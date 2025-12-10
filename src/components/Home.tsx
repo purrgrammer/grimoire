@@ -1,4 +1,4 @@
-import { useState, useEffect, Activity } from "react";
+import { useState, useEffect } from "react";
 import { useGrimoire } from "@/core/state";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import Feed from "./nostr/Feed";
@@ -141,21 +141,16 @@ export default function Home() {
           <UserMenu />
         </header>
         <section className="flex-1 relative overflow-hidden">
-          {Object.values(state.workspaces).map((workspace) => (
-            <Activity
-              key={workspace.id}
-              mode={
-                workspace.id === state.activeWorkspaceId ? "visible" : "hidden"
-              }
-            >
-              {workspace.layout === null ? (
+          {state.workspaces[state.activeWorkspaceId] && (
+            <>
+              {state.workspaces[state.activeWorkspaceId].layout === null ? (
                 <GrimoireWelcome
                   onLaunchCommand={() => setCommandLauncherOpen(true)}
                 />
               ) : (
                 <Mosaic
                   renderTile={renderTile}
-                  value={workspace.layout}
+                  value={state.workspaces[state.activeWorkspaceId].layout}
                   onChange={updateLayout}
                   onRelease={(node) => {
                     // When Mosaic removes a node from the layout, clean up the window
@@ -166,8 +161,8 @@ export default function Home() {
                   className="mosaic-blueprint-theme"
                 />
               )}
-            </Activity>
-          ))}
+            </>
+          )}
         </section>
         <TabBar />
       </main>

@@ -12,23 +12,24 @@ function hasRTLCharacters(text: string): boolean {
 
 export function Text({ node }: TextNodeProps) {
   const text = node.value;
-
+  
   // If no newlines, render as inline span
   if (!text.includes("\n")) {
     const isRTL = hasRTLCharacters(text);
     return <span dir={isRTL ? "rtl" : "auto"}>{text || "\u00A0"}</span>;
   }
-
-  // If has newlines, use divs for proper RTL per line
+  
+  // If has newlines, use spans with <br> tags
   const lines = text.split("\n");
   return (
     <>
       {lines.map((line, idx) => {
         const isRTL = hasRTLCharacters(line);
         return (
-          <div key={idx} dir={isRTL ? "rtl" : "auto"}>
-            {line || "\u00A0"}
-          </div>
+          <span key={idx}>
+            <span dir={isRTL ? "rtl" : "auto"}>{line || "\u00A0"}</span>
+            {idx < lines.length - 1 && <br />}
+          </span>
         );
       })}
     </>

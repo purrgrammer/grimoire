@@ -2,6 +2,7 @@ import { ProfileContent } from "applesauce-core/helpers";
 import { Dexie, Table } from "dexie";
 
 export interface Profile extends ProfileContent {
+  pubkey: string;
   created_at: number;
 }
 

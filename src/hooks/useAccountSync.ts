@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useObservableMemo, useEventStore } from "applesauce-react/hooks";
+import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 import { useGrimoire } from "@/core/state";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers";

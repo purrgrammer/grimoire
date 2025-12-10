@@ -30,7 +30,7 @@ export function EventAuthor({ pubkey }: { pubkey: string }) {
     <div className="flex flex-col gap-0">
       <UserName
         pubkey={pubkey}
-        className="text-md cursor-crosshair font-semibold hover:underline hover:decoration-dotted"
+        className="text-md text-accent cursor-crosshair font-semibold hover:underline hover:decoration-dotted"
       />
     </div>
   );

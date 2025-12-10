@@ -1,32 +1,54 @@
-import { useEffect } from "react";
-import { kinds } from "nostr-tools";
+import { useState, useEffect } from "react";
 import { profileLoader } from "@/services/loaders";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
 import { ProfileContent } from "applesauce-core/helpers";
-import { ProfileModel } from "applesauce-core/models/profile";
+import { kinds } from "nostr-tools";
+import db from "@/services/db";
 
 export function useProfile(pubkey: string): ProfileContent | undefined {
-  const eventStore = useEventStore();
+  const [profile, setProfile] = useState<ProfileContent | undefined>();
 
-  const profile = useObservableMemo(
-    () => eventStore.model(ProfileModel, pubkey),
-    [eventStore, pubkey],
-  );
-
-  // Fetch profile if not in store (only runs once per pubkey)
   useEffect(() => {
-    if (profile) return; // Already have the event
+    let mounted = true;
 
+    // Load from IndexedDB first
+    db.profiles.get(pubkey).then((cachedProfile) => {
+      if (mounted && cachedProfile) {
+        setProfile(cachedProfile);
+      }
+    });
+
+    // Fetch from network
     const sub = profileLoader({ kind: kinds.Metadata, pubkey }).subscribe({
-      next: (fetchedEvent) => {
-        if (fetchedEvent) {
-          eventStore.add(fetchedEvent);
+      next: async (fetchedEvent) => {
+        if (!fetchedEvent || !fetchedEvent.content) return;
+
+        try {
+          const profileData = JSON.parse(fetchedEvent.content) as ProfileContent;
+          
+          // Save to IndexedDB
+          await db.profiles.put({
+            ...profileData,
+            pubkey,
+            created_at: fetchedEvent.created_at,
+          });
+
+          if (mounted) {
+            setProfile(profileData);
+          }
+        } catch (e) {
+          console.error("[useProfile] Failed to parse profile:", e);
         }
+      },
+      error: (err) => {
+        console.error("[useProfile] Error fetching profile:", err);
       },
     });
 
-    return () => sub.unsubscribe();
-  }, [pubkey, eventStore]); // Removed event and loading from deps
+    return () => {
+      mounted = false;
+      sub.unsubscribe();
+    };
+  }, [pubkey]);
 
   return profile;
 }
