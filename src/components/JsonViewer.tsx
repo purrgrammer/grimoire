@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,

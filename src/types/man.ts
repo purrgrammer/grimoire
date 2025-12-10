@@ -3,6 +3,7 @@ import type { AppId } from "./app";
 
 import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
+import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 
 export interface ManPageEntry {

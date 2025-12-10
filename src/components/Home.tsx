@@ -103,6 +103,9 @@ export default function Home() {
       case "decode":
         content = <DecodeViewer args={window.props.args} />;
         break;
+      case "relay":
+        content = <RelayViewer url={window.props.url} />;
+        break;
       default:
         content = (
           <div className="p-4 text-muted-foreground">

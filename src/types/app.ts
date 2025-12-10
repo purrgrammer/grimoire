@@ -10,7 +10,8 @@ export type AppId =
   | "open"
   | "profile"
   | "encode"
-  | "decode";
+  | "decode"
+  | "relay";
 
 export interface WindowInstance {
   id: string;
