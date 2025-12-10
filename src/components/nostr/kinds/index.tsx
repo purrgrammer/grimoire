@@ -57,12 +57,14 @@ function DefaultKindRenderer({ event, showTimestamp }: BaseEventProps) {
 export function KindRenderer({
   event,
   showTimestamp = false,
+  depth = 0,
 }: {
   event: NostrEvent;
   showTimestamp?: boolean;
+  depth?: number;
 }) {
   const Renderer = kindRenderers[event.kind] || DefaultKindRenderer;
-  return <Renderer event={event} showTimestamp={showTimestamp} />;
+  return <Renderer event={event} showTimestamp={showTimestamp} depth={depth} />;
 }
 
 /**

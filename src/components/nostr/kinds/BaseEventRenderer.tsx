@@ -20,6 +20,7 @@ import { JsonViewer } from "@/components/JsonViewer";
 export interface BaseEventProps {
   event: NostrEvent;
   showTimestamp?: boolean;
+  depth?: number;
 }
 
 /**

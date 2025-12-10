@@ -9,7 +9,11 @@ import { useGrimoire } from "@/core/state";
 /**
  * Renderer for Kind 1 - Short Text Note
  */
-export function Kind1Renderer({ event, showTimestamp }: BaseEventProps) {
+export function Kind1Renderer({
+  event,
+  showTimestamp,
+  depth = 0,
+}: BaseEventProps) {
   const { addWindow } = useGrimoire();
   const refs = getNip10References(event);
   const hasReply = refs.reply?.e || refs.reply?.a;
@@ -49,7 +53,7 @@ export function Kind1Renderer({ event, showTimestamp }: BaseEventProps) {
           </div>
         </div>
       )}
-      <RichText event={event} className="text-sm" />
+      <RichText event={event} className="text-sm" depth={depth} />
     </BaseEventContainer>
   );
 }

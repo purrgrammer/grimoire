@@ -2,6 +2,7 @@ import { kinds } from "nostr-tools";
 import { UserName } from "../UserName";
 import { EventEmbed } from "./EventEmbed";
 import { EventPointer, AddressPointer } from "nostr-tools/nip19";
+import { useDepth } from "../RichText";
 
 interface MentionNodeProps {
   node: {
@@ -14,6 +15,8 @@ interface MentionNodeProps {
 }
 
 export function Mention({ node }: MentionNodeProps) {
+  const depth = useDepth();
+
   if (node.decoded?.type === "npub") {
     const pubkey = node.decoded.data;
     return (
@@ -43,17 +46,17 @@ export function Mention({ node }: MentionNodeProps) {
       kind: kinds.ShortTextNote,
       relays: [],
     };
-    return <EventEmbed node={{ pointer }} />;
+    return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 
   if (node.decoded?.type === "nevent") {
     const pointer: EventPointer = node.decoded.data;
-    return <EventEmbed node={{ pointer }} />;
+    return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 
   if (node.decoded?.type === "naddr") {
     const pointer: AddressPointer = node.decoded.data;
-    return <EventEmbed node={{ pointer }} />;
+    return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 
   return null;

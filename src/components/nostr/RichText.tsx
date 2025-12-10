@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Hooks } from "applesauce-react";
+import { createContext, useContext } from "react";
 import { Text } from "./RichText/Text";
 import { Hashtag } from "./RichText/Hashtag";
 import { Mention } from "./RichText/Mention";
@@ -10,10 +11,18 @@ import type { NostrEvent } from "@/types/nostr";
 
 const { useRenderedContent } = Hooks;
 
+// Context for passing depth through RichText rendering
+const DepthContext = createContext<number>(1);
+
+export function useDepth() {
+  return useContext(DepthContext);
+}
+
 interface RichTextProps {
   event?: NostrEvent;
   content?: string;
   className?: string;
+  depth?: number;
 }
 
 // Content node component types for rendering
@@ -31,7 +40,12 @@ const contentComponents = {
  * Supports mentions, hashtags, links, emojis, and galleries
  * Can also render plain text without requiring a full event
  */
-export function RichText({ event, content, className = "" }: RichTextProps) {
+export function RichText({
+  event,
+  content,
+  className = "",
+  depth = 1,
+}: RichTextProps) {
   // If plain content is provided, just render it
   if (content && !event) {
     const lines = content.trim().split("\n");
@@ -54,9 +68,11 @@ export function RichText({ event, content, className = "" }: RichTextProps) {
     };
     const renderedContent = useRenderedContent(trimmedEvent, contentComponents);
     return (
-      <div className={cn("leading-relaxed break-words", className)}>
-        {renderedContent}
-      </div>
+      <DepthContext.Provider value={depth}>
+        <div className={cn("leading-relaxed break-words", className)}>
+          {renderedContent}
+        </div>
+      </DepthContext.Provider>
     );
   }
 
