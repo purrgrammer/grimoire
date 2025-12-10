@@ -1,5 +1,3 @@
-import type { TextNode } from "applesauce-content";
-
 interface TextNodeProps {
   node: {
     type: "text";

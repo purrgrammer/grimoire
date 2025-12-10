@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import UserMenu from "./nostr/user-menu";
+import { useState, useEffect, Activity } from "react";
 import { useGrimoire } from "@/core/state";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import Feed from "./nostr/Feed";
@@ -17,10 +16,11 @@ import EncodeViewer from "./EncodeViewer";
 import DecodeViewer from "./DecodeViewer";
 import KindRenderer from "./KindRenderer";
 import { Terminal } from "lucide-react";
-import { Button } from "./ui/button";
+import UserMenu from "./nostr/user-menu";
+import { GrimoireWelcome } from "./GrimoireWelcome";
 
 export default function Home() {
-  const { state, activeWorkspace, updateLayout, removeWindow } = useGrimoire();
+  const { state, updateLayout, removeWindow } = useGrimoire();
   const [commandLauncherOpen, setCommandLauncherOpen] = useState(false);
 
   // Sync active account and fetch relay lists
@@ -129,7 +129,6 @@ export default function Home() {
         open={commandLauncherOpen}
         onOpenChange={setCommandLauncherOpen}
       />
-
       <main className="h-screen w-screen flex flex-col bg-background text-foreground">
         <header className="flex flex-row items-center justify-between px-1 border-b border-border">
           <button
@@ -142,59 +141,33 @@ export default function Home() {
           <UserMenu />
         </header>
         <section className="flex-1 relative overflow-hidden">
-          {activeWorkspace.layout === null ? (
-            <div className="h-full w-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-8">
-                <pre className="font-mono text-xs leading-tight text-grimoire-gradient">
-                  {`                    ★                                             ✦
-                                                       :          ☽
-                                                      t#,                           ,;
-    ✦     .Gt j.         t                           ;##W.   t   j.               f#i
-         j#W: EW,        Ej            ..       :   :#L:WE   Ej  EW,            .E#t
-   ☆   ;K#f   E##j       E#,          ,W,     .Et  .KG  ,#D  E#, E##j          i#W,
-     .G#D.    E###D.     E#t         t##,    ,W#t  EE    ;#f E#t E###D.       L#D.  ✦
-    j#K;      E#jG#W;    E#t        L###,   j###t f#.     t#iE#t E#jG#W;    :K#Wfff;
-  ,K#f   ,GD; E#t t##f   E#t      .E#j##,  G#fE#t :#G     GK E#t E#t t##f   i##WLLLLt
-☽  j#Wi   E#t E#t  :K#E: E#t     ;WW; ##,:K#i E#t  ;#L   LW. E#t E#t  :K#E:  .E#L
-    .G#D: E#t E#KDDDD###iE#t    j#E.  ##f#W,  E#t   t#f f#:  E#t E#KDDDD###i   f#E: ★
-      ,K#fK#t E#f,t#Wi,,,E#t  .D#L    ###K:   E#t    f#D#;   E#t E#f,t#Wi,,,    ,WW;
-   ✦    j###t E#t  ;#W:  E#t :K#t     ##D.    E#t     G#t    E#t E#t  ;#W:       .D#;
-         .G#t DWi   ,KK: E#t ...      #G      ..       t     E#t DWi   ,KK:        tt
-           ;;      ☆     ,;.          j              ✦       ,;.                ☆     `}
-                </pre>
-
-                <div className="flex flex-col items-center gap-3">
-                  <p className="text-muted-foreground text-sm font-mono mb-2">
-                    Press{" "}
-                    <kbd className="px-2 py-1 bg-muted border border-border text-xs">
-                      Cmd+K
-                    </kbd>{" "}
-                    or
-                  </p>
-                  <Button
-                    onClick={() => setCommandLauncherOpen(true)}
-                    variant="outline"
-                  >
-                    <span>⌘</span>
-                    <span>Launch Command</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Mosaic
-              renderTile={renderTile}
-              value={activeWorkspace.layout}
-              onChange={updateLayout}
-              onRelease={(node) => {
-                // When Mosaic removes a node from the layout, clean up the window
-                if (typeof node === "string") {
-                  handleRemoveWindow(node);
-                }
-              }}
-              className="mosaic-blueprint-theme"
-            />
-          )}
+          {Object.values(state.workspaces).map((workspace) => (
+            <Activity
+              key={workspace.id}
+              mode={
+                workspace.id === state.activeWorkspaceId ? "visible" : "hidden"
+              }
+            >
+              {workspace.layout === null ? (
+                <GrimoireWelcome
+                  onLaunchCommand={() => setCommandLauncherOpen(true)}
+                />
+              ) : (
+                <Mosaic
+                  renderTile={renderTile}
+                  value={workspace.layout}
+                  onChange={updateLayout}
+                  onRelease={(node) => {
+                    // When Mosaic removes a node from the layout, clean up the window
+                    if (typeof node === "string") {
+                      handleRemoveWindow(node);
+                    }
+                  }}
+                  className="mosaic-blueprint-theme"
+                />
+              )}
+            </Activity>
+          ))}
         </section>
         <TabBar />
       </main>
