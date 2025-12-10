@@ -3,6 +3,7 @@ import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
 import { Kind0DetailRenderer } from "./nostr/kinds/Kind0DetailRenderer";
+import { Kind3DetailView } from "./nostr/kinds/Kind3Renderer";
 import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
 import { Kind9802DetailRenderer } from "./nostr/kinds/Kind9802DetailRenderer";
 import { KindBadge } from "./KindBadge";
@@ -167,6 +168,8 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       <div className="flex-1 overflow-y-auto">
         {event.kind === 0 ? (
           <Kind0DetailRenderer event={event} />
+        ) : event.kind === 3 ? (
+          <Kind3DetailView event={event} />
         ) : event.kind === 30023 ? (
           <Kind30023DetailRenderer event={event} />
         ) : event.kind === 9802 ? (

@@ -1,5 +1,6 @@
 import { Kind0Renderer } from "./Kind0Renderer";
 import { Kind1Renderer } from "./Kind1Renderer";
+import { Kind3Renderer } from "./Kind3Renderer";
 import { Kind6Renderer } from "./Kind6Renderer";
 import { Kind7Renderer } from "./Kind7Renderer";
 import { Kind20Renderer } from "./Kind20Renderer";
@@ -19,6 +20,7 @@ import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   0: Kind0Renderer, // Profile Metadata
   1: Kind1Renderer, // Short Text Note
+  3: Kind3Renderer, // Contact List
   6: Kind6Renderer, // Repost
   7: Kind7Renderer, // Reaction
   20: Kind20Renderer, // Picture (NIP-68)

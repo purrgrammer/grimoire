@@ -144,7 +144,7 @@ export function BaseEventContainer({
   });
 
   return (
-    <div className="flex flex-col gap-1 p-2">
+    <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
       <div className="flex flex-row justify-between items-center">
         <EventAuthor pubkey={event.pubkey} />
         {showTimestamp ? (

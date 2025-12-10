@@ -36,7 +36,7 @@ export function RichText({ event, content, className = "" }: RichTextProps) {
   if (content && !event) {
     const lines = content.trim().split("\n");
     return (
-      <div className={cn("leading-tight break-words", className)}>
+      <div className={cn("leading-relaxed break-words", className)}>
         {lines.map((line, idx) => (
           <div key={idx} dir="auto">
             {line || "\u00A0"}
@@ -54,7 +54,7 @@ export function RichText({ event, content, className = "" }: RichTextProps) {
     };
     const renderedContent = useRenderedContent(trimmedEvent, contentComponents);
     return (
-      <div className={cn("leading-tight break-words", className)}>
+      <div className={cn("leading-relaxed break-words", className)}>
         {renderedContent}
       </div>
     );
