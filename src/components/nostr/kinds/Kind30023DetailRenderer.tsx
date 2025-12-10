@@ -10,6 +10,7 @@ import {
 } from "applesauce-core/helpers/article";
 import { UserName } from "../UserName";
 import { EmbeddedEvent } from "../EmbeddedEvent";
+import { MediaEmbed } from "../MediaEmbed";
 import { useGrimoire } from "@/core/state";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -169,8 +170,17 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
             return defaultUrlTransform(url);
           }}
           components={{
-            // Disable images as requested
-            img: () => null,
+            // Enable images with zoom
+            img: ({ src, alt }) =>
+              src ? (
+                <MediaEmbed
+                  url={src}
+                  alt={alt}
+                  preset="preview"
+                  enableZoom
+                  className="my-4"
+                />
+              ) : null,
             // Handle nostr: links
             a: ({ node, href, children, ...props }) => {
               if (!href) return null;
