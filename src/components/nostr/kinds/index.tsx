@@ -1,13 +1,16 @@
-import type { BaseEventProps } from "./BaseEventRenderer";
 import { Kind0Renderer } from "./Kind0Renderer";
 import { Kind1Renderer } from "./Kind1Renderer";
 import { Kind6Renderer } from "./Kind6Renderer";
 import { Kind7Renderer } from "./Kind7Renderer";
+import { Kind20Renderer } from "./Kind20Renderer";
+import { Kind21Renderer } from "./Kind21Renderer";
+import { Kind22Renderer } from "./Kind22Renderer";
+import { Kind1063Renderer } from "./Kind1063Renderer";
 import { Kind9735Renderer } from "./Kind9735Renderer";
 import { Kind9802Renderer } from "./Kind9802Renderer";
 import { Kind30023Renderer } from "./Kind30023Renderer";
 import { NostrEvent } from "@/types/nostr";
-import { BaseEventContainer } from "./BaseEventRenderer";
+import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -18,6 +21,10 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1: Kind1Renderer, // Short Text Note
   6: Kind6Renderer, // Repost
   7: Kind7Renderer, // Reaction
+  20: Kind20Renderer, // Picture (NIP-68)
+  21: Kind21Renderer, // Video Event (NIP-71)
+  22: Kind22Renderer, // Short Video (NIP-71)
+  1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1Renderer, // Post
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
@@ -68,4 +75,8 @@ export type { BaseEventProps } from "./BaseEventRenderer";
 export { Kind1Renderer } from "./Kind1Renderer";
 export { Kind6Renderer } from "./Kind6Renderer";
 export { Kind7Renderer } from "./Kind7Renderer";
+export { Kind20Renderer } from "./Kind20Renderer";
+export { Kind21Renderer } from "./Kind21Renderer";
+export { Kind22Renderer } from "./Kind22Renderer";
+export { Kind1063Renderer } from "./Kind1063Renderer";
 export { Kind9735Renderer } from "./Kind9735Renderer";

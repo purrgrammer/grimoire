@@ -1,12 +1,14 @@
-import type { NostrEvent } from "@/types/nostr";
-import { useRenderedContent } from "applesauce-react/hooks";
 import { cn } from "@/lib/utils";
+import { Hooks } from "applesauce-react";
 import { Text } from "./RichText/Text";
 import { Hashtag } from "./RichText/Hashtag";
 import { Mention } from "./RichText/Mention";
 import { Link } from "./RichText/Link";
 import { Emoji } from "./RichText/Emoji";
 import { Gallery } from "./RichText/Gallery";
+import type { NostrEvent } from "@/types/nostr";
+
+const { useRenderedContent } = Hooks;
 
 interface RichTextProps {
   event?: NostrEvent;
@@ -32,15 +34,15 @@ const contentComponents = {
 export function RichText({ event, content, className = "" }: RichTextProps) {
   // If plain content is provided, just render it
   if (content && !event) {
+    const lines = content.trim().split("\n");
     return (
-      <span
-        className={cn(
-          "whitespace-pre-line leading-tight break-words",
-          className,
-        )}
-      >
-        {content.trim()}
-      </span>
+      <div className={cn("leading-tight break-words", className)}>
+        {lines.map((line, idx) => (
+          <div key={idx} dir="auto">
+            {line || "\u00A0"}
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -52,14 +54,9 @@ export function RichText({ event, content, className = "" }: RichTextProps) {
     };
     const renderedContent = useRenderedContent(trimmedEvent, contentComponents);
     return (
-      <span
-        className={cn(
-          "whitespace-pre-line leading-tight break-words",
-          className,
-        )}
-      >
+      <div className={cn("leading-tight break-words", className)}>
         {renderedContent}
-      </span>
+      </div>
     );
   }
 

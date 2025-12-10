@@ -25,6 +25,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
 
   return (
     <span
+      dir="auto"
       className={cn("cursor-pointer hover:underline", className)}
       onClick={handleClick}
     >

@@ -219,6 +219,11 @@ export const setActiveAccount = (
   state: GrimoireState,
   pubkey: string | undefined,
 ): GrimoireState => {
+  // If pubkey is already set to the same value, return state unchanged
+  if (state.activeAccount?.pubkey === pubkey) {
+    return state;
+  }
+
   if (!pubkey) {
     return {
       ...state,
@@ -244,6 +249,12 @@ export const setActiveAccountRelays = (
   if (!state.activeAccount) {
     return state;
   }
+
+  // If relays reference hasn't changed, return state unchanged
+  if (state.activeAccount.relays === relays) {
+    return state;
+  }
+
   return {
     ...state,
     activeAccount: {

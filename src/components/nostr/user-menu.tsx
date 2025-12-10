@@ -53,10 +53,6 @@ export default function UserMenu() {
   const { state, addWindow } = useGrimoire();
   const relays = state.activeAccount?.relays;
 
-  console.log("UserMenu: account", account?.pubkey);
-  console.log("UserMenu: state.activeAccount", state.activeAccount);
-  console.log("UserMenu: relays", relays);
-
   function openProfile() {
     if (!account?.pubkey) return;
     addWindow(

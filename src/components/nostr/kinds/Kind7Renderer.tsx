@@ -30,7 +30,7 @@ export function Kind7Renderer({ event, showTimestamp }: BaseEventProps) {
   // Parse reaction content to detect custom emoji shortcodes
   // Format: :shortcode: in the content
   const parsedReaction = useMemo(() => {
-    const match = reaction.match(/^:([a-zA-Z0-9_-]+):$/);
+    const match = reaction.match(/^:([a-zA-Z0-9_#-]+):$/);
     if (match && customEmojis[match[1]]) {
       return {
         type: "custom" as const,

@@ -10,7 +10,7 @@ import type { RelayInfo, UserRelays } from "@/types/app";
  * Hook that syncs active account with Grimoire state and fetches relay lists
  */
 export function useAccountSync() {
-  const { state, setActiveAccount, setActiveAccountRelays } = useGrimoire();
+  const { setActiveAccount, setActiveAccountRelays } = useGrimoire();
   const eventStore = useEventStore();
 
   // Watch active account from accounts service
@@ -18,25 +18,17 @@ export function useAccountSync() {
 
   // Sync active account pubkey to state
   useEffect(() => {
-    console.log("useAccountSync: activeAccount changed", activeAccount?.pubkey);
-    if (activeAccount?.pubkey !== state.activeAccount?.pubkey) {
-      console.log(
-        "useAccountSync: setting active account",
-        activeAccount?.pubkey,
-      );
-      setActiveAccount(activeAccount?.pubkey);
-    }
-  }, [activeAccount?.pubkey, state.activeAccount?.pubkey, setActiveAccount]);
+    setActiveAccount(activeAccount?.pubkey);
+  }, [activeAccount?.pubkey, setActiveAccount]);
 
   // Fetch and watch relay list (kind 10002) when account changes
   useEffect(() => {
     if (!activeAccount?.pubkey) {
-      console.log("useAccountSync: no active account, skipping relay fetch");
       return;
     }
 
     const pubkey = activeAccount.pubkey;
-    console.log("useAccountSync: fetching relay list for", pubkey);
+    let lastRelayEventId: string | undefined;
 
     // Subscribe to kind 10002 (relay list)
     const subscription = addressLoader({
@@ -49,11 +41,11 @@ export function useAccountSync() {
     const storeSubscription = eventStore
       .replaceable(10002, pubkey, "")
       .subscribe((relayListEvent) => {
-        console.log(
-          "useAccountSync: relay list event received",
-          relayListEvent,
-        );
         if (!relayListEvent) return;
+
+        // Only process if this is a new event
+        if (relayListEvent.id === lastRelayEventId) return;
+        lastRelayEventId = relayListEvent.id;
 
         // Parse inbox and outbox relays
         const inboxRelays = getInboxes(relayListEvent);
@@ -92,7 +84,6 @@ export function useAccountSync() {
           all: allRelays,
         };
 
-        console.log("useAccountSync: parsed relays", relays);
         setActiveAccountRelays(relays);
       });
 
@@ -100,5 +91,5 @@ export function useAccountSync() {
       subscription.unsubscribe();
       storeSubscription.unsubscribe();
     };
-  }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
+  }, [activeAccount?.pubkey, eventStore]);
 }

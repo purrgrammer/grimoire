@@ -1,5 +1,4 @@
 import { getKindInfo } from "@/constants/kinds";
-import { KindBadge } from "./KindBadge";
 import Command from "./Command";
 import { ExternalLink } from "lucide-react";
 
@@ -25,16 +24,13 @@ export default function KindRenderer({ kind }: { kind: number }) {
   return (
     <div className="h-full w-full overflow-y-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start gap-4">
+      <div className="flex items-center gap-4">
         {Icon && (
-          <div className="w-12 h-12 bg-accent/20 rounded flex items-center justify-center flex-shrink-0">
-            <Icon className="w-6 h-6 text-accent" />
+          <div className="w-14 h-14 bg-accent/20 rounded flex items-center justify-center flex-shrink-0">
+            <Icon className="w-8 h-8 text-accent" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="mb-2">
-            <KindBadge kind={kind} variant="full" />
-          </div>
           <h1 className="text-2xl font-bold mb-1">{kindInfo.name}</h1>
           <p className="text-muted-foreground">{kindInfo.description}</p>
         </div>
@@ -86,7 +82,7 @@ export default function KindRenderer({ kind }: { kind: number }) {
           <a
             href={`https://github.com/nostr-protocol/nips/blob/master/${kindInfo.nip.padStart(
               2,
-              "0"
+              "0",
             )}.md`}
             target="_blank"
             rel="noopener noreferrer"
