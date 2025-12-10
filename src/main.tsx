@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { EventStoreProvider } from "applesauce-react/providers";
 import Root from "./root";
@@ -10,9 +9,7 @@ import "react-mosaic-component/react-mosaic-component.css";
 document.documentElement.classList.add("dark");
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <EventStoreProvider eventStore={eventStore}>
-      <Root />
-    </EventStoreProvider>
-  </StrictMode>,
+  <EventStoreProvider eventStore={eventStore}>
+    <Root />
+  </EventStoreProvider>,
 );

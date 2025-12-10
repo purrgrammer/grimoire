@@ -3,6 +3,7 @@ import type { Components } from "react-markdown";
 import { useMemo } from "react";
 import { useGrimoire } from "@/core/state";
 import { MediaEmbed } from "@/components/nostr/MediaEmbed";
+import remarkGfm from "remark-gfm";
 
 interface MarkdownProps {
   content: string;
@@ -79,15 +80,18 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
         console.log("[Markdown Link]", { href, children });
 
         // Check if it's a relative NIP link (e.g., "./01.md" or "01.md" or "30.md")
-        if (href && (href.endsWith(".md") || href.includes(".md#"))) {
-          console.log("[Markdown] Detected .md link:", href);
+        // Must be relative (not start with http:// or https://)
+        const isRelativeLink =
+          href && !href.startsWith("http://") && !href.startsWith("https://");
+        if (isRelativeLink && (href.endsWith(".md") || href.includes(".md#"))) {
+          console.log("[Markdown] Detected relative .md link:", href);
 
-          // Extract NIP number from various formats (1-3 digits)
-          const nipMatch = href.match(/(\d{1,3})\.md/);
+          // Extract NIP number from various formats (numeric 1-3 digits or hex A0-FF)
+          const nipMatch = href.match(/([0-9A-F]{1,3})\.md/i);
           console.log("[Markdown] Regex match result:", nipMatch);
 
           if (nipMatch) {
-            const nipNumber = nipMatch[1];
+            const nipNumber = nipMatch[1].toUpperCase();
             console.log("[Markdown] Creating NIP link for NIP-" + nipNumber);
 
             return (
@@ -221,7 +225,9 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
 
   return (
     <div className={className}>
-      <ReactMarkdown components={components}>{content}</ReactMarkdown>
+      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]}>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
