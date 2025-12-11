@@ -14,8 +14,8 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
   const uTag = event.tags.find((t) => t[0] === "u")?.[1];
   // If only d tag provided, assume https:// prefix
   const url = uTag || (dTag ? `https://${dTag}` : undefined);
-  // Display URL without scheme for cleaner appearance
-  const displayUrl = url?.replace(/^https?:\/\//, "");
+  // Display URL without scheme and trailing slash for cleaner appearance
+  const displayUrl = url?.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   return (
     <BaseEventContainer event={event}>
