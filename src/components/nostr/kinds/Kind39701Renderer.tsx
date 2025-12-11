@@ -14,6 +14,8 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
   const uTag = event.tags.find((t) => t[0] === "u")?.[1];
   // If only d tag provided, assume https:// prefix
   const url = uTag || (dTag ? `https://${dTag}` : undefined);
+  // Display URL without scheme for cleaner appearance
+  const displayUrl = url?.replace(/^https?:\/\//, "");
 
   return (
     <BaseEventContainer event={event}>
@@ -32,7 +34,7 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
             className="flex items-center gap-2 text-accent hover:underline"
           >
             <ExternalLink className="size-4" />
-            <span className="text-sm break-all">{url}</span>
+            <span className="text-sm break-all">{displayUrl}</span>
           </a>
         )}
 
