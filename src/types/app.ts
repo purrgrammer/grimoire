@@ -2,12 +2,14 @@ import { MosaicNode } from "react-mosaic-component";
 
 export type AppId =
   | "nip"
+  //| "nips"
   | "kind"
   | "kinds"
   | "man"
   | "feed"
   | "win"
   | "req"
+  //| "event"
   | "open"
   | "profile"
   | "encode"

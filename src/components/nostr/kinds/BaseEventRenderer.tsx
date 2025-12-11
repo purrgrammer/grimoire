@@ -16,6 +16,7 @@ import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
+import { EventFooter } from "@/components/EventFooter";
 
 // NIP-01 Kind ranges
 const REPLACEABLE_START = 10000;
@@ -199,6 +200,7 @@ export function BaseEventContainer({
         <EventMenu event={event} />
       </div>
       {children}
+      <EventFooter event={event} />
     </div>
   );
 }

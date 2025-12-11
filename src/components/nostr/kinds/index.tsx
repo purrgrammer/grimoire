@@ -51,7 +51,6 @@ function DefaultKindRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="text-sm text-muted-foreground">
-        <div className="text-xs mb-1">Kind {event.kind} event</div>
         <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
           {event.content || "(empty content)"}
         </pre>

@@ -7,7 +7,6 @@ import { Kind3DetailView } from "./nostr/kinds/Kind3Renderer";
 import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
 import { Kind9802DetailRenderer } from "./nostr/kinds/Kind9802DetailRenderer";
 import { Kind10002DetailRenderer } from "./nostr/kinds/Kind10002DetailRenderer";
-import { KindBadge } from "./KindBadge";
 import {
   Copy,
   Check,
@@ -93,19 +92,8 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
           </code>
         </button>
 
-        {/* Right: Kind Badge, Relay Count, and JSON Toggle */}
+        {/* Right: Relay Count and JSON Toggle */}
         <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="flex items-center gap-1">
-            <KindBadge kind={event.kind} variant="compact" />
-            <span className="text-xs text-muted-foreground">
-              <KindBadge
-                kind={event.kind}
-                showName
-                showKindNumber={false}
-                showIcon={false}
-              />
-            </span>
-          </div>
           {relays && relays.length > 0 && (
             <button
               onClick={() => setShowRelays(!showRelays)}

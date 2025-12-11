@@ -1,5 +1,4 @@
 import { X } from "lucide-react";
-import { Button } from "./ui/button";
 
 interface WindowToolbarProps {
   onClose?: () => void;
@@ -7,17 +6,16 @@ interface WindowToolbarProps {
 
 export function WindowToolbar({ onClose }: WindowToolbarProps) {
   return (
-    <div className="flex items-center gap-1">
+    <>
       {onClose && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6 text-muted-foreground hover:text-foreground"
+        <button
+          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           onClick={onClose}
+          title="Close window"
         >
-          <X className="size-3" />
-        </Button>
+          <X className="size-4" />
+        </button>
       )}
-    </div>
+    </>
   );
 }
