@@ -31,3 +31,6 @@ look into reconnecting on errors
 ## TODO: improve text rendering
 
 avoid inserting `br`, look into noStrudel's eol metadata
+
+## TODO: window crashes on unsupported kind event
+## TODO: app-wide error boundary. splash crash screen.

@@ -112,7 +112,9 @@ export default function UserMenu() {
                   </DropdownMenuLabel>
                   {relays.all.map((relay) => (
                     <RelayLink
-                      className="px-2 py-0.5"
+                      className="px-2 py-1"
+                      urlClassname="text-sm"
+                      iconClassname="size-4"
                       key={relay.url}
                       url={relay.url}
                       read={relay.read}

@@ -6,6 +6,7 @@ import { Kind0DetailRenderer } from "./nostr/kinds/Kind0DetailRenderer";
 import { Kind3DetailView } from "./nostr/kinds/Kind3Renderer";
 import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
 import { Kind9802DetailRenderer } from "./nostr/kinds/Kind9802DetailRenderer";
+import { Kind10002DetailRenderer } from "./nostr/kinds/Kind10002DetailRenderer";
 import { KindBadge } from "./KindBadge";
 import {
   Copy,
@@ -32,6 +33,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
   const event = useNostrEvent(pointer);
   const [showJson, setShowJson] = useState(false);
   const [showRelays, setShowRelays] = useState(false);
+  const { copy, copied } = useCopy();
 
   // Loading state
   if (!event) {
@@ -41,8 +43,6 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       </div>
     );
   }
-
-  const { copy, copied } = useCopy();
 
   // Get relays this event was seen on using applesauce
   const seenRelaysSet = getSeenRelays(event);
@@ -181,6 +181,8 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
           <Kind30023DetailRenderer event={event} />
         ) : event.kind === kinds.Highlights ? (
           <Kind9802DetailRenderer event={event} />
+        ) : event.kind === kinds.RelayList ? (
+          <Kind10002DetailRenderer event={event} />
         ) : (
           <KindRenderer event={event} />
         )}

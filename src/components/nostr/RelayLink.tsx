@@ -1,27 +1,37 @@
-import { Circle, Inbox, Send } from "lucide-react";
+import { Inbox, Send } from "lucide-react";
 import { useGrimoire } from "@/core/state";
+import { useRelayInfo } from "@/hooks/useRelayInfo";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { cn } from "@/lib/utils";
 
 export interface RelayLinkProps {
   url: string;
   read?: boolean;
   write?: boolean;
-  connected?: boolean;
   className?: string;
+  urlClassname?: string;
+  iconClassname?: string;
 }
 
 /**
  * RelayLink - Clickable relay URL component
- * Displays relay URL with connection status indicator and read/write badges
+ * Displays relay URL with read/write badges and tooltips
  * Opens relay detail window on click
  */
 export function RelayLink({
   url,
+  urlClassname,
+  iconClassname,
   read = false,
   write = false,
-  connected = true,
   className,
 }: RelayLinkProps) {
   const { addWindow } = useGrimoire();
+  const relayInfo = useRelayInfo(url);
 
   const handleClick = () => {
     addWindow("relay", { url }, `Relay ${url}`);
@@ -29,29 +39,72 @@ export function RelayLink({
 
   return (
     <div
-      className={`flex items-center justify-between gap-2 cursor-crosshair hover:bg-muted/50 ${className || ""}`}
+      className={cn(
+        "flex items-center justify-between gap-2 cursor-crosshair hover:bg-muted/50",
+        className,
+      )}
       onClick={handleClick}
     >
-      <div className="flex items-center gap-1">
-        <Circle
-          className={`size-2 ${
-            connected
-              ? "fill-green-500 text-green-500"
-              : "fill-muted-foreground text-muted-foreground"
-          }`}
-        />
-        <span className="text-xs">{url}</span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        {relayInfo?.icon && (
+          <img
+            src={relayInfo.icon}
+            alt=""
+            className={cn("size-3 flex-shrink-0 rounded-sm", iconClassname)}
+          />
+        )}
+        <span className={cn("text-xs truncate", urlClassname)}>{url}</span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {read && (
-          <div title="Read (inbox)">
-            <Inbox className="size-3 text-muted-foreground" />
-          </div>
+          <HoverCard openDelay={200}>
+            <HoverCardTrigger asChild>
+              <div className="cursor-help">
+                <Inbox
+                  className={cn("size-3 text-muted-foreground", iconClassname)}
+                />
+              </div>
+            </HoverCardTrigger>
+            <HoverCardContent
+              side="top"
+              className="w-64 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="space-y-1">
+                <div className="font-semibold">Read / Inbox</div>
+                <p className="text-muted-foreground">
+                  This relay is used to read events. Your client will fetch
+                  events from this relay when loading your feed or searching for
+                  content.
+                </p>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         )}
         {write && (
-          <div title="Write (outbox)">
-            <Send className="size-3 text-muted-foreground" />
-          </div>
+          <HoverCard openDelay={200}>
+            <HoverCardTrigger asChild>
+              <div className="cursor-help">
+                <Send
+                  className={cn("size-3 text-muted-foreground", iconClassname)}
+                />
+              </div>
+            </HoverCardTrigger>
+            <HoverCardContent
+              side="top"
+              className="w-64 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="space-y-1">
+                <div className="font-semibold">Write / Outbox</div>
+                <p className="text-muted-foreground">
+                  This relay is used to publish events. When you create a post
+                  or update your profile, it will be sent to this relay for
+                  others to discover.
+                </p>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         )}
       </div>
     </div>
