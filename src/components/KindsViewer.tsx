@@ -1,24 +1,9 @@
 import { getKindInfo } from "@/constants/kinds";
+import { kindRenderers } from "./nostr/kinds";
 import Command from "./Command";
 
-// Supported kinds with rich renderers
-const SUPPORTED_KINDS = [
-  0, // Profile Metadata
-  1, // Short Text Note
-  3, // Contact List
-  6, // Repost
-  7, // Reaction
-  20, // Picture (NIP-68)
-  21, // Video Event (NIP-71)
-  22, // Short Video (NIP-71)
-  1063, // File Metadata (NIP-94)
-  1111, // Post
-  9735, // Zap Receipt
-  9802, // Highlight
-  10002, // Relay List Metadata (NIP-65)
-  30023, // Long-form Article
-  39701, // Web Bookmarks (NIP-B0)
-];
+// Dynamically derive supported kinds from renderer registry
+const SUPPORTED_KINDS = Object.keys(kindRenderers).map(Number);
 
 /**
  * KindsViewer - System introspection command

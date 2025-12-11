@@ -70,6 +70,11 @@ export function KindRenderer({
 }
 
 /**
+ * Export kind renderers registry for dynamic kind detection
+ */
+export { kindRenderers };
+
+/**
  * Export individual renderers and base components for reuse
  */
 export {
