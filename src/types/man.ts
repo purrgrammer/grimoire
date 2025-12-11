@@ -31,18 +31,19 @@ export const manPages: Record<string, ManPageEntry> = {
     options: [
       {
         flag: "<number>",
-        description: "The NIP number to view (e.g., 01, 02, 19)",
+        description: "The NIP number to view (e.g., 01, 02, 19, B0)",
       },
     ],
     examples: [
       "nip 01    View the basic protocol specification",
       "nip 19    View the bech32 encoding specification",
+      "nip b0    View the NIP-B0 specification",
     ],
     seeAlso: ["feed", "kind"],
     appId: "nip",
     category: "Documentation",
     argParser: (args: string[]) => {
-      const num = args[0] || "01";
+      const num = (args[0] || "01").toUpperCase();
       // Pad single digit numbers with leading zero
       const paddedNum = num.length === 1 ? `0${num}` : num;
       return { number: paddedNum };
