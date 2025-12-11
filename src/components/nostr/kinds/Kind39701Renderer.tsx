@@ -33,15 +33,13 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-accent hover:underline"
           >
-            <ExternalLink className="size-4" />
+            <ExternalLink className="size-4 flex-shrink-0" />
             <span className="text-sm break-all">{displayUrl}</span>
           </a>
         )}
 
         {/* Description/Content as RichText */}
-        {event.content && (
-          <RichText event={event} className="text-sm text-muted-foreground" />
-        )}
+        {event.content && <RichText event={event} className="text-sm" />}
 
         {/* Fallback if no data */}
         {!title && !url && (
