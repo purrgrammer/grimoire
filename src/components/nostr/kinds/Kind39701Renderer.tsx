@@ -31,7 +31,7 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground hover:underline"
+            className="flex items-center gap-2 text-muted-foreground hover:underline hover:decoration-dotted"
           >
             <ExternalLink className="size-4 flex-shrink-0" />
             <span className="text-sm break-all">{displayUrl}</span>
