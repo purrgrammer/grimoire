@@ -17,6 +17,7 @@ const SUPPORTED_KINDS = [
   9802, // Highlight
   10002, // Relay List Metadata (NIP-65)
   30023, // Long-form Article
+  39701, // Web Bookmarks (NIP-B0)
 ];
 
 /**
