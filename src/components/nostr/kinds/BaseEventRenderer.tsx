@@ -191,7 +191,7 @@ export function BaseEventContainer({
         <div className="flex flex-row gap-2 items-baseline">
           <EventAuthor pubkey={event.pubkey} />
           <span
-            className="text-xs font-light text-muted-foreground cursor-help"
+            className="text-xs text-muted-foreground cursor-help"
             title={absoluteTime}
           >
             {relativeTime}
