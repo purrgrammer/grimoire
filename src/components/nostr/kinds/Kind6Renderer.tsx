@@ -15,7 +15,7 @@ export function Kind6Renderer({ event }: BaseEventProps) {
   const repostedEventId = eTag?.[1];
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Repeat2 className="size-4" />

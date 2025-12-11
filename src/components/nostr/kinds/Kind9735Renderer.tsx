@@ -47,14 +47,6 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
     return Math.floor(zapAmount / 1000);
   }, [zapAmount]);
 
-  if (!isValid) {
-    return (
-      <BaseEventContainer event={event} >
-        <div className="text-xs text-muted-foreground">Invalid zap receipt</div>
-      </BaseEventContainer>
-    );
-  }
-
   // Override event.pubkey to show zap sender instead of receipt pubkey
   const displayEvent = useMemo(
     () => ({
@@ -64,8 +56,16 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
     [event, zapSender],
   );
 
+  if (!isValid) {
+    return (
+      <BaseEventContainer event={event}>
+        <div className="text-xs text-muted-foreground">Invalid zap receipt</div>
+      </BaseEventContainer>
+    );
+  }
+
   return (
-    <BaseEventContainer event={displayEvent} >
+    <BaseEventContainer event={displayEvent}>
       <div className="flex flex-col gap-2">
         {/* Zap indicator */}
         <div className="flex items-center gap-2">

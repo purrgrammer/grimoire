@@ -20,7 +20,7 @@ export function Kind3Renderer({ event }: BaseEventProps) {
     : false;
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2 text-xs">
         <span className="flex items-center gap-1">
           <Users className="size-3 text-muted-foreground" />

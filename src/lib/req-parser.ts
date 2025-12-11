@@ -1,7 +1,11 @@
 import { nip19 } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
 import { isNip05 } from "./nip05";
-import { isValidHexPubkey, isValidHexEventId, normalizeHex } from "./nostr-validation";
+import {
+  isValidHexPubkey,
+  isValidHexEventId,
+  normalizeHex,
+} from "./nostr-validation";
 
 export interface ParsedReqCommand {
   filter: NostrFilter;
@@ -264,7 +268,7 @@ function parseNpubOrHex(value: string): string | null {
       if (decoded.type === "npub") {
         return decoded.data;
       }
-    } catch (e) {
+    } catch {
       // Not valid npub, continue
     }
   }
@@ -290,7 +294,7 @@ function parseNoteOrHex(value: string): string | null {
       if (decoded.type === "note") {
         return decoded.data;
       }
-    } catch (e) {
+    } catch {
       // Not valid note, continue
     }
   }

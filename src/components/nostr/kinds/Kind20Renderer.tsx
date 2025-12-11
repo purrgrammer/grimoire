@@ -15,7 +15,7 @@ export function Kind20Renderer({ event }: BaseEventProps) {
   const title = event.tags.find((t) => t[0] === "title")?.[1];
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Title if present */}
         {title && (

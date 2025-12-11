@@ -9,7 +9,9 @@ import db from "../services/db";
  * @param wsUrl - WebSocket URL of the relay (ws:// or wss://)
  * @returns Relay information or undefined if not yet loaded
  */
-export function useRelayInfo(wsUrl: string | undefined): RelayInformation | undefined {
+export function useRelayInfo(
+  wsUrl: string | undefined,
+): RelayInformation | undefined {
   const cached = useLiveQuery(
     () => (wsUrl ? db.relayInfo.get(wsUrl) : undefined),
     [wsUrl],

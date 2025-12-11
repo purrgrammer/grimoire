@@ -14,7 +14,7 @@ export function Kind30023Renderer({ event }: BaseEventProps) {
   const summary = useMemo(() => getArticleSummary(event), [event]);
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Title */}
         {title && (

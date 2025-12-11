@@ -34,7 +34,8 @@ export function useLocale(): LocaleConfig {
     const formatted = testDate.toLocaleTimeString(browserLocale, {
       hour: "numeric",
     });
-    const timeFormat = formatted.includes("PM") || formatted.includes("AM") ? "12h" : "24h";
+    const timeFormat =
+      formatted.includes("PM") || formatted.includes("AM") ? "12h" : "24h";
 
     return {
       locale: browserLocale,

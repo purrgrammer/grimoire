@@ -23,8 +23,10 @@ export function useProfile(pubkey: string): ProfileContent | undefined {
         if (!fetchedEvent || !fetchedEvent.content) return;
 
         try {
-          const profileData = JSON.parse(fetchedEvent.content) as ProfileContent;
-          
+          const profileData = JSON.parse(
+            fetchedEvent.content,
+          ) as ProfileContent;
+
           // Save to IndexedDB
           await db.profiles.put({
             ...profileData,

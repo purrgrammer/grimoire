@@ -182,7 +182,7 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
                 />
               ) : null,
             // Handle nostr: links
-            a: ({ node, href, children, ...props }) => {
+            a: ({ href, children, ...props }) => {
               if (!href) return null;
 
               // Render nostr: mentions inline
@@ -204,43 +204,43 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
               );
             },
             // Make pre elements display inline
-            pre: ({ node, children, ...props }) => (
+            pre: ({ children, ...props }) => (
               <span className="inline" {...props}>
                 {children}
               </span>
             ),
             // Style adjustments for dark theme
-            h1: ({ node, ...props }) => (
+            h1: ({ ...props }) => (
               <h1 className="text-2xl font-bold mt-8 mb-4" {...props} />
             ),
-            h2: ({ node, ...props }) => (
+            h2: ({ ...props }) => (
               <h2 className="text-xl font-bold mt-6 mb-3" {...props} />
             ),
-            h3: ({ node, ...props }) => (
+            h3: ({ ...props }) => (
               <h3 className="text-lg font-bold mt-4 mb-2" {...props} />
             ),
-            p: ({ node, ...props }) => (
+            p: ({ ...props }) => (
               <p className="text-sm leading-relaxed mb-4" {...props} />
             ),
-            code: ({ node, inline, ...props }: any) => (
+            code: ({ ...props }: any) => (
               <code
                 className="bg-muted px-0.5 py-0.5 rounded text-xs font-mono"
                 {...props}
               />
             ),
-            blockquote: ({ node, ...props }) => (
+            blockquote: ({ ...props }) => (
               <blockquote
                 className="border-l-4 border-muted pl-4 italic text-muted-foreground my-4"
                 {...props}
               />
             ),
-            ul: ({ node, ...props }) => (
+            ul: ({ ...props }) => (
               <ul
                 className="text-sm list-disc list-inside my-4 space-y-2"
                 {...props}
               />
             ),
-            ol: ({ node, ...props }) => (
+            ol: ({ ...props }) => (
               <ol
                 className="text-sm list-decimal list-inside my-4 space-y-2"
                 {...props}

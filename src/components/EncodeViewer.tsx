@@ -40,7 +40,7 @@ export default function EncodeViewer({ args }: EncodeViewerProps) {
         ...parsed,
         relays: relays.length > 0 ? relays : undefined,
       });
-    } catch (err) {
+    } catch {
       return null;
     }
   }, [parsed, relays]);

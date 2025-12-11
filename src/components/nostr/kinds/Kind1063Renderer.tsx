@@ -29,7 +29,7 @@ export function Kind1063Renderer({ event }: BaseEventProps) {
     event.tags.find((t) => t[0] === "summary")?.[1] || event.content;
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
         {/* File preview */}
         {metadata.url && (isImage || isVideo || isAudio) ? (

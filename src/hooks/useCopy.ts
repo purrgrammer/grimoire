@@ -38,7 +38,7 @@ export function useCopy(timeout = 3000) {
         setCopied(false);
       }
     },
-    [timeout]
+    [timeout],
   );
 
   return { copy, copied };

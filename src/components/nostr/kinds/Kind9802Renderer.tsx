@@ -17,7 +17,7 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
   const comment = useMemo(() => getHighlightComment(event), [event]);
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Comment */}
         {comment && <p className="text-sm text-foreground">{comment}</p>}

@@ -17,7 +17,8 @@ export function isNip05(value: string): boolean {
   if (!value) return false;
 
   // Match user@domain format
-  const userAtDomain = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}$/.test(value);
+  const userAtDomain =
+    /^[a-zA-Z0-9._-]+@[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}$/.test(value);
 
   // Match bare domain format (domain.com -> _@domain.com)
   const bareDomain = /^[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}$/.test(value);
@@ -66,7 +67,9 @@ export async function resolveNip05(nip05: string): Promise<string | null> {
       return null;
     }
 
-    console.log(`NIP-05: Resolved ${nip05} → ${normalized} → ${profile.pubkey}`);
+    console.log(
+      `NIP-05: Resolved ${nip05} → ${normalized} → ${profile.pubkey}`,
+    );
     return profile.pubkey.toLowerCase();
   } catch (error) {
     console.warn(`NIP-05: Resolution failed for ${normalized}:`, error);

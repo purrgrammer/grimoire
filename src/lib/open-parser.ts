@@ -1,5 +1,9 @@
 import { nip19 } from "nostr-tools";
-import { isValidHexEventId, isValidHexPubkey, normalizeHex } from "./nostr-validation";
+import {
+  isValidHexEventId,
+  isValidHexPubkey,
+  normalizeHex,
+} from "./nostr-validation";
 
 // Define pointer types locally since they're not exported from nostr-tools
 export interface EventPointer {

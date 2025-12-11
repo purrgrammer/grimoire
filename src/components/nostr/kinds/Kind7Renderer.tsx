@@ -108,7 +108,7 @@ export function Kind7Renderer({ event }: BaseEventProps) {
   };
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Reaction indicator */}
         <div className="flex items-center gap-2">

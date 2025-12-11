@@ -46,6 +46,18 @@ export function RichText({
   className = "",
   depth = 1,
 }: RichTextProps) {
+  // Call hook unconditionally - it will handle undefined/null
+  const trimmedEvent = event
+    ? {
+        ...event,
+        content: event.content.trim(),
+      }
+    : undefined;
+  const renderedContent = useRenderedContent(
+    trimmedEvent as NostrEvent,
+    contentComponents,
+  );
+
   // If plain content is provided, just render it
   if (content && !event) {
     const lines = content.trim().split("\n");
@@ -62,11 +74,6 @@ export function RichText({
 
   // Render event content with rich formatting
   if (event) {
-    const trimmedEvent = {
-      ...event,
-      content: event.content.trim(),
-    };
-    const renderedContent = useRenderedContent(trimmedEvent, contentComponents);
     return (
       <DepthContext.Provider value={depth}>
         <div className={cn("leading-relaxed break-words", className)}>

@@ -128,7 +128,7 @@ export const removeWindow = (
   const newWindowIds = ws.windowIds.filter((id) => id !== windowId);
 
   // Remove from global windows object
-  const { [windowId]: removedWindow, ...remainingWindows } = state.windows;
+  const { [windowId]: _removedWindow, ...remainingWindows } = state.windows;
 
   return {
     ...state,

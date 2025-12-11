@@ -16,7 +16,7 @@ export function Kind0Renderer({ event }: BaseEventProps) {
   const website = profile?.website;
 
   return (
-    <BaseEventContainer event={event} >
+    <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
         {/* Profile Info */}
         <div className="flex flex-col gap-2 p-3 border border-muted bg-muted/20">
