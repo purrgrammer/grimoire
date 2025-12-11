@@ -78,9 +78,50 @@ Use hooks like `useProfile()`, `useNostrEvent()`, `useTimeline()` - they handle 
 - Don't traverse or modify layout tree manually
 - Adding/removing windows handled by `logic.ts` functions
 
+## Testing
+
+**Test Framework**: Vitest with node environment
+
+**Running Tests**:
+```bash
+npm test          # Watch mode (auto-runs on file changes)
+npm run test:ui   # Visual UI for test exploration
+npm run test:run  # Single run (CI mode)
+```
+
+**Test Conventions**:
+- Test files: `*.test.ts` or `*.test.tsx` colocated with source files
+- Focus on testing pure functions and parsing logic
+- Use descriptive test names that explain behavior
+- Group related tests with `describe` blocks
+
+**What to Test**:
+- **Parsers** (`src/lib/*-parser.ts`): All argument parsing logic, edge cases, validation
+- **Pure functions** (`src/core/logic.ts`): State mutations, business logic
+- **Utilities** (`src/lib/*.ts`): Helper functions, data transformations
+- **Not UI components**: React components tested manually (for now)
+
+**Example Test Structure**:
+```typescript
+describe("parseReqCommand", () => {
+  describe("kind flag (-k, --kind)", () => {
+    it("should parse single kind", () => {
+      const result = parseReqCommand(["-k", "1"]);
+      expect(result.filter.kinds).toEqual([1]);
+    });
+
+    it("should deduplicate kinds", () => {
+      const result = parseReqCommand(["-k", "1,3,1"]);
+      expect(result.filter.kinds).toEqual([1, 3]);
+    });
+  });
+});
+```
+
 ## Critical Notes
 
 - React 19 features in use (ensure compatibility)
 - LocalStorage persistence has quota handling built-in
 - Dark mode is default (controlled via HTML class)
 - EventStore handles event deduplication and replaceability automatically
+- Run tests before committing changes to parsers or core logic

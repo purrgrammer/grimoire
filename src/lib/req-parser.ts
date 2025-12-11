@@ -16,6 +16,30 @@ export interface ParsedReqCommand {
 }
 
 /**
+ * Parse comma-separated values and apply a parser function to each
+ * Returns true if at least one value was successfully parsed
+ */
+function parseCommaSeparated<T>(
+  value: string,
+  parser: (v: string) => T | null,
+  target: Set<T>
+): boolean {
+  const values = value.split(',').map(v => v.trim());
+  let addedAny = false;
+
+  for (const val of values) {
+    if (!val) continue;
+    const parsed = parser(val);
+    if (parsed !== null) {
+      target.add(parsed);
+      addedAny = true;
+    }
+  }
+
+  return addedAny;
+}
+
+/**
  * Parse REQ command arguments into a Nostr filter
  * Supports:
  * - Filters: -k (kinds), -a (authors), -l (limit), -e (#e), -p (#p), -t (#t), -d (#d)
@@ -27,8 +51,17 @@ export interface ParsedReqCommand {
 export function parseReqCommand(args: string[]): ParsedReqCommand {
   const filter: NostrFilter = {};
   const relays: string[] = [];
-  const nip05Authors: string[] = [];
-  const nip05PTags: string[] = [];
+  const nip05Authors = new Set<string>();
+  const nip05PTags = new Set<string>();
+
+  // Use sets for deduplication during accumulation
+  const kinds = new Set<number>();
+  const authors = new Set<string>();
+  const eventIds = new Set<string>();
+  const pTags = new Set<string>();
+  const tTags = new Set<string>();
+  const dTags = new Set<string>();
+
   let closeOnEose = false;
 
   let i = 0;
@@ -58,33 +91,47 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
       switch (flag) {
         case "-k":
         case "--kind": {
-          const kind = parseInt(nextArg, 10);
-          if (!isNaN(kind)) {
-            if (!filter.kinds) filter.kinds = [];
-            filter.kinds.push(kind);
-            i += 2;
-          } else {
+          // Support comma-separated kinds: -k 1,3,7
+          if (!nextArg) {
             i++;
+            break;
           }
+          const addedAny = parseCommaSeparated(
+            nextArg,
+            (v) => {
+              const kind = parseInt(v, 10);
+              return isNaN(kind) ? null : kind;
+            },
+            kinds
+          );
+          i += addedAny ? 2 : 1;
           break;
         }
 
         case "-a":
         case "--author": {
-          // Check if it's a NIP-05 identifier
-          if (isNip05(nextArg)) {
-            nip05Authors.push(nextArg);
-            i += 2;
-          } else {
-            const pubkey = parseNpubOrHex(nextArg);
-            if (pubkey) {
-              if (!filter.authors) filter.authors = [];
-              filter.authors.push(pubkey);
-              i += 2;
+          // Support comma-separated authors: -a npub1...,npub2...,user@domain.com
+          if (!nextArg) {
+            i++;
+            break;
+          }
+          let addedAny = false;
+          const values = nextArg.split(',').map(a => a.trim());
+          for (const authorStr of values) {
+            if (!authorStr) continue;
+            // Check if it's a NIP-05 identifier
+            if (isNip05(authorStr)) {
+              nip05Authors.add(authorStr);
+              addedAny = true;
             } else {
-              i++;
+              const pubkey = parseNpubOrHex(authorStr);
+              if (pubkey) {
+                authors.add(pubkey);
+                addedAny = true;
+              }
             }
           }
+          i += addedAny ? 2 : 1;
           break;
         }
 
@@ -101,41 +148,55 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-e": {
-          const eventId = parseNoteOrHex(nextArg);
-          if (eventId) {
-            if (!filter["#e"]) filter["#e"] = [];
-            filter["#e"].push(eventId);
-            i += 2;
-          } else {
+          // Support comma-separated event IDs: -e id1,id2,id3
+          if (!nextArg) {
             i++;
+            break;
           }
+          const addedAny = parseCommaSeparated(
+            nextArg,
+            parseNoteOrHex,
+            eventIds
+          );
+          i += addedAny ? 2 : 1;
           break;
         }
 
         case "-p": {
-          // Check if it's a NIP-05 identifier
-          if (isNip05(nextArg)) {
-            nip05PTags.push(nextArg);
-            i += 2;
-          } else {
-            const pubkey = parseNpubOrHex(nextArg);
-            if (pubkey) {
-              if (!filter["#p"]) filter["#p"] = [];
-              filter["#p"].push(pubkey);
-              i += 2;
+          // Support comma-separated pubkeys: -p npub1...,npub2...,user@domain.com
+          if (!nextArg) {
+            i++;
+            break;
+          }
+          let addedAny = false;
+          const values = nextArg.split(',').map(p => p.trim());
+          for (const pubkeyStr of values) {
+            if (!pubkeyStr) continue;
+            // Check if it's a NIP-05 identifier
+            if (isNip05(pubkeyStr)) {
+              nip05PTags.add(pubkeyStr);
+              addedAny = true;
             } else {
-              i++;
+              const pubkey = parseNpubOrHex(pubkeyStr);
+              if (pubkey) {
+                pTags.add(pubkey);
+                addedAny = true;
+              }
             }
           }
+          i += addedAny ? 2 : 1;
           break;
         }
 
         case "-t": {
-          // Hashtag filter
+          // Support comma-separated hashtags: -t nostr,bitcoin,lightning
           if (nextArg) {
-            if (!filter["#t"]) filter["#t"] = [];
-            filter["#t"].push(nextArg);
-            i += 2;
+            const addedAny = parseCommaSeparated(
+              nextArg,
+              (v) => v, // hashtags are already strings
+              tTags
+            );
+            i += addedAny ? 2 : 1;
           } else {
             i++;
           }
@@ -143,11 +204,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-d": {
-          // D-tag filter (for replaceable events)
+          // Support comma-separated d-tags: -d article1,article2,article3
           if (nextArg) {
-            if (!filter["#d"]) filter["#d"] = [];
-            filter["#d"].push(nextArg);
-            i += 2;
+            const addedAny = parseCommaSeparated(
+              nextArg,
+              (v) => v, // d-tags are already strings
+              dTags
+            );
+            i += addedAny ? 2 : 1;
           } else {
             i++;
           }
@@ -201,16 +265,21 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     }
   }
 
-  const result = {
+  // Convert accumulated sets to filter arrays (with deduplication)
+  if (kinds.size > 0) filter.kinds = Array.from(kinds);
+  if (authors.size > 0) filter.authors = Array.from(authors);
+  if (eventIds.size > 0) filter["#e"] = Array.from(eventIds);
+  if (pTags.size > 0) filter["#p"] = Array.from(pTags);
+  if (tTags.size > 0) filter["#t"] = Array.from(tTags);
+  if (dTags.size > 0) filter["#d"] = Array.from(dTags);
+
+  return {
     filter,
     relays: relays.length > 0 ? relays : undefined,
     closeOnEose,
-    nip05Authors: nip05Authors.length > 0 ? nip05Authors : undefined,
-    nip05PTags: nip05PTags.length > 0 ? nip05PTags : undefined,
+    nip05Authors: nip05Authors.size > 0 ? Array.from(nip05Authors) : undefined,
+    nip05PTags: nip05PTags.size > 0 ? Array.from(nip05PTags) : undefined,
   };
-
-  console.log("parseReqCommand result:", result);
-  return result;
 }
 
 /**

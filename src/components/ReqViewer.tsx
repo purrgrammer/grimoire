@@ -163,7 +163,7 @@ export default function ReqViewer({
                 Authors: {filter.authors.length}
               </span>
               {nip05Authors && nip05Authors.length > 0 && (
-                <div className="text-xs text-blue-500 ml-2">
+                <div className="text-xs text-muted-foreground ml-2">
                   {nip05Authors.map((nip05) => (
                     <div key={nip05}>→ {nip05}</div>
                   ))}
@@ -178,7 +178,7 @@ export default function ReqViewer({
                 #p Tags: {filter["#p"].length}
               </span>
               {nip05PTags && nip05PTags.length > 0 && (
-                <div className="text-xs text-blue-500 ml-2">
+                <div className="text-xs text-muted-foreground ml-2">
                   {nip05PTags.map((nip05) => (
                     <div key={nip05}>→ {nip05}</div>
                   ))}

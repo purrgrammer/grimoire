@@ -144,12 +144,12 @@ export const manPages: Record<string, ManPageEntry> = {
       {
         flag: "-k, --kind <number>",
         description:
-          "Filter by event kind (e.g., 0=metadata, 1=note, 7=reaction)",
+          "Filter by event kind (e.g., 0=metadata, 1=note, 7=reaction). Supports comma-separated values: -k 1,3,7",
       },
       {
         flag: "-a, --author <npub|hex|nip05>",
         description:
-          "Filter by author pubkey (supports npub, hex, NIP-05 identifier, or bare domain)",
+          "Filter by author pubkey (supports npub, hex, NIP-05 identifier, or bare domain). Supports comma-separated values: -a npub1...,user@domain.com",
       },
       {
         flag: "-l, --limit <number>",
@@ -157,20 +157,20 @@ export const manPages: Record<string, ManPageEntry> = {
       },
       {
         flag: "-e <id>",
-        description: "Filter by referenced event ID (#e tag)",
+        description: "Filter by referenced event ID (#e tag). Supports comma-separated values: -e id1,id2,id3",
       },
       {
         flag: "-p <npub|hex|nip05>",
         description:
-          "Filter by mentioned pubkey (#p tag, supports npub, hex, NIP-05, or bare domain)",
+          "Filter by mentioned pubkey (#p tag, supports npub, hex, NIP-05, or bare domain). Supports comma-separated values: -p npub1...,npub2...",
       },
       {
         flag: "-t <hashtag>",
-        description: "Filter by hashtag (#t tag)",
+        description: "Filter by hashtag (#t tag). Supports comma-separated values: -t nostr,bitcoin,lightning",
       },
       {
         flag: "-d <identifier>",
-        description: "Filter by d-tag identifier (replaceable events)",
+        description: "Filter by d-tag identifier (replaceable events). Supports comma-separated values: -d article1,article2",
       },
       {
         flag: "--since <time>",
@@ -199,13 +199,15 @@ export const manPages: Record<string, ManPageEntry> = {
     ],
     examples: [
       "req -k 1 -l 20                      Get 20 recent notes (streams live by default)",
+      "req -k 1,3,7 -l 50                  Get notes, contact lists, and reactions",
       "req -k 0 -a npub1...                 Get profile for author",
       "req -k 1 -a user@domain.com          Get notes from NIP-05 identifier",
       "req -k 1 -a dergigi.com              Get notes from bare domain (resolves to _@dergigi.com)",
+      "req -k 1 -a npub1...,npub2...        Get notes from multiple authors",
       "req -k 1 -p verbiricha@habla.news    Get notes mentioning NIP-05 user",
       "req -k 1 --since 1h relay.damus.io   Get notes from last hour",
       "req -k 1 --close-on-eose             Get recent notes and close after EOSE",
-      "req -t nostr -l 50                   Get 50 events tagged #nostr",
+      "req -t nostr,bitcoin -l 50           Get 50 events tagged #nostr or #bitcoin",
       "req --search bitcoin -k 1            Search notes for 'bitcoin'",
       "req -k 1 relay1.com relay2.com       Query multiple relays",
     ],
