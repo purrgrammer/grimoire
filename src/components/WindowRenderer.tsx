@@ -13,6 +13,7 @@ import { RelayViewer } from "./RelayViewer";
 import KindRenderer from "./KindRenderer";
 import Feed from "./nostr/Feed";
 import { WinViewer } from "./WinViewer";
+import { DebugViewer } from "./DebugViewer";
 
 interface WindowRendererProps {
   window: WindowInstance;
@@ -128,6 +129,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "relay":
         content = <RelayViewer url={window.props.url} />;
+        break;
+      case "debug":
+        content = <DebugViewer />;
         break;
       default:
         content = (

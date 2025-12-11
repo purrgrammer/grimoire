@@ -13,11 +13,15 @@ interface UserNameProps {
  * Component that displays a user's name from their Nostr profile
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
+ * Uses orange-400 color for the logged-in user
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
-  const { addWindow } = useGrimoire();
+  const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
   const displayName = getDisplayName(pubkey, profile);
+
+  // Check if this is the logged-in user
+  const isActiveAccount = state.activeAccount?.pubkey === pubkey;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -27,7 +31,11 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
   return (
     <span
       dir="auto"
-      className={cn("cursor-pointer hover:underline", className)}
+      className={cn(
+        "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
+        isActiveAccount ? "text-orange-400" : "text-accent",
+        className,
+      )}
       onClick={handleClick}
     >
       {isMention ? "@" : null}

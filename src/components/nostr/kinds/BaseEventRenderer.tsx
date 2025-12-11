@@ -30,10 +30,7 @@ export interface BaseEventProps {
 export function EventAuthor({ pubkey }: { pubkey: string }) {
   return (
     <div className="flex flex-col gap-0">
-      <UserName
-        pubkey={pubkey}
-        className="text-md text-accent cursor-crosshair font-semibold hover:underline hover:decoration-dotted"
-      />
+      <UserName pubkey={pubkey} className="text-md" />
     </div>
   );
 }

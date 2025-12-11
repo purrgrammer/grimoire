@@ -23,3 +23,11 @@ Current RTL implementation is partial and has limitations:
 4. Accept partial RTL support and document limitations
 
 **Test case**: Arabic text with hashtags on same line should display properly with right-alignment.
+
+## TODO: compact Live indicator for REQ viewer
+## TODO: nested lists in Markdown should be padded
+## TODO: "live" sometimes not working?
+look into reconnecting on errors
+## TODO: improve text rendering
+
+avoid inserting `br`, look into noStrudel's eol metadata

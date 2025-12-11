@@ -11,7 +11,8 @@ export type AppId =
   | "profile"
   | "encode"
   | "decode"
-  | "relay";
+  | "relay"
+  | "debug";
 
 export interface WindowInstance {
   id: string;
