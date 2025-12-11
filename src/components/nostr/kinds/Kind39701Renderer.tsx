@@ -12,13 +12,16 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
   // URL comes from d tag (identifier) or optional u tag
   const dTag = event.tags.find((t) => t[0] === "d")?.[1];
   const uTag = event.tags.find((t) => t[0] === "u")?.[1];
-  const url = uTag || dTag;
+  // If only d tag provided, assume https:// prefix
+  const url = uTag || (dTag ? `https://${dTag}` : undefined);
 
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Title */}
-        {title && <h3 className="text-lg font-bold">{title}</h3>}
+        {title && (
+          <h3 className="text-lg font-bold text-foreground">{title}</h3>
+        )}
 
         {/* URL with external link icon */}
         {url && (
