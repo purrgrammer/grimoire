@@ -4,14 +4,97 @@ import { useProfile } from "@/hooks/useProfile";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { getKindName, getKindIcon } from "@/constants/kinds";
 import { getNipTitle } from "@/constants/nips";
-import { getCommandIcon, getCommandDescription } from "@/constants/command-icons";
+import {
+  getCommandIcon,
+  getCommandDescription,
+} from "@/constants/command-icons";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type { LucideIcon } from "lucide-react";
+import { nip19 } from "nostr-tools";
 
 export interface WindowTitleData {
   title: string;
   icon?: LucideIcon;
   tooltip?: string;
+}
+
+/**
+ * Generate raw command string from window appId and props
+ */
+function generateRawCommand(appId: string, props: any): string {
+  switch (appId) {
+    case "profile":
+      if (props.pubkey) {
+        try {
+          const npub = nip19.npubEncode(props.pubkey);
+          return `profile ${npub}`;
+        } catch {
+          return `profile ${props.pubkey.slice(0, 16)}...`;
+        }
+      }
+      return "profile";
+
+    case "kind":
+      return props.number ? `kind ${props.number}` : "kind";
+
+    case "nip":
+      return props.number ? `nip ${props.number}` : "nip";
+
+    case "relay":
+      return props.url ? `relay ${props.url}` : "relay";
+
+    case "open":
+      if (props.pointer) {
+        try {
+          if ("id" in props.pointer) {
+            const nevent = nip19.neventEncode({ id: props.pointer.id });
+            return `open ${nevent}`;
+          } else if ("kind" in props.pointer && "pubkey" in props.pointer) {
+            const naddr = nip19.naddrEncode({
+              kind: props.pointer.kind,
+              pubkey: props.pointer.pubkey,
+              identifier: props.pointer.identifier || "",
+            });
+            return `open ${naddr}`;
+          }
+        } catch {
+          // Fallback to shortened ID
+        }
+      }
+      return "open";
+
+    case "encode":
+      if (props.args && props.args[0]) {
+        return `encode ${props.args[0]}`;
+      }
+      return "encode";
+
+    case "decode":
+      if (props.args && props.args[0]) {
+        return `decode ${props.args[0]}`;
+      }
+      return "decode";
+
+    case "req":
+      // REQ command can be complex, show simplified version
+      if (props.filter) {
+        const parts: string[] = ["req"];
+        if (props.filter.kinds?.length) {
+          parts.push(`-k ${props.filter.kinds.join(",")}`);
+        }
+        if (props.filter.authors?.length) {
+          parts.push(`-a ${props.filter.authors.slice(0, 2).join(",")}`);
+        }
+        return parts.join(" ");
+      }
+      return "req";
+
+    case "man":
+      return props.cmd ? `man ${props.cmd}` : "man";
+
+    default:
+      return appId;
+  }
 }
 
 /**
@@ -60,9 +143,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     if (event.kind === 30023) {
       const titleTag = event.tags.find((t) => t[0] === "title")?.[1];
       if (titleTag) {
-        return titleTag.length > 50
-          ? `${titleTag.slice(0, 50)}...`
-          : titleTag;
+        return titleTag.length > 50 ? `${titleTag.slice(0, 50)}...` : titleTag;
       }
     }
 
@@ -107,12 +188,16 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       if (kindNames.length <= 3) {
         parts.push(kindNames.join(", "));
       } else {
-        parts.push(`${kindNames.slice(0, 3).join(", ")}, +${kindNames.length - 3}`);
+        parts.push(
+          `${kindNames.slice(0, 3).join(", ")}, +${kindNames.length - 3}`,
+        );
       }
     }
 
     if (filter.authors && filter.authors.length > 0) {
-      parts.push(`${filter.authors.length} author${filter.authors.length > 1 ? "s" : ""}`);
+      parts.push(
+        `${filter.authors.length} author${filter.authors.length > 1 ? "s" : ""}`,
+      );
     }
 
     return parts.length > 0 ? parts.join(" • ") : "REQ";
@@ -132,7 +217,9 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     if (appId !== "decode") return null;
     const { args } = props;
     if (args && args[0]) {
-      const prefix = args[0].match(/^(npub|nprofile|note|nevent|naddr|nsec)/i)?.[1];
+      const prefix = args[0].match(
+        /^(npub|nprofile|note|nevent|naddr|nsec)/i,
+      )?.[1];
       if (prefix) {
         return `DECODE ${prefix.toUpperCase()}`;
       }
@@ -185,70 +272,72 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     let icon: LucideIcon | undefined;
     let tooltip: string | undefined;
 
+    // Generate raw command for tooltip
+    const rawCommand = generateRawCommand(appId, props);
+
     // Priority order for title selection
     if (profileTitle) {
       title = profileTitle;
       icon = getCommandIcon("profile");
-      tooltip = `profile: ${getCommandDescription("profile")}`;
+      tooltip = rawCommand;
     } else if (eventTitle && appId === "open") {
       title = eventTitle;
       // Use the event's kind icon if we have the event loaded
       if (event) {
         icon = getKindIcon(event.kind);
-        const kindName = getKindName(event.kind);
-        tooltip = `${kindName} (kind ${event.kind})`;
       } else {
         icon = getCommandIcon("open");
-        tooltip = `open: ${getCommandDescription("open")}`;
       }
+      tooltip = rawCommand;
     } else if (kindTitle && appId === "kind") {
       title = kindTitle;
       const kindNum = parseInt(props.number);
       icon = getKindIcon(kindNum);
-      tooltip = `kind: ${getCommandDescription("kind")}`;
+      tooltip = rawCommand;
     } else if (relayTitle) {
       title = relayTitle;
       icon = getCommandIcon("relay");
-      tooltip = `relay: ${getCommandDescription("relay")}`;
+      tooltip = rawCommand;
     } else if (reqTitle) {
       title = reqTitle;
       icon = getCommandIcon("req");
-      tooltip = `req: ${getCommandDescription("req")}`;
+      tooltip = rawCommand;
     } else if (encodeTitle) {
       title = encodeTitle;
       icon = getCommandIcon("encode");
-      tooltip = `encode: ${getCommandDescription("encode")}`;
+      tooltip = rawCommand;
     } else if (decodeTitle) {
       title = decodeTitle;
       icon = getCommandIcon("decode");
-      tooltip = `decode: ${getCommandDescription("decode")}`;
+      tooltip = rawCommand;
     } else if (nipTitle) {
       title = nipTitle;
       icon = getCommandIcon("nip");
-      tooltip = `nip: ${getCommandDescription("nip")}`;
+      tooltip = rawCommand;
     } else if (manTitle) {
       title = manTitle;
       // Use the specific command's icon, not the generic "man" icon
       icon = getCommandIcon(props.cmd);
-      tooltip = `${props.cmd}: ${getCommandDescription(props.cmd)}`;
+      tooltip = rawCommand;
     } else if (feedTitle) {
       title = feedTitle;
       icon = getCommandIcon("feed");
-      tooltip = `feed: ${getCommandDescription("feed")}`;
+      tooltip = rawCommand;
     } else if (winTitle) {
       title = winTitle;
       icon = getCommandIcon("win");
-      tooltip = `win: ${getCommandDescription("win")}`;
+      tooltip = rawCommand;
     } else if (kindsTitle) {
       title = kindsTitle;
       icon = getCommandIcon("kinds");
-      tooltip = `kinds: ${getCommandDescription("kinds")}`;
+      tooltip = rawCommand;
     } else if (debugTitle) {
       title = debugTitle;
       icon = getCommandIcon("debug");
-      tooltip = `debug: ${getCommandDescription("debug")}`;
+      tooltip = rawCommand;
     } else {
       title = staticTitle;
+      tooltip = rawCommand;
     }
 
     return { title, icon, tooltip };

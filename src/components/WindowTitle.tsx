@@ -25,7 +25,9 @@ export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
               <Icon className="size-4 text-muted-foreground" />
             </span>
           )}
-          <span className="truncate">{title}</span>
+          <span className="truncate" title={tooltip}>
+            {title}
+          </span>
         </div>
         <WindowToolbar onClose={() => onClose(id)} />
       </div>
@@ -33,11 +35,7 @@ export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
   };
 
   return (
-    <MosaicWindow
-      path={path}
-      title={title}
-      renderToolbar={renderToolbar}
-    >
+    <MosaicWindow path={path} title={title} renderToolbar={renderToolbar}>
       <WindowRenderer window={window} onClose={() => onClose(id)} />
     </MosaicWindow>
   );
