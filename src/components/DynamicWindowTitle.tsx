@@ -65,6 +65,31 @@ function formatProfileNames(
 }
 
 /**
+ * Format hashtags with prefix
+ * @param prefix - Prefix to use (e.g., '#')
+ * @param hashtags - Array of hashtag strings
+ * @returns Formatted string like "#bitcoin, #nostr & 2 others" or null if no hashtags
+ */
+function formatHashtags(prefix: string, hashtags: string[]): string | null {
+  if (!hashtags.length) return null;
+
+  const formatted: string[] = [];
+  const [tag1, tag2] = hashtags;
+
+  // Add first two hashtags
+  if (tag1) formatted.push(`${prefix}${tag1}`);
+  if (hashtags.length > 1 && tag2) formatted.push(`${prefix}${tag2}`);
+
+  // Add "& X more" if more than 2
+  if (hashtags.length > 2) {
+    const moreCount = hashtags.length - 2;
+    formatted.push(`& ${moreCount} more`);
+  }
+
+  return formatted.join(", ");
+}
+
+/**
  * Generate raw command string from window appId and props
  */
 function generateRawCommand(appId: string, props: any): string {
@@ -127,6 +152,9 @@ function generateRawCommand(appId: string, props: any): string {
         const parts: string[] = ["req"];
         if (props.filter.kinds?.length) {
           parts.push(`-k ${props.filter.kinds.join(",")}`);
+        }
+        if (props.filter["#t"]?.length) {
+          parts.push(`-t ${props.filter["#t"].slice(0, 2).join(",")}`);
         }
         if (props.filter.authors?.length) {
           parts.push(`-a ${props.filter.authors.slice(0, 2).join(",")}`);
@@ -230,6 +258,9 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const tagged1Profile = useProfile(tagged1Pubkey);
   const tagged2Profile = useProfile(tagged2Pubkey);
 
+  const reqHashtags =
+    appId === "req" && props.filter?.["#t"] ? props.filter["#t"] : [];
+
   // REQ titles
   const reqTitle = useMemo(() => {
     if (appId !== "req") return null;
@@ -248,6 +279,12 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
           `${kindNames.slice(0, 3).join(", ")}, +${kindNames.length - 3}`,
         );
       }
+    }
+
+    // Format hashtags with # prefix
+    if (filter["#t"] && filter["#t"].length > 0) {
+      const hashtagText = formatHashtags("#", reqHashtags);
+      if (hashtagText) parts.push(hashtagText);
     }
 
     // Format tagged users with @ prefix
@@ -274,6 +311,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     props,
     reqAuthors,
     reqTagged,
+    reqHashtags,
     author1Profile,
     author2Profile,
     tagged1Profile,
