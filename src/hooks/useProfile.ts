@@ -4,11 +4,12 @@ import { ProfileContent } from "applesauce-core/helpers";
 import { kinds } from "nostr-tools";
 import db from "@/services/db";
 
-export function useProfile(pubkey: string): ProfileContent | undefined {
+export function useProfile(pubkey?: string): ProfileContent | undefined {
   const [profile, setProfile] = useState<ProfileContent | undefined>();
 
   useEffect(() => {
     let mounted = true;
+    if (!pubkey) return;
 
     // Load from IndexedDB first
     db.profiles.get(pubkey).then((cachedProfile) => {

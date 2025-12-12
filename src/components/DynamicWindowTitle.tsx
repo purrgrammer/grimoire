@@ -10,12 +10,58 @@ import {
 } from "@/constants/command-icons";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type { LucideIcon } from "lucide-react";
-import { nip19 } from "nostr-tools";
+import { kinds, nip19 } from "nostr-tools";
+import { ProfileContent } from "applesauce-core/helpers";
 
 export interface WindowTitleData {
   title: string;
   icon?: LucideIcon;
   tooltip?: string;
+}
+
+/**
+ * Format profile names with prefix
+ * @param prefix - Prefix to use (e.g., 'by ', '@ ')
+ * @param pubkeys - Array of pubkeys to format
+ * @param profiles - Array of corresponding profile metadata
+ * @returns Formatted string like "by Alice, Bob & 3 others" or null if no pubkeys
+ */
+function formatProfileNames(
+  prefix: string,
+  pubkeys: string[],
+  profiles: (ProfileContent | undefined)[],
+): string | null {
+  if (!pubkeys.length) return null;
+
+  const names: string[] = [];
+  const [pubkey1, pubkey2] = pubkeys;
+  const [profile1, profile2] = profiles;
+
+  // Add first profile
+  if (profile1) {
+    const name = profile1.display_name || profile1.name;
+    names.push(name || `${pubkey1.slice(0, 8)}...`);
+  } else if (pubkey1) {
+    names.push(`${pubkey1.slice(0, 8)}...`);
+  }
+
+  // Add second profile if exists
+  if (pubkeys.length > 1) {
+    if (profile2) {
+      const name = profile2.display_name || profile2.name;
+      names.push(name || `${pubkey2.slice(0, 8)}...`);
+    } else if (pubkey2) {
+      names.push(`${pubkey2.slice(0, 8)}...`);
+    }
+  }
+
+  // Add "& X other(s)" if more than 2
+  if (pubkeys.length > 2) {
+    const othersCount = pubkeys.length - 2;
+    names.push(`& ${othersCount} other${othersCount > 1 ? "s" : ""}`);
+  }
+
+  return names.length > 0 ? `${prefix}${names.join(", ")}` : null;
 }
 
 /**
@@ -115,10 +161,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     if (appId !== "profile" || !profilePubkey) return null;
 
     if (profile) {
-      const displayName = profile.display_name || profile.name;
-      if (displayName) {
-        return `@${displayName}`;
-      }
+      return profile.display_name || profile.name;
     }
 
     return `Profile ${profilePubkey.slice(0, 8)}...`;
@@ -134,13 +177,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     const kindName = getKindName(event.kind);
 
     // For text-based events, show a preview
-    if (event.kind === 1 && event.content) {
+    if (event.kind === kinds.ShortTextNote && event.content) {
       const preview = event.content.slice(0, 40).trim();
       return preview ? `${kindName}: ${preview}...` : kindName;
     }
 
     // For articles (kind 30023), show title tag
-    if (event.kind === 30023) {
+    if (event.kind === kinds.LongFormArticle) {
       const titleTag = event.tags.find((t) => t[0] === "title")?.[1];
       if (titleTag) {
         return titleTag.length > 50 ? `${titleTag.slice(0, 50)}...` : titleTag;
@@ -148,7 +191,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     }
 
     // For highlights (kind 9802), show preview
-    if (event.kind === 9802 && event.content) {
+    if (event.kind === kinds.Highlights && event.content) {
       const preview = event.content.slice(0, 40).trim();
       return preview ? `Highlight: ${preview}...` : "Highlight";
     }
@@ -174,13 +217,18 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     }
   }, [appId, props]);
 
-  // Fetch profiles for REQ authors (up to 2)
+  // Fetch profiles for REQ authors and tagged users (up to 2 each)
   const reqAuthors =
     appId === "req" && props.filter?.authors ? props.filter.authors : [];
-  const author1Pubkey = reqAuthors[0] || "";
-  const author2Pubkey = reqAuthors[1] || "";
+  const [author1Pubkey, author2Pubkey] = reqAuthors;
   const author1Profile = useProfile(author1Pubkey);
   const author2Profile = useProfile(author2Pubkey);
+
+  const reqTagged =
+    appId === "req" && props.filter?.["#p"] ? props.filter["#p"] : [];
+  const [tagged1Pubkey, tagged2Pubkey] = reqTagged;
+  const tagged1Profile = useProfile(tagged1Pubkey);
+  const tagged2Profile = useProfile(tagged2Pubkey);
 
   // REQ titles
   const reqTitle = useMemo(() => {
@@ -202,48 +250,34 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       }
     }
 
+    // Format tagged users with @ prefix
+    if (filter["#p"] && filter["#p"].length > 0) {
+      const taggedText = formatProfileNames("@", reqTagged, [
+        tagged1Profile,
+        tagged2Profile,
+      ]);
+      if (taggedText) parts.push(taggedText);
+    }
+
+    // Format authors with "by " prefix
     if (filter.authors && filter.authors.length > 0) {
-      const authorNames: string[] = [];
-
-      // Add first author
-      if (author1Profile) {
-        const name = author1Profile.display_name || author1Profile.name;
-        authorNames.push(
-          name ? `@${name}` : `@${author1Pubkey.slice(0, 8)}...`,
-        );
-      } else if (author1Pubkey) {
-        authorNames.push(`@${author1Pubkey.slice(0, 8)}...`);
-      }
-
-      // Add second author if exists
-      if (filter.authors.length > 1) {
-        if (author2Profile) {
-          const name = author2Profile.display_name || author2Profile.name;
-          authorNames.push(
-            name ? `@${name}` : `@${author2Pubkey.slice(0, 8)}...`,
-          );
-        } else if (author2Pubkey) {
-          authorNames.push(`@${author2Pubkey.slice(0, 8)}...`);
-        }
-      }
-
-      // Add "& X other(s)" if more than 2
-      if (filter.authors.length > 2) {
-        const othersCount = filter.authors.length - 2;
-        authorNames.push(`& ${othersCount} other${othersCount > 1 ? "s" : ""}`);
-      }
-
-      parts.push(authorNames.join(", "));
+      const authorsText = formatProfileNames("by ", reqAuthors, [
+        author1Profile,
+        author2Profile,
+      ]);
+      if (authorsText) parts.push(authorsText);
     }
 
     return parts.length > 0 ? parts.join(" • ") : "REQ";
   }, [
     appId,
     props,
+    reqAuthors,
+    reqTagged,
     author1Profile,
     author2Profile,
-    author1Pubkey,
-    author2Pubkey,
+    tagged1Profile,
+    tagged2Profile,
   ]);
 
   // Encode/Decode titles
