@@ -1,7 +1,8 @@
 import { useGrimoire } from "@/core/state";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { UserName } from "../UserName";
-import { Users, Sparkles } from "lucide-react";
+import { Users, Sparkles, Hash } from "lucide-react";
+import { getTagValues } from "@/lib/nostr-utils";
 
 /**
  * Kind 3 Renderer - Contact/Follow List
@@ -10,10 +11,8 @@ import { Users, Sparkles } from "lucide-react";
 export function Kind3Renderer({ event }: BaseEventProps) {
   const { state } = useGrimoire();
 
-  // Extract followed pubkeys from p tags
-  const followedPubkeys = event.tags
-    .filter((tag) => tag[0] === "p")
-    .map((tag) => tag[1]);
+  const followedPubkeys = getTagValues(event, "p");
+  const topics = getTagValues(event, "t");
 
   const followsYou = state.activeAccount?.pubkey
     ? followedPubkeys.includes(state.activeAccount.pubkey)
@@ -22,15 +21,21 @@ export function Kind3Renderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2 text-xs">
-        <span className="flex items-center gap-1">
-          <Users className="size-3 text-muted-foreground" />
-          Following {followedPubkeys.length} people
-        </span>
+        <div className="flex items-center gap-1">
+          <Users className="size-4 text-muted-foreground" />
+          {followedPubkeys.length} people
+        </div>
         {followsYou && (
-          <span className="flex items-center gap-1">
-            <Sparkles className="size-3 text-muted-foreground" />
+          <div className="flex items-center gap-1">
+            <Sparkles className="size-4 text-muted-foreground" />
             Follows you
-          </span>
+          </div>
+        )}
+        {topics.length > 0 && (
+          <div className="flex items-center gap-1">
+            <Hash className="size-4 text-muted-foreground" />
+            {topics.length} topics
+          </div>
         )}
       </div>
     </BaseEventContainer>
@@ -44,10 +49,10 @@ export function Kind3Renderer({ event }: BaseEventProps) {
 export function Kind3DetailView({ event }: { event: any }) {
   const { state } = useGrimoire();
 
-  // Extract followed pubkeys from p tags
-  const followedPubkeys = event.tags
-    .filter((tag: string[]) => tag[0] === "p" && tag[1].length === 64)
-    .map((tag: string[]) => tag[1]);
+  const followedPubkeys = getTagValues(event, "p").filter(
+    (pk) => pk.length === 64
+  );
+  const topics = getTagValues(event, "t");
 
   const followsYou = state.activeAccount?.pubkey
     ? followedPubkeys.includes(state.activeAccount.pubkey)
@@ -62,26 +67,46 @@ export function Kind3DetailView({ event }: { event: any }) {
         </div>
 
         <div className="flex flex-col gap-1 text-sm">
-          <span>Following {followedPubkeys.length} people</span>
+          <span className="flex items-center gap-1">
+            <Users className="size-4 text-muted-foreground" />
+            {followedPubkeys.length} people
+          </span>
           {followsYou && (
             <span className="flex items-center gap-1">
               <Sparkles className="size-4  text-muted-foreground" />
               Follows you
             </span>
           )}
+          {topics.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Hash className="size-4 text-muted-foreground" />
+              {topics.length} topics
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="border-t border-border pt-4">
+      <div className="flex flex-col gap-2">
+        <h2>People</h2>
+        {followedPubkeys.map((pubkey: string) => (
+          <div key={pubkey} className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">•</span>
+            <UserName pubkey={pubkey} />
+          </div>
+        ))}
+      </div>
+
+      {topics.length > 0 && (
         <div className="flex flex-col gap-2">
-          {followedPubkeys.map((pubkey: string) => (
-            <div key={pubkey} className="flex items-center gap-2 text-sm">
+          <h2>Topics</h2>
+          {topics.map((topic: string) => (
+            <div key={topic} className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">•</span>
-              <UserName pubkey={pubkey} />
+              <span className="text-muted-foreground">#{topic}</span>
             </div>
           ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }
