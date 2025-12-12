@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, memo } from "react";
+import { Virtuoso } from "react-virtuoso";
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +14,12 @@ import { useGrimoire } from "@/core/state";
 import { FeedEvent } from "./nostr/Feed";
 import { KindBadge } from "./KindBadge";
 import type { NostrFilter } from "@/types/nostr";
+
+// Memoized FeedEvent to prevent unnecessary re-renders during scroll
+const MemoizedFeedEvent = memo(
+  FeedEvent,
+  (prev, next) => prev.event.id === next.event.id,
+);
 
 interface ReqViewerProps {
   filter: NostrFilter;
@@ -240,9 +247,14 @@ export default function ReqViewer({
             Waiting for events...
           </div>
         )}
-        {events.map((event) => (
-          <FeedEvent key={event.id} event={event} />
-        ))}
+        {events.length > 0 && (
+          <Virtuoso
+            style={{ height: "100%" }}
+            data={events}
+            computeItemKey={(_index, event) => event.id}
+            itemContent={(_index, event) => <MemoizedFeedEvent event={event} />}
+          />
+        )}
       </div>
     </div>
   );
