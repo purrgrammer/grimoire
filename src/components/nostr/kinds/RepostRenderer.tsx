@@ -4,10 +4,13 @@ import { EmbeddedEvent } from "../EmbeddedEvent";
 import { useGrimoire } from "@/core/state";
 
 /**
- * Renderer for Kind 6 - Reposts
+ * Renderer for Kind 6 (Repost) and Kind 16 (Generic Repost)
  * Displays repost indicator with the original event embedded
+ *
+ * Kind 6: Specifically for reposting kind 1 notes (NIP-18)
+ * Kind 16: Generic repost for any event kind (NIP-18)
  */
-export function Kind6Renderer({ event }: BaseEventProps) {
+export function RepostRenderer({ event }: BaseEventProps) {
   const { addWindow } = useGrimoire();
 
   // Get the event being reposted (e tag)
@@ -38,3 +41,7 @@ export function Kind6Renderer({ event }: BaseEventProps) {
     </BaseEventContainer>
   );
 }
+
+// Export aliases for backwards compatibility and clarity
+export { RepostRenderer as Kind6Renderer };
+export { RepostRenderer as Kind16Renderer };

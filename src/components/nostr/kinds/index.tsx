@@ -1,7 +1,7 @@
 import { Kind0Renderer } from "./Kind0Renderer";
 import { Kind1Renderer } from "./Kind1Renderer";
 import { Kind3Renderer } from "./Kind3Renderer";
-import { Kind6Renderer } from "./Kind6Renderer";
+import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./Kind7Renderer";
 import { Kind20Renderer } from "./Kind20Renderer";
 import { Kind21Renderer } from "./Kind21Renderer";
@@ -24,8 +24,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   0: Kind0Renderer, // Profile Metadata
   1: Kind1Renderer, // Short Text Note
   3: Kind3Renderer, // Contact List
-  6: Kind6Renderer, // Repost
+  6: RepostRenderer, // Repost
   7: Kind7Renderer, // Reaction
+  16: RepostRenderer, // Generic Repost
   20: Kind20Renderer, // Picture (NIP-68)
   21: Kind21Renderer, // Video Event (NIP-71)
   22: Kind22Renderer, // Short Video (NIP-71)
@@ -89,7 +90,7 @@ export {
 } from "./BaseEventRenderer";
 export type { BaseEventProps } from "./BaseEventRenderer";
 export { Kind1Renderer } from "./Kind1Renderer";
-export { Kind6Renderer } from "./Kind6Renderer";
+export { RepostRenderer, Kind6Renderer, Kind16Renderer } from "./RepostRenderer";
 export { Kind7Renderer } from "./Kind7Renderer";
 export { Kind20Renderer } from "./Kind20Renderer";
 export { Kind21Renderer } from "./Kind21Renderer";
