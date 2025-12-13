@@ -30,7 +30,7 @@ export const createWorkspace = (
  */
 export const addWindow = (
   state: GrimoireState,
-  payload: { appId: string; title: string; props: any },
+  payload: { appId: string; title: string; props: any; commandString?: string },
 ): GrimoireState => {
   const activeId = state.activeWorkspaceId;
   const ws = state.workspaces[activeId];
@@ -40,6 +40,7 @@ export const addWindow = (
     appId: payload.appId as any,
     title: payload.title,
     props: payload.props,
+    commandString: payload.commandString,
   };
 
   // Simple Binary Split Logic
@@ -260,6 +261,59 @@ export const setActiveAccountRelays = (
     activeAccount: {
       ...state.activeAccount,
       relays,
+    },
+  };
+};
+
+/**
+ * Deletes a workspace by ID.
+ * Cannot delete the last remaining workspace.
+ * Does NOT change activeWorkspaceId - caller is responsible for workspace navigation.
+ */
+export const deleteWorkspace = (
+  state: GrimoireState,
+  workspaceId: string,
+): GrimoireState => {
+  const workspaceIds = Object.keys(state.workspaces);
+
+  // Don't delete if it's the only workspace
+  if (workspaceIds.length <= 1) {
+    return state;
+  }
+
+  // Don't delete if workspace doesn't exist
+  if (!state.workspaces[workspaceId]) {
+    return state;
+  }
+
+  // Remove the workspace (don't touch activeWorkspaceId - that's the caller's job)
+  const { [workspaceId]: _removed, ...remainingWorkspaces } = state.workspaces;
+
+  return {
+    ...state,
+    workspaces: remainingWorkspaces,
+  };
+};
+
+/**
+ * Updates an existing window with new properties.
+ * Allows updating props, title, commandString, and even appId (which changes the viewer type).
+ */
+export const updateWindow = (
+  state: GrimoireState,
+  windowId: string,
+  updates: Partial<Pick<WindowInstance, "props" | "title" | "commandString" | "appId">>,
+): GrimoireState => {
+  const window = state.windows[windowId];
+  if (!window) {
+    return state; // Window doesn't exist, return unchanged
+  }
+
+  return {
+    ...state,
+    windows: {
+      ...state.windows,
+      [windowId]: { ...window, ...updates },
     },
   };
 };

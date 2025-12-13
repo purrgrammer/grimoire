@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
+import { useAtom } from "jotai";
 import { useGrimoire } from "@/core/state";
 import { manPages } from "@/types/man";
+import { parseCommandInput, executeCommandParser } from "@/lib/command-parser";
+import { commandLauncherEditModeAtom } from "@/core/command-launcher-state";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import "./command-launcher.css";
@@ -16,24 +19,22 @@ export default function CommandLauncher({
   onOpenChange,
 }: CommandLauncherProps) {
   const [input, setInput] = useState("");
-  const { addWindow } = useGrimoire();
+  const [editMode, setEditMode] = useAtom(commandLauncherEditModeAtom);
+  const { addWindow, updateWindow } = useGrimoire();
 
+  // Prefill input when entering edit mode
   useEffect(() => {
-    if (!open) {
+    if (open && editMode) {
+      setInput(editMode.initialCommand);
+    } else if (!open) {
       setInput("");
     }
-  }, [open]);
+  }, [open, editMode]);
 
   // Parse input into command and arguments
-  const parseInput = (value: string) => {
-    const parts = value.trim().split(/\s+/);
-    const commandName = parts[0]?.toLowerCase() || "";
-    const args = parts.slice(1);
-    return { commandName, args, fullInput: value };
-  };
-
-  const { commandName, args } = parseInput(input);
-  const recognizedCommand = commandName && manPages[commandName];
+  const parsed = parseCommandInput(input);
+  const { commandName } = parsed;
+  const recognizedCommand = parsed.command;
 
   // Filter commands by partial match on command name only
   const filteredCommands = Object.entries(manPages).filter(([name]) =>
@@ -44,22 +45,33 @@ export default function CommandLauncher({
   const executeCommand = async () => {
     if (!recognizedCommand) return;
 
-    const command = recognizedCommand;
+    // Execute argParser and get props/title
+    const result = await executeCommandParser(parsed);
 
-    // Use argParser if available, otherwise use defaultProps
-    // argParser can now be async
-    const props = command.argParser
-      ? await Promise.resolve(command.argParser(args))
-      : command.defaultProps || {};
+    if (result.error || !result.props) {
+      console.error("Failed to parse command:", result.error);
+      return;
+    }
 
-    // Generate title
-    const title =
-      args.length > 0
-        ? `${commandName.toUpperCase()} ${args.join(" ")}`
-        : commandName.toUpperCase();
+    // Edit mode: update existing window
+    if (editMode) {
+      updateWindow(editMode.windowId, {
+        props: result.props,
+        title: result.title,
+        commandString: input.trim(),
+        appId: recognizedCommand.appId,
+      });
+      setEditMode(null); // Clear edit mode
+    } else {
+      // Normal mode: create new window
+      addWindow(
+        recognizedCommand.appId,
+        result.props,
+        result.title,
+        input.trim(),
+      );
+    }
 
-    // Execute command
-    addWindow(command.appId, props, title);
     onOpenChange(false);
   };
 
@@ -111,11 +123,11 @@ export default function CommandLauncher({
               className="command-input"
             />
 
-            {recognizedCommand && args.length > 0 && (
+            {recognizedCommand && parsed.args.length > 0 && (
               <div className="command-hint">
                 <span className="command-hint-label">Parsed:</span>
                 <span className="command-hint-command">{commandName}</span>
-                <span className="command-hint-args">{args.join(" ")}</span>
+                <span className="command-hint-args">{parsed.args.join(" ")}</span>
               </div>
             )}
 

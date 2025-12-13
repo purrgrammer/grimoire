@@ -9,9 +9,16 @@ interface WindowTileProps {
   window: WindowInstance;
   path: MosaicBranch[];
   onClose: (id: string) => void;
+  onEditCommand: () => void; // Callback to open CommandLauncher
 }
 
-export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
+export function WindowTile({
+  id,
+  window,
+  path,
+  onClose,
+  onEditCommand,
+}: WindowTileProps) {
   const { title, icon, tooltip } = useDynamicWindowTitle(window);
   const Icon = icon;
 
@@ -29,7 +36,11 @@ export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
             {title}
           </span>
         </div>
-        <WindowToolbar onClose={() => onClose(id)} />
+        <WindowToolbar
+          window={window}
+          onClose={() => onClose(id)}
+          onEditCommand={onEditCommand}
+        />
       </div>
     );
   };

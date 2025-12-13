@@ -71,6 +71,7 @@ export default function Home() {
         window={window}
         path={path}
         onClose={handleRemoveWindow}
+        onEditCommand={() => setCommandLauncherOpen(true)}
       />
     );
   };

@@ -24,6 +24,7 @@ export interface WindowInstance {
   appId: AppId;
   title: string;
   props: any;
+  commandString?: string; // Original command that created this window (e.g., "profile alice@domain.com")
 }
 
 export interface Workspace {

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useAtom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
-import { GrimoireState, AppId } from "@/types/app";
+import { GrimoireState, AppId, WindowInstance } from "@/types/app";
 import { useLocale } from "@/hooks/useLocale";
 import * as Logic from "./logic";
 
@@ -82,14 +82,17 @@ export const useGrimoire = () => {
       const count = Object.keys(state.workspaces).length + 1;
       setState((prev) => Logic.createWorkspace(prev, count.toString()));
     },
-    addWindow: (appId: AppId, props: any, title?: string) =>
+    addWindow: (appId: AppId, props: any, title?: string, commandString?: string) =>
       setState((prev) =>
         Logic.addWindow(prev, {
           appId,
           props,
           title: title || appId.toUpperCase(),
+          commandString,
         }),
       ),
+    updateWindow: (windowId: string, updates: Partial<Pick<WindowInstance, "props" | "title" | "commandString" | "appId">>) =>
+      setState((prev) => Logic.updateWindow(prev, windowId, updates)),
     removeWindow: (id: string) =>
       setState((prev) => Logic.removeWindow(prev, id)),
     moveWindowToWorkspace: (windowId: string, targetWorkspaceId: string) =>
@@ -99,7 +102,37 @@ export const useGrimoire = () => {
     updateLayout: (layout: any) =>
       setState((prev) => Logic.updateLayout(prev, layout)),
     setActiveWorkspace: (id: string) =>
-      setState((prev) => ({ ...prev, activeWorkspaceId: id })),
+      setState((prev) => {
+        // Validate target workspace exists
+        if (!prev.workspaces[id]) {
+          console.warn(`Cannot switch to non-existent workspace: ${id}`);
+          return prev;
+        }
+
+        // If not actually switching, return unchanged
+        if (prev.activeWorkspaceId === id) {
+          return prev;
+        }
+
+        // Check if we're leaving an empty workspace and should auto-remove it
+        const currentWorkspace = prev.workspaces[prev.activeWorkspaceId];
+        const shouldDeleteCurrent =
+          currentWorkspace &&
+          currentWorkspace.windowIds.length === 0 &&
+          Object.keys(prev.workspaces).length > 1;
+
+        if (shouldDeleteCurrent) {
+          // Delete the empty workspace, then switch to target
+          const afterDelete = Logic.deleteWorkspace(
+            prev,
+            prev.activeWorkspaceId,
+          );
+          return { ...afterDelete, activeWorkspaceId: id };
+        }
+
+        // Normal workspace switch
+        return { ...prev, activeWorkspaceId: id };
+      }),
     setActiveAccount: (pubkey: string | undefined) =>
       setState((prev) => Logic.setActiveAccount(prev, pubkey)),
     setActiveAccountRelays: (relays: any) =>

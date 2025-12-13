@@ -12,29 +12,31 @@ export function TabBar() {
   };
 
   return (
-    <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1">
-      {Object.values(workspaces).map((ws) => (
-        <button
-          key={ws.id}
-          onClick={() => setActiveWorkspace(ws.id)}
-          className={cn(
-            "px-3 py-1 text-xs font-mono rounded transition-colors",
-            ws.id === activeWorkspaceId
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted",
-          )}
+    <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto">
+      <div className="flex items-center gap-1 flex-nowrap">
+        {Object.values(workspaces).map((ws) => (
+          <button
+            key={ws.id}
+            onClick={() => setActiveWorkspace(ws.id)}
+            className={cn(
+              "px-3 py-1 text-xs font-mono rounded transition-colors whitespace-nowrap flex-shrink-0",
+              ws.id === activeWorkspaceId
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            )}
+          >
+            {ws.label}
+          </button>
+        ))}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 ml-1 flex-shrink-0"
+          onClick={handleNewTab}
         >
-          {ws.label}
-        </button>
-      ))}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 ml-1"
-        onClick={handleNewTab}
-      >
-        <Plus className="h-3 w-3" />
-      </Button>
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
     </div>
   );
 }
