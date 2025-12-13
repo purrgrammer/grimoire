@@ -70,17 +70,16 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
 
         {/* Highlighted text */}
         {highlightText && (
-          <blockquote className="border-l-4 border-muted pl-3 py-2 bg-muted/80">
-            <p className="text-sm italic">{highlightText}</p>
+          <blockquote className="border-l-4 border-muted px-4 py-2 bg-muted/30">
+            <p className="text-sm italic leading-relaxed text-muted-foreground">
+              {highlightText}
+            </p>
           </blockquote>
         )}
 
         {/* Compact Source Event Preview - Clickable link with icon, author, and title/content */}
         {sourceEvent && (eventPointer || addressPointer) && (
-          <div
-            //onClick={handleOpenEvent}
-            className="flex items-baseline gap-2"
-          >
+          <div className="flex items-center gap-2">
             <KindBadge
               iconClassname="size-3 flex-shrink-0 text-muted-foreground"
               showName={false}
@@ -88,7 +87,10 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
               clickable
             />
 
-            <UserName pubkey={sourceEvent.pubkey} className="text-xs" />
+            <UserName
+              pubkey={sourceEvent.pubkey}
+              className="text-xs flex-shrink-0 line-clamp-1"
+            />
 
             {/* Title or Content Preview */}
             {sourcePreview && (
@@ -108,7 +110,7 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
             href={sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs text-accent underline decoration-dotted"
+            className="flex items-center gap-1 text-xs text-muted-foreground underline decoration-dotted"
           >
             <ExternalLink className="size-3 flex-shrink-0" />
             <span className="truncate">{sourceUrl}</span>
@@ -117,7 +119,7 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
 
         {/* No content fallback */}
         {!highlightText && (
-          <p className="text-sm text-muted-foreground italic">
+          <p className="text-xs text-muted-foreground italic">
             (Empty highlight)
           </p>
         )}
