@@ -28,7 +28,7 @@ export function KindBadge({
   const Icon = kindInfo?.icon;
 
   const style = "inline-flex items-center gap-2 text-foreground";
-  const interactiveStyle = clickable ? "cursor-pointer" : "";
+  const interactiveStyle = clickable ? "cursor-crosshair" : "";
 
   const handleClick = () => {
     if (clickable) {

@@ -5,16 +5,62 @@ import {
   getHighlightText,
   getHighlightSourceUrl,
   getHighlightComment,
+  getHighlightSourceEventPointer,
+  getHighlightSourceAddressPointer,
 } from "applesauce-core/helpers/highlight";
+import { UserName } from "../UserName";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { useGrimoire } from "@/core/state";
+import { RichText } from "../RichText";
+import { getArticleTitle } from "applesauce-core/helpers";
+import { KindBadge } from "@/components/KindBadge";
 
 /**
  * Renderer for Kind 9802 - Highlight
- * Displays highlighted text with optional comment and source URL
+ * Displays highlighted text with optional comment, compact source event preview, and source URL
  */
 export function Kind9802Renderer({ event }: BaseEventProps) {
+  const { addWindow } = useGrimoire();
   const highlightText = useMemo(() => getHighlightText(event), [event]);
   const sourceUrl = useMemo(() => getHighlightSourceUrl(event), [event]);
   const comment = useMemo(() => getHighlightComment(event), [event]);
+
+  // Get source event pointer (e tag) or address pointer (a tag) for Nostr event references
+  const eventPointer = useMemo(
+    () => getHighlightSourceEventPointer(event),
+    [event],
+  );
+  const addressPointer = useMemo(
+    () => getHighlightSourceAddressPointer(event),
+    [event],
+  );
+
+  // Load the source event for preview
+  const sourceEvent = useNostrEvent(eventPointer || addressPointer);
+
+  // Extract title or content preview from source event
+  const sourcePreview = useMemo(() => {
+    if (!sourceEvent) return null;
+
+    const title = getArticleTitle(sourceEvent);
+    if (title) return title;
+
+    // Fall back to content
+    return sourceEvent.content || null;
+  }, [sourceEvent]);
+
+  // Handle click to open source event
+  const handleOpenEvent = () => {
+    if (eventPointer?.id) {
+      addWindow(
+        "open",
+        { pointer: eventPointer },
+        `Event ${eventPointer.id.slice(0, 8)}...`,
+      );
+    } else if (addressPointer) {
+      addWindow("open", { pointer: addressPointer }, `Event`);
+    }
+  };
 
   return (
     <BaseEventContainer event={event}>
@@ -29,8 +75,35 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
           </blockquote>
         )}
 
-        {/* Source URL */}
-        {sourceUrl && (
+        {/* Compact Source Event Preview - Clickable link with icon, author, and title/content */}
+        {sourceEvent && (eventPointer || addressPointer) && (
+          <div
+            //onClick={handleOpenEvent}
+            className="flex items-baseline gap-2"
+          >
+            <KindBadge
+              iconClassname="size-3 flex-shrink-0 text-muted-foreground"
+              showName={false}
+              kind={sourceEvent.kind}
+              clickable
+            />
+
+            <UserName pubkey={sourceEvent.pubkey} className="text-xs" />
+
+            {/* Title or Content Preview */}
+            {sourcePreview && (
+              <div
+                className="hover:underline hover:decoration-dotted cursor-crosshair text-xs line-clamp-1 break-words"
+                onClick={handleOpenEvent}
+              >
+                <RichText content={sourcePreview} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Source URL - Show for external websites (non-Nostr sources) */}
+        {sourceUrl && !eventPointer && !addressPointer && (
           <a
             href={sourceUrl}
             target="_blank"
