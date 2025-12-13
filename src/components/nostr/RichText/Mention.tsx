@@ -2,7 +2,7 @@ import { kinds } from "nostr-tools";
 import { UserName } from "../UserName";
 import { EventEmbed } from "./EventEmbed";
 import { EventPointer, AddressPointer } from "nostr-tools/nip19";
-import { useDepth } from "../RichText";
+import { useDepth, useRichTextOptions } from "../RichText";
 
 interface MentionNodeProps {
   node: {
@@ -16,6 +16,7 @@ interface MentionNodeProps {
 
 export function Mention({ node }: MentionNodeProps) {
   const depth = useDepth();
+  const options = useRichTextOptions();
 
   if (node.decoded?.type === "npub") {
     const pubkey = node.decoded.data;
@@ -46,16 +47,43 @@ export function Mention({ node }: MentionNodeProps) {
       kind: kinds.ShortTextNote,
       relays: [],
     };
+
+    if (!options.showEventEmbeds) {
+      return (
+        <span className="text-muted-foreground font-mono text-sm">
+          {node.encoded || `note:${pointer.id.slice(0, 8)}...`}
+        </span>
+      );
+    }
+
     return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 
   if (node.decoded?.type === "nevent") {
     const pointer: EventPointer = node.decoded.data;
+
+    if (!options.showEventEmbeds) {
+      return (
+        <span className="text-muted-foreground font-mono text-sm">
+          {node.encoded || `nevent:${pointer.id.slice(0, 8)}...`}
+        </span>
+      );
+    }
+
     return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 
   if (node.decoded?.type === "naddr") {
     const pointer: AddressPointer = node.decoded.data;
+
+    if (!options.showEventEmbeds) {
+      return (
+        <span className="text-muted-foreground font-mono text-sm">
+          {node.encoded || `naddr:${pointer.identifier || pointer.pubkey.slice(0, 8)}...`}
+        </span>
+      );
+    }
+
     return <EventEmbed node={{ pointer }} depth={depth} />;
   }
 

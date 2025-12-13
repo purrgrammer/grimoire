@@ -49,7 +49,10 @@ export function Kind9Renderer({ event, depth = 0 }: BaseEventProps) {
               className="flex-shrink-0 text-accent"
             />
             <div className="truncate line-clamp-1">
-              <RichText event={parentEvent} options={{ showMedia: false }} />
+              <RichText
+                event={parentEvent}
+                options={{ showMedia: false, showEventEmbeds: false }}
+              />
             </div>
           </div>
         </div>

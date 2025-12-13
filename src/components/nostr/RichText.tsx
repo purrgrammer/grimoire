@@ -30,6 +30,8 @@ export interface RichTextOptions {
   showAudio?: boolean;
   /** Convenience flag to disable all media at once (default: true) */
   showMedia?: boolean;
+  /** Show event embeds for note/nevent/naddr mentions (default: true) */
+  showEventEmbeds?: boolean;
 }
 
 // Default options
@@ -38,6 +40,7 @@ const defaultOptions: Required<RichTextOptions> = {
   showVideos: true,
   showAudio: true,
   showMedia: true,
+  showEventEmbeds: true,
 };
 
 // Context for passing options through RichText rendering
