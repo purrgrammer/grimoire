@@ -123,14 +123,6 @@ export default function CommandLauncher({
               className="command-input"
             />
 
-            {recognizedCommand && parsed.args.length > 0 && (
-              <div className="command-hint">
-                <span className="command-hint-label">Parsed:</span>
-                <span className="command-hint-command">{commandName}</span>
-                <span className="command-hint-args">{parsed.args.join(" ")}</span>
-              </div>
-            )}
-
             <Command.List className="command-list">
               <Command.Empty className="command-empty">
                 {commandName

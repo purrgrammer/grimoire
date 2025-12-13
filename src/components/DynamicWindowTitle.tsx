@@ -13,6 +13,12 @@ import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type { LucideIcon } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { ProfileContent } from "applesauce-core/helpers";
+import {
+  formatEventIds,
+  formatDTags,
+  formatTimeRangeCompact,
+  formatGenericTag,
+} from "@/lib/filter-formatters";
 
 export interface WindowTitleData {
   title: string;
@@ -273,8 +279,8 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     // Generate a descriptive title from the filter
     const parts: string[] = [];
 
+    // 1. Kinds
     if (filter.kinds && filter.kinds.length > 0) {
-      // Show actual kind names
       const kindNames = filter.kinds.map((k: number) => getKindName(k));
       if (kindNames.length <= 3) {
         parts.push(kindNames.join(", "));
@@ -285,13 +291,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       }
     }
 
-    // Format hashtags with # prefix
+    // 2. Hashtags (#t)
     if (filter["#t"] && filter["#t"].length > 0) {
       const hashtagText = formatHashtags("#", reqHashtags);
       if (hashtagText) parts.push(hashtagText);
     }
 
-    // Format tagged users with @ prefix
+    // 3. Mentions (#p)
     if (filter["#p"] && filter["#p"].length > 0) {
       const taggedText = formatProfileNames("@", reqTagged, [
         tagged1Profile,
@@ -300,13 +306,46 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       if (taggedText) parts.push(taggedText);
     }
 
-    // Format authors with "by " prefix
+    // 4. Event References (#e) - NEW
+    if (filter["#e"] && filter["#e"].length > 0) {
+      const eventIdsText = formatEventIds(filter["#e"], 2);
+      if (eventIdsText) parts.push(`→ ${eventIdsText}`);
+    }
+
+    // 5. D-Tags (#d) - NEW
+    if (filter["#d"] && filter["#d"].length > 0) {
+      const dTagsText = formatDTags(filter["#d"], 2);
+      if (dTagsText) parts.push(`📝 ${dTagsText}`);
+    }
+
+    // 6. Authors
     if (filter.authors && filter.authors.length > 0) {
       const authorsText = formatProfileNames("by ", reqAuthors, [
         author1Profile,
         author2Profile,
       ]);
       if (authorsText) parts.push(authorsText);
+    }
+
+    // 7. Time Range - NEW
+    if (filter.since || filter.until) {
+      const timeRangeText = formatTimeRangeCompact(filter.since, filter.until);
+      if (timeRangeText) parts.push(`📅 ${timeRangeText}`);
+    }
+
+    // 8. Generic Tags - NEW (a-z, A-Z filters excluding e, p, t, d)
+    const genericTags = Object.entries(filter)
+      .filter(([key]) => key.startsWith("#") && key.length === 2 && !["#e", "#p", "#t", "#d"].includes(key))
+      .map(([key, values]) => ({ letter: key[1], values: values as string[] }));
+
+    if (genericTags.length > 0) {
+      genericTags.slice(0, 2).forEach((tag) => {
+        const tagText = formatGenericTag(tag.letter, tag.values, 1);
+        if (tagText) parts.push(tagText);
+      });
+      if (genericTags.length > 2) {
+        parts.push(`+${genericTags.length - 2} more tags`);
+      }
     }
 
     return parts.length > 0 ? parts.join(" • ") : "REQ";
