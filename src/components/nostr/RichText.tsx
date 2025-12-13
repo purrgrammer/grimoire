@@ -18,11 +18,41 @@ export function useDepth() {
   return useContext(DepthContext);
 }
 
+/**
+ * Configuration options for RichText rendering behavior
+ */
+export interface RichTextOptions {
+  /** Show images inline (default: true) */
+  showImages?: boolean;
+  /** Show videos inline (default: true) */
+  showVideos?: boolean;
+  /** Show audio players inline (default: true) */
+  showAudio?: boolean;
+  /** Convenience flag to disable all media at once (default: true) */
+  showMedia?: boolean;
+}
+
+// Default options
+const defaultOptions: Required<RichTextOptions> = {
+  showImages: true,
+  showVideos: true,
+  showAudio: true,
+  showMedia: true,
+};
+
+// Context for passing options through RichText rendering
+const OptionsContext = createContext<Required<RichTextOptions>>(defaultOptions);
+
+export function useRichTextOptions() {
+  return useContext(OptionsContext);
+}
+
 interface RichTextProps {
   event?: NostrEvent;
   content?: string;
   className?: string;
   depth?: number;
+  options?: RichTextOptions;
 }
 
 // Content node component types for rendering
@@ -45,7 +75,14 @@ export function RichText({
   content,
   className = "",
   depth = 1,
+  options = {},
 }: RichTextProps) {
+  // Merge provided options with defaults
+  const mergedOptions: Required<RichTextOptions> = {
+    ...defaultOptions,
+    ...options,
+  };
+
   // Call hook unconditionally - it will handle undefined/null
   const trimmedEvent = event
     ? {
@@ -76,9 +113,11 @@ export function RichText({
   if (event) {
     return (
       <DepthContext.Provider value={depth}>
-        <div className={cn("leading-relaxed break-words", className)}>
-          {renderedContent}
-        </div>
+        <OptionsContext.Provider value={mergedOptions}>
+          <div className={cn("leading-relaxed break-words", className)}>
+            {renderedContent}
+          </div>
+        </OptionsContext.Provider>
       </DepthContext.Provider>
     );
   }

@@ -55,6 +55,7 @@ export function QuotedEvent({
           href="#"
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             onOpen(pointer);
           }}
           className="inline-flex items-center gap-1 text-accent underline decoration-dotted break-all"
@@ -95,7 +96,10 @@ export function QuotedEvent({
     >
       {/* Preview header - always visible */}
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsExpanded(!isExpanded);
+        }}
         className="w-full flex items-center justify-between gap-2 p-2 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0">

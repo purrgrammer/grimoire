@@ -3,6 +3,7 @@ import { Kind1Renderer } from "./Kind1Renderer";
 import { Kind3Renderer } from "./Kind3Renderer";
 import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./Kind7Renderer";
+import { Kind9Renderer } from "./Kind9Renderer";
 import { Kind20Renderer } from "./Kind20Renderer";
 import { Kind21Renderer } from "./Kind21Renderer";
 import { Kind22Renderer } from "./Kind22Renderer";
@@ -26,6 +27,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   3: Kind3Renderer, // Contact List
   6: RepostRenderer, // Repost
   7: Kind7Renderer, // Reaction
+  9: Kind9Renderer, // Chat Message (NIP-C7)
   16: RepostRenderer, // Generic Repost
   20: Kind20Renderer, // Picture (NIP-68)
   21: Kind21Renderer, // Video Event (NIP-71)
@@ -96,6 +98,7 @@ export {
   Kind16Renderer,
 } from "./RepostRenderer";
 export { Kind7Renderer } from "./Kind7Renderer";
+export { Kind9Renderer } from "./Kind9Renderer";
 export { Kind20Renderer } from "./Kind20Renderer";
 export { Kind21Renderer } from "./Kind21Renderer";
 export { Kind22Renderer } from "./Kind22Renderer";

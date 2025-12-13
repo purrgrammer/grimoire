@@ -150,6 +150,11 @@ export function MediaEmbed({
 
   // Audio rendering
   if (mediaType === "audio") {
+    const handleAudioClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (onAudioClick) onAudioClick();
+    };
+
     return (
       <div
         className={cn(
@@ -158,7 +163,7 @@ export function MediaEmbed({
             "cursor-crosshair hover:bg-muted/30 transition-colors",
           className,
         )}
-        onClick={onAudioClick}
+        onClick={onAudioClick ? handleAudioClick : undefined}
       >
         <Music className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         {!onAudioClick ? (

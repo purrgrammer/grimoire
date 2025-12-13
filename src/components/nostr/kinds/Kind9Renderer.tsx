@@ -1,0 +1,62 @@
+import { RichText } from "../RichText";
+import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { UserName } from "../UserName";
+import { MessageCircle } from "lucide-react";
+import { useGrimoire } from "@/core/state";
+import { getTagValues } from "@/lib/nostr-utils";
+import { isValidHexEventId } from "@/lib/nostr-validation";
+
+/**
+ * Renderer for Kind 9 - Chat Message (NIP-C7)
+ * Displays chat messages with optional quoted parent message
+ */
+export function Kind9Renderer({ event, depth = 0 }: BaseEventProps) {
+  const { addWindow } = useGrimoire();
+
+  // Parse 'q' tag for quoted parent message (NIP-C7 reply format)
+  const quotedEventIds = getTagValues(event, "q");
+  const quotedEventId = quotedEventIds[0]; // First q tag
+  const parentEvent = useNostrEvent(quotedEventId);
+
+  const handleQuoteClick = () => {
+    if (!parentEvent || !quotedEventId) return;
+    const pointer = isValidHexEventId(quotedEventId)
+      ? {
+          id: quotedEventId,
+        }
+      : quotedEventId;
+
+    addWindow(
+      "open",
+      { pointer },
+      `Quoted message from ${parentEvent.pubkey.slice(0, 8)}...`,
+    );
+  };
+
+  return (
+    <BaseEventContainer event={event}>
+      {/* Show quoted parent message if this is a reply */}
+      {quotedEventId && parentEvent && parentEvent.kind === 9 && (
+        <div
+          onClick={handleQuoteClick}
+          className="flex items-start gap-2 p-1 bg-muted/20 text-xs text-muted-foreground hover:bg-muted/30 cursor-crosshair rounded transition-colors"
+        >
+          <MessageCircle className="size-3 flex-shrink-0 mt-0.5" />
+          <div className="flex items-baseline gap-1 min-w-0 flex-1">
+            <UserName
+              pubkey={parentEvent.pubkey}
+              className="flex-shrink-0 text-accent"
+            />
+            <span className="truncate">
+              <RichText event={parentEvent} options={{ showMedia: false }} />
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Main message content */}
+      <RichText event={event} className="text-sm" depth={depth} />
+    </BaseEventContainer>
+  );
+}

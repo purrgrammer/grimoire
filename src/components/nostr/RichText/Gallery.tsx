@@ -7,6 +7,7 @@ import {
 import { MediaDialog } from "../MediaDialog";
 import { MediaEmbed } from "../MediaEmbed";
 import { PlainLink } from "../LinkPreview";
+import { useRichTextOptions } from "../RichText";
 
 interface GalleryNodeProps {
   node: {
@@ -15,6 +16,7 @@ interface GalleryNodeProps {
 }
 
 export function Gallery({ node }: GalleryNodeProps) {
+  const options = useRichTextOptions();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialIndex, setInitialIndex] = useState(0);
 
@@ -26,20 +28,32 @@ export function Gallery({ node }: GalleryNodeProps) {
   };
 
   const renderLink = (url: string, index: number) => {
+    // Check if media should be shown
+    const shouldShowMedia = options.showMedia;
+
     if (isImageURL(url)) {
-      return <MediaEmbed url={url} type="image" preset="inline" enableZoom />;
+      if (shouldShowMedia && options.showImages) {
+        return <MediaEmbed url={url} type="image" preset="inline" enableZoom />;
+      }
+      return <PlainLink url={url} />;
     }
     if (isVideoURL(url)) {
-      return <MediaEmbed url={url} type="video" preset="inline" />;
+      if (shouldShowMedia && options.showVideos) {
+        return <MediaEmbed url={url} type="video" preset="inline" />;
+      }
+      return <PlainLink url={url} />;
     }
     if (isAudioURL(url)) {
-      return (
-        <MediaEmbed
-          url={url}
-          type="audio"
-          onAudioClick={() => handleAudioClick(index)}
-        />
-      );
+      if (shouldShowMedia && options.showAudio) {
+        return (
+          <MediaEmbed
+            url={url}
+            type="audio"
+            onAudioClick={() => handleAudioClick(index)}
+          />
+        );
+      }
+      return <PlainLink url={url} />;
     }
     return <PlainLink url={url} />;
   };
