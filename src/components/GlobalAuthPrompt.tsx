@@ -127,7 +127,8 @@ export function GlobalAuthPrompt() {
       const relayState = relays[relayUrl];
       if (relayState && relayState.authStatus === "authenticated") {
         toast.success(`Authenticated with ${relayUrl}`, {
-          duration: 3000,
+          duration: 1000,
+          closeButton: true,
         });
         setAuthenticatingRelays((prev) => {
           const next = new Set(prev);
