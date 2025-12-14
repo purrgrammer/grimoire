@@ -711,6 +711,7 @@ export default function ReqViewer({
 
   /**
    * Export events to JSONL format with chunked processing for large datasets
+   * Uses Share API on mobile for reliable file sharing, falls back to download on desktop
    * Handles tens of thousands of events without blocking the UI
    */
   const handleExport = useCallback(async () => {
@@ -721,10 +722,12 @@ export default function ReqViewer({
 
     try {
       const sanitized = sanitizeFilename(exportFilename);
+      const filename = `${sanitized}.jsonl`;
       const CHUNK_SIZE = 1000; // Process 1000 events at a time
       const shouldChunk = events.length > CHUNK_SIZE;
 
-      let blob: Blob;
+      // Build JSONL content with chunked processing for large datasets
+      let content: string;
 
       if (shouldChunk) {
         // Chunked processing for large datasets
@@ -745,19 +748,57 @@ export default function ReqViewer({
         }
 
         // Join chunks with newlines between them
-        const jsonl = chunks.join("\n");
-        blob = new Blob([jsonl], { type: "application/jsonl" });
+        content = chunks.join("\n");
       } else {
         // Direct processing for small datasets
-        const jsonl = events.map((e) => JSON.stringify(e)).join("\n");
-        blob = new Blob([jsonl], { type: "application/jsonl" });
+        content = events.map((e) => JSON.stringify(e)).join("\n");
       }
 
-      // Create download
+      // Create File object (required for Share API)
+      const file = new File([content], filename, {
+        type: "application/jsonl",
+      });
+
+      // Try Share API first (mobile-friendly, native UX)
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function"
+      ) {
+        try {
+          // Check if we can actually share files
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "Export Nostr Events",
+              text: `${events.length} event${events.length !== 1 ? "s" : ""}`,
+            });
+
+            // Success! Close dialog
+            setExportProgress(100);
+            setIsExporting(false);
+            setExportProgress(0);
+            setShowExportDialog(false);
+            return;
+          }
+        } catch (err) {
+          // User cancelled share dialog (AbortError) - just close silently
+          if (err instanceof Error && err.name === "AbortError") {
+            setIsExporting(false);
+            setExportProgress(0);
+            setShowExportDialog(false);
+            return;
+          }
+          // Other errors - fall through to traditional download
+          console.warn("Share API failed, falling back to download:", err);
+        }
+      }
+
+      // Fallback: Traditional blob download (desktop browsers)
+      const blob = new Blob([content], { type: "application/jsonl" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${sanitized}.jsonl`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
