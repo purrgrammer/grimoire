@@ -46,11 +46,80 @@ describe("parseReqCommand", () => {
       expect(result.filter.authors).toEqual([hex]);
     });
 
+    it("should parse npub", () => {
+      // Real npub for pubkey: 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
+      const npub =
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+      const result = parseReqCommand(["-a", npub]);
+      expect(result.filter.authors).toEqual([
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
+    });
+
+    it("should parse nprofile", () => {
+      // Real nprofile for same pubkey with relay hints
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-a", nprofile]);
+      expect(result.filter.authors).toEqual([
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
+    });
+
+    it("should extract and normalize relay hints from nprofile in -a flag", () => {
+      // nprofile with relay hints
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-a", nprofile]);
+      // Relay hints should be normalized (lowercase, trailing slash)
+      expect(result.relays).toContain("wss://r.x.com/");
+      expect(result.relays).toContain("wss://djbas.sadkb.com/");
+    });
+
+    it("should combine explicit relays with nprofile relay hints and normalize all", () => {
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand([
+        "-a",
+        nprofile,
+        "wss://relay.damus.io",
+      ]);
+      // All relays should be normalized
+      expect(result.relays).toEqual([
+        "wss://r.x.com/",
+        "wss://djbas.sadkb.com/",
+        "wss://relay.damus.io/",
+      ]);
+    });
+
+    it("should extract relays from comma-separated nprofiles", () => {
+      const nprofile1 =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const nprofile2 =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-a", `${nprofile1},${nprofile2}`]);
+      // Should get normalized relays from both (even though they're duplicates in this test)
+      expect(result.relays).toContain("wss://r.x.com/");
+      expect(result.relays).toContain("wss://djbas.sadkb.com/");
+    });
+
     it("should parse comma-separated hex pubkeys", () => {
       const hex1 = "a".repeat(64);
       const hex2 = "b".repeat(64);
       const result = parseReqCommand(["-a", `${hex1},${hex2}`]);
       expect(result.filter.authors).toEqual([hex1, hex2]);
+    });
+
+    it("should parse comma-separated mix of npub and nprofile", () => {
+      const npub =
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-a", `${npub},${nprofile}`]);
+      // Both should decode to the same pubkey, so should be deduplicated
+      expect(result.filter.authors).toEqual([
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
     });
 
     it("should deduplicate authors", () => {
@@ -71,10 +140,18 @@ describe("parseReqCommand", () => {
       expect(result.filter.authors).toBeUndefined();
     });
 
-    it("should handle mixed hex and NIP-05", () => {
+    it("should handle mixed hex, npub, nprofile, and NIP-05", () => {
       const hex = "a".repeat(64);
-      const result = parseReqCommand(["-a", `${hex},user@domain.com`]);
-      expect(result.filter.authors).toEqual([hex]);
+      const npub =
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+      const result = parseReqCommand([
+        "-a",
+        `${hex},${npub},user@domain.com`,
+      ]);
+      expect(result.filter.authors).toEqual([
+        hex,
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
       expect(result.nip05Authors).toEqual(["user@domain.com"]);
     });
 
@@ -112,6 +189,33 @@ describe("parseReqCommand", () => {
       expect(result.filter["#p"]).toEqual([hex]);
     });
 
+    it("should parse npub for #p tag", () => {
+      const npub =
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+      const result = parseReqCommand(["-p", npub]);
+      expect(result.filter["#p"]).toEqual([
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
+    });
+
+    it("should parse nprofile for #p tag", () => {
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-p", nprofile]);
+      expect(result.filter["#p"]).toEqual([
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
+    });
+
+    it("should extract and normalize relay hints from nprofile in -p flag", () => {
+      const nprofile =
+        "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
+      const result = parseReqCommand(["-p", nprofile]);
+      // Relay hints should be normalized (lowercase, trailing slash)
+      expect(result.relays).toContain("wss://r.x.com/");
+      expect(result.relays).toContain("wss://djbas.sadkb.com/");
+    });
+
     it("should parse comma-separated pubkeys", () => {
       const hex1 = "a".repeat(64);
       const hex2 = "b".repeat(64);
@@ -129,6 +233,21 @@ describe("parseReqCommand", () => {
         "alice@example.com",
       ]);
       expect(result.filter["#p"]).toBeUndefined();
+    });
+
+    it("should handle mixed hex, npub, nprofile, and NIP-05 for #p tags", () => {
+      const hex = "a".repeat(64);
+      const npub =
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
+      const result = parseReqCommand([
+        "-p",
+        `${hex},${npub},user@domain.com`,
+      ]);
+      expect(result.filter["#p"]).toEqual([
+        hex,
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      ]);
+      expect(result.nip05PTags).toEqual(["user@domain.com"]);
     });
 
     it("should deduplicate #p tags", () => {
@@ -221,27 +340,41 @@ describe("parseReqCommand", () => {
   });
 
   describe("relay parsing", () => {
-    it("should parse relay with wss:// protocol", () => {
+    it("should parse relay with wss:// protocol and normalize", () => {
       const result = parseReqCommand(["wss://relay.example.com"]);
-      expect(result.relays).toEqual(["wss://relay.example.com"]);
+      expect(result.relays).toEqual(["wss://relay.example.com/"]);
     });
 
-    it("should parse relay domain and add wss://", () => {
+    it("should parse relay domain and add wss:// with trailing slash", () => {
       const result = parseReqCommand(["relay.example.com"]);
-      expect(result.relays).toEqual(["wss://relay.example.com"]);
+      expect(result.relays).toEqual(["wss://relay.example.com/"]);
     });
 
-    it("should parse multiple relays", () => {
+    it("should parse multiple relays and normalize all", () => {
       const result = parseReqCommand([
         "wss://relay1.com",
         "relay2.com",
-        "wss://relay3.com",
+        "wss://relay3.com/",
       ]);
       expect(result.relays).toEqual([
-        "wss://relay1.com",
-        "wss://relay2.com",
-        "wss://relay3.com",
+        "wss://relay1.com/",
+        "wss://relay2.com/",
+        "wss://relay3.com/",
       ]);
+    });
+
+    it("should normalize relays with and without trailing slash to same value", () => {
+      const result = parseReqCommand([
+        "wss://relay.com",
+        "wss://relay.com/",
+      ]);
+      // Should deduplicate because they normalize to the same URL
+      expect(result.relays).toEqual(["wss://relay.com/", "wss://relay.com/"]);
+    });
+
+    it("should lowercase relay URLs during normalization", () => {
+      const result = parseReqCommand(["wss://Relay.Example.COM"]);
+      expect(result.relays).toEqual(["wss://relay.example.com/"]);
     });
   });
 
@@ -279,7 +412,7 @@ describe("parseReqCommand", () => {
       expect(result.filter["#t"]).toEqual(["nostr", "bitcoin"]);
       expect(result.filter.limit).toBe(100);
       expect(result.filter.since).toBeDefined();
-      expect(result.relays).toEqual(["wss://relay.example.com"]);
+      expect(result.relays).toEqual(["wss://relay.example.com/"]);
     });
 
     it("should handle deduplication across multiple flags and commas", () => {

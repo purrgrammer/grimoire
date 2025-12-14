@@ -6,6 +6,7 @@ import {
   isValidHexEventId,
   normalizeHex,
 } from "./nostr-validation";
+import { normalizeRelayURL } from "./relay-url";
 
 export interface ParsedReqCommand {
   filter: NostrFilter;
@@ -42,10 +43,10 @@ function parseCommaSeparated<T>(
 /**
  * Parse REQ command arguments into a Nostr filter
  * Supports:
- * - Filters: -k (kinds), -a (authors), -l (limit), -e (#e), -p (#p), -t (#t), -d (#d), --tag/-T (any #tag)
+ * - Filters: -k (kinds), -a (authors: hex/npub/nprofile/NIP-05), -l (limit), -e (#e), -p (#p: hex/npub/nprofile/NIP-05), -t (#t), -d (#d), --tag/-T (any #tag)
  * - Time: --since, --until
  * - Search: --search
- * - Relays: wss://relay.com or relay.com (auto-adds wss://)
+ * - Relays: wss://relay.com or relay.com (auto-adds wss://), nprofile relay hints are automatically extracted
  * - Options: --close-on-eose (close stream after EOSE, default: stream stays open)
  */
 export function parseReqCommand(args: string[]): ParsedReqCommand {
@@ -74,14 +75,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
     // Relay URLs (starts with wss://, ws://, or looks like a domain)
     if (arg.startsWith("wss://") || arg.startsWith("ws://")) {
-      relays.push(arg);
+      relays.push(normalizeRelayURL(arg));
       i++;
       continue;
     }
 
     // Shorthand relay (domain-like string without protocol)
     if (isRelayDomain(arg)) {
-      relays.push(`wss://${arg}`);
+      relays.push(normalizeRelayURL(arg));
       i++;
       continue;
     }
@@ -127,10 +128,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
               nip05Authors.add(authorStr);
               addedAny = true;
             } else {
-              const pubkey = parseNpubOrHex(authorStr);
-              if (pubkey) {
-                authors.add(pubkey);
+              const result = parseNpubOrHex(authorStr);
+              if (result.pubkey) {
+                authors.add(result.pubkey);
                 addedAny = true;
+                // Add relay hints from nprofile (normalized)
+                if (result.relays) {
+                  relays.push(...result.relays.map(normalizeRelayURL));
+                }
               }
             }
           }
@@ -180,10 +185,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
               nip05PTags.add(pubkeyStr);
               addedAny = true;
             } else {
-              const pubkey = parseNpubOrHex(pubkeyStr);
-              if (pubkey) {
-                pTags.add(pubkey);
+              const result = parseNpubOrHex(pubkeyStr);
+              if (result.pubkey) {
+                pTags.add(result.pubkey);
                 addedAny = true;
+                // Add relay hints from nprofile (normalized)
+                if (result.relays) {
+                  relays.push(...result.relays.map(normalizeRelayURL));
+                }
               }
             }
           }
@@ -372,29 +381,39 @@ function parseTimestamp(value: string): number | null {
 }
 
 /**
- * Parse npub or hex pubkey
+ * Parse npub, nprofile, or hex pubkey
+ * Returns pubkey and optional relay hints from nprofile
  */
-function parseNpubOrHex(value: string): string | null {
-  if (!value) return null;
+function parseNpubOrHex(value: string): {
+  pubkey: string | null;
+  relays?: string[];
+} {
+  if (!value) return { pubkey: null };
 
-  // Try to decode npub
-  if (value.startsWith("npub")) {
+  // Try to decode npub or nprofile
+  if (value.startsWith("npub") || value.startsWith("nprofile")) {
     try {
       const decoded = nip19.decode(value);
       if (decoded.type === "npub") {
-        return decoded.data;
+        return { pubkey: decoded.data };
+      }
+      if (decoded.type === "nprofile") {
+        return {
+          pubkey: decoded.data.pubkey,
+          relays: decoded.data.relays,
+        };
       }
     } catch {
-      // Not valid npub, continue
+      // Not valid npub/nprofile, continue
     }
   }
 
   // Check if it's hex pubkey
   if (isValidHexPubkey(value)) {
-    return normalizeHex(value);
+    return { pubkey: normalizeHex(value) };
   }
 
-  return null;
+  return { pubkey: null };
 }
 
 /**

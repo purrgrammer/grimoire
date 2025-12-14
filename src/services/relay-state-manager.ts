@@ -8,6 +8,7 @@ import type {
 } from "@/types/relay-state";
 import { transitionAuthState, type AuthEvent } from "@/lib/auth-state-machine";
 import { createLogger } from "@/lib/logger";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import pool from "./relay-pool";
 import accountManager from "./accounts";
 import db from "./db";
@@ -79,11 +80,19 @@ class RelayStateManager {
 
   /**
    * Ensure a relay is being monitored (call this when adding relays to pool)
+   * @returns true if relay is being monitored, false if normalization failed
    */
-  ensureRelayMonitored(relayUrl: string) {
-    const relay = pool.relay(relayUrl);
-    if (relay && !this.subscriptions.has(relayUrl)) {
-      this.monitorRelay(relay);
+  ensureRelayMonitored(relayUrl: string): boolean {
+    try {
+      const normalizedUrl = normalizeRelayURL(relayUrl);
+      const relay = pool.relay(normalizedUrl);
+      if (relay && !this.subscriptions.has(relay.url)) {
+        this.monitorRelay(relay);
+      }
+      return true;
+    } catch (error) {
+      console.error(`Failed to monitor relay ${relayUrl}:`, error);
+      return false;
     }
   }
 
@@ -270,58 +279,71 @@ class RelayStateManager {
   async getAuthPreference(
     relayUrl: string,
   ): Promise<AuthPreference | undefined> {
-    // Check memory cache first
-    if (this.authPreferences.has(relayUrl)) {
-      return this.authPreferences.get(relayUrl);
-    }
+    try {
+      const normalizedUrl = normalizeRelayURL(relayUrl);
 
-    // Load from database
-    const record = await db.relayAuthPreferences.get(relayUrl);
-    if (record) {
-      this.authPreferences.set(relayUrl, record.preference);
-      return record.preference;
-    }
+      // Check memory cache first
+      if (this.authPreferences.has(normalizedUrl)) {
+        return this.authPreferences.get(normalizedUrl);
+      }
 
-    return undefined;
+      // Load from database
+      const record = await db.relayAuthPreferences.get(normalizedUrl);
+      if (record) {
+        this.authPreferences.set(normalizedUrl, record.preference);
+        return record.preference;
+      }
+
+      return undefined;
+    } catch (error) {
+      console.error(`Failed to get auth preference for ${relayUrl}:`, error);
+      return undefined;
+    }
   }
 
   /**
    * Set auth preference for a relay
    */
   async setAuthPreference(relayUrl: string, preference: AuthPreference) {
-    console.log(
-      `[RelayStateManager] Setting auth preference for ${relayUrl} to "${preference}"`,
-    );
-
-    // Update memory cache
-    this.authPreferences.set(relayUrl, preference);
-
-    // Save to database
     try {
-      await db.relayAuthPreferences.put({
-        url: relayUrl,
-        preference,
-        updatedAt: Date.now(),
-      });
+      const normalizedUrl = normalizeRelayURL(relayUrl);
       console.log(
-        `[RelayStateManager] Successfully saved preference to database`,
+        `[RelayStateManager] Setting auth preference for ${normalizedUrl} to "${preference}"`,
       );
-    } catch (error) {
-      console.error(
-        `[RelayStateManager] Failed to save preference to database:`,
-        error,
-      );
-      throw error;
-    }
 
-    // Update relay state
-    const state = this.relayStates.get(relayUrl);
-    if (state) {
-      state.authPreference = preference;
-      this.notifyListeners();
-      console.log(
-        `[RelayStateManager] Updated relay state and notified listeners`,
-      );
+      // Update memory cache
+      this.authPreferences.set(normalizedUrl, preference);
+
+      // Save to database
+      try {
+        await db.relayAuthPreferences.put({
+          url: normalizedUrl,
+          preference,
+          updatedAt: Date.now(),
+        });
+        console.log(
+          `[RelayStateManager] Successfully saved preference to database`,
+        );
+      } catch (error) {
+        console.error(
+          `[RelayStateManager] Failed to save preference to database:`,
+          error,
+        );
+        throw error;
+      }
+
+      // Update relay state
+      const state = this.relayStates.get(normalizedUrl);
+      if (state) {
+        state.authPreference = preference;
+        this.notifyListeners();
+        console.log(
+          `[RelayStateManager] Updated relay state and notified listeners`,
+        );
+      }
+    } catch (error) {
+      console.error(`Failed to set auth preference for ${relayUrl}:`, error);
+      throw error;
     }
   }
 
@@ -329,8 +351,15 @@ class RelayStateManager {
    * Authenticate with a relay
    */
   async authenticateRelay(relayUrl: string): Promise<void> {
-    const relay = pool.relay(relayUrl);
-    const state = this.relayStates.get(relayUrl);
+    let normalizedUrl: string;
+    try {
+      normalizedUrl = normalizeRelayURL(relayUrl);
+    } catch (error) {
+      throw new Error(`Invalid relay URL ${relayUrl}: ${error}`);
+    }
+
+    const relay = pool.relay(normalizedUrl);
+    const state = this.relayStates.get(relay.url);
 
     if (!relay || !state) {
       throw new Error(`Relay ${relayUrl} not found`);
@@ -420,27 +449,32 @@ class RelayStateManager {
    * Reject authentication for a relay
    */
   rejectAuth(relayUrl: string, rememberForSession = true) {
-    const state = this.relayStates.get(relayUrl);
-    if (state) {
-      // Use state machine for consistent transitions
-      const transition = transitionAuthState(state.authStatus, {
-        type: "USER_REJECTED",
-      });
+    try {
+      const normalizedUrl = normalizeRelayURL(relayUrl);
+      const state = this.relayStates.get(normalizedUrl);
+      if (state) {
+        // Use state machine for consistent transitions
+        const transition = transitionAuthState(state.authStatus, {
+          type: "USER_REJECTED",
+        });
 
-      console.log(
-        `[RelayStateManager] ${relayUrl} user rejected auth:`,
-        `${state.authStatus} → ${transition.newStatus}`,
-      );
+        console.log(
+          `[RelayStateManager] ${relayUrl} user rejected auth:`,
+          `${state.authStatus} → ${transition.newStatus}`,
+        );
 
-      state.authStatus = transition.newStatus;
-      if (transition.clearChallenge) {
-        state.currentChallenge = undefined;
+        state.authStatus = transition.newStatus;
+        if (transition.clearChallenge) {
+          state.currentChallenge = undefined;
+        }
+
+        if (rememberForSession) {
+          this.sessionRejections.add(normalizedUrl);
+        }
+        this.notifyListeners();
       }
-
-      if (rememberForSession) {
-        this.sessionRejections.add(relayUrl);
-      }
-      this.notifyListeners();
+    } catch (error) {
+      console.error(`Failed to reject auth for ${relayUrl}:`, error);
     }
   }
 
@@ -448,18 +482,25 @@ class RelayStateManager {
    * Check if a relay should be prompted for auth
    */
   shouldPromptAuth(relayUrl: string): boolean {
-    // Check permanent preferences
-    const pref = this.authPreferences.get(relayUrl);
-    if (pref === "never") return false;
+    try {
+      const normalizedUrl = normalizeRelayURL(relayUrl);
 
-    // Check session rejections
-    if (this.sessionRejections.has(relayUrl)) return false;
+      // Check permanent preferences
+      const pref = this.authPreferences.get(normalizedUrl);
+      if (pref === "never") return false;
 
-    // Don't prompt if already authenticated (unless challenge changes)
-    const state = this.relayStates.get(relayUrl);
-    if (state?.authStatus === "authenticated") return false;
+      // Check session rejections
+      if (this.sessionRejections.has(normalizedUrl)) return false;
 
-    return true;
+      // Don't prompt if already authenticated (unless challenge changes)
+      const state = this.relayStates.get(normalizedUrl);
+      if (state?.authStatus === "authenticated") return false;
+
+      return true;
+    } catch (error) {
+      console.error(`Failed to check auth prompt for ${relayUrl}:`, error);
+      return false;
+    }
   }
 
   /**

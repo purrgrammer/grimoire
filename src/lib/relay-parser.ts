@@ -1,3 +1,5 @@
+import { normalizeRelayURL } from "./relay-url";
+
 export interface ParsedRelayCommand {
   url: string;
 }
@@ -32,5 +34,6 @@ export function parseRelayCommand(args: string[]): ParsedRelayCommand {
     throw new Error(`Invalid relay URL: ${url}`);
   }
 
-  return { url };
+  // Normalize the URL (adds trailing slash, lowercases)
+  return { url: normalizeRelayURL(url) };
 }

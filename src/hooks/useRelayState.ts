@@ -3,6 +3,7 @@ import { useAtom } from "jotai";
 import { grimoireStateAtom } from "@/core/state";
 import relayStateManager from "@/services/relay-state-manager";
 import type { AuthPreference, RelayState } from "@/types/relay-state";
+import { normalizeRelayURL } from "@/lib/relay-url";
 
 /**
  * Hook for accessing and managing global relay state
@@ -45,7 +46,8 @@ export function useRelayState() {
 
     // Get single relay state
     getRelay: (url: string): RelayState | undefined => {
-      return relayState?.relays[url];
+      const normalizedUrl = normalizeRelayURL(url);
+      return relayState?.relays[normalizedUrl];
     },
 
     // Get auth preference

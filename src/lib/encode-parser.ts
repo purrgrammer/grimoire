@@ -1,5 +1,6 @@
 import { nip19 } from "nostr-tools";
 import { isValidHexEventId, isValidHexPubkey } from "./nostr-validation";
+import { normalizeRelayURL } from "./relay-url";
 
 export type EncodeType = "npub" | "note" | "nevent" | "nprofile" | "naddr";
 
@@ -55,7 +56,7 @@ export function parseEncodeCommand(args: string[]): ParsedEncodeCommand {
       if (i + 1 >= args.length) {
         throw new Error(`${flag} requires a relay URL`);
       }
-      relays.push(args[i + 1]);
+      relays.push(normalizeRelayURL(args[i + 1]));
       i += 2;
       continue;
     }

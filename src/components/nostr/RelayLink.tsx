@@ -1,4 +1,4 @@
-import { Inbox, Send } from "lucide-react";
+import { Inbox, Send, ShieldAlert } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useRelayInfo } from "@/hooks/useRelayInfo";
 import {
@@ -7,6 +7,22 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
+
+/**
+ * Format relay URL for display by removing protocol and trailing slashes
+ */
+function formatRelayUrlForDisplay(url: string): string {
+  return url
+    .replace(/^wss?:\/\//, "") // Remove ws:// or wss://
+    .replace(/\/$/, ""); // Remove trailing slash
+}
+
+/**
+ * Check if relay uses insecure ws:// protocol
+ */
+function isInsecureRelay(url: string): boolean {
+  return url.startsWith("ws://");
+}
 
 export interface RelayLinkProps {
   url: string;
@@ -46,6 +62,9 @@ export function RelayLink({
     prompt: "cursor-crosshair hover:underline hover:decoration-dotted",
   };
 
+  const displayUrl = formatRelayUrlForDisplay(url);
+  const isInsecure = isInsecureRelay(url);
+
   return (
     <div
       className={cn(
@@ -63,7 +82,37 @@ export function RelayLink({
             className={cn("size-3 flex-shrink-0 rounded-sm", iconClassname)}
           />
         )}
-        <span className={cn("text-xs truncate", urlClassname)}>{url}</span>
+        {isInsecure && (
+          <HoverCard openDelay={200}>
+            <HoverCardTrigger asChild>
+              <div className="cursor-help">
+                <ShieldAlert
+                  className={cn(
+                    "size-3 text-amber-600 dark:text-amber-500 flex-shrink-0",
+                    iconClassname,
+                  )}
+                />
+              </div>
+            </HoverCardTrigger>
+            <HoverCardContent
+              side="top"
+              className="w-64 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="space-y-1">
+                <div className="font-semibold">Insecure Connection</div>
+                <p className="text-muted-foreground">
+                  This relay uses unencrypted ws:// protocol. This is typically
+                  only safe for localhost/development. Production relays should
+                  use wss:// (secure WebSocket).
+                </p>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        )}
+        <span className={cn("text-xs truncate", urlClassname)}>
+          {displayUrl}
+        </span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {showInboxOutbox && read && (

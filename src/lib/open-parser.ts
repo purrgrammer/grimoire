@@ -4,6 +4,7 @@ import {
   isValidHexPubkey,
   normalizeHex,
 } from "./nostr-validation";
+import { normalizeRelayURL } from "./relay-url";
 
 // Define pointer types locally since they're not exported from nostr-tools
 export interface EventPointer {
@@ -60,14 +61,38 @@ export function parseOpenCommand(args: string[]): ParsedOpenCommand {
       if (decoded.type === "nevent") {
         // nevent1... -> EventPointer (already has id and optional relays)
         return {
-          pointer: decoded.data,
+          pointer: {
+            ...decoded.data,
+            relays: decoded.data.relays
+              ?.map((url) => {
+                try {
+                  return normalizeRelayURL(url);
+                } catch (error) {
+                  console.warn(`Skipping invalid relay hint in nevent: ${url}`, error);
+                  return null;
+                }
+              })
+              .filter((url): url is string => url !== null),
+          },
         };
       }
 
       if (decoded.type === "naddr") {
         // naddr1... -> AddressPointer (already has kind, pubkey, identifier)
         return {
-          pointer: decoded.data,
+          pointer: {
+            ...decoded.data,
+            relays: decoded.data.relays
+              ?.map((url) => {
+                try {
+                  return normalizeRelayURL(url);
+                } catch (error) {
+                  console.warn(`Skipping invalid relay hint in naddr: ${url}`, error);
+                  return null;
+                }
+              })
+              .filter((url): url is string => url !== null),
+          },
         };
       }
     } catch (error) {

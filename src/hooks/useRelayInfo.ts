@@ -1,8 +1,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { RelayInformation } from "../types/nip11";
 import { fetchRelayInfo } from "../lib/nip11";
 import db from "../services/db";
+import { normalizeRelayURL } from "../lib/relay-url";
 
 /**
  * React hook to fetch and cache relay information (NIP-11)
@@ -12,26 +13,37 @@ import db from "../services/db";
 export function useRelayInfo(
   wsUrl: string | undefined,
 ): RelayInformation | undefined {
+  // Normalize URL once
+  const normalizedUrl = useMemo(() => {
+    if (!wsUrl) return undefined;
+    try {
+      return normalizeRelayURL(wsUrl);
+    } catch (error) {
+      console.warn(`useRelayInfo: Invalid relay URL ${wsUrl}:`, error);
+      return undefined;
+    }
+  }, [wsUrl]);
+
   const cached = useLiveQuery(
-    () => (wsUrl ? db.relayInfo.get(wsUrl) : undefined),
-    [wsUrl],
+    () => (normalizedUrl ? db.relayInfo.get(normalizedUrl) : undefined),
+    [normalizedUrl],
   );
 
   useEffect(() => {
-    if (!wsUrl) return;
+    if (!normalizedUrl) return;
     if (cached) return;
 
     // Fetch relay info if not in cache
-    fetchRelayInfo(wsUrl).then((info) => {
+    fetchRelayInfo(normalizedUrl).then((info) => {
       if (info) {
         db.relayInfo.put({
-          url: wsUrl,
+          url: normalizedUrl,
           info,
           fetchedAt: Date.now(),
         });
       }
     });
-  }, [cached, wsUrl]);
+  }, [cached, normalizedUrl]);
 
   return cached?.info;
 }

@@ -8,6 +8,7 @@ import {
 import { useCopy } from "../hooks/useCopy";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { normalizeRelayURL } from "@/lib/relay-url";
 
 interface EncodeViewerProps {
   args: string[];
@@ -66,7 +67,7 @@ export default function EncodeViewer({ args }: EncodeViewerProps) {
         setError("Relay must be a WebSocket URL (ws:// or wss://)");
         return;
       }
-      setRelays([...relays, relayUrl]);
+      setRelays([...relays, normalizeRelayURL(relayUrl)]);
       setNewRelay("");
       setError(null);
     } catch {

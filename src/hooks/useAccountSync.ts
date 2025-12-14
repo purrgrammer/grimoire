@@ -5,6 +5,7 @@ import { useGrimoire } from "@/core/state";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers";
 import { addressLoader } from "@/services/loaders";
 import type { RelayInfo, UserRelays } from "@/types/app";
+import { normalizeRelayURL } from "@/lib/relay-url";
 
 /**
  * Hook that syncs active account with Grimoire state and fetches relay lists
@@ -56,31 +57,46 @@ export function useAccountSync() {
         const seenUrls = new Set<string>();
 
         for (const tag of relayListEvent.tags) {
-          if (tag[0] === "r") {
-            const url = tag[1];
-            if (seenUrls.has(url)) continue;
-            seenUrls.add(url);
+          if (tag[0] === "r" && tag[1]) {
+            try {
+              const url = normalizeRelayURL(tag[1]);
+              if (seenUrls.has(url)) continue;
+              seenUrls.add(url);
 
-            const type = tag[2];
-            allRelays.push({
-              url,
-              read: !type || type === "read",
-              write: !type || type === "write",
-            });
+              const type = tag[2];
+              allRelays.push({
+                url,
+                read: !type || type === "read",
+                write: !type || type === "write",
+              });
+            } catch (error) {
+              console.warn(
+                `Skipping invalid relay URL in Kind 10002 event: ${tag[1]}`,
+                error
+              );
+            }
           }
         }
 
         const relays: UserRelays = {
-          inbox: inboxRelays.map((url) => ({
-            url,
-            read: true,
-            write: false,
-          })),
-          outbox: outboxRelays.map((url) => ({
-            url,
-            read: false,
-            write: true,
-          })),
+          inbox: inboxRelays
+            .map((url) => {
+              try {
+                return { url: normalizeRelayURL(url), read: true, write: false };
+              } catch {
+                return null;
+              }
+            })
+            .filter((r): r is RelayInfo => r !== null),
+          outbox: outboxRelays
+            .map((url) => {
+              try {
+                return { url: normalizeRelayURL(url), read: false, write: true };
+              } catch {
+                return null;
+              }
+            })
+            .filter((r): r is RelayInfo => r !== null),
           all: allRelays,
         };
 

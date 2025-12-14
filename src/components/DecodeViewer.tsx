@@ -11,6 +11,7 @@ import { useCopy } from "../hooks/useCopy";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { KindBadge } from "./KindBadge";
+import { normalizeRelayURL } from "@/lib/relay-url";
 
 interface DecodeViewerProps {
   args: string[];
@@ -77,7 +78,7 @@ export default function DecodeViewer({ args }: DecodeViewerProps) {
         setError("Relay must be a WebSocket URL (ws:// or wss://)");
         return;
       }
-      setRelays([...relays, relayUrl]);
+      setRelays([...relays, normalizeRelayURL(relayUrl)]);
       setNewRelay("");
       setError(null);
     } catch {

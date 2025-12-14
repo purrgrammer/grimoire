@@ -473,21 +473,24 @@ export default function ReqViewer({
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto">
-        {loading && events.length === 0 && (
+        {/* Loading: Before EOSE received */}
+        {loading && events.length === 0 && !eoseReceived && (
           <div className="text-center text-muted-foreground font-mono text-sm p-4">
             Loading events...
           </div>
         )}
 
-        {!loading && !stream && events.length === 0 && !error && (
+        {/* EOSE received, no events, not streaming */}
+        {eoseReceived && events.length === 0 && !stream && !error && (
           <div className="text-center text-muted-foreground font-mono text-sm p-4">
             No events found matching filter
           </div>
         )}
 
-        {stream && events.length === 0 && !loading && (
+        {/* EOSE received, no events, streaming (live mode) */}
+        {eoseReceived && events.length === 0 && stream && (
           <div className="text-center text-muted-foreground font-mono text-sm p-4">
-            Waiting for events...
+            Listening for new events...
           </div>
         )}
 
