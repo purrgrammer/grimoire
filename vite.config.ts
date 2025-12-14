@@ -18,4 +18,52 @@ export default defineConfig({
       overlay: true,
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // React foundation - most stable, everything depends on it
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/scheduler/")
+          ) {
+            return "react-vendor";
+          }
+
+          // UI libraries - only depend on React, safe to separate
+          if (
+            id.includes("node_modules/@radix-ui/") ||
+            id.includes("node_modules/react-mosaic-component")
+          ) {
+            return "ui";
+          }
+
+          // Nostr ecosystem - keep tightly coupled libraries together
+          // This prevents "rxjs functions not found" errors by keeping
+          // applesauce + rxjs + nostr-tools + dexie in one chunk
+          if (
+            id.includes("node_modules/applesauce-") ||
+            id.includes("node_modules/nostr-tools") ||
+            id.includes("node_modules/rxjs") ||
+            id.includes("node_modules/dexie")
+          ) {
+            return "nostr";
+          }
+
+          // Markdown rendering - lazy loaded, can be separate
+          if (
+            id.includes("node_modules/react-markdown") ||
+            id.includes("node_modules/remark-") ||
+            id.includes("node_modules/unified") ||
+            id.includes("node_modules/micromark")
+          ) {
+            return "markdown";
+          }
+
+          // Let Vite handle everything else automatically
+        },
+      },
+    },
+  },
 });
