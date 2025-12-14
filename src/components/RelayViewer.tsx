@@ -1,4 +1,4 @@
-import { Copy, Check } from "lucide-react";
+import { Copy, CopyCheck } from "lucide-react";
 import { useRelayInfo } from "../hooks/useRelayInfo";
 import { useCopy } from "../hooks/useCopy";
 import { Button } from "./ui/button";
@@ -24,13 +24,13 @@ export function RelayViewer({ url }: RelayViewerProps) {
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
             {url}
             <Button
-              variant="ghost"
+              variant="link"
               size="icon"
-              className="size-5"
+              className="size-4 text-muted-foreground"
               onClick={() => copy(url)}
             >
               {copied ? (
-                <Check className="size-3" />
+                <CopyCheck className="size-3" />
               ) : (
                 <Copy className="size-3" />
               )}

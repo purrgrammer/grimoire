@@ -1,25 +1,104 @@
-import { useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { UserName } from "./nostr/UserName";
 import Nip05 from "./nostr/nip05";
 import {
   Copy,
-  Check,
-  ChevronDown,
-  ChevronRight,
+  CopyCheck,
   User as UserIcon,
-  Circle,
   Inbox,
   Send,
+  Wifi,
+  Loader2,
+  WifiOff,
+  XCircle,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  ShieldQuestion,
+  Shield,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { useCopy } from "../hooks/useCopy";
 import { RichText } from "./nostr/RichText";
+import { RelayLink } from "./nostr/RelayLink";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useRelayState } from "@/hooks/useRelayState";
+import type { RelayState } from "@/types/relay-state";
 
 export interface ProfileViewerProps {
   pubkey: string;
+}
+
+// Helper functions for relay status icons (from EventDetailViewer)
+function getConnectionIcon(relay: RelayState | undefined) {
+  if (!relay) {
+    return {
+      icon: <WifiOff className="size-3 text-muted-foreground" />,
+      label: "Unknown",
+    };
+  }
+
+  const iconMap = {
+    connected: {
+      icon: <Wifi className="size-3 text-green-500" />,
+      label: "Connected",
+    },
+    connecting: {
+      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
+      label: "Connecting",
+    },
+    disconnected: {
+      icon: <WifiOff className="size-3 text-muted-foreground" />,
+      label: "Disconnected",
+    },
+    error: {
+      icon: <XCircle className="size-3 text-red-500" />,
+      label: "Connection Error",
+    },
+  };
+  return iconMap[relay.connectionState];
+}
+
+function getAuthIcon(relay: RelayState | undefined) {
+  if (!relay || relay.authStatus === "none") {
+    return null;
+  }
+
+  const iconMap = {
+    authenticated: {
+      icon: <ShieldCheck className="size-3 text-green-500" />,
+      label: "Authenticated",
+    },
+    challenge_received: {
+      icon: <ShieldQuestion className="size-3 text-yellow-500" />,
+      label: "Challenge Received",
+    },
+    authenticating: {
+      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
+      label: "Authenticating",
+    },
+    failed: {
+      icon: <ShieldX className="size-3 text-red-500" />,
+      label: "Authentication Failed",
+    },
+    rejected: {
+      icon: <ShieldAlert className="size-3 text-muted-foreground" />,
+      label: "Authentication Rejected",
+    },
+    none: {
+      icon: <Shield className="size-3 text-muted-foreground" />,
+      label: "No Authentication",
+    },
+  };
+  return iconMap[relay.authStatus] || iconMap.none;
 }
 
 /**
@@ -29,8 +108,8 @@ export interface ProfileViewerProps {
 export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const profile = useProfile(pubkey);
   const eventStore = useEventStore();
-  const [showInboxes, setShowInboxes] = useState(false);
-  const [showOutboxes, setShowOutboxes] = useState(false);
+  const { copy, copied } = useCopy();
+  const { relays: relayStates } = useRelayState();
 
   // Get mailbox relays (kind 10002)
   const mailboxEvent = useObservableMemo(
@@ -48,10 +127,13 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     [eventStore, pubkey],
   );
 
-  const { copy, copied } = useCopy();
-
   // Combine all relays (inbox + outbox) for nprofile
   const allRelays = [...new Set([...inboxRelays, ...outboxRelays])];
+
+  // Calculate connection count for relay dropdown
+  const connectedCount = allRelays.filter(
+    (url) => relayStates[url]?.connectionState === "connected",
+  ).length;
 
   // Generate npub or nprofile depending on relay availability
   const identifier =
@@ -71,9 +153,10 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
           onClick={() => copy(identifier)}
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors truncate min-w-0"
           title={identifier}
+          aria-label="Copy profile ID"
         >
           {copied ? (
-            <Check className="size-3 flex-shrink-0 text-green-500" />
+            <CopyCheck className="size-3 flex-shrink-0" />
           ) : (
             <Copy className="size-3 flex-shrink-0" />
           )}
@@ -82,7 +165,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
           </code>
         </button>
 
-        {/* Right: Profile icon and Relay counts */}
+        {/* Right: Profile icon and Relay dropdown */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-1 text-muted-foreground">
             <UserIcon className="size-3" />
@@ -90,80 +173,92 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
           </div>
 
           {allRelays.length > 0 && (
-            <>
-              {inboxRelays.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <button
-                  onClick={() => setShowInboxes(!showInboxes)}
                   className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Inbox relays"
+                  aria-label={`${allRelays.length} relay${allRelays.length !== 1 ? "s" : ""}`}
                 >
-                  {showInboxes ? (
-                    <ChevronDown className="size-3" />
-                  ) : (
-                    <ChevronRight className="size-3" />
-                  )}
-                  <Inbox className="size-3" />
-                  <span>{inboxRelays.length}</span>
+                  <Wifi className="size-3" />
+                  <span>
+                    {connectedCount}/{allRelays.length}
+                  </span>
                 </button>
-              )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                {allRelays.map((url) => {
+                  const state = relayStates[url];
+                  const connIcon = getConnectionIcon(state);
+                  const authIcon = getAuthIcon(state);
+                  const isInbox = inboxRelays.includes(url);
+                  const isOutbox = outboxRelays.includes(url);
 
-              {outboxRelays.length > 0 && (
-                <button
-                  onClick={() => setShowOutboxes(!showOutboxes)}
-                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Outbox relays"
-                >
-                  {showOutboxes ? (
-                    <ChevronDown className="size-3" />
-                  ) : (
-                    <ChevronRight className="size-3" />
-                  )}
-                  <Send className="size-3" />
-                  <span>{outboxRelays.length}</span>
-                </button>
-              )}
-            </>
+                  return (
+                    <DropdownMenuItem
+                      key={url}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        {isInbox && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Inbox className="size-3 text-muted-foreground flex-shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Inbox</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {isOutbox && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Send className="size-3 text-muted-foreground flex-shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Outbox</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        <RelayLink
+                          url={url}
+                          showInboxOutbox={false}
+                          className="flex-1 min-w-0 hover:bg-transparent"
+                          iconClassname="size-3"
+                          urlClassname="text-xs"
+                        />
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {authIcon && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-help">{authIcon.icon}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{authIcon.label}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="cursor-help">{connIcon.icon}</div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{connIcon.label}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
-
-      {/* Expandable Inbox Relays */}
-      {showInboxes && inboxRelays.length > 0 && (
-        <div className="border-b border-border px-4 py-2 bg-muted">
-          <div className="text-xs text-muted-foreground mb-2 font-semibold">
-            Inbox Relays
-          </div>
-          <div className="flex flex-col gap-2">
-            {inboxRelays.map((relay) => (
-              <div key={relay} className="flex items-center gap-2">
-                <Circle className="size-2 fill-blue-500 text-blue-500" />
-                <span className="text-xs font-mono text-muted-foreground">
-                  {relay}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Expandable Outbox Relays */}
-      {showOutboxes && outboxRelays.length > 0 && (
-        <div className="border-b border-border px-4 py-2 bg-muted">
-          <div className="text-xs text-muted-foreground mb-2 font-semibold">
-            Outbox Relays
-          </div>
-          <div className="flex flex-col gap-2">
-            {outboxRelays.map((relay) => (
-              <div key={relay} className="flex items-center gap-2">
-                <Circle className="size-2 fill-green-500 text-green-500" />
-                <span className="text-xs font-mono text-muted-foreground">
-                  {relay}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Profile Content */}
       <div className="flex-1 overflow-y-auto p-4">
