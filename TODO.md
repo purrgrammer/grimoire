@@ -95,6 +95,86 @@ When an action is entered, show the list of available options below and provide 
 - **NIP badges everywhere** - Use consistent NIP badge components for linking to NIP documentation
 - **External spec event kind support** - Add references and documentation links for commented-out event kinds from external specs (Blossom, Marmot Protocol, NKBIP, nostrocket, Corny Chat, NUD, etc.) in `src/constants/kinds.ts`. Consider adding a separate registry or documentation for non-official-NIP event kinds.
 
+## Code Quality & Refactoring
+
+### Semantic Component Naming
+**Priority**: Low | **Effort**: Medium
+**Files**: All Kind*Renderer.tsx files, EventDetailViewer.tsx, and import locations
+
+**Current State**:
+- Component names use technical kind numbers: Kind0DetailRenderer, Kind3DetailView, Kind30023DetailRenderer
+- Makes code less self-documenting for developers unfamiliar with Nostr kind numbers
+- Requires mental mapping between kind numbers and their semantic meaning
+
+**Proposed Renaming**:
+- `Kind0DetailRenderer` → `ProfileMetadataRenderer` (kind 0)
+- `Kind0Renderer` → `ProfileMetadataFeedRenderer`
+- `Kind3DetailView` / `Kind3Renderer` → `ContactListRenderer` (kind 3)
+- `Kind1621Renderer` / `Kind1621DetailRenderer` → `IssueRenderer` / `IssueDetailRenderer` (kind 1621, NIP-34)
+- `Kind30023Renderer` / `Kind30023DetailRenderer` → `LongFormArticleRenderer` / `ArticleDetailRenderer` (kind 30023)
+- `Kind30617Renderer` / `Kind30617DetailRenderer` → `RepositoryRenderer` / `RepositoryDetailRenderer` (kind 30617, NIP-34)
+- `Kind9802Renderer` / `Kind9802DetailRenderer` → `HighlightRenderer` / `HighlightDetailRenderer` (kind 9802)
+- `Kind10002Renderer` / `Kind10002DetailRenderer` → `RelayListRenderer` / `RelayListDetailRenderer` (kind 10002)
+- And all other Kind*Renderer files following this pattern
+
+**Implementation Tasks**:
+1. Rename all Kind*Renderer.tsx files to semantic names
+2. Update component exports and function names
+3. Update all imports in EventDetailViewer.tsx
+4. Update kind registry in src/components/nostr/kinds/index.tsx
+5. Run build and tests to verify no breakage
+6. Update any documentation references
+
+**Benefits**:
+- Self-documenting code - component name explains what it renders
+- Better developer experience for new contributors
+- Easier to find components by searching for semantic names
+- Aligns with common practices in React codebases
+
+**Note**: Keep kind number comments in files to maintain traceability to Nostr specs
+
+### Locale-Aware Date Formatting Audit
+**Priority**: Medium | **Effort**: Low
+**Files**: All component files that display dates/times
+
+**Current State**:
+- `BaseEventRenderer.tsx` correctly implements locale-aware formatting using `formatTimestamp` from useLocale hook
+- `useGrimoire()` provides locale state from grimoire state atom
+- Pattern: `formatTimestamp(event.created_at, "relative", locale.locale)` for relative times
+- Pattern: `formatTimestamp(event.created_at, "absolute", locale.locale)` for full dates
+
+**Audit Tasks**:
+1. Search codebase for all date/time formatting
+2. Identify any components using `new Date().toLocaleString()` without locale parameter
+3. Identify any hardcoded date formats
+4. Replace with formatTimestamp utility where applicable
+5. Verify all date displays respect user's locale setting
+6. Test with different locales (en-US, es-ES, ja-JP, ar-SA for RTL)
+
+**Known Good Patterns**:
+- ✅ BaseEventRenderer - Uses formatTimestamp with locale
+- ✅ EventDetailViewer - No date display (delegates to renderers)
+- ✅ ProfileViewer - No date display currently
+
+**Files to Check**:
+- All Kind*Renderer.tsx files
+- Timeline/feed components
+- Any custom date displays
+- Comment/reply timestamps
+- Event metadata displays
+
+**Testing**:
+- Change locale in grimoire state
+- Verify all dates update to new locale format
+- Test relative times ("2m ago", "3h ago") in different languages
+- Test absolute times with various locale date formats
+
+**Benefits**:
+- Consistent internationalization support
+- Better UX for non-English users
+- Follows best practices for locale-aware applications
+- Prepares codebase for full i18n implementation (see Phase 3.4)
+
 ### NIP-22 Comment Threading Support
 **Priority**: High
 **Files**: `src/components/nostr/kinds/Kind1Renderer.tsx`, potentially new `Kind1111Renderer.tsx`

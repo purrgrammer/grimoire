@@ -16,6 +16,7 @@ import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
+import { getTagValue } from "applesauce-core/helpers";
 import { EventFooter } from "@/components/EventFooter";
 
 // NIP-01 Kind ranges
@@ -61,7 +62,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     let pointer;
     if (isAddressable) {
       // Find d-tag for identifier
-      const dTag = event.tags.find((t) => t[0] === "d")?.[1] || "";
+      const dTag = getTagValue(event, "d") || "";
       pointer = {
         kind: event.kind,
         pubkey: event.pubkey,
@@ -86,7 +87,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 
     if (isAddressable) {
       // Find d-tag for identifier
-      const dTag = event.tags.find((t) => t[0] === "d")?.[1] || "";
+      const dTag = getTagValue(event, "d") || "";
       const naddr = nip19.naddrEncode({
         kind: event.kind,
         pubkey: event.pubkey,

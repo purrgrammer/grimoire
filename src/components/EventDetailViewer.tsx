@@ -4,9 +4,11 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
 import { Kind0DetailRenderer } from "./nostr/kinds/Kind0DetailRenderer";
 import { Kind3DetailView } from "./nostr/kinds/Kind3Renderer";
-import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
+import { Kind1621DetailRenderer } from "./nostr/kinds/Kind1621DetailRenderer";
 import { Kind9802DetailRenderer } from "./nostr/kinds/Kind9802DetailRenderer";
 import { Kind10002DetailRenderer } from "./nostr/kinds/Kind10002DetailRenderer";
+import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
+import { Kind30617DetailRenderer } from "./nostr/kinds/Kind30617DetailRenderer";
 import { JsonViewer } from "./JsonViewer";
 import { RelayLink } from "./nostr/RelayLink";
 import {
@@ -33,6 +35,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { nip19, kinds } from "nostr-tools";
 import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { getTagValue } from "applesauce-core/helpers";
 import { useRelayState } from "@/hooks/useRelayState";
 import type { RelayState } from "@/types/relay-state";
 
@@ -138,7 +141,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       : nip19.naddrEncode({
           kind: event.kind,
           pubkey: event.pubkey,
-          identifier: event.tags.find((t) => t[0] === "d")?.[1] || "",
+          identifier: getTagValue(event, "d") || "",
           relays: relays,
         });
 
@@ -264,12 +267,16 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
           <Kind0DetailRenderer event={event} />
         ) : event.kind === kinds.Contacts ? (
           <Kind3DetailView event={event} />
-        ) : event.kind === kinds.LongFormArticle ? (
-          <Kind30023DetailRenderer event={event} />
+        ) : event.kind === 1621 ? (
+          <Kind1621DetailRenderer event={event} />
         ) : event.kind === kinds.Highlights ? (
           <Kind9802DetailRenderer event={event} />
         ) : event.kind === kinds.RelayList ? (
           <Kind10002DetailRenderer event={event} />
+        ) : event.kind === kinds.LongFormArticle ? (
+          <Kind30023DetailRenderer event={event} />
+        ) : event.kind === 30617 ? (
+          <Kind30617DetailRenderer event={event} />
         ) : (
           <KindRenderer event={event} />
         )}
