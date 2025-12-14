@@ -15,14 +15,21 @@ import {
   Shield,
   Filter as FilterIcon,
   Download,
+  Copy,
+  Clock,
+  User,
+  Hash,
+  Search,
+  Code,
+  CopyCheck,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
 import { useGrimoire } from "@/core/state";
-import { useProfile } from "@/hooks/useProfile";
 import { useRelayState } from "@/hooks/useRelayState";
 import { FeedEvent } from "./nostr/Feed";
 import { KindBadge } from "./KindBadge";
+import { UserName } from "./nostr/UserName";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
@@ -40,6 +47,17 @@ import {
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./ui/collapsible";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
 import { RelayLink } from "./nostr/RelayLink";
 import type { NostrFilter } from "@/types/nostr";
 import type { RelayState } from "@/types/relay-state";
@@ -48,10 +66,10 @@ import {
   formatDTags,
   formatTimeRange,
   formatGenericTag,
-  formatPubkeysWithProfiles,
   formatHashtags,
 } from "@/lib/filter-formatters";
 import { sanitizeFilename } from "@/lib/filename-utils";
+import { useCopy } from "@/hooks/useCopy";
 
 // Memoized FeedEvent to prevent unnecessary re-renders during scroll
 const MemoizedFeedEvent = memo(
@@ -138,21 +156,18 @@ interface QueryDropdownProps {
   nip05PTags?: string[];
 }
 
-function QueryDropdown({
-  filter,
-  nip05Authors,
-  nip05PTags,
-}: QueryDropdownProps) {
-  // Load profiles for authors and #p tags
-  const authorPubkeys = filter.authors || [];
-  const authorProfiles = authorPubkeys
-    .slice(0, 10)
-    .map((pubkey) => useProfile(pubkey));
+function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
+  const { copy: handleCopy, copied } = useCopy();
 
+  // Expandable lists state
+  const [showAllAuthors, setShowAllAuthors] = useState(false);
+  const [showAllPTags, setShowAllPTags] = useState(false);
+  const [showAllETags, setShowAllETags] = useState(false);
+  const [showAllTTags, setShowAllTTags] = useState(false);
+
+  // Get pubkeys for authors and #p tags
+  const authorPubkeys = filter.authors || [];
   const pTagPubkeys = filter["#p"] || [];
-  const pTagProfiles = pTagPubkeys
-    .slice(0, 10)
-    .map((pubkey) => useProfile(pubkey));
 
   // Extract tag filters
   const eTags = filter["#e"];
@@ -169,139 +184,480 @@ function QueryDropdown({
     )
     .map(([key, values]) => ({ letter: key[1], values: values as string[] }));
 
+  // Calculate summary counts
+  const tagCount =
+    (eTags?.length || 0) +
+    (pTagPubkeys.length || 0) +
+    (tTags?.length || 0) +
+    (dTags?.length || 0) +
+    genericTags.reduce((sum, tag) => sum + tag.values.length, 0);
+
+  // Determine if we should use accordion for complex queries
+  const isComplexQuery =
+    (filter.kinds?.length || 0) +
+      authorPubkeys.length +
+      (filter.search ? 1 : 0) +
+      tagCount >
+    5;
+
   return (
-    <div className="border-b border-border px-4 py-2 bg-muted space-y-2">
-      {/* Kinds */}
-      {filter.kinds && filter.kinds.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-foreground">Kinds:</span>
-          {filter.kinds.map((kind) => (
-            <KindBadge
-              key={kind}
-              kind={kind}
-              iconClassname="size-3"
-              className="text-xs"
-              clickable
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Time Range */}
-      {(filter.since || filter.until) && (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-foreground">
-            Time Range:
+    <div className="border-b border-border px-4 py-3 bg-muted/30 space-y-3">
+      {/* Summary Header */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+        {filter.kinds && filter.kinds.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <FileText className="size-3.5" />
+            {filter.kinds.length} kind{filter.kinds.length !== 1 ? "s" : ""}
           </span>
-          <span className="text-xs ml-2">
-            {formatTimeRange(filter.since, filter.until)}
+        )}
+        {authorPubkeys.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <User className="size-3.5" />
+            {authorPubkeys.length} author
+            {authorPubkeys.length !== 1 ? "s" : ""}
           </span>
-        </div>
-      )}
-
-      {/* Search */}
-      {filter.search && (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-foreground">Search:</span>
-          <span className="text-xs ml-2">"{filter.search}"</span>
-        </div>
-      )}
-
-      {/* Authors */}
-      {authorPubkeys.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-foreground">
-            Authors: {authorPubkeys.length}
+        )}
+        {(filter.since || filter.until) && (
+          <span className="flex items-center gap-1.5">
+            <Clock className="size-3.5" />
+            time range
           </span>
-          <div className="text-xs ml-2">
-            {formatPubkeysWithProfiles(authorPubkeys, authorProfiles, 3)}
-          </div>
-          {nip05Authors && nip05Authors.length > 0 && (
-            <div className="text-xs ml-2 mt-1 space-y-0.5">
-              {nip05Authors.map((nip05) => (
-                <div key={nip05}>→ {nip05}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tag Filters Section */}
-      {(eTags ||
-        pTagPubkeys.length > 0 ||
-        tTags ||
-        dTags ||
-        genericTags.length > 0) && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold text-foreground">
-            Tag Filters:
+        )}
+        {filter.search && (
+          <span className="flex items-center gap-1.5">
+            <Search className="size-3.5" />
+            search
           </span>
+        )}
+        {tagCount > 0 && (
+          <span className="flex items-center gap-1.5">
+            <Hash className="size-3.5" />
+            {tagCount} tag{tagCount !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
 
-          {/* Event References (#e) */}
-          {eTags && eTags.length > 0 && (
-            <div className="flex flex-col">
-              <span className="text-xs">#e ({eTags.length}):</span>
-              <span className="text-xs">{formatEventIds(eTags, 3)}</span>
-            </div>
-          )}
-
-          {/* Mentions (#p) */}
-          {pTagPubkeys.length > 0 && (
-            <div className="flex flex-col">
-              <span className="text-xs">#p ({pTagPubkeys.length}):</span>
-              <span className="text-xs">
-                {formatPubkeysWithProfiles(pTagPubkeys, pTagProfiles, 3)}
-              </span>
-              {nip05PTags && nip05PTags.length > 0 && (
-                <div className="text-xs space-y-0.5">
-                  {nip05PTags.map((nip05) => (
-                    <div key={nip05}>→ {nip05}</div>
+      {isComplexQuery ? (
+        /* Accordion for complex queries */
+        <Accordion
+          type="multiple"
+          defaultValue={["kinds", "authors", "time", "search", "tags"]}
+          className="space-y-2"
+        >
+          {/* Kinds Section */}
+          {filter.kinds && filter.kinds.length > 0 && (
+            <AccordionItem value="kinds" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <FileText className="size-3.5 text-muted-foreground" />
+                  Kinds ({filter.kinds.length})
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="flex items-center gap-2 flex-wrap pl-5">
+                  {filter.kinds.map((kind) => (
+                    <KindBadge
+                      key={kind}
+                      kind={kind}
+                      iconClassname="size-3"
+                      className="text-xs"
+                      clickable
+                    />
                   ))}
                 </div>
-              )}
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Time Range Section */}
+          {(filter.since || filter.until) && (
+            <AccordionItem value="time" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <Clock className="size-3.5 text-muted-foreground" />
+                  Time Range
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="text-xs ml-5 text-muted-foreground">
+                  {formatTimeRange(filter.since, filter.until)}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Search Section */}
+          {filter.search && (
+            <AccordionItem value="search" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <Search className="size-3.5 text-muted-foreground" />
+                  Search
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="text-xs ml-5">
+                  <code className="bg-muted/50 px-1.5 py-0.5">
+                    "{filter.search}"
+                  </code>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Authors Section */}
+          {authorPubkeys.length > 0 && (
+            <AccordionItem value="authors" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <User className="size-3.5 text-muted-foreground" />
+                  Authors ({authorPubkeys.length})
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 ml-5">
+                  <div className="flex flex-wrap gap-2">
+                    {authorPubkeys
+                      .slice(0, showAllAuthors ? undefined : 3)
+                      .map((pubkey) => {
+                        return (
+                          <UserName
+                            key={pubkey}
+                            pubkey={pubkey}
+                            className="text-xs"
+                          />
+                        );
+                      })}
+                  </div>
+                  {authorPubkeys.length > 3 && (
+                    <button
+                      onClick={() => setShowAllAuthors(!showAllAuthors)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {showAllAuthors
+                        ? "Show less"
+                        : `Show all ${authorPubkeys.length}`}
+                    </button>
+                  )}
+                  {nip05Authors && nip05Authors.length > 0 && (
+                    <div className="text-xs space-y-0.5 text-muted-foreground">
+                      {nip05Authors.map((nip05) => (
+                        <div key={nip05}>→ {nip05}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Tags Section */}
+          {tagCount > 0 && (
+            <AccordionItem value="tags" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <Hash className="size-3.5 text-muted-foreground" />
+                  Tags ({tagCount})
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 ml-5">
+                  {/* Event References (#e) */}
+                  {eTags && eTags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">
+                        Event References ({eTags.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {eTags
+                          .slice(0, showAllETags ? undefined : 3)
+                          .map((eventId) => (
+                            <div
+                              key={eventId}
+                              className="flex items-center gap-1.5 group"
+                            >
+                              <code className="text-xs">
+                                {eventId.slice(0, 8)}...{eventId.slice(-4)}
+                              </code>
+                            </div>
+                          ))}
+                      </div>
+                      {eTags.length > 3 && (
+                        <button
+                          onClick={() => setShowAllETags(!showAllETags)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          {showAllETags
+                            ? "Show less"
+                            : `Show all ${eTags.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mentions (#p) */}
+                  {pTagPubkeys.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">
+                        Mentions ({pTagPubkeys.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {pTagPubkeys
+                          .slice(0, showAllPTags ? undefined : 3)
+                          .map((pubkey) => {
+                            return (
+                              <UserName
+                                key={pubkey}
+                                pubkey={pubkey}
+                                isMention
+                                className="text-xs"
+                              />
+                            );
+                          })}
+                      </div>
+                      {pTagPubkeys.length > 3 && (
+                        <button
+                          onClick={() => setShowAllPTags(!showAllPTags)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          {showAllPTags
+                            ? "Show less"
+                            : `Show all ${pTagPubkeys.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hashtags (#t) */}
+                  {tTags && tTags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">
+                        Hashtags ({tTags.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {tTags
+                          .slice(0, showAllTTags ? undefined : 5)
+                          .map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                      </div>
+                      {tTags.length > 5 && (
+                        <button
+                          onClick={() => setShowAllTTags(!showAllTTags)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          {showAllTTags
+                            ? "Show less"
+                            : `Show all ${tTags.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* D-Tags (#d) */}
+                  {dTags && dTags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">
+                        D-Tags ({dTags.length})
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDTags(dTags, 5)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generic Tags */}
+                  {genericTags.map((tag) => (
+                    <div key={tag.letter} className="space-y-1">
+                      <div className="text-xs font-medium">
+                        #{tag.letter} Tags ({tag.values.length})
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatGenericTag(tag.letter, tag.values, 5).replace(
+                          `#${tag.letter}: `,
+                          "",
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+        </Accordion>
+      ) : (
+        /* Simple cards for simple queries */
+        <div className="space-y-3">
+          {/* Kinds */}
+          {filter.kinds && filter.kinds.length > 0 && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <FileText className="size-3.5 text-muted-foreground" />
+                Kinds ({filter.kinds.length})
+              </div>
+              <div className="flex items-center gap-2 flex-wrap ml-5">
+                {filter.kinds.map((kind) => (
+                  <KindBadge
+                    key={kind}
+                    kind={kind}
+                    iconClassname="size-3"
+                    className="text-xs"
+                    clickable
+                  />
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Hashtags (#t) */}
-          {tTags && tTags.length > 0 && (
-            <div className="flex flex-col">
-              <span className="text-xs">#t ({tTags.length}):</span>
-              <span className="text-xs">{formatHashtags(tTags, 3)}</span>
+          {/* Time Range */}
+          {(filter.since || filter.until) && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <Clock className="size-3.5 text-muted-foreground" />
+                Time Range
+              </div>
+              <div className="text-xs ml-5 text-muted-foreground">
+                {formatTimeRange(filter.since, filter.until)}
+              </div>
             </div>
           )}
 
-          {/* D-Tags (#d) */}
-          {dTags && dTags.length > 0 && (
-            <div className="flex flex-col">
-              <span className="text-xs">#d ({dTags.length}):</span>
-              <span className="text-xs">{formatDTags(dTags, 3)}</span>
+          {/* Search */}
+          {filter.search && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <Search className="size-3.5 text-muted-foreground" />
+                Search
+              </div>
+              <div className="text-xs ml-5">
+                <code className="bg-muted/50 px-1.5 py-0.5 rounded">
+                  "{filter.search}"
+                </code>
+              </div>
             </div>
           )}
 
-          {/* Generic Tags */}
-          {genericTags.map((tag) => (
-            <div key={tag.letter} className="flex flex-col">
-              <span className="text-xs">
-                #{tag.letter} ({tag.values.length}):
-              </span>
-              <span className="text-xs">
-                {formatGenericTag(tag.letter, tag.values, 3).replace(
-                  `#${tag.letter}: `,
-                  "",
+          {/* Authors */}
+          {authorPubkeys.length > 0 && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <User className="size-3.5 text-muted-foreground" />
+                Authors ({authorPubkeys.length})
+              </div>
+              <div className="ml-5 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {authorPubkeys
+                    .slice(0, showAllAuthors ? undefined : 3)
+                    .map((pubkey) => {
+                      return (
+                        <UserName
+                          key={pubkey}
+                          pubkey={pubkey}
+                          className="text-xs"
+                        />
+                      );
+                    })}
+                </div>
+                {authorPubkeys.length > 3 && (
+                  <button
+                    onClick={() => setShowAllAuthors(!showAllAuthors)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {showAllAuthors
+                      ? "Show less"
+                      : `Show all ${authorPubkeys.length}`}
+                  </button>
                 )}
-              </span>
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Tags (simplified for simple queries) */}
+          {tagCount > 0 && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <Hash className="size-3.5 text-muted-foreground" />
+                Tags ({tagCount})
+              </div>
+              <div className="ml-5 text-xs text-muted-foreground space-y-1">
+                {eTags && eTags.length > 0 && (
+                  <div>Event refs: {formatEventIds(eTags, 3)}</div>
+                )}
+                {pTagPubkeys.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>Mentions:</span>
+                    {pTagPubkeys.slice(0, 3).map((pubkey, idx) => (
+                      <span
+                        key={pubkey}
+                        className="inline-flex items-center gap-1"
+                      >
+                        <UserName
+                          pubkey={pubkey}
+                          isMention
+                          className="text-xs"
+                        />
+                        {idx < Math.min(2, pTagPubkeys.length - 1) && ","}
+                      </span>
+                    ))}
+                    {pTagPubkeys.length > 3 && (
+                      <span>...+{pTagPubkeys.length - 3} more</span>
+                    )}
+                  </div>
+                )}
+                {tTags && tTags.length > 0 && (
+                  <div>Hashtags: {formatHashtags(tTags, 3)}</div>
+                )}
+                {dTags && dTags.length > 0 && (
+                  <div>D-tags: {formatDTags(dTags, 3)}</div>
+                )}
+                {genericTags.map((tag) => (
+                  <div key={tag.letter}>
+                    #{tag.letter}:{" "}
+                    {formatGenericTag(tag.letter, tag.values, 3).replace(
+                      `#${tag.letter}: `,
+                      "",
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Raw Query */}
-      <details className="text-xs">
-        <summary className="cursor-pointer">Show raw query</summary>
-        <pre className="mt-2 text-xs font-mono bg-background p-2 border border-border overflow-x-auto">
-          {JSON.stringify(filter, null, 2)}
-        </pre>
-      </details>
+      {/* Raw Query - Always at bottom */}
+      <Collapsible>
+        <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+          <Code className="size-3" />
+          Raw Query JSON
+          <ChevronDown className="size-3 ml-auto" />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="relative mt-2">
+            <pre className="text-xs bg-muted/50 p-3 pr-10 overflow-x-auto font-mono border border-border/40 rounded">
+              <Button
+                size="icon"
+                variant="link"
+                onClick={() => handleCopy(JSON.stringify(filter, null, 2))}
+                aria-label="Copy query JSON"
+                className="absolute top-2 right-2"
+              >
+                {copied ? (
+                  <CopyCheck className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+              </Button>
+              {JSON.stringify(filter, null, 2)}
+            </pre>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
@@ -383,7 +739,9 @@ export default function ReqViewer({
           chunks.push(jsonlChunk);
 
           // Update progress
-          setExportProgress(Math.round(((i + chunk.length) / events.length) * 100));
+          setExportProgress(
+            Math.round(((i + chunk.length) / events.length) * 100),
+          );
         }
 
         // Join chunks with newlines between them
@@ -651,7 +1009,11 @@ export default function ReqViewer({
                 placeholder="Enter filename"
                 disabled={isExporting}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && exportFilename.trim() && !isExporting) {
+                  if (
+                    e.key === "Enter" &&
+                    exportFilename.trim() &&
+                    !isExporting
+                  ) {
                     handleExport();
                   }
                 }}

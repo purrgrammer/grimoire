@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { CopyCheck, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,30 +33,23 @@ export function JsonViewer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between pr-8">
-            <span>{title}</span>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto mt-2 relative">
+          <pre className="text-xs font-mono bg-muted p-4 pr-10 overflow-scroll">
             <Button
-              variant="outline"
-              size="sm"
+              size="icon"
+              variant="link"
               onClick={handleCopy}
-              className="gap-2"
+              aria-label="Copy JSON"
+              className="absolute top-2 right-2"
             >
               {copied ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  Copied
-                </>
+                <CopyCheck className="size-3.5" />
               ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </>
+                <Copy className="size-3.5" />
               )}
             </Button>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 overflow-auto mt-2">
-          <pre className="text-xs font-mono bg-muted p-4 overflow-scroll">
             {jsonString}
           </pre>
         </div>
