@@ -223,3 +223,34 @@
   height: 4px;
   margin: -2px 0;
 }
+
+/* Accessibility: Focus indicators for keyboard navigation */
+@layer base {
+  /* Focus-visible for buttons and interactive elements */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Focus-visible for input elements */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 0;
+  }
+
+  /* Focus-visible for command launcher items */
+  [cmdk-item]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+
+  /* Focus-visible for tab buttons */
+  .tabbar-button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}

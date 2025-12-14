@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
 import { createTimelineLoader } from "@/services/loaders";
@@ -35,6 +35,13 @@ export function useTimeline(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Stabilize filters and relays for dependency array
+  // Using JSON.stringify and .join() for deep comparison - this is intentional
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableFilters = useMemo(() => filters, [JSON.stringify(filters)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableRelays = useMemo(() => relays, [relays.join(",")]);
+
   // Load events into store
   useEffect(() => {
     if (relays.length === 0) return;
@@ -64,7 +71,7 @@ export function useTimeline(
     });
 
     return () => subscription.unsubscribe();
-  }, [id, relays.length, limit]);
+  }, [id, stableRelays, limit, eventStore, stableFilters]);
 
   // Watch store for matching events
   const timeline = useObservableMemo(() => {

@@ -4,7 +4,7 @@ export interface ParsedCommand {
   commandName: string;
   args: string[];
   fullInput: string;
-  command?: typeof manPages[string];
+  command?: (typeof manPages)[string];
   props?: any;
   title?: string;
   error?: string;

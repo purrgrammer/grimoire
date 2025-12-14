@@ -69,8 +69,9 @@ export function WinViewer() {
     const continuer = isLast ? "  " : "│ ";
 
     // Workspace header
+    const wsDisplay = ws.label ? `${ws.number} "${ws.label}"` : `${ws.number}`;
     lines.push(
-      `${prefix} ${isActive ? "●" : "○"} workspace: "${ws.label}" (${wsId})`,
+      `${prefix} ${isActive ? "●" : "○"} workspace: ${wsDisplay} (${wsId})`,
     );
 
     // Window IDs

@@ -72,7 +72,7 @@ export function useAccountSync() {
             } catch (error) {
               console.warn(
                 `Skipping invalid relay URL in Kind 10002 event: ${tag[1]}`,
-                error
+                error,
               );
             }
           }
@@ -82,7 +82,11 @@ export function useAccountSync() {
           inbox: inboxRelays
             .map((url) => {
               try {
-                return { url: normalizeRelayURL(url), read: true, write: false };
+                return {
+                  url: normalizeRelayURL(url),
+                  read: true,
+                  write: false,
+                };
               } catch {
                 return null;
               }
@@ -91,7 +95,11 @@ export function useAccountSync() {
           outbox: outboxRelays
             .map((url) => {
               try {
-                return { url: normalizeRelayURL(url), read: false, write: true };
+                return {
+                  url: normalizeRelayURL(url),
+                  read: false,
+                  write: true,
+                };
               } catch {
                 return null;
               }
@@ -107,5 +115,5 @@ export function useAccountSync() {
       subscription.unsubscribe();
       storeSubscription.unsubscribe();
     };
-  }, [activeAccount?.pubkey, eventStore]);
+  }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
 }

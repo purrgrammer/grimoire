@@ -89,6 +89,7 @@ export default function Home() {
             onClick={() => setCommandLauncherOpen(true)}
             className="p-1 text-muted-foreground hover:text-accent transition-colors cursor-crosshair"
             title="Launch command (Cmd+K)"
+            aria-label="Launch command palette"
           >
             <Terminal className="size-4" />
           </button>

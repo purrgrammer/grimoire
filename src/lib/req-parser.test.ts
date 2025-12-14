@@ -79,11 +79,7 @@ describe("parseReqCommand", () => {
     it("should combine explicit relays with nprofile relay hints and normalize all", () => {
       const nprofile =
         "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p";
-      const result = parseReqCommand([
-        "-a",
-        nprofile,
-        "wss://relay.damus.io",
-      ]);
+      const result = parseReqCommand(["-a", nprofile, "wss://relay.damus.io"]);
       // All relays should be normalized
       expect(result.relays).toEqual([
         "wss://r.x.com/",
@@ -144,10 +140,7 @@ describe("parseReqCommand", () => {
       const hex = "a".repeat(64);
       const npub =
         "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
-      const result = parseReqCommand([
-        "-a",
-        `${hex},${npub},user@domain.com`,
-      ]);
+      const result = parseReqCommand(["-a", `${hex},${npub},user@domain.com`]);
       expect(result.filter.authors).toEqual([
         hex,
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
@@ -239,10 +232,7 @@ describe("parseReqCommand", () => {
       const hex = "a".repeat(64);
       const npub =
         "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6";
-      const result = parseReqCommand([
-        "-p",
-        `${hex},${npub},user@domain.com`,
-      ]);
+      const result = parseReqCommand(["-p", `${hex},${npub},user@domain.com`]);
       expect(result.filter["#p"]).toEqual([
         hex,
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
@@ -364,10 +354,7 @@ describe("parseReqCommand", () => {
     });
 
     it("should normalize relays with and without trailing slash to same value", () => {
-      const result = parseReqCommand([
-        "wss://relay.com",
-        "wss://relay.com/",
-      ]);
+      const result = parseReqCommand(["wss://relay.com", "wss://relay.com/"]);
       // Should deduplicate because they normalize to the same URL
       expect(result.relays).toEqual(["wss://relay.com/", "wss://relay.com/"]);
     });
@@ -469,11 +456,7 @@ describe("parseReqCommand", () => {
     });
 
     it("should parse comma-separated values with spaces", () => {
-      const result = parseReqCommand([
-        "--tag",
-        "a",
-        "value1, value2, value3",
-      ]);
+      const result = parseReqCommand(["--tag", "a", "value1, value2, value3"]);
       expect(result.filter["#a"]).toEqual(["value1", "value2", "value3"]);
     });
 

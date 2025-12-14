@@ -47,6 +47,13 @@ export function useReqTimeline(
     );
   }, [eventsMap]);
 
+  // Stabilize filters and relays for dependency array
+  // Using JSON.stringify and .join() for deep comparison - this is intentional
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableFilters = useMemo(() => filters, [JSON.stringify(filters)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableRelays = useMemo(() => relays, [relays.join(",")]);
+
   useEffect(() => {
     if (relays.length === 0) {
       setLoading(false);
@@ -113,7 +120,7 @@ export function useReqTimeline(
     return () => {
       subscription.unsubscribe();
     };
-  }, [id, JSON.stringify(filters), relays.join(","), limit, stream]);
+  }, [id, stableFilters, stableRelays, limit, stream, eventStore]);
 
   return {
     events: events || [],

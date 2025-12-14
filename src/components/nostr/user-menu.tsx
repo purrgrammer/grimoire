@@ -83,7 +83,7 @@ export default function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="link">
+        <Button size="sm" variant="link" aria-label={account ? "User menu" : "Log in"}>
           {account ? (
             <UserAvatar pubkey={account.pubkey} />
           ) : (

@@ -44,16 +44,15 @@ function formatList(items: string[], maxDisplay: number): string {
 export function formatEventIds(ids: string[], maxDisplay = 2): string {
   if (!ids || ids.length === 0) return "";
 
-  const encoded = ids
-    .map((id) => {
-      try {
-        const note = nip19.noteEncode(id);
-        return truncateBech32(note);
-      } catch {
-        // Fallback for invalid IDs: truncate hex
-        return id.length > 16 ? `${id.slice(0, 8)}...${id.slice(-6)}` : id;
-      }
-    });
+  const encoded = ids.map((id) => {
+    try {
+      const note = nip19.noteEncode(id);
+      return truncateBech32(note);
+    } catch {
+      // Fallback for invalid IDs: truncate hex
+      return id.length > 16 ? `${id.slice(0, 8)}...${id.slice(-6)}` : id;
+    }
+  });
 
   return formatList(encoded, maxDisplay);
 }

@@ -11,10 +11,15 @@ export function TabBar() {
     createWorkspace();
   };
 
+  // Sort workspaces by number
+  const sortedWorkspaces = Object.values(workspaces).sort(
+    (a, b) => a.number - b.number,
+  );
+
   return (
     <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto">
       <div className="flex items-center gap-1 flex-nowrap">
-        {Object.values(workspaces).map((ws) => (
+        {sortedWorkspaces.map((ws) => (
           <button
             key={ws.id}
             onClick={() => setActiveWorkspace(ws.id)}
@@ -25,7 +30,7 @@ export function TabBar() {
                 : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
           >
-            {ws.label}
+            {ws.label && ws.label.trim() ? `${ws.number} ${ws.label}` : ws.number}
           </button>
         ))}
         <Button
@@ -33,6 +38,7 @@ export function TabBar() {
           size="icon"
           className="h-6 w-6 ml-1 flex-shrink-0"
           onClick={handleNewTab}
+          aria-label="Create new workspace"
         >
           <Plus className="h-3 w-3" />
         </Button>

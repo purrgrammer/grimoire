@@ -3,11 +3,36 @@ import type { MosaicNode } from "react-mosaic-component";
 import { GrimoireState, WindowInstance, UserRelays } from "@/types/app";
 
 /**
+ * Finds the lowest available workspace number.
+ * - If workspaces have numbers [1, 2, 4], returns 3
+ * - If workspaces have numbers [1, 2, 3], returns 4
+ * - If workspaces have numbers [2, 3, 4], returns 1
+ */
+export const findLowestAvailableWorkspaceNumber = (
+  workspaces: Record<string, { number: number }>,
+): number => {
+  // Get all workspace numbers as a Set for O(1) lookup
+  const numbers = new Set(Object.values(workspaces).map((ws) => ws.number));
+
+  // If no workspaces exist, start at 1
+  if (numbers.size === 0) return 1;
+
+  // Find first gap starting from 1
+  let candidate = 1;
+  while (numbers.has(candidate)) {
+    candidate++;
+  }
+
+  return candidate;
+};
+
+/**
  * Creates a new, empty workspace.
  */
 export const createWorkspace = (
   state: GrimoireState,
-  label: string,
+  number: number,
+  label?: string,
 ): GrimoireState => {
   const newId = uuidv4();
   return {
@@ -17,6 +42,7 @@ export const createWorkspace = (
       ...state.workspaces,
       [newId]: {
         id: newId,
+        number,
         label,
         layout: null,
         windowIds: [],
@@ -302,7 +328,9 @@ export const deleteWorkspace = (
 export const updateWindow = (
   state: GrimoireState,
   windowId: string,
-  updates: Partial<Pick<WindowInstance, "props" | "title" | "commandString" | "appId">>,
+  updates: Partial<
+    Pick<WindowInstance, "props" | "title" | "commandString" | "appId">
+  >,
 ): GrimoireState => {
   const window = state.windows[windowId];
   if (!window) {

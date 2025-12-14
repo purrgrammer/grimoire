@@ -14,7 +14,9 @@ describe("normalizeRelayURL", () => {
 
   it("should normalize URLs with and without trailing slash to the same value", () => {
     const withTrailingSlash = normalizeRelayURL("wss://theforest.nostr1.com/");
-    const withoutTrailingSlash = normalizeRelayURL("wss://theforest.nostr1.com");
+    const withoutTrailingSlash = normalizeRelayURL(
+      "wss://theforest.nostr1.com",
+    );
     expect(withTrailingSlash).toBe(withoutTrailingSlash);
   });
 
@@ -64,7 +66,9 @@ describe("normalizeRelayURL", () => {
   });
 
   it("should handle complex URLs with path, port, and query", () => {
-    const result = normalizeRelayURL("wss://relay.example.com:8080/path?key=value");
+    const result = normalizeRelayURL(
+      "wss://relay.example.com:8080/path?key=value",
+    );
     expect(result).toBe("wss://relay.example.com:8080/path?key=value");
   });
 
@@ -79,7 +83,9 @@ describe("normalizeRelayURL", () => {
     });
 
     it("should throw on whitespace-only string", () => {
-      expect(() => normalizeRelayURL("   ")).toThrow("Relay URL cannot be empty");
+      expect(() => normalizeRelayURL("   ")).toThrow(
+        "Relay URL cannot be empty",
+      );
     });
 
     it("should throw TypeError on null input", () => {
@@ -89,7 +95,9 @@ describe("normalizeRelayURL", () => {
 
     it("should throw TypeError on undefined input", () => {
       expect(() => normalizeRelayURL(undefined as any)).toThrow(TypeError);
-      expect(() => normalizeRelayURL(undefined as any)).toThrow("must be a string");
+      expect(() => normalizeRelayURL(undefined as any)).toThrow(
+        "must be a string",
+      );
     });
 
     it("should throw TypeError on non-string input (number)", () => {
@@ -111,7 +119,9 @@ describe("normalizeRelayURL", () => {
     });
 
     it("should handle URLs with special characters in query", () => {
-      const result = normalizeRelayURL("wss://relay.example.com?key=<script>alert('xss')</script>");
+      const result = normalizeRelayURL(
+        "wss://relay.example.com?key=<script>alert('xss')</script>",
+      );
       expect(result).toContain("wss://relay.example.com/");
       // Note: URL encoding is handled by browser's URL parsing
     });

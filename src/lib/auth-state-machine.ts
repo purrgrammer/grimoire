@@ -174,9 +174,10 @@ export function transitionAuthState(
       }
       return noChange;
 
-    default:
+    default: {
       // Exhaustive check
       const _exhaustive: never = currentStatus;
       return _exhaustive;
+    }
   }
 }

@@ -21,8 +21,7 @@ export function WindowToolbar({
     if (!window) return;
 
     // Get command string (existing or reconstructed)
-    const commandString =
-      window.commandString || reconstructCommand(window);
+    const commandString = window.commandString || reconstructCommand(window);
 
     // Set edit mode state
     setEditMode({
@@ -43,6 +42,7 @@ export function WindowToolbar({
           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           onClick={handleEdit}
           title="Edit command"
+          aria-label="Edit command"
         >
           <Pencil className="size-4" />
         </button>
@@ -52,6 +52,7 @@ export function WindowToolbar({
           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           onClick={onClose}
           title="Close window"
+          aria-label="Close window"
         >
           <X className="size-4" />
         </button>

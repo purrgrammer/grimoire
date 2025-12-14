@@ -51,7 +51,11 @@ export async function getRelayInfo(
 
     const info = await fetchRelayInfo(normalizedUrl);
     if (info) {
-      await db.relayInfo.put({ url: normalizedUrl, info, fetchedAt: Date.now() });
+      await db.relayInfo.put({
+        url: normalizedUrl,
+        info,
+        fetchedAt: Date.now(),
+      });
     }
 
     return info;
@@ -72,7 +76,10 @@ export async function getCachedRelayInfo(
     const cached = await db.relayInfo.get(normalizedUrl);
     return cached?.info ?? null;
   } catch (error) {
-    console.warn(`NIP-11: Failed to get cached relay info for ${wsUrl}:`, error);
+    console.warn(
+      `NIP-11: Failed to get cached relay info for ${wsUrl}:`,
+      error,
+    );
     return null;
   }
 }
@@ -86,15 +93,19 @@ export async function getRelayInfoBatch(
   const results = new Map<string, RelayInformation>();
 
   // Normalize URLs first
-  const normalizedUrls = wsUrls.map((url) => {
-    try {
-      return normalizeRelayURL(url);
-    } catch {
-      return null;
-    }
-  }).filter((url): url is string => url !== null);
+  const normalizedUrls = wsUrls
+    .map((url) => {
+      try {
+        return normalizeRelayURL(url);
+      } catch {
+        return null;
+      }
+    })
+    .filter((url): url is string => url !== null);
 
-  const infos = await Promise.all(normalizedUrls.map((url) => getRelayInfo(url)));
+  const infos = await Promise.all(
+    normalizedUrls.map((url) => getRelayInfo(url)),
+  );
 
   infos.forEach((info, i) => {
     if (info) results.set(normalizedUrls[i], info);

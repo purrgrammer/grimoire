@@ -3,6 +3,7 @@ import { WindowInstance } from "@/types/app";
 import { WindowToolbar } from "./WindowToolbar";
 import { WindowRenderer } from "./WindowRenderer";
 import { useDynamicWindowTitle } from "./DynamicWindowTitle";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 interface WindowTileProps {
   id: string;
@@ -47,7 +48,9 @@ export function WindowTile({
 
   return (
     <MosaicWindow path={path} title={title} renderToolbar={renderToolbar}>
-      <WindowRenderer window={window} onClose={() => onClose(id)} />
+      <ErrorBoundary level="window">
+        <WindowRenderer window={window} onClose={() => onClose(id)} />
+      </ErrorBoundary>
     </MosaicWindow>
   );
 }

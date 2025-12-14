@@ -335,7 +335,12 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
 
     // 8. Generic Tags - NEW (a-z, A-Z filters excluding e, p, t, d)
     const genericTags = Object.entries(filter)
-      .filter(([key]) => key.startsWith("#") && key.length === 2 && !["#e", "#p", "#t", "#d"].includes(key))
+      .filter(
+        ([key]) =>
+          key.startsWith("#") &&
+          key.length === 2 &&
+          !["#e", "#p", "#t", "#d"].includes(key),
+      )
       .map(([key, values]) => ({ letter: key[1], values: values as string[] }));
 
     if (genericTags.length > 0) {

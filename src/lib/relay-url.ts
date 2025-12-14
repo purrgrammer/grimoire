@@ -18,9 +18,7 @@ import { normalizeURL as applesauceNormalizeURL } from "applesauce-core/helpers"
 export function normalizeRelayURL(url: string): string {
   // Input validation
   if (typeof url !== "string") {
-    throw new TypeError(
-      `Relay URL must be a string, received: ${typeof url}`
-    );
+    throw new TypeError(`Relay URL must be a string, received: ${typeof url}`);
   }
 
   const trimmed = url.trim();
@@ -44,7 +42,7 @@ export function normalizeRelayURL(url: string): string {
     throw new Error(
       `Failed to normalize relay URL "${url}": ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
   }
 }

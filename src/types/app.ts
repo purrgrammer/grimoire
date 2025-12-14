@@ -27,7 +27,8 @@ export interface WindowInstance {
 
 export interface Workspace {
   id: string;
-  label: string;
+  number: number; // Numeric identifier for shortcuts (e.g., Cmd+1, Cmd+2)
+  label?: string; // Optional user-editable label
   layout: MosaicNode<string> | null;
   windowIds: string[];
 }
@@ -45,6 +46,7 @@ export interface UserRelays {
 }
 
 export interface GrimoireState {
+  __version: number; // Schema version for migrations
   windows: Record<string, WindowInstance>;
   workspaces: Record<string, Workspace>;
   activeWorkspaceId: string;

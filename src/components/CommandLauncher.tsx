@@ -109,83 +109,84 @@ export default function CommandLauncher({
         <VisuallyHidden>
           <DialogTitle>Command Launcher</DialogTitle>
         </VisuallyHidden>
-        <Command
-          label="Command Launcher"
-          className="grimoire-command-content"
-          shouldFilter={false}
-        >
-          <div className="command-launcher-wrapper">
-            <Command.Input
-              value={input}
-              onValueChange={setInput}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className="command-input"
-            />
+          <Command
+            label="Command Launcher"
+            className="grimoire-command-content"
+            shouldFilter={false}
+          >
+            <div className="command-launcher-wrapper">
+              <Command.Input
+                value={input}
+                onValueChange={setInput}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                className="command-input"
+                autoFocus
+              />
 
-            <Command.List className="command-list">
-              <Command.Empty className="command-empty">
-                {commandName
-                  ? `No command found: ${commandName}`
-                  : "Start typing..."}
-              </Command.Empty>
+              <Command.List className="command-list">
+                <Command.Empty className="command-empty">
+                  {commandName
+                    ? `No command found: ${commandName}`
+                    : "Start typing..."}
+                </Command.Empty>
 
-              {categories.map((category) => (
-                <Command.Group
-                  key={category}
-                  heading={category}
-                  className="command-group"
-                >
-                  {filteredCommands
-                    .filter(([_, cmd]) => cmd.category === category)
-                    .map(([name, cmd]) => {
-                      const isExactMatch = name === commandName;
-                      return (
-                        <Command.Item
-                          key={name}
-                          value={name}
-                          onSelect={() => handleSelect(name)}
-                          className="command-item"
-                          data-exact-match={isExactMatch}
-                        >
-                          <div className="command-item-content">
-                            <div className="command-item-name">
-                              <span className="command-name">{name}</span>
-                              {cmd.synopsis !== name && (
-                                <span className="command-args">
-                                  {cmd.synopsis.replace(name, "").trim()}
-                                </span>
-                              )}
-                              {isExactMatch && (
-                                <span className="command-match-indicator">
-                                  ✓
-                                </span>
-                              )}
+                {categories.map((category) => (
+                  <Command.Group
+                    key={category}
+                    heading={category}
+                    className="command-group"
+                  >
+                    {filteredCommands
+                      .filter(([_, cmd]) => cmd.category === category)
+                      .map(([name, cmd]) => {
+                        const isExactMatch = name === commandName;
+                        return (
+                          <Command.Item
+                            key={name}
+                            value={name}
+                            onSelect={() => handleSelect(name)}
+                            className="command-item"
+                            data-exact-match={isExactMatch}
+                          >
+                            <div className="command-item-content">
+                              <div className="command-item-name">
+                                <span className="command-name">{name}</span>
+                                {cmd.synopsis !== name && (
+                                  <span className="command-args">
+                                    {cmd.synopsis.replace(name, "").trim()}
+                                  </span>
+                                )}
+                                {isExactMatch && (
+                                  <span className="command-match-indicator">
+                                    ✓
+                                  </span>
+                                )}
+                              </div>
+                              <div className="command-item-description">
+                                {cmd.description.split(".")[0]}
+                              </div>
                             </div>
-                            <div className="command-item-description">
-                              {cmd.description.split(".")[0]}
-                            </div>
-                          </div>
-                        </Command.Item>
-                      );
-                    })}
-                </Command.Group>
-              ))}
-            </Command.List>
+                          </Command.Item>
+                        );
+                      })}
+                  </Command.Group>
+                ))}
+              </Command.List>
 
-            <div className="command-footer">
-              <div>
-                <kbd>↑↓</kbd> navigate
-                <kbd>↵</kbd> execute
-                <kbd>esc</kbd> close
+              <div className="command-footer">
+                <div>
+                  <kbd>↑↓</kbd> navigate
+                  <kbd>↵</kbd> execute
+                  <kbd>esc</kbd> close
+                </div>
+                {recognizedCommand && (
+                  <div className="command-footer-status">Ready to execute</div>
+                )}
               </div>
-              {recognizedCommand && (
-                <div className="command-footer-status">Ready to execute</div>
-              )}
             </div>
-          </div>
-        </Command>
-      </DialogContent>
-    </Dialog>
+          </Command>
+        </DialogContent>
+      </Dialog>
   );
 }

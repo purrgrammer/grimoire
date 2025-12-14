@@ -98,7 +98,7 @@ export function useNostrEvent(
     } else {
       console.warn("[useNostrEvent] Unknown pointer type:", pointer);
     }
-  }, [pointerKey]);
+  }, [pointer, pointerKey]);
 
   return event;
 }

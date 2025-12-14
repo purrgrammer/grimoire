@@ -1,20 +1,44 @@
-import { Component, ReactNode } from "react";
-import { AlertCircle } from "lucide-react";
+import { Component, ReactNode, Suspense, lazy } from "react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WindowInstance } from "@/types/app";
-import { NipRenderer } from "./NipRenderer";
-import ManPage from "./ManPage";
-import ReqViewer from "./ReqViewer";
-import { EventDetailViewer } from "./EventDetailViewer";
-import { ProfileViewer } from "./ProfileViewer";
-import EncodeViewer from "./EncodeViewer";
-import DecodeViewer from "./DecodeViewer";
-import { RelayViewer } from "./RelayViewer";
-import KindRenderer from "./KindRenderer";
-import KindsViewer from "./KindsViewer";
-import NipsViewer from "./NipsViewer";
-import { DebugViewer } from "./DebugViewer";
-import ConnViewer from "./ConnViewer";
+
+// Lazy load all viewer components for better code splitting
+const NipRenderer = lazy(() =>
+  import("./NipRenderer").then((m) => ({ default: m.NipRenderer })),
+);
+const ManPage = lazy(() => import("./ManPage"));
+const ReqViewer = lazy(() => import("./ReqViewer"));
+const EventDetailViewer = lazy(() =>
+  import("./EventDetailViewer").then((m) => ({ default: m.EventDetailViewer })),
+);
+const ProfileViewer = lazy(() =>
+  import("./ProfileViewer").then((m) => ({ default: m.ProfileViewer })),
+);
+const EncodeViewer = lazy(() => import("./EncodeViewer"));
+const DecodeViewer = lazy(() => import("./DecodeViewer"));
+const RelayViewer = lazy(() =>
+  import("./RelayViewer").then((m) => ({ default: m.RelayViewer })),
+);
+const KindRenderer = lazy(() => import("./KindRenderer"));
+const KindsViewer = lazy(() => import("./KindsViewer"));
+const NipsViewer = lazy(() => import("./NipsViewer"));
+const DebugViewer = lazy(() =>
+  import("./DebugViewer").then((m) => ({ default: m.DebugViewer })),
+);
+const ConnViewer = lazy(() => import("./ConnViewer"));
+
+// Loading fallback component
+function ViewerLoading() {
+  return (
+    <div className="h-full w-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <p className="text-sm">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 interface WindowRendererProps {
   window: WindowInstance;
@@ -168,7 +192,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
 
   return (
     <WindowErrorBoundary windowTitle={window.title} onClose={onClose}>
-      <div className="h-full w-full overflow-auto">{content}</div>
+      <Suspense fallback={<ViewerLoading />}>
+        <div className="h-full w-full overflow-auto">{content}</div>
+      </Suspense>
     </WindowErrorBoundary>
   );
 }

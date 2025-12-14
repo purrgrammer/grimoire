@@ -68,7 +68,10 @@ export function parseOpenCommand(args: string[]): ParsedOpenCommand {
                 try {
                   return normalizeRelayURL(url);
                 } catch (error) {
-                  console.warn(`Skipping invalid relay hint in nevent: ${url}`, error);
+                  console.warn(
+                    `Skipping invalid relay hint in nevent: ${url}`,
+                    error,
+                  );
                   return null;
                 }
               })
@@ -87,7 +90,10 @@ export function parseOpenCommand(args: string[]): ParsedOpenCommand {
                 try {
                   return normalizeRelayURL(url);
                 } catch (error) {
-                  console.warn(`Skipping invalid relay hint in naddr: ${url}`, error);
+                  console.warn(
+                    `Skipping invalid relay hint in naddr: ${url}`,
+                    error,
+                  );
                   return null;
                 }
               })

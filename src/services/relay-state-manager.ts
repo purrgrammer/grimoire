@@ -114,7 +114,9 @@ class RelayStateManager {
       connected: relay.connected$.pipe(startWith(relay.connected)),
       notices: relay.notice$.pipe(
         startWith(Array.isArray(relay.notices) ? relay.notices : []),
-        map(notice => Array.isArray(notice) ? notice : (notice ? [notice] : []))
+        map((notice) =>
+          Array.isArray(notice) ? notice : notice ? [notice] : [],
+        ),
       ),
       challenge: relay.challenge$.pipe(startWith(relay.challenge)),
       authenticated: relay.authenticated$.pipe(startWith(relay.authenticated)),
@@ -201,7 +203,8 @@ class RelayStateManager {
     // Priority 3: New challenge (or challenge change)
     else if (
       challenge &&
-      (!state.currentChallenge || state.currentChallenge.challenge !== challenge)
+      (!state.currentChallenge ||
+        state.currentChallenge.challenge !== challenge)
     ) {
       const preference = this.authPreferences.get(url);
       authEvent = { type: "CHALLENGE_RECEIVED", challenge, preference };
@@ -220,9 +223,12 @@ class RelayStateManager {
     if (authEvent) {
       const transition = transitionAuthState(state.authStatus, authEvent);
 
-      logger.info(`${url} auth transition: ${state.authStatus} → ${transition.newStatus}`, {
-        event: authEvent.type,
-      });
+      logger.info(
+        `${url} auth transition: ${state.authStatus} → ${transition.newStatus}`,
+        {
+          event: authEvent.type,
+        },
+      );
 
       // Update state
       state.authStatus = transition.newStatus;
@@ -537,9 +543,7 @@ class RelayStateManager {
           state.currentChallenge &&
           this.isChallengeExpired(state.currentChallenge.receivedAt)
         ) {
-          console.log(
-            `[RelayStateManager] Challenge expired for ${state.url}`,
-          );
+          console.log(`[RelayStateManager] Challenge expired for ${state.url}`);
           state.currentChallenge = undefined;
           if (state.authStatus === "challenge_received") {
             state.authStatus = "none";
