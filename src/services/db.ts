@@ -63,7 +63,9 @@ class GrimoireDb extends Dexie {
         console.log("[DB Migration v6] Normalizing relay URLs...");
 
         // Migrate relayAuthPreferences
-        const authPrefs = await tx.table<RelayAuthPreference>("relayAuthPreferences").toArray();
+        const authPrefs = await tx
+          .table<RelayAuthPreference>("relayAuthPreferences")
+          .toArray();
         const normalizedAuthPrefs = new Map<string, RelayAuthPreference>();
         let skippedAuthPrefs = 0;
 
@@ -83,16 +85,20 @@ class GrimoireDb extends Dexie {
             skippedAuthPrefs++;
             console.warn(
               `[DB Migration v6] Skipping invalid relay URL in auth preferences: ${pref.url}`,
-              error
+              error,
             );
           }
         }
 
         await tx.table("relayAuthPreferences").clear();
-        await tx.table("relayAuthPreferences").bulkAdd(Array.from(normalizedAuthPrefs.values()));
+        await tx
+          .table("relayAuthPreferences")
+          .bulkAdd(Array.from(normalizedAuthPrefs.values()));
         console.log(
           `[DB Migration v6] Normalized ${normalizedAuthPrefs.size} auth preferences` +
-          (skippedAuthPrefs > 0 ? ` (skipped ${skippedAuthPrefs} invalid)` : "")
+            (skippedAuthPrefs > 0
+              ? ` (skipped ${skippedAuthPrefs} invalid)`
+              : ""),
         );
 
         // Migrate relayInfo
@@ -116,16 +122,20 @@ class GrimoireDb extends Dexie {
             skippedRelayInfos++;
             console.warn(
               `[DB Migration v6] Skipping invalid relay URL in relay info: ${info.url}`,
-              error
+              error,
             );
           }
         }
 
         await tx.table("relayInfo").clear();
-        await tx.table("relayInfo").bulkAdd(Array.from(normalizedRelayInfos.values()));
+        await tx
+          .table("relayInfo")
+          .bulkAdd(Array.from(normalizedRelayInfos.values()));
         console.log(
           `[DB Migration v6] Normalized ${normalizedRelayInfos.size} relay infos` +
-          (skippedRelayInfos > 0 ? ` (skipped ${skippedRelayInfos} invalid)` : "")
+            (skippedRelayInfos > 0
+              ? ` (skipped ${skippedRelayInfos} invalid)`
+              : ""),
         );
         console.log("[DB Migration v6] Complete!");
       });

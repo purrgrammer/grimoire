@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState, memo, useCallback } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,7 @@ import {
   ShieldQuestion,
   Shield,
   Filter as FilterIcon,
+  Download,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -29,6 +30,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { Progress } from "./ui/progress";
 import { RelayLink } from "./nostr/RelayLink";
 import type { NostrFilter } from "@/types/nostr";
 import type { RelayState } from "@/types/relay-state";
@@ -40,6 +51,7 @@ import {
   formatPubkeysWithProfiles,
   formatHashtags,
 } from "@/lib/filter-formatters";
+import { sanitizeFilename } from "@/lib/filename-utils";
 
 // Memoized FeedEvent to prevent unnecessary re-renders during scroll
 const MemoizedFeedEvent = memo(
@@ -117,6 +129,7 @@ interface ReqViewerProps {
   closeOnEose?: boolean;
   nip05Authors?: string[];
   nip05PTags?: string[];
+  title?: string;
 }
 
 interface QueryDropdownProps {
@@ -299,6 +312,7 @@ export default function ReqViewer({
   closeOnEose = false,
   nip05Authors,
   nip05PTags,
+  title = "nostr-events",
 }: ReqViewerProps) {
   const { state } = useGrimoire();
   const { relays: relayStates } = useRelayState();
@@ -334,6 +348,77 @@ export default function ReqViewer({
   );
 
   const [showQuery, setShowQuery] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportFilename, setExportFilename] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
+  /**
+   * Export events to JSONL format with chunked processing for large datasets
+   * Handles tens of thousands of events without blocking the UI
+   */
+  const handleExport = useCallback(async () => {
+    if (!exportFilename.trim()) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    try {
+      const sanitized = sanitizeFilename(exportFilename);
+      const CHUNK_SIZE = 1000; // Process 1000 events at a time
+      const shouldChunk = events.length > CHUNK_SIZE;
+
+      let blob: Blob;
+
+      if (shouldChunk) {
+        // Chunked processing for large datasets
+        const chunks: string[] = [];
+
+        for (let i = 0; i < events.length; i += CHUNK_SIZE) {
+          // Yield to browser to prevent UI blocking
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          const chunk = events.slice(i, i + CHUNK_SIZE);
+          const jsonlChunk = chunk.map((e) => JSON.stringify(e)).join("\n");
+          chunks.push(jsonlChunk);
+
+          // Update progress
+          setExportProgress(Math.round(((i + chunk.length) / events.length) * 100));
+        }
+
+        // Join chunks with newlines between them
+        const jsonl = chunks.join("\n");
+        blob = new Blob([jsonl], { type: "application/jsonl" });
+      } else {
+        // Direct processing for small datasets
+        const jsonl = events.map((e) => JSON.stringify(e)).join("\n");
+        blob = new Blob([jsonl], { type: "application/jsonl" });
+      }
+
+      // Create download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sanitized}.jsonl`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setExportProgress(100);
+    } catch (error) {
+      console.error("Export failed:", error);
+      // Keep dialog open on error so user can retry
+      setIsExporting(false);
+      setExportProgress(0);
+      return;
+    }
+
+    // Close dialog on success
+    setIsExporting(false);
+    setExportProgress(0);
+    setShowExportDialog(false);
+  }, [events, exportFilename]);
 
   return (
     <div className="h-full w-full flex flex-col bg-background text-foreground">
@@ -375,11 +460,30 @@ export default function ReqViewer({
 
         {/* Right: Stats */}
         <div className="flex items-center gap-3">
-          {/* Event Count */}
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <FileText className="size-3" />
-            <span>{events.length}</span>
-          </div>
+          {/* Event Count (Dropdown) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={`${events.length} event${events.length !== 1 ? "s" : ""}, click for export options`}
+              >
+                <FileText className="size-3" />
+                <span>{events.length}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setExportFilename(title);
+                  setShowExportDialog(true);
+                }}
+                disabled={events.length === 0}
+              >
+                <Download className="size-3 mr-2" />
+                Export to JSONL
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Relay Count (Dropdown) */}
           <DropdownMenu>
@@ -503,6 +607,87 @@ export default function ReqViewer({
           />
         )}
       </div>
+
+      {/* Export Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export Events to JSONL</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              {isExporting ? (
+                <>
+                  Exporting{" "}
+                  <span className="font-semibold">{events.length}</span> event
+                  {events.length !== 1 ? "s" : ""}...
+                </>
+              ) : (
+                <>
+                  Export <span className="font-semibold">{events.length}</span>{" "}
+                  event{events.length !== 1 ? "s" : ""} as JSONL
+                  (newline-delimited JSON).
+                </>
+              )}
+            </div>
+            {isExporting && events.length > 1000 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Processing events...</span>
+                  <span>{exportProgress}%</span>
+                </div>
+                <Progress value={exportProgress} className="h-2" />
+              </div>
+            )}
+            <div className="space-y-2">
+              <label htmlFor="filename" className="text-sm font-medium">
+                Filename
+              </label>
+              <Input
+                id="filename"
+                autoFocus
+                value={exportFilename}
+                onChange={(e) => setExportFilename(e.target.value)}
+                placeholder="Enter filename"
+                disabled={isExporting}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && exportFilename.trim() && !isExporting) {
+                    handleExport();
+                  }
+                }}
+              />
+              <div className="text-xs text-muted-foreground">
+                .jsonl extension will be added automatically
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowExportDialog(false)}
+              disabled={isExporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleExport}
+              disabled={!exportFilename.trim() || isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="size-4 mr-2" />
+                  Export
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
