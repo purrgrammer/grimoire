@@ -126,6 +126,33 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
   const summary = useMemo(() => getArticleSummary(event), [event]);
   const published = useMemo(() => getArticlePublished(event), [event]);
 
+  // Get canonical URL from "r" tag to resolve relative URLs
+  const canonicalUrl = useMemo(() => {
+    const rTag = event.tags.find((t) => t[0] === "r");
+    return rTag?.[1] || null;
+  }, [event]);
+
+  // Helper to resolve relative URLs using canonical URL as base
+  const resolveUrl = (url: string): string | null => {
+    // If it's already absolute, return as-is
+    if (url.match(/^https?:\/\//)) {
+      return url;
+    }
+
+    // If we have a canonical URL, try to resolve relative URLs
+    if (canonicalUrl) {
+      try {
+        return new URL(url, canonicalUrl).toString();
+      } catch {
+        console.warn("Failed to resolve relative URL:", url);
+        return null;
+      }
+    }
+
+    // No canonical URL and it's relative - can't resolve
+    return null;
+  };
+
   // Format published date
   const publishedDate = published
     ? new Date(published * 1000).toLocaleDateString("en-US", {
@@ -171,16 +198,30 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
           }}
           components={{
             // Enable images with zoom
-            img: ({ src, alt }) =>
-              src ? (
+            img: ({ src, alt }) => {
+              if (!src) return null;
+
+              const resolvedUrl = resolveUrl(src);
+              if (!resolvedUrl) {
+                // Can't resolve URL - show fallback
+                return (
+                  <div className="my-4 p-4 border border-border rounded-lg bg-muted/10 text-sm text-muted-foreground">
+                    <p>Media unavailable (relative URL without base)</p>
+                    <p className="text-xs mt-1 break-all">{src}</p>
+                  </div>
+                );
+              }
+
+              return (
                 <MediaEmbed
-                  url={src}
+                  url={resolvedUrl}
                   alt={alt}
                   preset="preview"
                   enableZoom
                   className="my-4"
                 />
-              ) : null,
+              );
+            },
             // Handle nostr: links
             a: ({ href, children, ...props }) => {
               if (!href) return null;
