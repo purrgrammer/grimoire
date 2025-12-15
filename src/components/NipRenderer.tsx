@@ -1,5 +1,5 @@
 import { useNip } from "@/hooks/useNip";
-import { Markdown } from "./Markdown";
+import { MarkdownContent } from "./nostr/MarkdownContent";
 import { KindBadge } from "./KindBadge";
 import { getKindsForNip } from "@/lib/nip-kinds";
 
@@ -38,7 +38,7 @@ export function NipRenderer({ nipId, className = "" }: NipRendererProps) {
 
   return (
     <div className={`p-4 overflow-x-hidden ${className}`}>
-      <Markdown content={content} />
+      <MarkdownContent content={content} />
 
       {kinds.length > 0 && (
         <div className="mt-6 pt-4 border-t border-border">
