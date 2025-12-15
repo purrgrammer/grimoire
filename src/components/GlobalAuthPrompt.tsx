@@ -38,7 +38,7 @@ function AuthToast({
               showInboxOutbox={false}
               variant="prompt"
               iconClassname="size-4"
-              urlClassname="text-sm"
+              urlClassname="break-all text-sm"
             />
           </div>
 
@@ -154,13 +154,7 @@ export function GlobalAuthPrompt() {
             relayUrl={challenge.relayUrl}
             challenge={challenge.challenge}
             onAuthenticate={async (remember) => {
-              console.log(
-                `[AuthPrompt] Authenticate with remember=${remember}`,
-              );
               if (remember) {
-                console.log(
-                  `[AuthPrompt] Setting preference to "always" for ${challenge.relayUrl}`,
-                );
                 await setAuthPreference(challenge.relayUrl, "always");
               }
 
@@ -189,11 +183,7 @@ export function GlobalAuthPrompt() {
               }
             }}
             onReject={async (remember) => {
-              console.log(`[AuthPrompt] Reject with remember=${remember}`);
               if (remember) {
-                console.log(
-                  `[AuthPrompt] Setting preference to "never" for ${challenge.relayUrl}`,
-                );
                 await setAuthPreference(challenge.relayUrl, "never");
               }
 

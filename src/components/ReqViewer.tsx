@@ -5,14 +5,6 @@ import {
   Radio,
   FileText,
   Wifi,
-  WifiOff,
-  Loader2,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  ShieldQuestion,
-  Shield,
   Filter as FilterIcon,
   Download,
   Clock,
@@ -20,6 +12,7 @@ import {
   Hash,
   Search,
   Code,
+  Loader2,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -28,6 +21,7 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { FeedEvent } from "./nostr/Feed";
 import { KindBadge } from "./KindBadge";
 import { UserName } from "./nostr/UserName";
+import { TimelineSkeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
@@ -58,7 +52,6 @@ import {
 } from "./ui/accordion";
 import { RelayLink } from "./nostr/RelayLink";
 import type { NostrFilter } from "@/types/nostr";
-import type { RelayState } from "@/types/relay-state";
 import {
   formatEventIds,
   formatDTags,
@@ -70,76 +63,13 @@ import { sanitizeFilename } from "@/lib/filename-utils";
 import { useCopy } from "@/hooks/useCopy";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
+import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 
 // Memoized FeedEvent to prevent unnecessary re-renders during scroll
 const MemoizedFeedEvent = memo(
   FeedEvent,
   (prev, next) => prev.event.id === next.event.id,
 );
-
-// Helper functions for relay status icons
-function getConnectionIcon(relay: RelayState | undefined) {
-  if (!relay) {
-    return {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Unknown",
-    };
-  }
-
-  const iconMap = {
-    connected: {
-      icon: <Wifi className="size-3 text-green-500" />,
-      label: "Connected",
-    },
-    connecting: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Connecting",
-    },
-    disconnected: {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Disconnected",
-    },
-    error: {
-      icon: <XCircle className="size-3 text-red-500" />,
-      label: "Connection Error",
-    },
-  };
-  return iconMap[relay.connectionState];
-}
-
-function getAuthIcon(relay: RelayState | undefined) {
-  if (!relay || relay.authStatus === "none") {
-    return null;
-  }
-
-  const iconMap = {
-    authenticated: {
-      icon: <ShieldCheck className="size-3 text-green-500" />,
-      label: "Authenticated",
-    },
-    challenge_received: {
-      icon: <ShieldQuestion className="size-3 text-yellow-500" />,
-      label: "Challenge Received",
-    },
-    authenticating: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Authenticating",
-    },
-    failed: {
-      icon: <ShieldX className="size-3 text-red-500" />,
-      label: "Authentication Failed",
-    },
-    rejected: {
-      icon: <ShieldAlert className="size-3 text-muted-foreground" />,
-      label: "Authentication Rejected",
-    },
-    none: {
-      icon: <Shield className="size-3 text-muted-foreground" />,
-      label: "No Authentication",
-    },
-  };
-  return iconMap[relay.authStatus] || iconMap.none;
-}
 
 interface ReqViewerProps {
   filter: NostrFilter;
@@ -972,8 +902,8 @@ export default function ReqViewer({
       <div className="flex-1 overflow-y-auto">
         {/* Loading: Before EOSE received */}
         {loading && events.length === 0 && !eoseReceived && (
-          <div className="text-center text-muted-foreground font-mono text-sm p-4">
-            Loading events...
+          <div className="p-4">
+            <TimelineSkeleton count={5} />
           </div>
         )}
 

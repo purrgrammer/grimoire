@@ -4,6 +4,7 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { KindRenderer } from "./index";
+import { EventCardSkeleton } from "@/components/ui/skeleton";
 
 /**
  * Renderer for Kind 7 - Reactions
@@ -133,8 +134,8 @@ export function Kind7Renderer({ event }: BaseEventProps) {
 
         {/* Loading state */}
         {reactedEventId && !reactedEvent && (
-          <div className="border border-muted p-2 text-xs text-muted-foreground">
-            Loading referenced event...
+          <div className="border border-muted p-2">
+            <EventCardSkeleton variant="compact" showActions={false} />
           </div>
         )}
       </div>

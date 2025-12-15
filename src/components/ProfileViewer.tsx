@@ -1,6 +1,7 @@
 import { useProfile } from "@/hooks/useProfile";
 import { UserName } from "./nostr/UserName";
 import Nip05 from "./nostr/nip05";
+import { ProfileCardSkeleton } from "@/components/ui/skeleton";
 import {
   Copy,
   CopyCheck,
@@ -8,14 +9,6 @@ import {
   Inbox,
   Send,
   Wifi,
-  Loader2,
-  WifiOff,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  ShieldQuestion,
-  Shield,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
@@ -31,74 +24,10 @@ import {
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useRelayState } from "@/hooks/useRelayState";
-import type { RelayState } from "@/types/relay-state";
+import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 
 export interface ProfileViewerProps {
   pubkey: string;
-}
-
-// Helper functions for relay status icons (from EventDetailViewer)
-function getConnectionIcon(relay: RelayState | undefined) {
-  if (!relay) {
-    return {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Unknown",
-    };
-  }
-
-  const iconMap = {
-    connected: {
-      icon: <Wifi className="size-3 text-green-500" />,
-      label: "Connected",
-    },
-    connecting: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Connecting",
-    },
-    disconnected: {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Disconnected",
-    },
-    error: {
-      icon: <XCircle className="size-3 text-red-500" />,
-      label: "Connection Error",
-    },
-  };
-  return iconMap[relay.connectionState];
-}
-
-function getAuthIcon(relay: RelayState | undefined) {
-  if (!relay || relay.authStatus === "none") {
-    return null;
-  }
-
-  const iconMap = {
-    authenticated: {
-      icon: <ShieldCheck className="size-3 text-green-500" />,
-      label: "Authenticated",
-    },
-    challenge_received: {
-      icon: <ShieldQuestion className="size-3 text-yellow-500" />,
-      label: "Challenge Received",
-    },
-    authenticating: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Authenticating",
-    },
-    failed: {
-      icon: <ShieldX className="size-3 text-red-500" />,
-      label: "Authentication Failed",
-    },
-    rejected: {
-      icon: <ShieldAlert className="size-3 text-muted-foreground" />,
-      label: "Authentication Rejected",
-    },
-    none: {
-      icon: <Shield className="size-3 text-muted-foreground" />,
-      label: "No Authentication",
-    },
-  };
-  return iconMap[relay.authStatus] || iconMap.none;
 }
 
 /**
@@ -262,11 +191,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
 
       {/* Profile Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {!profile && !profileEvent && (
-          <div className="text-center text-muted-foreground text-sm">
-            Loading profile...
-          </div>
-        )}
+        {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
 
         {!profile && profileEvent && (
           <div className="text-center text-muted-foreground text-sm">

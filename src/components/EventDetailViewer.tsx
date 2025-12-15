@@ -15,20 +15,8 @@ import { CommunityNIPDetailRenderer } from "./nostr/kinds/CommunityNIPDetailRend
 import { RepositoryDetailRenderer } from "./nostr/kinds/RepositoryDetailRenderer";
 import { JsonViewer } from "./JsonViewer";
 import { RelayLink } from "./nostr/RelayLink";
-import {
-  Copy,
-  CopyCheck,
-  FileJson,
-  Wifi,
-  Loader2,
-  WifiOff,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  ShieldQuestion,
-  Shield,
-} from "lucide-react";
+import { EventDetailSkeleton } from "@/components/ui/skeleton";
+import { Copy, CopyCheck, FileJson, Wifi } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,74 +29,10 @@ import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { getTagValue } from "applesauce-core/helpers";
 import { useRelayState } from "@/hooks/useRelayState";
-import type { RelayState } from "@/types/relay-state";
+import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 
 export interface EventDetailViewerProps {
   pointer: EventPointer | AddressPointer;
-}
-
-// Helper functions for relay status icons (from ReqViewer)
-function getConnectionIcon(relay: RelayState | undefined) {
-  if (!relay) {
-    return {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Unknown",
-    };
-  }
-
-  const iconMap = {
-    connected: {
-      icon: <Wifi className="size-3 text-green-500" />,
-      label: "Connected",
-    },
-    connecting: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Connecting",
-    },
-    disconnected: {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
-      label: "Disconnected",
-    },
-    error: {
-      icon: <XCircle className="size-3 text-red-500" />,
-      label: "Connection Error",
-    },
-  };
-  return iconMap[relay.connectionState];
-}
-
-function getAuthIcon(relay: RelayState | undefined) {
-  if (!relay || relay.authStatus === "none") {
-    return null;
-  }
-
-  const iconMap = {
-    authenticated: {
-      icon: <ShieldCheck className="size-3 text-green-500" />,
-      label: "Authenticated",
-    },
-    challenge_received: {
-      icon: <ShieldQuestion className="size-3 text-yellow-500" />,
-      label: "Challenge Received",
-    },
-    authenticating: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
-      label: "Authenticating",
-    },
-    failed: {
-      icon: <ShieldX className="size-3 text-red-500" />,
-      label: "Authentication Failed",
-    },
-    rejected: {
-      icon: <ShieldAlert className="size-3 text-muted-foreground" />,
-      label: "Authentication Rejected",
-    },
-    none: {
-      icon: <Shield className="size-3 text-muted-foreground" />,
-      label: "No Authentication",
-    },
-  };
-  return iconMap[relay.authStatus] || iconMap.none;
 }
 
 /**
@@ -124,8 +48,8 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
   // Loading state
   if (!event) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-muted-foreground">
-        <div className="text-sm">Loading event...</div>
+      <div className="flex flex-col h-full p-8">
+        <EventDetailSkeleton />
       </div>
     );
   }
@@ -148,15 +72,6 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
           identifier: getTagValue(event, "d") || "",
           relays: relays,
         });
-
-  // Format timestamp - compact format
-  // const timestamp = new Date(event.created_at * 1000).toLocaleString("en-US", {
-  //   month: "2-digit",
-  //   day: "2-digit",
-  //   year: "numeric",
-  //   hour: "2-digit",
-  //   minute: "2-digit",
-  // });
 
   // Get relay state for each relay
   const relayStatesForEvent = relays

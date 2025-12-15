@@ -5,6 +5,7 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
+import { InlineReplySkeleton } from "@/components/ui/skeleton";
 
 /**
  * Renderer for Kind 1 - Short Text Note
@@ -30,6 +31,10 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
+      {/* Show parent message loading state */}
+      {pointer && !parentEvent && <InlineReplySkeleton icon={<Reply />} />}
+
+      {/* Show parent message once loaded */}
       {pointer && parentEvent && (
         <div
           onClick={handleReplyClick}

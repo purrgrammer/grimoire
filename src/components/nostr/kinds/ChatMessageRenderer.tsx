@@ -6,6 +6,7 @@ import { MessageCircle } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { getTagValues } from "@/lib/nostr-utils";
 import { isValidHexEventId } from "@/lib/nostr-validation";
+import { InlineReplySkeleton } from "@/components/ui/skeleton";
 
 /**
  * Renderer for Kind 9 - Chat Message (NIP-C7)
@@ -36,7 +37,12 @@ export function Kind9Renderer({ event, depth = 0 }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      {/* Show quoted parent message if this is a reply */}
+      {/* Show quoted message loading state */}
+      {quotedEventId && !parentEvent && (
+        <InlineReplySkeleton icon={<MessageCircle />} />
+      )}
+
+      {/* Show quoted parent message once loaded (only if it's a chat message) */}
       {quotedEventId && parentEvent && parentEvent.kind === 9 && (
         <div
           onClick={handleQuoteClick}

@@ -1,5 +1,6 @@
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./kinds";
+import { EventCardSkeleton } from "@/components/ui/skeleton";
 
 interface EmbeddedEventProps {
   /** Event ID string for regular events */
@@ -70,10 +71,10 @@ export function EmbeddedEvent({
     );
   }
 
-  // No onOpen handler - just show loading text
+  // No onOpen handler - show skeleton
   return (
-    <span className="text-sm text-muted-foreground italic">
-      Loading event...
-    </span>
+    <div className={className}>
+      <EventCardSkeleton variant="compact" />
+    </div>
   );
 }

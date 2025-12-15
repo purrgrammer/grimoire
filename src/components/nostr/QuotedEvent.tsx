@@ -4,6 +4,7 @@ import { KindRenderer } from "./kinds";
 import { UserName } from "./UserName";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CompactQuoteSkeleton } from "@/components/ui/skeleton";
 
 interface QuotedEventProps {
   /** Event ID string for regular events */
@@ -65,11 +66,7 @@ export function QuotedEvent({
       );
     }
 
-    return (
-      <span className="text-sm text-muted-foreground italic">
-        Loading event...
-      </span>
-    );
+    return <CompactQuoteSkeleton className={className} />;
   }
 
   // For depth 0-1: Show full content inline by default
