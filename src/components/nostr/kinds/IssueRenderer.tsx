@@ -16,6 +16,7 @@ import {
   getRepositoryIdentifier,
 } from "@/lib/nip34-helpers";
 import { UserName } from "../UserName";
+import { Label } from "@/components/ui/Label";
 
 /**
  * Renderer for Kind 1621 - Issue
@@ -103,12 +104,7 @@ export function IssueRenderer({ event }: BaseEventProps) {
             items-center gap-1 overflow-x-scroll my-1"
           >
             {labels.map((label, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 border border-muted border-dotted text-xs text-muted-foreground"
-              >
-                {label}
-              </span>
+              <Label key={idx}>{label}</Label>
             ))}
           </div>
         )}

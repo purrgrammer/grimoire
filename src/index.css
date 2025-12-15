@@ -1,3 +1,6 @@
+/* Prism syntax highlighting theme */
+@import './styles/prism-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

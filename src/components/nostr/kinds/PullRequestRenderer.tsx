@@ -16,6 +16,7 @@ import {
   getRepositoryName,
   getRepositoryIdentifier,
 } from "@/lib/nip34-helpers";
+import { Label } from "@/components/ui/Label";
 
 /**
  * Renderer for Kind 1618 - Pull Request
@@ -111,12 +112,7 @@ export function PullRequestRenderer({ event }: BaseEventProps) {
         {labels.length > 0 && (
           <div className="flex items-center gap-1 overflow-x-scroll">
             {labels.map((label, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 border border-muted border-dotted text-xs text-muted-foreground"
-              >
-                {label}
-              </span>
+              <Label key={idx}>{label}</Label>
             ))}
           </div>
         )}

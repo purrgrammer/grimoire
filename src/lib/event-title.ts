@@ -8,6 +8,7 @@ import {
   getPatchSubject,
   getPullRequestSubject,
 } from "@/lib/nip34-helpers";
+import { getCodeName } from "@/lib/nip-c0-helpers";
 import { getKindInfo } from "@/constants/kinds";
 
 /**
@@ -34,6 +35,9 @@ export function getEventDisplayTitle(
       break;
     case 30617: // Repository
       title = getRepositoryName(event);
+      break;
+    case 1337: // Code snippet
+      title = getCodeName(event);
       break;
     case 1621: // Issue
       title = getIssueTitle(event);

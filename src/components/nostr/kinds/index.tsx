@@ -1,22 +1,23 @@
-import { Kind0Renderer } from "./Kind0Renderer";
-import { Kind1Renderer } from "./Kind1Renderer";
-import { Kind3Renderer } from "./Kind3Renderer";
+import { Kind0Renderer } from "./ProfileRenderer";
+import { Kind1Renderer } from "./NoteRenderer";
+import { Kind3Renderer } from "./ContactListRenderer";
 import { RepostRenderer } from "./RepostRenderer";
-import { Kind7Renderer } from "./Kind7Renderer";
-import { Kind9Renderer } from "./Kind9Renderer";
-import { Kind20Renderer } from "./Kind20Renderer";
-import { Kind21Renderer } from "./Kind21Renderer";
-import { Kind22Renderer } from "./Kind22Renderer";
-import { Kind1063Renderer } from "./Kind1063Renderer";
+import { Kind7Renderer } from "./ReactionRenderer";
+import { Kind9Renderer } from "./ChatMessageRenderer";
+import { Kind20Renderer } from "./PictureRenderer";
+import { Kind21Renderer } from "./VideoRenderer";
+import { Kind22Renderer } from "./ShortVideoRenderer";
+import { Kind1063Renderer } from "./FileMetadataRenderer";
+import { Kind1337Renderer } from "./CodeSnippetRenderer";
 import { IssueRenderer } from "./IssueRenderer";
 import { PatchRenderer } from "./PatchRenderer";
 import { PullRequestRenderer } from "./PullRequestRenderer";
-import { Kind9735Renderer } from "./Kind9735Renderer";
-import { Kind9802Renderer } from "./Kind9802Renderer";
-import { Kind10002Renderer } from "./Kind10002Renderer";
-import { Kind30023Renderer } from "./Kind30023Renderer";
+import { Kind9735Renderer } from "./ZapReceiptRenderer";
+import { Kind9802Renderer } from "./HighlightRenderer";
+import { Kind10002Renderer } from "./RelayListRenderer";
+import { Kind30023Renderer } from "./ArticleRenderer";
 import { RepositoryRenderer } from "./RepositoryRenderer";
-import { Kind39701Renderer } from "./Kind39701Renderer";
+import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
@@ -38,6 +39,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   22: Kind22Renderer, // Short Video (NIP-71)
   1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1Renderer, // Post
+  1337: Kind1337Renderer, // Code Snippet (NIP-C0)
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
   1621: IssueRenderer, // Issue (NIP-34)
@@ -99,16 +101,16 @@ export {
   EventMenu,
 } from "./BaseEventRenderer";
 export type { BaseEventProps } from "./BaseEventRenderer";
-export { Kind1Renderer } from "./Kind1Renderer";
+export { Kind1Renderer } from "./NoteRenderer";
 export {
   RepostRenderer,
   Kind6Renderer,
   Kind16Renderer,
 } from "./RepostRenderer";
-export { Kind7Renderer } from "./Kind7Renderer";
-export { Kind9Renderer } from "./Kind9Renderer";
-export { Kind20Renderer } from "./Kind20Renderer";
-export { Kind21Renderer } from "./Kind21Renderer";
-export { Kind22Renderer } from "./Kind22Renderer";
-export { Kind1063Renderer } from "./Kind1063Renderer";
-export { Kind9735Renderer } from "./Kind9735Renderer";
+export { Kind7Renderer } from "./ReactionRenderer";
+export { Kind9Renderer } from "./ChatMessageRenderer";
+export { Kind20Renderer } from "./PictureRenderer";
+export { Kind21Renderer } from "./VideoRenderer";
+export { Kind22Renderer } from "./ShortVideoRenderer";
+export { Kind1063Renderer } from "./FileMetadataRenderer";
+export { Kind9735Renderer } from "./ZapReceiptRenderer";

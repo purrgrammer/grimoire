@@ -15,13 +15,11 @@ import {
   Shield,
   Filter as FilterIcon,
   Download,
-  Copy,
   Clock,
   User,
   Hash,
   Search,
   Code,
-  CopyCheck,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -70,6 +68,8 @@ import {
 } from "@/lib/filter-formatters";
 import { sanitizeFilename } from "@/lib/filename-utils";
 import { useCopy } from "@/hooks/useCopy";
+import { CodeCopyButton } from "@/components/CodeCopyButton";
+import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 
 // Memoized FeedEvent to prevent unnecessary re-renders during scroll
 const MemoizedFeedEvent = memo(
@@ -639,22 +639,16 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="relative mt-2">
-            <pre className="text-xs bg-muted/50 p-3 pr-10 overflow-x-auto font-mono border border-border/40 rounded">
-              <Button
-                size="icon"
-                variant="link"
-                onClick={() => handleCopy(JSON.stringify(filter, null, 2))}
-                aria-label="Copy query JSON"
-                className="absolute top-2 right-2"
-              >
-                {copied ? (
-                  <CopyCheck className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-              </Button>
-              {JSON.stringify(filter, null, 2)}
-            </pre>
+            <SyntaxHighlight
+              code={JSON.stringify(filter, null, 2)}
+              language="json"
+              className="bg-muted/50 p-3 pr-10 overflow-x-auto border border-border/40 rounded"
+            />
+            <CodeCopyButton
+              onCopy={() => handleCopy(JSON.stringify(filter, null, 2))}
+              copied={copied}
+              label="Copy query JSON"
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>

@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { GitCommit, FolderGit2, User, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
+import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { useCopy } from "@/hooks/useCopy";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getPatchSubject,
@@ -203,20 +205,16 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold">Patch</h2>
           <div className="relative">
-            <pre className="overflow-x-auto text-xs font-mono bg-muted/30 p-4 whitespace-pre-wrap break-words">
-              {event.content}
-            </pre>
-            <button
-              onClick={() => copy(event.content)}
-              className="absolute top-2 right-2 p-2 bg-background/90 hover:bg-muted border border-border rounded"
-              aria-label="Copy patch"
-            >
-              {copied ? (
-                <CopyCheck className="size-4 text-muted-foreground" />
-              ) : (
-                <Copy className="size-4 text-muted-foreground" />
-              )}
-            </button>
+            <SyntaxHighlight
+              code={event.content}
+              language="diff"
+              className="overflow-x-auto bg-muted/30 p-4"
+            />
+            <CodeCopyButton
+              onCopy={() => copy(event.content)}
+              copied={copied}
+              label="Copy patch"
+            />
           </div>
         </section>
       )}

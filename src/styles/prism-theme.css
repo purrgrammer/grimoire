@@ -1,0 +1,145 @@
+/* Grimoire Prism Theme - Matches dark theme using CSS variables */
+
+code[class*="language-"],
+pre[class*="language-"] {
+  color: hsl(var(--foreground));
+  background: none;
+  text-shadow: none;
+  font-family: 'Oxygen Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 4;
+  hyphens: none;
+}
+
+/* Diff-specific tokens */
+
+/* Deleted lines (red) - subtle background, no strikethrough */
+.token.deleted {
+  color: #ff8787;
+  background: rgba(255, 59, 48, 0.1);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+/* Added lines (green) - subtle background */
+.token.inserted {
+  color: #69db7c;
+  background: rgba(52, 199, 89, 0.1);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+/* Hunk headers (@@ -1,5 +1,7 @@) - cyan/blue */
+.token.diff.coord,
+.token.coord {
+  color: #66d9ef;
+  background: rgba(102, 217, 239, 0.08);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* File headers (diff --git, ---, +++) */
+.token.diff.range,
+.token.prefix.unchanged,
+.language-diff .token.unchanged {
+  color: hsl(var(--muted-foreground));
+  font-weight: normal;
+}
+
+/* Prefix characters (+/-) */
+.language-diff .token.prefix {
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* General syntax tokens */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: hsl(var(--muted-foreground));
+}
+
+.token.punctuation {
+  color: hsl(var(--foreground) / 0.7);
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: hsl(var(--primary));
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: hsl(var(--foreground));
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: hsl(var(--primary));
+}
+
+.token.function,
+.token.class-name {
+  color: hsl(var(--primary));
+  font-weight: bold;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: hsl(var(--primary));
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* Line highlighting */
+pre[class*="language-"] > code {
+  display: block;
+}
+
+/* Optional: Line numbers support */
+.line-numbers .line-numbers-rows {
+  border-right: 1px solid hsl(var(--border));
+}
+
+.line-numbers-rows > span:before {
+  color: hsl(var(--muted-foreground));
+}

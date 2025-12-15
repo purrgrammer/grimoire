@@ -11,6 +11,7 @@ import {
 import { UserName } from "../UserName";
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { MediaEmbed } from "../MediaEmbed";
+import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { useGrimoire } from "@/core/state";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -263,12 +264,32 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
             p: ({ ...props }) => (
               <p className="text-sm leading-relaxed mb-4" {...props} />
             ),
-            code: ({ ...props }: any) => (
-              <code
-                className="bg-muted px-0.5 py-0.5 rounded text-xs font-mono"
-                {...props}
-              />
-            ),
+            code: ({ className, children, ...props }: any) => {
+              const match = /language-(\w+)/.exec(className || "");
+              const language = match ? match[1] : null;
+              const code = String(children).replace(/\n$/, "");
+
+              // Inline code (no language)
+              if (!language) {
+                return (
+                  <code
+                    className="bg-muted px-0.5 py-0.5 rounded text-xs font-mono"
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+
+              // Block code with syntax highlighting
+              return (
+                <SyntaxHighlight
+                  code={code}
+                  language={language as any}
+                  className="my-4"
+                />
+              );
+            },
             blockquote: ({ ...props }) => (
               <blockquote
                 className="border-l-4 border-muted pl-4 italic text-muted-foreground my-4"

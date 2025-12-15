@@ -2,14 +2,15 @@ import { useState } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
-import { Kind0DetailRenderer } from "./nostr/kinds/Kind0DetailRenderer";
-import { Kind3DetailView } from "./nostr/kinds/Kind3Renderer";
+import { Kind0DetailRenderer } from "./nostr/kinds/ProfileDetailRenderer";
+import { Kind3DetailView } from "./nostr/kinds/ContactListRenderer";
 import { IssueDetailRenderer } from "./nostr/kinds/IssueDetailRenderer";
 import { PatchDetailRenderer } from "./nostr/kinds/PatchDetailRenderer";
 import { PullRequestDetailRenderer } from "./nostr/kinds/PullRequestDetailRenderer";
-import { Kind9802DetailRenderer } from "./nostr/kinds/Kind9802DetailRenderer";
-import { Kind10002DetailRenderer } from "./nostr/kinds/Kind10002DetailRenderer";
-import { Kind30023DetailRenderer } from "./nostr/kinds/Kind30023DetailRenderer";
+import { Kind1337DetailRenderer } from "./nostr/kinds/CodeSnippetDetailRenderer";
+import { Kind9802DetailRenderer } from "./nostr/kinds/HighlightDetailRenderer";
+import { Kind10002DetailRenderer } from "./nostr/kinds/RelayListDetailRenderer";
+import { Kind30023DetailRenderer } from "./nostr/kinds/ArticleDetailRenderer";
 import { RepositoryDetailRenderer } from "./nostr/kinds/RepositoryDetailRenderer";
 import { JsonViewer } from "./JsonViewer";
 import { RelayLink } from "./nostr/RelayLink";
@@ -269,6 +270,8 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
           <Kind0DetailRenderer event={event} />
         ) : event.kind === kinds.Contacts ? (
           <Kind3DetailView event={event} />
+        ) : event.kind === 1337 ? (
+          <Kind1337DetailRenderer event={event} />
         ) : event.kind === 1617 ? (
           <PatchDetailRenderer event={event} />
         ) : event.kind === 1618 ? (

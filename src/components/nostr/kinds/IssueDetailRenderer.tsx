@@ -7,6 +7,7 @@ import { Tag, FolderGit2 } from "lucide-react";
 import { UserName } from "../UserName";
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { MediaEmbed } from "../MediaEmbed";
+import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import type { NostrEvent } from "@/types/nostr";
@@ -19,6 +20,7 @@ import {
   getRepositoryName,
   getRepositoryIdentifier,
 } from "@/lib/nip34-helpers";
+import { Label } from "@/components/ui/Label";
 
 /**
  * Component to render nostr: mentions inline
@@ -214,12 +216,9 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
           <div className="flex flex-wrap items-center gap-2">
             <Tag className="size-3 text-muted-foreground" />
             {labels.map((label, idx) => (
-              <span
-                key={idx}
-                className="px-3 py-1 border border-muted border-dotted text-muted-foreground text-xs"
-              >
+              <Label key={idx} size="md">
                 {label}
-              </span>
+              </Label>
             ))}
           </div>
         )}
@@ -282,12 +281,32 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
               p: ({ ...props }) => (
                 <p className="text-sm leading-relaxed mb-4" {...props} />
               ),
-              code: ({ ...props }: any) => (
-                <code
-                  className="bg-muted px-0.5 py-0.5 rounded text-xs font-mono"
-                  {...props}
-                />
-              ),
+              code: ({ className, children, ...props }: any) => {
+                const match = /language-(\w+)/.exec(className || "");
+                const language = match ? match[1] : null;
+                const code = String(children).replace(/\n$/, "");
+
+                // Inline code (no language)
+                if (!language) {
+                  return (
+                    <code
+                      className="bg-muted px-0.5 py-0.5 rounded text-xs font-mono"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                }
+
+                // Block code with syntax highlighting
+                return (
+                  <SyntaxHighlight
+                    code={code}
+                    language={language as any}
+                    className="my-4"
+                  />
+                );
+              },
               blockquote: ({ ...props }) => (
                 <blockquote
                   className="border-l-4 border-muted pl-4 italic text-muted-foreground my-4"
@@ -309,7 +328,7 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
               hr: () => <hr className="my-4" />,
             }}
           >
-            {event.content.replace(/\\n/g, '\n')}
+            {event.content.replace(/\\n/g, "\n")}
           </ReactMarkdown>
         </article>
       ) : (

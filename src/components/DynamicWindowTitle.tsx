@@ -222,7 +222,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
         </div>
         {getEventDisplayTitle(event, false)}
         <span> - </span>
-        <UserName pubkey={event.pubkey} />
+        <UserName pubkey={event.pubkey} className="text-inherit" />
       </div>
     );
   }, [appId, event]);
