@@ -1299,10 +1299,10 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   },
   31989: {
     kind: 31989,
-    name: "Handler Rec",
-    description: "Handler recommendation",
+    name: "Recommendation",
+    description: "Application Recommendation",
     nip: "89",
-    icon: Settings,
+    icon: Star,
   },
   31990: {
     kind: 31990,
