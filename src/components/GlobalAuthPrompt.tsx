@@ -25,10 +25,10 @@ function AuthToast({
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="bg-background border border-border shadow-lg p-4 min-w-[350px] max-w-[500px]">
+    <div className="bg-background border border-border shadow-lg p-4 min-w-[350px] max-w-[500px] overflow-hidden">
       <div className="flex items-start gap-3">
         <Key className="size-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3 min-w-0">
           <div>
             <div className="font-semibold text-sm text-foreground mb-1">
               Authentication Request
@@ -38,7 +38,7 @@ function AuthToast({
               showInboxOutbox={false}
               variant="prompt"
               iconClassname="size-4"
-              urlClassname="break-all text-sm"
+              urlClassname="text-sm"
             />
           </div>
 

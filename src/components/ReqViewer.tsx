@@ -691,14 +691,31 @@ export default function ReqViewer({
   } = useOutboxRelays(resolvedFilter, outboxOptions);
 
   // Use explicit relays if provided, otherwise use NIP-65 selected relays
-  const finalRelays = relays || selectedRelays;
+  // Wait for relay selection to complete before subscribing to prevent multiple reconnections
+  const finalRelays = useMemo(() => {
+    // Explicit relays always used immediately
+    if (relays) {
+      return relays;
+    }
+
+    // Wait for outbox relay selection to complete before subscribing
+    // This prevents multiple reconnections during discovery/selection phases
+    if (relaySelectionPhase !== 'ready') {
+      return [];
+    }
+
+    return selectedRelays;
+  }, [relays, relaySelectionPhase, selectedRelays]);
 
 
   // Get relay state for each relay and calculate connected count
-  const relayStatesForReq = finalRelays.map((url) => ({
-    url,
-    state: relayStates[url],
-  }));
+  const relayStatesForReq = useMemo(
+    () => finalRelays.map((url) => ({
+      url,
+      state: relayStates[url],
+    })),
+    [finalRelays, relayStates]
+  );
   const connectedCount = relayStatesForReq.filter(
     (r) => r.state?.connectionState === "connected",
   ).length;

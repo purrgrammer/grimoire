@@ -74,7 +74,7 @@ export function RelayLink({
       )}
       onClick={handleClick}
     >
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
         {relayInfo?.icon && (
           <img
             src={relayInfo.icon}
@@ -110,7 +110,12 @@ export function RelayLink({
             </HoverCardContent>
           </HoverCard>
         )}
-        <span className={cn("text-xs truncate", urlClassname)}>
+        <span
+          className={cn(
+            "text-xs truncate",
+            urlClassname,
+          )}
+        >
           {displayUrl}
         </span>
       </div>

@@ -156,3 +156,25 @@ export function formatFileSize(bytes?: string | number): string {
 
   return `${displaySize.toFixed(1)} ${units[unitIndex]}`;
 }
+
+/**
+ * Extract aspect ratio from imeta dimensions string
+ * @param dim - dimensions string like "1920x1080"
+ * @returns aspect ratio as string like "16/9" or undefined if invalid
+ */
+export function getAspectRatioFromDimensions(
+  dim?: string,
+): string | undefined {
+  if (!dim) return undefined;
+
+  const match = dim.match(/^(\d+)x(\d+)$/);
+  if (!match) return undefined;
+
+  const width = parseInt(match[1], 10);
+  const height = parseInt(match[2], 10);
+
+  if (width <= 0 || height <= 0) return undefined;
+
+  // Return as CSS aspect-ratio value
+  return `${width}/${height}`;
+}

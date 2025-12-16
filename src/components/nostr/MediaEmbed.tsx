@@ -219,14 +219,12 @@ export function MediaEmbed({
             ? {
                 aspectRatio: effectiveAspectRatio,
                 maxHeight: presetStyles.maxHeight,
-                maxWidth:
-                  preset === "thumbnail" ? presetStyles.maxWidth : "100%",
+                maxWidth: presetStyles.maxWidth,
                 contain: "content", // Performance optimization
               }
             : {
                 maxHeight: presetStyles.maxHeight,
-                maxWidth:
-                  preset === "thumbnail" ? presetStyles.maxWidth : "100%",
+                maxWidth: presetStyles.maxWidth,
               }
         }
       >

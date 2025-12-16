@@ -1,7 +1,10 @@
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { MediaEmbed } from "../MediaEmbed";
 import { RichText } from "../RichText";
-import { parseImetaTags } from "@/lib/imeta";
+import {
+  parseImetaTags,
+  getAspectRatioFromDimensions,
+} from "@/lib/imeta";
 
 /**
  * Renderer for Kind 20 - Picture Event (NIP-68)
@@ -26,13 +29,24 @@ export function Kind20Renderer({ event }: BaseEventProps) {
 
         {/* Images */}
         {images.length > 0 && (
-          <div className="flex flex-col gap-2">
+          <div
+            className={
+              images.length === 1
+                ? "flex flex-col"
+                : images.length === 2
+                  ? "grid grid-cols-2 gap-2"
+                  : images.length <= 4
+                    ? "grid grid-cols-2 gap-2"
+                    : "grid grid-cols-3 gap-2"
+            }
+          >
             {images.map((img, i) => (
               <MediaEmbed
                 key={i}
                 url={img.url}
                 alt={img.alt || title || "Picture"}
-                preset="preview"
+                preset={images.length === 1 ? "preview" : "inline"}
+                aspectRatio={getAspectRatioFromDimensions(img.dim)}
                 enableZoom
               />
             ))}
