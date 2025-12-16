@@ -104,5 +104,9 @@ export const useGrimoire = () => {
       setState((prev) => Logic.setActiveAccount(prev, pubkey)),
     setActiveAccountRelays: (relays: any) =>
       setState((prev) => Logic.setActiveAccountRelays(prev, relays)),
+    setWindowBackgroundColor: (windowId: string, backgroundColor: string) =>
+      setState((prev) =>
+        Logic.setWindowBackgroundColor(prev, windowId, backgroundColor),
+      ),
   };
 };

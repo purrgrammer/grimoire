@@ -3,6 +3,7 @@ import { WindowInstance } from "@/types/app";
 import { WindowToolbar } from "./WindowToolbar";
 import { WindowRenderer } from "./WindowRenderer";
 import { useDynamicWindowTitle } from "./DynamicWindowTitle";
+import { useGrimoire } from "@/core/state";
 
 interface WindowTileProps {
   id: string;
@@ -13,12 +14,20 @@ interface WindowTileProps {
 
 export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
   const { title, icon, tooltip } = useDynamicWindowTitle(window);
+  const { setWindowBackgroundColor } = useGrimoire();
   const Icon = icon;
 
   // Custom toolbar renderer to include icon
   const renderToolbar = () => {
     return (
-      <div className="mosaic-window-toolbar draggable flex items-center justify-between w-full">
+      <div
+        className="mosaic-window-toolbar draggable flex items-center justify-between w-full transition-colors"
+        style={
+          window.backgroundColor
+            ? { backgroundColor: window.backgroundColor + "30" }
+            : undefined
+        }
+      >
         <div className="mosaic-window-title flex items-center gap-2 flex-1">
           {Icon && (
             <span title={tooltip} className="flex-shrink-0">
@@ -29,7 +38,13 @@ export function WindowTile({ id, window, path, onClose }: WindowTileProps) {
             {title}
           </span>
         </div>
-        <WindowToolbar onClose={() => onClose(id)} />
+        <WindowToolbar
+          onClose={() => onClose(id)}
+          backgroundColor={window.backgroundColor}
+          onBackgroundColorChange={(color) =>
+            setWindowBackgroundColor(id, color)
+          }
+        />
       </div>
     );
   };

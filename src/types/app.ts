@@ -24,6 +24,7 @@ export interface WindowInstance {
   appId: AppId;
   title: string;
   props: any;
+  backgroundColor?: string;
 }
 
 export interface Workspace {
