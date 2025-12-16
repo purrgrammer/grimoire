@@ -58,7 +58,7 @@ export function RelayLink({
   };
 
   const variantStyles = {
-    default: "cursor-crosshair hover:bg-muted/50",
+    default: "cursor-crosshair",
     prompt: "cursor-crosshair hover:underline hover:decoration-dotted",
   };
 

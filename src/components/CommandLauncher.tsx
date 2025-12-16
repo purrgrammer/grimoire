@@ -27,9 +27,11 @@ export default function CommandLauncher({
     if (open && editMode) {
       setInput(editMode.initialCommand);
     } else if (!open) {
+      // Clear input and edit mode when dialog closes
       setInput("");
+      setEditMode(null);
     }
-  }, [open, editMode]);
+  }, [open, editMode, setEditMode]);
 
   // Parse input into command and arguments
   const parsed = parseCommandInput(input);

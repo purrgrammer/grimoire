@@ -25,6 +25,10 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import { addressLoader } from "@/services/loaders";
+import { relayListCache } from "@/services/relay-list-cache";
+import { useEffect } from "react";
+import type { Subscription } from "rxjs";
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -40,7 +44,45 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const { copy, copied } = useCopy();
   const { relays: relayStates } = useRelayState();
 
-  // Get mailbox relays (kind 10002)
+  // Fetch fresh relay list from network only if not cached or stale
+  useEffect(() => {
+    let subscription: Subscription | null = null;
+
+    // Check if we have a valid cached relay list
+    relayListCache.has(pubkey).then(async (hasCached) => {
+      if (hasCached) {
+        console.debug(`[ProfileViewer] Using cached relay list for ${pubkey.slice(0, 8)}`);
+
+        // Load cached event into EventStore so UI can display it
+        const cached = await relayListCache.get(pubkey);
+        if (cached?.event) {
+          eventStore.add(cached.event);
+          console.debug(`[ProfileViewer] Loaded cached relay list into EventStore for ${pubkey.slice(0, 8)}`);
+        }
+        return;
+      }
+
+      // No cached or stale - fetch fresh from network
+      console.debug(`[ProfileViewer] Fetching fresh relay list for ${pubkey.slice(0, 8)}`);
+      subscription = addressLoader({
+        kind: kinds.RelayList,
+        pubkey,
+        identifier: "",
+      }).subscribe({
+        error: (err) => {
+          console.debug(`[ProfileViewer] Failed to fetch relay list for ${pubkey.slice(0, 8)}:`, err);
+        },
+      });
+    });
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [pubkey]);
+
+  // Get mailbox relays (kind 10002) - will update when fresh data arrives
   const mailboxEvent = useObservableMemo(
     () => eventStore.replaceable(kinds.RelayList, pubkey, ""),
     [eventStore, pubkey],

@@ -2,6 +2,7 @@ import { ProfileContent } from "applesauce-core/helpers";
 import { Dexie, Table } from "dexie";
 import { RelayInformation } from "../types/nip11";
 import { normalizeRelayURL } from "../lib/relay-url";
+import type { NostrEvent } from "@/types/nostr";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -31,12 +32,21 @@ export interface RelayAuthPreference {
   updatedAt: number;
 }
 
+export interface CachedRelayList {
+  pubkey: string;
+  event: NostrEvent;
+  read: string[];
+  write: string[];
+  updatedAt: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
   nips!: Table<Nip>;
   relayInfo!: Table<RelayInfo>;
   relayAuthPreferences!: Table<RelayAuthPreference>;
+  relayLists!: Table<CachedRelayList>;
 
   constructor(name: string) {
     super(name);
@@ -139,6 +149,16 @@ class GrimoireDb extends Dexie {
         );
         console.log("[DB Migration v6] Complete!");
       });
+
+    // Version 7: Add relay lists caching
+    this.version(7).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+    });
   }
 }
 

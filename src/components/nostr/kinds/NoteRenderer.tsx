@@ -15,7 +15,10 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
   const refs = getNip10References(event);
   const pointer =
     refs.reply?.e || refs.reply?.a || refs.root?.e || refs.root?.a;
-  const parentEvent = useNostrEvent(pointer);
+
+  // Pass full reply event to useNostrEvent for comprehensive relay selection
+  // This allows eventLoader to extract r/e/p tags for better relay coverage
+  const parentEvent = useNostrEvent(pointer, event);
 
   const handleReplyClick = () => {
     if (!parentEvent) return;

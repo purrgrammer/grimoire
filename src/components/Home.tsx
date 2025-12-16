@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGrimoire } from "@/core/state";
 import { useAccountSync } from "@/hooks/useAccountSync";
+import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
 import relayStateManager from "@/services/relay-state-manager";
 import { TabBar } from "./TabBar";
@@ -19,6 +20,9 @@ export default function Home() {
 
   // Sync active account and fetch relay lists
   useAccountSync();
+
+  // Auto-cache kind:10002 relay lists from EventStore to Dexie
+  useRelayListCacheSync();
 
   // Initialize global relay state manager
   useEffect(() => {

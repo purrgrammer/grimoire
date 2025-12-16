@@ -18,7 +18,10 @@ export function Kind9Renderer({ event, depth = 0 }: BaseEventProps) {
   // Parse 'q' tag for quoted parent message (NIP-C7 reply format)
   const quotedEventIds = getTagValues(event, "q");
   const quotedEventId = quotedEventIds[0]; // First q tag
-  const parentEvent = useNostrEvent(quotedEventId);
+
+  // Pass full reply event to useNostrEvent for comprehensive relay selection
+  // This allows eventLoader to extract r/e/p tags for better relay coverage
+  const parentEvent = useNostrEvent(quotedEventId, event);
 
   const handleQuoteClick = () => {
     if (!parentEvent || !quotedEventId) return;

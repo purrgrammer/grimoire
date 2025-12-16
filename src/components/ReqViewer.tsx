@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from "react";
+import { useState, memo, useCallback, useMemo } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -13,11 +13,15 @@ import {
   Search,
   Code,
   Loader2,
+  Mail,
+  Send,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
 import { useGrimoire } from "@/core/state";
 import { useRelayState } from "@/hooks/useRelayState";
+import { useOutboxRelays } from "@/hooks/useOutboxRelays";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { FeedEvent } from "./nostr/Feed";
 import { KindBadge } from "./KindBadge";
 import { UserName } from "./nostr/UserName";
@@ -627,7 +631,7 @@ export default function ReqViewer({
   needsAccount = false,
   title = "nostr-events",
 }: ReqViewerProps) {
-  const { state } = useGrimoire();
+  const { state, addWindow } = useGrimoire();
   const { relays: relayStates } = useRelayState();
 
   // Get active account for alias resolution
@@ -641,29 +645,57 @@ export default function ReqViewer({
       : undefined,
   );
 
-  // Extract contacts from kind 3 event
-  const contacts = contactListEvent
-    ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
-    : [];
+  // Extract contacts from kind 3 event (memoized to prevent unnecessary recalculation)
+  const contacts = useMemo(
+    () => contactListEvent
+      ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
+      : [],
+    [contactListEvent]
+  );
 
-  // Resolve $me and $contacts aliases
-  const resolvedFilter = needsAccount
-    ? resolveFilterAliases(filter, accountPubkey, contacts)
-    : filter;
+  // Resolve $me and $contacts aliases (memoized to prevent unnecessary object creation)
+  const resolvedFilter = useMemo(
+    () => needsAccount
+      ? resolveFilterAliases(filter, accountPubkey, contacts)
+      : filter,
+    [needsAccount, filter, accountPubkey, contacts]
+  );
 
   // NIP-05 resolution already happened in argParser before window creation
   // The filter prop already contains resolved pubkeys
   // We just display the NIP-05 identifiers for user reference
 
-  // Use inbox relays if logged in and no relays specified
-  const defaultRelays =
-    relays ||
-    (state.activeAccount?.relays?.inbox.length
-      ? state.activeAccount.relays.inbox.map((r) => r.url)
-      : ["wss://theforest.nostr1.com"]);
+  // NIP-65 outbox relay selection
+  // Memoize fallbackRelays to prevent re-creation on every render
+  const fallbackRelays = useMemo(
+    () => state.activeAccount?.relays?.inbox.map((r) => r.url) || AGGREGATOR_RELAYS,
+    [state.activeAccount?.relays?.inbox]
+  );
+
+  // Memoize outbox options to prevent object re-creation
+  const outboxOptions = useMemo(
+    () => ({
+      fallbackRelays,
+      timeout: 1000,
+      maxRelays: 42,
+    }),
+    [fallbackRelays]
+  );
+
+  // Select optimal relays based on authors (write relays) and #p tags (read relays)
+  const {
+    relays: selectedRelays,
+    reasoning,
+    isOptimized,
+    phase: relaySelectionPhase,
+  } = useOutboxRelays(resolvedFilter, outboxOptions);
+
+  // Use explicit relays if provided, otherwise use NIP-65 selected relays
+  const finalRelays = relays || selectedRelays;
+
 
   // Get relay state for each relay and calculate connected count
-  const relayStatesForReq = defaultRelays.map((url) => ({
+  const relayStatesForReq = finalRelays.map((url) => ({
     url,
     state: relayStates[url],
   }));
@@ -677,7 +709,7 @@ export default function ReqViewer({
   const { events, loading, error, eoseReceived } = useReqTimeline(
     `req-${JSON.stringify(filter)}-${closeOnEose}`,
     resolvedFilter,
-    defaultRelays,
+    finalRelays,
     { limit: resolvedFilter.limit || 50, stream },
   );
 
@@ -805,33 +837,43 @@ export default function ReqViewer({
         <div className="flex items-center gap-2">
           <Radio
             className={`size-3 ${
-              loading && !eoseReceived
+              relaySelectionPhase !== 'ready'
                 ? "text-yellow-500 animate-pulse"
                 : loading && eoseReceived && stream
                   ? "text-green-500 animate-pulse"
-                  : !loading && eoseReceived
-                    ? "text-muted-foreground"
-                    : "text-yellow-500 animate-pulse"
+                  : loading && !eoseReceived
+                    ? "text-yellow-500 animate-pulse"
+                    : eoseReceived
+                      ? "text-muted-foreground"
+                      : "text-yellow-500 animate-pulse"
             }`}
           />
           <span
             className={`${
-              loading && !eoseReceived
+              relaySelectionPhase !== 'ready'
                 ? "text-yellow-500"
                 : loading && eoseReceived && stream
                   ? "text-green-500"
-                  : !loading && eoseReceived
-                    ? "text-muted-foreground"
-                    : "text-yellow-500"
+                  : loading && !eoseReceived
+                    ? "text-yellow-500"
+                    : eoseReceived
+                      ? "text-muted-foreground"
+                      : "text-yellow-500"
             } font-semibold`}
           >
-            {loading && !eoseReceived
-              ? "LOADING"
-              : loading && eoseReceived && stream
-                ? "LIVE"
-                : !loading && eoseReceived
-                  ? "CLOSED"
-                  : "CONNECTING"}
+            {relaySelectionPhase === 'discovering'
+              ? "DISCOVERING RELAYS"
+              : relaySelectionPhase === 'selecting'
+                ? "SELECTING RELAYS"
+                : loading && eoseReceived && stream
+                  ? "LIVE"
+                  : loading && !eoseReceived && events.length === 0
+                    ? "CONNECTING"
+                    : loading && !eoseReceived
+                      ? "LOADING"
+                      : eoseReceived
+                        ? "CLOSED"
+                        : "CONNECTING"}
           </span>
         </div>
 
@@ -868,54 +910,118 @@ export default function ReqViewer({
               <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
                 <Wifi className="size-3" />
                 <span>
-                  {connectedCount}/{defaultRelays.length}
+                  {connectedCount}/{finalRelays.length}
                 </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              {relayStatesForReq.map(({ url, state }) => {
-                const connIcon = getConnectionIcon(state);
-                const authIcon = getAuthIcon(state);
+            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+              {/* Connection Status */}
+              <div className="py-1 border-b border-border">
+                <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                  Connection Status
+                </div>
+                {relayStatesForReq.map(({ url, state }) => {
+                  const connIcon = getConnectionIcon(state);
+                  const authIcon = getAuthIcon(state);
 
-                return (
-                  <DropdownMenuItem
-                    key={url}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <RelayLink
-                      url={url}
-                      showInboxOutbox={false}
-                      className="flex-1 min-w-0 hover:bg-transparent"
-                      iconClassname="size-3"
-                      urlClassname="text-xs"
-                    />
-                    <div
-                      className="flex items-center gap-1.5 flex-shrink-0"
-                      onClick={(e) => e.stopPropagation()}
+                  return (
+                    <DropdownMenuItem
+                      key={url}
+                      className="flex items-center justify-between gap-2"
                     >
-                      {authIcon && (
+                      <RelayLink
+                        url={url}
+                        showInboxOutbox={false}
+                        className="flex-1 min-w-0 hover:bg-transparent"
+                        iconClassname="size-3"
+                        urlClassname="text-xs"
+                      />
+                      <div
+                        className="flex items-center gap-1.5 flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {authIcon && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-help">{authIcon.icon}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{authIcon.label}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="cursor-help">{authIcon.icon}</div>
+                            <div className="cursor-help">{connIcon.icon}</div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>{authIcon.label}</p>
+                            <p>{connIcon.label}</p>
                           </TooltipContent>
                         </Tooltip>
-                      )}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </div>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="cursor-help">{connIcon.icon}</div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{connIcon.label}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </DropdownMenuItem>
-                );
-              })}
+              {/* Relay Selection */}
+              {!relays && reasoning && reasoning.length > 0 && (
+                <div className="py-2">
+                  <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                    Relay Selection
+                    {isOptimized && (
+                      <span className="ml-1.5 font-normal">
+                        (
+                        <button
+                          className="text-accent underline decoration-dotted cursor-crosshair"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addWindow("nip", { number: "65" }, "NIP-65 - Relay List Metadata");
+                          }}
+                        >
+                          NIP-65
+                        </button>
+                        )
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Flat list of relays with icons and counts */}
+                  <div className="px-3 py-1 space-y-1">
+                    {reasoning.map((r, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 text-xs py-0.5"
+                      >
+                        <RelayLink
+                          url={r.relay}
+                          className="flex-1 truncate font-mono text-foreground/80"
+                        />
+                        <div className="flex items-center gap-2 flex-shrink-0 text-muted-foreground">
+                          {r.readers.length > 0 && (
+                            <div className="flex items-center gap-0.5">
+                              <Mail className="w-3 h-3" />
+                              <span>{r.readers.length}</span>
+                            </div>
+                          )}
+                          {r.writers.length > 0 && (
+                            <div className="flex items-center gap-0.5">
+                              <Send className="w-3 h-3" />
+                              <span>{r.writers.length}</span>
+                            </div>
+                          )}
+                          {r.isFallback && (
+                            <span className="text-[10px] text-muted-foreground/60">
+                              fallback
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -26,6 +26,9 @@ function isAddressPointer(
  * Unified hook for fetching Nostr events by pointer
  * Supports string ID, EventPointer, and AddressPointer
  * @param pointer - string ID, EventPointer, or AddressPointer
+ * @param context - Optional context for relay hints:
+ *   - string: pubkey of event author (backward compatible)
+ *   - NostrEvent: full reply event with r/e/p tags (comprehensive relay selection)
  * @returns Event or undefined
  */
 export function useNostrEvent(
@@ -35,6 +38,7 @@ export function useNostrEvent(
     | AddressPointer
     | { kind: number; pubkey: string; identifier: string }
     | undefined,
+  context?: string | NostrEvent,
 ): NostrEvent | undefined {
   const eventStore = useEventStore();
 
@@ -75,13 +79,13 @@ export function useNostrEvent(
     // Handle string ID
     if (typeof pointer === "string") {
       console.log("[useNostrEvent] Loading event by ID:", pointer);
-      const subscription = eventLoader({ id: pointer }).subscribe();
+      const subscription = eventLoader({ id: pointer }, context).subscribe();
       return () => subscription.unsubscribe();
     }
 
     if (isEventPointer(pointer)) {
       console.log("[useNostrEvent] Loading event by EventPointer:", pointer);
-      const subscription = eventLoader(pointer).subscribe();
+      const subscription = eventLoader(pointer, context).subscribe();
       return () => subscription.unsubscribe();
     } else if (isAddressPointer(pointer)) {
       console.log("[useNostrEvent] Loading event by AddressPointer:", pointer);
@@ -98,7 +102,7 @@ export function useNostrEvent(
     } else {
       console.warn("[useNostrEvent] Unknown pointer type:", pointer);
     }
-  }, [pointer, pointerKey]);
+  }, [pointer, pointerKey, context]);
 
   return event;
 }
