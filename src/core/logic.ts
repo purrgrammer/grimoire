@@ -263,3 +263,28 @@ export const setActiveAccountRelays = (
     },
   };
 };
+
+/**
+ * Updates the background color of a window.
+ */
+export const setWindowBackgroundColor = (
+  state: GrimoireState,
+  windowId: string,
+  backgroundColor: string,
+): GrimoireState => {
+  const window = state.windows[windowId];
+  if (!window) {
+    return state;
+  }
+
+  return {
+    ...state,
+    windows: {
+      ...state.windows,
+      [windowId]: {
+        ...window,
+        backgroundColor,
+      },
+    },
+  };
+};
