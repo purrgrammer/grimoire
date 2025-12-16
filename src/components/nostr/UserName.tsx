@@ -25,7 +25,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addWindow("profile", { pubkey }, `Profile ${pubkey.slice(0, 8)}...`);
+    addWindow("profile", { pubkey });
   };
 
   return (

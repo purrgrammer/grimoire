@@ -56,7 +56,7 @@ export const createWorkspace = (
  */
 export const addWindow = (
   state: GrimoireState,
-  payload: { appId: string; title: string; props: any; commandString?: string },
+  payload: { appId: string; props: any; commandString?: string; customTitle?: string },
 ): GrimoireState => {
   const activeId = state.activeWorkspaceId;
   const ws = state.workspaces[activeId];
@@ -64,7 +64,7 @@ export const addWindow = (
   const newWindow: WindowInstance = {
     id: newWindowId,
     appId: payload.appId as any,
-    title: payload.title,
+    customTitle: payload.customTitle,
     props: payload.props,
     commandString: payload.commandString,
   };
@@ -323,13 +323,13 @@ export const deleteWorkspace = (
 
 /**
  * Updates an existing window with new properties.
- * Allows updating props, title, commandString, and even appId (which changes the viewer type).
+ * Allows updating props, title, customTitle, commandString, and even appId (which changes the viewer type).
  */
 export const updateWindow = (
   state: GrimoireState,
   windowId: string,
   updates: Partial<
-    Pick<WindowInstance, "props" | "title" | "commandString" | "appId">
+    Pick<WindowInstance, "props" | "title" | "customTitle" | "commandString" | "appId">
   >,
 ): GrimoireState => {
   const window = state.windows[windowId];

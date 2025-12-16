@@ -59,9 +59,9 @@ export default function CommandLauncher({
     if (editMode) {
       updateWindow(editMode.windowId, {
         props: result.props,
-        title: result.title,
         commandString: input.trim(),
         appId: recognizedCommand.appId,
+        customTitle: result.globalFlags?.windowProps?.title,
       });
       setEditMode(null); // Clear edit mode
     } else {
@@ -69,8 +69,8 @@ export default function CommandLauncher({
       addWindow(
         recognizedCommand.appId,
         result.props,
-        result.title,
         input.trim(),
+        result.globalFlags?.windowProps?.title,
       );
     }
 

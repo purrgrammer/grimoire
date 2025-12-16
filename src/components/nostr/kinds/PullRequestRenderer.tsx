@@ -66,7 +66,7 @@ export function PullRequestRenderer({ event }: BaseEventProps) {
 
   const handleRepoClick = () => {
     if (!repoPointer) return;
-    addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+    addWindow("open", { pointer: repoPointer });
   };
 
   return (
@@ -75,7 +75,7 @@ export function PullRequestRenderer({ event }: BaseEventProps) {
         {/* PR Title */}
         <ClickableEventTitle
           event={event}
-          windowTitle={subject || "Untitled Pull Request"}
+         
           className="font-semibold text-foreground"
         >
           {subject || "Untitled Pull Request"}

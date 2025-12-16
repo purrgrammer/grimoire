@@ -26,7 +26,7 @@ export function WindowTile({
   // Convert title to string for MosaicWindow (which only accepts strings)
   // The actual title (with React elements) is rendered in the custom toolbar
   const titleString =
-    typeof title === "string" ? title : tooltip || window.title;
+    typeof title === "string" ? title : tooltip || window.title || window.appId.toUpperCase();
 
   // Custom toolbar renderer to include icon
   const renderToolbar = () => {

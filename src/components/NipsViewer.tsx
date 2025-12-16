@@ -59,8 +59,7 @@ export default function NipsViewer() {
     } else if (e.key === "Enter" && filteredNips.length === 1) {
       // Open the single result when Enter is pressed
       const nipId = filteredNips[0];
-      const title = NIP_TITLES[nipId] || `NIP-${nipId}`;
-      addWindow("nip", { number: nipId }, `NIP-${nipId}: ${title}`);
+      addWindow("nip", { number: nipId });
     }
   };
 

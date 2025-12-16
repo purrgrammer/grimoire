@@ -228,7 +228,7 @@ export function useDynamicWindowTitle(window: WindowInstance): WindowTitleData {
 }
 
 function useDynamicTitle(window: WindowInstance): WindowTitleData {
-  const { appId, props, title: staticTitle } = window;
+  const { appId, props, title: staticTitle, customTitle } = window;
 
   // Get relay state for conn viewer
   const { relays } = useRelayState();
@@ -512,7 +512,15 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     // Generate raw command for tooltip
     const rawCommand = generateRawCommand(appId, props);
 
-    // Priority order for title selection
+    // Priority 0: Custom title always wins (user override via --title flag)
+    if (customTitle) {
+      title = customTitle;
+      icon = getCommandIcon(appId);
+      tooltip = rawCommand;
+      return { title, icon, tooltip };
+    }
+
+    // Priority order for title selection (dynamic titles based on data)
     if (profileTitle) {
       title = profileTitle;
       icon = getCommandIcon("profile");
@@ -569,7 +577,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       icon = getCommandIcon("conn");
       tooltip = rawCommand;
     } else {
-      title = staticTitle;
+      title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
     }
 
@@ -578,6 +586,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     appId,
     props,
     event,
+    customTitle,
     profileTitle,
     eventTitle,
     kindTitle,

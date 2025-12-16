@@ -19,7 +19,6 @@ import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
-import { getEventDisplayTitle } from "@/lib/event-title";
 
 // NIP-01 Kind ranges
 const REPLACEABLE_START = 10000;
@@ -77,9 +76,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       };
     }
 
-    // Use automatic title extraction for better window titles
-    const title = getEventDisplayTitle(event);
-    addWindow("open", { pointer }, title);
+    addWindow("open", { pointer });
   };
 
   const copyEventId = () => {
@@ -168,7 +165,6 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 interface ClickableEventTitleProps {
   event: NostrEvent;
   children: React.ReactNode;
-  windowTitle?: string;
   className?: string;
   as?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "span" | "div";
 }
@@ -176,7 +172,6 @@ interface ClickableEventTitleProps {
 export function ClickableEventTitle({
   event,
   children,
-  windowTitle,
   className,
   as: Component = "h3",
 }: ClickableEventTitleProps) {
@@ -192,8 +187,6 @@ export function ClickableEventTitle({
         event.kind < PARAMETERIZED_REPLACEABLE_END);
 
     let pointer;
-    // Use provided windowTitle, or fall back to automatic title extraction
-    const title = windowTitle || getEventDisplayTitle(event);
 
     if (isAddressable) {
       // For replaceable/parameterized replaceable events, use AddressPointer
@@ -210,7 +203,7 @@ export function ClickableEventTitle({
       };
     }
 
-    addWindow("open", { pointer }, title);
+    addWindow("open", { pointer });
   };
 
   return (

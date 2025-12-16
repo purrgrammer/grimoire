@@ -74,7 +74,7 @@ export function Kind1337DetailRenderer({ event }: Kind1337DetailRendererProps) {
 
   const handleRepoClick = () => {
     if (repoPointer) {
-      addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+      addWindow("open", { pointer: repoPointer });
     }
   };
 

@@ -63,7 +63,7 @@ export function PatchRenderer({ event }: BaseEventProps) {
 
   const handleRepoClick = () => {
     if (!repoPointer) return;
-    addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+    addWindow("open", { pointer: repoPointer });
   };
 
   // Shorten commit ID for display
@@ -75,7 +75,7 @@ export function PatchRenderer({ event }: BaseEventProps) {
         {/* Patch Subject */}
         <ClickableEventTitle
           event={event}
-          windowTitle={subject || "Untitled Patch"}
+         
           className="font-semibold text-foreground"
         >
           {subject || "Untitled Patch"}

@@ -17,7 +17,7 @@ export function CommunityNIPRenderer({ event }: BaseEventProps) {
       <div dir="auto" className="flex flex-col gap-2">
         <ClickableEventTitle
           event={event}
-          windowTitle={title}
+         
           className="text-lg font-bold text-foreground flex-1"
         >
           {title}

@@ -192,7 +192,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
   }
 
   return (
-    <WindowErrorBoundary windowTitle={window.title} onClose={onClose}>
+    <WindowErrorBoundary windowTitle={window.title || window.appId.toUpperCase()} onClose={onClose}>
       <Suspense fallback={<ViewerLoading />}>
         <div className="h-full w-full overflow-auto">{content}</div>
       </Suspense>

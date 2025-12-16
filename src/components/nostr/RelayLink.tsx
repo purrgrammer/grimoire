@@ -54,7 +54,7 @@ export function RelayLink({
   const relayInfo = useRelayInfo(url);
 
   const handleClick = () => {
-    addWindow("relay", { url }, `Relay ${url}`);
+    addWindow("relay", { url });
   };
 
   const variantStyles = {

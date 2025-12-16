@@ -96,20 +96,17 @@ export default function DecodeViewer({ args }: DecodeViewerProps) {
       addWindow(
         "open",
         { pointer: { id: decoded.data.data, relays } },
-        `Event ${decoded.data.data.slice(0, 8)}...`,
       );
     } else if (decoded.data.type === "nevent") {
       addWindow(
         "open",
         { pointer: { id: decoded.data.data.id, relays } },
-        `Event ${decoded.data.data.id.slice(0, 8)}...`,
       );
     } else if (decoded.data.type === "naddr") {
       const { kind, pubkey, identifier } = decoded.data.data;
       addWindow(
         "open",
         { pointer: { kind, pubkey, identifier, relays } },
-        `${kind}:${pubkey.slice(0, 8)}:${identifier}`,
       );
     }
   };
@@ -125,7 +122,7 @@ export default function DecodeViewer({ args }: DecodeViewerProps) {
       pubkey = decoded.data.data.pubkey;
     }
     if (pubkey) {
-      addWindow("profile", { pubkey }, `Profile ${pubkey.slice(0, 8)}...`);
+      addWindow("profile", { pubkey });
     }
   };
 

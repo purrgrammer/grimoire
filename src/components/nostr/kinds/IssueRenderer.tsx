@@ -63,7 +63,7 @@ export function IssueRenderer({ event }: BaseEventProps) {
     : repoAddress?.split(":")[2] || "Unknown Repository";
 
   const handleRepoClick = () => {
-    addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+    addWindow("open", { pointer: repoPointer });
   };
 
   return (
@@ -73,7 +73,7 @@ export function IssueRenderer({ event }: BaseEventProps) {
           {/* Issue Title */}
           <ClickableEventTitle
             event={event}
-            windowTitle={title || "Untitled Issue"}
+           
             className="font-semibold text-foreground"
           >
             {title || "Untitled Issue"}

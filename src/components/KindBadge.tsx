@@ -32,7 +32,7 @@ export function KindBadge({
 
   const handleClick = () => {
     if (clickable) {
-      addWindow("kind", { number: String(kind) }, `Kind ${kind}`);
+      addWindow("kind", { number: String(kind) });
     }
   };
 

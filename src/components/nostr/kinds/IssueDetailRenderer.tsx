@@ -62,7 +62,7 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
 
   const handleRepoClick = () => {
     if (!repoPointer || !repoEvent) return;
-    addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+    addWindow("open", { pointer: repoPointer });
   };
 
   return (

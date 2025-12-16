@@ -35,7 +35,6 @@ export function RepositoryRenderer({ event }: BaseEventProps) {
               <GitBranch className="size-4 text-muted-foreground flex-shrink-0" />
               <ClickableEventTitle
                 event={event}
-                windowTitle={`Repository: ${displayName}`}
                 className="text-lg font-semibold text-foreground"
                 as="span"
               >

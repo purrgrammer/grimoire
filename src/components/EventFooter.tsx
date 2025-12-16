@@ -31,7 +31,7 @@ export function EventFooter({ event }: EventFooterProps) {
 
   const handleKindClick = () => {
     // Open KIND command to show NIP documentation for this kind
-    addWindow("kind", { number: event.kind }, `KIND ${event.kind}`);
+    addWindow("kind", { number: event.kind });
   };
 
   return (

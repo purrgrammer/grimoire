@@ -994,7 +994,7 @@ export default function ReqViewer({
                           className="text-accent underline decoration-dotted cursor-crosshair"
                           onClick={(e) => {
                             e.stopPropagation();
-                            addWindow("nip", { number: "65" }, "NIP-65 - Relay List Metadata");
+                            addWindow("nip", { number: "65" });
                           }}
                         >
                           NIP-65

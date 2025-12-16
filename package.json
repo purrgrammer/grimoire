@@ -50,6 +50,7 @@
     "react-virtuoso": "^4.17.0",
     "remark-gfm": "^4.0.1",
     "rxjs": "^7.8.1",
+    "shell-quote": "^1.8.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.5.5"
   },
@@ -60,6 +61,7 @@
     "@types/prismjs": "^1.26.5",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/shell-quote": "^1.7.5",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^4.0.15",

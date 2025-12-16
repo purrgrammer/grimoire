@@ -132,13 +132,13 @@ export const useGrimoire = () => {
   }, [setState]);
 
   const addWindow = useCallback(
-    (appId: AppId, props: any, title?: string, commandString?: string) =>
+    (appId: AppId, props: any, commandString?: string, customTitle?: string) =>
       setState((prev) =>
         Logic.addWindow(prev, {
           appId,
           props,
-          title: title || appId.toUpperCase(),
           commandString,
+          customTitle,
         }),
       ),
     [setState],
@@ -148,7 +148,7 @@ export const useGrimoire = () => {
     (
       windowId: string,
       updates: Partial<
-        Pick<WindowInstance, "props" | "title" | "commandString" | "appId">
+        Pick<WindowInstance, "props" | "title" | "customTitle" | "commandString" | "appId">
       >,
     ) => setState((prev) => Logic.updateWindow(prev, windowId, updates)),
     [setState],

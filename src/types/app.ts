@@ -20,7 +20,8 @@ export type AppId =
 export interface WindowInstance {
   id: string;
   appId: AppId;
-  title: string;
+  title?: string; // Legacy field - rarely used now that DynamicWindowTitle handles all titles
+  customTitle?: string; // User-provided custom title via --title flag (overrides dynamic title)
   props: any;
   commandString?: string; // Original command that created this window (e.g., "profile alice@domain.com")
 }

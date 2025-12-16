@@ -41,6 +41,15 @@ Workspaces are virtual desktops, each with its own layout tree.
 - Parsers can be async (e.g., resolving NIP-05 addresses)
 - Command pattern: user types `profile alice@example.com` → parser resolves → opens ProfileViewer with props
 
+**Global Flags** (`src/lib/global-flags.ts`):
+- Global flags work across ALL commands and are extracted before command-specific parsing
+- `--title "Custom Title"` - Override the window title (supports quotes, emoji, Unicode)
+  - Example: `profile alice --title "👤 Alice"`
+  - Example: `req -k 1 -a npub... --title "My Feed"`
+  - Position independent: can appear before, after, or in the middle of command args
+- Tokenization uses `shell-quote` library for proper quote/whitespace handling
+- Display priority: `customTitle` > `dynamicTitle` (from DynamicWindowTitle) > `appId.toUpperCase()`
+
 ### Reactive Nostr Pattern
 
 Applesauce uses RxJS observables for reactive data flow:

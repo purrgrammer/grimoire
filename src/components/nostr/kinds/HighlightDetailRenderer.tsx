@@ -122,10 +122,9 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
                 addWindow(
                   "open",
                   { id: pointer },
-                  `Event ${pointer.slice(0, 8)}...`,
                 );
               } else {
-                addWindow("open", pointer, `Event`);
+                addWindow("open", pointer);
               }
             }}
           />

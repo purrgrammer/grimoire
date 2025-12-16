@@ -64,7 +64,7 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
 
   const handleRepoClick = () => {
     if (!repoPointer || !repoEvent) return;
-    addWindow("open", { pointer: repoPointer }, `Repository: ${repoName}`);
+    addWindow("open", { pointer: repoPointer });
   };
 
   // Format created date

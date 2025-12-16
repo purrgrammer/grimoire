@@ -37,19 +37,14 @@ export default function Command({
           ? await Promise.resolve(command.argParser(cmdArgs))
           : command.defaultProps || {};
 
-        const title =
-          cmdArgs.length > 0
-            ? `${commandName.toUpperCase()} ${cmdArgs.join(" ")}`
-            : commandName.toUpperCase();
-
-        addWindow(command.appId, cmdProps, title);
+        addWindow(command.appId, cmdProps);
       }
     } else if (appId) {
       // Open the specified app with given props
-      addWindow(appId, props || {}, name.toUpperCase());
+      addWindow(appId, props || {});
     } else {
       // Default: open man page
-      addWindow("man", { cmd: name }, `MAN ${name}`);
+      addWindow("man", { cmd: name });
     }
   };
 

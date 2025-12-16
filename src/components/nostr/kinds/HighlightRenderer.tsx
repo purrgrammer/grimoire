@@ -55,10 +55,9 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
       addWindow(
         "open",
         { pointer: eventPointer },
-        `Event ${eventPointer.id.slice(0, 8)}...`,
       );
     } else if (addressPointer) {
-      addWindow("open", { pointer: addressPointer }, `Event`);
+      addWindow("open", { pointer: addressPointer });
     }
   };
 
