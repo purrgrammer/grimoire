@@ -32,17 +32,30 @@ const PARAMETERIZED_REPLACEABLE_END = 40000;
 export interface BaseEventProps {
   event: NostrEvent;
   depth?: number;
+  /**
+   * Override the displayed author pubkey when the semantic "author" differs from event.pubkey
+   * Examples:
+   * - Zaps (kind 9735): Show the zapper, not the lightning service pubkey
+   * - Live events (kind 30311): Show the host, not the event publisher
+   * - Delegated events: Show the delegator, not the delegate
+   */
+  authorOverride?: {
+    pubkey: string;
+    label?: string; // e.g., "Host", "Sender", "Zapper", "From"
+  };
 }
 
 /**
  * User component - displays author info with profile
  */
-export function EventAuthor({ pubkey }: { pubkey: string }) {
-  return (
-    <div className="flex flex-col gap-0">
-      <UserName pubkey={pubkey} className="text-md" />
-    </div>
-  );
+export function EventAuthor({
+  pubkey,
+  label,
+}: {
+  pubkey: string;
+  label?: string;
+}) {
+  return <UserName pubkey={pubkey} className="text-md" />;
 }
 
 /**
@@ -230,9 +243,14 @@ export function ClickableEventTitle({
 export function BaseEventContainer({
   event,
   children,
+  authorOverride,
 }: {
   event: NostrEvent;
   children: React.ReactNode;
+  authorOverride?: {
+    pubkey: string;
+    label?: string;
+  };
 }) {
   // Format relative time for display
   const { locale } = useGrimoire();
@@ -249,11 +267,14 @@ export function BaseEventContainer({
     locale.locale,
   );
 
+  // Use author override if provided, otherwise use event author
+  const displayPubkey = authorOverride?.pubkey || event.pubkey;
+
   return (
     <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
       <div className="flex flex-row justify-between items-center">
         <div className="flex flex-row gap-2 items-baseline">
-          <EventAuthor pubkey={event.pubkey} />
+          <EventAuthor pubkey={displayPubkey} />
           <span
             className="text-xs text-muted-foreground cursor-help"
             title={absoluteTime}

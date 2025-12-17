@@ -85,7 +85,6 @@ export function Kind1337Renderer({ event }: BaseEventProps) {
           {/* Title */}
           <ClickableEventTitle
             event={event}
-           
             className="text-lg font-semibold text-foreground"
           >
             {name || "Code Snippet"}

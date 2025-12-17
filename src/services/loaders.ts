@@ -86,7 +86,7 @@ const baseEventLoader = createEventLoader(pool, {
  */
 export function eventLoader(
   pointer: EventPointer | { id: string },
-  context?: string | NostrEvent
+  context?: string | NostrEvent,
 ): Observable<NostrEvent> {
   // Extract context information
   let authorHint: string | undefined;
@@ -117,7 +117,8 @@ export function eventLoader(
   // Check if event already exists in store
   const existingEvent = eventStore.getEvent(pointer.id);
   if (existingEvent) {
-    cachedOutboxRelays = relayListCache.getOutboxRelaysSync(existingEvent.pubkey) || [];
+    cachedOutboxRelays =
+      relayListCache.getOutboxRelaysSync(existingEvent.pubkey) || [];
   }
 
   // If not in store but we have author hint (from reply "p" tag)
@@ -131,12 +132,12 @@ export function eventLoader(
   // Merge all relay sources with priority ordering
   // mergeRelaySets handles deduplication, normalization, and invalid URL filtering
   const allRelays = mergeRelaySets(
-    directHints,        // Priority 1: Direct hints (most specific)
-    seenRelays,         // Priority 2: Where reply was seen (high confidence)
-    topCachedRelays,    // Priority 3: Author's outbox (NIP-65 standard)
-    rTags,              // Priority 4: Conversation context
-    eTagRelays,         // Priority 5: Other event references
-    AGGREGATOR_RELAYS   // Priority 6: Fallback
+    directHints, // Priority 1: Direct hints (most specific)
+    seenRelays, // Priority 2: Where reply was seen (high confidence)
+    topCachedRelays, // Priority 3: Author's outbox (NIP-65 standard)
+    rTags, // Priority 4: Conversation context
+    eTagRelays, // Priority 5: Other event references
+    AGGREGATOR_RELAYS, // Priority 6: Fallback
   );
 
   // Build enhanced pointer with all relay sources
@@ -160,7 +161,7 @@ export function eventLoader(
     `[eventLoader] Fetching ${pointer.id.slice(0, 8)} from ${allRelays.length} relays ` +
       `(direct=${directHints.length} seen=${seenRelays?.size || 0} cached=${topCachedRelays.length} ` +
       `r=${rTags.length} e=${eTagRelays.length} agg=${AGGREGATOR_RELAYS.length}, ` +
-      `${duplicatesRemoved} duplicates removed)`
+      `${duplicatesRemoved} duplicates removed)`,
   );
 
   return baseEventLoader(enhancedPointer);

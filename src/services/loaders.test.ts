@@ -30,7 +30,7 @@ vi.mock("applesauce-loaders/loaders", () => ({
         }),
         // Return pointer so we can inspect it in tests
         _testPointer: pointer,
-      }) as any
+      }) as any,
   ),
   createAddressLoader: vi.fn(() => () => ({ subscribe: () => {} })),
   createTimelineLoader: vi.fn(),
@@ -75,7 +75,9 @@ describe("eventLoader", () => {
       expect(result).toBeDefined();
       expect((result as any)._testPointer.id).toBe("test123");
       // mergeRelaySets normalizes URLs with trailing slash
-      expect((result as any)._testPointer.relays).toContain("wss://relay.nostr.band/");
+      expect((result as any)._testPointer.relays).toContain(
+        "wss://relay.nostr.band/",
+      );
     });
 
     it("should handle EventPointer with relay hints", () => {
@@ -87,7 +89,9 @@ describe("eventLoader", () => {
       const result = eventLoader(pointer);
 
       // mergeRelaySets normalizes URLs with trailing slash
-      expect((result as any)._testPointer.relays).toContain("wss://relay.example.com/");
+      expect((result as any)._testPointer.relays).toContain(
+        "wss://relay.example.com/",
+      );
     });
 
     it("should handle undefined context gracefully", () => {
@@ -95,7 +99,9 @@ describe("eventLoader", () => {
 
       expect(result).toBeDefined();
       // mergeRelaySets normalizes URLs with trailing slash
-      expect((result as any)._testPointer.relays).toContain("wss://relay.nostr.band/");
+      expect((result as any)._testPointer.relays).toContain(
+        "wss://relay.nostr.band/",
+      );
     });
   });
 
@@ -108,10 +114,10 @@ describe("eventLoader", () => {
       const result = eventLoader({ id: "test123" }, "author-pubkey");
 
       expect(relayListCache.getOutboxRelaysSync).toHaveBeenCalledWith(
-        "author-pubkey"
+        "author-pubkey",
       );
       expect((result as any)._testPointer.relays).toContain(
-        "wss://author-relay.com/"
+        "wss://author-relay.com/",
       );
     });
 
@@ -130,7 +136,9 @@ describe("eventLoader", () => {
       expect(relays).toContain("wss://cached2.com/");
       expect(relays).toContain("wss://cached3.com/");
       // Should be limited to top 3 cached relays
-      expect(relays.filter((r: string) => r.startsWith("wss://cached")).length).toBeLessThanOrEqual(3);
+      expect(
+        relays.filter((r: string) => r.startsWith("wss://cached")).length,
+      ).toBeLessThanOrEqual(3);
     });
   });
 
@@ -190,7 +198,7 @@ describe("eventLoader", () => {
       const result = eventLoader({ id: "parent123" }, event);
 
       expect(relayListCache.getOutboxRelaysSync).toHaveBeenCalledWith(
-        "mentioned-author-pubkey"
+        "mentioned-author-pubkey",
       );
       const relays = (result as any)._testPointer.relays;
       expect(relays).toContain("wss://author-outbox.com/");
@@ -292,7 +300,9 @@ describe("eventLoader", () => {
       const relays = (result as any)._testPointer.relays;
 
       // Should only appear once despite being in 4 sources
-      const count = relays.filter((r: string) => r === "wss://duplicate.com/").length;
+      const count = relays.filter(
+        (r: string) => r === "wss://duplicate.com/",
+      ).length;
       expect(count).toBe(1);
     });
   });
@@ -305,7 +315,9 @@ describe("eventLoader", () => {
 
       expect(result).toBeDefined();
       // mergeRelaySets normalizes aggregator relays with trailing slash
-      expect((result as any)._testPointer.relays).toContain("wss://relay.nostr.band/");
+      expect((result as any)._testPointer.relays).toContain(
+        "wss://relay.nostr.band/",
+      );
     });
 
     it("should handle invalid e tags gracefully", () => {
@@ -343,10 +355,10 @@ describe("eventLoader", () => {
 
       expect(eventStore.getEvent).toHaveBeenCalledWith("test123");
       expect(relayListCache.getOutboxRelaysSync).toHaveBeenCalledWith(
-        "existing-author"
+        "existing-author",
       );
       expect((result as any)._testPointer.relays).toContain(
-        "wss://existing-author-relay.com/"
+        "wss://existing-author-relay.com/",
       );
     });
 
@@ -385,7 +397,7 @@ describe("eventLoader", () => {
 
       // Count how many cached relays made it through
       const cachedCount = relays.filter((r: string) =>
-        r.startsWith("wss://cached")
+        r.startsWith("wss://cached"),
       ).length;
 
       // Should be exactly 3 (top 3 cached relays)

@@ -119,10 +119,7 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
             addressPointer={addressPointer}
             onOpen={(pointer) => {
               if (typeof pointer === "string") {
-                addWindow(
-                  "open",
-                  { id: pointer },
-                );
+                addWindow("open", { id: pointer });
               } else {
                 addWindow("open", pointer);
               }

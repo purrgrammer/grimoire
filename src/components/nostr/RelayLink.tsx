@@ -110,12 +110,7 @@ export function RelayLink({
             </HoverCardContent>
           </HoverCard>
         )}
-        <span
-          className={cn(
-            "text-xs truncate",
-            urlClassname,
-          )}
-        >
+        <span className={cn("text-xs truncate", urlClassname)}>
           {displayUrl}
         </span>
       </div>

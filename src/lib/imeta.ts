@@ -162,9 +162,7 @@ export function formatFileSize(bytes?: string | number): string {
  * @param dim - dimensions string like "1920x1080"
  * @returns aspect ratio as string like "16/9" or undefined if invalid
  */
-export function getAspectRatioFromDimensions(
-  dim?: string,
-): string | undefined {
+export function getAspectRatioFromDimensions(dim?: string): string | undefined {
   if (!dim) return undefined;
 
   const match = dim.match(/^(\d+)x(\d+)$/);

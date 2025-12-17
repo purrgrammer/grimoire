@@ -148,7 +148,10 @@ export const useGrimoire = () => {
     (
       windowId: string,
       updates: Partial<
-        Pick<WindowInstance, "props" | "title" | "customTitle" | "commandString" | "appId">
+        Pick<
+          WindowInstance,
+          "props" | "title" | "customTitle" | "commandString" | "appId"
+        >
       >,
     ) => setState((prev) => Logic.updateWindow(prev, windowId, updates)),
     [setState],

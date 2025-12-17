@@ -3,7 +3,11 @@ import { AlertTriangle, Bug, FileJson, RefreshCw } from "lucide-react";
 import type { NostrEvent } from "@/types/nostr";
 import { nip19 } from "nostr-tools";
 import { Button } from "./ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./ui/collapsible";
 
 interface EventErrorBoundaryProps {
   children: ReactNode;
@@ -36,13 +40,19 @@ export class EventErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(_error: Error): Partial<EventErrorBoundaryState> {
+  static getDerivedStateFromError(
+    _error: Error,
+  ): Partial<EventErrorBoundaryState> {
     return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error to console for debugging
-    console.error("[EventErrorBoundary] Caught rendering error:", error, errorInfo);
+    console.error(
+      "[EventErrorBoundary] Caught rendering error:",
+      error,
+      errorInfo,
+    );
 
     this.setState({
       error,
@@ -88,7 +98,8 @@ export class EventErrorBoundary extends Component<
                 Rendering Error
               </h3>
               <p className="text-xs text-muted-foreground mb-3">
-                This event failed to render. The error has been logged to the console.
+                This event failed to render. The error has been logged to the
+                console.
               </p>
 
               <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
@@ -98,7 +109,10 @@ export class EventErrorBoundary extends Component<
                 </div>
                 <div className="flex items-center gap-1.5 bg-background/50 px-2 py-1 border border-border">
                   <FileJson className="size-3" />
-                  <span className="font-mono truncate max-w-[200px]" title={eventId}>
+                  <span
+                    className="font-mono truncate max-w-[200px]"
+                    title={eventId}
+                  >
                     {eventId.slice(0, 16)}...
                   </span>
                 </div>

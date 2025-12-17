@@ -586,7 +586,14 @@ describe("parseReqCommand", () => {
 
       it("should work with other filters", () => {
         const now = Math.floor(Date.now() / 1000);
-        const result = parseReqCommand(["-k", "1", "--since", "7d", "--until", "now"]);
+        const result = parseReqCommand([
+          "-k",
+          "1",
+          "--since",
+          "7d",
+          "--until",
+          "now",
+        ]);
 
         expect(result.filter.kinds).toEqual([1]);
         expect(result.filter.since).toBeLessThan(now);
@@ -646,7 +653,12 @@ describe("parseReqCommand", () => {
 
       it("should work with mixed relative and unix timestamps", () => {
         const now = Math.floor(Date.now() / 1000);
-        const result = parseReqCommand(["--since", "7d", "--until", "1234567890"]);
+        const result = parseReqCommand([
+          "--since",
+          "7d",
+          "--until",
+          "1234567890",
+        ]);
         expect(result.filter.since).toBeDefined();
         expect(result.filter.since).toBeLessThan(now);
         expect(result.filter.until).toBe(1234567890);

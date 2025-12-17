@@ -39,7 +39,9 @@ class RelayListCache {
         this.set(event);
       });
 
-    console.log("[RelayListCache] Subscribed to EventStore for kind:10002 events");
+    console.log(
+      "[RelayListCache] Subscribed to EventStore for kind:10002 events",
+    );
   }
 
   /**
@@ -105,9 +107,7 @@ class RelayListCache {
           try {
             return normalizeRelayURL(url);
           } catch {
-            console.warn(
-              `[RelayListCache] Invalid read relay URL: ${url}`,
-            );
+            console.warn(`[RelayListCache] Invalid read relay URL: ${url}`);
             return null;
           }
         })
@@ -118,9 +118,7 @@ class RelayListCache {
           try {
             return normalizeRelayURL(url);
           } catch {
-            console.warn(
-              `[RelayListCache] Invalid write relay URL: ${url}`,
-            );
+            console.warn(`[RelayListCache] Invalid write relay URL: ${url}`);
             return null;
           }
         })

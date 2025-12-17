@@ -51,26 +51,35 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     // Check if we have a valid cached relay list
     relayListCache.has(pubkey).then(async (hasCached) => {
       if (hasCached) {
-        console.debug(`[ProfileViewer] Using cached relay list for ${pubkey.slice(0, 8)}`);
+        console.debug(
+          `[ProfileViewer] Using cached relay list for ${pubkey.slice(0, 8)}`,
+        );
 
         // Load cached event into EventStore so UI can display it
         const cached = await relayListCache.get(pubkey);
         if (cached?.event) {
           eventStore.add(cached.event);
-          console.debug(`[ProfileViewer] Loaded cached relay list into EventStore for ${pubkey.slice(0, 8)}`);
+          console.debug(
+            `[ProfileViewer] Loaded cached relay list into EventStore for ${pubkey.slice(0, 8)}`,
+          );
         }
         return;
       }
 
       // No cached or stale - fetch fresh from network
-      console.debug(`[ProfileViewer] Fetching fresh relay list for ${pubkey.slice(0, 8)}`);
+      console.debug(
+        `[ProfileViewer] Fetching fresh relay list for ${pubkey.slice(0, 8)}`,
+      );
       subscription = addressLoader({
         kind: kinds.RelayList,
         pubkey,
         identifier: "",
       }).subscribe({
         error: (err) => {
-          console.debug(`[ProfileViewer] Failed to fetch relay list for ${pubkey.slice(0, 8)}:`, err);
+          console.debug(
+            `[ProfileViewer] Failed to fetch relay list for ${pubkey.slice(0, 8)}:`,
+            err,
+          );
         },
       });
     });

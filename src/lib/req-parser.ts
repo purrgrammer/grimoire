@@ -394,7 +394,9 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     nip05Authors: nip05Authors.size > 0 ? Array.from(nip05Authors) : undefined,
     nip05PTags: nip05PTags.size > 0 ? Array.from(nip05PTags) : undefined,
     nip05PTagsUppercase:
-      nip05PTagsUppercase.size > 0 ? Array.from(nip05PTagsUppercase) : undefined,
+      nip05PTagsUppercase.size > 0
+        ? Array.from(nip05PTagsUppercase)
+        : undefined,
     needsAccount,
   };
 }

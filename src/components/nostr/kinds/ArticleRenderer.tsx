@@ -24,7 +24,6 @@ export function Kind30023Renderer({ event }: BaseEventProps) {
         {title && (
           <ClickableEventTitle
             event={event}
-           
             className="text-lg font-bold text-foreground"
           >
             {title}

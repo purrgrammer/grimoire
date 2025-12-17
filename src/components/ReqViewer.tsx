@@ -185,7 +185,14 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
         /* Accordion for complex queries */
         <Accordion
           type="multiple"
-          defaultValue={["kinds", "authors", "mentions", "time", "search", "tags"]}
+          defaultValue={[
+            "kinds",
+            "authors",
+            "mentions",
+            "time",
+            "search",
+            "tags",
+          ]}
           className="space-y-2"
         >
           {/* Kinds Section */}
@@ -647,18 +654,20 @@ export default function ReqViewer({
 
   // Extract contacts from kind 3 event (memoized to prevent unnecessary recalculation)
   const contacts = useMemo(
-    () => contactListEvent
-      ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
-      : [],
-    [contactListEvent]
+    () =>
+      contactListEvent
+        ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
+        : [],
+    [contactListEvent],
   );
 
   // Resolve $me and $contacts aliases (memoized to prevent unnecessary object creation)
   const resolvedFilter = useMemo(
-    () => needsAccount
-      ? resolveFilterAliases(filter, accountPubkey, contacts)
-      : filter,
-    [needsAccount, filter, accountPubkey, contacts]
+    () =>
+      needsAccount
+        ? resolveFilterAliases(filter, accountPubkey, contacts)
+        : filter,
+    [needsAccount, filter, accountPubkey, contacts],
   );
 
   // NIP-05 resolution already happened in argParser before window creation
@@ -668,8 +677,9 @@ export default function ReqViewer({
   // NIP-65 outbox relay selection
   // Memoize fallbackRelays to prevent re-creation on every render
   const fallbackRelays = useMemo(
-    () => state.activeAccount?.relays?.inbox.map((r) => r.url) || AGGREGATOR_RELAYS,
-    [state.activeAccount?.relays?.inbox]
+    () =>
+      state.activeAccount?.relays?.inbox.map((r) => r.url) || AGGREGATOR_RELAYS,
+    [state.activeAccount?.relays?.inbox],
   );
 
   // Memoize outbox options to prevent object re-creation
@@ -679,7 +689,7 @@ export default function ReqViewer({
       timeout: 1000,
       maxRelays: 42,
     }),
-    [fallbackRelays]
+    [fallbackRelays],
   );
 
   // Select optimal relays based on authors (write relays) and #p tags (read relays)
@@ -700,21 +710,21 @@ export default function ReqViewer({
 
     // Wait for outbox relay selection to complete before subscribing
     // This prevents multiple reconnections during discovery/selection phases
-    if (relaySelectionPhase !== 'ready') {
+    if (relaySelectionPhase !== "ready") {
       return [];
     }
 
     return selectedRelays;
   }, [relays, relaySelectionPhase, selectedRelays]);
 
-
   // Get relay state for each relay and calculate connected count
   const relayStatesForReq = useMemo(
-    () => finalRelays.map((url) => ({
-      url,
-      state: relayStates[url],
-    })),
-    [finalRelays, relayStates]
+    () =>
+      finalRelays.map((url) => ({
+        url,
+        state: relayStates[url],
+      })),
+    [finalRelays, relayStates],
   );
   const connectedCount = relayStatesForReq.filter(
     (r) => r.state?.connectionState === "connected",
@@ -854,7 +864,7 @@ export default function ReqViewer({
         <div className="flex items-center gap-2">
           <Radio
             className={`size-3 ${
-              relaySelectionPhase !== 'ready'
+              relaySelectionPhase !== "ready"
                 ? "text-yellow-500 animate-pulse"
                 : loading && eoseReceived && stream
                   ? "text-green-500 animate-pulse"
@@ -867,7 +877,7 @@ export default function ReqViewer({
           />
           <span
             className={`${
-              relaySelectionPhase !== 'ready'
+              relaySelectionPhase !== "ready"
                 ? "text-yellow-500"
                 : loading && eoseReceived && stream
                   ? "text-green-500"
@@ -878,9 +888,9 @@ export default function ReqViewer({
                       : "text-yellow-500"
             } font-semibold`}
           >
-            {relaySelectionPhase === 'discovering'
+            {relaySelectionPhase === "discovering"
               ? "DISCOVERING RELAYS"
-              : relaySelectionPhase === 'selecting'
+              : relaySelectionPhase === "selecting"
                 ? "SELECTING RELAYS"
                 : loading && eoseReceived && stream
                   ? "LIVE"
@@ -931,7 +941,10 @@ export default function ReqViewer({
                 </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+            <DropdownMenuContent
+              align="end"
+              className="w-80 max-h-96 overflow-y-auto"
+            >
               {/* Connection Status */}
               <div className="py-1 border-b border-border">
                 <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -1082,9 +1095,10 @@ export default function ReqViewer({
             <User className="size-12 mx-auto mb-3" />
             <h3 className="text-lg font-semibold mb-2">Account Required</h3>
             <p className="text-sm max-w-md">
-              This query uses <code className="bg-muted px-1.5 py-0.5">$me</code>{" "}
-              or <code className="bg-muted px-1.5 py-0.5">$contacts</code>{" "}
-              aliases and requires an active account.
+              This query uses{" "}
+              <code className="bg-muted px-1.5 py-0.5">$me</code> or{" "}
+              <code className="bg-muted px-1.5 py-0.5">$contacts</code> aliases
+              and requires an active account.
             </p>
           </div>
         </div>
@@ -1119,7 +1133,9 @@ export default function ReqViewer({
               style={{ height: "100%" }}
               data={events}
               computeItemKey={(_index, item) => item.id}
-              itemContent={(_index, event) => <MemoizedFeedEvent event={event} />}
+              itemContent={(_index, event) => (
+                <MemoizedFeedEvent event={event} />
+              )}
             />
           )}
         </div>

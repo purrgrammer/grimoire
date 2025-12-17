@@ -47,7 +47,10 @@ async function fetchRelayList(
     );
   } catch (err) {
     // Timeout or error - continue with fallback
-    console.debug(`[RelaySelection] Failed to fetch relay list for ${pubkey.slice(0, 8)}`, err);
+    console.debug(
+      `[RelaySelection] Failed to fetch relay list for ${pubkey.slice(0, 8)}`,
+      err,
+    );
   }
 }
 
@@ -110,7 +113,9 @@ async function getOutboxRelaysForPubkey(
     }
 
     // Cache miss - get from EventStore
-    const event = eventStore.getReplaceable(10002, pubkey, "") as NostrEvent | undefined;
+    const event = eventStore.getReplaceable(10002, pubkey, "") as
+      | NostrEvent
+      | undefined;
     if (!event) {
       console.debug(
         `[RelaySelection] No relay list found for ${pubkey.slice(0, 8)} (not in cache or store)`,
@@ -131,7 +136,9 @@ async function getOutboxRelaysForPubkey(
         try {
           return normalizeRelayURL(url);
         } catch {
-          console.warn(`[RelaySelection] Invalid relay URL in kind:10002: ${url}`);
+          console.warn(
+            `[RelaySelection] Invalid relay URL in kind:10002: ${url}`,
+          );
           return null;
         }
       })
@@ -147,18 +154,24 @@ async function getOutboxRelaysForPubkey(
       // Edge case: If all relays filtered out, keep some anyway for redundancy
       if (healthy.length === 0 && sanitized.length > 0) {
         console.debug(
-          `[RelaySelection] All relays unhealthy for ${pubkey.slice(0, 8)}, keeping sanitized relays`
+          `[RelaySelection] All relays unhealthy for ${pubkey.slice(0, 8)}, keeping sanitized relays`,
         );
         return sanitized;
       }
 
       return healthy;
     } catch (err) {
-      console.warn(`[RelaySelection] Liveness filtering failed, using sanitized relays:`, err);
+      console.warn(
+        `[RelaySelection] Liveness filtering failed, using sanitized relays:`,
+        err,
+      );
       return sanitized;
     }
   } catch (err) {
-    console.warn(`[RelaySelection] Error getting outbox relays for ${pubkey.slice(0, 8)}:`, err);
+    console.warn(
+      `[RelaySelection] Error getting outbox relays for ${pubkey.slice(0, 8)}:`,
+      err,
+    );
     return [];
   }
 }
@@ -198,7 +211,9 @@ async function getInboxRelaysForPubkey(
     }
 
     // Cache miss - get from EventStore
-    const event = eventStore.getReplaceable(10002, pubkey, "") as NostrEvent | undefined;
+    const event = eventStore.getReplaceable(10002, pubkey, "") as
+      | NostrEvent
+      | undefined;
     if (!event) {
       console.debug(
         `[RelaySelection] No relay list found for ${pubkey.slice(0, 8)} (not in cache or store)`,
@@ -219,7 +234,9 @@ async function getInboxRelaysForPubkey(
         try {
           return normalizeRelayURL(url);
         } catch {
-          console.warn(`[RelaySelection] Invalid relay URL in kind:10002: ${url}`);
+          console.warn(
+            `[RelaySelection] Invalid relay URL in kind:10002: ${url}`,
+          );
           return null;
         }
       })
@@ -235,18 +252,24 @@ async function getInboxRelaysForPubkey(
       // Edge case: If all relays filtered out, keep some anyway for redundancy
       if (healthy.length === 0 && sanitized.length > 0) {
         console.debug(
-          `[RelaySelection] All relays unhealthy for ${pubkey.slice(0, 8)}, keeping sanitized relays`
+          `[RelaySelection] All relays unhealthy for ${pubkey.slice(0, 8)}, keeping sanitized relays`,
         );
         return sanitized;
       }
 
       return healthy;
     } catch (err) {
-      console.warn(`[RelaySelection] Liveness filtering failed, using sanitized relays:`, err);
+      console.warn(
+        `[RelaySelection] Liveness filtering failed, using sanitized relays:`,
+        err,
+      );
       return sanitized;
     }
   } catch (err) {
-    console.warn(`[RelaySelection] Error getting inbox relays for ${pubkey.slice(0, 8)}:`, err);
+    console.warn(
+      `[RelaySelection] Error getting inbox relays for ${pubkey.slice(0, 8)}:`,
+      err,
+    );
     return [];
   }
 }
@@ -265,7 +288,10 @@ function buildReasoning(
   pTagPointers: ProfilePointer[],
 ): RelaySelectionReasoning[] {
   // Group pubkeys by relay, tracking writers and readers separately
-  const relayMap = new Map<string, { writers: Set<string>; readers: Set<string> }>();
+  const relayMap = new Map<
+    string,
+    { writers: Set<string>; readers: Set<string> }
+  >();
 
   for (const pointer of selectedPointers) {
     const isAuthor = authorPointers.some((p) => p.pubkey === pointer.pubkey);
@@ -289,12 +315,14 @@ function buildReasoning(
   }
 
   // Convert to reasoning array
-  return Array.from(relayMap.entries()).map(([relay, { writers, readers }]) => ({
-    relay,
-    writers: Array.from(writers),
-    readers: Array.from(readers),
-    isFallback: false,
-  }));
+  return Array.from(relayMap.entries()).map(
+    ([relay, { writers, readers }]) => ({
+      relay,
+      writers: Array.from(writers),
+      readers: Array.from(readers),
+      isFallback: false,
+    }),
+  );
 }
 
 /**
@@ -357,7 +385,9 @@ export async function selectRelaysForFilter(
 
   // If no pubkeys, return fallback immediately
   if (authors.length === 0 && pTags.length === 0) {
-    console.debug("[RelaySelection] No authors or #p tags, using fallback relays");
+    console.debug(
+      "[RelaySelection] No authors or #p tags, using fallback relays",
+    );
     return createFallbackResult(fallbackRelays);
   }
 
@@ -381,7 +411,7 @@ export async function selectRelaysForFilter(
         pubkey,
         relays: relays.slice(0, maxRelaysPerUser),
       };
-    })
+    }),
   );
 
   const pTagPointers: ProfilePointer[] = await Promise.all(
@@ -391,18 +421,24 @@ export async function selectRelaysForFilter(
         pubkey,
         relays: relays.slice(0, maxRelaysPerUser),
       };
-    })
+    }),
   );
 
   // Add fallbacks for users with no relays
   const processedAuthorPointers = authorPointers.map((pointer) => ({
     ...pointer,
-    relays: (pointer.relays && pointer.relays.length > 0) ? pointer.relays : fallbackRelays,
+    relays:
+      pointer.relays && pointer.relays.length > 0
+        ? pointer.relays
+        : fallbackRelays,
   }));
 
   const processedPTagPointers = pTagPointers.map((pointer) => ({
     ...pointer,
-    relays: (pointer.relays && pointer.relays.length > 0) ? pointer.relays : fallbackRelays,
+    relays:
+      pointer.relays && pointer.relays.length > 0
+        ? pointer.relays
+        : fallbackRelays,
   }));
 
   const allPointers = [...processedAuthorPointers, ...processedPTagPointers];
@@ -418,7 +454,9 @@ export async function selectRelaysForFilter(
 
   // If all users have no relays, return fallback result
   if (fallbackCount === allPointers.length) {
-    console.debug("[RelaySelection] All users have no relay lists, using fallback");
+    console.debug(
+      "[RelaySelection] All users have no relay lists, using fallback",
+    );
     return createFallbackResult(fallbackRelays);
   }
 
@@ -476,8 +514,8 @@ export async function selectRelaysForFilter(
     selectedPointers = [...selectedAuthors, ...selectedPTags];
 
     console.debug(
-      `[RelaySelection] Selected ${selectedAuthors.flatMap(p => p.relays).length} write relays from ${authors.length} authors, ` +
-      `${selectedPTags.flatMap(p => p.relays).length} read relays from ${pTags.length} p-tags`,
+      `[RelaySelection] Selected ${selectedAuthors.flatMap((p) => p.relays).length} write relays from ${authors.length} authors, ` +
+        `${selectedPTags.flatMap((p) => p.relays).length} read relays from ${pTags.length} p-tags`,
     );
   } else {
     // Optimize relay selection for efficient coverage
@@ -487,17 +525,23 @@ export async function selectRelaysForFilter(
     });
 
     console.debug(
-      `[RelaySelection] Selected relays from ${allPointers.length} ${allPointers.length === 1 ? 'user' : 'users'}`,
+      `[RelaySelection] Selected relays from ${allPointers.length} ${allPointers.length === 1 ? "user" : "users"}`,
     );
   }
 
   // Extract unique relays
-  const relays = Array.from(new Set(selectedPointers.flatMap((p) => p.relays || [])));
+  const relays = Array.from(
+    new Set(selectedPointers.flatMap((p) => p.relays || [])),
+  );
 
   console.debug(`[RelaySelection] Total: ${relays.length} unique relays`);
 
   // Build reasoning
-  const reasoning = buildReasoning(selectedPointers, authorPointers, pTagPointers);
+  const reasoning = buildReasoning(
+    selectedPointers,
+    authorPointers,
+    pTagPointers,
+  );
 
   return {
     relays,

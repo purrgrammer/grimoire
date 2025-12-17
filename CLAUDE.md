@@ -93,6 +93,9 @@ Use hooks like `useProfile()`, `useNostrEvent()`, `useTimeline()` - they handle 
 - Detail renderers: `DetailKindRenderer` component with `detailRenderers` registry
 - Registry pattern allows adding new kind renderers without modifying parent components
 - Falls back to `DefaultKindRenderer` or feed renderer for unregistered kinds
+- **Naming Convention**: Use human-friendly names for renderers (e.g., `LiveActivityRenderer` instead of `Kind30311Renderer`) to make code understandable without memorizing kind numbers
+  - Feed renderer: `[Name]Renderer.tsx` (e.g., `LiveActivityRenderer.tsx`)
+  - Detail renderer: `[Name]DetailRenderer.tsx` (e.g., `LiveActivityDetailRenderer.tsx`)
 
 **Mosaic Layout**:
 - Layout mutations via `updateLayout()` callback only

@@ -292,12 +292,21 @@ function LivenessStatsRow({ url }: LivenessStatsRowProps) {
   // Format liveness state icon and label
   const livenessIcon = () => {
     if (!livenessState) {
-      return { icon: <Activity className="size-4 text-muted-foreground" />, label: "Unknown" };
+      return {
+        icon: <Activity className="size-4 text-muted-foreground" />,
+        label: "Unknown",
+      };
     }
 
     const iconMap = {
-      online: { icon: <Activity className="size-4 text-green-500" />, label: "Online" },
-      offline: { icon: <WifiOff className="size-4 text-yellow-500" />, label: "Offline" },
+      online: {
+        icon: <Activity className="size-4 text-green-500" />,
+        label: "Online",
+      },
+      offline: {
+        icon: <WifiOff className="size-4 text-yellow-500" />,
+        label: "Offline",
+      },
       dead: { icon: <Skull className="size-4 text-red-500" />, label: "Dead" },
     };
     return iconMap[livenessState.state];
@@ -312,7 +321,9 @@ function LivenessStatsRow({ url }: LivenessStatsRowProps) {
     return `${minutes}m`;
   };
 
-  const backoffRemaining = livenessState ? liveness.getBackoffRemaining(url) : 0;
+  const backoffRemaining = livenessState
+    ? liveness.getBackoffRemaining(url)
+    : 0;
   const isInBackoff = backoffRemaining > 0;
 
   if (!livenessState) {

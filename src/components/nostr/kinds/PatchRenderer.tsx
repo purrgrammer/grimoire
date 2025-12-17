@@ -75,7 +75,6 @@ export function PatchRenderer({ event }: BaseEventProps) {
         {/* Patch Subject */}
         <ClickableEventTitle
           event={event}
-         
           className="font-semibold text-foreground"
         >
           {subject || "Untitled Patch"}

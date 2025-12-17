@@ -56,7 +56,12 @@ export const createWorkspace = (
  */
 export const addWindow = (
   state: GrimoireState,
-  payload: { appId: string; props: any; commandString?: string; customTitle?: string },
+  payload: {
+    appId: string;
+    props: any;
+    commandString?: string;
+    customTitle?: string;
+  },
 ): GrimoireState => {
   const activeId = state.activeWorkspaceId;
   const ws = state.workspaces[activeId];
@@ -329,7 +334,10 @@ export const updateWindow = (
   state: GrimoireState,
   windowId: string,
   updates: Partial<
-    Pick<WindowInstance, "props" | "title" | "customTitle" | "commandString" | "appId">
+    Pick<
+      WindowInstance,
+      "props" | "title" | "customTitle" | "commandString" | "appId"
+    >
   >,
 ): GrimoireState => {
   const window = state.windows[windowId];

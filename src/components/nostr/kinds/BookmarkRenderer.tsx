@@ -28,7 +28,6 @@ export function Kind39701Renderer({ event }: BaseEventProps) {
         {title && (
           <ClickableEventTitle
             event={event}
-           
             className="text-lg font-bold text-foreground"
           >
             {title}

@@ -1,10 +1,7 @@
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { MediaEmbed } from "../MediaEmbed";
 import { RichText } from "../RichText";
-import {
-  parseImetaTags,
-  getAspectRatioFromDimensions,
-} from "@/lib/imeta";
+import { parseImetaTags, getAspectRatioFromDimensions } from "@/lib/imeta";
 
 /**
  * Renderer for Kind 20 - Picture Event (NIP-68)

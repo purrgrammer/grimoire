@@ -51,7 +51,8 @@ export function parseCommandInput(input: string): ParsedCommand {
       commandName: "",
       args: [],
       fullInput,
-      error: error instanceof Error ? error.message : "Failed to parse global flags",
+      error:
+        error instanceof Error ? error.message : "Failed to parse global flags",
     };
   }
 

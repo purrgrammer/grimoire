@@ -33,7 +33,7 @@ import type {
  * const { events } = useReqTimeline("timeline-id", filter, relays);
  * ```
  */
-export type RelaySelectionPhase = 'discovering' | 'selecting' | 'ready';
+export type RelaySelectionPhase = "discovering" | "selecting" | "ready";
 
 export function useOutboxRelays(
   filter: NostrFilter,
@@ -46,7 +46,7 @@ export function useOutboxRelays(
     isOptimized: false,
   });
   const [loading, setLoading] = useState(true);
-  const [phase, setPhase] = useState<RelaySelectionPhase>('discovering');
+  const [phase, setPhase] = useState<RelaySelectionPhase>("discovering");
 
   // Stable reference for filter.authors and filter["#p"]
   // Only re-run when these change
@@ -75,7 +75,7 @@ export function useOutboxRelays(
 
     async function selectRelays() {
       setLoading(true);
-      setPhase('discovering');
+      setPhase("discovering");
 
       try {
         // Reconstruct options inside effect to avoid dependency on object reference
@@ -86,7 +86,7 @@ export function useOutboxRelays(
           timeout,
         };
 
-        setPhase('selecting');
+        setPhase("selecting");
         const selection = await selectRelaysForFilter(
           eventStore,
           filter,
@@ -95,13 +95,13 @@ export function useOutboxRelays(
 
         if (!cancelled) {
           setResult(selection);
-          setPhase('ready');
+          setPhase("ready");
         }
       } catch (err) {
         console.error("[useOutboxRelays] Failed to select relays:", err);
         // Keep previous result on error
         if (!cancelled) {
-          setPhase('ready');
+          setPhase("ready");
         }
       } finally {
         if (!cancelled) {
@@ -115,7 +115,15 @@ export function useOutboxRelays(
     return () => {
       cancelled = true;
     };
-  }, [eventStore, authorsKey, pTagsKey, fallbackRelaysKey, maxRelays, maxRelaysPerUser, timeout]);
+  }, [
+    eventStore,
+    authorsKey,
+    pTagsKey,
+    fallbackRelaysKey,
+    maxRelays,
+    maxRelaysPerUser,
+    timeout,
+  ]);
 
   return {
     ...result,

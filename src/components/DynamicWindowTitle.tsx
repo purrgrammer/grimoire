@@ -59,7 +59,8 @@ function formatProfileNames(
     if (pubkey === "$me") {
       // Show account's name or "You"
       if (accountProfile) {
-        const name = accountProfile.display_name || accountProfile.name || "You";
+        const name =
+          accountProfile.display_name || accountProfile.name || "You";
         names.push(name);
       } else {
         names.push("You");
@@ -188,23 +189,17 @@ function generateRawCommand(appId: string, props: any): string {
         }
         if (props.filter.authors?.length) {
           // Keep original aliases in tooltip for clarity
-          const authorDisplay = props.filter.authors
-            .slice(0, 2)
-            .join(",");
+          const authorDisplay = props.filter.authors.slice(0, 2).join(",");
           parts.push(`-a ${authorDisplay}`);
         }
         if (props.filter["#p"]?.length) {
           // Keep original aliases in tooltip for clarity
-          const pTagDisplay = props.filter["#p"]
-            .slice(0, 2)
-            .join(",");
+          const pTagDisplay = props.filter["#p"].slice(0, 2).join(",");
           parts.push(`-p ${pTagDisplay}`);
         }
         if (props.filter["#P"]?.length) {
           // Keep original aliases in tooltip for clarity
-          const pTagUpperDisplay = props.filter["#P"]
-            .slice(0, 2)
-            .join(",");
+          const pTagUpperDisplay = props.filter["#P"].slice(0, 2).join(",");
           parts.push(`-P ${pTagUpperDisplay}`);
         }
         return parts.join(" ");
@@ -243,12 +238,15 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
 
   // Fetch contact list for $contacts display
   const contactListEvent = useNostrEvent(
-    accountPubkey ? { kind: 3, pubkey: accountPubkey, identifier: "" } : undefined,
+    accountPubkey
+      ? { kind: 3, pubkey: accountPubkey, identifier: "" }
+      : undefined,
   );
 
   // Extract contacts count from kind 3 event
   const contactsCount = contactListEvent
-    ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64).length
+    ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
+        .length
     : 0;
 
   // Profile titles

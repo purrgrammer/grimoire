@@ -17,14 +17,14 @@ export interface ExtractResult {
   remainingTokens: string[];
 }
 
-const RESERVED_GLOBAL_FLAGS = ['--title'] as const;
+const RESERVED_GLOBAL_FLAGS = ["--title"] as const;
 
 /**
  * Sanitize a title string: strip control characters, limit length
  */
 function sanitizeTitle(title: string): string | undefined {
   const sanitized = title
-    .replace(/[\x00-\x1F\x7F]/g, '') // Strip control chars (newlines, tabs, null bytes)
+    .replace(/[\x00-\x1F\x7F]/g, "") // Strip control chars (newlines, tabs, null bytes)
     .trim();
 
   if (!sanitized) {
@@ -55,12 +55,14 @@ export function extractGlobalFlagsFromTokens(tokens: string[]): ExtractResult {
   while (i < tokens.length) {
     const token = tokens[i];
 
-    if (token === '--title') {
+    if (token === "--title") {
       // Extract title value (next token)
       const nextToken = tokens[i + 1];
 
-      if (nextToken === undefined || nextToken.startsWith('--')) {
-        throw new Error('Flag --title requires a value. Usage: --title "Window Title"');
+      if (nextToken === undefined || nextToken.startsWith("--")) {
+        throw new Error(
+          'Flag --title requires a value. Usage: --title "Window Title"',
+        );
       }
 
       const sanitized = sanitizeTitle(nextToken);

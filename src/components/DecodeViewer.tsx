@@ -93,21 +93,12 @@ export default function DecodeViewer({ args }: DecodeViewerProps) {
   const openEvent = () => {
     if (!decoded) return;
     if (decoded.data.type === "note") {
-      addWindow(
-        "open",
-        { pointer: { id: decoded.data.data, relays } },
-      );
+      addWindow("open", { pointer: { id: decoded.data.data, relays } });
     } else if (decoded.data.type === "nevent") {
-      addWindow(
-        "open",
-        { pointer: { id: decoded.data.data.id, relays } },
-      );
+      addWindow("open", { pointer: { id: decoded.data.data.id, relays } });
     } else if (decoded.data.type === "naddr") {
       const { kind, pubkey, identifier } = decoded.data.data;
-      addWindow(
-        "open",
-        { pointer: { kind, pubkey, identifier, relays } },
-      );
+      addWindow("open", { pointer: { kind, pubkey, identifier, relays } });
     }
   };
 

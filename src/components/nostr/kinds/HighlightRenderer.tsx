@@ -52,10 +52,7 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
   // Handle click to open source event
   const handleOpenEvent = () => {
     if (eventPointer?.id) {
-      addWindow(
-        "open",
-        { pointer: eventPointer },
-      );
+      addWindow("open", { pointer: eventPointer });
     } else if (addressPointer) {
       addWindow("open", { pointer: addressPointer });
     }

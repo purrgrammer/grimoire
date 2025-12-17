@@ -73,7 +73,6 @@ export function IssueRenderer({ event }: BaseEventProps) {
           {/* Issue Title */}
           <ClickableEventTitle
             event={event}
-           
             className="font-semibold text-foreground"
           >
             {title || "Untitled Issue"}

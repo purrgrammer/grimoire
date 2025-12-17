@@ -32,6 +32,8 @@ import { RepositoryRenderer } from "./RepositoryRenderer";
 import { RepositoryDetailRenderer } from "./RepositoryDetailRenderer";
 import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
+import { LiveActivityRenderer } from "./LiveActivityRenderer";
+import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -67,8 +69,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
-  30817: CommunityNIPRenderer, // Community NIP
+  30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   30617: RepositoryRenderer, // Repository (NIP-34)
+  30817: CommunityNIPRenderer, // Community NIP
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
 
@@ -107,7 +110,10 @@ export function KindRenderer({
  * Registry of kind-specific detail renderers (for detail views)
  * Maps event kinds to their detailed renderer components
  */
-const detailRenderers: Record<number, React.ComponentType<{ event: NostrEvent }>> = {
+const detailRenderers: Record<
+  number,
+  React.ComponentType<{ event: NostrEvent }>
+> = {
   0: Kind0DetailRenderer, // Profile Metadata Detail
   3: Kind3DetailView, // Contact List Detail
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
@@ -117,6 +123,7 @@ const detailRenderers: Record<number, React.ComponentType<{ event: NostrEvent }>
   9802: Kind9802DetailRenderer, // Highlight Detail
   10002: Kind10002DetailRenderer, // Relay List Detail (NIP-65)
   30023: Kind30023DetailRenderer, // Long-form Article Detail
+  30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
 };

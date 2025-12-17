@@ -48,15 +48,6 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
     return Math.floor(zapAmount / 1000);
   }, [zapAmount]);
 
-  // Override event.pubkey to show zap sender instead of receipt pubkey
-  const displayEvent = useMemo(
-    () => ({
-      ...event,
-      pubkey: zapSender || event.pubkey,
-    }),
-    [event, zapSender],
-  );
-
   if (!isValid) {
     return (
       <BaseEventContainer event={event}>
@@ -66,7 +57,12 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
   }
 
   return (
-    <BaseEventContainer event={displayEvent}>
+    <BaseEventContainer
+      event={event}
+      authorOverride={
+        zapSender ? { pubkey: zapSender, label: "Zapper" } : undefined
+      }
+    >
       <div className="flex flex-col gap-2">
         {/* Zap indicator */}
         <div className="flex items-center gap-2">

@@ -75,7 +75,6 @@ export function PullRequestRenderer({ event }: BaseEventProps) {
         {/* PR Title */}
         <ClickableEventTitle
           event={event}
-         
           className="font-semibold text-foreground"
         >
           {subject || "Untitled Pull Request"}
