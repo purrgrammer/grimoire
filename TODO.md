@@ -24,24 +24,11 @@ Current RTL implementation is partial and has limitations:
 
 **Test case**: Arabic text with hashtags on same line should display properly with right-alignment.
 
-### Live Mode Reliability
-**Priority**: High
-**File**: `src/components/ReqViewer.tsx`
-
-**Issues**:
-- Live mode sometimes stops updating (gets stuck)
-- May be related to reconnection on errors
-- Compact live indicator needed for better UX
-
-**Investigation needed**: Check relay reconnection logic and subscription lifecycle.
-
 ### Rendering Issues
 **Priority**: Medium
 
-- **Window crashes on unsupported kind event** - Need graceful error handling for unknown kinds
 - **Nested lists in Markdown should be padded** - Markdown renderer spacing issue
 - **Text rendering**: Avoid inserting `<br>` tags, investigate noStrudel's EOL metadata approach
-- **JSON viewer scrolling**: Expandable JSON in event details cannot be scrolled when content exceeds available height - needs overflow handling
 
 ## Command Palette / UX Improvements
 
@@ -88,9 +75,41 @@ When an action is entered, show the list of available options below and provide 
 **Priority**: Low
 **Description**: Allow setting background color or theme for individual columns, helping visually organize workspace.
 
+## Recent Improvements ✅
+
+### Relay Liveness Persistence
+**Completed**: 2024-12-17
+**Files**: `src/services/db.ts`, `src/services/relay-liveness.ts`
+
+Relay health tracking now persists across sessions:
+- Added Dexie v8 migration with `relayLiveness` table
+- Created storage adapter implementing `LivenessStorage` interface
+- Relay failure counts, backoff states persist across app restarts
+- Prevents repeated connection attempts to dead relays
+
+### Detail Renderer Registry
+**Completed**: 2024-12-17
+**Files**: `src/components/nostr/kinds/index.tsx`, `src/components/EventDetailViewer.tsx`
+
+Refactored detail view rendering to use registry pattern:
+- Removed 25-line hardcoded if-else chain from EventDetailViewer
+- Created `detailRenderers` map with 11 specialized detail renderers
+- New detail renderers can be added without modifying EventDetailViewer
+- Falls back to feed renderer for kinds without custom detail views
+
+### Event Error Boundaries
+**Completed**: 2024-12-17
+**Files**: `src/components/EventErrorBoundary.tsx`, `src/components/nostr/Feed.tsx`, `src/components/EventDetailViewer.tsx`
+
+All event renderers now protected with error boundaries:
+- One broken event no longer crashes entire feed
+- Diagnostic UI shows kind, ID, error message, component stack
+- Retry button and collapsible details for debugging
+- Auto-resets when event changes
+
 ## Planned Improvements
 
-- **App-wide error boundary** - Splash crash screen for unhandled errors
+- **App-wide error boundary** - Splash crash screen for unhandled errors (separate from event-level boundaries)
 - **Collapsible relay list** - Show user relay links without inbox/outbox icons initially
 - **NIP badges everywhere** - Use consistent NIP badge components for linking to NIP documentation
 - **External spec event kind support** - Add references and documentation links for commented-out event kinds from external specs (Blossom, Marmot Protocol, NKBIP, nostrocket, Corny Chat, NUD, etc.) in `src/constants/kinds.ts`. Consider adding a separate registry or documentation for non-official-NIP event kinds.
@@ -258,20 +277,7 @@ When an action is entered, show the list of available options below and provide 
 ### Phase 1: Foundation Fixes (1-2 weeks)
 **Goal:** Fix critical architectural issues and quick wins
 
-#### 1.1 Unified Detail Renderer Registry
-**Priority**: High | **Effort**: Low
-**Files**: `src/components/nostr/kinds/index.tsx`, `src/components/EventDetailViewer.tsx`
-
-**Problem**: EventDetailViewer uses hardcoded switch statement instead of registry pattern
-```tsx
-// Current anti-pattern:
-event.kind === kinds.Metadata ? <Kind0DetailRenderer />
-: event.kind === kinds.Contacts ? <Kind3DetailView />
-```
-
-**Solution**: Create `detailRenderers` map parallel to `kindRenderers` with fallback logic
-
-#### 1.2 Systematic Depth Tracking
+#### 1.1 Systematic Depth Tracking
 **Priority**: High | **Effort**: Medium
 **Files**: All `*Renderer.tsx` files
 
@@ -283,15 +289,7 @@ event.kind === kinds.Metadata ? <Kind0DetailRenderer />
 - Audit all renderers using `EmbeddedEvent`
 - Implement `CollapsedPreview` component for max depth exceeded
 
-#### 1.3 Error Boundaries
-**Priority**: High | **Effort**: Low
-**File**: `src/components/EventErrorBoundary.tsx`
-
-**Problem**: One broken event crashes entire feed
-
-**Solution**: Create `EventErrorBoundary` component wrapping all events with diagnostic error cards
-
-#### 1.4 Renderer Memoization
+#### 1.2 Renderer Memoization
 **Priority**: Medium | **Effort**: Low
 **Files**: All `*Renderer.tsx` files
 

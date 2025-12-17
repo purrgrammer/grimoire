@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Wifi,
@@ -11,6 +11,10 @@ import {
   Shield,
   XCircle,
   Settings,
+  Activity,
+  Clock,
+  AlertCircle,
+  Skull,
 } from "lucide-react";
 import { useRelayState } from "@/hooks/useRelayState";
 import type { RelayState } from "@/types/relay-state";
@@ -26,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { isAuthPreference } from "@/lib/type-guards";
+import liveness from "@/services/relay-liveness";
 
 /**
  * CONN viewer - displays connection and auth status for all relays in the pool
@@ -43,6 +48,9 @@ function ConnViewer() {
   const disconnectedRelays = relayList
     .filter((r) => r.connectionState !== "connected")
     .sort((a, b) => a.url.localeCompare(b.url));
+
+  // Get all seen relays for liveness section
+  const seenRelays = liveness.getSeenRelays().sort();
 
   return (
     <div className="h-full w-full flex flex-col bg-background text-foreground">
@@ -74,6 +82,18 @@ function ConnViewer() {
             </div>
             {disconnectedRelays.map((relay) => (
               <RelayCard key={relay.url} relay={relay} />
+            ))}
+          </>
+        )}
+
+        {/* Relay Liveness Stats */}
+        {seenRelays.length > 0 && (
+          <>
+            <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground">
+              Relay Liveness
+            </div>
+            {seenRelays.map((url) => (
+              <LivenessStatsRow key={url} url={url} />
             ))}
           </>
         )}
@@ -247,6 +267,94 @@ function RelayCard({ relay }: RelayCardProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface LivenessStatsRowProps {
+  url: string;
+}
+
+function LivenessStatsRow({ url }: LivenessStatsRowProps) {
+  const [livenessState, setLivenessState] = useState(liveness.getState(url));
+
+  // Subscribe to liveness state updates
+  useEffect(() => {
+    const subscription = liveness.state(url).subscribe((state) => {
+      setLivenessState(state);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [url]);
+
+  // Format liveness state icon and label
+  const livenessIcon = () => {
+    if (!livenessState) {
+      return { icon: <Activity className="size-4 text-muted-foreground" />, label: "Unknown" };
+    }
+
+    const iconMap = {
+      online: { icon: <Activity className="size-4 text-green-500" />, label: "Online" },
+      offline: { icon: <WifiOff className="size-4 text-yellow-500" />, label: "Offline" },
+      dead: { icon: <Skull className="size-4 text-red-500" />, label: "Dead" },
+    };
+    return iconMap[livenessState.state];
+  };
+
+  // Format backoff remaining time
+  const formatBackoffTime = (ms: number) => {
+    if (ms <= 0) return null;
+    const seconds = Math.ceil(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.ceil(seconds / 60);
+    return `${minutes}m`;
+  };
+
+  const backoffRemaining = livenessState ? liveness.getBackoffRemaining(url) : 0;
+  const isInBackoff = backoffRemaining > 0;
+
+  if (!livenessState) {
+    return null;
+  }
+
+  return (
+    <div className="border-b border-border px-4 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <RelayLink
+          url={url}
+          showInboxOutbox={false}
+          className="line-clamp-1 hover:bg-transparent hover:underline hover:decoration-dotted"
+          iconClassname="size-4"
+          urlClassname="text-sm"
+        />
+        <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono flex-shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help">{livenessIcon().icon}</div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{livenessIcon().label}</p>
+            </TooltipContent>
+          </Tooltip>
+          <div className="flex items-center gap-1.5">
+            <AlertCircle className="size-4" />
+            <span>{livenessState.failureCount}</span>
+          </div>
+          {isInBackoff && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-help flex items-center gap-1.5 text-yellow-500">
+                  <Clock className="size-4" />
+                  <span>{formatBackoffTime(backoffRemaining)}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Backoff</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </div>

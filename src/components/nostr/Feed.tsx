@@ -2,6 +2,7 @@ import { useTimeline } from "@/hooks/useTimeline";
 import { kinds } from "nostr-tools";
 import { NostrEvent } from "@/types/nostr";
 import { KindRenderer } from "./kinds";
+import { EventErrorBoundary } from "../EventErrorBoundary";
 
 interface FeedEventProps {
   event: NostrEvent;
@@ -9,9 +10,14 @@ interface FeedEventProps {
 
 /**
  * FeedEvent - Renders a single event using the appropriate kind renderer
+ * Wrapped in error boundary to prevent one broken event from crashing the feed
  */
 export function FeedEvent({ event }: FeedEventProps) {
-  return <KindRenderer event={event} />;
+  return (
+    <EventErrorBoundary event={event}>
+      <KindRenderer event={event} />
+    </EventErrorBoundary>
+  );
 }
 
 /**

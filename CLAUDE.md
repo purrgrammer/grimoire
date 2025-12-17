@@ -23,7 +23,13 @@ Grimoire is a Nostr protocol explorer and developer tool. It's a tiling window m
 - Reactive: components subscribe via hooks, auto-update on new events
 - Handles replaceable events automatically (profiles, contact lists, etc.)
 
-**Critical**: Don't create new EventStore or RelayPool instances - use the singletons in `src/services/`
+**Relay State** (`src/services/relay-liveness.ts`):
+- Singleton `RelayLiveness` tracks relay health across sessions
+- Persisted to Dexie `relayLiveness` table
+- Maintains failure counts, backoff states, last success/failure times
+- Prevents repeated connection attempts to dead relays
+
+**Critical**: Don't create new EventStore, RelayPool, or RelayLiveness instances - use the singletons in `src/services/`
 
 ### Window System
 
@@ -82,10 +88,22 @@ Use hooks like `useProfile()`, `useNostrEvent()`, `useTimeline()` - they handle 
 - Active account stored in Jotai state, synced via `useAccountSync` hook
 - Use inbox/outbox relay pattern for user relay lists
 
+**Event Rendering**:
+- Feed renderers: `KindRenderer` component with `renderers` registry in `src/components/nostr/kinds/index.tsx`
+- Detail renderers: `DetailKindRenderer` component with `detailRenderers` registry
+- Registry pattern allows adding new kind renderers without modifying parent components
+- Falls back to `DefaultKindRenderer` or feed renderer for unregistered kinds
+
 **Mosaic Layout**:
 - Layout mutations via `updateLayout()` callback only
 - Don't traverse or modify layout tree manually
 - Adding/removing windows handled by `logic.ts` functions
+
+**Error Boundaries**:
+- All event renderers wrapped in `EventErrorBoundary` component
+- Prevents one broken event from crashing entire feed or detail view
+- Provides diagnostic UI with retry capability and error details
+- Error boundaries auto-reset when event changes
 
 ## Testing
 

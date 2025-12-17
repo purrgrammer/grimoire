@@ -40,6 +40,15 @@ export interface CachedRelayList {
   updatedAt: number;
 }
 
+export interface RelayLivenessEntry {
+  url: string;
+  state: "online" | "offline" | "dead";
+  failureCount: number;
+  lastFailureTime: number;
+  lastSuccessTime: number;
+  backoffUntil?: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -47,6 +56,7 @@ class GrimoireDb extends Dexie {
   relayInfo!: Table<RelayInfo>;
   relayAuthPreferences!: Table<RelayAuthPreference>;
   relayLists!: Table<CachedRelayList>;
+  relayLiveness!: Table<RelayLivenessEntry>;
 
   constructor(name: string) {
     super(name);
@@ -159,9 +169,42 @@ class GrimoireDb extends Dexie {
       relayAuthPreferences: "&url",
       relayLists: "&pubkey, updatedAt",
     });
+
+    // Version 8: Add relay liveness tracking
+    this.version(8).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+    });
   }
 }
 
 const db = new GrimoireDb("grimoire-dev");
+
+/**
+ * Dexie storage adapter for RelayLiveness persistence
+ * Implements the LivenessStorage interface expected by applesauce-relay
+ */
+export const relayLivenessStorage = {
+  async getItem(key: string): Promise<any> {
+    const entry = await db.relayLiveness.get(key);
+    if (!entry) return null;
+
+    // Return RelayState object without the url field
+    const { url, ...state } = entry;
+    return state;
+  },
+
+  async setItem(key: string, value: any): Promise<void> {
+    await db.relayLiveness.put({
+      url: key,
+      ...value,
+    });
+  },
+};
 
 export default db;

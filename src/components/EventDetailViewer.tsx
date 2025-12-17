@@ -1,18 +1,8 @@
 import { useState } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { KindRenderer } from "./nostr/kinds";
-import { Kind0DetailRenderer } from "./nostr/kinds/ProfileDetailRenderer";
-import { Kind3DetailView } from "./nostr/kinds/ContactListRenderer";
-import { IssueDetailRenderer } from "./nostr/kinds/IssueDetailRenderer";
-import { PatchDetailRenderer } from "./nostr/kinds/PatchDetailRenderer";
-import { PullRequestDetailRenderer } from "./nostr/kinds/PullRequestDetailRenderer";
-import { Kind1337DetailRenderer } from "./nostr/kinds/CodeSnippetDetailRenderer";
-import { Kind9802DetailRenderer } from "./nostr/kinds/HighlightDetailRenderer";
-import { Kind10002DetailRenderer } from "./nostr/kinds/RelayListDetailRenderer";
-import { Kind30023DetailRenderer } from "./nostr/kinds/ArticleDetailRenderer";
-import { CommunityNIPDetailRenderer } from "./nostr/kinds/CommunityNIPDetailRenderer";
-import { RepositoryDetailRenderer } from "./nostr/kinds/RepositoryDetailRenderer";
+import { DetailKindRenderer } from "./nostr/kinds";
+import { EventErrorBoundary } from "./EventErrorBoundary";
 import { JsonViewer } from "./JsonViewer";
 import { RelayLink } from "./nostr/RelayLink";
 import { EventDetailSkeleton } from "@/components/ui/skeleton";
@@ -24,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { nip19, kinds } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { getTagValue } from "applesauce-core/helpers";
@@ -182,31 +172,9 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
 
       {/* Rendered Content - Focus Here */}
       <div className="flex-1 overflow-y-auto">
-        {event.kind === kinds.Metadata ? (
-          <Kind0DetailRenderer event={event} />
-        ) : event.kind === kinds.Contacts ? (
-          <Kind3DetailView event={event} />
-        ) : event.kind === 1337 ? (
-          <Kind1337DetailRenderer event={event} />
-        ) : event.kind === 1617 ? (
-          <PatchDetailRenderer event={event} />
-        ) : event.kind === 1618 ? (
-          <PullRequestDetailRenderer event={event} />
-        ) : event.kind === 1621 ? (
-          <IssueDetailRenderer event={event} />
-        ) : event.kind === kinds.Highlights ? (
-          <Kind9802DetailRenderer event={event} />
-        ) : event.kind === kinds.RelayList ? (
-          <Kind10002DetailRenderer event={event} />
-        ) : event.kind === kinds.LongFormArticle ? (
-          <Kind30023DetailRenderer event={event} />
-        ) : event.kind === 30817 ? (
-          <CommunityNIPDetailRenderer event={event} />
-        ) : event.kind === 30617 ? (
-          <RepositoryDetailRenderer event={event} />
-        ) : (
-          <KindRenderer event={event} />
-        )}
+        <EventErrorBoundary event={event}>
+          <DetailKindRenderer event={event} />
+        </EventErrorBoundary>
       </div>
 
       {/* JSON Viewer Dialog */}

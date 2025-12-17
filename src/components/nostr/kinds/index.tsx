@@ -1,7 +1,9 @@
 import { Kind0Renderer } from "./ProfileRenderer";
+import { Kind0DetailRenderer } from "./ProfileDetailRenderer";
 import { Kind1Renderer } from "./NoteRenderer";
 import { Kind1111Renderer } from "./Kind1111Renderer";
 import { Kind3Renderer } from "./ContactListRenderer";
+import { Kind3DetailView } from "./ContactListRenderer";
 import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./ReactionRenderer";
 import { Kind9Renderer } from "./ChatMessageRenderer";
@@ -10,15 +12,24 @@ import { Kind21Renderer } from "./VideoRenderer";
 import { Kind22Renderer } from "./ShortVideoRenderer";
 import { Kind1063Renderer } from "./FileMetadataRenderer";
 import { Kind1337Renderer } from "./CodeSnippetRenderer";
+import { Kind1337DetailRenderer } from "./CodeSnippetDetailRenderer";
 import { IssueRenderer } from "./IssueRenderer";
+import { IssueDetailRenderer } from "./IssueDetailRenderer";
 import { PatchRenderer } from "./PatchRenderer";
+import { PatchDetailRenderer } from "./PatchDetailRenderer";
 import { PullRequestRenderer } from "./PullRequestRenderer";
+import { PullRequestDetailRenderer } from "./PullRequestDetailRenderer";
 import { Kind9735Renderer } from "./ZapReceiptRenderer";
 import { Kind9802Renderer } from "./HighlightRenderer";
+import { Kind9802DetailRenderer } from "./HighlightDetailRenderer";
 import { Kind10002Renderer } from "./RelayListRenderer";
+import { Kind10002DetailRenderer } from "./RelayListDetailRenderer";
 import { Kind30023Renderer } from "./ArticleRenderer";
+import { Kind30023DetailRenderer } from "./ArticleDetailRenderer";
 import { CommunityNIPRenderer } from "./CommunityNIPRenderer";
+import { CommunityNIPDetailRenderer } from "./CommunityNIPDetailRenderer";
 import { RepositoryRenderer } from "./RepositoryRenderer";
+import { RepositoryDetailRenderer } from "./RepositoryDetailRenderer";
 import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { NostrEvent } from "@/types/nostr";
@@ -93,9 +104,45 @@ export function KindRenderer({
 }
 
 /**
+ * Registry of kind-specific detail renderers (for detail views)
+ * Maps event kinds to their detailed renderer components
+ */
+const detailRenderers: Record<number, React.ComponentType<{ event: NostrEvent }>> = {
+  0: Kind0DetailRenderer, // Profile Metadata Detail
+  3: Kind3DetailView, // Contact List Detail
+  1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
+  1617: PatchDetailRenderer, // Patch Detail (NIP-34)
+  1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
+  1621: IssueDetailRenderer, // Issue Detail (NIP-34)
+  9802: Kind9802DetailRenderer, // Highlight Detail
+  10002: Kind10002DetailRenderer, // Relay List Detail (NIP-65)
+  30023: Kind30023DetailRenderer, // Long-form Article Detail
+  30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
+  30817: CommunityNIPDetailRenderer, // Community NIP Detail
+};
+
+/**
+ * Default detail renderer for kinds without custom detail implementations
+ * Falls back to the feed renderer
+ */
+function DefaultDetailRenderer({ event }: { event: NostrEvent }) {
+  return <KindRenderer event={event} depth={0} />;
+}
+
+/**
+ * Main DetailKindRenderer component
+ * Automatically selects the appropriate detail renderer based on event kind
+ * Falls back to feed renderer if no detail renderer exists
+ */
+export function DetailKindRenderer({ event }: { event: NostrEvent }) {
+  const Renderer = detailRenderers[event.kind] || DefaultDetailRenderer;
+  return <Renderer event={event} />;
+}
+
+/**
  * Export kind renderers registry for dynamic kind detection
  */
-export { kindRenderers };
+export { kindRenderers, detailRenderers };
 
 /**
  * Export individual renderers and base components for reuse
