@@ -3,7 +3,7 @@ import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { getNip10References } from "applesauce-core/helpers/threading";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { Reply, MessageSquare } from "lucide-react";
+import { Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
@@ -15,42 +15,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { EventPointer } from "nostr-tools/nip19";
-import type { AddressPointer } from "nostr-tools/nip19";
-
-/**
- * Check if two pointers reference the same event
- */
-function isSamePointer(
-  pointer1:
-    | { e: EventPointer; a: undefined }
-    | { e: undefined; a: AddressPointer }
-    | { e: EventPointer; a: AddressPointer }
-    | undefined,
-  pointer2:
-    | { e: EventPointer; a: undefined }
-    | { e: undefined; a: AddressPointer }
-    | { e: EventPointer; a: AddressPointer }
-    | undefined,
-): boolean {
-  if (!pointer1 || !pointer2) return false;
-
-  // Compare event pointers
-  if (pointer1.e && pointer2.e) {
-    return pointer1.e.id === pointer2.e.id;
-  }
-
-  // Compare address pointers
-  if (pointer1.a && pointer2.a) {
-    return (
-      pointer1.a.kind === pointer2.a.kind &&
-      pointer1.a.pubkey === pointer2.a.pubkey &&
-      pointer1.a.identifier === pointer2.a.identifier
-    );
-  }
-
-  return false;
-}
 
 /**
  * Parent event card component - compact single line
@@ -66,6 +30,9 @@ function ParentEventCard({
   tooltipText: string;
   onClickHandler: () => void;
 }) {
+  // Don't show kind badge for kind 1 (most common, adds clutter)
+  const showKindBadge = parentEvent.kind !== 1;
+
   return (
     <div
       onClick={onClickHandler}
@@ -79,7 +46,7 @@ function ParentEventCard({
           <p>{tooltipText}</p>
         </TooltipContent>
       </Tooltip>
-      <KindBadge kind={parentEvent.kind} variant="compact" />
+      {showKindBadge && <KindBadge kind={parentEvent.kind} variant="compact" />}
       <UserName
         pubkey={parentEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
@@ -98,8 +65,7 @@ function ParentEventCard({
 
 /**
  * Renderer for Kind 1 - Short Text Note (NIP-10 threading)
- * Shows parent event with kind icon, author, and title in reply-style format
- * If both root and reply exist and are different, shows both (root first, then reply)
+ * Shows immediate parent (reply) only for cleaner display
  */
 export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
   const { addWindow } = useGrimoire();
@@ -107,26 +73,11 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
   // Use NIP-10 threading helpers
   const refs = getNip10References(event);
 
-  // Get pointers for root and reply
-  const rootPointer = refs.root?.e || refs.root?.a;
+  // Get reply pointer (immediate parent)
   const replyPointer = refs.reply?.e || refs.reply?.a;
 
-  // Fetch both events
-  const rootEvent = useNostrEvent(rootPointer, event);
+  // Fetch reply event
   const replyEvent = useNostrEvent(replyPointer, event);
-
-  // Check if root and reply are different events
-  const hasDistinctReply =
-    refs.root &&
-    refs.reply &&
-    !isSamePointer(refs.root, refs.reply) &&
-    rootEvent &&
-    replyEvent;
-
-  const handleRootClick = () => {
-    if (!rootEvent || !rootPointer) return;
-    addWindow("open", { pointer: rootPointer }, `Thread root`);
-  };
 
   const handleReplyClick = () => {
     if (!replyEvent || !replyPointer) return;
@@ -140,31 +91,19 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <TooltipProvider>
-        <div className="flex flex-col gap-0.5">
-          {/* Show root event (thread origin) */}
-          {rootPointer && !rootEvent && (
-            <InlineReplySkeleton icon={<MessageSquare className="size-3" />} />
-          )}
+        {/* Show reply event (immediate parent) */}
+        {replyPointer && !replyEvent && (
+          <InlineReplySkeleton icon={<Reply className="size-3" />} />
+        )}
 
-          {rootPointer && rootEvent && (
-            <ParentEventCard
-              parentEvent={rootEvent}
-              icon={MessageSquare}
-              tooltipText="Thread root"
-              onClickHandler={handleRootClick}
-            />
-          )}
-
-          {/* Show reply event (immediate parent) if different from root */}
-          {hasDistinctReply && replyPointer && (
-            <ParentEventCard
-              parentEvent={replyEvent}
-              icon={Reply}
-              tooltipText="Replying to"
-              onClickHandler={handleReplyClick}
-            />
-          )}
-        </div>
+        {replyPointer && replyEvent && (
+          <ParentEventCard
+            parentEvent={replyEvent}
+            icon={Reply}
+            tooltipText="Replying to"
+            onClickHandler={handleReplyClick}
+          />
+        )}
       </TooltipProvider>
 
       <RichText event={event} className="text-sm" depth={depth} />
