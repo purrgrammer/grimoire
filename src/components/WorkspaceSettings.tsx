@@ -18,34 +18,29 @@ import type { LayoutConfig } from "@/types/app";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceSettingsProps {
-  workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function WorkspaceSettings({
-  workspaceId,
   open,
   onOpenChange,
 }: WorkspaceSettingsProps) {
-  const { state, updateWorkspaceLayoutConfig } = useGrimoire();
-  const workspace = state.workspaces[workspaceId];
+  const { state, updateLayoutConfig } = useGrimoire();
 
   // Local state for settings
   const [insertionMode, setInsertionMode] = useState<LayoutConfig["insertionMode"]>(
-    workspace?.layoutConfig?.insertionMode || "smart"
+    state.layoutConfig?.insertionMode || "smart"
   );
   const [splitPercentage, setSplitPercentage] = useState(
-    workspace?.layoutConfig?.splitPercentage || 50
+    state.layoutConfig?.splitPercentage || 50
   );
   const [insertionPosition, setInsertionPosition] = useState<LayoutConfig["insertionPosition"]>(
-    workspace?.layoutConfig?.insertionPosition || "second"
+    state.layoutConfig?.insertionPosition || "second"
   );
 
-  if (!workspace) return null;
-
   const handleSave = () => {
-    updateWorkspaceLayoutConfig(workspaceId, {
+    updateLayoutConfig({
       insertionMode,
       splitPercentage,
       insertionPosition,
@@ -63,12 +58,9 @@ export function WorkspaceSettings({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>
-            Workspace {workspace.number}
-            {workspace.label && ` - ${workspace.label}`} Settings
-          </DialogTitle>
+          <DialogTitle>Layout Settings</DialogTitle>
           <DialogDescription>
-            Configure how new windows are inserted into this workspace layout.
+            Configure how new windows are inserted into all workspaces.
           </DialogDescription>
         </DialogHeader>
 

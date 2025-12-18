@@ -65,7 +65,6 @@ export interface Workspace {
   label?: string; // Optional user-editable label
   layout: MosaicNode<string> | null;
   windowIds: string[];
-  layoutConfig: LayoutConfig; // How new windows are inserted into layout
 }
 
 export interface RelayInfo {
@@ -85,6 +84,7 @@ export interface GrimoireState {
   windows: Record<string, WindowInstance>;
   workspaces: Record<string, Workspace>;
   activeWorkspaceId: string;
+  layoutConfig: LayoutConfig; // Global configuration for window insertion (applies to all workspaces)
   activeAccount?: {
     pubkey: string;
     relays?: UserRelays;

@@ -18,13 +18,13 @@ const initialState: GrimoireState = {
       number: 1,
       windowIds: [],
       layout: null,
-      layoutConfig: {
-        insertionMode: "smart", // Smart auto-balancing by default
-        splitPercentage: 50, // Equal split
-        insertionPosition: "second", // New windows on right/bottom
-        autoPreset: undefined, // No preset maintenance
-      },
     },
+  },
+  layoutConfig: {
+    insertionMode: "smart", // Smart auto-balancing by default
+    splitPercentage: 50, // Equal split
+    insertionPosition: "second", // New windows on right/bottom
+    autoPreset: undefined, // No preset maintenance
   },
 };
 
@@ -229,14 +229,9 @@ export const useGrimoire = () => {
     [setState],
   );
 
-  const updateWorkspaceLayoutConfig = useCallback(
-    (
-      workspaceId: string,
-      layoutConfig: Partial<GrimoireState["workspaces"][string]["layoutConfig"]>,
-    ) =>
-      setState((prev) =>
-        Logic.updateWorkspaceLayoutConfig(prev, workspaceId, layoutConfig),
-      ),
+  const updateLayoutConfig = useCallback(
+    (layoutConfig: Partial<GrimoireState["layoutConfig"]>) =>
+      setState((prev) => Logic.updateLayoutConfig(prev, layoutConfig)),
     [setState],
   );
 
@@ -259,7 +254,7 @@ export const useGrimoire = () => {
     setActiveWorkspace,
     setActiveAccount,
     setActiveAccountRelays,
-    updateWorkspaceLayoutConfig,
+    updateLayoutConfig,
     applyPresetLayout,
   };
 };

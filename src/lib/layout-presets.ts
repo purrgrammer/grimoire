@@ -129,6 +129,7 @@ export function collectWindowIds(
 /**
  * Applies a preset layout to existing windows
  * Takes the first N windows from the current layout and arranges them according to the preset
+ * Preserves any remaining windows by adding them to the right side of the preset
  */
 export function applyPresetToLayout(
   currentLayout: MosaicNode<string> | null,
@@ -144,11 +145,36 @@ export function applyPresetToLayout(
     );
   }
 
-  // Take first N windows for the preset
-  const windowsToUse = windowIds.slice(0, preset.slots);
+  // Split windows: first N for preset, rest to preserve
+  const presetWindows = windowIds.slice(0, preset.slots);
+  const remainingWindows = windowIds.slice(preset.slots);
 
-  // Fill template with window IDs
-  return fillLayoutTemplate(preset.template, windowsToUse);
+  // Fill template with preset windows
+  let result = fillLayoutTemplate(preset.template, presetWindows);
+
+  // If there are remaining windows, add them to the right side
+  if (remainingWindows.length > 0) {
+    // Create a vertical stack for remaining windows
+    let remainingStack: MosaicNode<string> = remainingWindows[0];
+    for (let i = 1; i < remainingWindows.length; i++) {
+      remainingStack = {
+        direction: "column",
+        first: remainingStack,
+        second: remainingWindows[i],
+        splitPercentage: 50,
+      };
+    }
+
+    // Put preset on left, remaining on right (70/30 split)
+    result = {
+      direction: "row",
+      first: result,
+      second: remainingStack,
+      splitPercentage: 70, // Give more space to the preset layout
+    };
+  }
+
+  return result;
 }
 
 /**

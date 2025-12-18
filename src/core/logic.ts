@@ -76,8 +76,8 @@ export const addWindow = (
     commandString: payload.commandString,
   };
 
-  // Insert window using workspace layout configuration
-  const newLayout = insertWindow(ws.layout, newWindowId, ws.layoutConfig);
+  // Insert window using global layout configuration
+  const newLayout = insertWindow(ws.layout, newWindowId, state.layoutConfig);
 
   return {
     ...state,
@@ -347,30 +347,18 @@ export const updateWindow = (
 };
 
 /**
- * Updates the layout configuration for a workspace.
- * Controls how new windows are inserted into the workspace layout.
+ * Updates the global layout configuration.
+ * Controls how new windows are inserted into all workspaces.
  */
-export const updateWorkspaceLayoutConfig = (
+export const updateLayoutConfig = (
   state: GrimoireState,
-  workspaceId: string,
-  layoutConfig: Partial<GrimoireState["workspaces"][string]["layoutConfig"]>,
+  layoutConfig: Partial<GrimoireState["layoutConfig"]>,
 ): GrimoireState => {
-  const workspace = state.workspaces[workspaceId];
-  if (!workspace) {
-    return state; // Workspace doesn't exist, return unchanged
-  }
-
   return {
     ...state,
-    workspaces: {
-      ...state.workspaces,
-      [workspaceId]: {
-        ...workspace,
-        layoutConfig: {
-          ...workspace.layoutConfig,
-          ...layoutConfig,
-        },
-      },
+    layoutConfig: {
+      ...state.layoutConfig,
+      ...layoutConfig,
     },
   };
 };

@@ -131,16 +131,16 @@ describe("findLowestAvailableWorkspaceNumber", () => {
 describe("addWindow", () => {
   // Helper to create minimal test state
   const createTestState = (layoutConfig: LayoutConfig, existingLayout: MosaicNode<string> | null = null): GrimoireState => ({
-    __version: 8,
+    __version: 9,
     windows: {},
     activeWorkspaceId: "test-workspace",
+    layoutConfig, // Global layout config (not per-workspace)
     workspaces: {
       "test-workspace": {
         id: "test-workspace",
         number: 1,
         windowIds: [],
         layout: existingLayout,
-        layoutConfig,
       },
     },
   });

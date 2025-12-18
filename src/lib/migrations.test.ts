@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { migrateState, validateState, CURRENT_VERSION } from "./migrations";
 
 describe("migrations", () => {
-  describe("v6 to v8 migration (v6→v7→v8)", () => {
-    it("should convert numeric labels to number field and add layoutConfig", () => {
+  describe("v6 to v9 migration (v6→v7→v8→v9)", () => {
+    it("should convert numeric labels to number field and add global layoutConfig", () => {
       const oldState = {
         __version: 6,
         windows: {},
@@ -26,7 +26,7 @@ describe("migrations", () => {
 
       const migrated = migrateState(oldState);
 
-      // Should migrate to v8
+      // Should migrate to v9
       expect(migrated.__version).toBe(CURRENT_VERSION);
 
       // v6→v7: numeric labels converted to number
@@ -35,22 +35,19 @@ describe("migrations", () => {
       expect(migrated.workspaces.ws2.number).toBe(2);
       expect(migrated.workspaces.ws2.label).toBeUndefined();
 
-      // v7→v8: layoutConfig added
-      expect(migrated.workspaces.ws1.layoutConfig).toEqual({
+      // v7→v8→v9: layoutConfig moved to global state
+      expect(migrated.layoutConfig).toEqual({
         insertionMode: "smart",
         splitPercentage: 50,
         insertionPosition: "second",
         autoPreset: undefined,
       });
-      expect(migrated.workspaces.ws2.layoutConfig).toEqual({
-        insertionMode: "smart",
-        splitPercentage: 50,
-        insertionPosition: "second",
-        autoPreset: undefined,
-      });
+      // Workspaces should NOT have layoutConfig
+      expect(migrated.workspaces.ws1.layoutConfig).toBeUndefined();
+      expect(migrated.workspaces.ws2.layoutConfig).toBeUndefined();
     });
 
-    it("should convert non-numeric labels to number with label and add layoutConfig", () => {
+    it("should convert non-numeric labels to number with label and add global layoutConfig", () => {
       const oldState = {
         __version: 6,
         windows: {},
@@ -81,12 +78,13 @@ describe("migrations", () => {
       expect(migrated.workspaces.ws2.number).toBe(2);
       expect(migrated.workspaces.ws2.label).toBe("Development");
 
-      // v7→v8: layoutConfig added
-      expect(migrated.workspaces.ws1.layoutConfig).toBeDefined();
-      expect(migrated.workspaces.ws2.layoutConfig).toBeDefined();
+      // v7→v8→v9: layoutConfig is global, not per-workspace
+      expect(migrated.layoutConfig).toBeDefined();
+      expect(migrated.workspaces.ws1.layoutConfig).toBeUndefined();
+      expect(migrated.workspaces.ws2.layoutConfig).toBeUndefined();
     });
 
-    it("should handle mixed numeric and text labels and add layoutConfig", () => {
+    it("should handle mixed numeric and text labels and add global layoutConfig", () => {
       const oldState = {
         __version: 6,
         windows: {},
@@ -125,10 +123,11 @@ describe("migrations", () => {
       expect(migrated.workspaces.ws3.number).toBe(3);
       expect(migrated.workspaces.ws3.label).toBeUndefined();
 
-      // v7→v8: layoutConfig added to all workspaces
-      expect(migrated.workspaces.ws1.layoutConfig).toBeDefined();
-      expect(migrated.workspaces.ws2.layoutConfig).toBeDefined();
-      expect(migrated.workspaces.ws3.layoutConfig).toBeDefined();
+      // v7→v8→v9: layoutConfig is global
+      expect(migrated.layoutConfig).toBeDefined();
+      expect(migrated.workspaces.ws1.layoutConfig).toBeUndefined();
+      expect(migrated.workspaces.ws2.layoutConfig).toBeUndefined();
+      expect(migrated.workspaces.ws3.layoutConfig).toBeUndefined();
     });
 
     it("should validate migrated state", () => {
@@ -151,10 +150,10 @@ describe("migrations", () => {
     });
   });
 
-  describe("v7 to v8 migration", () => {
-    it("should add layoutConfig to existing workspaces", () => {
-      const v7State = {
-        __version: 7,
+  describe("v8 to v9 migration", () => {
+    it("should move layoutConfig from workspaces to global state", () => {
+      const v8State = {
+        __version: 8,
         windows: {
           w1: { id: "w1", appId: "profile", props: {} },
           w2: { id: "w2", appId: "nip", props: {} },
@@ -167,6 +166,12 @@ describe("migrations", () => {
             label: undefined,
             layout: null,
             windowIds: [],
+            layoutConfig: {
+              insertionMode: "smart",
+              splitPercentage: 50,
+              insertionPosition: "second",
+              autoPreset: undefined,
+            },
           },
           ws2: {
             id: "ws2",
@@ -174,27 +179,33 @@ describe("migrations", () => {
             label: "Development",
             layout: { direction: "row", first: "w1", second: "w2", splitPercentage: 50 },
             windowIds: ["w1", "w2"],
+            layoutConfig: {
+              insertionMode: "row",
+              splitPercentage: 70,
+              insertionPosition: "first",
+              autoPreset: undefined,
+            },
           },
         },
       };
 
-      const migrated = migrateState(v7State);
+      const migrated = migrateState(v8State);
 
-      expect(migrated.__version).toBe(8);
-      expect(migrated.workspaces.ws1.layoutConfig).toEqual({
-        insertionMode: "smart",
-        splitPercentage: 50,
-        insertionPosition: "second",
-        autoPreset: undefined,
-      });
-      expect(migrated.workspaces.ws2.layoutConfig).toEqual({
+      expect(migrated.__version).toBe(9);
+
+      // layoutConfig should be at global level (from first workspace)
+      expect(migrated.layoutConfig).toEqual({
         insertionMode: "smart",
         splitPercentage: 50,
         insertionPosition: "second",
         autoPreset: undefined,
       });
 
-      // Existing fields should be preserved
+      // Workspaces should NOT have layoutConfig
+      expect(migrated.workspaces.ws1.layoutConfig).toBeUndefined();
+      expect(migrated.workspaces.ws2.layoutConfig).toBeUndefined();
+
+      // Other fields should be preserved
       expect(migrated.workspaces.ws2.label).toBe("Development");
       expect(migrated.workspaces.ws2.layout).toEqual({
         direction: "row",
@@ -204,9 +215,9 @@ describe("migrations", () => {
       });
     });
 
-    it("should validate v7→v8 migrated state", () => {
-      const v7State = {
-        __version: 7,
+    it("should validate v8→v9 migrated state", () => {
+      const v8State = {
+        __version: 8,
         windows: { w1: { id: "w1", appId: "profile", props: {} } },
         activeWorkspaceId: "ws1",
         workspaces: {
@@ -215,11 +226,17 @@ describe("migrations", () => {
             number: 1,
             layout: "w1",
             windowIds: ["w1"],
+            layoutConfig: {
+              insertionMode: "smart",
+              splitPercentage: 50,
+              insertionPosition: "second",
+              autoPreset: undefined,
+            },
           },
         },
       };
 
-      const migrated = migrateState(v7State);
+      const migrated = migrateState(v8State);
       expect(validateState(migrated)).toBe(true);
     });
   });
@@ -230,6 +247,12 @@ describe("migrations", () => {
         __version: CURRENT_VERSION,
         windows: {},
         activeWorkspaceId: "default",
+        layoutConfig: {
+          insertionMode: "smart",
+          splitPercentage: 50,
+          insertionPosition: "second",
+          autoPreset: undefined,
+        },
         workspaces: {
           default: {
             id: "default",
@@ -247,6 +270,11 @@ describe("migrations", () => {
       const state = {
         windows: {},
         activeWorkspaceId: "default",
+        layoutConfig: {
+          insertionMode: "smart",
+          splitPercentage: 50,
+          insertionPosition: "second",
+        },
         workspaces: {
           default: {
             id: "default",
@@ -265,6 +293,29 @@ describe("migrations", () => {
         __version: CURRENT_VERSION,
         windows: {},
         activeWorkspaceId: "default",
+        layoutConfig: {
+          insertionMode: "smart",
+          splitPercentage: 50,
+          insertionPosition: "second",
+        },
+      };
+
+      expect(validateState(state)).toBe(false);
+    });
+
+    it("should reject state without layoutConfig", () => {
+      const state = {
+        __version: CURRENT_VERSION,
+        windows: {},
+        activeWorkspaceId: "default",
+        workspaces: {
+          default: {
+            id: "default",
+            number: 1,
+            layout: null,
+            windowIds: [],
+          },
+        },
       };
 
       expect(validateState(state)).toBe(false);

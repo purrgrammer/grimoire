@@ -8,7 +8,7 @@
 import { GrimoireState } from "@/types/app";
 import { toast } from "sonner";
 
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 
 /**
  * Migration function type
@@ -90,6 +90,32 @@ const migrations: Record<number, MigrationFn> = {
       workspaces: migratedWorkspaces,
     };
   },
+  // Migration from v8 to v9 - moves layoutConfig from per-workspace to global
+  8: (state: any) => {
+    const migratedWorkspaces: Record<string, any> = {};
+
+    // Get layoutConfig from first workspace (or use default)
+    const firstWorkspace = Object.values(state.workspaces || {})[0] as any;
+    const layoutConfig = firstWorkspace?.layoutConfig || {
+      insertionMode: "smart",
+      splitPercentage: 50,
+      insertionPosition: "second",
+      autoPreset: undefined,
+    };
+
+    // Remove layoutConfig from all workspaces
+    for (const [id, workspace] of Object.entries(state.workspaces || {})) {
+      const { layoutConfig: _, ...workspaceWithoutConfig } = workspace as any;
+      migratedWorkspaces[id] = workspaceWithoutConfig;
+    }
+
+    return {
+      ...state,
+      __version: 9,
+      workspaces: migratedWorkspaces,
+      layoutConfig, // Move to global state
+    };
+  },
 };
 
 /**
@@ -108,6 +134,7 @@ export function validateState(state: any): state is GrimoireState {
       !state.windows ||
       !state.workspaces ||
       !state.activeWorkspaceId ||
+      !state.layoutConfig ||
       typeof state.__version !== "number"
     ) {
       return false;
