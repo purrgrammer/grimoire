@@ -26,12 +26,45 @@ export interface WindowInstance {
   commandString?: string; // Original command that created this window (e.g., "profile alice@domain.com")
 }
 
+/**
+ * Configuration for how new windows are inserted into the workspace layout tree
+ */
+export interface LayoutConfig {
+  /**
+   * How to determine split direction for new windows
+   * - 'smart': Auto-balance horizontal/vertical splits (recommended)
+   * - 'row': Always horizontal splits (side-by-side)
+   * - 'column': Always vertical splits (stacked)
+   */
+  insertionMode: "smart" | "row" | "column";
+
+  /**
+   * Split percentage for new windows (10-90)
+   * Example: 70 means existing content gets 70%, new window gets 30%
+   */
+  splitPercentage: number;
+
+  /**
+   * Where to place the new window
+   * - 'first': Left (for row) or Top (for column)
+   * - 'second': Right (for row) or Bottom (for column)
+   */
+  insertionPosition: "first" | "second";
+
+  /**
+   * Optional: Auto-maintain a preset layout structure
+   * When set, system tries to preserve this preset when adding windows
+   */
+  autoPreset?: string;
+}
+
 export interface Workspace {
   id: string;
   number: number; // Numeric identifier for shortcuts (e.g., Cmd+1, Cmd+2)
   label?: string; // Optional user-editable label
   layout: MosaicNode<string> | null;
   windowIds: string[];
+  layoutConfig: LayoutConfig; // How new windows are inserted into layout
 }
 
 export interface RelayInfo {

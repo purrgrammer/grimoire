@@ -18,6 +18,12 @@ const initialState: GrimoireState = {
       number: 1,
       windowIds: [],
       layout: null,
+      layoutConfig: {
+        insertionMode: "smart", // Smart auto-balancing by default
+        splitPercentage: 50, // Equal split
+        insertionPosition: "second", // New windows on right/bottom
+        autoPreset: undefined, // No preset maintenance
+      },
     },
   },
 };

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { findLowestAvailableWorkspaceNumber } from "./logic";
+import type { MosaicNode } from "react-mosaic-component";
+import { findLowestAvailableWorkspaceNumber, addWindow } from "./logic";
+import type { GrimoireState, LayoutConfig } from "@/types/app";
 
 describe("findLowestAvailableWorkspaceNumber", () => {
   describe("basic number assignment", () => {
@@ -122,6 +124,411 @@ describe("findLowestAvailableWorkspaceNumber", () => {
       };
       const result = findLowestAvailableWorkspaceNumber(workspaces);
       expect(result).toBe(3);
+    });
+  });
+});
+
+describe("addWindow", () => {
+  // Helper to create minimal test state
+  const createTestState = (layoutConfig: LayoutConfig, existingLayout: MosaicNode<string> | null = null): GrimoireState => ({
+    __version: 8,
+    windows: {},
+    activeWorkspaceId: "test-workspace",
+    workspaces: {
+      "test-workspace": {
+        id: "test-workspace",
+        number: 1,
+        windowIds: [],
+        layout: existingLayout,
+        layoutConfig,
+      },
+    },
+  });
+
+  describe("first window", () => {
+    it("should create first window with row config", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "profile",
+        props: { npub: "test" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.windowIds).toHaveLength(1);
+      expect(workspace.layout).toBe(workspace.windowIds[0]); // Single window = leaf node
+      expect(result.windows[workspace.windowIds[0]]).toEqual({
+        id: workspace.windowIds[0],
+        appId: "profile",
+        customTitle: undefined,
+        props: { npub: "test" },
+        commandString: undefined,
+      });
+    });
+
+    it("should create first window with column config", () => {
+      const state = createTestState({
+        insertionMode: "column",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.windowIds).toHaveLength(1);
+      expect(workspace.layout).toBe(workspace.windowIds[0]);
+    });
+
+    it("should create first window with smart config", () => {
+      const state = createTestState({
+        insertionMode: "smart",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "kinds",
+        props: {},
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.windowIds).toHaveLength(1);
+      expect(workspace.layout).toBe(workspace.windowIds[0]);
+    });
+  });
+
+  describe("second window with row config", () => {
+    it("should create horizontal split", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.windowIds).toHaveLength(2);
+      expect(workspace.layout).toMatchObject({
+        direction: "row",
+        splitPercentage: 50,
+      });
+    });
+
+    it("should respect custom split percentage", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 70,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.layout).toMatchObject({
+        direction: "row",
+        splitPercentage: 70,
+      });
+    });
+
+    it("should place new window on right when position is second", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const layout = workspace.layout as any;
+      expect(layout.first).toBe("window-1");
+      expect(layout.second).toBe(workspace.windowIds[1]);
+    });
+
+    it("should place new window on left when position is first", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "first",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const layout = workspace.layout as any;
+      expect(layout.first).toBe(workspace.windowIds[1]); // New window
+      expect(layout.second).toBe("window-1"); // Old window
+    });
+  });
+
+  describe("second window with column config", () => {
+    it("should create vertical split", () => {
+      const state = createTestState({
+        insertionMode: "column",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.windowIds).toHaveLength(2);
+      expect(workspace.layout).toMatchObject({
+        direction: "column",
+        splitPercentage: 50,
+      });
+    });
+
+    it("should place new window on bottom when position is second", () => {
+      const state = createTestState({
+        insertionMode: "column",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const layout = workspace.layout as any;
+      expect(layout.first).toBe("window-1");
+      expect(layout.second).toBe(workspace.windowIds[1]);
+    });
+
+    it("should place new window on top when position is first", () => {
+      const state = createTestState({
+        insertionMode: "column",
+        splitPercentage: 50,
+        insertionPosition: "first",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const layout = workspace.layout as any;
+      expect(layout.first).toBe(workspace.windowIds[1]); // New window
+      expect(layout.second).toBe("window-1"); // Old window
+    });
+  });
+
+  describe("second window with smart config", () => {
+    it("should create horizontal split for first split", () => {
+      const state = createTestState({
+        insertionMode: "smart",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      expect(workspace.layout).toMatchObject({
+        direction: "row", // Smart defaults to row for first split
+      });
+    });
+  });
+
+  describe("third window with smart config", () => {
+    it("should balance by adding vertical split when horizontal exists", () => {
+      // Start with horizontal split (window-1 | window-2)
+      const existingLayout: MosaicNode<string> = {
+        direction: "row",
+        first: "window-1",
+        second: "window-2",
+        splitPercentage: 50,
+      };
+      const state = createTestState({
+        insertionMode: "smart",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, existingLayout);
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.windows["window-2"] = { id: "window-2", appId: "nip", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1", "window-2"];
+
+      const result = addWindow(state, {
+        appId: "kinds",
+        props: {},
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      // Should add column split to balance (1 row, 0 column → add column)
+      expect(workspace.layout).toMatchObject({
+        direction: "column",
+      });
+    });
+
+    it("should balance by adding horizontal split when vertical exists", () => {
+      // Start with vertical split (window-1 / window-2)
+      const existingLayout: MosaicNode<string> = {
+        direction: "column",
+        first: "window-1",
+        second: "window-2",
+        splitPercentage: 50,
+      };
+      const state = createTestState({
+        insertionMode: "smart",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, existingLayout);
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.windows["window-2"] = { id: "window-2", appId: "nip", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1", "window-2"];
+
+      const result = addWindow(state, {
+        appId: "kinds",
+        props: {},
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      // Should add row split to balance (0 row, 1 column → add row)
+      expect(workspace.layout).toMatchObject({
+        direction: "row",
+      });
+    });
+  });
+
+  describe("window metadata", () => {
+    it("should store commandString when provided", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "profile",
+        props: { npub: "test" },
+        commandString: "profile alice@nostr.com",
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const window = result.windows[workspace.windowIds[0]];
+      expect(window.commandString).toBe("profile alice@nostr.com");
+    });
+
+    it("should store customTitle when provided", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "profile",
+        props: { npub: "test" },
+        customTitle: "Alice Profile",
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const window = result.windows[workspace.windowIds[0]];
+      expect(window.customTitle).toBe("Alice Profile");
+    });
+
+    it("should store both commandString and customTitle", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "profile",
+        props: { npub: "test" },
+        commandString: "profile alice@nostr.com",
+        customTitle: "Alice",
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const window = result.windows[workspace.windowIds[0]];
+      expect(window.commandString).toBe("profile alice@nostr.com");
+      expect(window.customTitle).toBe("Alice");
+    });
+  });
+
+  describe("global windows object", () => {
+    it("should add window to global windows object", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      });
+
+      const result = addWindow(state, {
+        appId: "profile",
+        props: { npub: "test" },
+      });
+
+      const workspace = result.workspaces["test-workspace"];
+      const windowId = workspace.windowIds[0];
+      expect(result.windows[windowId]).toBeDefined();
+      expect(result.windows[windowId].appId).toBe("profile");
+    });
+
+    it("should preserve existing windows when adding new one", () => {
+      const state = createTestState({
+        insertionMode: "row",
+        splitPercentage: 50,
+        insertionPosition: "second",
+      }, "window-1");
+      state.windows["window-1"] = { id: "window-1", appId: "profile", props: {} };
+      state.workspaces["test-workspace"].windowIds = ["window-1"];
+
+      const result = addWindow(state, {
+        appId: "nip",
+        props: { number: "01" },
+      });
+
+      expect(result.windows["window-1"]).toBeDefined();
+      expect(Object.keys(result.windows)).toHaveLength(2);
     });
   });
 });

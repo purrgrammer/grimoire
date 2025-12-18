@@ -8,7 +8,7 @@
 import { GrimoireState } from "@/types/app";
 import { toast } from "sonner";
 
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 /**
  * Migration function type
@@ -64,6 +64,29 @@ const migrations: Record<number, MigrationFn> = {
     return {
       ...state,
       __version: 7,
+      workspaces: migratedWorkspaces,
+    };
+  },
+  // Migration from v7 to v8 - adds layoutConfig to workspaces
+  7: (state: any) => {
+    const migratedWorkspaces: Record<string, any> = {};
+
+    // Add default layoutConfig to each workspace
+    for (const [id, workspace] of Object.entries(state.workspaces || {})) {
+      migratedWorkspaces[id] = {
+        ...workspace,
+        layoutConfig: {
+          insertionMode: "smart", // New smart default (auto-balance)
+          splitPercentage: 50, // Matches old 50/50 behavior
+          insertionPosition: "second", // Matches old right/bottom behavior
+          autoPreset: undefined, // No preset by default
+        },
+      };
+    }
+
+    return {
+      ...state,
+      __version: 8,
       workspaces: migratedWorkspaces,
     };
   },

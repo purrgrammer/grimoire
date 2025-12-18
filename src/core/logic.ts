@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { MosaicNode } from "react-mosaic-component";
 import { GrimoireState, WindowInstance, UserRelays } from "@/types/app";
+import { insertWindow } from "@/lib/layout-utils";
 
 /**
  * Finds the lowest available workspace number.
@@ -74,18 +75,8 @@ export const addWindow = (
     commandString: payload.commandString,
   };
 
-  // Simple Binary Split Logic
-  let newLayout: MosaicNode<string>;
-  if (ws.layout === null) {
-    newLayout = newWindowId;
-  } else {
-    newLayout = {
-      direction: "row",
-      first: ws.layout,
-      second: newWindowId,
-      splitPercentage: 50,
-    };
-  }
+  // Insert window using workspace layout configuration
+  const newLayout = insertWindow(ws.layout, newWindowId, ws.layoutConfig);
 
   return {
     ...state,
