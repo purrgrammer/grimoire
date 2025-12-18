@@ -8,7 +8,7 @@
 import { GrimoireState } from "@/types/app";
 import { toast } from "sonner";
 
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 8;
 
 /**
  * Migration function type
@@ -67,52 +67,18 @@ const migrations: Record<number, MigrationFn> = {
       workspaces: migratedWorkspaces,
     };
   },
-  // Migration from v7 to v8 - adds layoutConfig to workspaces
+  // Migration from v7 to v8 - adds global layoutConfig
   7: (state: any) => {
-    const migratedWorkspaces: Record<string, any> = {};
-
-    // Add default layoutConfig to each workspace
-    for (const [id, workspace] of Object.entries(state.workspaces || {})) {
-      const ws = workspace as Record<string, any>;
-      migratedWorkspaces[id] = {
-        ...ws,
-        layoutConfig: {
-          insertionMode: "smart", // New smart default (auto-balance)
-          splitPercentage: 50, // Matches old 50/50 behavior
-          insertionPosition: "second", // Matches old right/bottom behavior
-          autoPreset: undefined, // No preset by default
-        },
-      };
-    }
-
+    // Add global layoutConfig with smart defaults
     return {
       ...state,
       __version: 8,
-      workspaces: migratedWorkspaces,
-    };
-  },
-  // Migration from v8 to v9 - preserve per-workspace layoutConfig
-  8: (state: any) => {
-    // Ensure all workspaces have layoutConfig (add default if missing)
-    const migratedWorkspaces: Record<string, any> = {};
-
-    for (const [id, workspace] of Object.entries(state.workspaces || {})) {
-      const ws = workspace as Record<string, any>;
-      migratedWorkspaces[id] = {
-        ...ws,
-        layoutConfig: ws.layoutConfig || {
-          insertionMode: "smart",
-          splitPercentage: 50,
-          insertionPosition: "second",
-          autoPreset: undefined,
-        },
-      };
-    }
-
-    return {
-      ...state,
-      __version: 9,
-      workspaces: migratedWorkspaces,
+      layoutConfig: {
+        insertionMode: "smart", // Smart auto-balancing
+        splitPercentage: 50, // Equal split
+        insertionPosition: "second", // New windows on right/bottom
+        autoPreset: undefined, // No preset by default
+      },
     };
   },
 };
@@ -133,8 +99,14 @@ export function validateState(state: any): state is GrimoireState {
       !state.windows ||
       !state.workspaces ||
       !state.activeWorkspaceId ||
+      !state.layoutConfig ||
       typeof state.__version !== "number"
     ) {
+      return false;
+    }
+
+    // layoutConfig must be an object
+    if (typeof state.layoutConfig !== "object") {
       return false;
     }
 
@@ -154,14 +126,9 @@ export function validateState(state: any): state is GrimoireState {
     }
 
     // All window IDs in workspaces must exist in windows
-    // Each workspace must have layoutConfig
     for (const workspace of Object.values(state.workspaces)) {
       const ws = workspace as any;
       if (!Array.isArray(ws.windowIds)) {
-        return false;
-      }
-      // Verify workspace has layoutConfig
-      if (!ws.layoutConfig || typeof ws.layoutConfig !== "object") {
         return false;
       }
       for (const windowId of ws.windowIds) {

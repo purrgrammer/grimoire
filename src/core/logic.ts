@@ -53,12 +53,6 @@ export const createWorkspace = (
         label,
         layout: null,
         windowIds: [],
-        layoutConfig: {
-          insertionMode: "smart",
-          splitPercentage: 50,
-          insertionPosition: "second",
-          autoPreset: undefined,
-        },
       },
     },
   };
@@ -87,8 +81,8 @@ export const addWindow = (
     commandString: payload.commandString,
   };
 
-  // Insert window using workspace's layout configuration
-  const newLayout = insertWindow(ws.layout, newWindowId, ws.layoutConfig);
+  // Insert window using global layout configuration
+  const newLayout = insertWindow(ws.layout, newWindowId, state.layoutConfig);
 
   return {
     ...state,
@@ -358,27 +352,18 @@ export const updateWindow = (
 };
 
 /**
- * Updates the active workspace's layout configuration.
- * Controls how new windows are inserted into the active workspace.
+ * Updates the global layout configuration.
+ * Controls how new windows are inserted across all workspaces.
  */
 export const updateLayoutConfig = (
   state: GrimoireState,
   layoutConfig: Partial<LayoutConfig>,
 ): GrimoireState => {
-  const activeId = state.activeWorkspaceId;
-  const activeWorkspace = state.workspaces[activeId];
-
   return {
     ...state,
-    workspaces: {
-      ...state.workspaces,
-      [activeId]: {
-        ...activeWorkspace,
-        layoutConfig: {
-          ...activeWorkspace.layoutConfig,
-          ...layoutConfig,
-        },
-      },
+    layoutConfig: {
+      ...state.layoutConfig,
+      ...layoutConfig,
     },
   };
 };

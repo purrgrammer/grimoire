@@ -123,7 +123,15 @@ export function parseTagStructure(tag: TagDefinition): {
       parts.push(`${current.either.join(" | ")}`);
     } else {
       // Replace 'free' with 'text' for better readability
-      const type = current.type === "free" ? "text" : current.type;
+      let type = current.type === "free" ? "text" : current.type;
+
+      // Add examples for specific types
+      if (type === "url") {
+        type = "url (e.g. https://grimoire.rocks)";
+      } else if (type === "relay") {
+        type = "relay (e.g. wss://grimoire.rocks)";
+      }
+
       parts.push(type);
     }
     current = current.next;

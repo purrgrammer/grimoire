@@ -134,16 +134,16 @@ describe("addWindow", () => {
     layoutConfig: LayoutConfig,
     existingLayout: MosaicNode<string> | null = null,
   ): GrimoireState => ({
-    __version: 9,
+    __version: 8,
     windows: {},
     activeWorkspaceId: "test-workspace",
+    layoutConfig, // Global layout config
     workspaces: {
       "test-workspace": {
         id: "test-workspace",
         number: 1,
         windowIds: [],
         layout: existingLayout,
-        layoutConfig, // Per-workspace layout config
       },
     },
   });

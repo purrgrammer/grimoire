@@ -24,7 +24,7 @@ import { useState } from "react";
 
 export function LayoutControls() {
   const { state, applyPresetLayout, updateLayoutConfig } = useGrimoire();
-  const { workspaces, activeWorkspaceId } = state;
+  const { workspaces, activeWorkspaceId, layoutConfig } = state;
 
   // Local state for immediate slider feedback (debounced persistence)
   const [localSplitPercentage, setLocalSplitPercentage] = useState<
@@ -32,7 +32,6 @@ export function LayoutControls() {
   >(null);
 
   const activeWorkspace = workspaces[activeWorkspaceId];
-  const layoutConfig = activeWorkspace?.layoutConfig;
   const windowCount = activeWorkspace?.windowIds.length || 0;
   const presets = getAllPresets();
 

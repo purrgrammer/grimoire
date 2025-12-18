@@ -20,8 +20,7 @@ export function WorkspaceSettings({
   children,
 }: WorkspaceSettingsProps) {
   const { state, updateLayoutConfig } = useGrimoire();
-  const activeWorkspace = state.workspaces[state.activeWorkspaceId];
-  const config = activeWorkspace?.layoutConfig;
+  const config = state.layoutConfig;
 
   // Early return if no config available
   if (!config) {
