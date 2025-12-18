@@ -1,5 +1,6 @@
 import { RichText } from "../RichText";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
+import { kinds } from "nostr-tools";
 import { getNip10References } from "applesauce-core/helpers/threading";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
@@ -31,7 +32,7 @@ function ParentEventCard({
   onClickHandler: () => void;
 }) {
   // Don't show kind badge for kind 1 (most common, adds clutter)
-  const showKindBadge = parentEvent.kind !== 1;
+  const showKindBadge = parentEvent.kind !== kinds.ShortTextNote;
 
   return (
     <div
@@ -51,9 +52,12 @@ function ParentEventCard({
         pubkey={parentEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
       />
-      <div className="text-muted-foreground truncate min-w-0 flex-1">
-        {getEventDisplayTitle(parentEvent, false) || (
+      <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
+        {showKindBadge ? (
+          getEventDisplayTitle(parentEvent, false)
+        ) : (
           <RichText
+            className="truncate line-clamp-1"
             event={parentEvent}
             options={{ showMedia: false, showEventEmbeds: false }}
           />
