@@ -6,7 +6,12 @@ import { LayoutControls } from "./LayoutControls";
 import { useEffect } from "react";
 
 export function TabBar() {
-  const { state, setActiveWorkspace, createWorkspace } = useGrimoire();
+  const {
+    state,
+    setActiveWorkspace,
+    createWorkspace,
+    createWorkspaceWithNumber,
+  } = useGrimoire();
   const { workspaces, activeWorkspaceId } = state;
 
   const handleNewTab = () => {
@@ -18,24 +23,39 @@ export function TabBar() {
     (a, b) => a.number - b.number,
   );
 
-  // Keyboard shortcut: Cmd+1-9 to switch workspaces by position
+  // Keyboard shortcut: Cmd+1-9 to switch (or create) workspaces by number
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for Cmd/Ctrl + number key (1-9)
       if ((e.metaKey || e.ctrlKey) && e.key >= "1" && e.key <= "9") {
-        const index = Number.parseInt(e.key, 10) - 1; // Convert key to array index
-        const targetWorkspace = sortedWorkspaces[index];
+        e.preventDefault(); // Prevent browser default (like Cmd+1 = first tab)
+
+        const desiredNumber = Number.parseInt(e.key, 10);
+
+        // Safety check: ensure valid workspace number (1-9)
+        if (desiredNumber < 1 || desiredNumber > 9) {
+          return;
+        }
+
+        // Find workspace with this number
+        const targetWorkspace = sortedWorkspaces.find(
+          (ws) => ws.number === desiredNumber,
+        );
 
         if (targetWorkspace) {
-          e.preventDefault(); // Prevent browser default (like Cmd+1 = first tab)
+          // Workspace exists - switch to it
           setActiveWorkspace(targetWorkspace.id);
+        } else {
+          // Workspace doesn't exist - create it and switch to it
+          createWorkspaceWithNumber(desiredNumber);
+          // Note: We don't need to explicitly switch - createWorkspace sets it as active
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [sortedWorkspaces, setActiveWorkspace]);
+  }, [sortedWorkspaces, setActiveWorkspace, createWorkspaceWithNumber]);
 
   return (
     <>

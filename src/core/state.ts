@@ -142,6 +142,32 @@ export const useGrimoire = () => {
     });
   }, [setState]);
 
+  const createWorkspaceWithNumber = useCallback(
+    (number: number) => {
+      setState((prev) => {
+        // Check if we're leaving an empty workspace and should auto-remove it
+        const currentWorkspace = prev.workspaces[prev.activeWorkspaceId];
+        const shouldDeleteCurrent =
+          currentWorkspace &&
+          currentWorkspace.windowIds.length === 0 &&
+          Object.keys(prev.workspaces).length > 1;
+
+        if (shouldDeleteCurrent) {
+          // Delete the empty workspace, then create new one
+          const afterDelete = Logic.deleteWorkspace(
+            prev,
+            prev.activeWorkspaceId,
+          );
+          return Logic.createWorkspace(afterDelete, number);
+        }
+
+        // Normal workspace creation
+        return Logic.createWorkspace(prev, number);
+      });
+    },
+    [setState],
+  );
+
   const addWindow = useCallback(
     (appId: AppId, props: any, commandString?: string, customTitle?: string) =>
       setState((prev) =>
@@ -250,6 +276,7 @@ export const useGrimoire = () => {
     locale: state.locale || browserLocale,
     activeWorkspace: state.workspaces[state.activeWorkspaceId],
     createWorkspace,
+    createWorkspaceWithNumber,
     addWindow,
     updateWindow,
     removeWindow,
