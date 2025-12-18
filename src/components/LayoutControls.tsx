@@ -33,9 +33,16 @@ export function LayoutControls() {
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
 
-    if (windowCount < preset.slots) {
+    if (windowCount < preset.minSlots) {
       toast.error(`Not enough windows`, {
-        description: `Preset "${preset.name}" requires ${preset.slots} windows, but only ${windowCount} available.`,
+        description: `Preset "${preset.name}" requires at least ${preset.minSlots} windows, but only ${windowCount} available.`,
+      });
+      return;
+    }
+
+    if (preset.maxSlots && windowCount > preset.maxSlots) {
+      toast.error(`Too many windows`, {
+        description: `Preset "${preset.name}" supports maximum ${preset.maxSlots} windows, but ${windowCount} available.`,
       });
       return;
     }
@@ -108,7 +115,21 @@ export function LayoutControls() {
           Presets
         </div>
         {presets.map((preset) => {
-          const canApply = windowCount >= preset.slots;
+          const hasMin = windowCount >= preset.minSlots;
+          const hasMax = !preset.maxSlots || windowCount <= preset.maxSlots;
+          const canApply = hasMin && hasMax;
+
+          let statusText = "";
+          if (!hasMin) {
+            statusText = `Needs ${preset.minSlots}+ (have ${windowCount})`;
+          } else if (!hasMax) {
+            statusText = `Max ${preset.maxSlots} (have ${windowCount})`;
+          } else if (preset.maxSlots) {
+            statusText = `${preset.minSlots}-${preset.maxSlots} windows`;
+          } else {
+            statusText = `${preset.minSlots}+ windows`;
+          }
+
           return (
             <DropdownMenuItem
               key={preset.id}
@@ -120,9 +141,7 @@ export function LayoutControls() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm">{preset.name}</div>
                 <div className="text-xs text-muted-foreground truncate">
-                  {canApply
-                    ? `${preset.slots}+ windows`
-                    : `Needs ${preset.slots} (have ${windowCount})`}
+                  {statusText}
                 </div>
               </div>
             </DropdownMenuItem>

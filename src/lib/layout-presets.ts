@@ -1,7 +1,7 @@
 import type { MosaicNode } from "react-mosaic-component";
 
 /**
- * A layout preset template with null values that get filled with window IDs
+ * A layout preset that can be applied to arrange windows
  */
 export interface LayoutPreset {
   /** Unique identifier for the preset */
@@ -10,10 +10,101 @@ export interface LayoutPreset {
   name: string;
   /** Description of the layout arrangement */
   description: string;
-  /** Template structure with null values to be replaced by window IDs */
-  template: MosaicNode<null>;
-  /** Number of windows required for this preset */
-  slots: number;
+  /** Minimum number of windows required */
+  minSlots: number;
+  /** Maximum number of windows (undefined = no limit) */
+  maxSlots?: number;
+  /** Function to generate layout for given window IDs */
+  generate: (windowIds: string[]) => MosaicNode<string>;
+}
+
+/**
+ * Builds a horizontal row of windows with equal splits
+ */
+function buildHorizontalRow(windowIds: string[]): MosaicNode<string> {
+  if (windowIds.length === 0) {
+    throw new Error("Cannot build row with zero windows");
+  }
+  if (windowIds.length === 1) {
+    return windowIds[0];
+  }
+
+  // Calculate percentage for first window to make equal splits
+  const splitPercent = (100 / windowIds.length);
+
+  return {
+    direction: "row",
+    first: windowIds[0],
+    second: buildHorizontalRow(windowIds.slice(1)),
+    splitPercentage: splitPercent,
+  };
+}
+
+/**
+ * Builds a vertical stack of windows with equal splits
+ */
+function buildVerticalStack(windowIds: string[]): MosaicNode<string> {
+  if (windowIds.length === 0) {
+    throw new Error("Cannot build stack with zero windows");
+  }
+  if (windowIds.length === 1) {
+    return windowIds[0];
+  }
+
+  // Calculate percentage for first window to make equal splits
+  const splitPercent = (100 / windowIds.length);
+
+  return {
+    direction: "column",
+    first: windowIds[0],
+    second: buildVerticalStack(windowIds.slice(1)),
+    splitPercentage: splitPercent,
+  };
+}
+
+/**
+ * Calculates best grid dimensions for N windows
+ * Prefers square-ish grids, slightly favoring more columns than rows
+ */
+function calculateGridDimensions(windowCount: number): { rows: number; cols: number } {
+  const sqrt = Math.sqrt(windowCount);
+  const rows = Math.floor(sqrt);
+  const cols = Math.ceil(windowCount / rows);
+  return { rows, cols };
+}
+
+/**
+ * Chunks an array into groups of specified size
+ */
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Builds a grid layout from window IDs
+ */
+function buildGridLayout(windowIds: string[]): MosaicNode<string> {
+  if (windowIds.length === 0) {
+    throw new Error("Cannot build grid with zero windows");
+  }
+  if (windowIds.length === 1) {
+    return windowIds[0];
+  }
+
+  const { rows, cols } = calculateGridDimensions(windowIds.length);
+
+  // Split windows into rows
+  const rowChunks = chunkArray(windowIds, cols);
+
+  // Build each row as a horizontal split
+  const rowNodes = rowChunks.map(chunk => buildHorizontalRow(chunk));
+
+  // Stack rows vertically
+  return buildVerticalStack(rowNodes);
 }
 
 /**
@@ -23,91 +114,48 @@ export const BUILT_IN_PRESETS: Record<string, LayoutPreset> = {
   "side-by-side": {
     id: "side-by-side",
     name: "Side by Side",
-    description: "Two windows side-by-side (50/50 horizontal split)",
-    template: {
-      direction: "row",
-      first: null,
-      second: null,
-      splitPercentage: 50,
+    description: "All windows in a single row (max 4)",
+    minSlots: 2,
+    maxSlots: 4,
+    generate: (windowIds: string[]) => {
+      if (windowIds.length > 4) {
+        throw new Error("Side-by-side layout supports maximum 4 windows");
+      }
+      return buildHorizontalRow(windowIds);
     },
-    slots: 2,
   },
 
   "main-sidebar": {
     id: "main-sidebar",
     name: "Main + Sidebar",
-    description: "Large main window with sidebar (70/30 horizontal split)",
-    template: {
-      direction: "row",
-      first: null,
-      second: null,
-      splitPercentage: 70,
+    description: "Large main window with sidebar windows stacked",
+    minSlots: 2,
+    generate: (windowIds: string[]) => {
+      const [main, ...sidebars] = windowIds;
+
+      if (sidebars.length === 0) {
+        return main;
+      }
+
+      return {
+        direction: "row",
+        first: main,
+        second: buildVerticalStack(sidebars),
+        splitPercentage: 70,
+      };
     },
-    slots: 2,
   },
 
   grid: {
     id: "grid",
     name: "Grid",
-    description: "Four windows in 2×2 grid layout",
-    template: {
-      direction: "row",
-      first: {
-        direction: "column",
-        first: null,
-        second: null,
-        splitPercentage: 50,
-      },
-      second: {
-        direction: "column",
-        first: null,
-        second: null,
-        splitPercentage: 50,
-      },
-      splitPercentage: 50,
+    description: "All windows in an adaptive grid layout",
+    minSlots: 2,
+    generate: (windowIds: string[]) => {
+      return buildGridLayout(windowIds);
     },
-    slots: 4,
   },
 };
-
-/**
- * Fills a layout template with actual window IDs
- * Uses depth-first traversal to assign window IDs to null slots
- */
-export function fillLayoutTemplate(
-  template: MosaicNode<null>,
-  windowIds: string[]
-): MosaicNode<string> {
-  let windowIndex = 0;
-
-  const fill = (node: MosaicNode<null>): MosaicNode<string> => {
-    // Leaf node - replace null with next window ID
-    if (node === null) {
-      if (windowIndex >= windowIds.length) {
-        throw new Error("Not enough window IDs to fill template");
-      }
-      return windowIds[windowIndex++];
-    }
-
-    // Branch node - recursively fill children
-    return {
-      ...node,
-      first: fill(node.first),
-      second: fill(node.second),
-    };
-  };
-
-  const result = fill(template);
-
-  // Verify all windows were used
-  if (windowIndex !== windowIds.length) {
-    throw new Error(
-      `Template requires ${windowIndex} windows but ${windowIds.length} were provided`
-    );
-  }
-
-  return result;
-}
 
 /**
  * Collects window IDs from a layout tree in depth-first order
@@ -128,8 +176,7 @@ export function collectWindowIds(
 
 /**
  * Applies a preset layout to existing windows
- * Takes the first N windows from the current layout and arranges them according to the preset
- * Preserves any remaining windows by adding them to the right side of the preset
+ * Uses ALL windows in the adaptive layout
  */
 export function applyPresetToLayout(
   currentLayout: MosaicNode<string> | null,
@@ -138,43 +185,22 @@ export function applyPresetToLayout(
   // Collect all window IDs from current layout
   const windowIds = collectWindowIds(currentLayout);
 
-  // Check if we have enough windows
-  if (windowIds.length < preset.slots) {
+  // Check minimum requirement
+  if (windowIds.length < preset.minSlots) {
     throw new Error(
-      `Preset "${preset.name}" requires ${preset.slots} windows but only ${windowIds.length} available`
+      `Preset "${preset.name}" requires at least ${preset.minSlots} windows but only ${windowIds.length} available`
     );
   }
 
-  // Split windows: first N for preset, rest to preserve
-  const presetWindows = windowIds.slice(0, preset.slots);
-  const remainingWindows = windowIds.slice(preset.slots);
-
-  // Fill template with preset windows
-  let result = fillLayoutTemplate(preset.template, presetWindows);
-
-  // If there are remaining windows, add them to the right side
-  if (remainingWindows.length > 0) {
-    // Create a vertical stack for remaining windows
-    let remainingStack: MosaicNode<string> = remainingWindows[0];
-    for (let i = 1; i < remainingWindows.length; i++) {
-      remainingStack = {
-        direction: "column",
-        first: remainingStack,
-        second: remainingWindows[i],
-        splitPercentage: 50,
-      };
-    }
-
-    // Put preset on left, remaining on right (70/30 split)
-    result = {
-      direction: "row",
-      first: result,
-      second: remainingStack,
-      splitPercentage: 70, // Give more space to the preset layout
-    };
+  // Check maximum limit if defined
+  if (preset.maxSlots && windowIds.length > preset.maxSlots) {
+    throw new Error(
+      `Preset "${preset.name}" supports maximum ${preset.maxSlots} windows but ${windowIds.length} available`
+    );
   }
 
-  return result;
+  // Generate layout using all windows
+  return preset.generate(windowIds);
 }
 
 /**
