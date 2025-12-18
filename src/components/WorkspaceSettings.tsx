@@ -1,223 +1,97 @@
-import { useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import { Label } from "./ui/Label";
-import { Button } from "./ui/button";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "./ui/popover";
+import { useGrimoire } from "@/core/state";
+import type { LayoutConfig } from "@/types/app";
+import { cn } from "@/lib/utils";
 import {
   Sparkles,
   SplitSquareHorizontal,
   SplitSquareVertical,
 } from "lucide-react";
-import { useGrimoire } from "@/core/state";
-import type { LayoutConfig } from "@/types/app";
-import { cn } from "@/lib/utils";
 
 interface WorkspaceSettingsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
 }
 
 export function WorkspaceSettings({
   open,
   onOpenChange,
+  children,
 }: WorkspaceSettingsProps) {
   const { state, updateLayoutConfig } = useGrimoire();
+  const config = state.layoutConfig;
 
-  // Local state for settings
-  const [insertionMode, setInsertionMode] = useState<LayoutConfig["insertionMode"]>(
-    state.layoutConfig?.insertionMode || "smart"
-  );
-  const [splitPercentage, setSplitPercentage] = useState(
-    state.layoutConfig?.splitPercentage || 50
-  );
-  const [insertionPosition, setInsertionPosition] = useState<LayoutConfig["insertionPosition"]>(
-    state.layoutConfig?.insertionPosition || "second"
-  );
-
-  const handleSave = () => {
-    updateLayoutConfig({
-      insertionMode,
-      splitPercentage,
-      insertionPosition,
-    });
-    onOpenChange(false);
+  const setInsertionMode = (mode: LayoutConfig["insertionMode"]) => {
+    updateLayoutConfig({ insertionMode: mode });
   };
 
-  const handleReset = () => {
-    setInsertionMode("smart");
-    setSplitPercentage(50);
-    setInsertionPosition("second");
+  const setSplitPercentage = (value: number) => {
+    updateLayoutConfig({ splitPercentage: value });
   };
+
+  const modes: Array<{
+    id: LayoutConfig["insertionMode"];
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    { id: "smart", label: "Balanced", icon: Sparkles },
+    { id: "row", label: "Horizontal", icon: SplitSquareHorizontal },
+    { id: "column", label: "Vertical", icon: SplitSquareVertical },
+  ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Layout Settings</DialogTitle>
-          <DialogDescription>
-            Configure how new windows are inserted into all workspaces.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          {/* Insertion Mode */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Insertion Mode</Label>
-            <div className="grid gap-2">
-              <button
-                onClick={() => setInsertionMode("smart")}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-md border-2 transition-all",
-                  insertionMode === "smart"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <Sparkles className="h-5 w-5 text-primary" />
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-sm">Balanced (auto)</div>
-                  <div className="text-xs text-muted-foreground">
-                    Automatically balances horizontal and vertical splits
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setInsertionMode("row")}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-md border-2 transition-all",
-                  insertionMode === "row"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <SplitSquareHorizontal className="h-5 w-5 text-primary" />
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-sm">Horizontal (side-by-side)</div>
-                  <div className="text-xs text-muted-foreground">
-                    New windows always split horizontally
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setInsertionMode("column")}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-md border-2 transition-all",
-                  insertionMode === "column"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <SplitSquareVertical className="h-5 w-5 text-primary" />
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-sm">Vertical (stacked)</div>
-                  <div className="text-xs text-muted-foreground">
-                    New windows always split vertically
-                  </div>
-                </div>
-              </button>
-            </div>
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-3 space-y-3">
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">
+            Insert Mode
           </div>
-
-          {/* Split Percentage */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Split Percentage</Label>
-              <span className="text-sm text-muted-foreground">
-                {splitPercentage}% / {100 - splitPercentage}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min="10"
-              max="90"
-              value={splitPercentage}
-              onChange={(e) => setSplitPercentage(Number(e.target.value))}
-              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Existing content gets {splitPercentage}%</span>
-              <span>New window gets {100 - splitPercentage}%</span>
-            </div>
-          </div>
-
-          {/* Insertion Position */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Insertion Position</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setInsertionPosition("first")}
-                className={cn(
-                  "p-3 rounded-md border-2 transition-all text-sm",
-                  insertionPosition === "first"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <div className="font-medium">Left / Top</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  New window first
-                </div>
-              </button>
-
-              <button
-                onClick={() => setInsertionPosition("second")}
-                className={cn(
-                  "p-3 rounded-md border-2 transition-all text-sm",
-                  insertionPosition === "second"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <div className="font-medium">Right / Bottom</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  New window second
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Preview */}
-          <div className="rounded-md border border-border bg-muted/30 p-4">
-            <div className="text-xs text-muted-foreground mb-2">Preview:</div>
-            <div className="text-sm">
-              <span className="font-medium">
-                {insertionMode === "smart" && "Smart mode"}
-                {insertionMode === "row" && "Horizontal splits"}
-                {insertionMode === "column" && "Vertical splits"}
-              </span>
-              {" · "}
-              <span>
-                {splitPercentage}%/{100 - splitPercentage}% split
-              </span>
-              {" · "}
-              <span>
-                New window on{" "}
-                {insertionPosition === "first" ? "left/top" : "right/bottom"}
-              </span>
-            </div>
+          <div className="space-y-1">
+            {modes.map((mode) => {
+              const Icon = mode.icon;
+              const isActive = config.insertionMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setInsertionMode(mode.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors",
+                    isActive
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-muted"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{mode.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={handleReset}>
-            Reset to Defaults
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-muted-foreground">Split</span>
+            <span className="text-foreground">
+              {config.splitPercentage}/{100 - config.splitPercentage}
+            </span>
           </div>
+          <input
+            type="range"
+            min="20"
+            max="80"
+            value={config.splitPercentage}
+            onChange={(e) => setSplitPercentage(Number(e.target.value))}
+            className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-accent"
+          />
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

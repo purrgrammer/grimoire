@@ -123,6 +123,11 @@
   background: hsl(var(--background));
 }
 
+/* Smooth animations for window resizing and repositioning */
+.mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme .mosaic-tile {
+  transition: width 0.2s ease-out, height 0.2s ease-out, top 0.2s ease-out, left 0.2s ease-out;
+}
+
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
   .mosaic-window
   .mosaic-window-toolbar {

@@ -26,10 +26,6 @@ export function TabBar() {
     createWorkspace();
   };
 
-  const handleSettingsClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent workspace switch
-    setSettingsOpen(true);
-  };
 
   const handleApplyPreset = (presetId: string) => {
     const preset = presets.find((p) => p.id === presetId);
@@ -44,9 +40,6 @@ export function TabBar() {
 
     try {
       applyPresetLayout(preset);
-      toast.success(`Layout applied`, {
-        description: `Applied "${preset.name}" preset to workspace ${activeWorkspace.number}`,
-      });
     } catch (error) {
       toast.error(`Failed to apply layout`, {
         description:
@@ -152,22 +145,21 @@ export function TabBar() {
           </DropdownMenu>
 
           {/* Window/Layout Settings */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={handleSettingsClick}
-            aria-label="Layout settings"
+          <WorkspaceSettings
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
           >
-            <SlidersHorizontal className="h-3 w-3" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              aria-label="Layout settings"
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+            </Button>
+          </WorkspaceSettings>
         </div>
       </div>
-
-      <WorkspaceSettings
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-      />
     </>
   );
 }
