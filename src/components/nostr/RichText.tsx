@@ -91,15 +91,15 @@ export function RichText({
   // Call hook unconditionally - it will handle undefined/null
   const trimmedEvent = event
     ? {
-      ...event,
-      content: event.content.trim(),
-    }
+        ...event,
+        content: event.content.trim(),
+      }
     : undefined;
   const renderedContent = useRenderedContent(
     content
       ? ({
-        content,
-      } as NostrEvent)
+          content,
+        } as NostrEvent)
       : trimmedEvent,
     contentComponents,
   );

@@ -1,7 +1,46 @@
 import { manPages } from "@/types/man";
+import { useGrimoire } from "@/core/state";
 
 interface ManPageProps {
   cmd: string;
+}
+
+/**
+ * ExecutableCommand - Renders a clickable command that executes when clicked
+ */
+function ExecutableCommand({
+  commandLine,
+  children,
+}: {
+  commandLine: string;
+  children: React.ReactNode;
+}) {
+  const { addWindow } = useGrimoire();
+
+  const handleClick = async () => {
+    const parts = commandLine.trim().split(/\s+/);
+    const commandName = parts[0]?.toLowerCase();
+    const cmdArgs = parts.slice(1);
+
+    const command = manPages[commandName];
+    if (command) {
+      // argParser can be async
+      const cmdProps = command.argParser
+        ? await Promise.resolve(command.argParser(cmdArgs))
+        : command.defaultProps || {};
+
+      addWindow(command.appId, cmdProps);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="text-accent font-medium hover:underline cursor-crosshair text-left"
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function ManPage({ cmd }: ManPageProps) {
@@ -23,11 +62,11 @@ export default function ManPage({ cmd }: ManPageProps) {
       {/* Header */}
       <div className="flex justify-between border-b border-border pb-2">
         <span className="font-bold">
-          {page.name.toUpperCase()}({page.section})
+          {page.name.toUpperCase()}
         </span>
         <span className="text-muted-foreground">Grimoire Manual</span>
         <span className="font-bold">
-          {page.name.toUpperCase()}({page.section})
+          {page.name.toUpperCase()}
         </span>
       </div>
 
@@ -81,7 +120,9 @@ export default function ManPage({ cmd }: ManPageProps) {
                 const [, command, description] = match;
                 return (
                   <div key={i}>
-                    <div className="text-accent font-medium">{command}</div>
+                    <ExecutableCommand commandLine={command.trim()}>
+                      {command}
+                    </ExecutableCommand>
                     <div className="ml-8 text-muted-foreground text-sm">
                       {description.trim()}
                     </div>
@@ -90,8 +131,10 @@ export default function ManPage({ cmd }: ManPageProps) {
               }
               // Fallback for examples without descriptions
               return (
-                <div key={i} className="text-accent font-medium">
-                  {example}
+                <div key={i}>
+                  <ExecutableCommand commandLine={example.trim()}>
+                    {example}
+                  </ExecutableCommand>
                 </div>
               );
             })}
@@ -104,14 +147,16 @@ export default function ManPage({ cmd }: ManPageProps) {
         <section>
           <h2 className="font-bold mb-2">SEE ALSO</h2>
           <div className="ml-8">
-            <span className="text-accent">
-              {page.seeAlso.map((cmd, i) => (
-                <span key={i}>
-                  {cmd}(1)
-                  {i < page.seeAlso!.length - 1 ? ", " : ""}
-                </span>
-              ))}
-            </span>
+            {page.seeAlso.map((cmd, i) => (
+              <span key={i}>
+                <ExecutableCommand commandLine={`man ${cmd}`}>
+                  <span className="text-accent">{cmd}</span>
+                </ExecutableCommand>
+                {i < page.seeAlso!.length - 1 && (
+                  <span className="text-accent">, </span>
+                )}
+              </span>
+            ))}
           </div>
         </section>
       )}

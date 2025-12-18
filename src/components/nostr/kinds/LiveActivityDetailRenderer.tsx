@@ -6,11 +6,12 @@ import {
   getLiveHost,
 } from "@/lib/live-activity";
 import { VideoPlayer } from "@/components/live/VideoPlayer";
-import { StreamChat } from "@/components/live/StreamChat";
+import { ChatView } from "@/components/nostr/ChatView";
 import { StatusBadge } from "@/components/live/StatusBadge";
 import { UserName } from "../UserName";
 import { Calendar } from "lucide-react";
 import { useOutboxRelays } from "@/hooks/useOutboxRelays";
+import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 
 interface LiveActivityDetailRendererProps {
   event: NostrEvent;
@@ -27,6 +28,31 @@ export function LiveActivityDetailRenderer({
   const { relays: hostRelays } = useOutboxRelays({
     authors: [hostPubkey],
   });
+
+  // Combine stream relays + host relays for chat events
+  const allRelays = useMemo(
+    () => Array.from(new Set([...activity.relays, ...hostRelays])),
+    [activity.relays, hostRelays],
+  );
+
+  // Fetch chat messages (kind 1311) and zaps (kind 9735) that a-tag this stream
+  const timelineFilter = useMemo(
+    () => ({
+      kinds: [1311, 9735],
+      "#a": [
+        `${event.kind}:${event.pubkey}:${event.tags.find((t) => t[0] === "d")?.[1] || ""}`,
+      ],
+      limit: 100,
+    }),
+    [event],
+  );
+
+  const { events: chatEvents } = useLiveTimeline(
+    `stream-feed-${event.id}`,
+    timelineFilter,
+    allRelays,
+    { stream: true },
+  );
 
   const videoUrl =
     status === "live" && activity.streaming
@@ -80,17 +106,15 @@ export function LiveActivityDetailRenderer({
         <h1 className="text-lg font-bold flex-1 line-clamp-1">
           {activity.title || "Untitled Live Activity"}
         </h1>
-        <UserName pubkey={hostPubkey} className="text-sm font-semibold line-clamp-1" />
+        <UserName
+          pubkey={hostPubkey}
+          className="text-sm font-semibold line-clamp-1"
+        />
       </div>
 
       {/* Chat Section */}
       <div className="flex-1 min-h-0">
-        <StreamChat
-          streamEvent={event}
-          streamRelays={activity.relays}
-          hostRelays={hostRelays}
-          className="h-full"
-        />
+        <ChatView events={chatEvents} className="h-full" />
       </div>
     </div>
   );

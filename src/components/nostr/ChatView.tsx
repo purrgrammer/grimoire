@@ -1,21 +1,19 @@
 import { useMemo } from "react";
-import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 import type { NostrEvent } from "@/types/nostr";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { kinds } from "nostr-tools";
-import { UserName } from "../nostr/UserName";
-import { RichText } from "../nostr/RichText";
-import { Zap } from "lucide-react";
+import { UserName } from "./UserName";
+import { RichText } from "./RichText";
+import { Zap, CornerDownRight, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getZapAmount, getZapSender } from "applesauce-core/helpers";
+import { getZapAmount, getZapSender, getTagValue } from "applesauce-core/helpers";
+import { getNip10References } from "applesauce-core/helpers/threading";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
 
-interface StreamChatProps {
-  streamEvent: NostrEvent;
-  streamRelays: string[];
-  hostRelays: string[];
+interface ChatViewProps {
+  events: NostrEvent[];
   className?: string;
 }
-
-// isConsecutive removed
 
 const isSameDay = (date1: Date, date2: Date) => {
   return (
@@ -25,63 +23,14 @@ const isSameDay = (date1: Date, date2: Date) => {
   );
 };
 
-export function StreamChat({
-  streamEvent,
-  streamRelays,
-  hostRelays,
-  className,
-}: StreamChatProps) {
-  // const [message, setMessage] = useState("");
-
-  // Combine stream relays + host relays
-  const allRelays = useMemo(
-    () => Array.from(new Set([...streamRelays, ...hostRelays])),
-    [streamRelays, hostRelays],
-  );
-
-  // Fetch chat messages (kind 1311) and zaps (kind 9735) that a-tag this stream
-  const timelineFilter = useMemo(
-    () => ({
-      kinds: [1311, 9735],
-      "#a": [
-        `${streamEvent.kind}:${streamEvent.pubkey}:${streamEvent.tags.find((t) => t[0] === "d")?.[1] || ""}`,
-      ],
-      limit: 100,
-    }),
-    [streamEvent],
-  );
-
-  const { events: allMessages } = useLiveTimeline(
-    `stream-feed-${streamEvent.id}`,
-    timelineFilter,
-    allRelays,
-    { stream: true },
-  );
-
-  /*
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement sending chat message
-    console.log("Send message:", message);
-    setMessage("");
-  };
-  */
-
+export function ChatView({ events, className }: ChatViewProps) {
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Chat messages area */}
       <div className="flex-1 flex flex-col-reverse gap-0.5 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-        {allMessages.map((event, index) => {
+        {events.map((event, index) => {
           const currentDate = new Date(event.created_at * 1000);
-          const prevEvent = allMessages[index + 1];
-          // If prevEvent exists, compare days. If different, we need a separator AFTER this message (visually before/above it)
-          // Actually, in flex-col-reverse:
-          // [Newest Message] (index 0)
-          // <Day Label Today>
-          // [Old Message] (index 1)
-
-          // Wait, logic is simpler:
-          // Loop through events. Determine if Date Header is needed between this event and the next one (older one).
+          const prevEvent = events[index + 1];
 
           const prevDate = prevEvent
             ? new Date(prevEvent.created_at * 1000)
@@ -138,17 +87,93 @@ export function StreamChat({
 }
 
 function ChatMessage({ event }: { event: NostrEvent }) {
+  const threadRefs = useMemo(() => getNip10References(event), [event]);
+  const replyToId = threadRefs.reply?.e?.id;
+  const qTagValue = useMemo(() => getTagValue(event, "q"), [event]);
+
   return (
-    <RichText
-      className="text-xs leading-tight text-foreground/90"
-      event={event}
-      options={{ showMedia: false, showEventEmbeds: false }}
-    >
+    <div className="flex flex-col gap-0.5">
+      {replyToId && <ReplyIndicator eventId={replyToId} />}
+      {qTagValue && <QuoteIndicator qValue={qTagValue} />}
+      <RichText
+        className="text-xs leading-tight text-foreground/90"
+        event={event}
+        options={{ showMedia: false, showEventEmbeds: false }}
+      >
+        <UserName
+          pubkey={event.pubkey}
+          className="font-bold leading-tight flex-shrink-0 mr-1.5 text-accent"
+        />
+      </RichText>
+    </div>
+  );
+}
+
+function ReplyIndicator({ eventId }: { eventId: string }) {
+  const replyToEvent = useNostrEvent(eventId);
+
+  if (!replyToEvent) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-1 text-[10px] text-muted-foreground pl-2 opacity-60">
+      <CornerDownRight className="w-3 h-3 flex-shrink-0" />
       <UserName
-        pubkey={event.pubkey}
-        className="font-bold leading-tight flex-shrink-0 mr-1.5 text-accent"
+        pubkey={replyToEvent.pubkey}
+        className="font-semibold flex-shrink-0"
       />
-    </RichText>
+      <span className="truncate">{replyToEvent.content}</span>
+    </div>
+  );
+}
+
+/**
+ * Parse q-tag value into EventPointer or AddressPointer
+ * Format can be:
+ * - Event ID: "abc123..." (64-char hex)
+ * - Address: "kind:pubkey:d-tag"
+ */
+function parseQTag(qValue: string): EventPointer | AddressPointer | null {
+  // Check if it's an address (contains colons)
+  if (qValue.includes(":")) {
+    const parts = qValue.split(":");
+    if (parts.length >= 2) {
+      const kind = parseInt(parts[0], 10);
+      const pubkey = parts[1];
+      const identifier = parts.slice(2).join(":") || "";
+
+      if (!isNaN(kind) && pubkey) {
+        return { kind, pubkey, identifier };
+      }
+    }
+  }
+
+  // Assume it's an event ID (hex string)
+  if (/^[0-9a-f]{64}$/i.test(qValue)) {
+    return { id: qValue };
+  }
+
+  return null;
+}
+
+function QuoteIndicator({ qValue }: { qValue: string }) {
+  const pointer = useMemo(() => parseQTag(qValue), [qValue]);
+  const quotedEvent = useNostrEvent(pointer || undefined);
+
+  if (!quotedEvent) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-1 text-[10px] text-muted-foreground pl-2 opacity-60">
+      <Quote className="w-3 h-3 flex-shrink-0" />
+      <UserName
+        pubkey={quotedEvent.pubkey}
+        className="font-semibold flex-shrink-0"
+      />
+      <span className="truncate">{quotedEvent.content}</span>
+    </div>
   );
 }
 

@@ -23,11 +23,39 @@ import {
 import { getEventDisplayTitle } from "@/lib/event-title";
 import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
+import { getLiveHost } from "@/lib/live-activity";
+import type { NostrEvent } from "@/types/nostr";
+import { getZapSender } from "applesauce-core/helpers/zap";
 
 export interface WindowTitleData {
   title: string | ReactElement;
   icon?: LucideIcon;
   tooltip?: string;
+}
+
+/**
+ * Get the semantic author of an event based on kind-specific logic
+ * Returns the pubkey that should be displayed as the "author" for UI purposes
+ *
+ * Examples:
+ * - Zaps (9735): Returns the zapper (P tag), not the lightning service pubkey
+ * - Live activities (30311): Returns the host (first p tag with "Host" role)
+ * - Regular events: Returns event.pubkey
+ */
+function getSemanticAuthor(event: NostrEvent): string {
+  switch (event.kind) {
+    case 9735: {
+      // Zap: show the zapper, not the lightning service pubkey
+      const zapSender = getZapSender(event);
+      return zapSender || event.pubkey;
+    }
+    case 30311: {
+      // Live activity: show the host
+      return getLiveHost(event);
+    }
+    default:
+      return event.pubkey;
+  }
 }
 
 /**
@@ -266,6 +294,17 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const eventPointer: EventPointer | AddressPointer | undefined =
     appId === "open" ? props.pointer : undefined;
   const event = useNostrEvent(eventPointer);
+
+  // Get semantic author for events (e.g., zapper for zaps, host for live activities)
+  const semanticAuthorPubkey = useMemo(() => {
+    if (appId !== "open" || !event) return null;
+    return getSemanticAuthor(event);
+  }, [appId, event]);
+
+  // Fetch semantic author profile to ensure it's cached for rendering
+  // Called for side effects (preloading profile data)
+  void useProfile(semanticAuthorPubkey || "");
+
   const eventTitle = useMemo(() => {
     if (appId !== "open" || !event) return null;
 
@@ -277,10 +316,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
         </div>
         {getEventDisplayTitle(event, false)}
         <span> - </span>
-        <UserName pubkey={event.pubkey} className="text-inherit" />
+        <UserName
+          pubkey={semanticAuthorPubkey || event.pubkey}
+          className="text-inherit"
+        />
       </div>
     );
-  }, [appId, event]);
+  }, [appId, event, semanticAuthorPubkey]);
 
   // Kind titles
   const kindTitle = useMemo(() => {
@@ -471,12 +513,12 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     return `NIP-${props.number}: ${title}`;
   }, [appId, props]);
 
-  // Man page titles - just show the command description, icon shows on hover
+  // Man page titles - show command name first, then description
   const manTitle = useMemo(() => {
     if (appId !== "man") return null;
-    // For man pages, we'll show the command's description via tooltip
-    // The title can just be generic or empty, as the icon conveys meaning
-    return getCommandDescription(props.cmd) || `${props.cmd} manual`;
+    const cmdName = props.cmd?.toUpperCase() || "MAN";
+    const description = getCommandDescription(props.cmd);
+    return description ? `${cmdName} - ${description}` : cmdName;
   }, [appId, props]);
 
   // Kinds viewer title

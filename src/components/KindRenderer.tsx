@@ -4,6 +4,11 @@ import { NIPBadge } from "./NIPBadge";
 import { Copy, CopyCheck } from "lucide-react";
 import { Button } from "./ui/button";
 import { useCopy } from "@/hooks/useCopy";
+import {
+  getKindSchema,
+  parseTagStructure,
+  getContentTypeDescription,
+} from "@/lib/nostr-schema";
 
 // NIP-01 Kind ranges
 const REPLACEABLE_START = 10000;
@@ -15,6 +20,7 @@ const PARAMETERIZED_REPLACEABLE_END = 40000;
 
 export default function KindRenderer({ kind }: { kind: number }) {
   const kindInfo = getKindInfo(kind);
+  const schema = getKindSchema(kind);
   const Icon = kindInfo?.icon;
   const category = getKindCategory(kind);
   const eventType = getEventType(kind);
@@ -94,6 +100,84 @@ export default function KindRenderer({ kind }: { kind: number }) {
           </>
         )}
       </div>
+
+      {/* Schema Information */}
+      {schema && (
+        <>
+          {/* Content Type */}
+          {schema.content && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Content</h2>
+              <p className="text-sm text-muted-foreground">
+                {getContentTypeDescription(schema.content.type)}
+              </p>
+            </div>
+          )}
+
+          {/* Tags */}
+          {schema.tags && schema.tags.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3">
+                Supported Tags
+                {schema.required && schema.required.length > 0 && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({schema.required.length} required)
+                  </span>
+                )}
+              </h2>
+              <div className="border border-border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-3 font-semibold w-20">name</th>
+                      <th className="text-left p-3 font-semibold">value</th>
+                      <th className="text-left p-3 font-semibold">other parameters</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schema.tags.map((tag, i) => {
+                      const isRequired = schema.required?.includes(tag.name);
+                      const structure = parseTagStructure(tag);
+                      return (
+                        <tr
+                          key={i}
+                          className="border-t border-border hover:bg-muted/30"
+                        >
+                          <td className="p-3 align-top">
+                            <code className="font-mono text-primary">
+                              {tag.name}
+                            </code>
+                            {isRequired && (
+                              <span className="ml-2 text-[10px] bg-destructive/20 text-destructive px-1.5 py-0.5 rounded whitespace-nowrap align-middle">
+                                required
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-muted-foreground align-top">
+                            {structure.primaryValue || "—"}
+                          </td>
+                          <td className="p-3 text-muted-foreground align-top">
+                            {structure.otherParameters.length > 0
+                              ? structure.otherParameters.join(", ")
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Usage Status */}
+          <div className="text-xs text-muted-foreground pt-2">
+            {schema.in_use
+              ? "✓ Actively used in the Nostr ecosystem"
+              : "⚠ Deprecated or experimental"}
+          </div>
+        </>
+      )}
     </div>
   );
 }
