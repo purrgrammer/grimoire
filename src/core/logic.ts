@@ -2,11 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { MosaicNode } from "react-mosaic-component";
 import { GrimoireState, WindowInstance, UserRelays } from "@/types/app";
 import { insertWindow } from "@/lib/layout-utils";
-import {
-  applyPresetToLayout,
-  balanceLayout,
-  type LayoutPreset,
-} from "@/lib/layout-presets";
+import { applyPresetToLayout, type LayoutPreset } from "@/lib/layout-presets";
 
 /**
  * Finds the lowest available workspace number.
@@ -397,29 +393,4 @@ export const applyPresetLayout = (
     console.error("[Layout] Failed to apply preset:", error);
     return state;
   }
-};
-
-/**
- * Balances all split percentages in the active workspace to 50/50.
- * Useful for equalizing splits after manual resizing.
- */
-export const balanceLayoutInWorkspace = (
-  state: GrimoireState,
-): GrimoireState => {
-  const activeId = state.activeWorkspaceId;
-  const ws = state.workspaces[activeId];
-
-  // Balance the layout tree
-  const balancedLayout = balanceLayout(ws.layout);
-
-  return {
-    ...state,
-    workspaces: {
-      ...state.workspaces,
-      [activeId]: {
-        ...ws,
-        layout: balancedLayout,
-      },
-    },
-  };
 };

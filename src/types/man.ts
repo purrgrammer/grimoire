@@ -4,7 +4,6 @@ import type { AppId } from "./app";
 import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
-import { parseLayoutCommand } from "@/lib/layout-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 
 export interface ManPageEntry {
@@ -457,31 +456,5 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "conn",
     category: "System",
     defaultProps: {},
-  },
-  layout: {
-    name: "layout",
-    section: "1",
-    synopsis: "layout [preset-name]",
-    description:
-      "Apply a preset layout to reorganize windows in the current workspace. Presets provide common layout arrangements like side-by-side splits, main+sidebar configurations, and grid layouts. Running without arguments shows all available presets.",
-    options: [
-      {
-        flag: "[preset-name]",
-        description: "Preset layout to apply (side-by-side, main-sidebar, grid)",
-      },
-    ],
-    examples: [
-      "layout                View all available presets",
-      "layout side-by-side   Apply 50/50 horizontal split (2 windows)",
-      "layout main-sidebar   Apply 70/30 horizontal split (2 windows)",
-      "layout grid           Apply 2×2 grid layout (4 windows)",
-    ],
-    seeAlso: ["man"],
-    appId: "layout",
-    category: "System",
-    argParser: (args: string[]) => {
-      const result = parseLayoutCommand(args);
-      return result;
-    },
   },
 };

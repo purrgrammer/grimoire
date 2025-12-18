@@ -112,7 +112,7 @@ export function LiveActivityRenderer({ event }: LiveActivityRendererProps) {
         <div className="flex items-center gap-2 text-xs flex-wrap">
           {/* Hashtags */}
           {activity.hashtags
-            .filter((t) => !t.startsWith("internal:"))
+            .filter((t) => !t.includes(":"))
             .map((tag) => (
               <Label key={tag} size="sm">
                 {tag}

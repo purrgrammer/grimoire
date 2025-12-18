@@ -6,12 +6,10 @@ import {
   getLiveHost,
 } from "@/lib/live-activity";
 import { VideoPlayer } from "@/components/live/VideoPlayer";
-import { ChatView } from "@/components/nostr/ChatView";
 import { StatusBadge } from "@/components/live/StatusBadge";
 import { UserName } from "../UserName";
+import { Label } from "@/components/ui/Label";
 import { Calendar } from "lucide-react";
-import { useOutboxRelays } from "@/hooks/useOutboxRelays";
-import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 
 interface LiveActivityDetailRendererProps {
   event: NostrEvent;
@@ -24,36 +22,6 @@ export function LiveActivityDetailRenderer({
   const status = useMemo(() => getLiveStatus(event), [event]);
   const hostPubkey = useMemo(() => getLiveHost(event), [event]);
 
-  // Get host's relay list for chat
-  const { relays: hostRelays } = useOutboxRelays({
-    authors: [hostPubkey],
-  });
-
-  // Combine stream relays + host relays for chat events
-  const allRelays = useMemo(
-    () => Array.from(new Set([...activity.relays, ...hostRelays])),
-    [activity.relays, hostRelays],
-  );
-
-  // Fetch chat messages (kind 1311) and zaps (kind 9735) that a-tag this stream
-  const timelineFilter = useMemo(
-    () => ({
-      kinds: [1311, 9735],
-      "#a": [
-        `${event.kind}:${event.pubkey}:${event.tags.find((t) => t[0] === "d")?.[1] || ""}`,
-      ],
-      limit: 100,
-    }),
-    [event],
-  );
-
-  const { events: chatEvents } = useLiveTimeline(
-    `stream-feed-${event.id}`,
-    timelineFilter,
-    allRelays,
-    { stream: true },
-  );
-
   const videoUrl =
     status === "live" && activity.streaming
       ? activity.streaming
@@ -62,7 +30,7 @@ export function LiveActivityDetailRenderer({
         : null;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background overflow-y-auto">
       {/* Video Section */}
       <div className="flex-shrink-0">
         {videoUrl ? (
@@ -94,27 +62,48 @@ export function LiveActivityDetailRenderer({
         ) : (
           <div className="aspect-video bg-neutral-800 flex items-center justify-center">
             <div className="text-center text-neutral-400">
-              <StatusBadge status={status} size="md" />
+              <StatusBadge status={status} />
               <p className="mt-4">No stream available</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Compact title bar */}
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-lg font-bold flex-1 line-clamp-1">
-          {activity.title || "Untitled Live Activity"}
-        </h1>
+      {/* Stream Info Section */}
+      <div className="flex-1 p-2 space-y-3">
+        {/* Title and Status Badge */}
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-bold text-balance">
+            {activity.title || "Untitled Live Activity"}
+          </h1>
+          <StatusBadge status={status} />
+        </div>
+
+        {/* Host */}
         <UserName
           pubkey={hostPubkey}
-          className="text-sm font-semibold line-clamp-1"
+          className="text-sm text-accent"
         />
-      </div>
 
-      {/* Chat Section */}
-      <div className="flex-1 min-h-0">
-        <ChatView events={chatEvents} className="h-full" />
+        {/* Description */}
+        {activity.summary && (
+          <p className="text-base text-muted-foreground leading-relaxed">
+            {activity.summary}
+          </p>
+        )}
+
+        {/* Hashtags */}
+        {activity.hashtags.filter((t) => !t.includes(":")).length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {activity.hashtags
+              .filter((t) => !t.includes(":"))
+              .map((tag) => (
+                <Label key={tag} size="sm">
+                  {tag}
+                </Label>
+              ))}
+          </div>
+        )}
       </div>
     </div>
   );

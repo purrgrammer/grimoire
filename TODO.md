@@ -116,19 +116,33 @@ All event renderers now protected with error boundaries:
 
 ### Layout System Enhancements
 **Completed**: 2024-12-18
-**Files**: `src/lib/layout-presets.ts`, `src/components/LayoutControls.tsx`, `src/components/TabBar.tsx`, `src/core/logic.ts`, `src/core/state.ts`
+**Files**: `src/lib/layout-presets.ts`, `src/components/LayoutControls.tsx`, `src/components/TabBar.tsx`
 
 Quick-win improvements to window management:
-- **Balance Splits**: New action to equalize all split percentages to 50/50 after manual resizing
-  - Recursive tree traversal preserves window IDs and directions
-  - Added to Actions section in LayoutControls dropdown
-  - Smooth animation on balance operation
-- **Keyboard Workspace Switching**: Cmd+1-9 (or Ctrl+1-9) to instantly switch to workspace by number
+- **Keyboard Workspace Switching**: Cmd+1-9 (or Ctrl+1-9) to instantly switch to workspace by position
   - Browser-safe shortcuts (prevents default browser behavior)
+  - Switches by visual position in tab bar, not workspace number
   - Significantly faster workflow for power users
-- Comprehensive test coverage for balanceLayout function
+- **Adaptive Layout Presets**: All presets now handle any number of windows
+  - Grid layout adapts to any N ≥ 2 windows (2×2, 2×3, 3×3, etc.)
+  - Side-by-side handles 2-4 windows with equal splits
+  - Main+sidebar naturally adapts to any number
+- Comprehensive test coverage for grid layouts with odd numbers
 
 ## Window Management Improvements
+
+### Balance Splits
+**Priority**: Medium | **Effort**: Low (1 hour)
+**Description**: Action to equalize all split percentages to 50/50 after manual resizing
+**Implementation**:
+- Recursive tree traversal that preserves window IDs and directions
+- Reset all `splitPercentage` values to 50
+- Add to layout dropdown (once basic features are validated)
+- Smooth animation on balance operation
+
+**Use Case**: After manually resizing windows, quickly restore clean 50/50 proportions
+
+**Note**: Deferred until core preset/insertion features are validated in real usage
 
 ### Fullscreen Mode
 **Priority**: High | **Effort**: Medium (2-3 hours)

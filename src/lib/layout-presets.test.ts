@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   collectWindowIds,
   applyPresetToLayout,
-  balanceLayout,
   BUILT_IN_PRESETS,
 } from "./layout-presets";
 import type { MosaicNode } from "react-mosaic-component";
@@ -151,16 +150,23 @@ describe("layout-presets", () => {
       expect(windowIds).toEqual(["w1", "w2", "w3"]);
     });
 
-    it("handles 4 windows (max allowed)", () => {
+    it("handles 4 windows", () => {
       const layout = sideBySidePreset.generate(["w1", "w2", "w3", "w4"]);
       const windowIds = collectWindowIds(layout);
       expect(windowIds).toEqual(["w1", "w2", "w3", "w4"]);
     });
 
-    it("throws error for 5+ windows", () => {
-      expect(() =>
-        sideBySidePreset.generate(["w1", "w2", "w3", "w4", "w5"])
-      ).toThrow("maximum 4 windows");
+    it("handles 5 windows", () => {
+      const layout = sideBySidePreset.generate(["w1", "w2", "w3", "w4", "w5"]);
+      const windowIds = collectWindowIds(layout);
+      expect(windowIds).toEqual(["w1", "w2", "w3", "w4", "w5"]);
+    });
+
+    it("handles 8 windows (many splits)", () => {
+      const windows = Array.from({ length: 8 }, (_, i) => `w${i + 1}`);
+      const layout = sideBySidePreset.generate(windows);
+      const windowIds = collectWindowIds(layout);
+      expect(windowIds).toEqual(windows);
     });
   });
 
@@ -194,117 +200,12 @@ describe("layout-presets", () => {
     });
   });
 
-  describe("balanceLayout", () => {
-    it("returns null for null layout", () => {
-      expect(balanceLayout(null)).toBeNull();
-    });
-
-    it("returns single window unchanged", () => {
-      expect(balanceLayout("w1")).toBe("w1");
-    });
-
-    it("balances a simple binary split", () => {
-      const unbalanced: MosaicNode<string> = {
-        direction: "row",
-        first: "w1",
-        second: "w2",
-        splitPercentage: 70,
-      };
-      const balanced = balanceLayout(unbalanced);
-      expect(balanced).toEqual({
-        direction: "row",
-        first: "w1",
-        second: "w2",
-        splitPercentage: 50,
-      });
-    });
-
-    it("balances nested splits recursively", () => {
-      const unbalanced: MosaicNode<string> = {
-        direction: "row",
-        first: {
-          direction: "column",
-          first: "w1",
-          second: "w2",
-          splitPercentage: 30,
-        },
-        second: {
-          direction: "column",
-          first: "w3",
-          second: "w4",
-          splitPercentage: 80,
-        },
-        splitPercentage: 60,
-      };
-      const balanced = balanceLayout(unbalanced);
-
-      // All splits should be 50%
-      expect(balanced).toMatchObject({
-        splitPercentage: 50,
-        first: { splitPercentage: 50 },
-        second: { splitPercentage: 50 },
-      });
-    });
-
-    it("preserves window IDs and directions", () => {
-      const original: MosaicNode<string> = {
-        direction: "column",
-        first: "w1",
-        second: {
-          direction: "row",
-          first: "w2",
-          second: "w3",
-          splitPercentage: 75,
-        },
-        splitPercentage: 25,
-      };
-      const balanced = balanceLayout(original);
-      const windowIds = collectWindowIds(balanced);
-      expect(windowIds).toEqual(["w1", "w2", "w3"]);
-
-      // Check directions preserved
-      if (balanced && typeof balanced !== "string") {
-        expect(balanced.direction).toBe("column");
-        if (typeof balanced.second !== "string") {
-          expect(balanced.second.direction).toBe("row");
-        }
-      }
-    });
-  });
-
   describe("applyPresetToLayout", () => {
     it("throws error if too few windows", () => {
       const layout: MosaicNode<string> = "w1";
       expect(() =>
         applyPresetToLayout(layout, BUILT_IN_PRESETS.grid)
       ).toThrow("at least 2 windows");
-    });
-
-    it("throws error if too many windows for side-by-side", () => {
-      const layout: MosaicNode<string> = {
-        direction: "row",
-        first: {
-          direction: "row",
-          first: "w1",
-          second: "w2",
-          splitPercentage: 50,
-        },
-        second: {
-          direction: "row",
-          first: {
-            direction: "row",
-            first: "w3",
-            second: "w4",
-            splitPercentage: 50,
-          },
-          second: "w5",
-          splitPercentage: 50,
-        },
-        splitPercentage: 50,
-      };
-      expect(() =>
-        applyPresetToLayout(layout, BUILT_IN_PRESETS["side-by-side"])
-      ).toThrow("maximum 4 windows");
     });
 
     it("applies grid preset to existing layout", () => {

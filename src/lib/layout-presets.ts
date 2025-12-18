@@ -114,13 +114,9 @@ export const BUILT_IN_PRESETS: Record<string, LayoutPreset> = {
   "side-by-side": {
     id: "side-by-side",
     name: "Side by Side",
-    description: "All windows in a single row (max 4)",
+    description: "All windows in a single row",
     minSlots: 2,
-    maxSlots: 4,
     generate: (windowIds: string[]) => {
-      if (windowIds.length > 4) {
-        throw new Error("Side-by-side layout supports maximum 4 windows");
-      }
       return buildHorizontalRow(windowIds);
     },
   },
@@ -201,31 +197,6 @@ export function applyPresetToLayout(
 
   // Generate layout using all windows
   return preset.generate(windowIds);
-}
-
-/**
- * Balances all split percentages in a layout tree to 50/50
- * Useful for equalizing splits after manual resizing
- */
-export function balanceLayout(
-  layout: MosaicNode<string> | null
-): MosaicNode<string> | null {
-  if (layout === null) {
-    return null;
-  }
-
-  // Leaf node (window ID), return as-is
-  if (typeof layout === "string") {
-    return layout;
-  }
-
-  // Branch node, balance this split and recurse
-  return {
-    direction: layout.direction,
-    first: balanceLayout(layout.first),
-    second: balanceLayout(layout.second),
-    splitPercentage: 50,
-  };
 }
 
 /**
