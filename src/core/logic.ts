@@ -344,3 +344,32 @@ export const updateWindow = (
     },
   };
 };
+
+/**
+ * Updates the layout configuration for a workspace.
+ * Controls how new windows are inserted into the workspace layout.
+ */
+export const updateWorkspaceLayoutConfig = (
+  state: GrimoireState,
+  workspaceId: string,
+  layoutConfig: Partial<GrimoireState["workspaces"][string]["layoutConfig"]>,
+): GrimoireState => {
+  const workspace = state.workspaces[workspaceId];
+  if (!workspace) {
+    return state; // Workspace doesn't exist, return unchanged
+  }
+
+  return {
+    ...state,
+    workspaces: {
+      ...state.workspaces,
+      [workspaceId]: {
+        ...workspace,
+        layoutConfig: {
+          ...workspace.layoutConfig,
+          ...layoutConfig,
+        },
+      },
+    },
+  };
+};

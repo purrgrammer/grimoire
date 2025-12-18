@@ -229,6 +229,17 @@ export const useGrimoire = () => {
     [setState],
   );
 
+  const updateWorkspaceLayoutConfig = useCallback(
+    (
+      workspaceId: string,
+      layoutConfig: Partial<GrimoireState["workspaces"][string]["layoutConfig"]>,
+    ) =>
+      setState((prev) =>
+        Logic.updateWorkspaceLayoutConfig(prev, workspaceId, layoutConfig),
+      ),
+    [setState],
+  );
+
   return {
     state,
     locale: state.locale || browserLocale,
@@ -242,5 +253,6 @@ export const useGrimoire = () => {
     setActiveWorkspace,
     setActiveAccount,
     setActiveAccountRelays,
+    updateWorkspaceLayoutConfig,
   };
 };
