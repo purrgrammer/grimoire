@@ -399,3 +399,37 @@ export const applyPresetLayout = (
     return state;
   }
 };
+
+/**
+ * Updates the label of an existing workspace.
+ * Labels are user-friendly names that appear alongside workspace numbers.
+ */
+export const updateWorkspaceLabel = (
+  state: GrimoireState,
+  workspaceId: string,
+  label: string | undefined,
+): GrimoireState => {
+  const workspace = state.workspaces[workspaceId];
+  if (!workspace) {
+    return state; // Workspace doesn't exist, return unchanged
+  }
+
+  // Normalize label: trim and treat empty strings as undefined
+  const normalizedLabel = label?.trim() || undefined;
+
+  // If label hasn't changed, return state unchanged (optimization)
+  if (workspace.label === normalizedLabel) {
+    return state;
+  }
+
+  return {
+    ...state,
+    workspaces: {
+      ...state.workspaces,
+      [workspaceId]: {
+        ...workspace,
+        label: normalizedLabel,
+      },
+    },
+  };
+};

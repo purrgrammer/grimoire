@@ -125,7 +125,9 @@
 
 /* Smooth animations for window resizing and repositioning */
 /* Only animate during preset application, not manual resize/drag */
-body.animating-layout .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme .mosaic-tile {
+body.animating-layout
+  .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
+  .mosaic-tile {
   transition:
     width 150ms cubic-bezier(0.25, 0.1, 0.25, 1),
     height 150ms cubic-bezier(0.25, 0.1, 0.25, 1),

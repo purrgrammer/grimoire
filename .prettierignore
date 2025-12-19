@@ -3,3 +3,4 @@ node_modules
 .claude
 *.md
 package-lock.json
+src/data/nostr-kinds-schema.yaml

@@ -272,6 +272,12 @@ export const useGrimoire = () => {
     [setState],
   );
 
+  const updateWorkspaceLabel = useCallback(
+    (workspaceId: string, label: string | undefined) =>
+      setState((prev) => Logic.updateWorkspaceLabel(prev, workspaceId, label)),
+    [setState],
+  );
+
   return {
     state,
     locale: state.locale || browserLocale,
@@ -288,5 +294,6 @@ export const useGrimoire = () => {
     setActiveAccountRelays,
     updateLayoutConfig,
     applyPresetLayout,
+    updateWorkspaceLabel,
   };
 };
