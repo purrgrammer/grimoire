@@ -1,18 +1,12 @@
 import { useMemo, useState } from "react";
-import { BookHeart, ChevronDown, Plus, Save, WandSparkles, X } from "lucide-react";
+import { BookHeart, ChevronDown, Plus, Save, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
 import { createSpellbook, parseSpellbook } from "@/lib/spellbook-manager";
-import { decodeSpell } from "@/lib/spell-conversion";
-import type {
-  SpellbookEvent,
-  ParsedSpellbook,
-  SpellEvent,
-  ParsedSpell,
-} from "@/types/spell";
-import { SPELLBOOK_KIND, SPELL_KIND } from "@/constants/kinds";
+import type { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
+import { SPELLBOOK_KIND } from "@/constants/kinds";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -23,14 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { toast } from "sonner";
-import { manPages } from "@/types/man";
 import { cn } from "@/lib/utils";
 import { PublishSpellbookAction } from "@/actions/publish-spellbook";
 import { saveSpellbook } from "@/services/spellbook-storage";
 import { SaveSpellbookDialog } from "./SaveSpellbookDialog";
 
 export function SpellbookDropdown() {
-  const { state, loadSpellbook, addWindow, clearActiveSpellbook } = useGrimoire();
+  const { state, loadSpellbook, addWindow, clearActiveSpellbook } =
+    useGrimoire();
   const activeAccount = state.activeAccount;
   const activeSpellbook = state.activeSpellbook;
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -40,15 +34,12 @@ export function SpellbookDropdown() {
   const localSpellbooks = useLiveQuery(() =>
     db.spellbooks.toArray().then((books) => books.filter((b) => !b.deletedAt)),
   );
-  const localSpells = useLiveQuery(() =>
-    db.spells.toArray().then((spells) => spells.filter((s) => !s.deletedAt)),
-  );
 
   // 2. Fetch Network Data
-  const { events: networkEvents, loading: networkLoading } = useReqTimeline(
-    activeAccount ? `header-resources-${activeAccount.pubkey}` : "none",
+  const { events: networkEvents } = useReqTimeline(
+    activeAccount ? `header-spellbooks-${activeAccount.pubkey}` : "none",
     activeAccount
-      ? { kinds: [SPELLBOOK_KIND, SPELL_KIND], authors: [activeAccount.pubkey] }
+      ? { kinds: [SPELLBOOK_KIND], authors: [activeAccount.pubkey] }
       : [],
     activeAccount?.relays?.map((r) => r.url) || [],
     { stream: true },
@@ -70,7 +61,7 @@ export function SpellbookDropdown() {
       });
     }
 
-    for (const event of networkEvents.filter((e) => e.kind === SPELLBOOK_KIND)) {
+    for (const event of networkEvents) {
       const slug = event.tags.find((t) => t[0] === "d")?.[1] || "";
       if (!slug) continue;
       const existing = allMap.get(slug);
@@ -91,43 +82,7 @@ export function SpellbookDropdown() {
     );
   }, [localSpellbooks, networkEvents, activeAccount]);
 
-  // 4. Process Spells
-  const spells = useMemo(() => {
-    if (!activeAccount) return [];
-    const allMap = new Map<string, ParsedSpell>();
-
-    for (const s of localSpells || []) {
-      // Use eventId if available, otherwise fallback to local id for deduplication
-      const key = s.eventId || s.id;
-      allMap.set(key, {
-        name: s.name || s.alias,
-        command: s.command,
-        description: s.description,
-        event: s.event as SpellEvent,
-        filter: {},
-        topics: [],
-        closeOnEose: false,
-      });
-    }
-
-    for (const event of networkEvents.filter((e) => e.kind === SPELL_KIND)) {
-      if (allMap.has(event.id)) continue;
-      try {
-        allMap.set(event.id, decodeSpell(event as SpellEvent));
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    return Array.from(allMap.values()).sort((a, b) =>
-      (a.name || "Untitled").localeCompare(b.name || "Untitled"),
-    );
-  }, [localSpells, networkEvents, activeAccount]);
-
-  if (
-    !activeAccount ||
-    (spellbooks.length === 0 && spells.length === 0 && !networkLoading)
-  ) {
+  if (!activeAccount || (spellbooks.length === 0 && !activeSpellbook)) {
     return null;
   }
 
@@ -145,11 +100,14 @@ export function SpellbookDropdown() {
         state,
         title: activeSpellbook.title,
       });
-      
+
       const content = JSON.parse(encoded.eventProps.content);
 
       // 1. Save locally
-      const local = await db.spellbooks.where("slug").equals(activeSpellbook.slug).first();
+      const local = await db.spellbooks
+        .where("slug")
+        .equals(activeSpellbook.slug)
+        .first();
       if (local) {
         await db.spellbooks.update(local.id, { content });
       } else {
@@ -170,7 +128,9 @@ export function SpellbookDropdown() {
           content,
           localId: local?.id,
         });
-        toast.success(`Layout "${activeSpellbook.title}" updated and published`);
+        toast.success(
+          `Layout "${activeSpellbook.title}" updated and published`,
+        );
       } else {
         toast.success(`Layout "${activeSpellbook.title}" updated locally`);
       }
@@ -181,31 +141,15 @@ export function SpellbookDropdown() {
     }
   };
 
-  const handleRunSpell = async (spell: ParsedSpell) => {
-    try {
-      const parts = spell.command.trim().split(/\s+/);
-      const commandName = parts[0]?.toLowerCase();
-      const cmdArgs = parts.slice(1);
-      const command = manPages[commandName];
-
-      if (command) {
-        const cmdProps = command.argParser
-          ? await Promise.resolve(command.argParser(cmdArgs))
-          : command.defaultProps || {};
-        addWindow(command.appId, cmdProps, spell.command);
-        toast.success(`Ran spell: ${spell.name || "Untitled"}`);
-      }
-    } catch (e) {
-      toast.error("Failed to run spell");
-    }
-  };
-
   const itemClass =
     "cursor-pointer py-2 hover:bg-muted focus:bg-muted transition-colors";
 
   return (
     <>
-      <SaveSpellbookDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} />
+      <SaveSpellbookDialog
+        open={saveDialogOpen}
+        onOpenChange={setSaveDialogOpen}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -213,12 +157,12 @@ export function SpellbookDropdown() {
             size="sm"
             className={cn(
               "h-7 px-2 gap-1.5 text-muted-foreground hover:text-foreground",
-              activeSpellbook && "text-foreground font-bold"
+              activeSpellbook && "text-foreground font-bold",
             )}
           >
             <BookHeart className="size-4" />
             <span className="text-xs font-medium hidden sm:inline">
-              {activeSpellbook ? activeSpellbook.title : "Library"}
+              {activeSpellbook ? activeSpellbook.title : "Layouts"}
             </span>
             <ChevronDown className="size-3 opacity-50" />
           </Button>
@@ -240,8 +184,12 @@ export function SpellbookDropdown() {
               >
                 <Save className="size-3.5 mr-2 text-muted-foreground" />
                 <div className="flex flex-col min-w-0">
-                  <span className="font-medium text-sm">Update "{activeSpellbook.title}"</span>
-                  <span className="text-[10px] text-muted-foreground">Save current state to this spellbook</span>
+                  <span className="font-medium text-sm">
+                    Update "{activeSpellbook.title}"
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Save current state to this spellbook
+                  </span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -259,7 +207,7 @@ export function SpellbookDropdown() {
           {spellbooks.length > 0 && (
             <>
               <DropdownMenuLabel className="flex items-center justify-between py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                Spellbooks
+                My Layouts
               </DropdownMenuLabel>
               {spellbooks.map((sb) => {
                 const isActive = activeSpellbook?.slug === sb.slug;
@@ -269,7 +217,12 @@ export function SpellbookDropdown() {
                     onClick={() => handleApplySpellbook(sb)}
                     className={cn(itemClass, isActive && "bg-muted font-bold")}
                   >
-                    <BookHeart className={cn("size-3.5 mr-2 text-muted-foreground", isActive && "text-foreground")} />
+                    <BookHeart
+                      className={cn(
+                        "size-3.5 mr-2 text-muted-foreground",
+                        isActive && "text-foreground",
+                      )}
+                    />
                     <div className="flex flex-col min-w-0">
                       <span className="truncate font-medium text-sm">
                         {sb.title}
@@ -286,54 +239,22 @@ export function SpellbookDropdown() {
                 className={cn(itemClass, "text-xs opacity-70")}
               >
                 <BookHeart className="size-3 mr-2 text-muted-foreground" />
-                Manage Library
+                Manage Layouts
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
           )}
 
-          {/* New/Save Section */}
+          {/* New Section */}
           <DropdownMenuItem
             onClick={() => setSaveDialogOpen(true)}
             className={itemClass}
           >
             <Plus className="size-3.5 mr-2 text-muted-foreground" />
-            <span className="text-sm">Save as new layout</span>
+            <span className="text-sm font-medium text-muted-foreground">
+              Save as new layout
+            </span>
           </DropdownMenuItem>
-
-          {/* Spells Section */}
-          {spells.length > 0 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="flex items-center justify-between py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                Spells
-              </DropdownMenuLabel>
-              {spells.map((s, idx) => (
-                <DropdownMenuItem
-                  key={s.event?.id || `local-${idx}`}
-                  onClick={() => handleRunSpell(s)}
-                  className={itemClass}
-                >
-                  <WandSparkles className="size-3.5 mr-2 text-muted-foreground flex-shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="truncate font-medium text-sm">
-                      {s.name || "Untitled Spell"}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground truncate font-mono">
-                      {s.command}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuItem
-                onClick={() => addWindow("spells", {})}
-                className={cn(itemClass, "text-xs opacity-70")}
-              >
-                <WandSparkles className="size-3 mr-2 text-muted-foreground" />
-                Manage Spells
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>
