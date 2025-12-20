@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BookHeart, ChevronDown, Plus, Save, WandSparkles } from "lucide-react";
+import { BookHeart, ChevronDown, Plus, Save, WandSparkles, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
@@ -30,7 +30,7 @@ import { saveSpellbook } from "@/services/spellbook-storage";
 import { SaveSpellbookDialog } from "./SaveSpellbookDialog";
 
 export function SpellbookDropdown() {
-  const { state, loadSpellbook, addWindow } = useGrimoire();
+  const { state, loadSpellbook, addWindow, clearActiveSpellbook } = useGrimoire();
   const activeAccount = state.activeAccount;
   const activeSpellbook = state.activeSpellbook;
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -243,6 +243,13 @@ export function SpellbookDropdown() {
                   <span className="font-medium text-sm">Update "{activeSpellbook.title}"</span>
                   <span className="text-[10px] text-muted-foreground">Save current state to this spellbook</span>
                 </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={clearActiveSpellbook}
+                className={cn(itemClass, "text-xs opacity-70")}
+              >
+                <X className="size-3.5 mr-2 text-muted-foreground" />
+                Stop Tracking Layout
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
