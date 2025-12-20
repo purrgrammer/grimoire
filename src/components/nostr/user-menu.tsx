@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, Link2 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { ExtensionSigner } from "applesauce-signers";
 import { ExtensionAccount } from "applesauce-accounts/accounts";
@@ -63,7 +63,11 @@ export default function UserMenu() {
     );
   }
 
-  async function login() {
+  function openLogin() {
+    addWindow("login", {}, "Login");
+  }
+
+  async function loginWithExtension() {
     try {
       const signer = new ExtensionSigner();
       const pubkey = await signer.getPublicKey();
@@ -87,7 +91,10 @@ export default function UserMenu() {
           {account ? (
             <UserAvatar pubkey={account.pubkey} />
           ) : (
-            <User onClick={login} className="size-4 text-muted-foreground" />
+            <User
+              onClick={openLogin}
+              className="size-4 text-muted-foreground"
+            />
           )}
         </Button>
       </DropdownMenuTrigger>
@@ -131,7 +138,16 @@ export default function UserMenu() {
             </DropdownMenuItem>
           </>
         ) : (
-          <DropdownMenuItem onClick={login}>Log in</DropdownMenuItem>
+          <>
+            <DropdownMenuItem onClick={loginWithExtension}>
+              <User className="mr-2 h-4 w-4" />
+              Login with Extension (NIP-07)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={openLogin}>
+              <Link2 className="mr-2 h-4 w-4" />
+              Login with Remote Signer
+            </DropdownMenuItem>
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -427,4 +427,18 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "System",
     defaultProps: {},
   },
+  login: {
+    name: "login",
+    section: "1",
+    synopsis: "login",
+    description:
+      "Login to Grimoire using various Nostr authentication methods. Supports remote login via bunker URLs, QR code scanning with mobile signers, and browser extension login (NIP-07).",
+    examples: [
+      "login    Open the login interface to choose authentication method",
+    ],
+    seeAlso: ["profile", "conn"],
+    appId: "login",
+    category: "System",
+    defaultProps: {},
+  },
 };
