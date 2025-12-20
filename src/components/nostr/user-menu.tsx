@@ -19,6 +19,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
+import SettingsDialog from "@/components/SettingsDialog";
+import { useState } from "react";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -53,6 +55,7 @@ export default function UserMenu() {
   const account = useObservableMemo(() => accounts.active$, []);
   const { state, addWindow } = useGrimoire();
   const relays = state.activeAccount?.relays;
+  const [showSettings, setShowSettings] = useState(false);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -81,63 +84,74 @@ export default function UserMenu() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          size="sm"
-          variant="link"
-          aria-label={account ? "User menu" : "Log in"}
-        >
-          {account ? (
-            <UserAvatar pubkey={account.pubkey} />
-          ) : (
-            <User onClick={login} className="size-4 text-muted-foreground" />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-80" align="start">
-        {account ? (
-          <>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel
-                className="cursor-crosshair hover:bg-muted/50"
-                onClick={openProfile}
-              >
-                <UserLabel pubkey={account.pubkey} />
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-
-            {relays && relays.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    Relays
-                  </DropdownMenuLabel>
-                  {relays.map((relay) => (
-                    <RelayLink
-                      className="px-2 py-1"
-                      urlClassname="text-sm"
-                      iconClassname="size-4"
-                      key={relay.url}
-                      url={relay.url}
-                      read={relay.read}
-                      write={relay.write}
-                    />
-                  ))}
-                </DropdownMenuGroup>
-              </>
+    <>
+      <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="sm"
+            variant="link"
+            aria-label={account ? "User menu" : "Log in"}
+          >
+            {account ? (
+              <UserAvatar pubkey={account.pubkey} />
+            ) : (
+              <User onClick={login} className="size-4 text-muted-foreground" />
             )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-80" align="start">
+          {account ? (
+            <>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel
+                  className="cursor-crosshair hover:bg-muted/50"
+                  onClick={openProfile}
+                >
+                  <UserLabel pubkey={account.pubkey} />
+                </DropdownMenuLabel>
+              </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="cursor-crosshair">
-              Log out
-            </DropdownMenuItem>
-          </>
-        ) : (
-          <DropdownMenuItem onClick={login}>Log in</DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+              {relays && relays.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      Relays
+                    </DropdownMenuLabel>
+                    {relays.map((relay) => (
+                      <RelayLink
+                        className="px-2 py-1"
+                        urlClassname="text-sm"
+                        iconClassname="size-4"
+                        key={relay.url}
+                        url={relay.url}
+                        read={relay.read}
+                        write={relay.write}
+                      />
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              <DropdownMenuSeparator />
+              {/* <DropdownMenuItem
+                onClick={() => setShowSettings(true)}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 size-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator /> */}
+              <DropdownMenuItem onClick={logout} className="cursor-crosshair">
+                Log out
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <DropdownMenuItem onClick={login}>Log in</DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

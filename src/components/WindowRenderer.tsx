@@ -27,6 +27,9 @@ const DebugViewer = lazy(() =>
   import("./DebugViewer").then((m) => ({ default: m.DebugViewer })),
 );
 const ConnViewer = lazy(() => import("./ConnViewer"));
+const SpellsViewer = lazy(() =>
+  import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -161,6 +164,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "conn":
         content = <ConnViewer />;
+        break;
+      case "spells":
+        content = <SpellsViewer />;
         break;
       default:
         content = (

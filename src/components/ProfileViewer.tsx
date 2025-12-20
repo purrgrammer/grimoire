@@ -29,6 +29,7 @@ import { addressLoader } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
 import { useEffect } from "react";
 import type { Subscription } from "rxjs";
+import { useGrimoire } from "@/core/state";
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -39,7 +40,13 @@ export interface ProfileViewerProps {
  * Shows profile metadata, inbox/outbox relays, and raw JSON
  */
 export function ProfileViewer({ pubkey }: ProfileViewerProps) {
-  const profile = useProfile(pubkey);
+  const { state } = useGrimoire();
+  const accountPubkey = state.activeAccount?.pubkey;
+
+  // Resolve $me alias
+  const resolvedPubkey = pubkey === "$me" ? accountPubkey : pubkey;
+
+  const profile = useProfile(resolvedPubkey);
   const eventStore = useEventStore();
   const { copy, copied } = useCopy();
   const { relays: relayStates } = useRelayState();
@@ -47,20 +54,21 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   // Fetch fresh relay list from network only if not cached or stale
   useEffect(() => {
     let subscription: Subscription | null = null;
+    if (!resolvedPubkey) return;
 
     // Check if we have a valid cached relay list
-    relayListCache.has(pubkey).then(async (hasCached) => {
+    relayListCache.has(resolvedPubkey).then(async (hasCached) => {
       if (hasCached) {
         console.debug(
-          `[ProfileViewer] Using cached relay list for ${pubkey.slice(0, 8)}`,
+          `[ProfileViewer] Using cached relay list for ${resolvedPubkey.slice(0, 8)}`,
         );
 
         // Load cached event into EventStore so UI can display it
-        const cached = await relayListCache.get(pubkey);
+        const cached = await relayListCache.get(resolvedPubkey);
         if (cached?.event) {
           eventStore.add(cached.event);
           console.debug(
-            `[ProfileViewer] Loaded cached relay list into EventStore for ${pubkey.slice(0, 8)}`,
+            `[ProfileViewer] Loaded cached relay list into EventStore for ${resolvedPubkey.slice(0, 8)}`,
           );
         }
         return;
@@ -68,16 +76,16 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
 
       // No cached or stale - fetch fresh from network
       console.debug(
-        `[ProfileViewer] Fetching fresh relay list for ${pubkey.slice(0, 8)}`,
+        `[ProfileViewer] Fetching fresh relay list for ${resolvedPubkey.slice(0, 8)}`,
       );
       subscription = addressLoader({
         kind: kinds.RelayList,
-        pubkey,
+        pubkey: resolvedPubkey,
         identifier: "",
       }).subscribe({
         error: (err) => {
           console.debug(
-            `[ProfileViewer] Failed to fetch relay list for ${pubkey.slice(0, 8)}:`,
+            `[ProfileViewer] Failed to fetch relay list for ${resolvedPubkey.slice(0, 8)}:`,
             err,
           );
         },
@@ -89,12 +97,15 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         subscription.unsubscribe();
       }
     };
-  }, [pubkey]);
+  }, [resolvedPubkey, eventStore]);
 
   // Get mailbox relays (kind 10002) - will update when fresh data arrives
   const mailboxEvent = useObservableMemo(
-    () => eventStore.replaceable(kinds.RelayList, pubkey, ""),
-    [eventStore, pubkey],
+    () =>
+      resolvedPubkey
+        ? eventStore.replaceable(kinds.RelayList, resolvedPubkey, "")
+        : undefined,
+    [eventStore, resolvedPubkey],
   );
   const inboxRelays =
     mailboxEvent && mailboxEvent.tags ? getInboxes(mailboxEvent) : [];
@@ -103,8 +114,11 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
 
   // Get profile metadata event (kind 0)
   const profileEvent = useObservableMemo(
-    () => eventStore.replaceable(0, pubkey, ""),
-    [eventStore, pubkey],
+    () =>
+      resolvedPubkey
+        ? eventStore.replaceable(0, resolvedPubkey, "")
+        : undefined,
+    [eventStore, resolvedPubkey],
   );
 
   // Combine all relays (inbox + outbox) for nprofile
@@ -117,12 +131,35 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
 
   // Generate npub or nprofile depending on relay availability
   const identifier =
-    allRelays.length > 0
+    resolvedPubkey && allRelays.length > 0
       ? nip19.nprofileEncode({
-          pubkey,
+          pubkey: resolvedPubkey,
           relays: allRelays,
         })
-      : nip19.npubEncode(pubkey);
+      : resolvedPubkey
+        ? nip19.npubEncode(resolvedPubkey)
+        : "";
+
+  if (pubkey === "$me" && !accountPubkey) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+        <div className="text-muted-foreground">
+          <UserIcon className="size-12 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold mb-2">Account Required</h3>
+          <p className="text-sm max-w-md">
+            The <code className="bg-muted px-1.5 py-0.5">$me</code> alias
+            requires an active account. Please log in to view your profile.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!resolvedPubkey) {
+    return (
+      <div className="p-4 text-muted-foreground">Invalid profile pubkey.</div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

@@ -15,7 +15,8 @@ export type AppId =
   | "decode"
   | "relay"
   | "debug"
-  | "conn";
+  | "conn"
+  | "spells";
 
 export interface WindowInstance {
   id: string;
@@ -82,6 +83,7 @@ export interface GrimoireState {
     pubkey: string;
     relays?: RelayInfo[];
   };
+  compactModeKinds?: number[];
   locale?: {
     locale: string;
     language: string;

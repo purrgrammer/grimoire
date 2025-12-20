@@ -8,7 +8,7 @@
 import { GrimoireState } from "@/types/app";
 import { toast } from "sonner";
 
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 10;
 
 /**
  * Migration function type
@@ -105,6 +105,14 @@ const migrations: Record<number, MigrationFn> = {
       __version: 9,
     };
   },
+  // Migration from v9 to v10 - adds compactModeKinds
+  9: (state: any) => {
+    return {
+      ...state,
+      __version: 10,
+      compactModeKinds: [6, 7, 16, 9735],
+    };
+  },
 };
 
 /**
@@ -131,6 +139,11 @@ export function validateState(state: any): state is GrimoireState {
 
     // layoutConfig must be an object
     if (typeof state.layoutConfig !== "object") {
+      return false;
+    }
+
+    // compactModeKinds must be an array if present
+    if (state.compactModeKinds && !Array.isArray(state.compactModeKinds)) {
       return false;
     }
 

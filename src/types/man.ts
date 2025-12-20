@@ -17,7 +17,7 @@ export interface ManPageEntry {
   // Command execution metadata
   appId: AppId;
   category: "Documentation" | "System" | "Nostr";
-  argParser?: (args: string[]) => any;
+  argParser?: (args: string[], activeAccountPubkey?: string) => any;
   defaultProps?: any;
 }
 
@@ -335,7 +335,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "profile <identifier>",
     description:
-      "Open a detailed view of a Nostr user profile. Accepts multiple identifier formats including npub, nprofile, hex pubkeys, and NIP-05 identifiers (including bare domains). Displays profile metadata, inbox/outbox relays, and raw JSON.",
+      "Open a detailed view of a Nostr user profile. Accepts multiple identifier formats including npub, nprofile, hex pubkeys, NIP-05 identifiers (including bare domains), and the $me alias. Displays profile metadata, inbox/outbox relays, and raw JSON.",
     options: [
       {
         flag: "<identifier>",
@@ -344,6 +344,7 @@ export const manPages: Record<string, ManPageEntry> = {
     ],
     examples: [
       "profile fiatjaf.com                   Open profile by NIP-05 identifier",
+      "profile $me                          Open your own profile",
       "profile nprofile1qyd8wumn8ghj7urewfsk66ty9enxjct5dfskvtnrdakj7qgmwaehxw309a6xsetxdaex2um59ehx7um5wgcjucm0d5hsz9mhwden5te0veex2mnn9ehx7um5wgcjucm0d5hszxrhwden5te0ve5kcar9wghxummnw3ezuamfdejj7qpq07jk7htfv243u0x5ynn43scq9wrxtaasmrwwa8lfu2ydwag6cx2q0al9p4  Open profile with relay hints",
       "profile 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d  Open profile by hex pubkey (64 chars)",
       "profile dergigi.com                   Open profile by domain (resolves to _@dergigi.com)",
@@ -352,8 +353,8 @@ export const manPages: Record<string, ManPageEntry> = {
     seeAlso: ["open", "req"],
     appId: "profile",
     category: "Nostr",
-    argParser: async (args: string[]) => {
-      const parsed = await parseProfileCommand(args);
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      const parsed = await parseProfileCommand(args, activeAccountPubkey);
       return parsed;
     },
   },
@@ -455,6 +456,18 @@ export const manPages: Record<string, ManPageEntry> = {
     seeAlso: ["relay", "req"],
     appId: "conn",
     category: "System",
+    defaultProps: {},
+  },
+  spells: {
+    name: "spells",
+    section: "1",
+    synopsis: "spells",
+    description:
+      "Browse and manage your REQ command spells. Spells are saved queries that can be run instantly. You can save spells locally or publish them as Nostr events (kind 777) to relays, making them portable and shareable. Use the 'Save as Spell' button in any REQ window to create new spells.",
+    examples: ["spells          Browse your saved spells"],
+    seeAlso: ["req"],
+    appId: "spells",
+    category: "Nostr",
     defaultProps: {},
   },
 };

@@ -1,9 +1,59 @@
 import type { ProfileContent } from "applesauce-core/helpers";
 import type { NostrEvent } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
+import { getNip10References } from "applesauce-core/helpers/threading";
+import { getCommentReplyPointer } from "applesauce-core/helpers/comment";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 
 export function derivePlaceholderName(pubkey: string): string {
   return `${pubkey.slice(0, 4)}:${pubkey.slice(-4)}`;
+}
+
+/**
+ * Get a reply pointer for an event, abstracting the differences between NIP-10 and NIP-22 (comments).
+ */
+export function getEventReply(
+  event: NostrEvent,
+):
+  | { type: "root"; pointer: EventPointer | AddressPointer }
+  | { type: "reply"; pointer: EventPointer | AddressPointer }
+  | { type: "comment"; pointer: any }
+  | null {
+  // Handle Kind 1 (Text Note) - NIP-10
+  if (event.kind === 1) {
+    const references = getNip10References(event);
+    if (references.reply) {
+      const pointer = references.reply.e || references.reply.a;
+      if (pointer) return { type: "reply", pointer };
+    }
+    if (references.root) {
+      const pointer = references.root.e || references.root.a;
+      if (pointer) return { type: "root", pointer };
+    }
+  }
+
+  // Handle Kind 1111 (Comment) - NIP-22
+  if (event.kind === 1111) {
+    const pointer = getCommentReplyPointer(event);
+    if (pointer) {
+      return { type: "comment", pointer };
+    }
+  }
+
+  // Fallback for generic replies (using NIP-10 logic for other kinds usually works)
+  if (event.kind !== 1111) {
+    const references = getNip10References(event);
+    if (references.reply) {
+      const pointer = references.reply.e || references.reply.a;
+      if (pointer) return { type: "reply", pointer };
+    }
+    if (references.root) {
+      const pointer = references.root.e || references.root.a;
+      if (pointer) return { type: "root", pointer };
+    }
+  }
+
+  return null;
 }
 
 export function getTagValues(event: NostrEvent, tagName: string): string[] {

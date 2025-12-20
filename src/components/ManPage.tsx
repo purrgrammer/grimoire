@@ -1,6 +1,8 @@
 import { manPages } from "@/types/man";
 import { useGrimoire } from "@/core/state";
 import { CenteredContent } from "./ui/CenteredContent";
+import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
 
 interface ManPageProps {
   cmd: string;
@@ -9,11 +11,13 @@ interface ManPageProps {
 /**
  * ExecutableCommand - Renders a clickable command that executes when clicked
  */
-function ExecutableCommand({
+export function ExecutableCommand({
   commandLine,
+  className,
   children,
 }: {
   commandLine: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   const { addWindow } = useGrimoire();
@@ -35,12 +39,16 @@ function ExecutableCommand({
   };
 
   return (
-    <button
+    <Button
       onClick={handleClick}
-      className="text-accent font-medium hover:underline cursor-crosshair text-left"
+      variant="link"
+      className={cn(
+        "text-accent font-medium hover:underline cursor-crosshair text-left",
+        className,
+      )}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

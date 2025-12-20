@@ -98,7 +98,7 @@ export function TabBar() {
 
   return (
     <>
-      <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto">
+      <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto no-scrollbar">
         {/* Left side: Workspace tabs + new workspace button */}
         <Reorder.Group
           axis="x"

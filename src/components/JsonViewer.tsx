@@ -8,6 +8,28 @@ import { useCopy } from "../hooks/useCopy";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 
+interface CopyableJsonViewerProps {
+  json: string;
+}
+
+export function CopyableJsonViewer({ json }: CopyableJsonViewerProps) {
+  const { copy, copied } = useCopy();
+  const handleCopy = () => {
+    copy(json);
+  };
+
+  return (
+    <div className="flex-1 overflow-auto relative">
+      <SyntaxHighlight
+        code={json}
+        language="json"
+        className="bg-muted p-4 pr-10 overflow-scroll"
+      />
+      <CodeCopyButton onCopy={handleCopy} copied={copied} label="Copy JSON" />
+    </div>
+  );
+}
+
 interface JsonViewerProps {
   data: any;
   open: boolean;

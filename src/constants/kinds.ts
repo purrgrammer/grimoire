@@ -60,6 +60,7 @@ import {
   UserX,
   Video,
   Wallet,
+  WandSparkles,
   XCircle,
   Zap,
   type LucideIcon,
@@ -680,6 +681,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     icon: Zap,
   },
   9735: { kind: 9735, name: "Zap", description: "Zap", nip: "57", icon: Zap },
+  777: {
+    kind: 777,
+    name: "Spell",
+    description: "REQ Command Spell",
+    nip: "",
+    icon: WandSparkles,
+  },
   9802: {
     kind: 9802,
     name: "Highlight",

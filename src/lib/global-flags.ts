@@ -24,7 +24,8 @@ const RESERVED_GLOBAL_FLAGS = ["--title"] as const;
  */
 function sanitizeTitle(title: string): string | undefined {
   const sanitized = title
-    .replace(/[\x00-\x1F\x7F]/g, "") // Strip control chars (newlines, tabs, null bytes)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]/g, "") // Strip control chars (newlines, tabs, null bytes)
     .trim();
 
   if (!sanitized) {

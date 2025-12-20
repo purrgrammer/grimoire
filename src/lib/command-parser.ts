@@ -97,6 +97,7 @@ export function parseCommandInput(input: string): ParsedCommand {
  */
 export async function executeCommandParser(
   parsed: ParsedCommand,
+  activeAccountPubkey?: string,
 ): Promise<ParsedCommand> {
   if (!parsed.command) {
     return parsed; // Already has error, return as-is
@@ -105,7 +106,9 @@ export async function executeCommandParser(
   try {
     // Use argParser if available, otherwise use defaultProps
     const props = parsed.command.argParser
-      ? await Promise.resolve(parsed.command.argParser(parsed.args))
+      ? await Promise.resolve(
+          parsed.command.argParser(parsed.args, activeAccountPubkey),
+        )
       : parsed.command.defaultProps || {};
 
     return {
@@ -129,10 +132,11 @@ export async function executeCommandParser(
  */
 export async function parseAndExecuteCommand(
   input: string,
+  activeAccountPubkey?: string,
 ): Promise<ParsedCommand> {
   const parsed = parseCommandInput(input);
   if (parsed.error || !parsed.command) {
     return parsed;
   }
-  return executeCommandParser(parsed);
+  return executeCommandParser(parsed, activeAccountPubkey);
 }

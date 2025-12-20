@@ -2,6 +2,7 @@ import { useState, memo, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Radio,
   FileText,
   Wifi,
@@ -678,9 +679,8 @@ export default function ReqViewer({
   // Memoize fallbackRelays to prevent re-creation on every render
   const fallbackRelays = useMemo(
     () =>
-      state.activeAccount?.relays
-        ?.filter((r) => r.read)
-        .map((r) => r.url) || AGGREGATOR_RELAYS,
+      state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) ||
+      AGGREGATOR_RELAYS,
     [state.activeAccount?.relays],
   );
 
@@ -748,42 +748,53 @@ export default function ReqViewer({
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
 
-  // Virtuoso scroll position preservation for prepending events
-  const STARTING_INDEX = 100000;
-  const [firstItemIndex, setFirstItemIndex] = useState(STARTING_INDEX);
-  const seenEventIdsRef = useRef<Set<string>>(new Set());
+  // Freeze timeline after EOSE to prevent auto-scrolling on new events
+  const [freezePoint, setFreezePoint] = useState<string | null>(null);
+  const [isFrozen, setIsFrozen] = useState(false);
+  const virtuosoRef = useRef<any>(null);
 
-  // Adjust firstItemIndex when new events are prepended to preserve scroll position
-  // Uses Set-based tracking to handle rapid batches correctly
+  // Freeze timeline after EOSE in streaming mode
   useEffect(() => {
-    // Reset on query change (events cleared)
+    // Freeze after EOSE in streaming mode
+    if (eoseReceived && stream && !isFrozen && events.length > 0) {
+      setFreezePoint(events[0].id);
+      setIsFrozen(true);
+    }
+
+    // Reset freeze on query change (events cleared)
     if (events.length === 0) {
-      seenEventIdsRef.current = new Set();
-      setFirstItemIndex(STARTING_INDEX);
-      return;
+      setFreezePoint(null);
+      setIsFrozen(false);
+    }
+  }, [eoseReceived, stream, isFrozen, events]);
+
+  // Filter events based on freeze point
+  const { visibleEvents, newEventCount } = useMemo(() => {
+    if (!isFrozen || !freezePoint) {
+      return { visibleEvents: events, newEventCount: 0 };
     }
 
-    // Find new events at the start of the array (prepended)
-    // This approach is immune to rapid updates because we track ALL seen IDs cumulatively
-    let prependCount = 0;
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
-      if (!seenEventIdsRef.current.has(event.id)) {
-        // New event found at position i
-        prependCount++;
-        seenEventIdsRef.current.add(event.id);
-      } else {
-        // Found first existing event, stop counting
-        // All events after this are old (already seen)
-        break;
-      }
-    }
+    const freezeIndex = events.findIndex((e) => e.id === freezePoint);
+    return freezeIndex === -1
+      ? { visibleEvents: events, newEventCount: 0 }
+      : {
+          visibleEvents: events.slice(freezeIndex),
+          newEventCount: freezeIndex,
+        };
+  }, [events, isFrozen, freezePoint]);
 
-    // Adjust index only in streaming mode after EOSE
-    if (prependCount > 0 && stream && eoseReceived) {
-      setFirstItemIndex((prev) => prev - prependCount);
-    }
-  }, [events, stream, eoseReceived]);
+  // Unfreeze handler - show new events and scroll to top
+  const handleUnfreeze = useCallback(() => {
+    setIsFrozen(false);
+    setFreezePoint(null);
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: 0,
+        align: "start",
+        behavior: "smooth",
+      });
+    });
+  }, []);
 
   /**
    * Export events to JSONL format with chunked processing for large datasets
@@ -1145,7 +1156,21 @@ export default function ReqViewer({
 
       {/* Results */}
       {(!needsAccount || accountPubkey) && (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative">
+          {/* Floating "New Events" Button */}
+          {isFrozen && newEventCount > 0 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+              <Button
+                onClick={handleUnfreeze}
+                className="shadow-lg bg-accent text-accent-foreground opacity-100 hover:bg-accent"
+                size="sm"
+              >
+                <ChevronUp className="size-4 mr-2" />
+                {newEventCount} new event{newEventCount !== 1 ? "s" : ""}
+              </Button>
+            </div>
+          )}
+
           {/* Loading: Before EOSE received */}
           {loading && events.length === 0 && !eoseReceived && (
             <div className="p-4">
@@ -1167,11 +1192,11 @@ export default function ReqViewer({
             </div>
           )}
 
-          {events.length > 0 && (
+          {visibleEvents.length > 0 && (
             <Virtuoso
+              ref={virtuosoRef}
               style={{ height: "100%" }}
-              data={events}
-              firstItemIndex={firstItemIndex}
+              data={visibleEvents}
               computeItemKey={(_index, item) => item.id}
               itemContent={(_index, event) => (
                 <MemoizedFeedEvent event={event} />

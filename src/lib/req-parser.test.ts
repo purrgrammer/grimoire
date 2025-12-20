@@ -179,7 +179,8 @@ describe("parseReqCommand", () => {
   describe("event ID flag (-e) with nevent/naddr support", () => {
     describe("nevent support", () => {
       it("should parse nevent and populate filter.ids", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({
           id: eventId,
         });
@@ -192,7 +193,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should extract relay hints from nevent", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({
           id: eventId,
           relays: ["wss://relay.damus.io"],
@@ -204,7 +206,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should normalize relay URLs from nevent", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({
           id: eventId,
           relays: ["wss://relay.damus.io"],
@@ -218,7 +221,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should handle nevent without relay hints", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({
           id: eventId,
         });
@@ -231,7 +235,8 @@ describe("parseReqCommand", () => {
 
     describe("naddr support", () => {
       it("should parse naddr and populate filter['#a']", () => {
-        const pubkey = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const pubkey =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const naddr = nip19.naddrEncode({
           kind: 30023,
           pubkey: pubkey,
@@ -245,7 +250,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should extract relay hints from naddr", () => {
-        const pubkey = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const pubkey =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const naddr = nip19.naddrEncode({
           kind: 30023,
           pubkey: pubkey,
@@ -261,7 +267,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should format coordinate correctly (kind:pubkey:identifier)", () => {
-        const pubkey = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const pubkey =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const naddr = nip19.naddrEncode({
           kind: 30023,
           pubkey: pubkey,
@@ -280,7 +287,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should handle naddr without relay hints", () => {
-        const pubkey = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const pubkey =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const naddr = nip19.naddrEncode({
           kind: 30023,
           pubkey: pubkey,
@@ -295,7 +303,8 @@ describe("parseReqCommand", () => {
 
     describe("note/hex support (existing behavior)", () => {
       it("should parse note and populate filter['#e']", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const note = nip19.noteEncode(eventId);
         const result = parseReqCommand(["-e", note]);
 
@@ -318,7 +327,8 @@ describe("parseReqCommand", () => {
     describe("mixed format support", () => {
       it("should handle comma-separated mix of all formats", () => {
         const hex = "a".repeat(64);
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const pubkey = "b".repeat(64);
 
         const note = nip19.noteEncode(eventId);
@@ -349,9 +359,13 @@ describe("parseReqCommand", () => {
       });
 
       it("should deduplicate within each filter field", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent1 = nip19.neventEncode({ id: eventId });
-        const nevent2 = nip19.neventEncode({ id: eventId, relays: ["wss://relay.damus.io"] });
+        const nevent2 = nip19.neventEncode({
+          id: eventId,
+          relays: ["wss://relay.damus.io"],
+        });
 
         const result = parseReqCommand(["-e", `${nevent1},${nevent2}`]);
 
@@ -360,7 +374,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should collect relay hints from mixed formats", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const pubkey = "b".repeat(64);
 
         const nevent = nip19.neventEncode({
@@ -383,7 +398,8 @@ describe("parseReqCommand", () => {
       });
 
       it("should handle multiple nevents with different relay hints", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent1 = nip19.neventEncode({
           id: eventId,
           relays: ["wss://relay.damus.io"],
@@ -438,7 +454,8 @@ describe("parseReqCommand", () => {
 
     describe("integration with other flags", () => {
       it("should work with kind filter", () => {
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({ id: eventId });
         const result = parseReqCommand(["-k", "1", "-e", nevent]);
 
@@ -465,7 +482,8 @@ describe("parseReqCommand", () => {
 
       it("should work with author and time filters", () => {
         const hex = "c".repeat(64);
-        const eventId = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({ id: eventId });
         const result = parseReqCommand([
           "-k",

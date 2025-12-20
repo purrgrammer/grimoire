@@ -14,14 +14,23 @@ export interface ParsedProfileCommand {
  * - abc123... (64-char hex pubkey)
  * - user@domain.com (NIP-05 identifier)
  * - domain.com (bare domain, resolved as _@domain.com)
+ * - $me (active account alias)
  */
 export async function parseProfileCommand(
   args: string[],
+  activeAccountPubkey?: string,
 ): Promise<ParsedProfileCommand> {
   const identifier = args[0];
 
   if (!identifier) {
     throw new Error("User identifier required");
+  }
+
+  // Handle $me alias
+  if (identifier.toLowerCase() === "$me") {
+    return {
+      pubkey: activeAccountPubkey || "$me",
+    };
   }
 
   // Try bech32 decode first (npub, nprofile)

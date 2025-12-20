@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCommandInput } from "./command-parser";
+import { parseCommandInput, executeCommandParser } from "./command-parser";
 
 /**
  * Regression tests for parseCommandInput
@@ -252,5 +252,29 @@ describe("parseCommandInput - regression tests", () => {
       const result = parseCommandInput('profile alice --title "👤 Alice"');
       expect(result.globalFlags?.windowProps?.title).toBe("👤 Alice");
     });
+  });
+});
+
+describe("executeCommandParser - alias resolution", () => {
+  it("should resolve $me in profile command when activeAccountPubkey is provided", async () => {
+    const input = "profile $me";
+    const parsed = parseCommandInput(input);
+    const activeAccountPubkey =
+      "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
+
+    const result = await executeCommandParser(parsed, activeAccountPubkey);
+
+    expect(result.error).toBeUndefined();
+    expect(result.props.pubkey).toBe(activeAccountPubkey);
+  });
+
+  it("should return $me literal in profile command when activeAccountPubkey is NOT provided", async () => {
+    const input = "profile $me";
+    const parsed = parseCommandInput(input);
+
+    const result = await executeCommandParser(parsed);
+
+    expect(result.error).toBeUndefined();
+    expect(result.props.pubkey).toBe("$me");
   });
 });

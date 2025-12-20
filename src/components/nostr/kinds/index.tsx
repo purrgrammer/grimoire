@@ -34,6 +34,7 @@ import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
 import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
+import { SpellRenderer, SpellDetailRenderer } from "./SpellRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -62,6 +63,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1621: IssueRenderer, // Issue (NIP-34)
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
+  777: SpellRenderer, // Spell (Grimoire)
   10002: Kind10002Renderer, // Relay List Metadata (NIP-65)
   10006: GenericRelayListRenderer, // Blocked Relays (NIP-51)
   10007: GenericRelayListRenderer, // Search Relays (NIP-51)
@@ -122,6 +124,7 @@ const detailRenderers: Record<
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
   9802: Kind9802DetailRenderer, // Highlight Detail
   10002: Kind10002DetailRenderer, // Relay List Detail (NIP-65)
+  777: SpellDetailRenderer, // Spell Detail
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)

@@ -237,6 +237,9 @@ function generateRawCommand(appId: string, props: any): string {
     case "man":
       return props.cmd ? `man ${props.cmd}` : "man";
 
+    case "spells":
+      return "spells";
+
     default:
       return appId;
   }

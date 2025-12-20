@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { useAtom } from "jotai";
+import { useLiveQuery } from "dexie-react-hooks";
+import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { manPages } from "@/types/man";
 import { parseCommandInput, executeCommandParser } from "@/lib/command-parser";
@@ -20,7 +22,17 @@ export default function CommandLauncher({
 }: CommandLauncherProps) {
   const [input, setInput] = useState("");
   const [editMode, setEditMode] = useAtom(commandLauncherEditModeAtom);
-  const { addWindow, updateWindow } = useGrimoire();
+  const { state, addWindow, updateWindow } = useGrimoire();
+
+  // Fetch spells with aliases
+  const aliasedSpells =
+    useLiveQuery(() =>
+      db.spells
+        .toArray()
+        .then((spells) =>
+          spells.filter((s) => s.alias !== undefined && s.alias !== ""),
+        ),
+    ) || [];
 
   // Prefill input when entering edit mode
   useEffect(() => {
@@ -36,19 +48,49 @@ export default function CommandLauncher({
   // Parse input into command and arguments
   const parsed = parseCommandInput(input);
   const { commandName } = parsed;
-  const recognizedCommand = parsed.command;
+
+  // Check if it's a spell alias
+  const activeSpell = aliasedSpells.find(
+    (s) => s.alias?.toLowerCase() === commandName.toLowerCase(),
+  );
+
+  // Re-parse if it's a spell
+  const effectiveParsed = activeSpell
+    ? parseCommandInput(
+        activeSpell.command +
+          (input.trim().includes(" ")
+            ? " " + input.trim().split(/\s+/).slice(1).join(" ")
+            : ""),
+      )
+    : parsed;
+
+  const recognizedCommand = effectiveParsed.command;
 
   // Filter commands by partial match on command name only
-  const filteredCommands = Object.entries(manPages).filter(([name]) =>
-    name.toLowerCase().includes(commandName.toLowerCase()),
-  );
+  const filteredCommands = [
+    ...Object.entries(manPages),
+    ...aliasedSpells.map((s) => [
+      s.alias!,
+      {
+        name: s.alias!,
+        synopsis: s.alias!,
+        description: s.name || s.description || "",
+        category: "Spells",
+        appId: "req",
+        spellCommand: s.command,
+      } as any,
+    ]),
+  ].filter(([name]) => name.toLowerCase().includes(commandName.toLowerCase()));
 
   // Execute command (async to support async argParsers)
   const executeCommand = async () => {
     if (!recognizedCommand) return;
 
     // Execute argParser and get props/title
-    const result = await executeCommandParser(parsed);
+    const result = await executeCommandParser(
+      effectiveParsed,
+      state.activeAccount?.pubkey,
+    );
 
     if (result.error || !result.props) {
       console.error("Failed to parse command:", result.error);
@@ -59,7 +101,7 @@ export default function CommandLauncher({
     if (editMode) {
       updateWindow(editMode.windowId, {
         props: result.props,
-        commandString: input.trim(),
+        commandString: activeSpell ? effectiveParsed.fullInput : input.trim(),
         appId: recognizedCommand.appId,
         customTitle: result.globalFlags?.windowProps?.title,
       });
@@ -69,7 +111,7 @@ export default function CommandLauncher({
       addWindow(
         recognizedCommand.appId,
         result.props,
-        input.trim(),
+        activeSpell ? effectiveParsed.fullInput : input.trim(),
         result.globalFlags?.windowProps?.title,
       );
     }
@@ -90,19 +132,21 @@ export default function CommandLauncher({
     }
   };
 
-  // Define category order: Nostr first, then Documentation, then System
-  const categoryOrder = ["Nostr", "Documentation", "System"];
+  // Define category order: Nostr first, then Spells, then Documentation, then System
+  const categoryOrder = ["Nostr", "Spells", "Documentation", "System"];
   const categories = Array.from(
     new Set(filteredCommands.map(([_, cmd]) => cmd.category)),
   ).sort((a, b) => {
-    const indexA = categoryOrder.indexOf(a);
-    const indexB = categoryOrder.indexOf(b);
+    const indexA = categoryOrder.indexOf(a as string);
+    const indexB = categoryOrder.indexOf(b as string);
     return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
   });
 
   // Dynamic placeholder
   const placeholder = recognizedCommand
-    ? recognizedCommand.synopsis
+    ? activeSpell
+      ? activeSpell.command
+      : recognizedCommand.synopsis
     : "Type a command...";
 
   return (
@@ -165,9 +209,16 @@ export default function CommandLauncher({
                                 </span>
                               )}
                             </div>
-                            <div className="command-item-description">
-                              {cmd.description.split(".")[0]}
-                            </div>
+                            {cmd.description && (
+                              <div className="command-item-description">
+                                {cmd.description.split(".")[0]}
+                              </div>
+                            )}
+                            {cmd.spellCommand && (
+                              <div className="text-[10px] opacity-50 font-mono truncate mt-0.5">
+                                {cmd.spellCommand}
+                              </div>
+                            )}
                           </div>
                         </Command.Item>
                       );

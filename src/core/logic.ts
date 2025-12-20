@@ -489,4 +489,3 @@ export const setCompactModeKinds = (
     compactModeKinds: kinds,
   };
 };
-
