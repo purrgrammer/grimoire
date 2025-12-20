@@ -336,11 +336,7 @@ describe("parseReqCommand", () => {
     });
 
     it("should parse comma-separated values with spaces", () => {
-      const result = parseReqCommand([
-        "--tag",
-        "a",
-        "value1, value2, value3",
-      ]);
+      const result = parseReqCommand(["--tag", "a", "value1, value2, value3"]);
       expect(result.filter["#a"]).toEqual(["value1", "value2", "value3"]);
     });
 

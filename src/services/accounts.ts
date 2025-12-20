@@ -1,5 +1,7 @@
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
+import { NostrConnectSigner } from "applesauce-signers";
+import pool from "./relay-pool";
 
 const ACCOUNTS = "nostr-accounts";
 const ACTIVE_ACCOUNT = "active-account";
@@ -11,6 +13,10 @@ function safeParse(s: string) {
     console.error(err);
   }
 }
+
+// Setup nostr connect signer methods before account restoration
+NostrConnectSigner.subscriptionMethod = pool.subscription.bind(pool);
+NostrConnectSigner.publishMethod = pool.publish.bind(pool);
 
 const accountManager = new AccountManager();
 registerCommonAccountTypes(accountManager);

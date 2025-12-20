@@ -16,6 +16,7 @@ import Feed from "./nostr/Feed";
 import { WinViewer } from "./WinViewer";
 import { DebugViewer } from "./DebugViewer";
 import ConnViewer from "./ConnViewer";
+import LoginViewer from "./LoginViewer";
 
 interface WindowRendererProps {
   window: WindowInstance;
@@ -140,6 +141,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "conn":
         content = <ConnViewer />;
+        break;
+      case "login":
+        content = <LoginViewer />;
         break;
       default:
         content = (

@@ -15,7 +15,8 @@ class Logger {
   private log(level: LogLevel, message: string, data?: unknown) {
     // Format message
     const prefix = `[${this.context}]`;
-    const logMessage = data !== undefined ? [prefix, message, data] : [prefix, message];
+    const logMessage =
+      data !== undefined ? [prefix, message, data] : [prefix, message];
 
     switch (level) {
       case "debug":

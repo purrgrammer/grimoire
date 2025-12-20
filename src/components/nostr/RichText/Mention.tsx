@@ -79,7 +79,8 @@ export function Mention({ node }: MentionNodeProps) {
     if (!options.showEventEmbeds) {
       return (
         <span className="text-muted-foreground font-mono text-sm">
-          {node.encoded || `naddr:${pointer.identifier || pointer.pubkey.slice(0, 8)}...`}
+          {node.encoded ||
+            `naddr:${pointer.identifier || pointer.pubkey.slice(0, 8)}...`}
         </span>
       );
     }
