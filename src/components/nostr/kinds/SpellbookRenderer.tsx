@@ -5,7 +5,7 @@ import {
   ClickableEventTitle,
 } from "./BaseEventRenderer";
 import { parseSpellbook } from "@/lib/spellbook-manager";
-import { SpellbookEvent } from "@/types/spell";
+import { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { NostrEvent } from "@/types/nostr";
 import { BookHeart, Layout, ExternalLink, Play, Eye, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,23 @@ import { toast } from "sonner";
 import { useProfile } from "@/hooks/useProfile";
 import { nip19 } from "nostr-tools";
 import { useNavigate } from "react-router";
+import { KindBadge } from "@/components/KindBadge";
+import { WindowInstance } from "@/types/app";
+
+/**
+ * Helper to extract all unique event kinds from a spellbook's windows
+ */
+function getSpellbookKinds(spellbook: ParsedSpellbook): number[] {
+  const kinds = new Set<number>();
+  Object.values(spellbook.content.windows).forEach((w) => {
+    const window = w as WindowInstance;
+    // If it's a req window, extract kinds from filter
+    if (window.appId === "req" && window.props?.filter?.kinds) {
+      window.props.filter.kinds.forEach((k: number) => kinds.add(k));
+    }
+  });
+  return Array.from(kinds).sort((a, b) => a - b);
+}
 
 /**
  * Preview Button Component
@@ -100,6 +117,22 @@ export function SpellbookRenderer({ event }: BaseEventProps) {
           <PreviewButton event={event} identifier={spellbook.slug} size="sm" className="flex-shrink-0" />
         </div>
 
+        {/* Kind Badges */}
+        {getSpellbookKinds(spellbook).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {getSpellbookKinds(spellbook).map((kind) => (
+              <KindBadge
+                key={kind}
+                kind={kind}
+                variant="compact"
+                className="text-[10px]"
+                showName
+                clickable
+              />
+            ))}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="flex gap-4 mt-1 text-xs text-muted-foreground font-mono">
           <div className="flex items-center gap-1">
@@ -167,8 +200,27 @@ export function SpellbookDetailRenderer({ event }: { event: NostrEvent }) {
             <div className="p-2.5 bg-accent/10 rounded-xl">
               <BookHeart className="size-8 text-accent" />
             </div>
-            <h2 className="text-3xl font-bold truncate">{spellbook.title}</h2>
+            <ClickableEventTitle 
+              event={event} 
+              className="text-3xl font-bold truncate hover:underline cursor-pointer"
+            >
+              {spellbook.title}
+            </ClickableEventTitle>
           </div>
+          
+          {getSpellbookKinds(spellbook).length > 0 && (
+            <div className="flex flex-wrap gap-2 py-1">
+              {getSpellbookKinds(spellbook).map((kind) => (
+                <KindBadge
+                  key={kind}
+                  kind={kind}
+                  showName
+                  clickable
+                />
+              ))}
+            </div>
+          )}
+
           {spellbook.description && (
             <p className="text-lg text-muted-foreground">
               {spellbook.description}
