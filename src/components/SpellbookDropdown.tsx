@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { BookHeart, ChevronDown, Loader2, WandSparkles } from "lucide-react";
+import { BookHeart, ChevronDown, WandSparkles } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
@@ -230,22 +230,13 @@ export function SpellbookDropdown() {
               onClick={() => addWindow("spells", {})}
               className={cn(itemClass, "text-xs opacity-70")}
             >
-              <WandSparkles className="size-3 mr-2 text-muted-foreground" />
-              Manage Spells
-            </DropdownMenuItem>
-          </>
-        )}
-
-        {networkLoading && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="p-2 flex items-center justify-center gap-2 text-[10px] text-muted-foreground italic uppercase tracking-tight">
-              <Loader2 className="size-3 animate-spin" />
-              Syncing...
-            </div>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+                          <WandSparkles className="size-3 mr-2 text-muted-foreground" />
+                          Manage Spells
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+              }
+              
