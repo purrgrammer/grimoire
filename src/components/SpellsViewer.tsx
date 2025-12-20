@@ -9,8 +9,8 @@ import {
   Loader2,
   RefreshCw,
   Archive,
-  Users,
   WandSparkles as Wand,
+  BookUp,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
@@ -407,8 +407,8 @@ export function SpellsViewer() {
         <div className="px-4 py-3 border-b border-border bg-accent/5 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-              <Users className="size-4" />
-              Network Spells
+              <BookUp className="size-4" />
+              Enhance your grimoire
             </div>
             <p className="text-xs text-muted-foreground">
               Browse spells published by your contacts.
