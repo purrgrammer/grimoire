@@ -1,12 +1,17 @@
 import { useMemo } from "react";
-import { BookHeart, ChevronDown, Layout, Loader2, WandSparkles } from "lucide-react";
+import { BookHeart, ChevronDown, Loader2, WandSparkles } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
 import { parseSpellbook } from "@/lib/spellbook-manager";
 import { decodeSpell } from "@/lib/spell-conversion";
-import type { SpellbookEvent, ParsedSpellbook, SpellEvent, ParsedSpell } from "@/types/spell";
+import type {
+  SpellbookEvent,
+  ParsedSpellbook,
+  SpellEvent,
+  ParsedSpell,
+} from "@/types/spell";
 import { SPELLBOOK_KIND, SPELL_KIND } from "@/constants/kinds";
 import { Button } from "./ui/button";
 import {
@@ -19,6 +24,7 @@ import {
 } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { manPages } from "@/types/man";
+import { cn } from "@/lib/utils";
 
 export function SpellbookDropdown() {
   const { state, loadSpellbook, addWindow } = useGrimoire();
@@ -26,10 +32,10 @@ export function SpellbookDropdown() {
 
   // 1. Load Local Data
   const localSpellbooks = useLiveQuery(() =>
-    db.spellbooks.toArray().then(books => books.filter(b => !b.deletedAt)),
+    db.spellbooks.toArray().then((books) => books.filter((b) => !b.deletedAt)),
   );
   const localSpells = useLiveQuery(() =>
-    db.spells.toArray().then(spells => spells.filter(s => !s.deletedAt)),
+    db.spells.toArray().then((spells) => spells.filter((s) => !s.deletedAt)),
   );
 
   // 2. Fetch Network Data
@@ -58,17 +64,25 @@ export function SpellbookDropdown() {
       });
     }
 
-    for (const event of networkEvents.filter(e => e.kind === SPELLBOOK_KIND)) {
+    for (const event of networkEvents.filter((e) => e.kind === SPELLBOOK_KIND)) {
       const slug = event.tags.find((t) => t[0] === "d")?.[1] || "";
       if (!slug) continue;
       const existing = allMap.get(slug);
-      if (existing && event.created_at * 1000 <= (existing.event?.created_at || 0) * 1000) continue;
+      if (
+        existing &&
+        event.created_at * 1000 <= (existing.event?.created_at || 0) * 1000
+      )
+        continue;
       try {
         allMap.set(slug, parseSpellbook(event as SpellbookEvent));
-      } catch (e) {}
+      } catch (e) {
+        // ignore
+      }
     }
 
-    return Array.from(allMap.values()).sort((a, b) => a.title.localeCompare(b.title));
+    return Array.from(allMap.values()).sort((a, b) =>
+      a.title.localeCompare(b.title),
+    );
   }, [localSpellbooks, networkEvents, activeAccount]);
 
   // 4. Process Spells
@@ -77,30 +91,37 @@ export function SpellbookDropdown() {
     const allMap = new Map<string, ParsedSpell>();
 
     for (const s of localSpells || []) {
-      allMap.set(s.id, {
+      // Use eventId if available, otherwise fallback to local id for deduplication
+      const key = s.eventId || s.id;
+      allMap.set(key, {
         name: s.name || s.alias,
         command: s.command,
         description: s.description,
         event: s.event as SpellEvent,
-        filter: {}, // Not needed for dropdown
+        filter: {},
         topics: [],
-        closeOnEose: false
+        closeOnEose: false,
       });
     }
 
-    for (const event of networkEvents.filter(e => e.kind === SPELL_KIND)) {
+    for (const event of networkEvents.filter((e) => e.kind === SPELL_KIND)) {
       if (allMap.has(event.id)) continue;
       try {
         allMap.set(event.id, decodeSpell(event as SpellEvent));
-      } catch (e) {}
+      } catch (e) {
+        // ignore
+      }
     }
 
-    return Array.from(allMap.values()).sort((a, b) => 
-      (a.name || "Untitled").localeCompare(b.name || "Untitled")
+    return Array.from(allMap.values()).sort((a, b) =>
+      (a.name || "Untitled").localeCompare(b.name || "Untitled"),
     );
   }, [localSpells, networkEvents, activeAccount]);
 
-  if (!activeAccount || (spellbooks.length === 0 && spells.length === 0 && !networkLoading)) {
+  if (
+    !activeAccount ||
+    (spellbooks.length === 0 && spells.length === 0 && !networkLoading)
+  ) {
     return null;
   }
 
@@ -121,12 +142,15 @@ export function SpellbookDropdown() {
           ? await Promise.resolve(command.argParser(cmdArgs))
           : command.defaultProps || {};
         addWindow(command.appId, cmdProps, spell.command);
-        toast.success(`Ran spell: ${spell.name || 'Untitled'}`);
+        toast.success(`Ran spell: ${spell.name || "Untitled"}`);
       }
     } catch (e) {
       toast.error("Failed to run spell");
     }
   };
+
+  const itemClass =
+    "cursor-pointer py-2 hover:bg-muted focus:bg-muted transition-colors";
 
   return (
     <DropdownMenu>
@@ -134,14 +158,17 @@ export function SpellbookDropdown() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 gap-1.5 text-muted-foreground hover:text-accent"
+          className="h-7 px-2 gap-1.5 text-muted-foreground hover:text-foreground"
         >
           <BookHeart className="size-4" />
           <span className="text-xs font-medium hidden sm:inline">Library</span>
           <ChevronDown className="size-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-64 max-h-[80vh] overflow-y-auto">
+      <DropdownMenuContent
+        align="center"
+        className="w-64 max-h-[80vh] overflow-y-auto"
+      >
         {/* Spellbooks Section */}
         {spellbooks.length > 0 && (
           <>
@@ -152,17 +179,26 @@ export function SpellbookDropdown() {
               <DropdownMenuItem
                 key={sb.slug}
                 onClick={() => handleApplySpellbook(sb)}
-                className="cursor-pointer py-2"
+                className={itemClass}
               >
-                <Layout className="size-3.5 mr-2 text-muted-foreground flex-shrink-0" />
+                <BookHeart className="size-3.5 mr-2 text-muted-foreground flex-shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <span className="truncate font-medium text-sm">{sb.title}</span>
+                  <span className="truncate font-medium text-sm">
+                    {sb.title}
+                  </span>
                   <span className="text-[10px] text-muted-foreground truncate">
                     {Object.keys(sb.content.workspaces).length} tabs
                   </span>
                 </div>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuItem
+              onClick={() => addWindow("spellbooks", {})}
+              className={cn(itemClass, "text-xs opacity-70")}
+            >
+              <BookHeart className="size-3 mr-2 text-muted-foreground" />
+              Manage Library
+            </DropdownMenuItem>
           </>
         )}
 
@@ -177,35 +213,38 @@ export function SpellbookDropdown() {
               <DropdownMenuItem
                 key={s.event?.id || `local-${idx}`}
                 onClick={() => handleRunSpell(s)}
-                className="cursor-pointer py-2"
+                className={itemClass}
               >
-                <WandSparkles className="size-3.5 mr-2 text-accent flex-shrink-0" />
+                <WandSparkles className="size-3.5 mr-2 text-muted-foreground flex-shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <span className="truncate font-medium text-sm">{s.name || "Untitled Spell"}</span>
+                  <span className="truncate font-medium text-sm">
+                    {s.name || "Untitled Spell"}
+                  </span>
                   <span className="text-[10px] text-muted-foreground truncate font-mono">
                     {s.command}
                   </span>
                 </div>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuItem
+              onClick={() => addWindow("spells", {})}
+              className={cn(itemClass, "text-xs opacity-70")}
+            >
+              <WandSparkles className="size-3 mr-2 text-muted-foreground" />
+              Manage Spells
+            </DropdownMenuItem>
           </>
         )}
 
         {networkLoading && (
-          <div className="p-2 flex items-center justify-center gap-2 text-xs text-muted-foreground italic">
-            <Loader2 className="size-3 animate-spin" />
-            Syncing...
-          </div>
+          <>
+            <DropdownMenuSeparator />
+            <div className="p-2 flex items-center justify-center gap-2 text-[10px] text-muted-foreground italic uppercase tracking-tight">
+              <Loader2 className="size-3 animate-spin" />
+              Syncing...
+            </div>
+          </>
         )}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => addWindow("spellbooks", {})}
-          className="cursor-crosshair py-2"
-        >
-          <BookHeart className="size-3.5 mr-2 text-muted-foreground" />
-          <span className="text-sm">Manage Library</span>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
