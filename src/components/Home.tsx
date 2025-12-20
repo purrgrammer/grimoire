@@ -42,7 +42,11 @@ export default function Home() {
   const [resolvedPubkey, setResolvedPubkey] = useState<string | null>(null);
   const isPreviewPath = location.pathname.startsWith("/preview/");
   const isDirectPath = actor && identifier && !isPreviewPath;
+  const isFromApp = location.state?.fromApp === true;
   const [hasLoadedSpellbook, setHasLoadedSpellbook] = useState(false);
+
+  // Show banner only if temporary AND we navigated from within the app
+  const showBanner = isTemporary && isFromApp;
 
   // 1. Resolve actor to pubkey
   useEffect(() => {
@@ -192,7 +196,7 @@ export default function Home() {
       />
       <GlobalAuthPrompt />
       <main className="h-screen w-screen flex flex-col bg-background text-foreground">
-        {isTemporary && (
+        {showBanner && (
           <div className="bg-accent text-accent-foreground px-4 py-1.5 flex items-center justify-between text-sm font-medium animate-in slide-in-from-top duration-300 shadow-md z-50">
             <div className="flex items-center gap-2">
               <BookHeart className="size-4" />

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { BookHeart, ChevronDown, Plus, Save, X } from "lucide-react";
+import { BookHeart, ChevronDown, Plus, Save, Settings, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
-import { createSpellbook, parseSpellbook } from "@/lib/spellbook-manager";
+import { parseSpellbook } from "@/lib/spellbook-manager";
 import type { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { SPELLBOOK_KIND } from "@/constants/kinds";
 import { Button } from "./ui/button";
@@ -16,19 +16,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PublishSpellbookAction } from "@/actions/publish-spellbook";
-import { saveSpellbook } from "@/services/spellbook-storage";
 import { SaveSpellbookDialog } from "./SaveSpellbookDialog";
 
 export function SpellbookDropdown() {
-  const { state, loadSpellbook, addWindow, clearActiveSpellbook } =
+  const { state, loadSpellbook, addWindow, clearActiveSpellbook, applyTemporaryToPersistent, isTemporary } =
     useGrimoire();
   const activeAccount = state.activeAccount;
   const activeSpellbook = state.activeSpellbook;
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [dialogSpellbook, setDialogSpellbook] = useState<{
+    slug: string;
+    title: string;
+    description?: string;
+    workspaceIds?: string[];
+    localId?: string;
+    pubkey?: string;
+  } | undefined>(undefined);
 
   // 1. Load Local Data
   const localSpellbooks = useLiveQuery(() =>
@@ -82,63 +86,43 @@ export function SpellbookDropdown() {
     );
   }, [localSpellbooks, networkEvents, activeAccount]);
 
+  // Check if active spellbook is in local library
+  const isActiveLocal = useMemo(() => {
+    if (!activeSpellbook) return false;
+    return (localSpellbooks || []).some(s => s.slug === activeSpellbook.slug);
+  }, [activeSpellbook, localSpellbooks]);
+
   if (!activeAccount || (spellbooks.length === 0 && !activeSpellbook)) {
     return null;
   }
 
   const handleApplySpellbook = (sb: ParsedSpellbook) => {
     loadSpellbook(sb);
-    toast.success(`Layout "${sb.title}" applied`);
   };
 
   const handleUpdateActive = async () => {
     if (!activeSpellbook) return;
-    setIsUpdating(true);
-    try {
-      // Generate current layout content
-      const encoded = createSpellbook({
-        state,
-        title: activeSpellbook.title,
-      });
 
-      const content = JSON.parse(encoded.eventProps.content);
+    // Get local spellbook for ID
+    const local = await db.spellbooks
+      .where("slug")
+      .equals(activeSpellbook.slug)
+      .first();
 
-      // 1. Save locally
-      const local = await db.spellbooks
-        .where("slug")
-        .equals(activeSpellbook.slug)
-        .first();
-      if (local) {
-        await db.spellbooks.update(local.id, { content });
-      } else {
-        await saveSpellbook({
-          slug: activeSpellbook.slug,
-          title: activeSpellbook.title,
-          content,
-          isPublished: false,
-        });
-      }
+    // Open dialog with existing spellbook data
+    setDialogSpellbook({
+      slug: activeSpellbook.slug,
+      title: activeSpellbook.title,
+      workspaceIds: Object.keys(state.workspaces),
+      localId: local?.id,
+      pubkey: activeSpellbook.pubkey,
+    });
+    setSaveDialogOpen(true);
+  };
 
-      // 2. If it was published or we want to publish updates
-      if (activeSpellbook.pubkey === activeAccount.pubkey) {
-        const action = new PublishSpellbookAction();
-        await action.execute({
-          state,
-          title: activeSpellbook.title,
-          content,
-          localId: local?.id,
-        });
-        toast.success(
-          `Layout "${activeSpellbook.title}" updated and published`,
-        );
-      } else {
-        toast.success(`Layout "${activeSpellbook.title}" updated locally`);
-      }
-    } catch (e) {
-      toast.error("Failed to update layout");
-    } finally {
-      setIsUpdating(false);
-    }
+  const handleNewSpellbook = () => {
+    setDialogSpellbook(undefined);
+    setSaveDialogOpen(true);
   };
 
   const itemClass =
@@ -149,6 +133,7 @@ export function SpellbookDropdown() {
       <SaveSpellbookDialog
         open={saveDialogOpen}
         onOpenChange={setSaveDialogOpen}
+        existingSpellbook={isActiveLocal ? dialogSpellbook : undefined}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -162,7 +147,7 @@ export function SpellbookDropdown() {
           >
             <BookHeart className="size-4" />
             <span className="text-xs font-medium hidden sm:inline">
-              {activeSpellbook ? activeSpellbook.title : "Layouts"}
+              {activeSpellbook ? activeSpellbook.title : "grimoire"}
             </span>
             <ChevronDown className="size-3 opacity-50" />
           </Button>
@@ -175,21 +160,40 @@ export function SpellbookDropdown() {
           {activeSpellbook && (
             <>
               <DropdownMenuLabel className="py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                Current Layout
+                Active Layout
               </DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={handleUpdateActive}
-                disabled={isUpdating}
-                className={itemClass}
-              >
-                <Save className="size-3.5 mr-2 text-muted-foreground" />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-medium text-sm">Update</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    Save current state to this spellbook
-                  </span>
-                </div>
-              </DropdownMenuItem>
+              <div className="px-2 py-1 text-sm font-medium truncate opacity-80 mb-1">
+                {activeSpellbook.title || activeSpellbook.slug}
+              </div>
+
+              {isTemporary && (
+                <DropdownMenuItem
+                  onClick={applyTemporaryToPersistent}
+                  className={cn(itemClass, "bg-accent/5 font-bold")}
+                >
+                  <Save className="size-3.5 mr-2" />
+                  Apply to Dashboard
+                </DropdownMenuItem>
+              )}
+
+              {isActiveLocal && activeSpellbook.pubkey === activeAccount.pubkey ? (
+                <DropdownMenuItem
+                  onClick={handleUpdateActive}
+                  className={itemClass}
+                >
+                  <Save className="size-3.5 mr-2 text-muted-foreground" />
+                  Update
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={handleUpdateActive}
+                  className={itemClass}
+                >
+                  <Plus className="size-3.5 mr-2 text-muted-foreground" />
+                  Add to Library
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={clearActiveSpellbook}
                 className={cn(itemClass, "text-xs opacity-70")}
@@ -202,56 +206,58 @@ export function SpellbookDropdown() {
           )}
 
           {/* Spellbooks Section */}
-          {spellbooks.length > 0 && (
-            <>
-              <DropdownMenuLabel className="flex items-center justify-between py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                My Layouts
-              </DropdownMenuLabel>
-              {spellbooks.map((sb) => {
-                const isActive = activeSpellbook?.slug === sb.slug;
-                return (
-                  <DropdownMenuItem
-                    key={sb.slug}
-                    onClick={() => handleApplySpellbook(sb)}
-                    className={cn(itemClass, isActive && "bg-muted font-bold")}
-                  >
-                    <BookHeart
-                      className={cn(
-                        "size-3.5 mr-2 text-muted-foreground",
-                        isActive && "text-foreground",
-                      )}
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="truncate font-medium text-sm">
-                        {sb.title}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground truncate">
-                        {Object.keys(sb.content.workspaces).length} tabs
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                );
-              })}
-              <DropdownMenuItem
-                onClick={() => addWindow("spellbooks", {})}
-                className={cn(itemClass, "text-xs opacity-70")}
-              >
-                <BookHeart className="size-3 mr-2 text-muted-foreground" />
-                Manage Layouts
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
+          <DropdownMenuLabel className="flex items-center justify-between py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
+            My Layouts
+          </DropdownMenuLabel>
+          
+          {spellbooks.length === 0 ? (
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground italic">
+              No layouts saved yet.
+            </div>
+          ) : (
+            spellbooks.map((sb) => {
+              const isActive = activeSpellbook?.slug === sb.slug;
+              return (
+                <DropdownMenuItem
+                  key={sb.slug}
+                  disabled={isActive}
+                  onClick={() => handleApplySpellbook(sb)}
+                  className={cn(itemClass, isActive && "bg-muted font-bold")}
+                >
+                  <BookHeart
+                    className={cn(
+                      "size-3.5 mr-2 text-muted-foreground",
+                      isActive && "text-foreground",
+                    )}
+                  />
+                  <div className="flex flex-row gap-0 min-w-0">
+                    <span className="truncate font-medium text-sm">
+                      {sb.title}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })
           )}
 
-          {/* New Section */}
+          <DropdownMenuSeparator />
+          
+          {!activeSpellbook && (
+            <DropdownMenuItem
+              onClick={handleNewSpellbook}
+              className={itemClass}
+            >
+              <Plus className="size-3.5 mr-2 text-muted-foreground" />
+              <span className="text-sm font-medium">Save current as Layout</span>
+            </DropdownMenuItem>
+          )}
+
           <DropdownMenuItem
-            onClick={() => setSaveDialogOpen(true)}
-            className={itemClass}
+            onClick={() => addWindow("spellbooks", {})}
+            className={cn(itemClass, "text-xs opacity-70")}
           >
-            <Plus className="size-3.5 mr-2 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">
-              Save as new layout
-            </span>
+            <Settings className="size-3.5 mr-2 text-muted-foreground" />
+            Manage Library
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

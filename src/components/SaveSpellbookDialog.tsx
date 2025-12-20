@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,20 +22,47 @@ import { Loader2, Save, Send } from "lucide-react";
 interface SaveSpellbookDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  existingSpellbook?: {
+    slug: string;
+    title: string;
+    description?: string;
+    workspaceIds?: string[];
+    localId?: string;
+    pubkey?: string;
+  };
 }
 
 export function SaveSpellbookDialog({
   open,
   onOpenChange,
+  existingSpellbook,
 }: SaveSpellbookDialogProps) {
   const { state } = useGrimoire();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const isUpdateMode = !!existingSpellbook;
+
+  const [title, setTitle] = useState(existingSpellbook?.title || "");
+  const [description, setDescription] = useState(existingSpellbook?.description || "");
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<string[]>(
-    Object.keys(state.workspaces),
+    existingSpellbook?.workspaceIds || Object.keys(state.workspaces),
   );
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Update form when dialog opens with existing spellbook data
+  useEffect(() => {
+    if (open && existingSpellbook) {
+      setTitle(existingSpellbook.title);
+      setDescription(existingSpellbook.description || "");
+      setSelectedWorkspaces(
+        existingSpellbook.workspaceIds || Object.keys(state.workspaces),
+      );
+    } else if (open && !existingSpellbook) {
+      // Reset form for new spellbook
+      setTitle("");
+      setDescription("");
+      setSelectedWorkspaces(Object.keys(state.workspaces));
+    }
+  }, [open, existingSpellbook, state.workspaces]);
 
   const handleSave = async (shouldPublish: boolean) => {
     if (!title.trim()) {
@@ -44,7 +71,7 @@ export function SaveSpellbookDialog({
     }
 
     if (selectedWorkspaces.length === 0) {
-      toast.error("Please select at least one workspace to include");
+      toast.error("Please select at least one tab to include");
       return;
     }
 
@@ -60,16 +87,21 @@ export function SaveSpellbookDialog({
         workspaceIds: selectedWorkspaces,
       });
 
-      // 2. Save locally
+      // 2. Determine slug (keep existing for updates, generate for new)
+      const slug = isUpdateMode
+        ? existingSpellbook.slug
+        : title.toLowerCase().trim().replace(/\s+/g, "-");
+
+      // 3. Save locally
       const localSpellbook = await saveSpellbook({
-        slug: title.toLowerCase().trim().replace(/\s+/g, "-"),
+        slug,
         title,
         description,
         content: JSON.parse(encoded.eventProps.content),
         isPublished: false,
       });
 
-      // 3. Optionally publish
+      // 4. Optionally publish
       if (shouldPublish) {
         const action = new PublishSpellbookAction();
         await action.execute({
@@ -77,21 +109,32 @@ export function SaveSpellbookDialog({
           title,
           description,
           workspaceIds: selectedWorkspaces,
-          localId: localSpellbook.id,
+          localId: existingSpellbook?.localId || localSpellbook.id,
           content: localSpellbook.content, // Pass explicitly to avoid re-calculating (and potentially failing)
         });
-        toast.success("Spellbook saved and published to Nostr");
+        toast.success(
+          isUpdateMode
+            ? "Spellbook updated and published to Nostr"
+            : "Spellbook saved and published to Nostr",
+        );
       } else {
-        toast.success("Spellbook saved locally");
+        toast.success(
+          isUpdateMode ? "Spellbook updated locally" : "Spellbook saved locally",
+        );
       }
 
       onOpenChange(false);
-      // Reset form
-      setTitle("");
-      setDescription("");
+      // Reset form only if creating new
+      if (!isUpdateMode) {
+        setTitle("");
+        setDescription("");
+        setSelectedWorkspaces(Object.keys(state.workspaces));
+      }
     } catch (error) {
       console.error("Failed to save spellbook:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to save spellbook");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save spellbook",
+      );
     } finally {
       setIsSaving(false);
       setIsPublishing(false);
@@ -102,9 +145,13 @@ export function SaveSpellbookDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Save Layout as Spellbook</DialogTitle>
+          <DialogTitle>
+            {isUpdateMode ? "Update Spellbook" : "Save Layout as Spellbook"}
+          </DialogTitle>
           <DialogDescription>
-            Save your current workspaces and window configuration.
+            {isUpdateMode
+              ? "Update the configuration of your spellbook."
+              : "Save your current workspaces and window configuration."}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,7 +177,7 @@ export function SaveSpellbookDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Workspaces to include</Label>
+            <Label>Tabs to include</Label>
             <div className="grid grid-cols-2 gap-2 mt-1">
               {Object.values(state.workspaces)
                 .sort((a, b) => a.number - b.number)
@@ -153,7 +200,7 @@ export function SaveSpellbookDialog({
                       htmlFor={`ws-${ws.id}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
-                      {ws.number}. {ws.label || "Workspace"}
+                      {ws.number}. {ws.label || "Tab"}
                     </label>
                   </div>
                 ))}
