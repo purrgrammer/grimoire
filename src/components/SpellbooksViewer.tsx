@@ -44,7 +44,12 @@ interface SpellbookCardProps {
   onApply: (spellbook: ParsedSpellbook) => void;
 }
 
-function SpellbookCard({ spellbook, onDelete, onPublish, onApply }: SpellbookCardProps) {
+function SpellbookCard({
+  spellbook,
+  onDelete,
+  onPublish,
+  onApply,
+}: SpellbookCardProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const displayName = spellbook.title || "Untitled Spellbook";
@@ -127,18 +132,19 @@ function SpellbookCard({ spellbook, onDelete, onPublish, onApply }: SpellbookCar
           <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
               <Layout className="size-3" />
-              {workspaceCount} {workspaceCount === 1 ? 'workspace' : 'workspaces'}
+              {workspaceCount}{" "}
+              {workspaceCount === 1 ? "workspace" : "workspaces"}
             </div>
             <div className="flex items-center gap-1">
               <ExternalLink className="size-3" />
-              {windowCount} {windowCount === 1 ? 'window' : 'windows'}
+              {windowCount} {windowCount === 1 ? "window" : "windows"}
             </div>
           </div>
         </div>
       </CardContent>
 
       <CardFooter className="p-4 pt-0 flex-wrap gap-2 justify-between">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             variant="destructive"
@@ -169,13 +175,22 @@ function SpellbookCard({ spellbook, onDelete, onPublish, onApply }: SpellbookCar
               ) : (
                 <Send className="size-3.5 mr-1" />
               )}
-              {isPublishing ? "Publishing..." : spellbook.isPublished ? "Rebroadcast" : "Publish"}
+              {isPublishing
+                ? "Publishing..."
+                : spellbook.isPublished
+                  ? "Rebroadcast"
+                  : "Publish"}
             </Button>
           )}
         </div>
 
         {!spellbook.deletedAt && (
-          <Button size="sm" variant="default" className="h-8" onClick={handleApply}>
+          <Button
+            size="sm"
+            variant="default"
+            className="h-8"
+            onClick={handleApply}
+          >
             Apply Layout
           </Button>
         )}
@@ -198,7 +213,9 @@ export function SpellbooksViewer() {
 
   // Fetch from Nostr
   const { events: networkEvents, loading: networkLoading } = useReqTimeline(
-    state.activeAccount ? `user-spellbooks-${state.activeAccount.pubkey}` : "none",
+    state.activeAccount
+      ? `user-spellbooks-${state.activeAccount.pubkey}`
+      : "none",
     state.activeAccount
       ? { kinds: [SPELLBOOK_KIND], authors: [state.activeAccount.pubkey] }
       : [],
@@ -217,11 +234,13 @@ export function SpellbooksViewer() {
 
     for (const event of networkEvents) {
       // Find d tag for matching with local slug
-      const slug = event.tags.find(t => t[0] === 'd')?.[1] || '';
-      
+      const slug = event.tags.find((t) => t[0] === "d")?.[1] || "";
+
       // Look for existing by slug + pubkey? For now just ID matching if we have it
       // Replaceable events are tricky. Let's match by slug if localId not found.
-      const existing = Array.from(allSpellbooksMap.values()).find(s => s.slug === slug);
+      const existing = Array.from(allSpellbooksMap.values()).find(
+        (s) => s.slug === slug,
+      );
 
       if (existing) {
         // Update existing with network event if it's newer
@@ -284,7 +303,10 @@ export function SpellbooksViewer() {
 
     try {
       if (spellbook.isPublished && spellbook.event) {
-        await new DeleteEventAction().execute({ event: spellbook.event }, "Deleted by user");
+        await new DeleteEventAction().execute(
+          { event: spellbook.event },
+          "Deleted by user",
+        );
       }
       await deleteSpellbook(spellbook.id);
       toast.success("Spellbook deleted");
@@ -302,6 +324,7 @@ export function SpellbooksViewer() {
         description: spellbook.description,
         workspaceIds: Object.keys(spellbook.content.workspaces),
         localId: spellbook.id,
+        content: spellbook.content, // Pass existing content
       });
       toast.success("Spellbook published");
     } catch (error) {
@@ -379,7 +402,7 @@ export function SpellbooksViewer() {
             No spellbooks found.
           </div>
         ) : (
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1">
             {filteredSpellbooks.map((s) => (
               <SpellbookCard
                 key={s.id}

@@ -37,6 +37,10 @@ import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
 import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
 import { SpellRenderer, SpellDetailRenderer } from "./SpellRenderer";
+import {
+  SpellbookRenderer,
+  SpellbookDetailRenderer,
+} from "./SpellbookRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -76,6 +80,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   30617: RepositoryRenderer, // Repository (NIP-34)
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
+  30777: SpellbookRenderer, // Spellbook (Grimoire)
   30817: CommunityNIPRenderer, // Community NIP
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
@@ -132,6 +137,7 @@ const detailRenderers: Record<
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
+  30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
 };
 
