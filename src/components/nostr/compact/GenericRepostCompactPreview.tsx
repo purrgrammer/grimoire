@@ -1,6 +1,5 @@
 import type { NostrEvent } from "@/types/nostr";
 import { useMemo } from "react";
-import { Repeat2 } from "lucide-react";
 import { getTagValue } from "applesauce-core/helpers";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { getContentPreview } from "./index";
@@ -43,7 +42,6 @@ export function GenericRepostCompactPreview({ event }: { event: NostrEvent }) {
 
   return (
     <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-      <Repeat2 className="size-3 shrink-0" />
       {kindLabel && (
         <span className="shrink-0 text-xs opacity-70">{kindLabel}</span>
       )}

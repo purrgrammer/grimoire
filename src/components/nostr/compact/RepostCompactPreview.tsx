@@ -28,21 +28,17 @@ export function RepostCompactPreview({ event }: { event: NostrEvent }) {
   // Fetch the reposted event
   const repostedEvent = useNostrEvent(eventPointer);
 
-  // Get content preview
-  const preview = repostedEvent ? getContentPreview(repostedEvent, 50) : null;
-
   return (
     <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-      <Repeat2 className="size-3 shrink-0" />
       {repostedEvent ? (
         <>
           <UserName
             pubkey={repostedEvent.pubkey}
             className="text-sm shrink-0"
           />
-          <span className="truncate">
+          <span className="truncate line-clamp-1">
             <RichText
-              content={preview || ""}
+              event={repostedEvent}
               className="inline text-sm leading-none"
               options={{ showMedia: false, showEventEmbeds: false }}
             />

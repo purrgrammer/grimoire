@@ -141,6 +141,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             filter={window.props.filter}
             relays={window.props.relays}
             closeOnEose={window.props.closeOnEose}
+            view={window.props.view}
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
             needsAccount={window.props.needsAccount}

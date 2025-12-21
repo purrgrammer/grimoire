@@ -61,7 +61,10 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
       )}
       {zappedEvent && (
         <>
-          <UserName pubkey={zappedEvent.pubkey} className="text-sm shrink-0" />
+          <UserName
+            pubkey={zappedEvent.pubkey}
+            className="text-sm truncate line-clamp-1"
+          />
           <span className="text-muted-foreground truncate">
             <RichText
               content={preview || ""}
