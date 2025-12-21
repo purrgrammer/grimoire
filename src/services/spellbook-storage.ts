@@ -2,13 +2,50 @@ import db, { LocalSpellbook } from "./db";
 import { SpellbookEvent } from "@/types/spell";
 
 /**
+ * Find existing spellbook by slug and pubkey
+ */
+async function findExistingSpellbook(
+  slug: string,
+  pubkey?: string,
+): Promise<LocalSpellbook | undefined> {
+  if (!pubkey) {
+    // For local-only spellbooks, match by slug
+    const spellbooks = await db.spellbooks.where("slug").equals(slug).toArray();
+    return spellbooks.find((s) => !s.event?.pubkey);
+  }
+
+  // For published spellbooks, match by slug AND pubkey
+  const spellbooks = await db.spellbooks.where("slug").equals(slug).toArray();
+  return spellbooks.find((s) => s.event?.pubkey === pubkey);
+}
+
+/**
  * Save a spellbook to local storage
+ * If a spellbook with the same slug and pubkey exists, it will be updated
  */
 export async function saveSpellbook(
-  spellbook: Omit<LocalSpellbook, "id" | "createdAt">,
+  spellbook: Omit<LocalSpellbook, "id" | "createdAt"> & { id?: string },
 ): Promise<LocalSpellbook> {
-  const id = spellbook.eventId || crypto.randomUUID();
-  const createdAt = Date.now();
+  // Check for existing spellbook
+  const pubkey = spellbook.event?.pubkey;
+  const existing = await findExistingSpellbook(spellbook.slug, pubkey);
+
+  let id: string;
+  let createdAt: number;
+
+  if (existing) {
+    // Update existing spellbook
+    id = existing.id;
+    createdAt = existing.createdAt;
+  } else if (spellbook.id) {
+    // Use provided ID (for updates via dialog)
+    id = spellbook.id;
+    createdAt = Date.now();
+  } else {
+    // Create new spellbook
+    id = spellbook.eventId || crypto.randomUUID();
+    createdAt = Date.now();
+  }
 
   const localSpellbook: LocalSpellbook = {
     id,

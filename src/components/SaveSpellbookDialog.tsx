@@ -93,8 +93,9 @@ export function SaveSpellbookDialog({
         ? existingSpellbook.slug
         : title.toLowerCase().trim().replace(/\s+/g, "-");
 
-      // 3. Save locally
+      // 3. Save locally (pass existing ID in update mode to prevent duplicates)
       const localSpellbook = await saveSpellbook({
+        id: isUpdateMode ? existingSpellbook.localId : undefined,
         slug,
         title,
         description,
