@@ -30,21 +30,20 @@ export function useStableValue<T>(
 /**
  * Stabilize a string array for use in dependency arrays
  *
- * Optimized version of useStableValue for string arrays.
- * Uses join(",") instead of JSON.stringify for better performance.
+ * Uses JSON.stringify for safe serialization (handles arrays with commas in elements).
  *
  * @param arr - The array to stabilize
  * @returns The memoized array
  *
  * @example
  * ```typescript
- * // Instead of: useMemo(() => relays, [relays.join(",")])
+ * // Instead of: useMemo(() => relays, [JSON.stringify(relays)])
  * const stableRelays = useStableArray(relays);
  * ```
  */
 export function useStableArray<T extends string>(arr: T[]): T[] {
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => arr, [arr.join(",")]);
+  return useMemo(() => arr, [JSON.stringify(arr)]);
 }
 
 /**

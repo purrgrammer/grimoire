@@ -225,7 +225,6 @@ export function ClickableEventTitle({
 
     // For replaceable/parameterized replaceable events, use AddressPointer
     if (isAddressableKind(event.kind)) {
-      // For replaceable/parameterized replaceable events, use AddressPointer
       const dTag = getTagValue(event, "d") || "";
       pointer = {
         kind: event.kind,

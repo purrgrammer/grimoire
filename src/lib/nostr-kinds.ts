@@ -26,14 +26,16 @@ import {
 } from "nostr-tools/kinds";
 
 // Kind range boundaries (NIP-01) - exported for display purposes only
+// Note: END values are exclusive (e.g., REGULAR covers 0-9999, not 10000)
+// Exception: kinds 0 (Metadata) and 3 (Contacts) are replaceable despite being < 10000
 export const REGULAR_START = 0;
-export const REGULAR_END = 10000;
+export const REGULAR_END = 10000; // exclusive: regular kinds are 0-9999 (except 0, 3)
 export const REPLACEABLE_START = 10000;
-export const REPLACEABLE_END = 20000;
+export const REPLACEABLE_END = 20000; // exclusive: replaceable kinds are 10000-19999
 export const EPHEMERAL_START = 20000;
-export const EPHEMERAL_END = 30000;
+export const EPHEMERAL_END = 30000; // exclusive: ephemeral kinds are 20000-29999
 export const PARAMETERIZED_REPLACEABLE_START = 30000;
-export const PARAMETERIZED_REPLACEABLE_END = 40000;
+export const PARAMETERIZED_REPLACEABLE_END = 40000; // exclusive: parameterized replaceable are 30000-39999
 
 /**
  * Check if a kind is parameterized replaceable (NIP-01)

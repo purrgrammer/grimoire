@@ -50,21 +50,18 @@ export function useProfile(pubkey?: string): ProfileContent | undefined {
           return;
         }
 
-        // Save to IndexedDB (fire and forget if aborted)
-        const savePromise = db.profiles.put({
-          ...profileData,
-          pubkey,
-          created_at: fetchedEvent.created_at,
-        });
+        // Only update state and cache if not aborted
+        if (controller.signal.aborted) return;
 
-        // Only update state if not aborted
-        if (!controller.signal.aborted) {
-          setProfile(profileData);
-        }
+        setProfile(profileData);
 
-        // Await save after state update to avoid blocking UI
+        // Save to IndexedDB after state update to avoid blocking UI
         try {
-          await savePromise;
+          await db.profiles.put({
+            ...profileData,
+            pubkey,
+            created_at: fetchedEvent.created_at,
+          });
         } catch (err) {
           // Log but don't throw - cache failure shouldn't break the UI
           console.error("[useProfile] Failed to cache profile:", err);

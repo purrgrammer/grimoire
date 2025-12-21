@@ -1,5 +1,4 @@
 import { getKindInfo } from "@/constants/kinds";
-import { kinds } from "nostr-tools";
 import { NIPBadge } from "./NIPBadge";
 import { Copy, CopyCheck } from "lucide-react";
 import { Button } from "./ui/button";
@@ -190,7 +189,7 @@ function getKindCategory(kind: number): string {
   if (kind >= 20 && kind <= 39) return "Media & Content";
   if (kind >= 40 && kind <= 49) return "Channels";
   if (kind >= 1000 && kind <= 9999) return "Application Specific";
-  if (isReplaceableKind(kind)) return "Regular Lists";
+  if (isReplaceableKind(kind)) return "Replaceable Events";
   if (isEphemeralKind(kind)) return "Ephemeral Events";
   if (isParameterizedReplaceableKind(kind)) return "Parameterized Replaceable";
   if (kind >= 40000) return "Custom/Experimental";
@@ -201,7 +200,8 @@ function getKindCategory(kind: number): string {
  * Determine the replaceability of an event kind
  */
 function getEventType(kind: number): string {
-  if (kind === kinds.Metadata || kind === kinds.Contacts || isReplaceableKind(kind)) {
+  // nostr-tools' isReplaceableKind already includes kinds 0 (Metadata) and 3 (Contacts)
+  if (isReplaceableKind(kind)) {
     return "Replaceable";
   }
   if (isParameterizedReplaceableKind(kind)) {
