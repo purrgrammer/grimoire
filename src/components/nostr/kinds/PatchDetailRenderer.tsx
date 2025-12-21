@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { GitCommit, FolderGit2, User, Copy, CopyCheck } from "lucide-react";
+import { GitCommit, User, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { useCopy } from "@/hooks/useCopy";
-import { useGrimoire } from "@/core/state";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import type { NostrEvent } from "@/types/nostr";
 import {
@@ -16,17 +14,13 @@ import {
   isPatchRoot,
   isPatchRootRevision,
 } from "@/lib/nip34-helpers";
-import {
-  getRepositoryName,
-  getRepositoryIdentifier,
-} from "@/lib/nip34-helpers";
+import { RepositoryLink } from "../RepositoryLink";
 
 /**
  * Detail renderer for Kind 1617 - Patch
  * Displays full patch metadata and content
  */
 export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
-  const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
 
   const subject = useMemo(() => getPatchSubject(event), [event]);
@@ -36,36 +30,6 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
   const repoAddress = useMemo(() => getPatchRepositoryAddress(event), [event]);
   const isRoot = useMemo(() => isPatchRoot(event), [event]);
   const isRootRevision = useMemo(() => isPatchRootRevision(event), [event]);
-
-  // Parse repository address
-  const repoPointer = useMemo(() => {
-    if (!repoAddress) return null;
-    try {
-      const [kindStr, pubkey, identifier] = repoAddress.split(":");
-      return {
-        kind: parseInt(kindStr),
-        pubkey,
-        identifier,
-      };
-    } catch {
-      return null;
-    }
-  }, [repoAddress]);
-
-  // Fetch repository event
-  const repoEvent = useNostrEvent(repoPointer || undefined);
-
-  // Get repository display name
-  const repoName = repoEvent
-    ? getRepositoryName(repoEvent) ||
-      getRepositoryIdentifier(repoEvent) ||
-      "Repository"
-    : repoPointer?.identifier || "Unknown Repository";
-
-  const handleRepoClick = () => {
-    if (!repoPointer || !repoEvent) return;
-    addWindow("open", { pointer: repoPointer });
-  };
 
   // Format created date
   const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
@@ -104,18 +68,11 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
         {repoAddress && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Repository:</span>
-            <button
-              onClick={repoEvent ? handleRepoClick : undefined}
-              disabled={!repoEvent}
-              className={`flex items-center gap-2 font-mono ${
-                repoEvent
-                  ? "text-muted-foreground underline decoration-dotted cursor-crosshair hover:text-primary"
-                  : "text-muted-foreground cursor-not-allowed"
-              }`}
-            >
-              <FolderGit2 className="size-4" />
-              {repoName}
-            </button>
+            <RepositoryLink
+              repoAddress={repoAddress}
+              iconSize="size-4"
+              className="font-mono"
+            />
           </div>
         )}
 

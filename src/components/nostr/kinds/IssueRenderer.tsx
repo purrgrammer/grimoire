@@ -3,68 +3,22 @@ import {
   type BaseEventProps,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { FolderGit2 } from "lucide-react";
-import { useGrimoire } from "@/core/state";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
 import {
   getIssueTitle,
   getIssueLabels,
   getIssueRepositoryAddress,
 } from "@/lib/nip34-helpers";
-import {
-  getRepositoryName,
-  getRepositoryIdentifier,
-} from "@/lib/nip34-helpers";
 import { Label } from "@/components/ui/label";
+import { RepositoryLink } from "../RepositoryLink";
 
 /**
  * Renderer for Kind 1621 - Issue
  * Displays as a compact issue card in feed view
  */
 export function IssueRenderer({ event }: BaseEventProps) {
-  const { addWindow } = useGrimoire();
   const title = getIssueTitle(event);
   const labels = getIssueLabels(event);
   const repoAddress = getIssueRepositoryAddress(event);
-
-  // Parse repository address to get the pointer
-  const repoPointer = repoAddress
-    ? (() => {
-        try {
-          // Address format: "kind:pubkey:identifier"
-          const [kindStr, pubkey, identifier] = repoAddress.split(":");
-          return {
-            kind: parseInt(kindStr),
-            pubkey,
-            identifier,
-          };
-        } catch {
-          return null;
-        }
-      })()
-    : null;
-
-  // Fetch the repository event to get its name
-  const repoEvent = useNostrEvent(
-    repoPointer
-      ? {
-          kind: repoPointer.kind,
-          pubkey: repoPointer.pubkey,
-          identifier: repoPointer.identifier,
-        }
-      : undefined,
-  );
-
-  // Get repository display name
-  const repoName = repoEvent
-    ? getRepositoryName(repoEvent) ||
-      getRepositoryIdentifier(repoEvent) ||
-      "Repository"
-    : repoAddress?.split(":")[2] || "Unknown Repository";
-
-  const handleRepoClick = () => {
-    addWindow("open", { pointer: repoPointer });
-  };
 
   return (
     <BaseEventContainer event={event}>
@@ -79,17 +33,9 @@ export function IssueRenderer({ event }: BaseEventProps) {
           </ClickableEventTitle>
 
           {/* Repository Reference */}
-          {repoAddress && repoPointer && (
+          {repoAddress && (
             <div className="text-xs line-clamp-1">
-              <div
-                onClick={handleRepoClick}
-                className={`flex items-center gap-1 text-muted-foreground
-                cursor-crosshair underline decoration-dotted hover:text-primary
-              `}
-              >
-                <FolderGit2 className="size-3" />
-                <span>{repoName}</span>
-              </div>
+              <RepositoryLink repoAddress={repoAddress} />
             </div>
           )}
         </div>

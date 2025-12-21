@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { GitBranch, FolderGit2, Tag, Copy, CopyCheck } from "lucide-react";
+import { GitBranch, Tag, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
 import { useCopy } from "@/hooks/useCopy";
-import { useGrimoire } from "@/core/state";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getPullRequestSubject,
@@ -15,18 +13,14 @@ import {
   getPullRequestMergeBase,
   getPullRequestRepositoryAddress,
 } from "@/lib/nip34-helpers";
-import {
-  getRepositoryName,
-  getRepositoryIdentifier,
-} from "@/lib/nip34-helpers";
 import { Label } from "@/components/ui/label";
+import { RepositoryLink } from "../RepositoryLink";
 
 /**
  * Detail renderer for Kind 1618 - Pull Request
  * Displays full PR content with markdown rendering
  */
 export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
-  const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
 
   const subject = useMemo(() => getPullRequestSubject(event), [event]);
@@ -40,31 +34,6 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
     [event],
   );
 
-  // Parse repository address
-  const repoPointer = useMemo(() => {
-    if (!repoAddress) return null;
-    try {
-      const [kindStr, pubkey, identifier] = repoAddress.split(":");
-      return {
-        kind: parseInt(kindStr),
-        pubkey,
-        identifier,
-      };
-    } catch {
-      return null;
-    }
-  }, [repoAddress]);
-
-  // Fetch repository event
-  const repoEvent = useNostrEvent(repoPointer || undefined);
-
-  // Get repository display name
-  const repoName = repoEvent
-    ? getRepositoryName(repoEvent) ||
-      getRepositoryIdentifier(repoEvent) ||
-      "Repository"
-    : repoPointer?.identifier || "Unknown Repository";
-
   // Format created date
   const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
     "en-US",
@@ -74,11 +43,6 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
       day: "numeric",
     },
   );
-
-  const handleRepoClick = () => {
-    if (!repoPointer || !repoEvent) return;
-    addWindow("open", { pointer: repoPointer });
-  };
 
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
@@ -93,18 +57,11 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
         {repoAddress && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Repository:</span>
-            <button
-              onClick={repoEvent ? handleRepoClick : undefined}
-              disabled={!repoEvent}
-              className={`flex items-center gap-2 font-mono ${
-                repoEvent
-                  ? "text-muted-foreground underline decoration-dotted cursor-crosshair hover:text-primary"
-                  : "text-muted-foreground cursor-not-allowed"
-              }`}
-            >
-              <FolderGit2 className="size-4" />
-              {repoName}
-            </button>
+            <RepositoryLink
+              repoAddress={repoAddress}
+              iconSize="size-4"
+              className="font-mono"
+            />
           </div>
         )}
 

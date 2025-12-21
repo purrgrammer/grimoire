@@ -1,54 +1,24 @@
 import { useMemo } from "react";
-import { Tag, FolderGit2 } from "lucide-react";
+import { Tag } from "lucide-react";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
-import { useGrimoire } from "@/core/state";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getIssueTitle,
   getIssueLabels,
   getIssueRepositoryAddress,
-  getRepositoryName,
-  getRepositoryIdentifier,
 } from "@/lib/nip34-helpers";
 import { Label } from "@/components/ui/label";
+import { RepositoryLink } from "../RepositoryLink";
 
 /**
  * Detail renderer for Kind 1621 - Issue (NIP-34)
  * Full view with repository context and markdown description
  */
 export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
-  const { addWindow } = useGrimoire();
-
   const title = useMemo(() => getIssueTitle(event), [event]);
   const labels = useMemo(() => getIssueLabels(event), [event]);
   const repoAddress = useMemo(() => getIssueRepositoryAddress(event), [event]);
-
-  // Parse repository address if present
-  const repoPointer = useMemo(() => {
-    if (!repoAddress) return null;
-    try {
-      const [kindStr, pubkey, identifier] = repoAddress.split(":");
-      return {
-        kind: parseInt(kindStr),
-        pubkey,
-        identifier,
-      };
-    } catch {
-      return null;
-    }
-  }, [repoAddress]);
-
-  // Fetch repository event
-  const repoEvent = useNostrEvent(repoPointer || undefined);
-
-  // Get repository display name
-  const repoName = repoEvent
-    ? getRepositoryName(repoEvent) ||
-      getRepositoryIdentifier(repoEvent) ||
-      "Repository"
-    : repoPointer?.identifier || "Unknown Repository";
 
   // Format created date
   const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
@@ -59,11 +29,6 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
       day: "numeric",
     },
   );
-
-  const handleRepoClick = () => {
-    if (!repoPointer || !repoEvent) return;
-    addWindow("open", { pointer: repoPointer });
-  };
 
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
@@ -76,18 +41,11 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
         {repoAddress && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Repository:</span>
-            <button
-              onClick={repoEvent ? handleRepoClick : undefined}
-              disabled={!repoEvent}
-              className={`flex items-center gap-2 font-mono ${
-                repoEvent
-                  ? "text-muted-foreground underline decoration-dotted cursor-crosshair hover:text-primary"
-                  : "text-muted-foreground cursor-not-allowed"
-              }`}
-            >
-              <FolderGit2 className="size-4" />
-              {repoName}
-            </button>
+            <RepositoryLink
+              repoAddress={repoAddress}
+              iconSize="size-4"
+              className="font-mono"
+            />
           </div>
         )}
 
