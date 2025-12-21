@@ -281,3 +281,92 @@ export function getPullRequestRepositoryAddress(
 ): string | undefined {
   return getTagValue(event, "a");
 }
+
+// ============================================================================
+// Repository State Event Helpers (Kind 30618)
+// ============================================================================
+
+/**
+ * Get the HEAD reference from a repository state event
+ * @param event Repository state event (kind 30618)
+ * @returns HEAD reference (e.g., "ref: refs/heads/main") or undefined
+ */
+export function getRepositoryStateHead(event: NostrEvent): string | undefined {
+  return getTagValue(event, "HEAD");
+}
+
+/**
+ * Parse HEAD reference to extract branch name
+ * @param headRef HEAD reference string (e.g., "ref: refs/heads/main")
+ * @returns Branch name (e.g., "main") or undefined
+ */
+export function parseHeadBranch(
+  headRef: string | undefined,
+): string | undefined {
+  if (!headRef) return undefined;
+  const match = headRef.match(/^ref:\s*refs\/heads\/(.+)$/);
+  return match ? match[1] : undefined;
+}
+
+/**
+ * Get all git refs from a repository state event
+ * @param event Repository state event (kind 30618)
+ * @returns Array of { ref: string, hash: string } objects
+ */
+export function getRepositoryStateRefs(
+  event: NostrEvent,
+): Array<{ ref: string; hash: string }> {
+  return event.tags
+    .filter((t) => t[0].startsWith("refs/"))
+    .map((t) => ({ ref: t[0], hash: t[1] }));
+}
+
+/**
+ * Get the commit hash that HEAD points to
+ * @param event Repository state event (kind 30618)
+ * @returns Commit hash or undefined
+ */
+export function getRepositoryStateHeadCommit(
+  event: NostrEvent,
+): string | undefined {
+  const headRef = getRepositoryStateHead(event);
+  const branch = parseHeadBranch(headRef);
+  if (!branch) return undefined;
+
+  // Find the refs/heads/{branch} tag
+  const branchRef = `refs/heads/${branch}`;
+  const branchTag = event.tags.find((t) => t[0] === branchRef);
+  return branchTag ? branchTag[1] : undefined;
+}
+
+/**
+ * Get branches from repository state refs
+ * @param event Repository state event (kind 30618)
+ * @returns Array of { name: string, hash: string } objects
+ */
+export function getRepositoryStateBranches(
+  event: NostrEvent,
+): Array<{ name: string; hash: string }> {
+  return event.tags
+    .filter((t) => t[0].startsWith("refs/heads/"))
+    .map((t) => ({
+      name: t[0].replace("refs/heads/", ""),
+      hash: t[1],
+    }));
+}
+
+/**
+ * Get tags from repository state refs
+ * @param event Repository state event (kind 30618)
+ * @returns Array of { name: string, hash: string } objects
+ */
+export function getRepositoryStateTags(
+  event: NostrEvent,
+): Array<{ name: string; hash: string }> {
+  return event.tags
+    .filter((t) => t[0].startsWith("refs/tags/"))
+    .map((t) => ({
+      name: t[0].replace("refs/tags/", ""),
+      hash: t[1],
+    }));
+}

@@ -30,6 +30,8 @@ import { CommunityNIPRenderer } from "./CommunityNIPRenderer";
 import { CommunityNIPDetailRenderer } from "./CommunityNIPDetailRenderer";
 import { RepositoryRenderer } from "./RepositoryRenderer";
 import { RepositoryDetailRenderer } from "./RepositoryDetailRenderer";
+import { RepositoryStateRenderer } from "./RepositoryStateRenderer";
+import { RepositoryStateDetailRenderer } from "./RepositoryStateDetailRenderer";
 import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
@@ -73,6 +75,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30023: Kind30023Renderer, // Long-form Article
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   30617: RepositoryRenderer, // Repository (NIP-34)
+  30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30817: CommunityNIPRenderer, // Community NIP
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
@@ -128,6 +131,7 @@ const detailRenderers: Record<
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
+  30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
 };
 
