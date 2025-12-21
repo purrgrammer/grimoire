@@ -1,18 +1,32 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
-import Home from "./components/Home";
+import { AppShell } from "./components/layouts/AppShell";
+import DashboardPage from "./components/pages/DashboardPage";
+import SpellbookPage from "./components/pages/SpellbookPage";
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Home />,
+    element: (
+      <AppShell>
+        <DashboardPage />
+      </AppShell>
+    ),
   },
   {
     path: "/preview/:actor/:identifier",
-    element: <Home />,
+    element: (
+      <AppShell>
+        <SpellbookPage />
+      </AppShell>
+    ),
   },
   {
     path: "/:actor/:identifier",
-    element: <Home />,
+    element: (
+      <AppShell>
+        <SpellbookPage />
+      </AppShell>
+    ),
   },
 ]);
 
