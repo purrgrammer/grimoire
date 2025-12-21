@@ -132,7 +132,7 @@ function WaveformVisualization({
             key={i}
             className={cn(
               "w-1 rounded-full transition-colors",
-              isPlayed ? "bg-primary" : "bg-muted-foreground/40"
+              isPlayed ? "bg-primary" : "bg-muted-foreground/40",
             )}
             style={{
               height: `${Math.max(4, amplitude * 100)}%`,
@@ -290,7 +290,7 @@ function VoiceNotePlayer({
       if (!audio || duration <= 0) return;
       audio.currentTime = progress * duration;
     },
-    [duration]
+    [duration],
   );
 
   const progress = duration > 0 ? currentTime / duration : 0;
@@ -469,7 +469,7 @@ export function VoiceNoteReplyRenderer({ event }: BaseEventProps) {
     addWindow(
       "open",
       { pointer: replyPointer },
-      `Reply to ${replyEvent.pubkey.slice(0, 8)}...`
+      `Reply to ${replyEvent.pubkey.slice(0, 8)}...`,
     );
   };
 
