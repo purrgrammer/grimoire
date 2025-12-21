@@ -11,12 +11,6 @@ import {
 } from "@/lib/nostr-schema";
 import { CenteredContent } from "./ui/CenteredContent";
 import {
-  REPLACEABLE_START,
-  REPLACEABLE_END,
-  EPHEMERAL_START,
-  EPHEMERAL_END,
-  PARAMETERIZED_REPLACEABLE_START,
-  PARAMETERIZED_REPLACEABLE_END,
   isReplaceableKind,
   isEphemeralKind,
   isParameterizedReplaceableKind,
@@ -86,12 +80,11 @@ export default function KindRenderer({ kind }: { kind: number }) {
         <div>{eventType}</div>
         <div className="text-muted-foreground">Storage</div>
         <div>
-          {kind >= EPHEMERAL_START && kind < EPHEMERAL_END
+          {isEphemeralKind(kind)
             ? "Not stored (ephemeral)"
             : "Stored by relays"}
         </div>
-        {kind >= PARAMETERIZED_REPLACEABLE_START &&
-          kind < PARAMETERIZED_REPLACEABLE_END && (
+        {isParameterizedReplaceableKind(kind) && (
             <>
               <div className="text-muted-foreground">Identifier</div>
               <code className="font-mono text-xs">d-tag</code>
