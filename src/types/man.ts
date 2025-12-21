@@ -221,6 +221,11 @@ export const manPages: Record<string, ManPageEntry> = {
           "Close connection after EOSE (End Of Stored Events). By default, streams stay open for real-time updates.",
       },
       {
+        flag: "-v, --view <list|compact>",
+        description:
+          "Display mode for results. 'list' shows full event cards, 'compact' shows condensed single-line rows. Defaults to 'list'.",
+      },
+      {
         flag: "[relay...]",
         description:
           "Relay URLs to query (wss://relay.com or shorthand: relay.com)",
@@ -253,6 +258,7 @@ export const manPages: Record<string, ManPageEntry> = {
       "req -k 30023 --tag d badges,grimoire 							    Get specific replaceable events by d-tag",
       "req --search bitcoin -k 1            							    Search notes for 'bitcoin'",
       "req -k 1 theforest.nostr1.com relay.damus.io                                                 Query specific relays (overrides auto-selection)",
+      "req -k 1 -l 100 --view compact                                                                 Get notes in compact view mode",
     ],
     seeAlso: ["kind", "nip"],
     appId: "req",

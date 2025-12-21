@@ -8,10 +8,13 @@ import {
 } from "./nostr-validation";
 import { normalizeRelayURL } from "./relay-url";
 
+export type ViewMode = "list" | "compact";
+
 export interface ParsedReqCommand {
   filter: NostrFilter;
   relays?: string[];
   closeOnEose?: boolean;
+  view?: ViewMode; // Display mode for results
   nip05Authors?: string[]; // NIP-05 identifiers that need async resolution
   nip05PTags?: string[]; // NIP-05 identifiers for #p tags that need async resolution
   nip05PTagsUppercase?: string[]; // NIP-05 identifiers for #P tags that need async resolution
@@ -73,6 +76,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
   const genericTags = new Map<string, Set<string>>();
 
   let closeOnEose = false;
+  let view: ViewMode | undefined;
 
   let i = 0;
 
@@ -342,6 +346,17 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           break;
         }
 
+        case "--view":
+        case "-v": {
+          if (nextArg === "list" || nextArg === "compact") {
+            view = nextArg;
+            i += 2;
+          } else {
+            i++;
+          }
+          break;
+        }
+
         case "-T":
         case "--tag": {
           // Generic tag filter: --tag <letter> <value>
@@ -417,6 +432,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     filter,
     relays: relays.length > 0 ? relays : undefined,
     closeOnEose,
+    view,
     nip05Authors: nip05Authors.size > 0 ? Array.from(nip05Authors) : undefined,
     nip05PTags: nip05PTags.size > 0 ? Array.from(nip05PTags) : undefined,
     nip05PTagsUppercase:
