@@ -10,6 +10,7 @@ vi.mock("@/services/accounts", () => ({
   default: {
     active: {
       signer: {},
+      pubkey: "test-pubkey",
     },
   },
 }));
@@ -26,7 +27,7 @@ vi.mock("@/services/spell-storage", () => ({
 
 vi.mock("@/services/relay-list-cache", () => ({
   relayListCache: {
-    getOutboxRelays: vi.fn().mockResolvedValue(["wss://relay.example.com"]),
+    getOutboxRelays: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -69,6 +70,7 @@ describe("PublishSpellAction", () => {
     accountManager.active = {
       pubkey: "pubkey",
       signer: mockSigner,
+      pubkey: "pubkey",
     };
 
     const spell: LocalSpell = {
