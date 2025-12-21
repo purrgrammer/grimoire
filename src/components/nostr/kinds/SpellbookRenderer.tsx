@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BaseEventContainer,
   BaseEventProps,
@@ -15,6 +15,7 @@ import { nip19 } from "nostr-tools";
 import { useNavigate } from "react-router";
 import { KindBadge } from "@/components/KindBadge";
 import { WindowInstance } from "@/types/app";
+import { ShareSpellbookDialog } from "@/components/ShareSpellbookDialog";
 
 /**
  * Helper to extract all unique event kinds from a spellbook's windows
@@ -283,6 +284,7 @@ export function SpellbookRenderer({ event }: BaseEventProps) {
  */
 export function SpellbookDetailRenderer({ event }: { event: NostrEvent }) {
   const profile = useProfile(event.pubkey);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   const spellbook = useMemo(() => {
     try {
@@ -299,13 +301,6 @@ export function SpellbookDetailRenderer({ event }: { event: NostrEvent }) {
       </div>
     );
   }
-
-  const handleCopyLink = () => {
-    const actor = profile?.nip05 || nip19.npubEncode(event.pubkey);
-    const url = `${window.location.origin}/${actor}/${spellbook.slug}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Preview link copied to clipboard");
-  };
 
   const sortedWorkspaces = Object.values(spellbook.content.workspaces).sort(
     (a, b) => a.number - b.number,
@@ -327,11 +322,11 @@ export function SpellbookDetailRenderer({ event }: { event: NostrEvent }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleCopyLink}
+            onClick={() => setShareDialogOpen(true)}
             className="flex items-center gap-2"
           >
             <Share2 className="size-4" />
-            Share Link
+            Share
           </Button>
 
           <PreviewButton
@@ -388,6 +383,14 @@ export function SpellbookDetailRenderer({ event }: { event: NostrEvent }) {
           })}
         </div>
       </div>
+
+      {/* Share Dialog */}
+      <ShareSpellbookDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        event={event}
+        spellbook={spellbook}
+      />
     </div>
   );
 }

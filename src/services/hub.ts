@@ -5,6 +5,7 @@ import pool from "./relay-pool";
 import { relayListCache } from "./relay-list-cache";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import type { NostrEvent } from "nostr-tools/core";
+import accountManager from "./accounts";
 
 /**
  * Publishes a Nostr event to relays using the author's outbox relays
@@ -25,7 +26,7 @@ async function publishEvent(event: NostrEvent): Promise<void> {
   // If still no relays, throw error
   if (relays.length === 0) {
     throw new Error(
-      "No relays found for publishing. Please configure relay list (kind 10002) or ensure event has relay hints."
+      "No relays found for publishing. Please configure relay list (kind 10002) or ensure event has relay hints.",
     );
   }
 
@@ -36,6 +37,8 @@ async function publishEvent(event: NostrEvent): Promise<void> {
   eventStore.add(event);
 }
 
+const factory = new EventFactory();
+
 /**
  * Global action hub for Grimoire
  * Used to register and execute actions throughout the application
@@ -45,4 +48,10 @@ async function publishEvent(event: NostrEvent): Promise<void> {
  * - EventFactory: Creates and signs events
  * - publishEvent: Publishes events to author's outbox relays (with fallback to seen relays)
  */
-export const hub = new ActionHub(eventStore, new EventFactory(), publishEvent);
+export const hub = new ActionHub(eventStore, factory, publishEvent);
+
+// Sync factory signer with active account
+// This ensures the hub can sign events when an account is active
+accountManager.active$.subscribe((account) => {
+  factory.setSigner(account?.signer || undefined);
+});

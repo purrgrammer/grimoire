@@ -4,6 +4,13 @@ import type { ActionHub } from "applesauce-actions";
 import type { GrimoireState } from "@/types/app";
 import type { NostrEvent } from "nostr-tools/core";
 
+// Mock accountManager
+vi.mock("@/services/accounts", () => ({
+  default: {
+    active: null, // Will be set in tests
+  },
+}));
+
 // Mock implementations
 const mockSigner = {
   getPublicKey: vi.fn(async () => "test-pubkey"),
@@ -29,9 +36,6 @@ const mockFactory = {
 };
 
 const mockHub: ActionHub = {
-  accountManager: {
-    active: mockAccount,
-  },
   factory: mockFactory,
 } as any;
 
@@ -59,8 +63,12 @@ const mockState: GrimoireState = {
 } as any;
 
 describe("PublishSpellbook action", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Set up accountManager mock
+    const accountManager = await import("@/services/accounts");
+    (accountManager.default as any).active = mockAccount;
   });
 
   describe("validation", () => {
@@ -87,37 +95,38 @@ describe("PublishSpellbook action", () => {
     });
 
     it("should throw error if no active account", async () => {
-      const hubWithoutAccount: ActionHub = {
-        ...mockHub,
-        accountManager: { active: null } as any,
-      };
+      const accountManager = await import("@/services/accounts");
+      (accountManager.default as any).active = null;
 
       await expect(async () => {
-        for await (const event of PublishSpellbook(hubWithoutAccount, {
+        for await (const event of PublishSpellbook(mockHub, {
           state: mockState,
           title: "Test Spellbook",
         })) {
           // Should not reach here
         }
       }).rejects.toThrow("No active account");
+
+      // Restore for other tests
+      (accountManager.default as any).active = mockAccount;
     });
 
     it("should throw error if no signer available", async () => {
-      const hubWithoutSigner: ActionHub = {
-        ...mockHub,
-        accountManager: {
-          active: { ...mockAccount, signer: null } as any,
-        } as any,
-      };
+      const accountManager = await import("@/services/accounts");
+      const accountWithoutSigner = { ...mockAccount, signer: null };
+      (accountManager.default as any).active = accountWithoutSigner;
 
       await expect(async () => {
-        for await (const event of PublishSpellbook(hubWithoutSigner, {
+        for await (const event of PublishSpellbook(mockHub, {
           state: mockState,
           title: "Test Spellbook",
         })) {
           // Should not reach here
         }
       }).rejects.toThrow("No signer available");
+
+      // Restore for other tests
+      (accountManager.default as any).active = mockAccount;
     });
   });
 

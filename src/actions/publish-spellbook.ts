@@ -5,6 +5,7 @@ import { GrimoireState } from "@/types/app";
 import { SpellbookContent } from "@/types/spell";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import accountManager from "@/services/accounts";
 import type { ActionHub } from "applesauce-actions";
 import type { NostrEvent } from "nostr-tools/core";
 
@@ -55,7 +56,7 @@ export async function* PublishSpellbook(
     throw new Error("Title is required");
   }
 
-  const account = hub.accountManager?.active;
+  const account = accountManager.active;
   if (!account) {
     throw new Error("No active account. Please log in first.");
   }

@@ -11,6 +11,8 @@ import {
   Archive,
   Layout,
   ExternalLink,
+  Globe,
+  User,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
@@ -37,12 +39,16 @@ import { useReqTimeline } from "@/hooks/useReqTimeline";
 import { parseSpellbook } from "@/lib/spellbook-manager";
 import type { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { SPELLBOOK_KIND } from "@/constants/kinds";
+import { UserName } from "./nostr/UserName";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 interface SpellbookCardProps {
   spellbook: LocalSpellbook;
   onDelete: (spellbook: LocalSpellbook) => Promise<void>;
   onPublish: (spellbook: LocalSpellbook) => Promise<void>;
   onApply: (spellbook: ParsedSpellbook) => void;
+  showAuthor?: boolean;
+  isOwner?: boolean;
 }
 
 function SpellbookCard({
@@ -50,6 +56,8 @@ function SpellbookCard({
   onDelete,
   onPublish,
   onApply,
+  showAuthor = false,
+  isOwner = true,
 }: SpellbookCardProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -57,6 +65,9 @@ function SpellbookCard({
 
   const workspaceCount = Object.keys(spellbook.content.workspaces).length;
   const windowCount = Object.keys(spellbook.content.windows).length;
+
+  // Get author pubkey from event if available
+  const authorPubkey = spellbook.event?.pubkey;
 
   const handlePublish = async () => {
     setIsPublishing(true);
@@ -130,6 +141,12 @@ function SpellbookCard({
 
       <CardContent className="p-4 pt-0 flex-1">
         <div className="flex flex-col gap-2">
+          {showAuthor && authorPubkey && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <User className="size-3" />
+              <UserName pubkey={authorPubkey} className="text-xs" />
+            </div>
+          )}
           <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
               <Layout className="size-3" />
@@ -145,51 +162,53 @@ function SpellbookCard({
       </CardContent>
 
       <CardFooter className="p-4 pt-0 flex-wrap gap-2 justify-between">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-8 px-2"
-            onClick={handleDelete}
-            disabled={isPublishing || isDeleting || !!spellbook.deletedAt}
-          >
-            {isDeleting ? (
-              <Loader2 className="size-3.5 mr-1 animate-spin" />
-            ) : (
-              <Trash2 className="size-3.5 mr-1" />
-            )}
-            {spellbook.deletedAt ? "Deleted" : "Delete"}
-          </Button>
-
-          {!spellbook.deletedAt && (
+        {isOwner && (
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              variant={spellbook.isPublished ? "outline" : "default"}
-              className="h-8"
-              onClick={handlePublish}
-              disabled={isPublishing || isDeleting}
+              variant="destructive"
+              className="h-8 px-2"
+              onClick={handleDelete}
+              disabled={isPublishing || isDeleting || !!spellbook.deletedAt}
             >
-              {isPublishing ? (
+              {isDeleting ? (
                 <Loader2 className="size-3.5 mr-1 animate-spin" />
-              ) : spellbook.isPublished ? (
-                <RefreshCw className="size-3.5 mr-1" />
               ) : (
-                <Send className="size-3.5 mr-1" />
+                <Trash2 className="size-3.5 mr-1" />
               )}
-              {isPublishing
-                ? "Publishing..."
-                : spellbook.isPublished
-                  ? "Rebroadcast"
-                  : "Publish"}
+              {spellbook.deletedAt ? "Deleted" : "Delete"}
             </Button>
-          )}
-        </div>
+
+            {!spellbook.deletedAt && (
+              <Button
+                size="sm"
+                variant={spellbook.isPublished ? "outline" : "default"}
+                className="h-8"
+                onClick={handlePublish}
+                disabled={isPublishing || isDeleting}
+              >
+                {isPublishing ? (
+                  <Loader2 className="size-3.5 mr-1 animate-spin" />
+                ) : spellbook.isPublished ? (
+                  <RefreshCw className="size-3.5 mr-1" />
+                ) : (
+                  <Send className="size-3.5 mr-1" />
+                )}
+                {isPublishing
+                  ? "Publishing..."
+                  : spellbook.isPublished
+                    ? "Rebroadcast"
+                    : "Publish"}
+              </Button>
+            )}
+          </div>
+        )}
 
         {!spellbook.deletedAt && (
           <Button
             size="sm"
             variant="default"
-            className="h-8"
+            className={cn("h-8", !isOwner && "w-full")}
             onClick={handleApply}
           >
             Apply Layout
@@ -203,7 +222,7 @@ function SpellbookCard({
 export function SpellbooksViewer() {
   const { state, loadSpellbook } = useGrimoire();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "local" | "published">(
+  const [filterType, setFilterType] = useState<"all" | "local" | "published" | "discover">(
     "all",
   );
 
@@ -212,8 +231,8 @@ export function SpellbooksViewer() {
     db.spellbooks.orderBy("createdAt").reverse().toArray(),
   );
 
-  // Fetch from Nostr
-  const { events: networkEvents, loading: networkLoading } = useReqTimeline(
+  // Fetch user's spellbooks from Nostr
+  const { events: userNetworkEvents, loading: userNetworkLoading } = useReqTimeline(
     state.activeAccount
       ? `user-spellbooks-${state.activeAccount.pubkey}`
       : "none",
@@ -224,23 +243,45 @@ export function SpellbooksViewer() {
     { stream: true },
   );
 
+  // Fetch discovered spellbooks from network (all authors)
+  const { events: discoveredEvents, loading: discoveredLoading } = useReqTimeline(
+    filterType === "discover" ? "discover-spellbooks" : "none",
+    filterType === "discover" ? { kinds: [SPELLBOOK_KIND], limit: 50 } : [],
+    AGGREGATOR_RELAYS,
+    { stream: true },
+  );
+
+  const networkLoading = userNetworkLoading || discoveredLoading;
+
   const loading = localSpellbooks === undefined;
 
   // Filter and sort
   const { filteredSpellbooks, totalCount } = useMemo(() => {
     const allSpellbooksMap = new Map<string, LocalSpellbook>();
+    const currentUserPubkey = state.activeAccount?.pubkey;
+
+    // Add local spellbooks first
     for (const s of localSpellbooks || []) {
       allSpellbooksMap.set(s.id, s);
     }
 
-    for (const event of networkEvents) {
+    // Process network events based on filter type
+    const eventsToProcess = filterType === "discover"
+      ? discoveredEvents
+      : userNetworkEvents;
+
+    for (const event of eventsToProcess) {
       // Find d tag for matching with local slug
       const slug = event.tags.find((t) => t[0] === "d")?.[1] || "";
 
-      // Look for existing by slug + pubkey? For now just ID matching if we have it
-      // Replaceable events are tricky. Let's match by slug if localId not found.
+      // For discovered mode, skip user's own spellbooks (they're in userNetworkEvents)
+      if (filterType === "discover" && event.pubkey === currentUserPubkey) {
+        continue;
+      }
+
+      // Look for existing by slug and author
       const existing = Array.from(allSpellbooksMap.values()).find(
-        (s) => s.slug === slug,
+        (s) => s.slug === slug && s.event?.pubkey === event.pubkey,
       );
 
       if (existing) {
@@ -280,6 +321,9 @@ export function SpellbooksViewer() {
       filtered = filtered.filter((s) => !s.isPublished || !!s.deletedAt);
     } else if (filterType === "published") {
       filtered = filtered.filter((s) => s.isPublished && !s.deletedAt);
+    } else if (filterType === "discover") {
+      // Only show network spellbooks from others
+      filtered = filtered.filter((s) => s.isPublished && s.event?.pubkey !== currentUserPubkey);
     }
 
     if (searchQuery.trim()) {
@@ -297,7 +341,7 @@ export function SpellbooksViewer() {
     });
 
     return { filteredSpellbooks: filtered, totalCount: total };
-  }, [localSpellbooks, networkEvents, searchQuery, filterType]);
+  }, [localSpellbooks, userNetworkEvents, discoveredEvents, searchQuery, filterType, state.activeAccount?.pubkey]);
 
   const handleDelete = async (spellbook: LocalSpellbook) => {
     if (!confirm(`Delete spellbook "${spellbook.title}"?`)) return;
@@ -368,7 +412,7 @@ export function SpellbooksViewer() {
               className="pl-9"
             />
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             <Button
               size="sm"
               variant={filterType === "all" ? "default" : "outline"}
@@ -381,6 +425,7 @@ export function SpellbooksViewer() {
               variant={filterType === "local" ? "default" : "outline"}
               onClick={() => setFilterType("local")}
             >
+              <Lock className="size-3 mr-1" />
               Local
             </Button>
             <Button
@@ -388,7 +433,16 @@ export function SpellbooksViewer() {
               variant={filterType === "published" ? "default" : "outline"}
               onClick={() => setFilterType("published")}
             >
+              <Cloud className="size-3 mr-1" />
               Published
+            </Button>
+            <Button
+              size="sm"
+              variant={filterType === "discover" ? "default" : "outline"}
+              onClick={() => setFilterType("discover")}
+            >
+              <Globe className="size-3 mr-1" />
+              Discover
             </Button>
           </div>
         </div>
@@ -405,15 +459,22 @@ export function SpellbooksViewer() {
           </div>
         ) : (
           <div className="grid gap-3 grid-cols-1">
-            {filteredSpellbooks.map((s) => (
-              <SpellbookCard
-                key={s.id}
-                spellbook={s}
-                onDelete={handleDelete}
-                onPublish={handlePublish}
-                onApply={handleApply}
-              />
-            ))}
+            {filteredSpellbooks.map((s) => {
+              const isOwner = s.event?.pubkey === state.activeAccount?.pubkey || !s.event;
+              const showAuthor = filterType === "discover" || !isOwner;
+
+              return (
+                <SpellbookCard
+                  key={s.id}
+                  spellbook={s}
+                  onDelete={handleDelete}
+                  onPublish={handlePublish}
+                  onApply={handleApply}
+                  showAuthor={showAuthor}
+                  isOwner={isOwner}
+                />
+              );
+            })}
           </div>
         )}
       </div>
