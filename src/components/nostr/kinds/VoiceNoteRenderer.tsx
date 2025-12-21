@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { kinds } from "nostr-tools";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { Mic, Play, Pause, Reply } from "lucide-react";
 import { getNip10References } from "applesauce-core/helpers/threading";
@@ -7,6 +8,7 @@ import { UserName } from "../UserName";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
+import { Button } from "@/components/ui/button";
 import { getEventDisplayTitle } from "@/lib/event-title";
 import type { NostrEvent } from "@/types/nostr";
 import {
@@ -17,6 +19,10 @@ import {
 } from "@/components/ui/tooltip";
 import { RichText } from "../RichText";
 import { cn } from "@/lib/utils";
+
+// NIP-A0 Voice Message kinds
+const VOICE_MESSAGE_KIND = 1222;
+const VOICE_MESSAGE_COMMENT_KIND = 1244;
 
 /**
  * Parse voice note metadata from imeta tags (NIP-92)
@@ -259,9 +265,11 @@ function VoiceNotePlayer({
     <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/20">
       <audio ref={audioRef} src={url} preload="metadata" />
 
-      <button
+      <Button
+        variant="default"
+        size="icon"
         onClick={togglePlayback}
-        className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        className="rounded-full w-10 h-10"
         aria-label={isPlaying ? "Pause" : "Play"}
       >
         {isPlaying ? (
@@ -269,7 +277,7 @@ function VoiceNotePlayer({
         ) : (
           <Play className="w-5 h-5 ml-0.5" />
         )}
-      </button>
+      </Button>
 
       {waveform && waveform.length > 0 ? (
         <WaveformVisualization
@@ -290,6 +298,13 @@ function VoiceNotePlayer({
 }
 
 /**
+ * Check if event kind is a voice note type
+ */
+function isVoiceNoteKind(kind: number): boolean {
+  return kind === VOICE_MESSAGE_KIND || kind === VOICE_MESSAGE_COMMENT_KIND;
+}
+
+/**
  * Parent event card component for reply references
  */
 function ParentEventCard({
@@ -300,7 +315,9 @@ function ParentEventCard({
   onClickHandler: () => void;
 }) {
   // Don't show kind badge for common note types
-  const showKindBadge = parentEvent.kind !== 1 && parentEvent.kind !== 1222;
+  const showKindBadge =
+    parentEvent.kind !== kinds.ShortTextNote &&
+    parentEvent.kind !== VOICE_MESSAGE_KIND;
 
   return (
     <div
@@ -323,7 +340,7 @@ function ParentEventCard({
       <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
         {showKindBadge ? (
           getEventDisplayTitle(parentEvent, false)
-        ) : parentEvent.kind === 1222 || parentEvent.kind === 1244 ? (
+        ) : isVoiceNoteKind(parentEvent.kind) ? (
           <span className="italic">Voice note</span>
         ) : (
           <RichText
