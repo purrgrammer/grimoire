@@ -1,0 +1,78 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  code-review:
+    # Only run on PRs or when @claude is mentioned in a comment
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref || github.event.pull_request.head.sha }}
+
+      - name: Run Code Review with Claude
+        id: code-review
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          prompt: |
+            Review the PR changes with focus on:
+
+            ## Code Quality
+            - Check for bugs, edge cases, and potential runtime errors
+            - Verify proper error handling and validation
+            - Look for security vulnerabilities (XSS, injection, etc.)
+            - Ensure TypeScript types are properly defined
+
+            ## Architecture & Best Practices
+            - Verify adherence to CLAUDE.md project conventions
+            - Check for proper use of singleton EventStore/RelayLiveness
+            - Ensure pure functions in src/core/logic.ts for state mutations
+            - Validate proper use of Applesauce reactive patterns
+            - Check for over-engineering or unnecessary complexity
+
+            ## Testing
+            - Verify parsers and pure functions have tests
+            - Check that test descriptions are clear and meaningful
+
+            ## Performance
+            - Look for potential performance issues
+            - Check for unnecessary re-renders or subscriptions
+            - Verify proper cleanup in useEffect hooks
+
+            Write your review as constructive feedback in markdown format.
+            If changes look good, say so! Focus on significant issues.
+          allowed_tools: "Bash(git diff --name-only HEAD~1),Bash(git diff HEAD~1),Read,Glob,Grep"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Comment on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## 🤖 Claude Code Review\n\n' + process.env.REVIEW_OUTPUT
+            })
+        env:
+          REVIEW_OUTPUT: ${{ steps.code-review.outputs.result }}
