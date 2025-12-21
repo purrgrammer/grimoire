@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+
+# Testing
+coverage
+*.test.ts
+*.test.tsx
+**/__tests__
+
+# Development
+.env.local
+.env.development
+
+# IDE
+.vscode
+.idea
+
+# Git
+.git
+.github
+
+# Documentation (not needed for deployment)
+CLAUDE.md
+README.md
+
+# Test configuration
+vitest.config.ts
