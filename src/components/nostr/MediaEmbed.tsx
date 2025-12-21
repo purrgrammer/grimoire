@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
-import { Music, AlertCircle, Play, RotateCw } from "lucide-react";
+import { Mic, AlertCircle, Play, RotateCw } from "lucide-react";
 import {
   isImageURL,
   isVideoURL,
@@ -362,14 +362,13 @@ export function MediaEmbed({
     return (
       <div
         className={cn(
-          "flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/20",
-          onAudioClick &&
-            "cursor-crosshair hover:bg-muted/30 transition-colors",
+          "flex items-center gap-3",
+          onAudioClick && "cursor-crosshair hover:opacity-80 transition-opacity",
           className,
         )}
         onClick={onAudioClick ? handleAudioClick : undefined}
       >
-        <Music className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <Mic className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         {!onAudioClick ? (
           <audio
             src={url}

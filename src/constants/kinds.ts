@@ -1343,6 +1343,20 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   //   nip: "",
   //   icon: AppWindow,
   // },
+  34235: {
+    kind: 34235,
+    name: "Video",
+    description: "Horizontal Video (legacy)",
+    nip: "71",
+    icon: Video,
+  },
+  34236: {
+    kind: 34236,
+    name: "Short Video",
+    description: "Vertical Video (legacy)",
+    nip: "71",
+    icon: Video,
+  },
   34550: {
     kind: 34550,
     name: "Community",

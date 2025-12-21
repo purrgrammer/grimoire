@@ -1,0 +1,76 @@
+import type { NostrEvent } from "@/types/nostr";
+import { Zap } from "lucide-react";
+import { useMemo } from "react";
+import {
+  getZapAmount,
+  getZapEventPointer,
+  getZapAddressPointer,
+  getZapRequest,
+} from "applesauce-core/helpers/zap";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { getContentPreview } from "./index";
+import { UserName } from "../UserName";
+import { RichText } from "../RichText";
+
+/**
+ * Compact preview for Kind 9735 (Zap Receipt)
+ * Layout: [amount] [zap message] [target pubkey] [preview]
+ */
+export function ZapCompactPreview({ event }: { event: NostrEvent }) {
+  const zapAmount = useMemo(() => getZapAmount(event), [event]);
+  const zapRequest = useMemo(() => getZapRequest(event), [event]);
+
+  // Get zap comment from request
+  const zapMessage = useMemo(() => {
+    if (!zapRequest) return null;
+    return zapRequest.content || null;
+  }, [zapRequest]);
+
+  // Get zapped content pointers
+  const eventPointer = useMemo(() => getZapEventPointer(event), [event]);
+  const addressPointer = useMemo(() => getZapAddressPointer(event), [event]);
+
+  // Fetch the zapped event (prefer address pointer for replaceable events)
+  const zappedByEvent = useNostrEvent(eventPointer || undefined);
+  const zappedByAddress = useNostrEvent(addressPointer || undefined);
+  const zappedEvent = zappedByAddress || zappedByEvent;
+
+  // Convert from msats to sats
+  const amountInSats = useMemo(() => {
+    if (!zapAmount) return 0;
+    return Math.floor(zapAmount / 1000);
+  }, [zapAmount]);
+
+  // Get content preview
+  const preview = zappedEvent ? getContentPreview(zappedEvent, 40) : null;
+
+  return (
+    <span className="flex items-center gap-1 text-sm truncate">
+      <Zap className="size-3 fill-yellow-500 text-yellow-500 shrink-0" />
+      <span className="text-yellow-500 font-medium shrink-0">
+        {amountInSats.toLocaleString("en", { notation: "compact" })}
+      </span>
+      {zapMessage && (
+        <span className="flex-1">
+          <RichText
+            content={zapMessage}
+            className="inline text-sm leading-none"
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
+        </span>
+      )}
+      {zappedEvent && (
+        <>
+          <UserName pubkey={zappedEvent.pubkey} className="text-sm shrink-0" />
+          <span className="text-muted-foreground truncate">
+            <RichText
+              content={preview || ""}
+              className="inline text-sm leading-none"
+              options={{ showMedia: false, showEventEmbeds: false }}
+            />
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
