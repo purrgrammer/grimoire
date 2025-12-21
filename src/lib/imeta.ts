@@ -13,6 +13,8 @@ export interface ImetaEntry {
   x?: string; // SHA-256 hash
   size?: string; // file size in bytes
   fallback?: string[]; // fallback URLs
+  waveform?: string; // space-separated amplitude integers (NIP-A0)
+  duration?: string; // audio duration in seconds (NIP-A0)
 }
 
 /**
@@ -175,4 +177,47 @@ export function getAspectRatioFromDimensions(dim?: string): string | undefined {
 
   // Return as CSS aspect-ratio value
   return `${width}/${height}`;
+}
+
+/**
+ * Parse waveform string into array of amplitude values
+ * Filters out any NaN values from parsing
+ */
+export function parseWaveform(waveformStr?: string): number[] | undefined {
+  if (!waveformStr) return undefined;
+
+  const values = waveformStr
+    .split(" ")
+    .map((v) => parseInt(v, 10))
+    .filter((v) => !isNaN(v));
+
+  return values.length > 0 ? values : undefined;
+}
+
+/**
+ * Parse duration string into number of seconds
+ */
+export function parseDuration(durationStr?: string): number | undefined {
+  if (!durationStr) return undefined;
+
+  const value = parseFloat(durationStr);
+  return !isNaN(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * Extract voice note metadata from imeta tags (NIP-A0)
+ * Returns waveform data and duration if present
+ */
+export function getVoiceNoteMetadata(event: NostrEvent): {
+  waveform?: number[];
+  duration?: number;
+} {
+  const imeta = parseImetaTags(event);
+  if (imeta.length === 0) return {};
+
+  const entry = imeta[0];
+  return {
+    waveform: parseWaveform(entry.waveform),
+    duration: parseDuration(entry.duration),
+  };
 }
