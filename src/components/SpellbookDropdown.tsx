@@ -1,7 +1,21 @@
 import { useMemo, useState } from "react";
-import { BookHeart, ChevronDown, Plus, Save, Settings, X } from "lucide-react";
+import {
+  BookHeart,
+  Check,
+  ChevronDown,
+  Cloud,
+  GitFork,
+  Lock,
+  Plus,
+  Save,
+  Settings,
+  Share2,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -19,6 +33,68 @@ import {
 } from "./ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { SaveSpellbookDialog } from "./SaveSpellbookDialog";
+import { toast } from "sonner";
+
+/**
+ * Status indicator component for spellbook state
+ */
+function SpellbookStatus({
+  isOwner,
+  isPublished,
+  isLocal,
+  className,
+}: {
+  isOwner: boolean;
+  isPublished?: boolean;
+  isLocal?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 text-[10px] text-muted-foreground",
+        className,
+      )}
+    >
+      {/* Ownership */}
+      {isOwner ? (
+        <span className="flex items-center gap-0.5" title="Your spellbook">
+          <User className="size-2.5" />
+          <span>you</span>
+        </span>
+      ) : (
+        <span className="flex items-center gap-0.5" title="Others' spellbook">
+          <Users className="size-2.5" />
+          <span>other</span>
+        </span>
+      )}
+      <span className="opacity-50">•</span>
+      {/* Storage status */}
+      {isPublished ? (
+        <span
+          className="flex items-center gap-0.5 text-green-600"
+          title="Published to Nostr"
+        >
+          <Cloud className="size-2.5" />
+          <span>published</span>
+        </span>
+      ) : isLocal ? (
+        <span className="flex items-center gap-0.5" title="Local only">
+          <Lock className="size-2.5" />
+          <span>local</span>
+        </span>
+      ) : (
+        <span
+          className="flex items-center gap-0.5"
+          title="Network only (not in library)"
+        >
+          <Cloud className="size-2.5" />
+          <span>network</span>
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function SpellbookDropdown() {
   const {
@@ -27,21 +103,23 @@ export function SpellbookDropdown() {
     addWindow,
     clearActiveSpellbook,
     applyTemporaryToPersistent,
+    discardTemporary,
     isTemporary,
   } = useGrimoire();
   const location = useLocation();
+  const navigate = useNavigate();
   const activeAccount = state.activeAccount;
   const activeSpellbook = state.activeSpellbook;
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [dialogSpellbook, setDialogSpellbook] = useState<
     | {
-      slug: string;
-      title: string;
-      description?: string;
-      workspaceIds?: string[];
-      localId?: string;
-      pubkey?: string;
-    }
+        slug: string;
+        title: string;
+        description?: string;
+        workspaceIds?: string[];
+        localId?: string;
+        pubkey?: string;
+      }
     | undefined
   >(undefined);
 
@@ -76,6 +154,9 @@ export function SpellbookDropdown() {
         content: s.content,
         referencedSpells: [],
         event: s.event as SpellbookEvent,
+        localId: s.id,
+        isPublished: s.isPublished,
+        source: "local",
       });
     }
 
@@ -89,8 +170,14 @@ export function SpellbookDropdown() {
       )
         continue;
       try {
-        allMap.set(slug, parseSpellbook(event as SpellbookEvent));
-      } catch (e) {
+        const parsed = parseSpellbook(event as SpellbookEvent);
+        allMap.set(slug, {
+          ...parsed,
+          localId: existing?.localId,
+          isPublished: true,
+          source: existing?.localId ? "local" : "network",
+        });
+      } catch (_e) {
         // ignore
       }
     }
@@ -100,46 +187,76 @@ export function SpellbookDropdown() {
     );
   }, [localSpellbooks, networkEvents, activeAccount]);
 
-  // Check if active spellbook is in local library
-  const isActiveLocal = useMemo(() => {
+  // Derived states for clearer UX
+  const isOwner = useMemo(() => {
     if (!activeSpellbook) return false;
-    return (localSpellbooks || []).some((s) => s.slug === activeSpellbook.slug);
-  }, [activeSpellbook, localSpellbooks]);
+    // Owner if: no pubkey (local-only) OR pubkey matches active account
+    return (
+      !activeSpellbook.pubkey ||
+      activeSpellbook.pubkey === activeAccount?.pubkey
+    );
+  }, [activeSpellbook, activeAccount]);
+
+  const isInLibrary = useMemo(() => {
+    if (!activeSpellbook) return false;
+    return !!activeSpellbook.localId;
+  }, [activeSpellbook]);
 
   // Show dropdown if: in preview mode, has active account, or has active spellbook
   if (!isPreviewMode && !activeAccount && !activeSpellbook) {
     return null;
   }
 
-  const handleApplySpellbook = (sb: ParsedSpellbook) => {
+  const handleLoadSpellbook = (sb: ParsedSpellbook) => {
     loadSpellbook(sb);
+    toast.success(`Loaded "${sb.title}"`);
   };
 
-  const handleUpdateActive = async () => {
+  const handleUpdateSpellbook = async () => {
     if (!activeSpellbook) return;
 
-    // Get local spellbook for ID
     const local = await db.spellbooks
       .where("slug")
       .equals(activeSpellbook.slug)
       .first();
 
-    // Open dialog with existing spellbook data
-    // Prefer local description if available, fall back to active spellbook
     setDialogSpellbook({
       slug: activeSpellbook.slug,
       title: activeSpellbook.title,
       description: local?.description || activeSpellbook.description,
       workspaceIds: Object.keys(state.workspaces),
-      localId: local?.id,
+      localId: local?.id || activeSpellbook.localId,
       pubkey: activeSpellbook.pubkey,
     });
+    setSaveDialogOpen(true);
+  };
+
+  const handleForkSpellbook = () => {
+    if (!activeSpellbook) return;
+    // Open save dialog without existing spellbook to create a new one
+    setDialogSpellbook(undefined);
     setSaveDialogOpen(true);
   };
 
   const handleNewSpellbook = () => {
     setDialogSpellbook(undefined);
     setSaveDialogOpen(true);
+  };
+
+  const handleApplyToMain = () => {
+    applyTemporaryToPersistent();
+    navigate("/", { replace: true });
+    toast.success("Spellbook applied to your dashboard");
+  };
+
+  const handleExitPreview = () => {
+    discardTemporary();
+    navigate("/", { replace: true });
+  };
+
+  const handleCloseSpellbook = () => {
+    clearActiveSpellbook();
+    toast.info("Spellbook closed");
   };
 
   const itemClass =
@@ -150,7 +267,7 @@ export function SpellbookDropdown() {
       <SaveSpellbookDialog
         open={saveDialogOpen}
         onOpenChange={setSaveDialogOpen}
-        existingSpellbook={isActiveLocal ? dialogSpellbook : undefined}
+        existingSpellbook={isOwner && isInLibrary ? dialogSpellbook : undefined}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -159,11 +276,14 @@ export function SpellbookDropdown() {
             size="sm"
             className={cn(
               "h-7 px-2 gap-1.5 text-muted-foreground hover:text-foreground",
-              activeSpellbook && "text-foreground font-bold",
+              activeSpellbook && "text-foreground font-medium",
+              isTemporary && "ring-1 ring-amber-500/50",
             )}
           >
-            <BookHeart className="size-4" />
-            <span className="text-xs font-medium hidden sm:inline">
+            <BookHeart
+              className={cn("size-4", isTemporary && "text-amber-500")}
+            />
+            <span className="text-xs font-medium hidden sm:inline max-w-[120px] truncate">
               {activeSpellbook ? activeSpellbook.title : "grimoire"}
             </span>
             <ChevronDown className="size-3 opacity-50" />
@@ -171,68 +291,143 @@ export function SpellbookDropdown() {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="center"
-          className="w-64 max-h-[80vh] overflow-y-auto"
+          className="w-72 max-h-[80vh] overflow-y-auto"
         >
-          {/* Active Spellbook Actions */}
-          {activeSpellbook && (
+          {/* Preview Mode Banner */}
+          {isPreviewMode && (
             <>
-              <DropdownMenuLabel className="py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                Active Layout
-              </DropdownMenuLabel>
-              <div className="px-2 py-1 text-sm font-medium truncate opacity-80 mb-1">
-                {activeSpellbook.title || activeSpellbook.slug}
+              <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20">
+                <div className="flex items-center gap-2 text-amber-600 text-xs font-medium">
+                  <BookHeart className="size-3.5" />
+                  Preview Mode
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  You're viewing a shared spellbook. Apply to keep it.
+                </p>
               </div>
-
-              {isTemporary && (
-                <DropdownMenuItem
-                  onClick={applyTemporaryToPersistent}
-                  className={cn(itemClass, "bg-accent/5 font-bold")}
-                >
-                  <Save className="size-3.5 mr-2" />
-                  Apply to Dashboard
-                </DropdownMenuItem>
+              {activeSpellbook && (
+                <div className="px-3 py-2 border-b">
+                  <div className="font-medium text-sm truncate">
+                    {activeSpellbook.title}
+                  </div>
+                  <SpellbookStatus
+                    isOwner={isOwner}
+                    isPublished={activeSpellbook.isPublished}
+                    isLocal={isInLibrary}
+                    className="mt-1"
+                  />
+                </div>
               )}
-
-              {isActiveLocal && activeAccount &&
-                activeSpellbook.pubkey === activeAccount.pubkey ? (
-                <DropdownMenuItem
-                  onClick={handleUpdateActive}
-                  className={itemClass}
-                >
-                  <Save className="size-3.5 mr-2 text-muted-foreground" />
-                  Update
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={handleUpdateActive}
-                  className={itemClass}
-                >
-                  <Plus className="size-3.5 mr-2 text-muted-foreground" />
-                  Add to Library
-                </DropdownMenuItem>
-              )}
-
               <DropdownMenuItem
-                onClick={clearActiveSpellbook}
-                className={cn(itemClass, "text-xs opacity-70")}
+                onClick={handleApplyToMain}
+                className={cn(
+                  itemClass,
+                  "bg-green-500/5 text-green-600 font-medium",
+                )}
               >
-                <X className="size-3.5 mr-2 text-muted-foreground" />
-                Deselect
+                <Check className="size-3.5 mr-2" />
+                Apply to Dashboard
+              </DropdownMenuItem>
+              {activeAccount && (
+                <DropdownMenuItem
+                  onClick={handleForkSpellbook}
+                  className={itemClass}
+                >
+                  <GitFork className="size-3.5 mr-2 text-muted-foreground" />
+                  Fork to Library
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={handleExitPreview}
+                className={cn(itemClass, "text-muted-foreground")}
+              >
+                <X className="size-3.5 mr-2" />
+                Exit Preview
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
           )}
 
-          {/* Spellbooks Section - only show if user is logged in */}
+          {/* Active Spellbook Section (non-preview) */}
+          {activeSpellbook && !isPreviewMode && (
+            <>
+              <DropdownMenuLabel className="py-1 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
+                Active Spellbook
+              </DropdownMenuLabel>
+              <div className="px-3 py-2 border-b">
+                <div className="font-medium text-sm truncate">
+                  {activeSpellbook.title}
+                </div>
+                <SpellbookStatus
+                  isOwner={isOwner}
+                  isPublished={activeSpellbook.isPublished}
+                  isLocal={isInLibrary}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Temporary session actions */}
+              {isTemporary && (
+                <DropdownMenuItem
+                  onClick={handleApplyToMain}
+                  className={cn(itemClass, "bg-amber-500/5 font-medium")}
+                >
+                  <Check className="size-3.5 mr-2 text-amber-600" />
+                  Keep This Spellbook
+                </DropdownMenuItem>
+              )}
+
+              {/* Owner actions */}
+              {isOwner && isInLibrary && (
+                <DropdownMenuItem
+                  onClick={handleUpdateSpellbook}
+                  className={itemClass}
+                >
+                  <Save className="size-3.5 mr-2 text-muted-foreground" />
+                  Update & Publish
+                </DropdownMenuItem>
+              )}
+
+              {/* Non-owner or not in library actions */}
+              {(!isOwner || !isInLibrary) && activeAccount && (
+                <DropdownMenuItem
+                  onClick={handleForkSpellbook}
+                  className={itemClass}
+                >
+                  <GitFork className="size-3.5 mr-2 text-muted-foreground" />
+                  {isOwner ? "Save to Library" : "Fork to Library"}
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuItem
+                onClick={() => addWindow("spellbooks", {})}
+                className={cn(itemClass, "text-muted-foreground text-xs")}
+              >
+                <Share2 className="size-3.5 mr-2" />
+                Share...
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={handleCloseSpellbook}
+                className={cn(itemClass, "text-muted-foreground text-xs")}
+              >
+                <X className="size-3.5 mr-2" />
+                Close Spellbook
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          {/* My Spellbooks Section */}
           {activeAccount && (
             <>
-              <DropdownMenuLabel className="flex items-center justify-between py-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                My Layouts
+              <DropdownMenuLabel className="flex items-center justify-between py-1 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
+                My Spellbooks
               </DropdownMenuLabel>
 
               {spellbooks.length === 0 ? (
-                <div className="px-2 py-4 text-center text-xs text-muted-foreground italic">
-                  No layouts saved yet.
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+                  No spellbooks saved yet.
                 </div>
               ) : (
                 spellbooks.map((sb) => {
@@ -241,20 +436,39 @@ export function SpellbookDropdown() {
                     <DropdownMenuItem
                       key={sb.slug}
                       disabled={isActive}
-                      onClick={() => handleApplySpellbook(sb)}
-                      className={cn(itemClass, isActive && "bg-muted font-bold")}
+                      onClick={() => handleLoadSpellbook(sb)}
+                      className={cn(
+                        itemClass,
+                        "flex items-center gap-2",
+                        isActive && "bg-muted",
+                      )}
                     >
                       <BookHeart
                         className={cn(
-                          "size-3.5 mr-2 text-muted-foreground",
+                          "size-3.5 flex-shrink-0 text-muted-foreground",
                           isActive && "text-foreground",
                         )}
                       />
-                      <div className="flex flex-row gap-0 min-w-0">
-                        <span className="truncate font-medium text-sm">
-                          {sb.title}
-                        </span>
-                      </div>
+                      <span
+                        className={cn(
+                          "truncate flex-1 text-sm",
+                          isActive && "font-medium",
+                        )}
+                      >
+                        {sb.title}
+                      </span>
+                      {/* Status badge */}
+                      {sb.isPublished ? (
+                        <Cloud
+                          className="size-3 text-green-600 flex-shrink-0"
+                          title="Published"
+                        />
+                      ) : (
+                        <Lock
+                          className="size-3 text-muted-foreground flex-shrink-0"
+                          title="Local only"
+                        />
+                      )}
                     </DropdownMenuItem>
                   );
                 })
@@ -262,30 +476,29 @@ export function SpellbookDropdown() {
 
               <DropdownMenuSeparator />
 
-              {!activeSpellbook && (
-                <DropdownMenuItem
-                  onClick={handleNewSpellbook}
-                  className={itemClass}
-                >
-                  <Save className="size-3.5 mr-2 text-muted-foreground" />
-                  <span className="text-sm font-medium">Save Spellbook</span>
-                </DropdownMenuItem>
-              )}
+              {/* Actions */}
+              <DropdownMenuItem
+                onClick={handleNewSpellbook}
+                className={itemClass}
+              >
+                <Plus className="size-3.5 mr-2 text-muted-foreground" />
+                <span className="text-sm">Save Current as Spellbook</span>
+              </DropdownMenuItem>
 
               <DropdownMenuItem
                 onClick={() => addWindow("spellbooks", {})}
-                className={cn(itemClass, "text-xs opacity-70")}
+                className={cn(itemClass, "text-muted-foreground")}
               >
-                <Settings className="size-3.5 mr-2 text-muted-foreground" />
-                <span className="text-sm font-medium">Manage Library</span>
+                <Settings className="size-3.5 mr-2" />
+                <span className="text-sm">Manage Library</span>
               </DropdownMenuItem>
             </>
           )}
 
-          {/* Show message for non-logged-in users in preview mode */}
+          {/* Non-logged-in user in preview mode */}
           {!activeAccount && isPreviewMode && (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground italic">
-              Log in to save and manage layouts
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+              Log in to save and manage spellbooks
             </div>
           )}
         </DropdownMenuContent>

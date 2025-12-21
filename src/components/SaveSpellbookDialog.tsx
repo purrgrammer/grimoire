@@ -14,11 +14,15 @@ import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
 import { useGrimoire } from "@/core/state";
 import { toast } from "sonner";
-import { saveSpellbook } from "@/services/spellbook-storage";
+import {
+  saveSpellbook,
+  markSpellbookPublished,
+} from "@/services/spellbook-storage";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
 import { hub } from "@/services/hub";
 import { createSpellbook } from "@/lib/spellbook-manager";
 import { Loader2, Save, Send } from "lucide-react";
+import type { SpellbookEvent } from "@/types/spell";
 
 interface SaveSpellbookDialogProps {
   open: boolean;
@@ -42,7 +46,9 @@ export function SaveSpellbookDialog({
   const isUpdateMode = !!existingSpellbook;
 
   const [title, setTitle] = useState(existingSpellbook?.title || "");
-  const [description, setDescription] = useState(existingSpellbook?.description || "");
+  const [description, setDescription] = useState(
+    existingSpellbook?.description || "",
+  );
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<string[]>(
     existingSpellbook?.workspaceIds || Object.keys(state.workspaces),
   );
@@ -105,14 +111,18 @@ export function SaveSpellbookDialog({
 
       // 4. Optionally publish
       if (shouldPublish) {
-        await hub.run(PublishSpellbook, {
+        const localId = existingSpellbook?.localId || localSpellbook.id;
+        // Use hub.exec() to get the event and handle side effects after successful publish
+        for await (const event of hub.exec(PublishSpellbook, {
           state,
           title,
           description,
           workspaceIds: selectedWorkspaces,
-          localId: existingSpellbook?.localId || localSpellbook.id,
-          content: localSpellbook.content, // Pass explicitly to avoid re-calculating
-        });
+          content: localSpellbook.content,
+        })) {
+          // Only mark as published AFTER successful relay publish
+          await markSpellbookPublished(localId, event as SpellbookEvent);
+        }
         toast.success(
           isUpdateMode
             ? "Spellbook updated and published to Nostr"
@@ -120,11 +130,13 @@ export function SaveSpellbookDialog({
         );
       } else {
         toast.success(
-          isUpdateMode ? "Spellbook updated locally" : "Spellbook saved locally",
+          isUpdateMode
+            ? "Spellbook updated locally"
+            : "Spellbook saved locally",
         );
       }
 
-      // 5. Set as active spellbook
+      // 5. Set as active spellbook with full source tracking
       const parsedSpellbook = {
         slug,
         title,
@@ -132,6 +144,10 @@ export function SaveSpellbookDialog({
         content: localSpellbook.content,
         referencedSpells: [],
         event: localSpellbook.event as any, // Event might not exist for locally-only spellbooks
+        // Enhanced source tracking:
+        localId: localSpellbook.id,
+        isPublished: shouldPublish || localSpellbook.isPublished,
+        source: "local" as const,
       };
       loadSpellbook(parsedSpellbook);
 
@@ -158,7 +174,7 @@ export function SaveSpellbookDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {isUpdateMode ? "Update Spellbook" : "Save Layout as Spellbook"}
+            {isUpdateMode ? "Update Spellbook" : "Save as Spellbook"}
           </DialogTitle>
           <DialogDescription>
             {isUpdateMode
@@ -181,7 +197,7 @@ export function SaveSpellbookDialog({
             <Label>Description (optional)</Label>
             <Textarea
               id="description"
-              placeholder="What is this layout for?"
+              placeholder="What is this spellbook for?"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}

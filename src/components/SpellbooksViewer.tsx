@@ -28,7 +28,10 @@ import {
 } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
-import { deleteSpellbook } from "@/services/spellbook-storage";
+import {
+  deleteSpellbook,
+  markSpellbookPublished,
+} from "@/services/spellbook-storage";
 import type { LocalSpellbook } from "@/services/db";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
 import { DeleteEventAction } from "@/actions/delete-event";
@@ -96,6 +99,10 @@ function SpellbookCard({
       content: spellbook.content,
       referencedSpells: [], // We don't need this for applying
       event: spellbook.event as SpellbookEvent,
+      // Enhanced source tracking:
+      localId: spellbook.id,
+      isPublished: spellbook.isPublished,
+      source: "local",
     };
     onApply(parsed);
   };
@@ -211,7 +218,7 @@ function SpellbookCard({
             className={cn("h-8", !isOwner && "w-full")}
             onClick={handleApply}
           >
-            Apply Layout
+            Load Spellbook
           </Button>
         )}
       </CardFooter>
@@ -222,9 +229,9 @@ function SpellbookCard({
 export function SpellbooksViewer() {
   const { state, loadSpellbook } = useGrimoire();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "local" | "published" | "discover">(
-    "all",
-  );
+  const [filterType, setFilterType] = useState<
+    "all" | "local" | "published" | "discover"
+  >("all");
 
   // Load local spellbooks from Dexie
   const localSpellbooks = useLiveQuery(() =>
@@ -232,24 +239,26 @@ export function SpellbooksViewer() {
   );
 
   // Fetch user's spellbooks from Nostr
-  const { events: userNetworkEvents, loading: userNetworkLoading } = useReqTimeline(
-    state.activeAccount
-      ? `user-spellbooks-${state.activeAccount.pubkey}`
-      : "none",
-    state.activeAccount
-      ? { kinds: [SPELLBOOK_KIND], authors: [state.activeAccount.pubkey] }
-      : [],
-    state.activeAccount?.relays?.map((r) => r.url) || [],
-    { stream: true },
-  );
+  const { events: userNetworkEvents, loading: userNetworkLoading } =
+    useReqTimeline(
+      state.activeAccount
+        ? `user-spellbooks-${state.activeAccount.pubkey}`
+        : "none",
+      state.activeAccount
+        ? { kinds: [SPELLBOOK_KIND], authors: [state.activeAccount.pubkey] }
+        : [],
+      state.activeAccount?.relays?.map((r) => r.url) || [],
+      { stream: true },
+    );
 
   // Fetch discovered spellbooks from network (all authors)
-  const { events: discoveredEvents, loading: discoveredLoading } = useReqTimeline(
-    filterType === "discover" ? "discover-spellbooks" : "none",
-    filterType === "discover" ? { kinds: [SPELLBOOK_KIND], limit: 50 } : [],
-    AGGREGATOR_RELAYS,
-    { stream: true },
-  );
+  const { events: discoveredEvents, loading: discoveredLoading } =
+    useReqTimeline(
+      filterType === "discover" ? "discover-spellbooks" : "none",
+      filterType === "discover" ? { kinds: [SPELLBOOK_KIND], limit: 50 } : [],
+      AGGREGATOR_RELAYS,
+      { stream: true },
+    );
 
   const networkLoading = userNetworkLoading || discoveredLoading;
 
@@ -266,9 +275,8 @@ export function SpellbooksViewer() {
     }
 
     // Process network events based on filter type
-    const eventsToProcess = filterType === "discover"
-      ? discoveredEvents
-      : userNetworkEvents;
+    const eventsToProcess =
+      filterType === "discover" ? discoveredEvents : userNetworkEvents;
 
     for (const event of eventsToProcess) {
       // Find d tag for matching with local slug
@@ -323,7 +331,9 @@ export function SpellbooksViewer() {
       filtered = filtered.filter((s) => s.isPublished && !s.deletedAt);
     } else if (filterType === "discover") {
       // Only show network spellbooks from others
-      filtered = filtered.filter((s) => s.isPublished && s.event?.pubkey !== currentUserPubkey);
+      filtered = filtered.filter(
+        (s) => s.isPublished && s.event?.pubkey !== currentUserPubkey,
+      );
     }
 
     if (searchQuery.trim()) {
@@ -341,7 +351,14 @@ export function SpellbooksViewer() {
     });
 
     return { filteredSpellbooks: filtered, totalCount: total };
-  }, [localSpellbooks, userNetworkEvents, discoveredEvents, searchQuery, filterType, state.activeAccount?.pubkey]);
+  }, [
+    localSpellbooks,
+    userNetworkEvents,
+    discoveredEvents,
+    searchQuery,
+    filterType,
+    state.activeAccount?.pubkey,
+  ]);
 
   const handleDelete = async (spellbook: LocalSpellbook) => {
     if (!confirm(`Delete spellbook "${spellbook.title}"?`)) return;
@@ -355,33 +372,36 @@ export function SpellbooksViewer() {
       }
       await deleteSpellbook(spellbook.id);
       toast.success("Spellbook deleted");
-    } catch (error) {
+    } catch (_error) {
       toast.error("Failed to delete spellbook");
     }
   };
 
   const handlePublish = async (spellbook: LocalSpellbook) => {
     try {
-      await hub.run(PublishSpellbook, {
+      // Use hub.exec() to get the event and handle side effects after successful publish
+      for await (const event of hub.exec(PublishSpellbook, {
         state,
         title: spellbook.title,
         description: spellbook.description,
         workspaceIds: Object.keys(spellbook.content.workspaces),
-        localId: spellbook.id,
-        content: spellbook.content, // Pass existing content
-      });
+        content: spellbook.content,
+      })) {
+        // Only mark as published AFTER successful relay publish
+        await markSpellbookPublished(spellbook.id, event as SpellbookEvent);
+      }
       toast.success("Spellbook published");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to publish spellbook"
+        error instanceof Error ? error.message : "Failed to publish spellbook",
       );
     }
   };
 
   const handleApply = (spellbook: ParsedSpellbook) => {
     loadSpellbook(spellbook);
-    toast.success("Layout applied", {
-      description: `Replaced current layout with ${Object.keys(spellbook.content.workspaces).length} workspaces.`,
+    toast.success("Spellbook loaded", {
+      description: `Loaded ${Object.keys(spellbook.content.workspaces).length} workspaces.`,
     });
   };
 
@@ -460,7 +480,8 @@ export function SpellbooksViewer() {
         ) : (
           <div className="grid gap-3 grid-cols-1">
             {filteredSpellbooks.map((s) => {
-              const isOwner = s.event?.pubkey === state.activeAccount?.pubkey || !s.event;
+              const isOwner =
+                s.event?.pubkey === state.activeAccount?.pubkey || !s.event;
               const showAuthor = filterType === "discover" || !isOwner;
 
               return (

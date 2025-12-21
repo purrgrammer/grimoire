@@ -1,5 +1,4 @@
 import { createSpellbook, slugify } from "@/lib/spellbook-manager";
-import { markSpellbookPublished } from "@/services/spellbook-storage";
 import { SpellbookEvent } from "@/types/spell";
 import { GrimoireState } from "@/types/app";
 import { SpellbookContent } from "@/types/spell";
@@ -12,7 +11,6 @@ export interface PublishSpellbookOptions {
   title: string;
   description?: string;
   workspaceIds?: string[];
-  localId?: string; // If provided, updates this local spellbook
   content?: SpellbookContent; // Optional explicit content
 }
 
@@ -24,7 +22,10 @@ export interface PublishSpellbookOptions {
  * 2. Creates spellbook event from state or explicit content
  * 3. Signs the event using the action hub's factory
  * 4. Yields the signed event (ActionHub handles publishing)
- * 5. Marks local spellbook as published if localId provided
+ *
+ * NOTE: This action does NOT mark the local spellbook as published.
+ * The caller should use hub.exec() and call markSpellbookPublished()
+ * AFTER successful publish to ensure data consistency.
  *
  * @param options - Spellbook publishing options
  * @returns Action generator for ActionHub
@@ -33,17 +34,15 @@ export interface PublishSpellbookOptions {
  *
  * @example
  * ```typescript
- * // Publish via ActionHub
- * await hub.run(PublishSpellbook, {
- *   state: currentState,
- *   title: "My Dashboard",
- *   description: "Daily workflow",
- *   localId: "local-spellbook-id"
- * });
+ * // Publish via ActionHub with proper side-effect handling
+ * for await (const event of hub.exec(PublishSpellbook, options)) {
+ *   // Only mark as published AFTER successful relay publish
+ *   await markSpellbookPublished(localId, event as SpellbookEvent);
+ * }
  * ```
  */
 export function PublishSpellbook(options: PublishSpellbookOptions) {
-  const { state, title, description, workspaceIds, localId, content } = options;
+  const { state, title, description, workspaceIds, content } = options;
 
   return async function* ({
     factory,
@@ -103,12 +102,9 @@ export function PublishSpellbook(options: PublishSpellbookOptions) {
     // 4. Sign the event
     const event = (await factory.sign(draft)) as SpellbookEvent;
 
-    // 5. Mark as published in local DB (before yielding for better UX)
-    if (localId) {
-      await markSpellbookPublished(localId, event);
-    }
-
-    // 6. Yield signed event - ActionHub's publishEvent will handle relay selection and publishing
+    // 5. Yield signed event - ActionHub handles relay selection and publishing
+    // NOTE: Caller is responsible for marking local spellbook as published
+    // after successful publish using markSpellbookPublished()
     yield event;
   };
 }

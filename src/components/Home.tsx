@@ -74,7 +74,10 @@ export default function Home() {
         } else if (isNip05(actor)) {
           // Add timeout for NIP-05 resolution
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("NIP-05 resolution timeout")), 10000)
+            setTimeout(
+              () => reject(new Error("NIP-05 resolution timeout")),
+              10000,
+            ),
           );
           const pubkey = await Promise.race([
             resolveNip05(actor),
@@ -89,7 +92,7 @@ export default function Home() {
       } catch (e) {
         console.error("Failed to resolve actor:", actor, e);
         setResolutionError(
-          e instanceof Error ? e.message : "Failed to resolve actor"
+          e instanceof Error ? e.message : "Failed to resolve actor",
         );
         toast.error(`Failed to resolve actor: ${actor}`, {
           description:
@@ -129,9 +132,9 @@ export default function Home() {
         setHasLoadedSpellbook(true);
 
         if (isPreviewPath) {
-          toast.info(`Previewing layout: ${parsed.title}`, {
+          toast.info(`Previewing spellbook: ${parsed.title}`, {
             description:
-              "You are in a temporary session. Apply to keep this layout.",
+              "You are in a temporary session. Apply to keep this spellbook.",
           });
         }
       } catch (e) {
@@ -147,10 +150,10 @@ export default function Home() {
     switchToTemporary,
   ]);
 
-  const handleApplyLayout = () => {
+  const handleApplySpellbook = () => {
     applyTemporaryToPersistent();
     navigate("/", { replace: true });
-    toast.success("Layout applied to your dashboard");
+    toast.success("Spellbook applied to your dashboard");
   };
 
   const handleDiscardPreview = () => {
@@ -181,7 +184,11 @@ export default function Home() {
     }
 
     // Otherwise show date
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   // Sync active account and fetch relay lists
@@ -295,10 +302,10 @@ export default function Home() {
                 variant="secondary"
                 size="sm"
                 className="h-7 bg-white text-accent hover:bg-white/90 font-bold shadow-sm"
-                onClick={handleApplyLayout}
+                onClick={handleApplySpellbook}
               >
                 <Check className="size-3.5 mr-1" />
-                Apply Layout
+                Apply Spellbook
               </Button>
             </div>
           </div>

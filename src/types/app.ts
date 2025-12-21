@@ -100,6 +100,10 @@ export interface GrimoireState {
     slug: string; // d-tag
     title: string;
     description?: string;
-    pubkey?: string; // owner
+    pubkey?: string; // owner's pubkey (undefined = local-only, never published)
+    // Enhanced fields for better UX:
+    source: "local" | "network"; // Where the spellbook was loaded from
+    localId?: string; // Local DB ID if saved to library
+    isPublished?: boolean; // Whether it has been published to Nostr
   };
 }

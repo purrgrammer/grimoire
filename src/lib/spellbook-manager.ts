@@ -40,8 +40,8 @@ export function slugify(text: string): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-") // Replace spaces with -
-    .replace(/[^\w\-]+/g, "") // Remove all non-word chars
-    .replace(/\-\-+/g, "-"); // Replace multiple - with single -
+    .replace(/[^\w-]+/g, "") // Remove all non-word chars
+    .replace(/--+/g, "-"); // Replace multiple - with single -
 }
 
 /**
@@ -79,6 +79,7 @@ export function createSpellbook(
   const selectedWorkspaces: Record<string, Workspace> = {};
   const selectedWindows: Record<string, WindowInstance> = {};
   const referencedSpells = new Set<string>();
+  const usedKinds = new Set<number>();
 
   // 2. Collect workspaces and their windows
   for (const wsId of targetWorkspaceIds) {
@@ -95,13 +96,21 @@ export function createSpellbook(
     // Also include any loose windows in the workspace definition just in case
     ws.windowIds.forEach((id) => windowIds.add(id));
 
-    // 3. Extract window instances
+    // 3. Extract window instances and analyze kinds
     for (const winId of windowIds) {
       const window = state.windows[winId];
       if (window) {
         selectedWindows[winId] = window;
         if (window.spellId) {
           referencedSpells.add(window.spellId);
+        }
+        // Extract kinds from REQ windows for filtering/discovery
+        if (window.appId === "req" && window.props?.filter?.kinds) {
+          for (const kind of window.props.filter.kinds) {
+            if (typeof kind === "number") {
+              usedKinds.add(kind);
+            }
+          }
         }
       }
     }
@@ -133,6 +142,12 @@ export function createSpellbook(
     tags.push(["e", spellId, "", "mention"]);
   }
 
+  // Add k tags for kinds used in REQ windows (enables filtering/discovery)
+  const sortedKinds = Array.from(usedKinds).sort((a, b) => a - b);
+  for (const kind of sortedKinds) {
+    tags.push(["k", String(kind)]);
+  }
+
   return {
     eventProps: {
       kind: SPELLBOOK_KIND,
@@ -150,13 +165,15 @@ export function parseSpellbook(event: SpellbookEvent): ParsedSpellbook {
   let content: SpellbookContent;
   try {
     content = JSON.parse(event.content);
-  } catch (e) {
+  } catch (_e) {
     throw new Error("Failed to parse spellbook content: Invalid JSON");
   }
 
   // Validate version (basic check)
   if (!content.version || content.version < 1) {
-    console.warn("Spellbook missing version or invalid, attempting to load anyway");
+    console.warn(
+      "Spellbook missing version or invalid, attempting to load anyway",
+    );
   }
 
   // Extract metadata
@@ -214,7 +231,7 @@ export function compareSpellbookVersions(
     created_at: number;
     content: SpellbookContent;
     id: string;
-  }
+  },
 ): {
   hasConflict: boolean;
   newerVersion: "local" | "network" | "same";
@@ -255,9 +272,7 @@ export function compareSpellbookVersions(
   // 2. Local has been published (has eventId) AND
   // 3. The event IDs don't match (different versions)
   const hasConflict =
-    contentDiffers &&
-    !!local.eventId &&
-    local.eventId !== network.id;
+    contentDiffers && !!local.eventId && local.eventId !== network.id;
 
   return {
     hasConflict,
@@ -289,7 +304,7 @@ export function loadSpellbook(
   spellbook: ParsedSpellbook,
 ): GrimoireState {
   const { workspaces, windows } = spellbook.content;
-  
+
   // Maps to track old -> new IDs
   const workspaceIdMap = new Map<string, string>();
   const windowIdMap = new Map<string, string>();
@@ -302,7 +317,7 @@ export function loadSpellbook(
   Object.values(windows).forEach((window) => {
     const newId = uuidv4();
     windowIdMap.set(window.id, newId);
-    
+
     // Create new window instance with new ID
     newWindows[newId] = {
       ...window,
@@ -313,7 +328,7 @@ export function loadSpellbook(
   // 3. Process Workspaces
   // Sort by original number to preserve order
   const sortedWorkspaces = Object.values(workspaces).sort(
-    (a, b) => a.number - b.number
+    (a, b) => a.number - b.number,
   );
 
   let firstNewWorkspaceId: string | null = null;
@@ -321,7 +336,7 @@ export function loadSpellbook(
   sortedWorkspaces.forEach((ws) => {
     const newWsId = uuidv4();
     if (!firstNewWorkspaceId) firstNewWorkspaceId = newWsId;
-    
+
     workspaceIdMap.set(ws.id, newWsId);
 
     // Update window IDs in the windowIds array
@@ -350,11 +365,15 @@ export function loadSpellbook(
     windows: newWindows,
     activeWorkspaceId: firstNewWorkspaceId || state.activeWorkspaceId,
     activeSpellbook: {
-      id: spellbook.event?.id || uuidv4(), // Fallback to uuid if local
+      id: spellbook.event?.id || spellbook.localId || uuidv4(),
       slug: spellbook.slug,
       title: spellbook.title,
       description: spellbook.description,
       pubkey: spellbook.event?.pubkey,
+      // Enhanced fields for UX clarity:
+      source: spellbook.source || (spellbook.event ? "network" : "local"),
+      localId: spellbook.localId,
+      isPublished: spellbook.isPublished ?? !!spellbook.event,
     },
   };
 }

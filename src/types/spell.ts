@@ -167,6 +167,12 @@ export interface ParsedSpellbook {
   content: SpellbookContent;
   /** IDs of spells referenced in this book (from e tags) */
   referencedSpells: string[];
-  /** Full event reference */
-  event: SpellbookEvent;
+  /** Full event reference (may be undefined for local-only spellbooks) */
+  event?: SpellbookEvent;
+  /** Optional: Local DB ID if this spellbook is in the user's library */
+  localId?: string;
+  /** Optional: Whether this spellbook has been published to Nostr */
+  isPublished?: boolean;
+  /** Optional: Where this spellbook was loaded from */
+  source?: "local" | "network";
 }
