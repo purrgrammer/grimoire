@@ -125,9 +125,11 @@ export function SpellbookDropdown() {
       .first();
 
     // Open dialog with existing spellbook data
+    // Prefer local description if available, fall back to active spellbook
     setDialogSpellbook({
       slug: activeSpellbook.slug,
       title: activeSpellbook.title,
+      description: local?.description || activeSpellbook.description,
       workspaceIds: Object.keys(state.workspaces),
       localId: local?.id,
       pubkey: activeSpellbook.pubkey,
