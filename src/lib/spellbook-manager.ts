@@ -198,6 +198,89 @@ function updateLayoutIds(
 }
 
 /**
+ * Compares two spellbook versions to detect conflicts
+ *
+ * @param local - Local spellbook from Dexie
+ * @param network - Network spellbook from Nostr event
+ * @returns Comparison result with conflict status and differences
+ */
+export function compareSpellbookVersions(
+  local: {
+    createdAt: number;
+    content: SpellbookContent;
+    eventId?: string;
+  },
+  network: {
+    created_at: number;
+    content: SpellbookContent;
+    id: string;
+  }
+): {
+  hasConflict: boolean;
+  newerVersion: "local" | "network" | "same";
+  differences: {
+    workspaceCount: { local: number; network: number };
+    windowCount: { local: number; network: number };
+    lastModified: { local: number; network: number };
+    contentDiffers: boolean;
+  };
+} {
+  const localTimestamp = local.createdAt;
+  const networkTimestamp = network.created_at * 1000; // Convert to ms
+
+  // Count workspaces and windows
+  const localWorkspaceCount = Object.keys(local.content.workspaces).length;
+  const networkWorkspaceCount = Object.keys(network.content.workspaces).length;
+  const localWindowCount = Object.keys(local.content.windows).length;
+  const networkWindowCount = Object.keys(network.content.windows).length;
+
+  // Check if content differs (simple stringify comparison)
+  const localContentStr = JSON.stringify(local.content);
+  const networkContentStr = JSON.stringify(network.content);
+  const contentDiffers = localContentStr !== networkContentStr;
+
+  // Determine newer version
+  let newerVersion: "local" | "network" | "same";
+  if (localTimestamp > networkTimestamp) {
+    newerVersion = "local";
+  } else if (networkTimestamp > localTimestamp) {
+    newerVersion = "network";
+  } else {
+    newerVersion = "same";
+  }
+
+  // Determine if there's a conflict
+  // Conflict exists if:
+  // 1. Content differs AND
+  // 2. Local has been published (has eventId) AND
+  // 3. The event IDs don't match (different versions)
+  const hasConflict =
+    contentDiffers &&
+    !!local.eventId &&
+    local.eventId !== network.id;
+
+  return {
+    hasConflict,
+    newerVersion,
+    differences: {
+      workspaceCount: {
+        local: localWorkspaceCount,
+        network: networkWorkspaceCount,
+      },
+      windowCount: {
+        local: localWindowCount,
+        network: networkWindowCount,
+      },
+      lastModified: {
+        local: localTimestamp,
+        network: networkTimestamp,
+      },
+      contentDiffers,
+    },
+  };
+}
+
+/**
  * Imports a parsed spellbook into the current state.
  * Regenerates IDs to avoid collisions.
  */

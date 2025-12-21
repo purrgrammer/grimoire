@@ -3,13 +3,14 @@ import { useGrimoire } from "@/core/state";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
+import { useProfile } from "@/hooks/useProfile";
 import relayStateManager from "@/services/relay-state-manager";
 import { TabBar } from "./TabBar";
 import { Mosaic, MosaicWindow, MosaicBranch } from "react-mosaic-component";
 import CommandLauncher from "./CommandLauncher";
 import { WindowToolbar } from "./WindowToolbar";
 import { WindowTile } from "./WindowTitle";
-import { BookHeart, X, Check } from "lucide-react";
+import { BookHeart, X, Check, Link as LinkIcon, Loader2 } from "lucide-react";
 import UserMenu from "./nostr/user-menu";
 import { GrimoireWelcome } from "./GrimoireWelcome";
 import { GlobalAuthPrompt } from "./GlobalAuthPrompt";
@@ -40,6 +41,8 @@ export default function Home() {
 
   // Preview state
   const [resolvedPubkey, setResolvedPubkey] = useState<string | null>(null);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
   const isPreviewPath = location.pathname.startsWith("/preview/");
   const isDirectPath = actor && identifier && !isPreviewPath;
   const isFromApp = location.state?.fromApp === true;
@@ -52,6 +55,8 @@ export default function Home() {
   useEffect(() => {
     if (!actor) {
       setResolvedPubkey(null);
+      setResolutionError(null);
+      setIsResolving(false);
       setHasLoadedSpellbook(false);
       // If we were in temporary mode and navigated back to /, discard
       if (isTemporary) discardTemporary();
@@ -59,18 +64,39 @@ export default function Home() {
     }
 
     const resolve = async () => {
+      setIsResolving(true);
+      setResolutionError(null);
+
       try {
         if (actor.startsWith("npub")) {
           const { data } = nip19.decode(actor);
           setResolvedPubkey(data as string);
         } else if (isNip05(actor)) {
-          const pubkey = await resolveNip05(actor);
+          // Add timeout for NIP-05 resolution
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("NIP-05 resolution timeout")), 10000)
+          );
+          const pubkey = await Promise.race([
+            resolveNip05(actor),
+            timeoutPromise,
+          ]);
           setResolvedPubkey(pubkey);
         } else if (actor.length === 64) {
           setResolvedPubkey(actor);
+        } else {
+          setResolutionError(`Invalid actor format: ${actor}`);
         }
       } catch (e) {
         console.error("Failed to resolve actor:", actor, e);
+        setResolutionError(
+          e instanceof Error ? e.message : "Failed to resolve actor"
+        );
+        toast.error(`Failed to resolve actor: ${actor}`, {
+          description:
+            e instanceof Error ? e.message : "Invalid format or network error",
+        });
+      } finally {
+        setIsResolving(false);
       }
     };
 
@@ -88,6 +114,9 @@ export default function Home() {
   }, [resolvedPubkey, identifier]);
 
   const spellbookEvent = useNostrEvent(pointer);
+
+  // Get author profile for banner
+  const authorProfile = useProfile(resolvedPubkey || undefined);
 
   // 3. Apply preview/layout when event is loaded
   useEffect(() => {
@@ -127,6 +156,32 @@ export default function Home() {
   const handleDiscardPreview = () => {
     discardTemporary();
     navigate("/", { replace: true });
+  };
+
+  const handleCopyLink = () => {
+    if (!actor || !identifier) return;
+    const link = `${window.location.origin}/preview/${actor}/${identifier}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Link copied to clipboard");
+  };
+
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const now = Date.now();
+    const diff = now - date.getTime();
+
+    // Less than 24 hours: show relative time
+    if (diff < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(diff / (60 * 60 * 1000));
+      if (hours === 0) {
+        const minutes = Math.floor(diff / (60 * 1000));
+        return minutes === 0 ? "just now" : `${minutes}m ago`;
+      }
+      return `${hours}h ago`;
+    }
+
+    // Otherwise show date
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   // Sync active account and fetch relay lists
@@ -201,15 +256,32 @@ export default function Home() {
       <main className="h-screen w-screen flex flex-col bg-background text-foreground">
         {showBanner && (
           <div className="bg-accent text-accent-foreground px-4 py-1.5 flex items-center justify-between text-sm font-medium animate-in slide-in-from-top duration-300 shadow-md z-50">
-            <div className="flex items-center gap-2">
-              <BookHeart className="size-4" />
-              <span>
-                {isPreviewPath ? "Preview Mode" : "Temporary Layout"}:{" "}
-                {spellbookEvent?.tags.find((t) => t[0] === "title")?.[1] ||
-                  "Spellbook"}
-              </span>
+            <div className="flex items-center gap-3">
+              <BookHeart className="size-4 flex-shrink-0" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold">
+                  {spellbookEvent?.tags.find((t) => t[0] === "title")?.[1] ||
+                    "Spellbook"}
+                </span>
+                {spellbookEvent && (
+                  <span className="text-xs text-accent-foreground/70 flex items-center gap-2">
+                    {authorProfile?.name || resolvedPubkey?.slice(0, 8)}
+                    <span className="text-accent-foreground/50">•</span>
+                    {formatTimestamp(spellbookEvent.created_at)}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 hover:bg-black/10 text-accent-foreground"
+                onClick={handleCopyLink}
+                title="Copy share link"
+              >
+                <LinkIcon className="size-3.5" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -229,6 +301,17 @@ export default function Home() {
                 Apply Layout
               </Button>
             </div>
+          </div>
+        )}
+        {isResolving && (
+          <div className="bg-muted px-4 py-2 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            <span>Resolving {actor}...</span>
+          </div>
+        )}
+        {resolutionError && (
+          <div className="bg-destructive/10 text-destructive px-4 py-2 flex items-center justify-center text-sm">
+            <span>Failed to resolve actor: {resolutionError}</span>
           </div>
         )}
         <header className="flex flex-row items-center justify-between px-1 border-b border-border">
