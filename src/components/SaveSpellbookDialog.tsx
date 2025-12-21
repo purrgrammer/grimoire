@@ -19,10 +19,11 @@ import {
   markSpellbookPublished,
 } from "@/services/spellbook-storage";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
-import { hub } from "@/services/hub";
+import { hub, publishEvent } from "@/services/hub";
 import { createSpellbook } from "@/lib/spellbook-manager";
 import { Loader2, Save, Send } from "lucide-react";
 import type { SpellbookEvent } from "@/types/spell";
+import { lastValueFrom } from "rxjs";
 
 interface SaveSpellbookDialogProps {
   open: boolean;
@@ -112,17 +113,22 @@ export function SaveSpellbookDialog({
       // 4. Optionally publish
       if (shouldPublish) {
         const localId = existingSpellbook?.localId || localSpellbook.id;
-        // Use hub.exec() to get the event and handle side effects after successful publish
-        for await (const event of hub.exec(PublishSpellbook, {
-          state,
-          title,
-          description,
-          workspaceIds: selectedWorkspaces,
-          content: localSpellbook.content,
-        })) {
+        const event = await lastValueFrom(
+          hub.exec(PublishSpellbook, {
+            state,
+            title,
+            description,
+            workspaceIds: selectedWorkspaces,
+            content: localSpellbook.content,
+          }),
+        );
+
+        if (event) {
+          await publishEvent(event);
           // Only mark as published AFTER successful relay publish
           await markSpellbookPublished(localId, event as SpellbookEvent);
         }
+
         toast.success(
           isUpdateMode
             ? "Spellbook updated and published to Nostr"

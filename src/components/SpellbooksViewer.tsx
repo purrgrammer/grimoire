@@ -35,7 +35,7 @@ import {
 import type { LocalSpellbook } from "@/services/db";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
 import { DeleteEventAction } from "@/actions/delete-event";
-import { hub } from "@/services/hub";
+import { hub, publishEvent } from "@/services/hub";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -44,6 +44,7 @@ import type { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { SPELLBOOK_KIND } from "@/constants/kinds";
 import { UserName } from "./nostr/UserName";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { lastValueFrom } from "rxjs";
 
 interface SpellbookCardProps {
   spellbook: LocalSpellbook;
@@ -380,16 +381,22 @@ export function SpellbooksViewer() {
   const handlePublish = async (spellbook: LocalSpellbook) => {
     try {
       // Use hub.exec() to get the event and handle side effects after successful publish
-      for await (const event of hub.exec(PublishSpellbook, {
-        state,
-        title: spellbook.title,
-        description: spellbook.description,
-        workspaceIds: Object.keys(spellbook.content.workspaces),
-        content: spellbook.content,
-      })) {
+      const event = await lastValueFrom(
+        hub.exec(PublishSpellbook, {
+          state,
+          title: spellbook.title,
+          description: spellbook.description,
+          workspaceIds: Object.keys(spellbook.content.workspaces),
+          content: spellbook.content,
+        }),
+      );
+      
+      if (event) {
+        await publishEvent(event);
         // Only mark as published AFTER successful relay publish
         await markSpellbookPublished(spellbook.id, event as SpellbookEvent);
       }
+      
       toast.success("Spellbook published");
     } catch (error) {
       toast.error(

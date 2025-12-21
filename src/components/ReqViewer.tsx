@@ -71,7 +71,6 @@ import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { cn } from "@/lib/utils";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
 import type { ViewMode } from "@/lib/req-parser";
 

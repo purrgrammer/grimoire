@@ -3,7 +3,7 @@ import { Skeleton } from "./Skeleton";
 
 export interface InlineReplySkeletonProps {
   /** Icon to show on the left (Reply, MessageCircle, etc.) */
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   className?: string;
 }
 

@@ -35,7 +35,9 @@ export interface PublishSpellbookOptions {
  * @example
  * ```typescript
  * // Publish via ActionHub with proper side-effect handling
- * for await (const event of hub.exec(PublishSpellbook, options)) {
+ * const event = await lastValueFrom(hub.exec(PublishSpellbook, options));
+ * if (event) {
+ *   await publishEvent(event);
  *   // Only mark as published AFTER successful relay publish
  *   await markSpellbookPublished(localId, event as SpellbookEvent);
  * }

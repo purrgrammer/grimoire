@@ -10,7 +10,7 @@ import {
   parseHeadBranch,
   getRepositoryStateHead,
 } from "@/lib/nip34-helpers";
-import { Label } from "@/components/ui/Label";
+import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
 
 /**

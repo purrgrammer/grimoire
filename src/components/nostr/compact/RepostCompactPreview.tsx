@@ -1,8 +1,6 @@
 import type { NostrEvent } from "@/types/nostr";
 import { useMemo } from "react";
-import { Repeat2 } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { getContentPreview } from "./index";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";
 

@@ -2,7 +2,6 @@ import type { NostrEvent } from "@/types/nostr";
 import { useMemo } from "react";
 import { Heart, ThumbsUp, ThumbsDown, Flame, Smile } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { getContentPreview } from "./index";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";
 
@@ -82,9 +81,6 @@ export function ReactionCompactPreview({ event }: { event: NostrEvent }) {
 
   // Fetch the reacted event
   const reactedEvent = useNostrEvent(eventPointer);
-
-  // Get content preview
-  const preview = reactedEvent ? getContentPreview(reactedEvent, 50) : null;
 
   // Map common reactions to icons for compact display
   const getReactionDisplay = (content: string) => {

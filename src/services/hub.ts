@@ -13,7 +13,7 @@ import accountManager from "./accounts";
  *
  * @param event - The signed Nostr event to publish
  */
-async function publishEvent(event: NostrEvent): Promise<void> {
+export async function publishEvent(event: NostrEvent): Promise<void> {
   // Try to get author's outbox relays from EventStore (kind 10002)
   let relays = await relayListCache.getOutboxRelays(event.pubkey);
 

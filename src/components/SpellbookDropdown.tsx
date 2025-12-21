@@ -34,16 +34,19 @@ import {
 import { cn } from "@/lib/utils";
 import { SaveSpellbookDialog } from "./SaveSpellbookDialog";
 import { toast } from "sonner";
+import { UserName } from "./nostr/UserName";
 
 /**
  * Status indicator component for spellbook state
  */
 function SpellbookStatus({
+  owner,
   isOwner,
   isPublished,
   isLocal,
   className,
 }: {
+  owner?: string;
   isOwner: boolean;
   isPublished?: boolean;
   isLocal?: boolean;
@@ -62,12 +65,12 @@ function SpellbookStatus({
           <User className="size-2.5" />
           <span>you</span>
         </span>
-      ) : (
+      ) : owner ? (
         <span className="flex items-center gap-0.5" title="Others' spellbook">
           <Users className="size-2.5" />
-          <span>other</span>
+          <UserName pubkey={owner} />
         </span>
-      )}
+      ) : null}
       <span className="opacity-50">•</span>
       {/* Storage status */}
       {isPublished ? (
@@ -187,6 +190,7 @@ export function SpellbookDropdown() {
     );
   }, [localSpellbooks, networkEvents, activeAccount]);
 
+  const owner = activeSpellbook?.pubkey;
   // Derived states for clearer UX
   const isOwner = useMemo(() => {
     if (!activeSpellbook) return false;
@@ -311,6 +315,7 @@ export function SpellbookDropdown() {
                     {activeSpellbook.title}
                   </div>
                   <SpellbookStatus
+                    owner={owner}
                     isOwner={isOwner}
                     isPublished={activeSpellbook.isPublished}
                     isLocal={isInLibrary}
@@ -359,6 +364,7 @@ export function SpellbookDropdown() {
                   {activeSpellbook.title}
                 </div>
                 <SpellbookStatus
+                  owner={activeSpellbook.pubkey}
                   isOwner={isOwner}
                   isPublished={activeSpellbook.isPublished}
                   isLocal={isInLibrary}
@@ -461,12 +467,12 @@ export function SpellbookDropdown() {
                       {sb.isPublished ? (
                         <Cloud
                           className="size-3 text-green-600 flex-shrink-0"
-                          title="Published"
+                          aria-label="Published"
                         />
                       ) : (
                         <Lock
                           className="size-3 text-muted-foreground flex-shrink-0"
-                          title="Local only"
+                          aria-label="Local only"
                         />
                       )}
                     </DropdownMenuItem>
