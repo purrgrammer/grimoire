@@ -35,6 +35,7 @@ import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
 import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
 import { SpellRenderer, SpellDetailRenderer } from "./SpellRenderer";
+import { VoiceNoteRenderer, VoiceNoteReplyRenderer } from "./VoiceNoteRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -57,6 +58,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   22: Kind22Renderer, // Short Video (NIP-71)
   1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1111Renderer, // Post (NIP-22)
+  1222: VoiceNoteRenderer, // Voice Message (NIP-A0)
+  1244: VoiceNoteReplyRenderer, // Voice Message Reply (NIP-A0)
   1337: Kind1337Renderer, // Code Snippet (NIP-C0)
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
@@ -176,4 +179,10 @@ export { Kind20Renderer } from "./PictureRenderer";
 export { Kind21Renderer } from "./VideoRenderer";
 export { Kind22Renderer } from "./ShortVideoRenderer";
 export { Kind1063Renderer } from "./FileMetadataRenderer";
+export {
+  VoiceNoteRenderer,
+  VoiceNoteReplyRenderer,
+  Kind1222Renderer,
+  Kind1244Renderer,
+} from "./VoiceNoteRenderer";
 export { Kind9735Renderer } from "./ZapReceiptRenderer";
