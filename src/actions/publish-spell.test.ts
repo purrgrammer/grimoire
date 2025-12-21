@@ -70,7 +70,6 @@ describe("PublishSpellAction", () => {
     accountManager.active = {
       pubkey: "pubkey",
       signer: mockSigner,
-      pubkey: "pubkey",
     };
 
     const spell: LocalSpell = {
