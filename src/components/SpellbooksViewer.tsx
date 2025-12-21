@@ -28,8 +28,9 @@ import { Badge } from "./ui/badge";
 import { toast } from "sonner";
 import { deleteSpellbook } from "@/services/spellbook-storage";
 import type { LocalSpellbook } from "@/services/db";
-import { PublishSpellbookAction } from "@/actions/publish-spellbook";
+import { PublishSpellbook } from "@/actions/publish-spellbook";
 import { DeleteEventAction } from "@/actions/delete-event";
+import { hub } from "@/services/hub";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -317,8 +318,7 @@ export function SpellbooksViewer() {
 
   const handlePublish = async (spellbook: LocalSpellbook) => {
     try {
-      const action = new PublishSpellbookAction();
-      await action.execute({
+      await hub.run(PublishSpellbook, {
         state,
         title: spellbook.title,
         description: spellbook.description,
@@ -328,7 +328,9 @@ export function SpellbooksViewer() {
       });
       toast.success("Spellbook published");
     } catch (error) {
-      toast.error("Failed to publish");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to publish spellbook"
+      );
     }
   };
 

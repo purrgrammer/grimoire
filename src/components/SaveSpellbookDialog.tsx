@@ -15,7 +15,8 @@ import { Checkbox } from "./ui/checkbox";
 import { useGrimoire } from "@/core/state";
 import { toast } from "sonner";
 import { saveSpellbook } from "@/services/spellbook-storage";
-import { PublishSpellbookAction } from "@/actions/publish-spellbook";
+import { PublishSpellbook } from "@/actions/publish-spellbook";
+import { hub } from "@/services/hub";
 import { createSpellbook } from "@/lib/spellbook-manager";
 import { Loader2, Save, Send } from "lucide-react";
 
@@ -103,14 +104,13 @@ export function SaveSpellbookDialog({
 
       // 4. Optionally publish
       if (shouldPublish) {
-        const action = new PublishSpellbookAction();
-        await action.execute({
+        await hub.run(PublishSpellbook, {
           state,
           title,
           description,
           workspaceIds: selectedWorkspaces,
           localId: existingSpellbook?.localId || localSpellbook.id,
-          content: localSpellbook.content, // Pass explicitly to avoid re-calculating (and potentially failing)
+          content: localSpellbook.content, // Pass explicitly to avoid re-calculating
         });
         toast.success(
           isUpdateMode
