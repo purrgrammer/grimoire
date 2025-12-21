@@ -24,6 +24,12 @@ vi.mock("@/services/spell-storage", () => ({
   markSpellPublished: vi.fn(),
 }));
 
+vi.mock("@/services/relay-list-cache", () => ({
+  relayListCache: {
+    getOutboxRelays: vi.fn().mockResolvedValue(["wss://relay.example.com"]),
+  },
+}));
+
 describe("PublishSpellAction", () => {
   let action: PublishSpellAction;
 
@@ -61,6 +67,7 @@ describe("PublishSpellAction", () => {
 
     // @ts-expect-error: mocking internal state for test
     accountManager.active = {
+      pubkey: "pubkey",
       signer: mockSigner,
     };
 
