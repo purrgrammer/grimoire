@@ -1318,6 +1318,17 @@ kinds:
       type: empty
     tags: []
 
+  10317:
+    description: User grasp list
+    content:
+      type: empty
+    tags:
+      -
+        name: g
+        next:
+          type: relay
+          required: true
+
   10377:
     description: Proxy Announcement
     content:

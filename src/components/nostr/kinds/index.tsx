@@ -25,6 +25,8 @@ import { Kind9802Renderer } from "./HighlightRenderer";
 import { Kind9802DetailRenderer } from "./HighlightDetailRenderer";
 import { Kind10002Renderer } from "./RelayListRenderer";
 import { Kind10002DetailRenderer } from "./RelayListDetailRenderer";
+import { Kind10317Renderer } from "./GraspListRenderer";
+import { Kind10317DetailRenderer } from "./GraspListDetailRenderer";
 import { Kind30023Renderer } from "./ArticleRenderer";
 import { Kind30023DetailRenderer } from "./ArticleDetailRenderer";
 import { CommunityNIPRenderer } from "./CommunityNIPRenderer";
@@ -74,6 +76,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   9802: Kind9802Renderer, // Highlight
   777: SpellRenderer, // Spell (Grimoire)
   10002: Kind10002Renderer, // Relay List Metadata (NIP-65)
+  10317: Kind10317Renderer, // User Grasp List (NIP-34)
   10006: GenericRelayListRenderer, // Blocked Relays (NIP-51)
   10007: GenericRelayListRenderer, // Search Relays (NIP-51)
   10012: GenericRelayListRenderer, // Favorite Relays (NIP-51)
@@ -137,6 +140,7 @@ const detailRenderers: Record<
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
   9802: Kind9802DetailRenderer, // Highlight Detail
   10002: Kind10002DetailRenderer, // Relay List Detail (NIP-65)
+  10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   777: SpellDetailRenderer, // Spell Detail
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)

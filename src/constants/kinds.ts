@@ -847,6 +847,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "66",
     icon: Activity,
   },
+  10317: {
+    kind: 10317,
+    name: "Grasp List",
+    description: "User grasp list",
+    nip: "34",
+    icon: FolderGit2,
+  },
   // 10312: {
   //   kind: 10312,
   //   name: "Room Presence",
