@@ -108,6 +108,7 @@ export function WindowToolbar({
           <Button
             variant="link"
             size="icon"
+            className="text-muted-foreground"
             onClick={handleEdit}
             title="Edit command"
             aria-label="Edit command"
@@ -120,6 +121,7 @@ export function WindowToolbar({
             <Button
               variant="link"
               size="icon"
+              className="text-muted-foreground"
               onClick={handleCopyNip}
               title="Copy NIP markdown"
               aria-label="Copy NIP markdown"
@@ -136,6 +138,7 @@ export function WindowToolbar({
                 <Button
                   variant="link"
                   size="icon"
+                  className="text-muted-foreground"
                   title="More actions"
                   aria-label="More actions"
                 >
@@ -169,6 +172,7 @@ export function WindowToolbar({
         <Button
           variant="link"
           size="icon"
+          className="text-muted-foreground"
           onClick={onClose}
           title="Close window"
           aria-label="Close window"
