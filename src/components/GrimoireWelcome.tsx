@@ -4,9 +4,23 @@ import { Kbd, KbdGroup } from "./ui/kbd";
 
 interface GrimoireWelcomeProps {
   onLaunchCommand: () => void;
+  onExecuteCommand: (command: string) => void;
 }
 
-export function GrimoireWelcome({ onLaunchCommand }: GrimoireWelcomeProps) {
+const EXAMPLE_COMMANDS = [
+  { command: "nip 29", description: "View relay-based groups spec" },
+  {
+    command: "profile verbiricha@habla.news",
+    description: "Explore a Nostr profile",
+  },
+  { command: "req -k 1 -l 20", description: "Query recent notes" },
+  { command: "nips", description: "Browse all NIPs" },
+];
+
+export function GrimoireWelcome({
+  onLaunchCommand,
+  onExecuteCommand,
+}: GrimoireWelcomeProps) {
   return (
     <div className="h-full w-full flex items-center justify-center">
       <div className="flex flex-col items-center gap-8">
@@ -64,6 +78,27 @@ export function GrimoireWelcome({ onLaunchCommand }: GrimoireWelcomeProps) {
             <Terminal />
             <span>Launch Command</span>
           </Button>
+        </div>
+
+        {/* Example commands */}
+        <div className="flex flex-col items-start gap-2 w-full max-w-md">
+          <p className="text-muted-foreground text-xs font-mono mb-1">
+            Try these commands:
+          </p>
+          {EXAMPLE_COMMANDS.map(({ command, description }) => (
+            <button
+              key={command}
+              onClick={() => onExecuteCommand(command)}
+              className="w-full text-left px-3 py-2 rounded-md border border-border hover:border-accent hover:bg-accent/5 transition-colors group"
+            >
+              <div className="font-mono text-sm text-foreground group-hover:text-accent transition-colors">
+                {command}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {description}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </div>
