@@ -1,5 +1,4 @@
 import { getKindInfo } from "@/constants/kinds";
-import { kinds } from "nostr-tools";
 import { NIPBadge } from "./NIPBadge";
 import { Copy, CopyCheck } from "lucide-react";
 import { Button } from "./ui/button";
@@ -10,14 +9,11 @@ import {
   getContentTypeDescription,
 } from "@/lib/nostr-schema";
 import { CenteredContent } from "./ui/CenteredContent";
-
-// NIP-01 Kind ranges
-const REPLACEABLE_START = 10000;
-const REPLACEABLE_END = 20000;
-const EPHEMERAL_START = 20000;
-const EPHEMERAL_END = 30000;
-const PARAMETERIZED_REPLACEABLE_START = 30000;
-const PARAMETERIZED_REPLACEABLE_END = 40000;
+import {
+  isReplaceableKind,
+  isEphemeralKind,
+  isParameterizedReplaceableKind,
+} from "@/lib/nostr-kinds";
 
 export default function KindRenderer({ kind }: { kind: number }) {
   const kindInfo = getKindInfo(kind);
@@ -83,12 +79,11 @@ export default function KindRenderer({ kind }: { kind: number }) {
         <div>{eventType}</div>
         <div className="text-muted-foreground">Storage</div>
         <div>
-          {kind >= EPHEMERAL_START && kind < EPHEMERAL_END
+          {isEphemeralKind(kind)
             ? "Not stored (ephemeral)"
             : "Stored by relays"}
         </div>
-        {kind >= PARAMETERIZED_REPLACEABLE_START &&
-          kind < PARAMETERIZED_REPLACEABLE_END && (
+        {isParameterizedReplaceableKind(kind) && (
             <>
               <div className="text-muted-foreground">Identifier</div>
               <code className="font-mono text-xs">d-tag</code>
@@ -194,15 +189,9 @@ function getKindCategory(kind: number): string {
   if (kind >= 20 && kind <= 39) return "Media & Content";
   if (kind >= 40 && kind <= 49) return "Channels";
   if (kind >= 1000 && kind <= 9999) return "Application Specific";
-  if (kind >= REPLACEABLE_START && kind < REPLACEABLE_END)
-    return "Regular Lists";
-  if (kind >= EPHEMERAL_START && kind < EPHEMERAL_END)
-    return "Ephemeral Events";
-  if (
-    kind >= PARAMETERIZED_REPLACEABLE_START &&
-    kind < PARAMETERIZED_REPLACEABLE_END
-  )
-    return "Parameterized Replaceable";
+  if (isReplaceableKind(kind)) return "Replaceable Events";
+  if (isEphemeralKind(kind)) return "Ephemeral Events";
+  if (isParameterizedReplaceableKind(kind)) return "Parameterized Replaceable";
   if (kind >= 40000) return "Custom/Experimental";
   return "Other";
 }
@@ -211,20 +200,14 @@ function getKindCategory(kind: number): string {
  * Determine the replaceability of an event kind
  */
 function getEventType(kind: number): string {
-  if (
-    kind === kinds.Metadata ||
-    kind === kinds.Contacts ||
-    (kind >= REPLACEABLE_START && kind < REPLACEABLE_END)
-  ) {
+  // nostr-tools' isReplaceableKind already includes kinds 0 (Metadata) and 3 (Contacts)
+  if (isReplaceableKind(kind)) {
     return "Replaceable";
   }
-  if (
-    kind >= PARAMETERIZED_REPLACEABLE_START &&
-    kind < PARAMETERIZED_REPLACEABLE_END
-  ) {
+  if (isParameterizedReplaceableKind(kind)) {
     return "Parameterized Replaceable";
   }
-  if (kind >= EPHEMERAL_START && kind < EPHEMERAL_END) {
+  if (isEphemeralKind(kind)) {
     return "Ephemeral";
   }
   return "Regular";

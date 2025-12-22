@@ -2,7 +2,6 @@ import { useState } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
 import { KindBadge } from "@/components/KindBadge";
-// import { kinds } from "nostr-tools";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,17 +19,7 @@ import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
-// import { RichText } from "../RichText";
-// import { getEventReply } from "@/lib/nostr-utils";
-// import { useNostrEvent } from "@/hooks/useNostrEvent";
-// import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-// import { Skeleton } from "@/components/ui/skeleton";
-
-// NIP-01 Kind ranges
-const REPLACEABLE_START = 10000;
-const REPLACEABLE_END = 20000;
-const PARAMETERIZED_REPLACEABLE_START = 30000;
-const PARAMETERIZED_REPLACEABLE_END = 40000;
+import { isAddressableKind } from "@/lib/nostr-kinds";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -116,14 +105,9 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
 
   const openEventDetail = () => {
-    // For replaceable/parameterized replaceable events, use AddressPointer
-    const isAddressable =
-      (event.kind >= REPLACEABLE_START && event.kind < REPLACEABLE_END) ||
-      (event.kind >= PARAMETERIZED_REPLACEABLE_START &&
-        event.kind < PARAMETERIZED_REPLACEABLE_END);
-
     let pointer;
-    if (isAddressable) {
+    // For replaceable/parameterized replaceable events, use AddressPointer
+    if (isAddressableKind(event.kind)) {
       // Find d-tag for identifier
       const dTag = getTagValue(event, "d") || "";
       pointer = {
@@ -143,12 +127,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 
   const copyEventId = () => {
     // For replaceable/parameterized replaceable events, encode as naddr
-    const isAddressable =
-      (event.kind >= REPLACEABLE_START && event.kind < REPLACEABLE_END) ||
-      (event.kind >= PARAMETERIZED_REPLACEABLE_START &&
-        event.kind < PARAMETERIZED_REPLACEABLE_END);
-
-    if (isAddressable) {
+    if (isAddressableKind(event.kind)) {
       // Find d-tag for identifier
       const dTag = getTagValue(event, "d") || "";
       const naddr = nip19.naddrEncode({
@@ -242,16 +221,10 @@ export function ClickableEventTitle({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Determine if event is addressable/replaceable
-    const isAddressable =
-      (event.kind >= REPLACEABLE_START && event.kind < REPLACEABLE_END) ||
-      (event.kind >= PARAMETERIZED_REPLACEABLE_START &&
-        event.kind < PARAMETERIZED_REPLACEABLE_END);
-
     let pointer;
 
-    if (isAddressable) {
-      // For replaceable/parameterized replaceable events, use AddressPointer
+    // For replaceable/parameterized replaceable events, use AddressPointer
+    if (isAddressableKind(event.kind)) {
       const dTag = getTagValue(event, "d") || "";
       pointer = {
         kind: event.kind,
