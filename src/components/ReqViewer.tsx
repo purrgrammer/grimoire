@@ -14,11 +14,13 @@ import {
   Search,
   Code,
   Loader2,
-  Mail,
-  Send,
+  Inbox,
+  Sparkles,
+  Link as LinkIcon,
+  Check,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
-import { useReqTimeline } from "@/hooks/useReqTimeline";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { useGrimoire } from "@/core/state";
 import { useRelayState } from "@/hooks/useRelayState";
 import { useOutboxRelays } from "@/hooks/useOutboxRelays";
@@ -69,6 +71,13 @@ import { useCopy } from "@/hooks/useCopy";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import { normalizeRelayURL } from "@/lib/relay-url";
+import {
+  getStatusText,
+  getStatusTooltip,
+  getStatusColor,
+  shouldAnimate,
+} from "@/lib/req-state-machine";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
@@ -702,7 +711,6 @@ export default function ReqViewer({
   const {
     relays: selectedRelays,
     reasoning,
-    isOptimized,
     phase: relaySelectionPhase,
   } = useOutboxRelays(resolvedFilter, outboxOptions);
 
@@ -723,26 +731,34 @@ export default function ReqViewer({
     return selectedRelays;
   }, [relays, relaySelectionPhase, selectedRelays]);
 
-  // Get relay state for each relay and calculate connected count
-  const relayStatesForReq = useMemo(
-    () =>
-      finalRelays.map((url) => ({
-        url,
-        state: relayStates[url],
-      })),
-    [finalRelays, relayStates],
-  );
-  const connectedCount = relayStatesForReq.filter(
-    (r) => r.state?.connectionState === "connected",
-  ).length;
+  // Normalize relay URLs for consistent lookups in relayStates
+  // RelayStateManager normalizes all URLs (adds trailing slash, lowercase, etc.)
+  // so we must normalize here too to match the keys in relayStates
+  const normalizedRelays = useMemo(() => {
+    return finalRelays.map((url) => {
+      try {
+        return normalizeRelayURL(url);
+      } catch (err) {
+        console.warn("Failed to normalize relay URL:", url, err);
+        return url; // Fallback to original URL if normalization fails
+      }
+    });
+  }, [finalRelays]);
 
   // Streaming is the default behavior, closeOnEose inverts it
   const stream = !closeOnEose;
 
-  const { events, loading, error, eoseReceived } = useReqTimeline(
+  const {
+    events,
+    loading,
+    error,
+    eoseReceived,
+    relayStates: reqRelayStates,
+    overallState,
+  } = useReqTimelineEnhanced(
     `req-${JSON.stringify(filter)}-${closeOnEose}`,
     resolvedFilter,
-    finalRelays,
+    normalizedRelays,
     { limit: resolvedFilter.limit || 50, stream },
   );
 
@@ -915,48 +931,25 @@ export default function ReqViewer({
       {/* Compact Header */}
       <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
         {/* Left: Status Indicator */}
-        <div className="flex items-center gap-2">
-          <Radio
-            className={`size-3 ${
-              relaySelectionPhase !== "ready"
-                ? "text-yellow-500 animate-pulse"
-                : loading && eoseReceived && stream
-                  ? "text-green-500 animate-pulse"
-                  : loading && !eoseReceived
-                    ? "text-yellow-500 animate-pulse"
-                    : eoseReceived
-                      ? "text-muted-foreground"
-                      : "text-yellow-500 animate-pulse"
-            }`}
-          />
-          <span
-            className={`${
-              relaySelectionPhase !== "ready"
-                ? "text-yellow-500"
-                : loading && eoseReceived && stream
-                  ? "text-green-500"
-                  : loading && !eoseReceived
-                    ? "text-yellow-500"
-                    : eoseReceived
-                      ? "text-muted-foreground"
-                      : "text-yellow-500"
-            } font-semibold`}
-          >
-            {relaySelectionPhase === "discovering"
-              ? "DISCOVERING RELAYS"
-              : relaySelectionPhase === "selecting"
-                ? "SELECTING RELAYS"
-                : loading && eoseReceived && stream
-                  ? "LIVE"
-                  : loading && !eoseReceived && events.length === 0
-                    ? "CONNECTING"
-                    : loading && !eoseReceived
-                      ? "LOADING"
-                      : eoseReceived
-                        ? "CLOSED"
-                        : "CONNECTING"}
-          </span>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-2 cursor-help">
+              <Radio
+                className={`size-3 ${getStatusColor(overallState.status)} ${
+                  shouldAnimate(overallState.status) ? "animate-pulse" : ""
+                }`}
+              />
+              <span
+                className={`${getStatusColor(overallState.status)} font-semibold`}
+              >
+                {getStatusText(overallState)}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="bg-popover text-popover-foreground border border-border shadow-md">
+            <p>{getStatusTooltip(overallState)}</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Right: Stats */}
         <div className="flex items-center gap-3">
@@ -991,72 +984,28 @@ export default function ReqViewer({
               <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
                 <Wifi className="size-3" />
                 <span>
-                  {connectedCount}/{finalRelays.length}
+                  {overallState.connectedCount}/{overallState.totalRelays}
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-80 max-h-96 overflow-y-auto"
+              className="w-96 max-h-96 overflow-y-auto"
             >
-              {/* Connection Status */}
-              <div className="py-1 border-b border-border">
-                <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
-                  Connection Status
-                </div>
-                {relayStatesForReq.map(({ url, state }) => {
-                  const connIcon = getConnectionIcon(state);
-                  const authIcon = getAuthIcon(state);
-
-                  return (
-                    <DropdownMenuItem
-                      key={url}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <RelayLink
-                        url={url}
-                        showInboxOutbox={false}
-                        className="flex-1 min-w-0 hover:bg-transparent"
-                        iconClassname="size-3"
-                        urlClassname="text-xs"
-                      />
-                      <div
-                        className="flex items-center gap-1.5 flex-shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {authIcon && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="cursor-help">{authIcon.icon}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{authIcon.label}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="cursor-help">{connIcon.icon}</div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{connIcon.label}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
-
-              {/* Relay Selection */}
-              {!relays && reasoning && reasoning.length > 0 && (
-                <div className="py-2">
-                  <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
-                    Relay Selection
-                    {isOptimized && (
-                      <span className="ml-1.5 font-normal">
-                        (
+              {/* Header: Relay Selection Strategy */}
+              <div className="px-3 py-2 border-b border-border">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  {relays ? (
+                    // Explicit relays
+                    <>
+                      <LinkIcon className="size-3 text-muted-foreground/60" />
+                      <span>Explicit Relays ({finalRelays.length})</span>
+                    </>
+                  ) : reasoning && reasoning.some((r) => !r.isFallback) ? (
+                    // NIP-65 Outbox
+                    <>
+                      <Sparkles className="size-3 text-muted-foreground/60" />
+                      <span>
                         <button
                           className="text-accent underline decoration-dotted cursor-crosshair"
                           onClick={(e) => {
@@ -1064,48 +1013,206 @@ export default function ReqViewer({
                             addWindow("nip", { number: "65" });
                           }}
                         >
-                          NIP-65
-                        </button>
-                        )
+                          NIP-65 Outbox
+                        </button>{" "}
+                        ({finalRelays.length} relays)
                       </span>
-                    )}
-                  </div>
-
-                  {/* Flat list of relays with icons and counts */}
-                  <div className="px-3 py-1 space-y-1">
-                    {reasoning.map((r, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 text-xs py-0.5"
-                      >
-                        <RelayLink
-                          url={r.relay}
-                          className="flex-1 truncate font-mono text-foreground/80"
-                        />
-                        <div className="flex items-center gap-2 flex-shrink-0 text-muted-foreground">
-                          {r.readers.length > 0 && (
-                            <div className="flex items-center gap-0.5">
-                              <Mail className="w-3 h-3" />
-                              <span>{r.readers.length}</span>
-                            </div>
-                          )}
-                          {r.writers.length > 0 && (
-                            <div className="flex items-center gap-0.5">
-                              <Send className="w-3 h-3" />
-                              <span>{r.writers.length}</span>
-                            </div>
-                          )}
-                          {r.isFallback && (
-                            <span className="text-[10px] text-muted-foreground/60">
-                              fallback
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    // Fallback relays
+                    <>
+                      <Inbox className="size-3 text-muted-foreground/60" />
+                      <span>Fallback Relays ({finalRelays.length})</span>
+                    </>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {(() => {
+                // Group relays by connection status
+                // Use normalizedRelays for lookups to match RelayStateManager's keys
+                const onlineRelays: string[] = [];
+                const disconnectedRelays: string[] = [];
+
+                normalizedRelays.forEach((url) => {
+                  const globalState = relayStates[url];
+                  const isConnected =
+                    globalState?.connectionState === "connected";
+
+                  if (isConnected) {
+                    onlineRelays.push(url);
+                  } else {
+                    disconnectedRelays.push(url);
+                  }
+                });
+
+                const renderRelay = (url: string) => {
+                  const globalState = relayStates[url];
+                  const reqState = reqRelayStates.get(url);
+                  const connIcon = getConnectionIcon(globalState);
+                  const authIcon = getAuthIcon(globalState);
+
+                  // Find NIP-65 info for this relay (if using outbox)
+                  const nip65Info = reasoning?.find((r) => r.relay === url);
+
+                  // Build comprehensive tooltip content
+                  const tooltipContent = (
+                    <div className="space-y-3 text-xs p-1">
+                      <div className="font-mono font-bold border-b border-border pb-2 mb-2 break-all text-primary">
+                        {url}
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div className="space-y-0.5">
+                          <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                            Connection
+                          </div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <span className="shrink-0">{connIcon.icon}</span>
+                            <span>{connIcon.label}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                            Authentication
+                          </div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <span className="shrink-0">{authIcon.icon}</span>
+                            <span>{authIcon.label}</span>
+                          </div>
+                        </div>
+
+                        {reqState && (
+                          <>
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                Subscription
+                              </div>
+                              <div className="font-medium capitalize">
+                                {reqState.subscriptionState}
+                              </div>
+                            </div>
+
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                Events
+                              </div>
+                              <div className="flex items-center gap-1.5 font-medium">
+                                <FileText className="size-3 text-muted-foreground" />
+                                <span>{reqState.eventCount} received</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {nip65Info && (
+                          <>
+                            {nip65Info.readers.length > 0 && (
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                  Inbox (Read)
+                                </div>
+                                <div className="font-medium">
+                                  {nip65Info.readers.length} author
+                                  {nip65Info.readers.length !== 1 ? "s" : ""}
+                                </div>
+                              </div>
+                            )}
+                            {nip65Info.writers.length > 0 && (
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                  Outbox (Write)
+                                </div>
+                                <div className="font-medium">
+                                  {nip65Info.writers.length} author
+                                  {nip65Info.writers.length !== 1 ? "s" : ""}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+
+                  return (
+                    <Tooltip key={url}>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2 text-xs py-1 px-3 hover:bg-accent/5 cursor-default">
+                          {/* Relay URL */}
+                          <RelayLink
+                            url={url}
+                            showInboxOutbox={false}
+                            className="flex-1 min-w-0 truncate font-mono text-foreground/80"
+                          />
+
+                          {/* Right side: compact status icons */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* Event count badge */}
+                            {reqState && reqState.eventCount > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                                <FileText className="size-2.5" />
+                                <span>{reqState.eventCount}</span>
+                              </div>
+                            )}
+
+                            {/* EOSE status */}
+                            {reqState && (
+                              <>
+                                {reqState.subscriptionState === "eose" ? (
+                                  <Check className="size-3 text-green-600/70" />
+                                ) : (
+                                  (reqState.subscriptionState === "receiving" ||
+                                    reqState.subscriptionState ===
+                                      "waiting") && (
+                                    <Loader2 className="size-3 text-muted-foreground/40 animate-spin" />
+                                  )
+                                )}
+                              </>
+                            )}
+
+                            {/* Auth icon (always visible) */}
+                            <div>{authIcon.icon}</div>
+
+                            {/* Connection icon (always visible) */}
+                            <div>{connIcon.icon}</div>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="left"
+                        className="max-w-xs bg-popover text-popover-foreground border border-border shadow-md"
+                      >
+                        {tooltipContent}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                };
+
+                return (
+                  <>
+                    {/* Online Section */}
+                    {onlineRelays.length > 0 && (
+                      <div className="py-2">
+                        <div className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Online ({onlineRelays.length})
+                        </div>
+                        {onlineRelays.map(renderRelay)}
+                      </div>
+                    )}
+
+                    {/* Disconnected Section */}
+                    {disconnectedRelays.length > 0 && (
+                      <div className="py-2 border-t border-border">
+                        <div className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Disconnected ({disconnectedRelays.length})
+                        </div>
+                        {disconnectedRelays.map(renderRelay)}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -24,19 +24,19 @@ export function getConnectionIcon(relay: RelayState | undefined) {
 
   const iconMap = {
     connected: {
-      icon: <Wifi className="size-3 text-green-500" />,
+      icon: <Wifi className="size-3 text-green-600/70" />,
       label: "Connected",
     },
     connecting: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
+      icon: <Loader2 className="size-3 text-yellow-600/70 animate-spin" />,
       label: "Connecting",
     },
     disconnected: {
-      icon: <WifiOff className="size-3 text-muted-foreground" />,
+      icon: <WifiOff className="size-3 text-muted-foreground/60" />,
       label: "Disconnected",
     },
     error: {
-      icon: <XCircle className="size-3 text-red-500" />,
+      icon: <XCircle className="size-3 text-red-600/70" />,
       label: "Connection Error",
     },
   };
@@ -45,37 +45,40 @@ export function getConnectionIcon(relay: RelayState | undefined) {
 
 /**
  * Get authentication icon and label for a relay state
- * Returns null if no authentication is required
+ * Always returns an icon (including for unauthenticated relays)
  */
 export function getAuthIcon(relay: RelayState | undefined) {
-  if (!relay || relay.authStatus === "none") {
-    return null;
+  if (!relay) {
+    return {
+      icon: <Shield className="size-3 text-muted-foreground/40" />,
+      label: "Unknown",
+    };
   }
 
   const iconMap = {
     authenticated: {
-      icon: <ShieldCheck className="size-3 text-green-500" />,
+      icon: <ShieldCheck className="size-3 text-green-600/70" />,
       label: "Authenticated",
     },
     challenge_received: {
-      icon: <ShieldQuestion className="size-3 text-yellow-500" />,
+      icon: <ShieldQuestion className="size-3 text-yellow-600/70" />,
       label: "Challenge Received",
     },
     authenticating: {
-      icon: <Loader2 className="size-3 text-yellow-500 animate-spin" />,
+      icon: <Loader2 className="size-3 text-yellow-600/70 animate-spin" />,
       label: "Authenticating",
     },
     failed: {
-      icon: <ShieldX className="size-3 text-red-500" />,
+      icon: <ShieldX className="size-3 text-red-600/70" />,
       label: "Authentication Failed",
     },
     rejected: {
-      icon: <ShieldAlert className="size-3 text-muted-foreground" />,
+      icon: <ShieldAlert className="size-3 text-muted-foreground/60" />,
       label: "Authentication Rejected",
     },
     none: {
-      icon: <Shield className="size-3 text-muted-foreground" />,
-      label: "No Authentication",
+      icon: <Shield className="size-3 text-muted-foreground/40" />,
+      label: "Not required",
     },
   };
   return iconMap[relay.authStatus] || iconMap.none;
