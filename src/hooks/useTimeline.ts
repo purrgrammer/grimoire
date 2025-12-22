@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
 import { createTimelineLoader } from "@/services/loaders";
 import pool from "@/services/relay-pool";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { useStableValue, useStableArray } from "./useStable";
 
 interface UseTimelineOptions {
   limit?: number;
@@ -35,12 +36,9 @@ export function useTimeline(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Stabilize filters and relays for dependency array
-  // Using JSON.stringify and .join() for deep comparison - this is intentional
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stableFilters = useMemo(() => filters, [JSON.stringify(filters)]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stableRelays = useMemo(() => relays, [relays.join(",")]);
+  // Stabilize filters and relays to prevent unnecessary re-renders
+  const stableFilters = useStableValue(filters);
+  const stableRelays = useStableArray(relays);
 
   // Load events into store
   useEffect(() => {

@@ -3,6 +3,7 @@ import pool from "@/services/relay-pool";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
+import { useStableValue, useStableArray } from "./useStable";
 
 interface UseReqTimelineOptions {
   limit?: number;
@@ -47,12 +48,9 @@ export function useReqTimeline(
     );
   }, [eventsMap]);
 
-  // Stabilize filters and relays for dependency array
-  // Using JSON.stringify and .join() for deep comparison - this is intentional
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stableFilters = useMemo(() => filters, [JSON.stringify(filters)]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stableRelays = useMemo(() => relays, [relays.join(",")]);
+  // Stabilize filters and relays to prevent unnecessary re-renders
+  const stableFilters = useStableValue(filters);
+  const stableRelays = useStableArray(relays);
 
   useEffect(() => {
     if (relays.length === 0) {
