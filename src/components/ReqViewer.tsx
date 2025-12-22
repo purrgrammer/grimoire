@@ -18,7 +18,7 @@ import {
   Send,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
-import { useReqTimeline } from "@/hooks/useReqTimeline";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { useGrimoire } from "@/core/state";
 import { useRelayState } from "@/hooks/useRelayState";
 import { useOutboxRelays } from "@/hooks/useOutboxRelays";
@@ -69,6 +69,13 @@ import { useCopy } from "@/hooks/useCopy";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import {
+  getStatusText,
+  getStatusTooltip,
+  getStatusColor,
+  shouldAnimate,
+  getRelayStateBadge,
+} from "@/lib/req-state-machine";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
@@ -739,7 +746,7 @@ export default function ReqViewer({
   // Streaming is the default behavior, closeOnEose inverts it
   const stream = !closeOnEose;
 
-  const { events, loading, error, eoseReceived } = useReqTimeline(
+  const { events, loading, error, eoseReceived, relayStates: reqRelayStates, overallState } = useReqTimelineEnhanced(
     `req-${JSON.stringify(filter)}-${closeOnEose}`,
     resolvedFilter,
     finalRelays,
@@ -915,48 +922,23 @@ export default function ReqViewer({
       {/* Compact Header */}
       <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
         {/* Left: Status Indicator */}
-        <div className="flex items-center gap-2">
-          <Radio
-            className={`size-3 ${
-              relaySelectionPhase !== "ready"
-                ? "text-yellow-500 animate-pulse"
-                : loading && eoseReceived && stream
-                  ? "text-green-500 animate-pulse"
-                  : loading && !eoseReceived
-                    ? "text-yellow-500 animate-pulse"
-                    : eoseReceived
-                      ? "text-muted-foreground"
-                      : "text-yellow-500 animate-pulse"
-            }`}
-          />
-          <span
-            className={`${
-              relaySelectionPhase !== "ready"
-                ? "text-yellow-500"
-                : loading && eoseReceived && stream
-                  ? "text-green-500"
-                  : loading && !eoseReceived
-                    ? "text-yellow-500"
-                    : eoseReceived
-                      ? "text-muted-foreground"
-                      : "text-yellow-500"
-            } font-semibold`}
-          >
-            {relaySelectionPhase === "discovering"
-              ? "DISCOVERING RELAYS"
-              : relaySelectionPhase === "selecting"
-                ? "SELECTING RELAYS"
-                : loading && eoseReceived && stream
-                  ? "LIVE"
-                  : loading && !eoseReceived && events.length === 0
-                    ? "CONNECTING"
-                    : loading && !eoseReceived
-                      ? "LOADING"
-                      : eoseReceived
-                        ? "CLOSED"
-                        : "CONNECTING"}
-          </span>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-2 cursor-help">
+              <Radio
+                className={`size-3 ${getStatusColor(overallState.status)} ${
+                  shouldAnimate(overallState.status) ? "animate-pulse" : ""
+                }`}
+              />
+              <span className={`${getStatusColor(overallState.status)} font-semibold`}>
+                {getStatusText(overallState)}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{getStatusTooltip(overallState)}</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Right: Stats */}
         <div className="flex items-center gap-3">
@@ -991,7 +973,7 @@ export default function ReqViewer({
               <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
                 <Wifi className="size-3" />
                 <span>
-                  {connectedCount}/{finalRelays.length}
+                  {overallState.connectedCount}/{overallState.totalRelays}
                 </span>
               </button>
             </DropdownMenuTrigger>
@@ -999,58 +981,9 @@ export default function ReqViewer({
               align="end"
               className="w-80 max-h-96 overflow-y-auto"
             >
-              {/* Connection Status */}
-              <div className="py-1 border-b border-border">
-                <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
-                  Connection Status
-                </div>
-                {relayStatesForReq.map(({ url, state }) => {
-                  const connIcon = getConnectionIcon(state);
-                  const authIcon = getAuthIcon(state);
-
-                  return (
-                    <DropdownMenuItem
-                      key={url}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <RelayLink
-                        url={url}
-                        showInboxOutbox={false}
-                        className="flex-1 min-w-0 hover:bg-transparent"
-                        iconClassname="size-3"
-                        urlClassname="text-xs"
-                      />
-                      <div
-                        className="flex items-center gap-1.5 flex-shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {authIcon && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="cursor-help">{authIcon.icon}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{authIcon.label}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="cursor-help">{connIcon.icon}</div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{connIcon.label}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
-
-              {/* Relay Selection */}
-              {!relays && reasoning && reasoning.length > 0 && (
+              {/* Relay Status (condensed: connection + subscription + NIP-65) */}
+              {!relays && reasoning && reasoning.length > 0 ? (
+                /* NIP-65 Relay Selection with status */
                 <div className="py-2">
                   <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
                     Relay Selection
@@ -1071,38 +1004,182 @@ export default function ReqViewer({
                     )}
                   </div>
 
-                  {/* Flat list of relays with icons and counts */}
+                  {/* Relay list with connection, subscription, and NIP-65 info */}
                   <div className="px-3 py-1 space-y-1">
-                    {reasoning.map((r, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 text-xs py-0.5"
-                      >
-                        <RelayLink
-                          url={r.relay}
-                          className="flex-1 truncate font-mono text-foreground/80"
-                        />
-                        <div className="flex items-center gap-2 flex-shrink-0 text-muted-foreground">
-                          {r.readers.length > 0 && (
-                            <div className="flex items-center gap-0.5">
-                              <Mail className="w-3 h-3" />
-                              <span>{r.readers.length}</span>
-                            </div>
-                          )}
-                          {r.writers.length > 0 && (
-                            <div className="flex items-center gap-0.5">
-                              <Send className="w-3 h-3" />
-                              <span>{r.writers.length}</span>
-                            </div>
-                          )}
-                          {r.isFallback && (
-                            <span className="text-[10px] text-muted-foreground/60">
-                              fallback
-                            </span>
-                          )}
+                    {reasoning.map((r, i) => {
+                      const globalState = relayStates[r.relay];
+                      const reqState = reqRelayStates.get(r.relay);
+                      const connIcon = getConnectionIcon(globalState);
+                      const authIcon = getAuthIcon(globalState);
+                      const badge = reqState ? getRelayStateBadge(reqState) : null;
+
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-xs py-0.5"
+                        >
+                          <RelayLink
+                            url={r.relay}
+                            showInboxOutbox={false}
+                            className="flex-1 truncate font-mono text-foreground/80"
+                          />
+                          <div className="flex items-center gap-1.5 flex-shrink-0 text-muted-foreground">
+                            {/* Event count */}
+                            {reqState && reqState.eventCount > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-0.5">
+                                    <FileText className="size-3" />
+                                    <span className="text-[10px]">{reqState.eventCount}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {reqState.eventCount} events received
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Subscription state badge */}
+                            {badge && (
+                              <span className={`text-[10px] ${badge.color}`}>
+                                {badge.text}
+                              </span>
+                            )}
+
+                            {/* NIP-65 inbox/outbox indicators */}
+                            {r.readers.length > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-0.5">
+                                    <Mail className="w-3 h-3" />
+                                    <span className="text-[10px]">{r.readers.length}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Inbox relay for {r.readers.length} author{r.readers.length !== 1 ? 's' : ''}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                            {r.writers.length > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-0.5">
+                                    <Send className="w-3 h-3" />
+                                    <span className="text-[10px]">{r.writers.length}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Outbox relay for {r.writers.length} author{r.writers.length !== 1 ? 's' : ''}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Fallback indicator */}
+                            {r.isFallback && (
+                              <span className="text-[10px] text-muted-foreground/60">
+                                fallback
+                              </span>
+                            )}
+
+                            {/* Auth icon */}
+                            {authIcon && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help">{authIcon.icon}</div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{authIcon.label}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Connection icon */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">{connIcon.icon}</div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{connIcon.label}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Explicit relays: show simple status list */
+                <div className="py-1">
+                  <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                    Relay Status
+                  </div>
+                  <div className="px-3 py-1 space-y-1">
+                    {finalRelays.map((url) => {
+                      const globalState = relayStates[url];
+                      const reqState = reqRelayStates.get(url);
+                      const connIcon = getConnectionIcon(globalState);
+                      const authIcon = getAuthIcon(globalState);
+                      const badge = reqState ? getRelayStateBadge(reqState) : null;
+
+                      return (
+                        <div
+                          key={url}
+                          className="flex items-center gap-2 text-xs py-0.5"
+                        >
+                          <RelayLink
+                            url={url}
+                            showInboxOutbox={false}
+                            className="flex-1 truncate font-mono text-foreground/80"
+                          />
+                          <div className="flex items-center gap-1.5 flex-shrink-0 text-muted-foreground">
+                            {/* Event count */}
+                            {reqState && reqState.eventCount > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-0.5">
+                                    <FileText className="size-3" />
+                                    <span className="text-[10px]">{reqState.eventCount}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {reqState.eventCount} events received
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Subscription state badge */}
+                            {badge && (
+                              <span className={`text-[10px] ${badge.color}`}>
+                                {badge.text}
+                              </span>
+                            )}
+
+                            {/* Auth icon */}
+                            {authIcon && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help">{authIcon.icon}</div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{authIcon.label}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Connection icon */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">{connIcon.icon}</div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{connIcon.label}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
