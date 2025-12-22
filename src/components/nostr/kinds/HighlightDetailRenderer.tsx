@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import type { NostrEvent } from "@/types/nostr";
 import {
@@ -16,23 +15,18 @@ import { useGrimoire } from "@/core/state";
 /**
  * Detail renderer for Kind 9802 - Highlight
  * Shows highlighted text, comment, context, and embedded source event
+ * Note: All applesauce helpers cache internally, no useMemo needed
  */
 export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
   const { addWindow } = useGrimoire();
-  const highlightText = useMemo(() => getHighlightText(event), [event]);
-  const comment = useMemo(() => getHighlightComment(event), [event]);
-  const context = useMemo(() => getHighlightContext(event), [event]);
-  const sourceUrl = useMemo(() => getHighlightSourceUrl(event), [event]);
+  const highlightText = getHighlightText(event);
+  const comment = getHighlightComment(event);
+  const context = getHighlightContext(event);
+  const sourceUrl = getHighlightSourceUrl(event);
 
   // Get source event pointer (e tag) or address pointer (a tag)
-  const eventPointer = useMemo(
-    () => getHighlightSourceEventPointer(event),
-    [event],
-  );
-  const addressPointer = useMemo(
-    () => getHighlightSourceAddressPointer(event),
-    [event],
-  );
+  const eventPointer = getHighlightSourceEventPointer(event);
+  const addressPointer = getHighlightSourceAddressPointer(event);
 
   // Format created date
   const createdDate = new Date(event.created_at * 1000).toLocaleDateString(

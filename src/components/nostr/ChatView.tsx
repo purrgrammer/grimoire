@@ -91,9 +91,10 @@ export function ChatView({ events, className }: ChatViewProps) {
 }
 
 function ChatMessage({ event }: { event: NostrEvent }) {
-  const threadRefs = useMemo(() => getNip10References(event), [event]);
+  // Both helpers cache internally, no useMemo needed
+  const threadRefs = getNip10References(event);
   const replyToId = threadRefs.reply?.e?.id;
-  const qTagValue = useMemo(() => getTagValue(event, "q"), [event]);
+  const qTagValue = getTagValue(event, "q");
 
   return (
     <div className="flex flex-col gap-0.5">

@@ -29,19 +29,21 @@ interface Kind1337DetailRendererProps {
 /**
  * Detail renderer for Kind 1337 - Code Snippet (NIP-C0)
  * Full view with all metadata and complete code
+ * Note: NIP-C0 helpers wrap getTagValue which caches internally
  */
 export function Kind1337DetailRenderer({ event }: Kind1337DetailRendererProps) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
 
-  const name = useMemo(() => getCodeName(event), [event]);
-  const language = useMemo(() => getCodeLanguage(event), [event]);
-  const extension = useMemo(() => getCodeExtension(event), [event]);
-  const description = useMemo(() => getCodeDescription(event), [event]);
-  const runtime = useMemo(() => getCodeRuntime(event), [event]);
-  const licenses = useMemo(() => getCodeLicenses(event), [event]);
-  const dependencies = useMemo(() => getCodeDependencies(event), [event]);
-  const repo = useMemo(() => getCodeRepo(event), [event]);
+  // All these helpers wrap getTagValue, which caches internally
+  const name = getCodeName(event);
+  const language = getCodeLanguage(event);
+  const extension = getCodeExtension(event);
+  const description = getCodeDescription(event);
+  const runtime = getCodeRuntime(event);
+  const licenses = getCodeLicenses(event);
+  const dependencies = getCodeDependencies(event);
+  const repo = getCodeRepo(event);
 
   // Parse NIP-34 repository address if present
   const repoPointer = useMemo(() => {

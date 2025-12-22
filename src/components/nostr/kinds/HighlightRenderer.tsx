@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { BaseEventContainer, BaseEventProps } from "./BaseEventRenderer";
 import { ExternalLink } from "lucide-react";
 import {
@@ -18,36 +17,28 @@ import { KindBadge } from "@/components/KindBadge";
 /**
  * Renderer for Kind 9802 - Highlight
  * Displays highlighted text with optional comment, compact source event preview, and source URL
+ * Note: All applesauce helpers cache internally, no useMemo needed
  */
 export function Kind9802Renderer({ event }: BaseEventProps) {
   const { addWindow } = useGrimoire();
-  const highlightText = useMemo(() => getHighlightText(event), [event]);
-  const sourceUrl = useMemo(() => getHighlightSourceUrl(event), [event]);
-  const comment = useMemo(() => getHighlightComment(event), [event]);
+  const highlightText = getHighlightText(event);
+  const sourceUrl = getHighlightSourceUrl(event);
+  const comment = getHighlightComment(event);
 
   // Get source event pointer (e tag) or address pointer (a tag) for Nostr event references
-  const eventPointer = useMemo(
-    () => getHighlightSourceEventPointer(event),
-    [event],
-  );
-  const addressPointer = useMemo(
-    () => getHighlightSourceAddressPointer(event),
-    [event],
-  );
+  const eventPointer = getHighlightSourceEventPointer(event);
+  const addressPointer = getHighlightSourceAddressPointer(event);
 
   // Load the source event for preview
   const sourceEvent = useNostrEvent(eventPointer || addressPointer);
 
-  // Extract title or content preview from source event
-  const sourcePreview = useMemo(() => {
+  // Extract title or content preview from source event (getArticleTitle caches internally)
+  const sourcePreview = (() => {
     if (!sourceEvent) return null;
-
     const title = getArticleTitle(sourceEvent);
     if (title) return title;
-
-    // Fall back to content
     return sourceEvent.content || null;
-  }, [sourceEvent]);
+  })();
 
   // Handle click to open source event
   const handleOpenEvent = () => {

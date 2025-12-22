@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   BaseEventContainer,
   BaseEventProps,
@@ -12,10 +11,11 @@ import {
 /**
  * Renderer for Kind 30023 - Long-form Article
  * Displays article title and summary in feed
+ * Note: getArticleTitle and getArticleSummary cache internally, no useMemo needed
  */
 export function Kind30023Renderer({ event }: BaseEventProps) {
-  const title = useMemo(() => getArticleTitle(event), [event]);
-  const summary = useMemo(() => getArticleSummary(event), [event]);
+  const title = getArticleTitle(event);
+  const summary = getArticleSummary(event);
 
   return (
     <BaseEventContainer event={event}>
