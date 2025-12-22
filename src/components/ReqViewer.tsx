@@ -659,12 +659,17 @@ export default function ReqViewer({
   const activeAccount = state.activeAccount;
   const accountPubkey = activeAccount?.pubkey;
 
-  // Fetch contact list (kind 3) if needed for $contacts resolution
-  const contactListEvent = useNostrEvent(
-    needsAccount && accountPubkey
-      ? { kind: 3, pubkey: accountPubkey, identifier: "" }
-      : undefined,
+  // Memoize contact list pointer to prevent unnecessary re-subscriptions
+  const contactPointer = useMemo(
+    () =>
+      needsAccount && accountPubkey
+        ? { kind: 3, pubkey: accountPubkey, identifier: "" }
+        : undefined,
+    [needsAccount, accountPubkey],
   );
+
+  // Fetch contact list (kind 3) if needed for $contacts resolution
+  const contactListEvent = useNostrEvent(contactPointer);
 
   // Extract contacts from kind 3 event (memoized to prevent unnecessary recalculation)
   const contacts = useMemo(
