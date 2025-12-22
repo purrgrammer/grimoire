@@ -3,6 +3,7 @@ import { Copy, CopyCheck } from "lucide-react";
 import { getTagValue } from "applesauce-core/helpers";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
+import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/useCopy";
 import { toast } from "sonner";
 import type { NostrEvent } from "@/types/nostr";
@@ -46,18 +47,15 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
         {/* Title with Copy Button */}
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-3xl font-bold">{title}</h1>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleCopy}
-            className="p-2 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
             title="Copy NIP markdown"
             aria-label="Copy NIP markdown"
           >
-            {copied ? (
-              <CopyCheck className="size-5" />
-            ) : (
-              <Copy className="size-5" />
-            )}
-          </button>
+            {copied ? <CopyCheck /> : <Copy />}
+          </Button>
         </div>
 
         {/* Metadata */}

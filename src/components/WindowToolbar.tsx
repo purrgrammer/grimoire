@@ -1,4 +1,11 @@
-import { X, Pencil, MoreVertical, WandSparkles, Copy, CopyCheck } from "lucide-react";
+import {
+  X,
+  Pencil,
+  MoreVertical,
+  WandSparkles,
+  Copy,
+  CopyCheck,
+} from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 import { WindowInstance } from "@/types/app";
@@ -10,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { SpellDialog } from "@/components/nostr/SpellDialog";
 import { reconstructCommand as reconstructReqCommand } from "@/lib/spell-conversion";
 import { toast } from "sonner";
@@ -66,7 +74,7 @@ export function WindowToolbar({
 
   // Fetch NIP content for regular NIPs
   const { content: nipContent } = useNip(
-    isNipWindow && window?.props?.number ? window.props.number : ""
+    isNipWindow && window?.props?.number ? window.props.number : "",
   );
 
   const handleCopyNip = () => {
@@ -96,44 +104,46 @@ export function WindowToolbar({
     <>
       {window && (
         <>
-          {/* Edit button with keyboard shortcut hint */}
-          <button
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          {/* Edit button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={handleEdit}
-            title="Edit command (Cmd+E)"
+            title="Edit command"
             aria-label="Edit command"
           >
             <Pencil className="size-4" />
-          </button>
+          </Button>
 
           {/* Copy button for NIPs */}
           {isNipWindow && (
-            <button
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
               onClick={handleCopyNip}
               title="Copy NIP markdown"
               aria-label="Copy NIP markdown"
               disabled={!nipContent}
             >
-              {copied ? (
-                <CopyCheck className="size-4" />
-              ) : (
-                <Copy className="size-4" />
-              )}
-            </button>
+              {copied ? <CopyCheck /> : <Copy />}
+            </Button>
           )}
 
           {/* More actions menu - only for REQ windows for now */}
           {isReqWindow && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
                   title="More actions"
                   aria-label="More actions"
                 >
                   <MoreVertical className="size-4" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleTurnIntoSpell}>
@@ -159,14 +169,16 @@ export function WindowToolbar({
         </>
       )}
       {onClose && (
-        <button
-          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
           onClick={onClose}
-          title="Close window (Cmd+W)"
+          title="Close window"
           aria-label="Close window"
         >
           <X className="size-4" />
-        </button>
+        </Button>
       )}
     </>
   );
