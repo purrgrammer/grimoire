@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { KindRenderer } from "./index";
 import { EventCardSkeleton } from "@/components/ui/skeleton";
+import { parseCoordinate } from "applesauce-core/helpers/pointers";
 
 /**
  * Renderer for Kind 7 - Reactions
@@ -54,16 +55,8 @@ export function Kind7Renderer({ event }: BaseEventProps) {
   const aTag = event.tags.find((tag) => tag[0] === "a");
   const reactedAddress = aTag?.[1]; // Format: kind:pubkey:d-tag
 
-  // Parse a tag into components
-  const addressParts = useMemo(() => {
-    if (!reactedAddress) return null;
-    const parts = reactedAddress.split(":");
-    return {
-      kind: parseInt(parts[0], 10),
-      pubkey: parts[1],
-      dTag: parts[2],
-    };
-  }, [reactedAddress]);
+  // Parse a tag coordinate using applesauce helper
+  const addressPointer = reactedAddress ? parseCoordinate(reactedAddress) : null;
 
   // Create event pointer for fetching
   const eventPointer = useMemo(() => {
@@ -73,16 +66,16 @@ export function Kind7Renderer({ event }: BaseEventProps) {
         relays: reactedRelay ? [reactedRelay] : undefined,
       };
     }
-    if (addressParts) {
+    if (addressPointer) {
       return {
-        kind: addressParts.kind,
-        pubkey: addressParts.pubkey,
-        identifier: addressParts.dTag || "",
+        kind: addressPointer.kind,
+        pubkey: addressPointer.pubkey,
+        identifier: addressPointer.identifier || "",
         relays: [],
       };
     }
     return undefined;
-  }, [reactedEventId, reactedRelay, addressParts]);
+  }, [reactedEventId, reactedRelay, addressPointer]);
 
   // Fetch the reacted event
   const reactedEvent = useNostrEvent(eventPointer);

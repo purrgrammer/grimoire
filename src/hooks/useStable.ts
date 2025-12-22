@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { isFilterEqual } from "applesauce-core/helpers/filter";
+import type { Filter } from "nostr-tools";
 
 /**
  * Stabilize a value for use in dependency arrays
@@ -46,13 +48,23 @@ export function useStableArray<T extends string>(arr: T[]): T[] {
 /**
  * Stabilize a Nostr filter or array of filters
  *
- * Specialized stabilizer for Nostr filters which are commonly
- * recreated on each render.
+ * Uses applesauce's isFilterEqual for robust filter comparison.
+ * Better than JSON.stringify as it handles undefined values correctly
+ * and supports NIP-ND AND operator.
  *
  * @param filters - Single filter or array of filters
  * @returns The memoized filter(s)
  */
-export function useStableFilters<T>(filters: T): T {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => filters, [JSON.stringify(filters)]);
+export function useStableFilters<T extends Filter | Filter[]>(filters: T): T {
+  const prevFiltersRef = useRef<T>();
+
+  // Only update if filters actually changed (per isFilterEqual)
+  if (
+    !prevFiltersRef.current ||
+    !isFilterEqual(prevFiltersRef.current as Filter | Filter[], filters as Filter | Filter[])
+  ) {
+    prevFiltersRef.current = filters;
+  }
+
+  return prevFiltersRef.current;
 }
