@@ -761,7 +761,7 @@ export default function ReqViewer({
     relayStates: reqRelayStates,
     overallState,
   } = useReqTimelineEnhanced(
-    `req-${JSON.stringify(filter)}-${closeOnEose}`,
+    `req-${JSON.stringify(resolvedFilter)}-${closeOnEose}`,
     resolvedFilter,
     normalizedRelays,
     { limit: resolvedFilter.limit || 50, stream },
