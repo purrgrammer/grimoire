@@ -61,7 +61,10 @@ export function useStableFilters<T extends Filter | Filter[]>(filters: T): T {
   // Only update if filters actually changed (per isFilterEqual)
   if (
     !prevFiltersRef.current ||
-    !isFilterEqual(prevFiltersRef.current as Filter | Filter[], filters as Filter | Filter[])
+    !isFilterEqual(
+      prevFiltersRef.current as Filter | Filter[],
+      filters as Filter | Filter[],
+    )
   ) {
     prevFiltersRef.current = filters;
   }

@@ -56,7 +56,9 @@ export function Kind7Renderer({ event }: BaseEventProps) {
   const reactedAddress = aTag?.[1]; // Format: kind:pubkey:d-tag
 
   // Parse a tag coordinate using applesauce helper
-  const addressPointer = reactedAddress ? parseCoordinate(reactedAddress) : null;
+  const addressPointer = reactedAddress
+    ? parseCoordinate(reactedAddress)
+    : null;
 
   // Create event pointer for fetching
   const eventPointer = useMemo(() => {
