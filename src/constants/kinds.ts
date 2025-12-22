@@ -850,7 +850,7 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   10317: {
     kind: 10317,
     name: "Grasp List",
-    description: "User grasp list",
+    description: "User Grasp List",
     nip: "34",
     icon: FolderGit2,
   },

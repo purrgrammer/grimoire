@@ -1319,7 +1319,7 @@ kinds:
     tags: []
 
   10317:
-    description: User grasp list
+    description: User Grasp List
     content:
       type: empty
     tags:
