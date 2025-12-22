@@ -68,8 +68,8 @@ describe("PublishSpellAction", () => {
 
     // @ts-expect-error: mocking internal state for test
     accountManager.active = {
-      signer: mockSigner,
       pubkey: "pubkey",
+      signer: mockSigner,
     };
 
     const spell: LocalSpell = {
