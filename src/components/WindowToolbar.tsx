@@ -1,4 +1,4 @@
-import { X, Pencil, MoreVertical, WandSparkles } from "lucide-react";
+import { X, Pencil, MoreVertical, WandSparkles, Copy, CopyCheck } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 import { WindowInstance } from "@/types/app";
@@ -13,6 +13,8 @@ import {
 import { SpellDialog } from "@/components/nostr/SpellDialog";
 import { reconstructCommand as reconstructReqCommand } from "@/lib/spell-conversion";
 import { toast } from "sonner";
+import { useCopy } from "@/hooks/useCopy";
+import { useNip } from "@/hooks/useNip";
 
 interface WindowToolbarProps {
   window?: WindowInstance;
@@ -58,6 +60,22 @@ export function WindowToolbar({
     setShowSpellDialog(true);
   };
 
+  // Copy functionality for NIPs
+  const { copy, copied } = useCopy();
+  const isNipWindow = window?.appId === "nip";
+
+  // Fetch NIP content for regular NIPs
+  const { content: nipContent } = useNip(
+    isNipWindow && window?.props?.number ? window.props.number : ""
+  );
+
+  const handleCopyNip = () => {
+    if (!window || !nipContent) return;
+
+    copy(nipContent);
+    toast.success("NIP markdown copied to clipboard");
+  };
+
   // Check if this is a REQ window for spell creation
   const isReqWindow = window?.appId === "req";
 
@@ -87,6 +105,23 @@ export function WindowToolbar({
           >
             <Pencil className="size-4" />
           </button>
+
+          {/* Copy button for NIPs */}
+          {isNipWindow && (
+            <button
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              onClick={handleCopyNip}
+              title="Copy NIP markdown"
+              aria-label="Copy NIP markdown"
+              disabled={!nipContent}
+            >
+              {copied ? (
+                <CopyCheck className="size-4" />
+              ) : (
+                <Copy className="size-4" />
+              )}
+            </button>
+          )}
 
           {/* More actions menu - only for REQ windows for now */}
           {isReqWindow && (

@@ -1,7 +1,10 @@
 import { useMemo } from "react";
+import { Copy, CopyCheck } from "lucide-react";
 import { getTagValue } from "applesauce-core/helpers";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
+import { useCopy } from "@/hooks/useCopy";
+import { toast } from "sonner";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -29,12 +32,33 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
     },
   );
 
+  // Copy functionality
+  const { copy, copied } = useCopy();
+  const handleCopy = () => {
+    copy(event.content);
+    toast.success("Community NIP markdown copied to clipboard");
+  };
+
   return (
     <div dir="auto" className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
       {/* NIP Header */}
       <header className="flex flex-col gap-4 border-b border-border pb-6">
-        {/* Title */}
-        <h1 className="text-3xl font-bold">{title}</h1>
+        {/* Title with Copy Button */}
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-3xl font-bold">{title}</h1>
+          <button
+            onClick={handleCopy}
+            className="p-2 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+            title="Copy NIP markdown"
+            aria-label="Copy NIP markdown"
+          >
+            {copied ? (
+              <CopyCheck className="size-5" />
+            ) : (
+              <Copy className="size-5" />
+            )}
+          </button>
+        </div>
 
         {/* Metadata */}
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
