@@ -45,6 +45,8 @@ import { SPELLBOOK_KIND } from "@/constants/kinds";
 import { UserName } from "./nostr/UserName";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { lastValueFrom } from "rxjs";
+import { nip19 } from "nostr-tools";
+import type { AddressPointer } from "nostr-tools/nip19";
 
 interface SpellbookCardProps {
   spellbook: LocalSpellbook;
@@ -63,7 +65,7 @@ function SpellbookCard({
   showAuthor = false,
   isOwner = true,
 }: SpellbookCardProps) {
-  const { addWindow } = useGrimoire();
+  const { state, addWindow } = useGrimoire();
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const displayName = spellbook.title || "Untitled Spellbook";
@@ -110,22 +112,22 @@ function SpellbookCard({
   };
 
   const handleOpenEvent = () => {
-    const id = spellbook.eventId || (spellbook.event?.id as string);
-    if (id && id.length === 64) {
-      addWindow("open", { pointer: { id } }, `open ${id}`);
-    } else if (spellbook.isPublished && spellbook.slug && authorPubkey) {
-      // For addressable events (kind 30003)
-      addWindow(
-        "open",
-        {
-          pointer: {
-            kind: SPELLBOOK_KIND,
-            pubkey: authorPubkey,
-            identifier: spellbook.slug,
-          },
-        },
-        `open ${SPELLBOOK_KIND}:${authorPubkey}:${spellbook.slug}`,
-      );
+    if (spellbook.slug && authorPubkey) {
+      // For addressable events (kind 30777)
+      const pointer: AddressPointer = {
+        kind: SPELLBOOK_KIND,
+        pubkey: authorPubkey,
+        identifier: spellbook.slug,
+        relays: state.activeAccount?.relays?.map((r) => r.url) || [],
+      };
+
+      const naddr = nip19.naddrEncode(pointer);
+      addWindow("open", { pointer }, `open ${naddr}`);
+    } else {
+      const id = spellbook.eventId || (spellbook.event?.id as string);
+      if (id && id.length === 64) {
+        addWindow("open", { pointer: { id } }, `open ${id}`);
+      }
     }
   };
 
