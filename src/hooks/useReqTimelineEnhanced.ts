@@ -36,14 +36,13 @@ interface UseReqTimelineEnhancedReturn {
  * - Syncs connection state from RelayStateManager
  * - Tracks events per relay via event._relay metadata
  * - Derives overall state from individual relay states
+ * - Generates subscription ID automatically from filters, relays, and options
  *
- * @param id - Unique identifier for this timeline (for caching)
  * @param filters - Nostr filter(s)
  * @param relays - Array of relay URLs
  * @param options - Stream mode, limit, etc.
  */
 export function useReqTimelineEnhanced(
-  id: string,
   filters: Filter | Filter[],
   relays: string[],
   options: UseReqTimelineEnhancedOptions = { limit: 50 },
@@ -84,6 +83,12 @@ export function useReqTimelineEnhanced(
   // Stabilize inputs to prevent unnecessary re-renders
   const stableFilters = useStableValue(filters);
   const stableRelays = useStableArray(relays);
+
+  // Generate stable subscription ID from parameters
+  // This ensures re-subscription when filters, relays, or stream mode changes
+  const subscriptionId = useMemo(() => {
+    return `req-${JSON.stringify(stableFilters)}-${stableRelays.join(",")}-${stream}`;
+  }, [stableFilters, stableRelays, stream]);
 
   // Initialize relay states when relays change
   useEffect(() => {
@@ -317,7 +322,7 @@ export function useReqTimelineEnhanced(
     return () => {
       subscriptions.forEach((sub) => sub.unsubscribe());
     };
-  }, [id, stableFilters, stableRelays, limit, stream, eventStore]);
+  }, [subscriptionId, limit, eventStore]);
 
   // Derive overall state from individual relay states
   const overallState = useMemo(() => {

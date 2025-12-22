@@ -760,12 +760,10 @@ export default function ReqViewer({
     eoseReceived,
     relayStates: reqRelayStates,
     overallState,
-  } = useReqTimelineEnhanced(
-    `req-${JSON.stringify(resolvedFilter)}-${closeOnEose}`,
-    resolvedFilter,
-    normalizedRelays,
-    { limit: resolvedFilter.limit || 50, stream },
-  );
+  } = useReqTimelineEnhanced(resolvedFilter, normalizedRelays, {
+    limit: resolvedFilter.limit || 50,
+    stream,
+  });
 
   const [showQuery, setShowQuery] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
