@@ -34,12 +34,8 @@ export function deriveOverallState(
   const receivingCount = states.filter(
     (s) => s.subscriptionState === "receiving",
   ).length;
-  const eoseCount = states.filter(
-    (s) => s.subscriptionState === "eose",
-  ).length;
-  const errorCount = states.filter(
-    (s) => s.connectionState === "error",
-  ).length;
+  const eoseCount = states.filter((s) => s.subscriptionState === "eose").length;
+  const errorCount = states.filter((s) => s.connectionState === "error").length;
   const disconnectedCount = states.filter(
     (s) => s.connectionState === "disconnected",
   ).length;

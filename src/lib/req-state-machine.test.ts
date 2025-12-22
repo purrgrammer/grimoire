@@ -405,12 +405,12 @@ describe("getStatusText", () => {
   };
 
   it("should return correct text for each status", () => {
-    expect(
-      getStatusText({ ...baseState, status: "discovering" }),
-    ).toBe("DISCOVERING");
-    expect(
-      getStatusText({ ...baseState, status: "connecting" }),
-    ).toBe("CONNECTING");
+    expect(getStatusText({ ...baseState, status: "discovering" })).toBe(
+      "DISCOVERING",
+    );
+    expect(getStatusText({ ...baseState, status: "connecting" })).toBe(
+      "CONNECTING",
+    );
     expect(getStatusText({ ...baseState, status: "loading" })).toBe("LOADING");
     expect(getStatusText({ ...baseState, status: "live" })).toBe("LIVE");
     expect(getStatusText({ ...baseState, status: "partial" })).toBe("PARTIAL");

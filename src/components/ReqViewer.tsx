@@ -730,23 +730,17 @@ export default function ReqViewer({
     return selectedRelays;
   }, [relays, relaySelectionPhase, selectedRelays]);
 
-  // Get relay state for each relay and calculate connected count
-  const relayStatesForReq = useMemo(
-    () =>
-      finalRelays.map((url) => ({
-        url,
-        state: relayStates[url],
-      })),
-    [finalRelays, relayStates],
-  );
-  const connectedCount = relayStatesForReq.filter(
-    (r) => r.state?.connectionState === "connected",
-  ).length;
-
   // Streaming is the default behavior, closeOnEose inverts it
   const stream = !closeOnEose;
 
-  const { events, loading, error, eoseReceived, relayStates: reqRelayStates, overallState } = useReqTimelineEnhanced(
+  const {
+    events,
+    loading,
+    error,
+    eoseReceived,
+    relayStates: reqRelayStates,
+    overallState,
+  } = useReqTimelineEnhanced(
     `req-${JSON.stringify(filter)}-${closeOnEose}`,
     resolvedFilter,
     finalRelays,
@@ -930,7 +924,9 @@ export default function ReqViewer({
                   shouldAnimate(overallState.status) ? "animate-pulse" : ""
                 }`}
               />
-              <span className={`${getStatusColor(overallState.status)} font-semibold`}>
+              <span
+                className={`${getStatusColor(overallState.status)} font-semibold`}
+              >
                 {getStatusText(overallState)}
               </span>
             </div>
@@ -1011,7 +1007,9 @@ export default function ReqViewer({
                       const reqState = reqRelayStates.get(r.relay);
                       const connIcon = getConnectionIcon(globalState);
                       const authIcon = getAuthIcon(globalState);
-                      const badge = reqState ? getRelayStateBadge(reqState) : null;
+                      const badge = reqState
+                        ? getRelayStateBadge(reqState)
+                        : null;
 
                       return (
                         <div
@@ -1030,7 +1028,9 @@ export default function ReqViewer({
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-0.5">
                                     <FileText className="size-3" />
-                                    <span className="text-[10px]">{reqState.eventCount}</span>
+                                    <span className="text-[10px]">
+                                      {reqState.eventCount}
+                                    </span>
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -1052,11 +1052,14 @@ export default function ReqViewer({
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-0.5">
                                     <Mail className="w-3 h-3" />
-                                    <span className="text-[10px]">{r.readers.length}</span>
+                                    <span className="text-[10px]">
+                                      {r.readers.length}
+                                    </span>
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  Inbox relay for {r.readers.length} author{r.readers.length !== 1 ? 's' : ''}
+                                  Inbox relay for {r.readers.length} author
+                                  {r.readers.length !== 1 ? "s" : ""}
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -1065,11 +1068,14 @@ export default function ReqViewer({
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-0.5">
                                     <Send className="w-3 h-3" />
-                                    <span className="text-[10px]">{r.writers.length}</span>
+                                    <span className="text-[10px]">
+                                      {r.writers.length}
+                                    </span>
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  Outbox relay for {r.writers.length} author{r.writers.length !== 1 ? 's' : ''}
+                                  Outbox relay for {r.writers.length} author
+                                  {r.writers.length !== 1 ? "s" : ""}
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -1085,7 +1091,9 @@ export default function ReqViewer({
                             {authIcon && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <div className="cursor-help">{authIcon.icon}</div>
+                                  <div className="cursor-help">
+                                    {authIcon.icon}
+                                  </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>{authIcon.label}</p>
@@ -1096,7 +1104,9 @@ export default function ReqViewer({
                             {/* Connection icon */}
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="cursor-help">{connIcon.icon}</div>
+                                <div className="cursor-help">
+                                  {connIcon.icon}
+                                </div>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>{connIcon.label}</p>
@@ -1120,7 +1130,9 @@ export default function ReqViewer({
                       const reqState = reqRelayStates.get(url);
                       const connIcon = getConnectionIcon(globalState);
                       const authIcon = getAuthIcon(globalState);
-                      const badge = reqState ? getRelayStateBadge(reqState) : null;
+                      const badge = reqState
+                        ? getRelayStateBadge(reqState)
+                        : null;
 
                       return (
                         <div
@@ -1139,7 +1151,9 @@ export default function ReqViewer({
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-0.5">
                                     <FileText className="size-3" />
-                                    <span className="text-[10px]">{reqState.eventCount}</span>
+                                    <span className="text-[10px]">
+                                      {reqState.eventCount}
+                                    </span>
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -1159,7 +1173,9 @@ export default function ReqViewer({
                             {authIcon && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <div className="cursor-help">{authIcon.icon}</div>
+                                  <div className="cursor-help">
+                                    {authIcon.icon}
+                                  </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>{authIcon.label}</p>
@@ -1170,7 +1186,9 @@ export default function ReqViewer({
                             {/* Connection icon */}
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="cursor-help">{connIcon.icon}</div>
+                                <div className="cursor-help">
+                                  {connIcon.icon}
+                                </div>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>{connIcon.label}</p>
