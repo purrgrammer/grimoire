@@ -8,7 +8,6 @@ import {
   getZapRequest,
 } from "applesauce-core/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { getContentPreview } from "./index";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";
 
@@ -41,9 +40,6 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
     return Math.floor(zapAmount / 1000);
   }, [zapAmount]);
 
-  // Get content preview
-  const preview = zappedEvent ? getContentPreview(zappedEvent, 40) : null;
-
   return (
     <span className="flex items-center gap-1 text-sm truncate">
       <Zap className="size-3 fill-yellow-500 text-yellow-500 shrink-0" />
@@ -61,13 +57,10 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
       )}
       {zappedEvent && (
         <>
-          <UserName
-            pubkey={zappedEvent.pubkey}
-            className="text-sm truncate line-clamp-1"
-          />
+          <UserName pubkey={zappedEvent.pubkey} className="flex-1" />
           <span className="text-muted-foreground truncate line-clamp-1">
             <RichText
-              content={preview || ""}
+              event={zappedEvent}
               className="inline text-sm leading-none"
               options={{ showMedia: false, showEventEmbeds: false }}
             />

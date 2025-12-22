@@ -301,10 +301,7 @@ export function BaseEventContainer({
     label?: string;
   };
 }) {
-  // const { addWindow } = useGrimoire();
   const { locale } = useGrimoire();
-  // const compactModeKinds = state.compactModeKinds || [];
-  // const isCompact = compactModeKinds.includes(event.kind);
 
   // Format relative time for display
   const relativeTime = formatTimestamp(
@@ -322,59 +319,6 @@ export function BaseEventContainer({
 
   // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
-
-  /*
-  if (isCompact) {
-    const reply = getEventReply(event);
-
-    const handleReplyClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!reply) return;
-
-      // Type guard to check if it's an AddressPointer (has 'kind' property)
-      const pointer = reply.pointer;
-      if ("kind" in pointer) {
-        addWindow("open", { pointer: pointer });
-      } else {
-        addWindow("open", { pointer: { id: pointer.id } });
-      }
-    };
-
-    return (
-      <div className="flex flex-row items-center gap-2 p-3 py-0">
-        <EventAuthor pubkey={displayPubkey} className="" />
-        {event.kind === kinds.Zap ? (
-          <div className="flex items-center gap-1">
-            <Zap className="size-4 text-amber-300" />
-            <span>{(getZapAmount(event) || 0) / 1000}</span>
-          </div>
-        ) : [kinds.Repost, kinds.GenericRepost].includes(event.kind) ? (
-          <KindBadge kind={event.kind} variant="compact" />
-        ) : event.content ? (
-          <RichText
-            event={event}
-            className="truncate line-clamp-1 text-sm"
-            options={{
-              showMedia: false,
-              showEventEmbeds: false,
-            }}
-          />
-        ) : (
-          <KindBadge kind={event.kind} variant="compact" />
-        )}
-        {reply && (
-          <ReplyPreview pointer={reply.pointer} onClick={handleReplyClick} />
-        )}
-        <span
-          className="text-xs text-muted-foreground/70 whitespace-nowrap ml-auto"
-          title={absoluteTime}
-        >
-          {relativeTime}
-        </span>
-      </div>
-    );
-  }
-  */
 
   return (
     <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">

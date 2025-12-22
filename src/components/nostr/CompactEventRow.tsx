@@ -1,8 +1,9 @@
 import { memo, useCallback } from "react";
 import type { NostrEvent } from "@/types/nostr";
+import { kinds } from "nostr-tools";
 import { useGrimoire } from "@/core/state";
 import { formatTimestamp } from "@/hooks/useLocale";
-import { getTagValue } from "applesauce-core/helpers";
+import { getTagValue, getZapSender } from "applesauce-core/helpers";
 import { KindBadge } from "@/components/KindBadge";
 import { UserName } from "./UserName";
 import { compactRenderers, DefaultCompactPreview } from "./compact";
@@ -77,10 +78,14 @@ export function CompactEventRow({ event }: CompactEventRowProps) {
       <KindBadge kind={event.kind} variant="compact" className="shrink-0" />
 
       {/* Author */}
-      <UserName
-        pubkey={event.pubkey}
-        className="text-sm shrink-0 max-w-[100px] truncate"
-      />
+      {event.kind === kinds.Zap && getZapSender(event) ? (
+        <UserName
+          pubkey={getZapSender(event) as string}
+          className="shrink-0 truncate"
+        />
+      ) : (
+        <UserName pubkey={event.pubkey} className="shrink-0 truncate" />
+      )}
 
       {/* Kind-specific or default preview */}
       <div className="flex-1 min-w-0 truncate">
