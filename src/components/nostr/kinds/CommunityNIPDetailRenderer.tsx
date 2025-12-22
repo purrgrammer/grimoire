@@ -48,7 +48,7 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-3xl font-bold">{title}</h1>
           <Button
-            variant="ghost"
+            variant="link"
             size="icon"
             onClick={handleCopy}
             title="Copy NIP markdown"

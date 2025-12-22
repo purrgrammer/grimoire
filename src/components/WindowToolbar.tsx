@@ -106,9 +106,8 @@ export function WindowToolbar({
         <>
           {/* Edit button */}
           <Button
-            variant="ghost"
+            variant="link"
             size="icon"
-            className="h-8 w-8"
             onClick={handleEdit}
             title="Edit command"
             aria-label="Edit command"
@@ -119,9 +118,8 @@ export function WindowToolbar({
           {/* Copy button for NIPs */}
           {isNipWindow && (
             <Button
-              variant="ghost"
+              variant="link"
               size="icon"
-              className="h-8 w-8"
               onClick={handleCopyNip}
               title="Copy NIP markdown"
               aria-label="Copy NIP markdown"
@@ -136,9 +134,8 @@ export function WindowToolbar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="link"
                   size="icon"
-                  className="h-8 w-8"
                   title="More actions"
                   aria-label="More actions"
                 >
@@ -170,9 +167,8 @@ export function WindowToolbar({
       )}
       {onClose && (
         <Button
-          variant="ghost"
+          variant="link"
           size="icon"
-          className="h-8 w-8"
           onClick={onClose}
           title="Close window"
           aria-label="Close window"
