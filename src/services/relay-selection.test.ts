@@ -6,12 +6,15 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { selectRelaysForFilter } from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
+import relayListCache from "./relay-list-cache";
 
 describe("selectRelaysForFilter", () => {
   let eventStore: EventStore;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     eventStore = new EventStore();
+    // Clear the relay list cache to ensure test isolation
+    await relayListCache.clear();
   });
 
   describe("fallback behavior", () => {
