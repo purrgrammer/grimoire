@@ -78,7 +78,7 @@ export function getAuthIcon(relay: RelayState | undefined) {
     },
     none: {
       icon: <Shield className="size-3 text-muted-foreground/40" />,
-      label: "No Authentication Required",
+      label: "Not required",
     },
   };
   return iconMap[relay.authStatus] || iconMap.none;

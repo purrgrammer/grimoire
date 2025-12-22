@@ -29,6 +29,12 @@ Grimoire is a Nostr protocol explorer and developer tool. It's a tiling window m
 - Maintains failure counts, backoff states, last success/failure times
 - Prevents repeated connection attempts to dead relays
 
+**Nostr Query State Machine** (`src/lib/req-state-machine.ts` + `src/hooks/useReqTimelineEnhanced.ts`):
+- Accurate tracking of REQ subscriptions across multiple relays
+- Distinguishes between `LIVE`, `LOADING`, `PARTIAL`, `OFFLINE`, `CLOSED`, and `FAILED` states
+- Solves "LIVE with 0 relays" bug by tracking per-relay connection state and event counts
+- Pattern: Subscribe to relays individually to detect per-relay EOSE and errors
+
 **Critical**: Don't create new EventStore, RelayPool, or RelayLiveness instances - use the singletons in `src/services/`
 
 ### Window System

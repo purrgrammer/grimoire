@@ -1057,59 +1057,76 @@ export default function ReqViewer({
 
                   // Build comprehensive tooltip content
                   const tooltipContent = (
-                    <div className="space-y-1.5 text-xs">
-                      <div className="font-semibold border-b border-border pb-1 mb-1">
+                    <div className="space-y-3 text-xs p-1">
+                      <div className="font-mono font-bold border-b border-border pb-2 mb-2 break-all text-primary">
                         {url}
                       </div>
-                      <div className="space-y-1 text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <span className="w-20">Connection:</span>
-                          <span className="text-foreground">
-                            {connIcon.label}
-                          </span>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div className="space-y-0.5">
+                          <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                            Connection
+                          </div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <span className="shrink-0">{connIcon.icon}</span>
+                            <span>{connIcon.label}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-20">Auth:</span>
-                          <span className="text-foreground">
-                            {authIcon.label}
-                          </span>
+
+                        <div className="space-y-0.5">
+                          <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                            Authentication
+                          </div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <span className="shrink-0">{authIcon.icon}</span>
+                            <span>{authIcon.label}</span>
+                          </div>
                         </div>
+
                         {reqState && (
                           <>
-                            <div className="flex items-center gap-2">
-                              <span className="w-20">Subscription:</span>
-                              <span className="text-foreground capitalize">
-                                {reqState.subscriptionState}
-                              </span>
-                            </div>
-                            {reqState.eventCount > 0 && (
-                              <div className="flex items-center gap-2">
-                                <span className="w-20">Events:</span>
-                                <span className="text-foreground">
-                                  {reqState.eventCount} received
-                                </span>
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                Subscription
                               </div>
-                            )}
+                              <div className="font-medium capitalize">
+                                {reqState.subscriptionState}
+                              </div>
+                            </div>
+
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                Events
+                              </div>
+                              <div className="flex items-center gap-1.5 font-medium">
+                                <FileText className="size-3 text-muted-foreground" />
+                                <span>{reqState.eventCount} received</span>
+                              </div>
+                            </div>
                           </>
                         )}
+
                         {nip65Info && (
                           <>
                             {nip65Info.readers.length > 0 && (
-                              <div className="flex items-center gap-2">
-                                <span className="w-20">Inbox:</span>
-                                <span className="text-foreground">
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                  Inbox (Read)
+                                </div>
+                                <div className="font-medium">
                                   {nip65Info.readers.length} author
                                   {nip65Info.readers.length !== 1 ? "s" : ""}
-                                </span>
+                                </div>
                               </div>
                             )}
                             {nip65Info.writers.length > 0 && (
-                              <div className="flex items-center gap-2">
-                                <span className="w-20">Outbox:</span>
-                                <span className="text-foreground">
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                  Outbox (Write)
+                                </div>
+                                <div className="font-medium">
                                   {nip65Info.writers.length} author
                                   {nip65Info.writers.length !== 1 ? "s" : ""}
-                                </span>
+                                </div>
                               </div>
                             )}
                           </>
@@ -1133,9 +1150,8 @@ export default function ReqViewer({
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {/* Event count badge */}
                             {reqState && reqState.eventCount > 0 && (
-                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
-                                <FileText className="size-2.5" />
-                                <span>{reqState.eventCount}</span>
+                              <div className="text-[10px] text-muted-foreground font-medium">
+                                [{reqState.eventCount}]
                               </div>
                             )}
 
@@ -1146,7 +1162,8 @@ export default function ReqViewer({
                                   <Check className="size-3 text-green-600/70" />
                                 ) : (
                                   (reqState.subscriptionState === "receiving" ||
-                                    reqState.subscriptionState === "waiting") && (
+                                    reqState.subscriptionState ===
+                                      "waiting") && (
                                     <Loader2 className="size-3 text-muted-foreground/40 animate-spin" />
                                   )
                                 )}

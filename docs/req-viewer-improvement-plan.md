@@ -19,9 +19,32 @@ We'll combine two sources of truth:
 
 This hybrid approach avoids duplicate subscriptions while providing accurate status tracking.
 
-## Implementation Tasks
+## Implementation Progress
 
-### Phase 1: Core Infrastructure
+### COMPLETED: Phase 1: Core Infrastructure
+- [x] Task 1.1: Create Per-Relay State Tracking Types (`src/types/req-state.ts`)
+- [x] Task 1.2: Create State Derivation Logic (`src/lib/req-state-machine.ts`)
+- [x] Task 1.3: Create Enhanced Timeline Hook (`src/hooks/useReqTimelineEnhanced.ts`)
+- [x] Unit tests for state machine (`src/lib/req-state-machine.test.ts`)
+
+### COMPLETED: Phase 2: UI Integration
+- [x] Task 2.1: Update ReqViewer Status Indicator with 8-state machine
+- [x] Task 2.2: Enhance Relay Dropdown with Per-Relay Status and 2-column grid tooltip
+- [x] Task 2.3: Add Empty/Error States (Failed, Offline, Partial)
+
+### PENDING: Phase 3: Testing & Polish
+- [ ] Task 3.1: Add Unit Tests for `useReqTimelineEnhanced` hook
+- [ ] Task 3.2: Add Integration Tests for `ReqViewer` UI
+- [ ] Task 3.3: Complete Manual Testing Checklist
+
+### FUTURE: Phase 4: Future Enhancements
+- [ ] Task 4.1: Relay Performance Metrics (Latency tracking)
+- [ ] Task 4.2: Smart Relay Selection (Integrate with RelayLiveness)
+- [ ] Task 4.3: Query Optimization Suggestions
+
+---
+
+## Original Implementation Tasks (Reference)
 
 #### Task 1.1: Create Per-Relay State Tracking Types
 
