@@ -343,7 +343,7 @@ export function SpellDialog({
             <label htmlFor="command" className="text-sm font-medium">
               Command
             </label>
-            <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm font-mono">
+            <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm font-mono break-words overflow-x-auto">
               {filterSpellCommand(
                 mode === "edit" && existingSpell
                   ? existingSpell.command

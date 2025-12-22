@@ -601,7 +601,7 @@ export function CreateSpellDialog({
               <label className="text-xs font-medium text-muted-foreground uppercase">
                 Generated Command
               </label>
-              <div className="bg-background border rounded-md p-3 font-mono text-xs break-all text-primary">
+              <div className="bg-background border rounded-md p-3 font-mono text-xs break-words overflow-x-auto text-primary">
                 {generatedCommand}
               </div>
             </div>

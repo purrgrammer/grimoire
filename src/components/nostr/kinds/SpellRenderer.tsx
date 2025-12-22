@@ -256,7 +256,7 @@ export function SpellDetailRenderer({ event }: BaseEventProps) {
           </h3>
           <ExecutableCommand
             commandLine={spell.command}
-            className="text-sm font-mono p-4 bg-muted/30 border border-border text-primary hover:underline hover:decoration-dotted cursor-crosshair break-all"
+            className="text-sm font-mono p-4 bg-muted/30 border border-border text-primary hover:underline hover:decoration-dotted cursor-crosshair break-words overflow-x-auto"
           >
             {spell.command}
           </ExecutableCommand>
