@@ -106,16 +106,36 @@ export function useCountQuery(
           return updated;
         });
       },
-      error: (err: Error) => {
+      error: (err: any) => {
         console.error("COUNT: Error", err);
-        setError(err);
+
+        // Extract meaningful error message from various error types
+        let errorMessage = "Unknown error";
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (err && typeof err === "object") {
+          if ("message" in err && typeof err.message === "string") {
+            errorMessage = err.message;
+          } else if ("type" in err) {
+            // WebSocket Event objects
+            errorMessage = `Connection ${err.type}`;
+          } else if ("reason" in err && typeof err.reason === "string") {
+            errorMessage = err.reason;
+          } else {
+            errorMessage = JSON.stringify(err);
+          }
+        } else if (typeof err === "string") {
+          errorMessage = err;
+        }
+
+        setError(new Error(errorMessage));
         setLoading(false);
 
         // Mark all still-loading relays as errored
         setResults((prev) =>
           prev.map((r) =>
             r.status === "loading"
-              ? { ...r, status: "error" as CountStatus, error: err.message }
+              ? { ...r, status: "error" as CountStatus, error: errorMessage }
               : r,
           ),
         );

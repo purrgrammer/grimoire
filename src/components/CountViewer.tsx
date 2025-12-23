@@ -454,7 +454,7 @@ export function CountViewer({
         <div className="border-t border-border px-4 py-3 bg-red-500/10">
           <div className="flex items-center gap-2 text-sm text-red-500">
             <AlertCircle className="size-4" />
-            <span>{String(error.message || error)}</span>
+            <span>{error.message || "An error occurred"}</span>
           </div>
         </div>
       )}
