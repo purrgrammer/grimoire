@@ -1,4 +1,5 @@
 import { parseReqCommand } from "../lib/req-parser";
+import { parseCountCommand } from "../lib/count-parser";
 import type { AppId } from "./app";
 
 import { parseOpenCommand } from "@/lib/open-parser";
@@ -318,6 +319,139 @@ export const manPages: Record<string, ManPageEntry> = {
       return parsed;
     },
     defaultProps: { filter: { kinds: [1], limit: 50 } },
+  },
+  count: {
+    name: "count",
+    section: "1",
+    synopsis: "count [options] [relay...]",
+    description:
+      "Count Nostr events on relays using NIP-45. Returns the number of events matching the specified filter criteria without fetching the actual events. Uses identical filter syntax to the REQ command. Supports $me and $contacts aliases for queries based on your active account.",
+    options: [
+      {
+        flag: "-k, --kind <number>",
+        description:
+          "Filter by event kind (e.g., 0=metadata, 1=note, 7=reaction). Supports comma-separated values: -k 1,3,7",
+      },
+      {
+        flag: "-a, --author <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by author pubkey (supports npub, hex, NIP-05 identifier, bare domain, $me, or $contacts). Supports comma-separated values: -a npub1...,user@domain.com,$me",
+      },
+      {
+        flag: "-e <note|nevent|naddr|hex>",
+        description:
+          "Filter by event ID or coordinate. Supports note1, nevent1, naddr1, or raw hex. Comma-separated values supported.",
+      },
+      {
+        flag: "-p <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by mentioned pubkey (#p tag, supports npub, hex, NIP-05, bare domain, $me, or $contacts). Supports comma-separated values.",
+      },
+      {
+        flag: "-P <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by zap sender (#P tag). Useful for counting zaps sent by specific users.",
+      },
+      {
+        flag: "-t <hashtag>",
+        description:
+          "Filter by hashtag (#t tag). Supports comma-separated values: -t nostr,bitcoin,lightning",
+      },
+      {
+        flag: "-d <identifier>",
+        description:
+          "Filter by d-tag identifier (replaceable events). Supports comma-separated values.",
+      },
+      {
+        flag: "-T, --tag <letter> <value>",
+        description:
+          "Filter by any single-letter tag (#<letter>). Supports comma-separated values.",
+      },
+      {
+        flag: "--since <time>",
+        description:
+          "Events after timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+      },
+      {
+        flag: "--until <time>",
+        description:
+          "Events before timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+      },
+      {
+        flag: "--search <text>",
+        description: "Search event content for text (relay-dependent)",
+      },
+      {
+        flag: "[relay...]",
+        description:
+          "Relay URLs to query (wss://relay.com or shorthand: relay.com)",
+      },
+    ],
+    examples: [
+      "count -k 3 -p npub1...                  Count followers for a pubkey",
+      "count -k 1 -a $me                       Count your notes",
+      "count -k 1 -a fiatjaf.com               Count notes from author",
+      "count -k 7 -p $me                       Count reactions to your notes",
+      "count -k 9735 -p $me --since 7d         Count zaps received in last week",
+      "count -k 1 -a $contacts --since 30d     Count notes from contacts in last 30 days",
+      "count -k 1,3,7 --since 24h              Count notes, contacts, and reactions in last day",
+      "count -t nostr,bitcoin                  Count events tagged #nostr or #bitcoin",
+      "count --search bitcoin -k 1             Count notes containing 'bitcoin'",
+      "count -k 30023 -d article1              Count specific addressable events",
+      "count -k 1 relay.damus.io nos.lol       Count notes on specific relays",
+    ],
+    seeAlso: ["req", "kind"],
+    appId: "count",
+    category: "Nostr",
+    argParser: async (args: string[]) => {
+      const parsed = parseCountCommand(args);
+
+      // Resolve NIP-05 identifiers if present
+      const allNip05 = [
+        ...(parsed.nip05Authors || []),
+        ...(parsed.nip05PTags || []),
+        ...(parsed.nip05PTagsUppercase || []),
+      ];
+
+      if (allNip05.length > 0) {
+        const resolved = await resolveNip05Batch(allNip05);
+
+        // Add resolved authors to filter
+        if (parsed.nip05Authors) {
+          for (const nip05 of parsed.nip05Authors) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter.authors) parsed.filter.authors = [];
+              parsed.filter.authors.push(pubkey);
+            }
+          }
+        }
+
+        // Add resolved #p tags to filter
+        if (parsed.nip05PTags) {
+          for (const nip05 of parsed.nip05PTags) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter["#p"]) parsed.filter["#p"] = [];
+              parsed.filter["#p"].push(pubkey);
+            }
+          }
+        }
+
+        // Add resolved #P tags to filter
+        if (parsed.nip05PTagsUppercase) {
+          for (const nip05 of parsed.nip05PTagsUppercase) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter["#P"]) parsed.filter["#P"] = [];
+              parsed.filter["#P"].push(pubkey);
+            }
+          }
+        }
+      }
+
+      return parsed;
+    },
   },
   open: {
     name: "open",

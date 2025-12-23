@@ -8,6 +8,7 @@ export type AppId =
   | "kinds"
   | "man"
   | "req"
+  | "count"
   //| "event"
   | "open"
   | "profile"

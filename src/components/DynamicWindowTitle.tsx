@@ -234,6 +234,32 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "req";
 
+    case "count":
+      // COUNT command similar to REQ
+      if (props.filter) {
+        const parts: string[] = ["count"];
+        if (props.filter.kinds?.length) {
+          parts.push(`-k ${props.filter.kinds.join(",")}`);
+        }
+        if (props.filter["#t"]?.length) {
+          parts.push(`-t ${props.filter["#t"].slice(0, 2).join(",")}`);
+        }
+        if (props.filter.authors?.length) {
+          const authorDisplay = props.filter.authors.slice(0, 2).join(",");
+          parts.push(`-a ${authorDisplay}`);
+        }
+        if (props.filter["#p"]?.length) {
+          const pTagDisplay = props.filter["#p"].slice(0, 2).join(",");
+          parts.push(`-p ${pTagDisplay}`);
+        }
+        if (props.filter["#P"]?.length) {
+          const pTagUpperDisplay = props.filter["#P"].slice(0, 2).join(",");
+          parts.push(`-P ${pTagUpperDisplay}`);
+        }
+        return parts.join(" ");
+      }
+      return "count";
+
     case "man":
       return props.cmd ? `man ${props.cmd}` : "man";
 
@@ -367,6 +393,29 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const reqHashtags =
     appId === "req" && props.filter?.["#t"] ? props.filter["#t"] : [];
 
+  // Fetch profiles for COUNT authors and tagged users (up to 2 each)
+  const countAuthors =
+    appId === "count" && props.filter?.authors ? props.filter.authors : [];
+  const [countAuthor1Pubkey, countAuthor2Pubkey] = countAuthors;
+  const countAuthor1Profile = useProfile(countAuthor1Pubkey);
+  const countAuthor2Profile = useProfile(countAuthor2Pubkey);
+
+  const countTagged =
+    appId === "count" && props.filter?.["#p"] ? props.filter["#p"] : [];
+  const [countTagged1Pubkey, countTagged2Pubkey] = countTagged;
+  const countTagged1Profile = useProfile(countTagged1Pubkey);
+  const countTagged2Profile = useProfile(countTagged2Pubkey);
+
+  const countTaggedUppercase =
+    appId === "count" && props.filter?.["#P"] ? props.filter["#P"] : [];
+  const [countTaggedUpper1Pubkey, countTaggedUpper2Pubkey] =
+    countTaggedUppercase;
+  const countTaggedUpper1Profile = useProfile(countTaggedUpper1Pubkey);
+  const countTaggedUpper2Profile = useProfile(countTaggedUpper2Pubkey);
+
+  const countHashtags =
+    appId === "count" && props.filter?.["#t"] ? props.filter["#t"] : [];
+
   // REQ titles
   const reqTitle = useMemo(() => {
     if (appId !== "req") return null;
@@ -485,6 +534,92 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     contactsCount,
   ]);
 
+  // COUNT titles
+  const countTitle = useMemo(() => {
+    if (appId !== "count") return null;
+    const { filter } = props;
+
+    // Generate a descriptive title from the filter (similar to REQ but with COUNT: prefix)
+    const parts: string[] = ["COUNT:"];
+
+    // 1. Kinds
+    if (filter.kinds && filter.kinds.length > 0) {
+      const kindNames = filter.kinds.map((k: number) => getKindName(k));
+      if (kindNames.length <= 3) {
+        parts.push(kindNames.join(", "));
+      } else {
+        parts.push(
+          `${kindNames.slice(0, 3).join(", ")}, +${kindNames.length - 3}`,
+        );
+      }
+    }
+
+    // 2. Hashtags (#t)
+    if (filter["#t"] && filter["#t"].length > 0) {
+      const hashtagText = formatHashtags("#", countHashtags);
+      if (hashtagText) parts.push(hashtagText);
+    }
+
+    // 3. Mentions (#p)
+    if (filter["#p"] && filter["#p"].length > 0) {
+      const taggedText = formatProfileNames(
+        "@",
+        countTagged,
+        [countTagged1Profile, countTagged2Profile],
+        accountProfile,
+        contactsCount,
+      );
+      if (taggedText) parts.push(taggedText);
+    }
+
+    // 3b. Zap Senders (#P)
+    if (filter["#P"] && filter["#P"].length > 0) {
+      const zapSendersText = formatProfileNames(
+        "⚡ from ",
+        countTaggedUppercase,
+        [countTaggedUpper1Profile, countTaggedUpper2Profile],
+        accountProfile,
+        contactsCount,
+      );
+      if (zapSendersText) parts.push(zapSendersText);
+    }
+
+    // 4. Authors
+    if (filter.authors && filter.authors.length > 0) {
+      const authorsText = formatProfileNames(
+        "by ",
+        countAuthors,
+        [countAuthor1Profile, countAuthor2Profile],
+        accountProfile,
+        contactsCount,
+      );
+      if (authorsText) parts.push(authorsText);
+    }
+
+    // 5. Time Range
+    if (filter.since || filter.until) {
+      const timeRangeText = formatTimeRangeCompact(filter.since, filter.until);
+      if (timeRangeText) parts.push(`📅 ${timeRangeText}`);
+    }
+
+    return parts.length > 1 ? parts.join(" ") : "COUNT";
+  }, [
+    appId,
+    props,
+    countAuthors,
+    countTagged,
+    countTaggedUppercase,
+    countHashtags,
+    countAuthor1Profile,
+    countAuthor2Profile,
+    countTagged1Profile,
+    countTagged2Profile,
+    countTaggedUpper1Profile,
+    countTaggedUpper2Profile,
+    accountProfile,
+    contactsCount,
+  ]);
+
   // Encode/Decode titles
   const encodeTitle = useMemo(() => {
     if (appId !== "encode") return null;
@@ -590,6 +725,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = reqTitle;
       icon = getCommandIcon("req");
       tooltip = rawCommand;
+    } else if (countTitle) {
+      title = countTitle;
+      icon = getCommandIcon("count");
+      tooltip = rawCommand;
     } else if (encodeTitle) {
       title = encodeTitle;
       icon = getCommandIcon("encode");
@@ -635,6 +774,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     kindTitle,
     relayTitle,
     reqTitle,
+    countTitle,
     encodeTitle,
     decodeTitle,
     nipTitle,

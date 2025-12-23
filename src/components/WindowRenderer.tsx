@@ -9,6 +9,9 @@ const NipRenderer = lazy(() =>
 );
 const ManPage = lazy(() => import("./ManPage"));
 const ReqViewer = lazy(() => import("./ReqViewer"));
+const CountViewer = lazy(() =>
+  import("./CountViewer").then((m) => ({ default: m.CountViewer })),
+);
 const EventDetailViewer = lazy(() =>
   import("./EventDetailViewer").then((m) => ({ default: m.EventDetailViewer })),
 );
@@ -144,6 +147,18 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             view={window.props.view}
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
+            needsAccount={window.props.needsAccount}
+          />
+        );
+        break;
+      case "count":
+        content = (
+          <CountViewer
+            filter={window.props.filter}
+            relays={window.props.relays}
+            nip05Authors={window.props.nip05Authors}
+            nip05PTags={window.props.nip05PTags}
+            nip05PTagsUppercase={window.props.nip05PTagsUppercase}
             needsAccount={window.props.needsAccount}
           />
         );

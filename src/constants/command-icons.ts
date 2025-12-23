@@ -14,6 +14,7 @@ import {
   Layout,
   Bug,
   Wifi,
+  Hash,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,6 +54,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   req: {
     icon: Podcast,
     description: "Active subscription to Nostr relays with filters",
+  },
+  count: {
+    icon: Hash,
+    description: "Count events matching filters using NIP-45",
   },
   open: {
     icon: ExternalLink,
