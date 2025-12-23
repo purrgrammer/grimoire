@@ -86,7 +86,7 @@ export function CountViewer({
   const contactPointer = useMemo(
     () =>
       needsAccount && accountPubkey
-        ? ({ kind: 3, pubkey: accountPubkey, identifier: "" } as const)
+        ? { kind: 3, pubkey: accountPubkey, identifier: "" }
         : undefined,
     [needsAccount, accountPubkey],
   );
@@ -97,7 +97,9 @@ export function CountViewer({
   // Extract contact pubkeys from kind 3 event
   const contacts = useMemo(() => {
     if (!contactListEvent) return [];
-    return getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64);
+    return getTagValues(contactListEvent, "p").filter(
+      (pk): pk is string => typeof pk === "string" && pk.length === 64,
+    );
   }, [contactListEvent]);
 
   // Resolve filter aliases ($me, $contacts) if needed
@@ -161,11 +163,11 @@ export function CountViewer({
   };
 
   // Extract tag filters for display
-  const authorPubkeys = filter.authors || [];
-  const pTagPubkeys = filter["#p"] || [];
-  const eTags = filter["#e"];
-  const tTags = filter["#t"];
-  const dTags = filter["#d"];
+  const authorPubkeys = Array.isArray(filter.authors) ? filter.authors : [];
+  const pTagPubkeys = Array.isArray(filter["#p"]) ? filter["#p"] : [];
+  const eTags = Array.isArray(filter["#e"]) ? filter["#e"] : undefined;
+  const tTags = Array.isArray(filter["#t"]) ? filter["#t"] : undefined;
+  const dTags = Array.isArray(filter["#d"]) ? filter["#d"] : undefined;
 
   return (
     <div className="flex flex-col h-full">
@@ -452,7 +454,7 @@ export function CountViewer({
         <div className="border-t border-border px-4 py-3 bg-red-500/10">
           <div className="flex items-center gap-2 text-sm text-red-500">
             <AlertCircle className="size-4" />
-            <span>{error.message}</span>
+            <span>{String(error.message || error)}</span>
           </div>
         </div>
       )}
