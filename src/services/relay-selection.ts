@@ -25,6 +25,7 @@ import type {
   RelaySelectionResult,
   RelaySelectionReasoning,
   RelaySelectionOptions,
+  RelayFilterMap,
 } from "@/types/relay-selection";
 
 /**
@@ -487,6 +488,37 @@ function buildReasoning(
 }
 
 /**
+ * Builds per-relay filter maps for optimized queries
+ *
+ * Groups authors by which relay they should be queried from,
+ * allowing consumers to send only relevant authors to each relay.
+ *
+ * @param selectedPointers - ProfilePointers after optimization (with filtered relays)
+ * @returns Array of per-relay filter mappings
+ */
+function buildPerRelayFilters(
+  selectedPointers: ProfilePointer[],
+): RelayFilterMap[] {
+  // Group authors by relay
+  const relayToAuthors = new Map<string, Set<string>>();
+
+  for (const pointer of selectedPointers) {
+    for (const relay of pointer.relays || []) {
+      if (!relayToAuthors.has(relay)) {
+        relayToAuthors.set(relay, new Set());
+      }
+      relayToAuthors.get(relay)!.add(pointer.pubkey);
+    }
+  }
+
+  // Convert to array
+  return Array.from(relayToAuthors.entries()).map(([relay, authors]) => ({
+    relay,
+    authors: Array.from(authors),
+  }));
+}
+
+/**
  * Creates a fallback result when no pubkeys or all fetches failed
  *
  * @param fallbackRelays - Relay URLs to use as fallback
@@ -707,9 +739,13 @@ export async function selectRelaysForFilter(
     pTagPointers,
   );
 
+  // Build per-relay filter maps for optimized queries
+  const perRelayFilters = buildPerRelayFilters(selectedPointers);
+
   return {
     relays,
     reasoning,
     isOptimized: true,
+    perRelayFilters,
   };
 }
