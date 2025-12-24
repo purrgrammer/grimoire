@@ -4,6 +4,7 @@ import { useAccountSync } from "@/hooks/useAccountSync";
 import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
 import relayStateManager from "@/services/relay-state-manager";
+import relayMetricsCollector from "@/services/relay-metrics-collector";
 import { TabBar } from "../TabBar";
 import CommandLauncher from "../CommandLauncher";
 import { GlobalAuthPrompt } from "../GlobalAuthPrompt";
@@ -24,11 +25,12 @@ export function AppShell({ children }: AppShellProps) {
   // Auto-cache kind:10002 relay lists from EventStore to Dexie
   useRelayListCacheSync();
 
-  // Initialize global relay state manager
+  // Initialize global relay state manager and metrics collector
   useEffect(() => {
     relayStateManager.initialize().catch((err) => {
       console.error("Failed to initialize relay state manager:", err);
     });
+    relayMetricsCollector.initialize();
   }, []);
 
   // Sync relay state with Jotai

@@ -5,6 +5,7 @@ import { useEventStore } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
 import { useStableValue, useStableArray } from "./useStable";
 import { useRelayState } from "./useRelayState";
+import relayMetricsCollector from "@/services/relay-metrics-collector";
 import type { ReqRelayState, ReqOverallState } from "@/types/req-state";
 import { deriveOverallState } from "@/lib/req-state-machine";
 
@@ -185,11 +186,15 @@ export function useReqTimelineEnhanced(
       limit: limit || f.limit,
     }));
 
+    // Track subscription start times for response time metrics
+    const subscriptionStartTimes = new Map<string, number>();
+
     // CRITICAL FIX: Subscribe to each relay INDIVIDUALLY to get per-relay EOSE
     // Previously used pool.subscription() which only emits EOSE when ALL relays finish
     // Now we track each relay separately for accurate per-relay EOSE detection
     const subscriptions = relays.map((url) => {
       const relay = pool.relay(url);
+      subscriptionStartTimes.set(url, Date.now());
 
       return relay
         .subscription(filtersWithLimit, {
@@ -202,6 +207,14 @@ export function useReqTimelineEnhanced(
             // Response can be an event or 'EOSE' string
             if (typeof response === "string" && response === "EOSE") {
               console.log("REQ Enhanced: EOSE received from", url);
+
+              // Record response time for relay scoring
+              const startTime = subscriptionStartTimes.get(url);
+              if (startTime) {
+                const responseTimeMs = Date.now() - startTime;
+                relayMetricsCollector.recordResponseTime(url, responseTimeMs);
+                relayMetricsCollector.recordSuccess(url);
+              }
 
               // Mark THIS specific relay as having received EOSE
               setRelayStates((prev) => {
@@ -291,6 +304,10 @@ export function useReqTimelineEnhanced(
           },
           (err: Error) => {
             console.error("REQ Enhanced: Error from", url, err);
+
+            // Record failure for relay scoring
+            relayMetricsCollector.recordFailure(url);
+
             // Mark this relay as errored
             setRelayStates((prev) => {
               const state = prev.get(url);

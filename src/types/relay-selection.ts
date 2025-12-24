@@ -17,6 +17,14 @@ export interface RelaySelectionResult {
 
   /** True if using NIP-65 optimization, false if using fallback */
   isOptimized: boolean;
+
+  /**
+   * Per-relay author mappings for optimized queries (optional)
+   *
+   * When present, consumers can use this to send only relevant
+   * authors to each relay instead of the full authors list.
+   */
+  perRelayFilters?: RelayFilterMap[];
 }
 
 /**
@@ -51,4 +59,18 @@ export interface RelaySelectionOptions {
 
   /** Timeout in ms for fetching kind:10002 events (default: 1000) */
   timeout?: number;
+}
+
+/**
+ * Per-relay filter mapping for optimized queries
+ *
+ * Instead of sending the same filter to all relays, we can send
+ * only the relevant authors to each relay based on their relay lists.
+ */
+export interface RelayFilterMap {
+  /** Relay URL (normalized) */
+  relay: string;
+
+  /** Authors that should be queried from this relay */
+  authors: string[];
 }
