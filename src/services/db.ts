@@ -54,6 +54,35 @@ export interface RelayLivenessEntry {
   backoffUntil?: number;
 }
 
+/**
+ * Relay performance metrics for scoring
+ * Tracks response time, connection time, stability, and success rate
+ */
+export interface RelayPerformanceEntry {
+  url: string;
+
+  // Response time (how fast relay answers queries)
+  responseTimeMs: number; // Exponential moving average
+  responseTimeCount: number; // Number of samples
+
+  // Connection time (how fast WebSocket connects)
+  connectTimeMs: number; // Exponential moving average
+  connectTimeCount: number; // Number of samples
+
+  // Stability (how long before relay disconnects)
+  avgSessionDurationMs: number; // Average time connected before disconnect
+  sessionCount: number; // Number of sessions
+
+  // Success rate
+  successfulQueries: number;
+  failedQueries: number;
+
+  // Timestamps
+  lastUpdated: number;
+  lastSuccess: number;
+  lastFailure: number;
+}
+
 export interface LocalSpell {
   id: string; // UUID for local-only spells, or event ID for published spells
   alias?: string; // Optional local-only quick name (e.g., "btc")
@@ -88,6 +117,7 @@ class GrimoireDb extends Dexie {
   relayAuthPreferences!: Table<RelayAuthPreference>;
   relayLists!: Table<CachedRelayList>;
   relayLiveness!: Table<RelayLivenessEntry>;
+  relayPerformance!: Table<RelayPerformanceEntry>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
 
@@ -308,6 +338,20 @@ class GrimoireDb extends Dexie {
       relayAuthPreferences: "&url",
       relayLists: "&pubkey, updatedAt",
       relayLiveness: "&url",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 15: Add relay performance tracking for scoring
+    this.version(15).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      relayPerformance: "&url",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
