@@ -16,16 +16,177 @@ import { firstValueFrom, timeout as rxTimeout, of } from "rxjs";
 import { catchError } from "rxjs/operators";
 import type { IEventStore } from "applesauce-core/event-store";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers";
-import { selectOptimalRelays } from "applesauce-core/helpers";
 import { addressLoader, AGGREGATOR_RELAYS } from "./loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import liveness from "./relay-liveness";
 import relayListCache from "./relay-list-cache";
+import relayScoreboard from "./relay-scoreboard";
 import type {
   RelaySelectionResult,
   RelaySelectionReasoning,
   RelaySelectionOptions,
 } from "@/types/relay-selection";
+
+/**
+ * Custom scoring function for relay selection
+ * Combines coverage efficiency with performance scoring and health status
+ *
+ * @param relay - Relay URL
+ * @param coverage - Number of uncovered users this relay covers
+ * @param popularity - Total number of users using this relay
+ * @returns Score for relay selection (higher = better)
+ */
+function scoreRelay(
+  relay: string,
+  coverage: number,
+  popularity: number,
+): number {
+  // Base score: coverage efficiency (how many uncovered users per total users)
+  // This is the default applesauce behavior
+  const coverageScore = coverage / Math.max(1, popularity);
+
+  // Performance score from scoreboard (0-10, normalized to 0-1)
+  const perfScore = relayScoreboard.getScore(relay) / 10;
+
+  // Health multiplier from liveness (penalize unhealthy relays)
+  let healthMultiplier = 1.0;
+  try {
+    const healthyRelays = liveness.healthy;
+    const isHealthy = healthyRelays.includes(relay);
+    healthMultiplier = isHealthy ? 1.0 : 0.3;
+  } catch {
+    // If liveness check fails, assume healthy
+    healthMultiplier = 1.0;
+  }
+
+  // Combined score:
+  // - Coverage is weighted higher (60%) because we need the events
+  // - Performance helps break ties and prefer faster relays (40%)
+  // - Health multiplier penalizes but doesn't exclude unhealthy relays
+  return (coverageScore * 0.6 + perfScore * 0.4) * healthMultiplier;
+}
+
+interface ScoredSelectOptions {
+  maxConnections: number;
+  maxRelaysPerUser?: number;
+}
+
+/**
+ * Custom relay selection algorithm with performance scoring
+ *
+ * This is a greedy set-cover algorithm that selects relays to maximize
+ * user coverage while preferring relays with better performance scores.
+ *
+ * Algorithm:
+ * 1. Build a map of which relays cover which users
+ * 2. Calculate popularity (total users) for each relay
+ * 3. While we have uncovered users and haven't hit maxConnections:
+ *    a. For each unselected relay, calculate coverage of still-uncovered users
+ *    b. Score each relay using scoreRelay(relay, coverage, popularity)
+ *    c. Select the highest-scoring relay
+ *    d. Mark covered users as satisfied
+ *    e. If maxRelaysPerUser set, remove satisfied users from remaining relays
+ * 4. Return filtered pointers with only selected relays
+ */
+function selectOptimalRelaysWithScoring(
+  users: ProfilePointer[],
+  options: ScoredSelectOptions,
+): ProfilePointer[] {
+  const { maxConnections, maxRelaysPerUser } = options;
+
+  // Build relay → users map and popularity counts
+  const relayToUsers = new Map<string, Set<string>>();
+  const relayPopularity = new Map<string, number>();
+
+  for (const user of users) {
+    for (const relay of user.relays || []) {
+      if (!relayToUsers.has(relay)) {
+        relayToUsers.set(relay, new Set());
+        relayPopularity.set(relay, 0);
+      }
+      relayToUsers.get(relay)!.add(user.pubkey);
+      relayPopularity.set(relay, (relayPopularity.get(relay) || 0) + 1);
+    }
+  }
+
+  // Track state
+  const selectedRelays = new Set<string>();
+  const coveredUsers = new Set<string>();
+  const userRelayCounts = new Map<string, number>(); // Track relays per user
+
+  // Initialize user relay counts
+  for (const user of users) {
+    userRelayCounts.set(user.pubkey, 0);
+  }
+
+  // Greedy selection loop
+  while (selectedRelays.size < maxConnections) {
+    let bestRelay: string | null = null;
+    let bestScore = -Infinity;
+
+    // Score each unselected relay
+    for (const [relay, allUsersOnRelay] of relayToUsers) {
+      if (selectedRelays.has(relay)) continue;
+
+      // Calculate coverage: users on this relay that aren't yet covered
+      // (or haven't hit maxRelaysPerUser)
+      let coverage = 0;
+      for (const pubkey of allUsersOnRelay) {
+        if (maxRelaysPerUser) {
+          const currentCount = userRelayCounts.get(pubkey) || 0;
+          if (currentCount < maxRelaysPerUser) {
+            coverage++;
+          }
+        } else if (!coveredUsers.has(pubkey)) {
+          coverage++;
+        }
+      }
+
+      // Skip relays with no marginal coverage
+      if (coverage === 0) continue;
+
+      // Score this relay
+      const popularity = relayPopularity.get(relay) || 1;
+      const score = scoreRelay(relay, coverage, popularity);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestRelay = relay;
+      }
+    }
+
+    // No more useful relays
+    if (!bestRelay) break;
+
+    // Select this relay
+    selectedRelays.add(bestRelay);
+
+    // Update coverage tracking
+    const usersOnBestRelay = relayToUsers.get(bestRelay) || new Set();
+    for (const pubkey of usersOnBestRelay) {
+      if (maxRelaysPerUser) {
+        const currentCount = userRelayCounts.get(pubkey) || 0;
+        if (currentCount < maxRelaysPerUser) {
+          userRelayCounts.set(pubkey, currentCount + 1);
+          if (currentCount + 1 >= maxRelaysPerUser) {
+            coveredUsers.add(pubkey);
+          }
+        }
+      } else {
+        coveredUsers.add(pubkey);
+      }
+    }
+
+    // Check if all users are covered
+    if (coveredUsers.size === users.length) break;
+  }
+
+  // Filter pointers to only include selected relays
+  return users.map((user) => ({
+    ...user,
+    relays: (user.relays || []).filter((relay) => selectedRelays.has(relay)),
+  }));
+}
 
 /**
  * Fetches a kind:10002 relay list event for a pubkey with timeout
@@ -500,13 +661,16 @@ export async function selectRelaysForFilter(
       maxRelays - authorRelayBudget,
     );
 
-    // Select from each group independently
-    const selectedAuthors = selectOptimalRelays(processedAuthorPointers, {
-      maxConnections: authorRelayBudget,
-      maxRelaysPerUser,
-    });
+    // Select from each group independently using custom scoring
+    const selectedAuthors = selectOptimalRelaysWithScoring(
+      processedAuthorPointers,
+      {
+        maxConnections: authorRelayBudget,
+        maxRelaysPerUser,
+      },
+    );
 
-    const selectedPTags = selectOptimalRelays(processedPTagPointers, {
+    const selectedPTags = selectOptimalRelaysWithScoring(processedPTagPointers, {
       maxConnections: pTagRelayBudget,
       maxRelaysPerUser,
     });
@@ -518,8 +682,8 @@ export async function selectRelaysForFilter(
         `${selectedPTags.flatMap((p) => p.relays).length} read relays from ${pTags.length} p-tags`,
     );
   } else {
-    // Optimize relay selection for efficient coverage
-    selectedPointers = selectOptimalRelays(allPointers, {
+    // Optimize relay selection for efficient coverage using custom scoring
+    selectedPointers = selectOptimalRelaysWithScoring(allPointers, {
       maxConnections: maxRelays,
       maxRelaysPerUser,
     });
