@@ -10,7 +10,7 @@ import { PlainLink } from "../LinkPreview";
 import { useRichTextOptions } from "../RichText";
 
 function MediaPlaceholder({ type }: { type: "image" | "video" | "audio" }) {
-  return <span className="text-muted-foreground text-sm">[{type}]</span>;
+  return <span className="text-muted-foreground">[{type}]</span>;
 }
 
 interface LinkNodeProps {
