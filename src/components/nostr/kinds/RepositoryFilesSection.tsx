@@ -97,23 +97,9 @@ export function RepositoryFilesSection({
     );
   }
 
-  // Error state
+  // Error state - silently hide section
   if (treeError) {
-    return (
-      <section className={cn("flex flex-col gap-4", className)}>
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <FolderGit2 className="size-5" />
-          Files
-        </h2>
-        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded text-sm">
-          <AlertCircle className="size-5 text-destructive flex-shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-1">
-            <p className="font-medium">Unable to load repository files</p>
-            <p className="text-muted-foreground text-xs">{treeError.message}</p>
-          </div>
-        </div>
-      </section>
-    );
+    return null;
   }
 
   // No tree available
@@ -147,8 +133,22 @@ export function RepositoryFilesSection({
         <div className="border border-border rounded max-h-96 overflow-auto bg-muted/20">
           {selectedFile ? (
             contentLoading ? (
-              <div className="p-4">
-                <Skeleton className="h-48" />
+              <div className="relative">
+                <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-3 py-1.5 border-b border-border/50 flex items-center justify-between">
+                  <span className="text-xs font-mono text-muted-foreground truncate">
+                    {selectedFile.path}
+                  </span>
+                </div>
+                <div className="p-3 space-y-2">
+                  <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-3 w-5/6" />
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-3 w-4/5" />
+                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
               </div>
             ) : contentError ? (
               <div className="flex items-start gap-3 p-4 text-sm">
