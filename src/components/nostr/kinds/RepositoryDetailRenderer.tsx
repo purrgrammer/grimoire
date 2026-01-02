@@ -3,6 +3,7 @@ import { Globe, Copy, Users, CopyCheck, Server } from "lucide-react";
 import { UserName } from "../UserName";
 import { RelayLink } from "../RelayLink";
 import { useCopy } from "@/hooks/useCopy";
+import { RepositoryFilesSection } from "./RepositoryFilesSection";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getRepositoryName,
@@ -123,6 +124,9 @@ export function RepositoryDetailRenderer({ event }: { event: NostrEvent }) {
           </ul>
         </section>
       )}
+
+      {/* Files Section */}
+      {cloneUrls.length > 0 && <RepositoryFilesSection cloneUrls={cloneUrls} />}
     </div>
   );
 }
