@@ -11,8 +11,8 @@ let highlighterPromise: Promise<HighlighterCore> | null = null;
 const loadedLanguages = new Set<string>();
 
 /**
- * Grimoire dark theme matching current minimalistic Prism styles
- * Uses muted colors with primary accent for keywords/functions
+ * Grimoire dark theme - minimalistic grayscale with semantic colors
+ * Uses muted grays for syntax with color only for diff semantics
  */
 const grimoireTheme: ThemeRegistration = {
   name: "grimoire-dark",
@@ -32,7 +32,7 @@ const grimoireTheme: ThemeRegistration = {
       scope: ["string", "string.quoted"],
       settings: { foreground: "#9ca3af" },
     },
-    // Keywords, operators - primary color
+    // Keywords, operators - emphasized gray
     {
       scope: [
         "keyword",
@@ -42,14 +42,14 @@ const grimoireTheme: ThemeRegistration = {
         "keyword.operator",
         "keyword.control",
       ],
-      settings: { foreground: "#a855f7" },
+      settings: { foreground: "#d4d4d4" },
     },
-    // Functions, methods - primary bold
+    // Functions, methods - foreground bold
     {
       scope: ["entity.name.function", "support.function", "meta.function-call"],
-      settings: { foreground: "#a855f7", fontStyle: "bold" },
+      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
     },
-    // Classes, types - primary bold
+    // Classes, types - foreground bold
     {
       scope: [
         "entity.name.class",
@@ -57,9 +57,9 @@ const grimoireTheme: ThemeRegistration = {
         "support.class",
         "support.type",
       ],
-      settings: { foreground: "#a855f7", fontStyle: "bold" },
+      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
     },
-    // Numbers, constants - primary
+    // Numbers, constants - emphasized gray
     {
       scope: [
         "constant",
@@ -67,7 +67,7 @@ const grimoireTheme: ThemeRegistration = {
         "constant.language",
         "constant.character",
       ],
-      settings: { foreground: "#a855f7" },
+      settings: { foreground: "#d4d4d4" },
     },
     // Variables, parameters - foreground
     {
@@ -91,7 +91,7 @@ const grimoireTheme: ThemeRegistration = {
     // Tags (HTML/JSX)
     {
       scope: ["entity.name.tag", "support.class.component"],
-      settings: { foreground: "#a855f7" },
+      settings: { foreground: "#d4d4d4" },
     },
     // JSON keys
     {
@@ -124,7 +124,7 @@ const grimoireTheme: ThemeRegistration = {
     // Markdown headings
     {
       scope: ["markup.heading", "entity.name.section"],
-      settings: { foreground: "#a855f7", fontStyle: "bold" },
+      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
     },
     // Markdown bold/italic
     {
@@ -138,7 +138,7 @@ const grimoireTheme: ThemeRegistration = {
     // Markdown links
     {
       scope: ["markup.underline.link"],
-      settings: { foreground: "#a855f7" },
+      settings: { foreground: "#93c5fd" },
     },
   ],
 };
@@ -277,6 +277,8 @@ const CORE_LANGUAGES = [
   "json",
   "diff",
   "bash",
+  "rust",
+  "markdown",
 ] as const;
 
 /**
@@ -303,6 +305,8 @@ export async function getHighlighter(): Promise<HighlighterCore> {
         import("shiki/langs/json.mjs"),
         import("shiki/langs/diff.mjs"),
         import("shiki/langs/bash.mjs"),
+        import("shiki/langs/rust.mjs"),
+        import("shiki/langs/markdown.mjs"),
       ],
       engine: createOnigurumaEngine(import("shiki/wasm")),
     }).then((hl) => {

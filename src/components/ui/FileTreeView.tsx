@@ -153,7 +153,7 @@ function TreeNode({
   selectedPath,
   depth,
 }: TreeNodeProps) {
-  const [isOpen, setIsOpen] = useState(depth === 0);
+  const [isOpen, setIsOpen] = useState(false);
   const isSelected = selectedPath === path;
 
   const handleClick = () => {
