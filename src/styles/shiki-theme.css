@@ -1,0 +1,81 @@
+/* Shiki syntax highlighting - Grimoire dark theme overrides */
+
+/* Base container styling */
+.shiki-container pre {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+}
+
+.shiki-container code {
+  font-family: "Oxygen Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 4;
+}
+
+/* Ensure shiki's inline styles don't conflict */
+.shiki-container .shiki {
+  background: transparent !important;
+}
+
+.shiki-container .shiki code {
+  background: transparent !important;
+}
+
+/* Loading state - subtle pulse animation */
+.shiki-loading {
+  animation: shiki-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes shiki-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Diff-specific styling - block-level backgrounds for inserted/deleted */
+/* These target the line spans that Shiki generates for diff content */
+.shiki-container .line:has(.diff.add),
+.shiki-container .line:has([style*="color:#69db7c"]) {
+  background: rgba(52, 199, 89, 0.1);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+.shiki-container .line:has(.diff.remove),
+.shiki-container .line:has([style*="color:#ff8787"]) {
+  background: rgba(255, 59, 48, 0.1);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+/* Hunk headers (@@ lines) - cyan background */
+.shiki-container .line:has([style*="color:#66d9ef"]) {
+  background: rgba(102, 217, 239, 0.08);
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+  font-weight: 600;
+}
+
+/* Optional: Line numbers */
+.shiki-container.line-numbers .line::before {
+  content: attr(data-line);
+  display: inline-block;
+  width: 2rem;
+  margin-right: 1rem;
+  text-align: right;
+  color: hsl(var(--muted-foreground));
+  border-right: 1px solid hsl(var(--border));
+  padding-right: 0.5rem;
+}
