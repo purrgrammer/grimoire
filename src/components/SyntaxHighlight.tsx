@@ -1,45 +1,24 @@
-import { useEffect, useRef } from "react";
-import Prism from "prismjs";
-
-// Core languages
-import "prismjs/components/prism-diff";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-typescript";
-import "prismjs/components/prism-jsx";
-import "prismjs/components/prism-tsx";
-import "prismjs/components/prism-bash";
-import "prismjs/components/prism-json";
-import "prismjs/components/prism-markdown";
-import "prismjs/components/prism-css";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-yaml";
+import { useHighlightedCode } from "@/hooks/useHighlightedCode";
+import { cn } from "@/lib/utils";
 
 interface SyntaxHighlightProps {
   code: string;
-  language:
-    | "diff"
-    | "javascript"
-    | "typescript"
-    | "jsx"
-    | "tsx"
-    | "bash"
-    | "shell"
-    | "json"
-    | "markdown"
-    | "css"
-    | "python"
-    | "yaml";
+  language?: string | null;
   className?: string;
   showLineNumbers?: boolean;
 }
 
 /**
- * Syntax highlighting component using Prism.js
- * Matches Grimoire's dark theme using CSS custom properties
+ * Syntax highlighting component using Shiki with lazy language loading
+ *
+ * Languages are loaded on-demand - the first render of a new language
+ * will show a brief loading state while the grammar is fetched.
  *
  * @example
  * ```tsx
  * <SyntaxHighlight code={patchContent} language="diff" />
+ * <SyntaxHighlight code={jsonStr} language="json" />
+ * <SyntaxHighlight code={snippet} language="python" />
  * ```
  */
 export function SyntaxHighlight({
@@ -48,26 +27,45 @@ export function SyntaxHighlight({
   className = "",
   showLineNumbers = false,
 }: SyntaxHighlightProps) {
-  const codeRef = useRef<HTMLElement>(null);
+  const { html, loading, error } = useHighlightedCode(code, language);
 
-  // Normalize language aliases
-  const normalizedLanguage = language === "shell" ? "bash" : language;
+  // Loading state - show code without highlighting
+  if (loading) {
+    return (
+      <pre
+        className={cn(
+          "shiki-loading overflow-x-auto max-w-full font-mono text-xs",
+          className,
+        )}
+      >
+        <code className="text-foreground/70">{code}</code>
+      </pre>
+    );
+  }
 
-  useEffect(() => {
-    // Check for browser environment (SSR safety)
-    if (typeof window === "undefined" || !codeRef.current) return;
+  // Error state - fallback to plain code
+  if (error || !html) {
+    return (
+      <pre
+        className={cn(
+          "overflow-x-auto max-w-full font-mono text-xs",
+          className,
+        )}
+      >
+        <code>{code}</code>
+      </pre>
+    );
+  }
 
-    // Highlight the code element
-    Prism.highlightElement(codeRef.current);
-  }, [code, normalizedLanguage]);
-
+  // Render highlighted HTML
   return (
-    <pre
-      className={`language-${normalizedLanguage} ${showLineNumbers ? "line-numbers" : ""} overflow-x-auto max-w-full ${className}`.trim()}
-    >
-      <code ref={codeRef} className={`language-${normalizedLanguage}`}>
-        {code}
-      </code>
-    </pre>
+    <div
+      className={cn(
+        "shiki-container overflow-x-auto max-w-full [&_pre]:!bg-transparent [&_code]:text-xs [&_code]:font-mono",
+        showLineNumbers && "line-numbers",
+        className,
+      )}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
