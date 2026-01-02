@@ -1,5 +1,5 @@
-/* Prism syntax highlighting theme */
-@import "./styles/prism-theme.css";
+/* Shiki syntax highlighting theme */
+@import "./styles/shiki-theme.css";
 
 @tailwind base;
 @tailwind components;

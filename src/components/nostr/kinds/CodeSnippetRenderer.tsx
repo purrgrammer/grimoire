@@ -11,58 +11,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 
-// Map common language names to Prism-supported languages
-function mapLanguage(
-  lang: string | null | undefined,
-):
-  | "javascript"
-  | "typescript"
-  | "jsx"
-  | "tsx"
-  | "bash"
-  | "json"
-  | "markdown"
-  | "css"
-  | "python"
-  | "yaml"
-  | "diff" {
-  if (!lang) return "javascript";
-
-  const normalized = lang.toLowerCase();
-
-  // Direct matches
-  if (
-    [
-      "javascript",
-      "typescript",
-      "jsx",
-      "tsx",
-      "bash",
-      "json",
-      "markdown",
-      "css",
-      "python",
-      "yaml",
-      "diff",
-    ].includes(normalized)
-  ) {
-    return normalized as any;
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    js: "javascript",
-    ts: "typescript",
-    sh: "bash",
-    shell: "bash",
-    py: "python",
-    md: "markdown",
-    yml: "yaml",
-  };
-
-  return (aliases[normalized] as any) || "javascript";
-}
-
 /**
  * Renderer for Kind 1337 - Code Snippet (NIP-C0)
  * Displays code snippet name, language, description, and preview in feed
@@ -109,7 +57,7 @@ export function Kind1337Renderer({ event }: BaseEventProps) {
         <div className="relative">
           <SyntaxHighlight
             code={previewCode}
-            language={mapLanguage(language)}
+            language={language}
             className="overflow-x-auto bg-muted/30 p-3 border border-border"
           />
         </div>
