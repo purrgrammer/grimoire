@@ -11,7 +11,13 @@ import { KindBadge } from "@/components/KindBadge";
 import { Badge } from "@/components/ui/badge";
 import { useCopy } from "@/hooks/useCopy";
 import { UserName } from "../UserName";
-import { Copy, CopyCheck, Globe, Smartphone, TabletSmartphone } from "lucide-react";
+import {
+  Copy,
+  CopyCheck,
+  Globe,
+  Smartphone,
+  TabletSmartphone,
+} from "lucide-react";
 import { CopyableJsonViewer } from "@/components/JsonViewer";
 import { useMemo } from "react";
 
@@ -200,10 +206,7 @@ export function ApplicationHandlerDetailRenderer({
           Event ID:{" "}
           <code className="font-mono text-xs bg-muted px-1">{event.id}</code>
         </div>
-        <div>
-          Created:{" "}
-          {new Date(event.created_at * 1000).toLocaleString()}
-        </div>
+        <div>Created: {new Date(event.created_at * 1000).toLocaleString()}</div>
       </div>
     </div>
   );

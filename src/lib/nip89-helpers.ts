@@ -1,6 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers";
-import { AddressPointer } from "applesauce-core/helpers";
+import { AddressPointer } from "nostr-tools/nip19";
 
 /**
  * NIP-89 Helper Functions
@@ -88,9 +88,7 @@ export function getSupportedKinds(event: NostrEvent): number[] {
  * Get platform-specific URL templates from kind 31990 event
  * Returns a map of platform name to URL template
  */
-export function getPlatformUrls(
-  event: NostrEvent
-): Record<string, string> {
+export function getPlatformUrls(event: NostrEvent): Record<string, string> {
   if (event.kind !== 31990) return {};
 
   const platforms: Record<string, string> = {};
@@ -220,7 +218,7 @@ export function getHandlerReferences(event: NostrEvent): HandlerReference[] {
  */
 export function getHandlersByPlatform(
   event: NostrEvent,
-  platform?: string
+  platform?: string,
 ): HandlerReference[] {
   const allRefs = getHandlerReferences(event);
 
@@ -254,7 +252,7 @@ export function getRecommendedPlatforms(event: NostrEvent): string[] {
  */
 export function substituteTemplate(
   template: string,
-  bech32Entity: string
+  bech32Entity: string,
 ): string {
   return template.replace(/<bech32>/g, bech32Entity);
 }

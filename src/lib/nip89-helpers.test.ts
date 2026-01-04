@@ -19,9 +19,7 @@ import {
 import { NostrEvent } from "@/types/nostr";
 
 // Helper to create a minimal kind 31990 event
-function createHandlerEvent(
-  overrides?: Partial<NostrEvent>
-): NostrEvent {
+function createHandlerEvent(overrides?: Partial<NostrEvent>): NostrEvent {
   return {
     id: "test-id",
     pubkey: "test-pubkey",
@@ -36,7 +34,7 @@ function createHandlerEvent(
 
 // Helper to create a minimal kind 31989 event
 function createRecommendationEvent(
-  overrides?: Partial<NostrEvent>
+  overrides?: Partial<NostrEvent>,
 ): NostrEvent {
   return {
     id: "test-id",

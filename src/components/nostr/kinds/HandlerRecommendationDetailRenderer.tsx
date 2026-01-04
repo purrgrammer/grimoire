@@ -14,12 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
 import { UserName } from "../UserName";
-import {
-  Globe,
-  Smartphone,
-  TabletSmartphone,
-  Package,
-} from "lucide-react";
+import { Globe, Smartphone, TabletSmartphone, Package } from "lucide-react";
 import { useState } from "react";
 
 interface HandlerRecommendationDetailRendererProps {
@@ -104,7 +99,8 @@ function HandlerCard({
       {supportedKinds.length > 0 && (
         <div className="flex flex-col gap-2">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase">
-            Handles {supportedKinds.length} kind{supportedKinds.length > 1 ? "s" : ""}
+            Handles {supportedKinds.length} kind
+            {supportedKinds.length > 1 ? "s" : ""}
           </h4>
           <div className="flex flex-wrap gap-1">
             {supportedKinds.slice(0, 10).map((kind) => (
@@ -151,13 +147,14 @@ function HandlerCard({
         <div className="flex flex-col gap-1 pt-2 border-t border-border text-xs text-muted-foreground">
           {platform && (
             <div>
-              Recommended for: <Badge variant="outline" className="text-[10px] ml-1">{platform}</Badge>
+              Recommended for:{" "}
+              <Badge variant="outline" className="text-[10px] ml-1">
+                {platform}
+              </Badge>
             </div>
           )}
           {relayHint && (
-            <div className="font-mono">
-              Relay hint: {relayHint}
-            </div>
+            <div className="font-mono">Relay hint: {relayHint}</div>
           )}
         </div>
       )}
@@ -227,7 +224,7 @@ export function HandlerRecommendationDetailRenderer({
           </button>
           {platforms.map((platform) => {
             const count = allHandlers.filter(
-              (h) => h.platform === platform
+              (h) => h.platform === platform,
             ).length;
             return (
               <button
