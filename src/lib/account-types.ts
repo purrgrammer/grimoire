@@ -61,10 +61,8 @@ export class ReadOnlyAccount extends BaseAccount<
 > {
   static readonly type = "readonly";
 
-  constructor(pubkey: string, metadata: ReadOnlyMetadata) {
-    const signer = new ReadOnlySigner(pubkey);
+  constructor(pubkey: string, signer: ReadOnlySigner) {
     super(pubkey, signer);
-    this.metadata = metadata;
   }
 
   toJSON(): SerializedAccount<void, ReadOnlyMetadata> {
@@ -76,8 +74,22 @@ export class ReadOnlyAccount extends BaseAccount<
   static fromJSON(
     data: SerializedAccount<void, ReadOnlyMetadata>,
   ): ReadOnlyAccount {
-    const account = new ReadOnlyAccount(data.pubkey, data.metadata!);
+    const signer = new ReadOnlySigner(data.pubkey);
+    const account = new ReadOnlyAccount(data.pubkey, signer);
     return BaseAccount.loadCommonFields(account, data);
+  }
+
+  /**
+   * Helper to create account with metadata
+   */
+  private static createWithMetadata(
+    pubkey: string,
+    metadata: ReadOnlyMetadata,
+  ): ReadOnlyAccount {
+    const signer = new ReadOnlySigner(pubkey);
+    const account = new ReadOnlyAccount(pubkey, signer);
+    account.metadata = metadata;
+    return account;
   }
 
   /**
@@ -89,7 +101,7 @@ export class ReadOnlyAccount extends BaseAccount<
       if (decoded.type !== "npub") {
         throw new Error("Invalid npub: expected npub format");
       }
-      return new ReadOnlyAccount(decoded.data, {
+      return ReadOnlyAccount.createWithMetadata(decoded.data, {
         source: "npub",
         originalInput: npub,
       });
@@ -108,7 +120,7 @@ export class ReadOnlyAccount extends BaseAccount<
     if (!pubkey) {
       throw new Error(`Failed to resolve NIP-05 identifier: ${nip05}`);
     }
-    return new ReadOnlyAccount(pubkey, {
+    return ReadOnlyAccount.createWithMetadata(pubkey, {
       source: "nip05",
       originalInput: nip05,
       nip05,
@@ -124,7 +136,7 @@ export class ReadOnlyAccount extends BaseAccount<
       if (decoded.type !== "nprofile") {
         throw new Error("Invalid nprofile: expected nprofile format");
       }
-      return new ReadOnlyAccount(decoded.data.pubkey, {
+      return ReadOnlyAccount.createWithMetadata(decoded.data.pubkey, {
         source: "nprofile",
         originalInput: nprofile,
         relays: decoded.data.relays,
@@ -146,7 +158,7 @@ export class ReadOnlyAccount extends BaseAccount<
         "Invalid hex pubkey: expected 64 character hexadecimal string",
       );
     }
-    return new ReadOnlyAccount(hex.toLowerCase(), {
+    return ReadOnlyAccount.createWithMetadata(hex.toLowerCase(), {
       source: "hex",
       originalInput: hex,
     });
