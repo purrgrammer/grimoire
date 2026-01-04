@@ -19,7 +19,6 @@ import {
   Smartphone,
   TabletSmartphone,
   Package,
-  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -133,7 +132,7 @@ function HandlerCard({
             Platforms
           </h4>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(platformUrls).map(([plat, url]) => (
+            {Object.entries(platformUrls).map(([plat]) => (
               <Badge
                 key={plat}
                 variant="secondary"

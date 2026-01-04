@@ -6,7 +6,6 @@ import {
 import {
   getRecommendedKind,
   getHandlerReferences,
-  formatAddressPointer,
   getAppName,
 } from "@/lib/nip89-helpers";
 import { KindBadge } from "@/components/KindBadge";
@@ -40,7 +39,6 @@ function PlatformIcon({ platform }: { platform: string }) {
 function HandlerItem({
   address,
   platform,
-  relayHint,
 }: {
   address: { kind: number; pubkey: string; identifier: string };
   platform?: string;
