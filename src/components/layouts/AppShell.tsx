@@ -13,9 +13,10 @@ import { AppShellContext } from "./AppShellContext";
 
 interface AppShellProps {
   children: ReactNode;
+  hideBottomBar?: boolean;
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
   const [commandLauncherOpen, setCommandLauncherOpen] = useState(false);
 
   // Sync active account and fetch relay lists
@@ -76,7 +77,7 @@ export function AppShell({ children }: AppShellProps) {
         <section className="flex-1 relative overflow-hidden">
           {children}
         </section>
-        <TabBar />
+        {!hideBottomBar && <TabBar />}
       </main>
     </AppShellContext.Provider>
   );
