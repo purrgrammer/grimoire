@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Nip05 from "@/components/nostr/nip05";
+import type { IAccount } from "applesauce-accounts";
+import type { ISigner } from "applesauce-signers";
 
 function AccountCard({
   account,
   isActive,
 }: {
-  account: any;
+  account: IAccount<ISigner, unknown, unknown>;
   isActive: boolean;
 }) {
   const profile = useProfile(account.pubkey);

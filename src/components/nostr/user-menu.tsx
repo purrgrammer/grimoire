@@ -23,6 +23,7 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import { useState } from "react";
 import type { IAccount } from "applesauce-accounts";
+import type { ISigner } from "applesauce-signers";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -85,7 +86,7 @@ export default function UserMenu() {
     }
   }
 
-  function switchAccount(targetAccount: IAccount<any, any, any>) {
+  function switchAccount(targetAccount: IAccount<ISigner, unknown, unknown>) {
     accounts.setActive(targetAccount.id);
   }
 
