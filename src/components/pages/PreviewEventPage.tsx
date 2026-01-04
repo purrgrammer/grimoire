@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router";
-import { nip19 } from "nostr-tools";
+import { useMemo, useEffect } from "react";
+import { useParams, useNavigate, useLocation } from "react-router";
+import { useNip19Decode } from "@/hooks/useNip19Decode";
 import type { EventPointer } from "nostr-tools/nip19";
 import { EventDetailViewer } from "../EventDetailViewer";
 import { Loader2 } from "lucide-react";
@@ -14,52 +14,53 @@ import { toast } from "sonner";
 export default function PreviewEventPage() {
   const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
-  const [pointer, setPointer] = useState<EventPointer | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const location = useLocation();
 
-  useEffect(() => {
-    if (!identifier) {
-      setError("No identifier provided");
-      return;
-    }
+  // Determine the prefix based on the current path
+  const fullIdentifier = useMemo(() => {
+    if (!identifier) return undefined;
 
-    // Determine the prefix based on the current path
-    const path = window.location.pathname;
-    let fullIdentifier: string;
-
+    const path = location.pathname;
     if (path.startsWith("/nevent")) {
-      fullIdentifier = `nevent${identifier}`;
+      return `nevent${identifier}`;
     } else if (path.startsWith("/note")) {
-      fullIdentifier = `note${identifier}`;
-    } else {
-      setError("Invalid route");
-      return;
+      return `note${identifier}`;
     }
+    return undefined;
+  }, [identifier, location.pathname]);
 
-    try {
-      const decoded = nip19.decode(fullIdentifier);
+  // Decode the event identifier (accepts both nevent and note)
+  const { decoded, isLoading, error, retry } = useNip19Decode(fullIdentifier);
 
-      if (decoded.type === "nevent") {
-        setPointer(decoded.data);
-      } else if (decoded.type === "note") {
-        // note is just an event ID, convert to EventPointer
-        setPointer({
-          id: decoded.data,
-        });
-      } else {
-        setError(`Invalid identifier type: expected nevent or note, got ${decoded.type}`);
-        toast.error("Invalid event identifier");
-        return;
-      }
-    } catch (e) {
-      console.error("Failed to decode event identifier:", e);
-      setError(e instanceof Error ? e.message : "Failed to decode identifier");
+  // Convert decoded entity to EventPointer
+  const pointer: EventPointer | null = useMemo(() => {
+    if (!decoded) return null;
+
+    if (decoded.type === "nevent") {
+      return decoded.data;
+    } else if (decoded.type === "note") {
+      // note is just an event ID, convert to EventPointer
+      return { id: decoded.data };
+    }
+    return null;
+  }, [decoded]);
+
+  // Show error toast when error occurs
+  useEffect(() => {
+    if (error) {
       toast.error("Invalid event identifier");
     }
-  }, [identifier]);
+  }, [error]);
+
+  // Validate that we got an event-type entity
+  useEffect(() => {
+    if (decoded && decoded.type !== "nevent" && decoded.type !== "note") {
+      toast.error(`Invalid identifier type: expected nevent or note, got ${decoded.type}`);
+    }
+  }, [decoded]);
 
   // Loading state
-  if (!pointer && !error) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
         <Loader2 className="size-8 animate-spin text-primary/50" />
@@ -72,25 +73,33 @@ export default function PreviewEventPage() {
   }
 
   // Error state
-  if (error) {
+  if (error || !pointer) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md">
-          {error}
+        <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md max-w-md text-center">
+          {error || "Failed to decode event identifier"}
         </div>
-        <button
-          onClick={() => navigate("/")}
-          className="text-sm text-muted-foreground hover:text-foreground underline"
-        >
-          Return to dashboard
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={retry}
+            className="text-sm text-primary hover:text-primary/80 underline"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="text-sm text-muted-foreground hover:text-foreground underline"
+          >
+            Return to dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="h-full overflow-auto">
-      <EventDetailViewer pointer={pointer!} />
+      <EventDetailViewer pointer={pointer} />
     </div>
   );
 }

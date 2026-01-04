@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { nip19 } from "nostr-tools";
+import { useNip19Decode } from "@/hooks/useNip19Decode";
 import { ProfileViewer } from "../ProfileViewer";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 /**
  * PreviewProfilePage - Preview a Nostr profile from an npub identifier
@@ -13,36 +13,25 @@ import { toast } from "sonner";
 export default function PreviewProfilePage() {
   const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
-  const [pubkey, setPubkey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
+  // Reconstruct the full identifier (react-router splits on /)
+  const fullIdentifier = identifier ? `npub${identifier}` : undefined;
+
+  // Decode the npub identifier
+  const { decoded, isLoading, error, retry } = useNip19Decode(
+    fullIdentifier,
+    "npub"
+  );
+
+  // Show error toast when error occurs
   useEffect(() => {
-    if (!identifier) {
-      setError("No identifier provided");
-      return;
-    }
-
-    // Reconstruct the full identifier (react-router splits on /)
-    const fullIdentifier = `npub${identifier}`;
-
-    try {
-      const decoded = nip19.decode(fullIdentifier);
-      if (decoded.type !== "npub") {
-        setError(`Invalid identifier type: expected npub, got ${decoded.type}`);
-        toast.error("Invalid npub identifier");
-        return;
-      }
-
-      setPubkey(decoded.data);
-    } catch (e) {
-      console.error("Failed to decode npub:", e);
-      setError(e instanceof Error ? e.message : "Failed to decode identifier");
+    if (error) {
       toast.error("Invalid npub identifier");
     }
-  }, [identifier]);
+  }, [error]);
 
   // Loading state
-  if (!pubkey && !error) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
         <Loader2 className="size-8 animate-spin text-primary/50" />
@@ -58,22 +47,35 @@ export default function PreviewProfilePage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md">
+        <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md max-w-md text-center">
           {error}
         </div>
-        <button
-          onClick={() => navigate("/")}
-          className="text-sm text-muted-foreground hover:text-foreground underline"
-        >
-          Return to dashboard
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={retry}
+            className="text-sm text-primary hover:text-primary/80 underline"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="text-sm text-muted-foreground hover:text-foreground underline"
+          >
+            Return to dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
+  // Type guard to ensure we have the correct decoded type
+  if (!decoded || decoded.type !== "npub") {
+    return null;
+  }
+
   return (
     <div className="h-full overflow-auto">
-      <ProfileViewer pubkey={pubkey!} />
+      <ProfileViewer pubkey={decoded.data} />
     </div>
   );
 }
