@@ -43,9 +43,9 @@ describe("detectLoginInputType", () => {
     expect(detectLoginInputType("bunker://pubkey?relay=wss://...")).toBe(
       "bunker",
     );
-    expect(
-      detectLoginInputType("nostrconnect://pubkey?relay=wss://..."),
-    ).toBe("bunker");
+    expect(detectLoginInputType("nostrconnect://pubkey?relay=wss://...")).toBe(
+      "bunker",
+    );
   });
 
   it("should return extension for empty input", () => {
@@ -90,7 +90,7 @@ describe("createAccountFromInput", () => {
     expect(account.pubkey).toBe(
       "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
     );
-    expect(account.metadata.source).toBe("npub");
+    expect(account.metadata?.source).toBe("npub");
   });
 
   it("should create account from hex", async () => {
@@ -99,7 +99,7 @@ describe("createAccountFromInput", () => {
     const account = await createAccountFromInput(hex);
 
     expect(account.pubkey).toBe(hex);
-    expect(account.metadata.source).toBe("hex");
+    expect(account.metadata?.source).toBe("hex");
   });
 
   it("should create account from nprofile", async () => {
@@ -110,8 +110,8 @@ describe("createAccountFromInput", () => {
     expect(account.pubkey).toBe(
       "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
     );
-    expect(account.metadata.source).toBe("nprofile");
-    expect(account.metadata.relays).toBeDefined();
+    expect(account.metadata?.source).toBe("nprofile");
+    expect(account.metadata?.relays).toBeDefined();
   });
 
   it("should create account from nip-05", async () => {
@@ -124,8 +124,8 @@ describe("createAccountFromInput", () => {
     const account = await createAccountFromInput(nip05Id);
 
     expect(account.pubkey).toBe(pubkey);
-    expect(account.metadata.source).toBe("nip05");
-    expect(account.metadata.nip05).toBe(nip05Id);
+    expect(account.metadata?.source).toBe("nip05");
+    expect(account.metadata?.nip05).toBe(nip05Id);
   });
 
   it("should throw error for bunker URL (not yet implemented)", async () => {
@@ -165,9 +165,9 @@ describe("createAccountFromInput", () => {
   it("should throw descriptive error for failed nip-05 resolution", async () => {
     vi.mocked(nip05.resolveNip05).mockResolvedValue(null);
 
-    await expect(createAccountFromInput("notfound@example.com")).rejects.toThrow(
-      "Failed to resolve NIP-05 identifier",
-    );
+    await expect(
+      createAccountFromInput("notfound@example.com"),
+    ).rejects.toThrow("Failed to resolve NIP-05 identifier");
   });
 });
 

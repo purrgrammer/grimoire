@@ -15,11 +15,10 @@ describe("ReadOnlyAccount", () => {
       const account = ReadOnlyAccount.fromHex(hex);
 
       expect(account.pubkey).toBe(hex);
-      expect(account.id).toBe(`readonly:${hex}`);
-      expect(account.metadata.type).toBe("readonly");
-      expect(account.metadata.source).toBe("hex");
-      expect(account.metadata.originalInput).toBe(hex);
-      expect(account.signer).toBeUndefined();
+      expect(account.id).toBeDefined();
+      expect(account.metadata?.source).toBe("hex");
+      expect(account.metadata?.originalInput).toBe(hex);
+      expect(account.signer).toBeDefined(); // ReadOnlySigner instance
     });
 
     it("should normalize hex to lowercase", () => {
@@ -54,8 +53,8 @@ describe("ReadOnlyAccount", () => {
       expect(account.pubkey).toBe(
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
       );
-      expect(account.metadata.source).toBe("npub");
-      expect(account.metadata.originalInput).toBe(npub);
+      expect(account.metadata?.source).toBe("npub");
+      expect(account.metadata?.originalInput).toBe(npub);
     });
 
     it("should reject invalid npub format", async () => {
@@ -82,9 +81,9 @@ describe("ReadOnlyAccount", () => {
       expect(account.pubkey).toBe(
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
       );
-      expect(account.metadata.source).toBe("nprofile");
-      expect(account.metadata.relays).toBeDefined();
-      expect(account.metadata.relays?.length).toBeGreaterThan(0);
+      expect(account.metadata?.source).toBe("nprofile");
+      expect(account.metadata?.relays).toBeDefined();
+      expect(account.metadata?.relays?.length).toBeGreaterThan(0);
     });
 
     it("should reject invalid nprofile format", async () => {
@@ -113,18 +112,18 @@ describe("ReadOnlyAccount", () => {
       const account = await ReadOnlyAccount.fromNip05(nip05Id);
 
       expect(account.pubkey).toBe(pubkey);
-      expect(account.metadata.source).toBe("nip05");
-      expect(account.metadata.nip05).toBe(nip05Id);
-      expect(account.metadata.originalInput).toBe(nip05Id);
+      expect(account.metadata?.source).toBe("nip05");
+      expect(account.metadata?.nip05).toBe(nip05Id);
+      expect(account.metadata?.originalInput).toBe(nip05Id);
       expect(nip05.resolveNip05).toHaveBeenCalledWith(nip05Id);
     });
 
     it("should reject when nip-05 resolution fails", async () => {
       vi.mocked(nip05.resolveNip05).mockResolvedValue(null);
 
-      await expect(ReadOnlyAccount.fromNip05("invalid@example.com")).rejects.toThrow(
-        "Failed to resolve NIP-05 identifier",
-      );
+      await expect(
+        ReadOnlyAccount.fromNip05("invalid@example.com"),
+      ).rejects.toThrow("Failed to resolve NIP-05 identifier");
     });
   });
 
@@ -139,10 +138,9 @@ describe("ReadOnlyAccount", () => {
 
       expect(restored.pubkey).toBe(account.pubkey);
       expect(restored.id).toBe(account.id);
-      expect(restored.metadata.type).toBe(account.metadata.type);
-      expect(restored.metadata.source).toBe(account.metadata.source);
-      expect(restored.metadata.originalInput).toBe(
-        account.metadata.originalInput,
+      expect(restored.metadata?.source).toBe(account.metadata?.source);
+      expect(restored.metadata?.originalInput).toBe(
+        account.metadata?.originalInput,
       );
     });
 
@@ -154,7 +152,7 @@ describe("ReadOnlyAccount", () => {
       const json = account.toJSON();
       const restored = ReadOnlyAccount.fromJSON(json);
 
-      expect(restored.metadata.relays).toEqual(account.metadata.relays);
+      expect(restored.metadata?.relays).toEqual(account.metadata?.relays);
     });
 
     it("should preserve nip05 identifier through serialization", async () => {
@@ -169,34 +167,50 @@ describe("ReadOnlyAccount", () => {
       const json = account.toJSON();
       const restored = ReadOnlyAccount.fromJSON(json);
 
-      expect(restored.metadata.nip05).toBe(nip05Id);
+      expect(restored.metadata?.nip05).toBe(nip05Id);
     });
   });
 
   describe("account properties", () => {
-    it("should have no signer for read-only accounts", () => {
+    it("should have ReadOnlySigner for read-only accounts", () => {
       const hex =
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
       const account = ReadOnlyAccount.fromHex(hex);
 
-      expect(account.signer).toBeUndefined();
+      expect(account.signer).toBeDefined();
+      expect(account.signer.pubkey).toBe(hex);
     });
 
-    it("should have consistent ID format", () => {
+    it("should have an ID", () => {
       const hex =
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
       const account = ReadOnlyAccount.fromHex(hex);
 
-      expect(account.id).toBe(`readonly:${hex}`);
-      expect(account.id).toContain("readonly:");
+      expect(account.id).toBeDefined();
+      expect(account.id.length).toBeGreaterThan(0);
     });
 
-    it("should have readonly type in metadata", () => {
+    it("should have source in metadata", () => {
       const hex =
         "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
       const account = ReadOnlyAccount.fromHex(hex);
 
-      expect(account.metadata.type).toBe("readonly");
+      expect(account.metadata?.source).toBe("hex");
+    });
+
+    it("should throw when trying to sign", async () => {
+      const hex =
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+      const account = ReadOnlyAccount.fromHex(hex);
+
+      await expect(
+        account.signEvent({
+          kind: 1,
+          content: "test",
+          tags: [],
+          created_at: Math.floor(Date.now() / 1000),
+        }),
+      ).rejects.toThrow("Cannot sign events with a read-only account");
     });
   });
 });

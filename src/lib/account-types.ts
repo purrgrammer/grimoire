@@ -1,62 +1,83 @@
 import { nip19 } from "nostr-tools";
 import { resolveNip05 } from "@/lib/nip05";
+import { BaseAccount, type SerializedAccount } from "applesauce-accounts";
+import type { ISigner } from "applesauce-signers";
+import type { EventTemplate, NostrEvent } from "nostr-tools";
 
 /**
- * Account interface matching applesauce-accounts
+ * Read-only metadata interface
  */
-export interface Account {
-  id: string;
-  pubkey: string;
-  signer?: any;
-  metadata?: Record<string, any>;
-  toJSON(): any;
+export interface ReadOnlyMetadata {
+  source: "npub" | "nip05" | "hex" | "nprofile";
+  originalInput: string;
+  relays?: string[]; // from nprofile
+  nip05?: string; // original nip-05 identifier
+}
+
+/**
+ * A signer that always throws errors - used for read-only accounts
+ */
+export class ReadOnlySigner implements ISigner {
+  constructor(public pubkey: string) {}
+
+  async getPublicKey(): Promise<string> {
+    return this.pubkey;
+  }
+
+  async signEvent(_template: EventTemplate): Promise<NostrEvent> {
+    throw new Error(
+      "Cannot sign events with a read-only account. Please add a signing account.",
+    );
+  }
+
+  // Optional NIP-04/NIP-44 methods - also throw errors
+  nip04 = {
+    encrypt: async (_pubkey: string, _plaintext: string): Promise<string> => {
+      throw new Error("Cannot encrypt with a read-only account.");
+    },
+    decrypt: async (_pubkey: string, _ciphertext: string): Promise<string> => {
+      throw new Error("Cannot decrypt with a read-only account.");
+    },
+  };
+
+  nip44 = {
+    encrypt: async (_pubkey: string, _plaintext: string): Promise<string> => {
+      throw new Error("Cannot encrypt with a read-only account.");
+    },
+    decrypt: async (_pubkey: string, _ciphertext: string): Promise<string> => {
+      throw new Error("Cannot decrypt with a read-only account.");
+    },
+  };
 }
 
 /**
  * Read-only account - no signing capability
  * Supports login via npub, nip-05, hex pubkey, or nprofile
  */
-export class ReadOnlyAccount implements Account {
-  id: string;
-  pubkey: string;
-  signer = undefined;
-  metadata: {
-    type: "readonly";
-    source: "npub" | "nip05" | "hex" | "nprofile";
-    originalInput: string;
-    relays?: string[]; // from nprofile
-    nip05?: string; // original nip-05 identifier
-  };
+export class ReadOnlyAccount extends BaseAccount<
+  ReadOnlySigner,
+  void,
+  ReadOnlyMetadata
+> {
+  static readonly type = "readonly";
 
-  constructor(
-    pubkey: string,
-    source: "npub" | "nip05" | "hex" | "nprofile",
-    metadata: Partial<ReadOnlyAccount["metadata"]>,
-  ) {
-    this.pubkey = pubkey;
-    this.id = `readonly:${pubkey}`;
-    this.metadata = {
-      type: "readonly",
-      source,
-      originalInput: metadata.originalInput || pubkey,
-      ...metadata,
-    };
+  constructor(pubkey: string, metadata: ReadOnlyMetadata) {
+    const signer = new ReadOnlySigner(pubkey);
+    super(pubkey, signer);
+    this.metadata = metadata;
   }
 
-  toJSON() {
-    return {
-      id: this.id,
-      pubkey: this.pubkey,
-      metadata: this.metadata,
-    };
-  }
-
-  static fromJSON(data: any): ReadOnlyAccount {
-    return new ReadOnlyAccount(data.pubkey, data.metadata.source, {
-      originalInput: data.metadata.originalInput,
-      relays: data.metadata.relays,
-      nip05: data.metadata.nip05,
+  toJSON(): SerializedAccount<void, ReadOnlyMetadata> {
+    return this.saveCommonFields({
+      signer: undefined,
     });
+  }
+
+  static fromJSON(
+    data: SerializedAccount<void, ReadOnlyMetadata>,
+  ): ReadOnlyAccount {
+    const account = new ReadOnlyAccount(data.pubkey, data.metadata!);
+    return BaseAccount.loadCommonFields(account, data);
   }
 
   /**
@@ -68,7 +89,8 @@ export class ReadOnlyAccount implements Account {
       if (decoded.type !== "npub") {
         throw new Error("Invalid npub: expected npub format");
       }
-      return new ReadOnlyAccount(decoded.data, "npub", {
+      return new ReadOnlyAccount(decoded.data, {
+        source: "npub",
         originalInput: npub,
       });
     } catch (error) {
@@ -86,7 +108,8 @@ export class ReadOnlyAccount implements Account {
     if (!pubkey) {
       throw new Error(`Failed to resolve NIP-05 identifier: ${nip05}`);
     }
-    return new ReadOnlyAccount(pubkey, "nip05", {
+    return new ReadOnlyAccount(pubkey, {
+      source: "nip05",
       originalInput: nip05,
       nip05,
     });
@@ -101,7 +124,8 @@ export class ReadOnlyAccount implements Account {
       if (decoded.type !== "nprofile") {
         throw new Error("Invalid nprofile: expected nprofile format");
       }
-      return new ReadOnlyAccount(decoded.data.pubkey, "nprofile", {
+      return new ReadOnlyAccount(decoded.data.pubkey, {
+        source: "nprofile",
         originalInput: nprofile,
         relays: decoded.data.relays,
       });
@@ -122,7 +146,8 @@ export class ReadOnlyAccount implements Account {
         "Invalid hex pubkey: expected 64 character hexadecimal string",
       );
     }
-    return new ReadOnlyAccount(hex.toLowerCase(), "hex", {
+    return new ReadOnlyAccount(hex.toLowerCase(), {
+      source: "hex",
       originalInput: hex,
     });
   }
