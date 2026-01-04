@@ -50,7 +50,7 @@ export interface UseNip19DecodeResult {
  */
 export function useNip19Decode(
   identifier: string | undefined,
-  expectedType?: Nip19EntityType
+  expectedType?: Nip19EntityType,
 ): UseNip19DecodeResult {
   return useMemo(() => {
     if (!identifier) {

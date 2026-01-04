@@ -55,7 +55,9 @@ export default function PreviewEventPage() {
   // Validate that we got an event-type entity
   useEffect(() => {
     if (decoded && decoded.type !== "nevent" && decoded.type !== "note") {
-      toast.error(`Invalid identifier type: expected nevent or note, got ${decoded.type}`);
+      toast.error(
+        `Invalid identifier type: expected nevent or note, got ${decoded.type}`,
+      );
     }
   }, [decoded]);
 

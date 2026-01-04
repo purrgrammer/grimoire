@@ -105,9 +105,7 @@ describe("useNip19Decode", () => {
     });
 
     it("should handle invalid identifier format", () => {
-      const { result } = renderHook(() =>
-        useNip19Decode("invalid-identifier")
-      );
+      const { result } = renderHook(() => useNip19Decode("invalid-identifier"));
 
       expect(result.current.decoded).toBeNull();
       expect(result.current.error).toBeTruthy();
@@ -115,7 +113,7 @@ describe("useNip19Decode", () => {
 
     it("should handle corrupted bech32 string", () => {
       const { result } = renderHook(() =>
-        useNip19Decode("npub1invalidbech32string")
+        useNip19Decode("npub1invalidbech32string"),
       );
 
       expect(result.current.decoded).toBeNull();
@@ -130,7 +128,7 @@ describe("useNip19Decode", () => {
         ({ id }: { id: string | undefined }) => useNip19Decode(id),
         {
           initialProps: { id: npub as string },
-        }
+        },
       );
 
       const firstResult = result.current;
@@ -149,7 +147,7 @@ describe("useNip19Decode", () => {
         ({ id }: { id: string | undefined }) => useNip19Decode(id),
         {
           initialProps: { id: npub as string },
-        }
+        },
       );
 
       expect(result.current.decoded?.type).toBe("npub");
