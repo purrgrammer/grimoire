@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from "react";
-import { useParams, useNavigate, useLocation } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { useNip19Decode } from "@/hooks/useNip19Decode";
 import type { EventPointer } from "nostr-tools/nip19";
 import { EventDetailViewer } from "../EventDetailViewer";
@@ -7,30 +7,15 @@ import { toast } from "sonner";
 
 /**
  * PreviewEventPage - Preview a Nostr event from a nevent or note identifier
- * Routes: /nevent1*, /note1*
+ * Route: /:identifier (where identifier starts with nevent1 or note1)
  * This page shows a single event view without affecting user's workspace layout
  */
 export default function PreviewEventPage() {
-  const params = useParams<{ "*": string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Determine the prefix based on the current path and reconstruct full identifier
-  const fullIdentifier = useMemo(() => {
-    const captured = params["*"];
-    if (!captured) return undefined;
-
-    const path = location.pathname;
-    if (path.startsWith("/nevent1")) {
-      return `nevent1${captured}`;
-    } else if (path.startsWith("/note1")) {
-      return `note1${captured}`;
-    }
-    return undefined;
-  }, [params, location.pathname]);
 
   // Decode the event identifier (synchronous, memoized)
-  const { decoded, error } = useNip19Decode(fullIdentifier);
+  const { decoded, error } = useNip19Decode(identifier);
 
   // Convert decoded entity to EventPointer
   const pointer: EventPointer | null = useMemo(() => {

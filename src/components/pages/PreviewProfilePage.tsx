@@ -6,18 +6,15 @@ import { toast } from "sonner";
 
 /**
  * PreviewProfilePage - Preview a Nostr profile from an npub identifier
- * Route: /npub1*
+ * Route: /:identifier (where identifier starts with npub1)
  * This page shows a single profile view without affecting user's workspace layout
  */
 export default function PreviewProfilePage() {
-  const params = useParams<{ "*": string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
 
-  // Get the full npub from the URL (npub1 + captured part)
-  const fullIdentifier = params["*"] ? `npub1${params["*"]}` : undefined;
-
   // Decode the npub identifier (synchronous, memoized)
-  const { decoded, error } = useNip19Decode(fullIdentifier, "npub");
+  const { decoded, error } = useNip19Decode(identifier, "npub");
 
   // Show error toast when error occurs
   useEffect(() => {

@@ -7,19 +7,16 @@ import { toast } from "sonner";
 
 /**
  * PreviewAddressPage - Preview or redirect naddr identifiers
- * Route: /naddr1*
+ * Route: /:identifier (where identifier starts with naddr1)
  * For spellbooks (kind 30777), redirects to /:actor/:identifier
  * For all other addressable events, shows detail view
  */
 export default function PreviewAddressPage() {
-  const params = useParams<{ "*": string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
 
-  // Get the full naddr from the URL (naddr1 + captured part)
-  const fullIdentifier = params["*"] ? `naddr1${params["*"]}` : undefined;
-
   // Decode the naddr identifier (synchronous, memoized)
-  const { decoded, error } = useNip19Decode(fullIdentifier, "naddr");
+  const { decoded, error } = useNip19Decode(identifier, "naddr");
 
   // Handle redirect for spellbooks
   useEffect(() => {
