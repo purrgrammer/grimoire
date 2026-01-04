@@ -5,6 +5,7 @@ import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
+import { createAccountFromInput } from "@/lib/login-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -91,6 +92,53 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "man",
     category: "System",
     defaultProps: { cmd: "help" },
+  },
+  login: {
+    name: "login",
+    section: "1",
+    synopsis: "login [identifier]",
+    description:
+      "Add a new Nostr account to Grimoire. Supports read-only accounts (npub, nip-05, hex pubkey, nprofile) and signing accounts (browser extension via NIP-07). When called without arguments, opens the login dialog with method selection.",
+    options: [
+      {
+        flag: "[identifier]",
+        description:
+          "Account identifier: npub1..., user@domain.com, hex pubkey, nprofile1..., or leave empty to open dialog",
+      },
+    ],
+    examples: [
+      "login                          Open login dialog",
+      "login npub1abc...              Add read-only account from npub",
+      "login alice@nostr.com          Add read-only account from NIP-05",
+      "login nprofile1...             Add read-only account with relay hints",
+      "login 3bf0c63f...              Add read-only account from hex pubkey",
+    ],
+    seeAlso: ["profile", "req"],
+    appId: "login-handler",
+    category: "System",
+    argParser: async (args: string[]) => {
+      const input = args.join(" ").trim();
+
+      // No input - open dialog
+      if (!input) {
+        return { action: "open-dialog" };
+      }
+
+      // Try to create account from input
+      try {
+        const account = await createAccountFromInput(input);
+        return {
+          action: "add-account",
+          account,
+        };
+      } catch (error) {
+        return {
+          action: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+    defaultProps: { action: "open-dialog" },
   },
   kinds: {
     name: "kinds",
