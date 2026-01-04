@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from "react-router";
 import { useNip19Decode } from "@/hooks/useNip19Decode";
 import type { EventPointer } from "nostr-tools/nip19";
 import { EventDetailViewer } from "../EventDetailViewer";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -29,8 +28,8 @@ export default function PreviewEventPage() {
     return undefined;
   }, [identifier, location.pathname]);
 
-  // Decode the event identifier (accepts both nevent and note)
-  const { decoded, isLoading, error, retry } = useNip19Decode(fullIdentifier);
+  // Decode the event identifier (synchronous, memoized)
+  const { decoded, error } = useNip19Decode(fullIdentifier);
 
   // Convert decoded entity to EventPointer
   const pointer: EventPointer | null = useMemo(() => {
@@ -59,19 +58,6 @@ export default function PreviewEventPage() {
     }
   }, [decoded]);
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
-        <Loader2 className="size-8 animate-spin text-primary/50" />
-        <div className="flex flex-col items-center gap-1">
-          <p className="font-medium text-foreground">Loading Event...</p>
-          <p className="text-xs">Decoding identifier</p>
-        </div>
-      </div>
-    );
-  }
-
   // Error state
   if (error || !pointer) {
     return (
@@ -79,20 +65,12 @@ export default function PreviewEventPage() {
         <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md max-w-md text-center">
           {error || "Failed to decode event identifier"}
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={retry}
-            className="text-sm text-primary hover:text-primary/80 underline"
-          >
-            Retry
-          </button>
-          <button
-            onClick={() => navigate("/")}
-            className="text-sm text-muted-foreground hover:text-foreground underline"
-          >
-            Return to dashboard
-          </button>
-        </div>
+        <button
+          onClick={() => navigate("/")}
+          className="text-sm text-muted-foreground hover:text-foreground underline"
+        >
+          Return to dashboard
+        </button>
       </div>
     );
   }
