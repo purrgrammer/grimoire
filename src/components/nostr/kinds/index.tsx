@@ -44,6 +44,10 @@ import {
   SpellbookRenderer,
   SpellbookDetailRenderer,
 } from "./SpellbookRenderer";
+import { ApplicationHandlerRenderer } from "./ApplicationHandlerRenderer";
+import { ApplicationHandlerDetailRenderer } from "./ApplicationHandlerDetailRenderer";
+import { HandlerRecommendationRenderer } from "./HandlerRecommendationRenderer";
+import { HandlerRecommendationDetailRenderer } from "./HandlerRecommendationDetailRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -90,6 +94,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30777: SpellbookRenderer, // Spellbook (Grimoire)
   30817: CommunityNIPRenderer, // Community NIP
+  31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
+  31990: ApplicationHandlerRenderer, // Application Handler (NIP-89)
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
 
@@ -148,6 +154,8 @@ const detailRenderers: Record<
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
+  31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)
+  31990: ApplicationHandlerDetailRenderer, // Application Handler Detail (NIP-89)
 };
 
 /**
