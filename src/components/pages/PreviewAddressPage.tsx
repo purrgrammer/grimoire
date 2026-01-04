@@ -1,14 +1,15 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useNip19Decode } from "@/hooks/useNip19Decode";
+import { EventDetailViewer } from "../EventDetailViewer";
 import { nip19 } from "nostr-tools";
 import { toast } from "sonner";
 
 /**
- * PreviewAddressPage - Redirect naddr identifiers to appropriate routes
+ * PreviewAddressPage - Preview or redirect naddr identifiers
  * Route: /naddr...
  * For spellbooks (kind 30777), redirects to /:actor/:identifier
- * For other kinds, shows error (could be extended to handle other addressable events)
+ * For all other addressable events, shows detail view
  */
 export default function PreviewAddressPage() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -20,20 +21,16 @@ export default function PreviewAddressPage() {
   // Decode the naddr identifier (synchronous, memoized)
   const { decoded, error } = useNip19Decode(fullIdentifier, "naddr");
 
-  // Handle redirect when decoded successfully
+  // Handle redirect for spellbooks
   useEffect(() => {
     if (!decoded || decoded.type !== "naddr") return;
 
     const pointer = decoded.data;
 
-    // Check if it's a spellbook (kind 30777)
+    // Check if it's a spellbook (kind 30777) - redirect to spellbook route
     if (pointer.kind === 30777) {
-      // Redirect to the spellbook route
       const npub = nip19.npubEncode(pointer.pubkey);
       navigate(`/${npub}/${pointer.identifier}`, { replace: true });
-    } else {
-      // For other kinds, show error via toast
-      toast.error(`Addressable events of kind ${pointer.kind} are not yet supported in preview mode`);
     }
   }, [decoded, navigate]);
 
@@ -61,23 +58,20 @@ export default function PreviewAddressPage() {
     );
   }
 
-  // Show error for unsupported kinds
-  if (decoded && decoded.type === "naddr" && decoded.data.kind !== 30777) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-md max-w-md text-center">
-          Addressable events of kind {decoded.data.kind} are not yet supported in preview mode
-        </div>
-        <button
-          onClick={() => navigate("/")}
-          className="text-sm text-muted-foreground hover:text-foreground underline"
-        >
-          Return to dashboard
-        </button>
-      </div>
-    );
+  // Type guard to ensure we have the correct decoded type
+  if (!decoded || decoded.type !== "naddr") {
+    return null;
   }
 
-  // Redirecting (shown briefly before redirect happens)
-  return null;
+  // If it's a spellbook, return null (redirect will happen in useEffect)
+  if (decoded.data.kind === 30777) {
+    return null;
+  }
+
+  // Show detail view for all other addressable events
+  return (
+    <div className="h-full overflow-auto">
+      <EventDetailViewer pointer={decoded.data} />
+    </div>
+  );
 }
