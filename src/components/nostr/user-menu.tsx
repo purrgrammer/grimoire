@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, Check, UserPlus } from "lucide-react";
 import accounts from "@/services/accounts";
 import { ExtensionSigner } from "applesauce-signers";
 import { ExtensionAccount } from "applesauce-accounts/accounts";
@@ -6,6 +6,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useObservableMemo } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
+import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import { useState } from "react";
+import type { IAccount } from "applesauce-accounts";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -53,9 +55,14 @@ function UserLabel({ pubkey }: { pubkey: string }) {
 
 export default function UserMenu() {
   const account = useObservableMemo(() => accounts.active$, []);
+  const allAccounts = useObservableMemo(() => accounts.accounts$, []);
   const { state, addWindow } = useGrimoire();
+  const { openCommandLauncher } = useAppShell();
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
+
+  // Get other accounts (not the active one)
+  const otherAccounts = allAccounts.filter((acc) => acc.id !== account?.id);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -76,6 +83,15 @@ export default function UserMenu() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function switchAccount(targetAccount: IAccount<any, any, any>) {
+    accounts.setActive(targetAccount.id);
+  }
+
+  function addAccount() {
+    // Open the command launcher (user will type "login" command)
+    openCommandLauncher();
   }
 
   async function logout() {
@@ -103,15 +119,54 @@ export default function UserMenu() {
         <DropdownMenuContent className="w-80" align="start">
           {account ? (
             <>
+              {/* Active Account */}
               <DropdownMenuGroup>
                 <DropdownMenuLabel
                   className="cursor-crosshair hover:bg-muted/50"
                   onClick={openProfile}
                 >
-                  <UserLabel pubkey={account.pubkey} />
+                  <div className="flex items-center gap-2">
+                    <Check className="size-4 text-primary" />
+                    <UserLabel pubkey={account.pubkey} />
+                  </div>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
 
+              {/* Other Accounts */}
+              {otherAccounts.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      Switch Account
+                    </DropdownMenuLabel>
+                    {otherAccounts.map((acc) => (
+                      <DropdownMenuItem
+                        key={acc.id}
+                        onClick={() => switchAccount(acc)}
+                        className="cursor-crosshair"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserAvatar pubkey={acc.pubkey} />
+                          <UserLabel pubkey={acc.pubkey} />
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              {/* Add Account */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={addAccount}
+                className="cursor-crosshair"
+              >
+                <UserPlus className="mr-2 size-4" />
+                Add account
+              </DropdownMenuItem>
+
+              {/* Relays */}
               {relays && relays.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
@@ -134,15 +189,8 @@ export default function UserMenu() {
                 </>
               )}
 
+              {/* Logout */}
               <DropdownMenuSeparator />
-              {/* <DropdownMenuItem
-                onClick={() => setShowSettings(true)}
-                className="cursor-pointer"
-              >
-                <Settings className="mr-2 size-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator /> */}
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
