@@ -39,6 +39,14 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
     },
   );
 
+  // Create synthetic event for comment rendering (preserves emoji tags)
+  const commentEvent = comment
+    ? {
+        ...event,
+        content: comment,
+      }
+    : undefined;
+
   return (
     <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
       {/* Highlight Header */}
@@ -76,13 +84,13 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
       )}
 
       {/* Comment */}
-      {comment && (
+      {commentEvent && (
         <div className="flex flex-col gap-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">
             Comment
           </div>
           <RichText
-            content={comment}
+            event={commentEvent}
             className="text-sm leading-relaxed"
             options={{ showMedia: false, showEventEmbeds: false }}
           />
