@@ -140,6 +140,43 @@ export const manPages: Record<string, ManPageEntry> = {
     },
     defaultProps: { action: "open-dialog" },
   },
+  accounts: {
+    name: "accounts",
+    section: "1",
+    synopsis: "accounts",
+    description:
+      "View and manage all Nostr accounts in Grimoire. Shows all logged-in accounts with their connection types, allows switching between accounts, and provides account management options.",
+    examples: ["accounts    View all accounts"],
+    seeAlso: ["login", "logout", "profile"],
+    appId: "account-manager",
+    category: "System",
+    defaultProps: {},
+  },
+  logout: {
+    name: "logout",
+    section: "1",
+    synopsis: "logout [--all]",
+    description:
+      "Remove the active Nostr account from Grimoire. Use the --all flag to remove all accounts at once.",
+    options: [
+      {
+        flag: "--all",
+        description: "Remove all accounts instead of just the active one",
+      },
+    ],
+    examples: [
+      "logout         Remove the active account",
+      "logout --all   Remove all accounts",
+    ],
+    seeAlso: ["login", "accounts"],
+    appId: "logout-handler",
+    category: "System",
+    argParser: (args: string[]) => {
+      const all = args.includes("--all");
+      return { action: all ? "logout-all" : "logout", all };
+    },
+    defaultProps: { action: "logout", all: false },
+  },
   kinds: {
     name: "kinds",
     section: "1",

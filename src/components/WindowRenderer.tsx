@@ -34,6 +34,8 @@ const SpellbooksViewer = lazy(() =>
   import("./SpellbooksViewer").then((m) => ({ default: m.SpellbooksViewer })),
 );
 const LoginHandler = lazy(() => import("./LoginHandler"));
+const AccountManager = lazy(() => import("./AccountManager"));
+const LogoutHandler = lazy(() => import("./LogoutHandler"));
 
 // Loading fallback component
 function ViewerLoading() {
@@ -183,6 +185,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             account={window.props.account}
             message={window.props.message}
           />
+        );
+        break;
+      case "account-manager":
+        content = <AccountManager />;
+        break;
+      case "logout-handler":
+        content = (
+          <LogoutHandler action={window.props.action} all={window.props.all} />
         );
         break;
       default:
