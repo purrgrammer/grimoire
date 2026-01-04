@@ -491,6 +491,9 @@ class RelayStateManager {
     try {
       const normalizedUrl = normalizeRelayURL(relayUrl);
 
+      // Don't prompt if there's no active account
+      if (!accountManager.active) return false;
+
       // Check permanent preferences
       const pref = this.authPreferences.get(normalizedUrl);
       if (pref === "never") return false;
