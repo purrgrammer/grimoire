@@ -46,7 +46,9 @@ function HandlerItem({
 }) {
   const { addWindow } = useGrimoire();
   const handlerEvent = useNostrEvent(address);
-  const appName = handlerEvent ? getAppName(handlerEvent) : address.identifier;
+  const appName = handlerEvent
+    ? getAppName(handlerEvent)
+    : (address?.identifier || "Unknown Handler");
 
   const handleClick = () => {
     addWindow("open", { pointer: address });

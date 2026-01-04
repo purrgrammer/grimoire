@@ -61,7 +61,7 @@ function HandlerCard({
         <div className="flex items-center gap-2">
           <Package className="size-5 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">
-            Loading {address.identifier}...
+            Loading {address?.identifier || "handler"}...
           </span>
         </div>
       </div>

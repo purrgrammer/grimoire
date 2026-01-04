@@ -32,7 +32,9 @@ export function getAppName(event: NostrEvent): string {
   if (event.content) {
     try {
       const metadata = JSON.parse(event.content);
-      if (metadata.name) return metadata.name;
+      if (metadata && typeof metadata === "object" && metadata.name && typeof metadata.name === "string") {
+        return metadata.name;
+      }
     } catch {
       // Not valid JSON, continue to fallback
     }
@@ -40,7 +42,7 @@ export function getAppName(event: NostrEvent): string {
 
   // Fallback to d tag identifier
   const dTag = getTagValue(event, "d");
-  return dTag || "Unknown App";
+  return dTag && typeof dTag === "string" ? dTag : "Unknown App";
 }
 
 /**
@@ -51,10 +53,13 @@ export function getAppDescription(event: NostrEvent): string | undefined {
 
   try {
     const metadata = JSON.parse(event.content);
-    return metadata.description;
+    if (metadata && typeof metadata === "object" && metadata.description && typeof metadata.description === "string") {
+      return metadata.description;
+    }
   } catch {
-    return undefined;
+    // Invalid JSON
   }
+  return undefined;
 }
 
 /**
@@ -65,10 +70,16 @@ export function getAppImage(event: NostrEvent): string | undefined {
 
   try {
     const metadata = JSON.parse(event.content);
-    return metadata.image || metadata.picture;
+    if (metadata && typeof metadata === "object") {
+      const image = metadata.image || metadata.picture;
+      if (image && typeof image === "string") {
+        return image;
+      }
+    }
   } catch {
-    return undefined;
+    // Invalid JSON
   }
+  return undefined;
 }
 
 /**
