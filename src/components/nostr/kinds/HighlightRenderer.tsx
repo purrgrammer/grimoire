@@ -53,7 +53,13 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Comment */}
-        {comment && <p className="text-sm text-foreground">{comment}</p>}
+        {comment && (
+          <RichText
+            content={comment}
+            className="text-sm text-foreground"
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
+        )}
 
         {/* Highlighted text */}
         {highlightText && (

@@ -11,6 +11,7 @@ import {
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { UserName } from "../UserName";
 import { useGrimoire } from "@/core/state";
+import { RichText } from "../RichText";
 
 /**
  * Detail renderer for Kind 9802 - Highlight
@@ -80,7 +81,11 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
           <div className="text-xs text-muted-foreground uppercase tracking-wide">
             Comment
           </div>
-          <p className="text-sm leading-relaxed">{comment}</p>
+          <RichText
+            content={comment}
+            className="text-sm leading-relaxed"
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
         </div>
       )}
 
