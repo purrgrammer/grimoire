@@ -7,26 +7,27 @@ import { toast } from "sonner";
 
 /**
  * PreviewEventPage - Preview a Nostr event from a nevent or note identifier
- * Routes: /nevent..., /note...
+ * Routes: /nevent1*, /note1*
  * This page shows a single event view without affecting user's workspace layout
  */
 export default function PreviewEventPage() {
-  const { identifier } = useParams<{ identifier: string }>();
+  const params = useParams<{ "*": string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine the prefix based on the current path
+  // Determine the prefix based on the current path and reconstruct full identifier
   const fullIdentifier = useMemo(() => {
-    if (!identifier) return undefined;
+    const captured = params["*"];
+    if (!captured) return undefined;
 
     const path = location.pathname;
-    if (path.startsWith("/nevent")) {
-      return `nevent${identifier}`;
-    } else if (path.startsWith("/note")) {
-      return `note${identifier}`;
+    if (path.startsWith("/nevent1")) {
+      return `nevent1${captured}`;
+    } else if (path.startsWith("/note1")) {
+      return `note1${captured}`;
     }
     return undefined;
-  }, [identifier, location.pathname]);
+  }, [params, location.pathname]);
 
   // Decode the event identifier (synchronous, memoized)
   const { decoded, error } = useNip19Decode(fullIdentifier);

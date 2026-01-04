@@ -16,7 +16,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/npub:identifier",
+    path: "/npub1*",
     element: (
       <AppShell hideBottomBar>
         <PreviewProfilePage />
@@ -24,7 +24,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/nevent:identifier",
+    path: "/nevent1*",
     element: (
       <AppShell hideBottomBar>
         <PreviewEventPage />
@@ -32,7 +32,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/note:identifier",
+    path: "/note1*",
     element: (
       <AppShell hideBottomBar>
         <PreviewEventPage />
@@ -40,7 +40,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/naddr:identifier",
+    path: "/naddr1*",
     element: (
       <AppShell hideBottomBar>
         <PreviewAddressPage />
