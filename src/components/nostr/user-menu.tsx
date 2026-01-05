@@ -6,6 +6,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,21 @@ import LoginDialog from "@/components/LoginDialog";
 import { useState } from "react";
 import type { IAccount } from "applesauce-accounts";
 import type { ISigner } from "applesauce-signers";
+
+function UserAvatar({ pubkey }: { pubkey: string }) {
+  const profile = useProfile(pubkey);
+  return (
+    <Avatar className="size-4">
+      <AvatarImage
+        src={profile?.picture}
+        alt={getDisplayName(pubkey, profile)}
+      />
+      <AvatarFallback>
+        {getDisplayName(pubkey, profile).slice(0, 2).toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
 
 function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
   const accountType = (account.constructor as unknown as { type: string }).type;
@@ -116,7 +132,11 @@ export default function UserMenu() {
             variant="link"
             aria-label={account ? "User menu" : "Log in"}
           >
-            <User className="size-4 text-muted-foreground" />
+            {account ? (
+              <UserAvatar pubkey={account.pubkey} />
+            ) : (
+              <User className="size-4 text-muted-foreground" />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80" align="start">
