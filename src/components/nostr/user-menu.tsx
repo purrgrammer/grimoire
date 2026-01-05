@@ -1,4 +1,4 @@
-import { User, Check, UserPlus, Eye, Puzzle } from "lucide-react";
+import { User, Check, UserPlus, Eye, Puzzle, Link2 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { useObservableMemo } from "applesauce-react/hooks";
@@ -56,6 +56,15 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
       <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
         <Puzzle className="size-3 mr-1" />
         Extension
+      </Badge>
+    );
+  }
+
+  if (accountType === "nostr-connect") {
+    return (
+      <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
+        <Link2 className="size-3 mr-1" />
+        Remote
       </Badge>
     );
   }

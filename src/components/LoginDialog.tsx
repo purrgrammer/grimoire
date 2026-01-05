@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, Puzzle } from "lucide-react";
+import { Eye, Puzzle, Link2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import accountManager from "@/services/accounts";
-import { ExtensionSigner } from "applesauce-signers";
-import { ExtensionAccount } from "applesauce-accounts/accounts";
+import { ExtensionSigner, NostrConnectSigner } from "applesauce-signers";
+import { ExtensionAccount, NostrConnectAccount } from "applesauce-accounts/accounts";
 import { createAccountFromInput } from "@/lib/login-parser";
 
 interface LoginDialogProps {
@@ -22,6 +22,7 @@ interface LoginDialogProps {
 
 export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [readonlyInput, setReadonlyInput] = useState("");
+  const [bunkerInput, setBunkerInput] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleReadonlyLogin = async () => {
@@ -68,6 +69,39 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     }
   };
 
+  const handleRemoteSignerLogin = async () => {
+    if (!bunkerInput.trim()) {
+      toast.error("Please enter a bunker URI");
+      return;
+    }
+
+    if (!bunkerInput.startsWith("bunker://")) {
+      toast.error("Invalid bunker URI. Must start with bunker://");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const signer = await NostrConnectSigner.fromBunkerURI(bunkerInput);
+      await signer.open();
+      const pubkey = await signer.getPublicKey();
+      const account = new NostrConnectAccount(pubkey, signer);
+      accountManager.addAccount(account);
+      accountManager.setActive(account.id);
+      toast.success("Connected to remote signer");
+      onOpenChange(false);
+      setBunkerInput("");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to connect to remote signer",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -76,7 +110,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         </DialogHeader>
 
         <Tabs defaultValue="readonly" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="readonly" className="gap-2">
               <Eye className="size-4" />
               Read-only
@@ -84,6 +118,10 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
             <TabsTrigger value="extension" className="gap-2">
               <Puzzle className="size-4" />
               Extension
+            </TabsTrigger>
+            <TabsTrigger value="remote" className="gap-2">
+              <Link2 className="size-4" />
+              Remote
             </TabsTrigger>
           </TabsList>
 
@@ -133,6 +171,36 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               className="w-full"
             >
               {loading ? "Connecting..." : "Connect Extension"}
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="remote" className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label htmlFor="bunker-uri" className="text-sm font-medium">
+                Bunker URI
+              </label>
+              <Input
+                id="bunker-uri"
+                placeholder="bunker://..."
+                value={bunkerInput}
+                onChange={(e) => setBunkerInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRemoteSignerLogin();
+                }}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Connect to a remote signer using NIP-46 (Nostr Connect). Paste
+                your bunker:// URI from your remote signer app.
+              </p>
+            </div>
+
+            <Button
+              onClick={handleRemoteSignerLogin}
+              disabled={loading || !bunkerInput.trim()}
+              className="w-full"
+            >
+              {loading ? "Connecting..." : "Connect Remote Signer"}
             </Button>
           </TabsContent>
         </Tabs>
