@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import accountManager from "@/services/accounts";
+import pool from "@/services/relay-pool";
 import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner } from "applesauce-signers";
 import { ExtensionAccount, NostrConnectAccount } from "applesauce-accounts/accounts";
 import { createAccountFromInput } from "@/lib/login-parser";
@@ -48,6 +49,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               "wss://relay.damus.io",
               "wss://nos.lol",
             ],
+            pool,
           });
 
           await signer.open();
@@ -169,7 +171,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
     setLoading(true);
     try {
-      const signer = await NostrConnectSigner.fromBunkerURI(bunkerInput);
+      const signer = await NostrConnectSigner.fromBunkerURI(bunkerInput, { pool });
       await signer.open();
       const pubkey = await signer.getPublicKey();
       const account = new NostrConnectAccount(pubkey, signer);
