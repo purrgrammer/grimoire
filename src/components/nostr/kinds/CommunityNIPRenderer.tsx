@@ -3,7 +3,7 @@ import {
   BaseEventProps,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { getArticleTitle } from "applesauce-core/helpers";
+import { getArticleTitle } from "applesauce-common/helpers/article";
 
 /**
  * Renderer for Kind 30817 - Community NIP

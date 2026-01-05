@@ -1,7 +1,7 @@
 import { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers";
 import { kinds } from "nostr-tools";
-import { getArticleTitle } from "applesauce-core/helpers/article";
+import { getArticleTitle } from "applesauce-common/helpers/article";
 import {
   getRepositoryName,
   getIssueTitle,

@@ -31,6 +31,12 @@ vi.mock("@/services/relay-list-cache", () => ({
   },
 }));
 
+vi.mock("@/services/event-store", () => ({
+  default: {
+    add: vi.fn(),
+  },
+}));
+
 describe("PublishSpellAction", () => {
   let action: PublishSpellAction;
 

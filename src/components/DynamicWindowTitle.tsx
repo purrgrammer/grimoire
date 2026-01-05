@@ -25,7 +25,7 @@ import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getLiveHost } from "@/lib/live-activity";
 import type { NostrEvent } from "@/types/nostr";
-import { getZapSender } from "applesauce-core/helpers/zap";
+import { getZapSender } from "applesauce-common/helpers/zap";
 
 export interface WindowTitleData {
   title: string | ReactElement;

@@ -3,7 +3,7 @@ import accounts from "@/services/accounts";
 import { ExtensionSigner } from "applesauce-signers";
 import { ExtensionAccount } from "applesauce-accounts/accounts";
 import { useProfile } from "@/hooks/useProfile";
-import { useObservableMemo } from "applesauce-react/hooks";
+import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,7 @@ function UserLabel({ pubkey }: { pubkey: string }) {
 }
 
 export default function UserMenu() {
-  const account = useObservableMemo(() => accounts.active$, []);
+  const account = use$(accounts.active$);
   const { state, addWindow } = useGrimoire();
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);

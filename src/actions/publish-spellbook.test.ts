@@ -35,10 +35,34 @@ const mockFactory = {
   })),
 };
 
+// Track published events
+const publishedEvents: NostrEvent[] = [];
+
+const mockSign = vi.fn(async (draft: any) => ({
+  ...draft,
+  sig: "test-signature",
+}));
+
+// v5: publish accepts (event | events, relays?)
+const mockPublish = vi.fn(
+  async (event: NostrEvent | NostrEvent[], _relays?: string[]) => {
+    if (Array.isArray(event)) {
+      publishedEvents.push(...event);
+    } else {
+      publishedEvents.push(event);
+    }
+  },
+);
+
 const mockContext: ActionContext = {
   factory: mockFactory as any,
   events: {} as any,
   self: "test-pubkey",
+  user: {} as any,
+  signer: mockSigner as any,
+  sign: mockSign,
+  publish: mockPublish,
+  run: vi.fn(),
 };
 
 const mockState: GrimoireState = {
@@ -64,16 +88,17 @@ const mockState: GrimoireState = {
   workspaceOrder: ["ws-1"],
 } as any;
 
-// Helper to run action with context
+// Helper to run action with context (v5 - async function, not generator)
 async function runAction(
   options: Parameters<typeof PublishSpellbook>[0],
 ): Promise<NostrEvent[]> {
-  const events: NostrEvent[] = [];
+  // Clear published events before each run
+  publishedEvents.length = 0;
+
   const action = PublishSpellbook(options);
-  for await (const event of action(mockContext)) {
-    events.push(event);
-  }
-  return events;
+  await action(mockContext);
+
+  return [...publishedEvents];
 }
 
 describe("PublishSpellbook action", () => {
@@ -267,13 +292,13 @@ describe("PublishSpellbook action", () => {
       );
     });
 
-    it("should call factory.sign with draft", async () => {
+    it("should call sign with draft", async () => {
       await runAction({
         state: mockState,
         title: "Test",
       });
 
-      expect(mockFactory.sign).toHaveBeenCalledWith(
+      expect(mockSign).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 30777,
         }),

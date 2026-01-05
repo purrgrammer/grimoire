@@ -6,7 +6,7 @@ import {
   getZapEventPointer,
   getZapAddressPointer,
   getZapRequest,
-} from "applesauce-core/helpers/zap";
+} from "applesauce-common/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";

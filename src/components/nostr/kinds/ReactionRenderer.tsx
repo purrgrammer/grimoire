@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { KindRenderer } from "./index";
 import { EventCardSkeleton } from "@/components/ui/skeleton";
-import { parseCoordinate } from "applesauce-core/helpers/pointers";
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 
 /**
  * Renderer for Kind 7 - Reactions
@@ -55,9 +55,9 @@ export function Kind7Renderer({ event }: BaseEventProps) {
   const aTag = event.tags.find((tag) => tag[0] === "a");
   const reactedAddress = aTag?.[1]; // Format: kind:pubkey:d-tag
 
-  // Parse a tag coordinate using applesauce helper
+  // Parse a tag coordinate using applesauce helper (renamed in v5)
   const addressPointer = reactedAddress
-    ? parseCoordinate(reactedAddress)
+    ? parseReplaceableAddress(reactedAddress)
     : null;
 
   // Create event pointer for fetching

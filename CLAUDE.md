@@ -37,6 +37,17 @@ Grimoire is a Nostr protocol explorer and developer tool. It's a tiling window m
 
 **Critical**: Don't create new EventStore, RelayPool, or RelayLiveness instances - use the singletons in `src/services/`
 
+**Event Loading** (`src/services/loaders.ts`):
+- Unified loader auto-fetches missing events when queried via `eventStore.event()` or `eventStore.replaceable()`
+- Custom `eventLoader()` with smart relay hint merging for explicit loading with context
+- `addressLoader` and `profileLoader` for replaceable events with batching
+- `createTimelineLoader` for paginated feeds
+
+**Action System** (`src/services/hub.ts`):
+- `ActionRunner` (v5) executes actions with signing and publishing
+- Actions are async functions: `async ({ factory, sign, publish }) => { ... }`
+- Use `await publish(event)` to publish (not generators/yield)
+
 ### Window System
 
 Windows are rendered in a recursive binary split layout (via `react-mosaic-component`):
@@ -72,6 +83,18 @@ Applesauce uses RxJS observables for reactive data flow:
 
 Use hooks like `useProfile()`, `useNostrEvent()`, `useTimeline()` - they handle subscriptions.
 
+**The `use$` Hook** (applesauce v5):
+```typescript
+import { use$ } from "applesauce-react/hooks";
+
+// Direct observable (for BehaviorSubjects - never undefined)
+const account = use$(accounts.active$);
+
+// Factory with deps (for dynamic observables)
+const event = use$(() => eventStore.event(eventId), [eventId]);
+const timeline = use$(() => eventStore.timeline(filters), [filters]);
+```
+
 ### Applesauce Helpers & Caching
 
 **Critical Performance Insight**: Applesauce helpers cache computed values internally using symbols. **You don't need `useMemo` when calling applesauce helpers.**
@@ -88,16 +111,24 @@ const text = getHighlightText(event);
 
 **How it works**: Helpers use `getOrComputeCachedValue(event, symbol, compute)` to cache results on the event object. The first call computes and caches, subsequent calls return the cached value instantly.
 
-**Available Helpers** (from `applesauce-core/helpers`):
+**Available Helpers** (split between packages in applesauce v5):
+
+*From `applesauce-core/helpers` (protocol-level):*
 - **Tags**: `getTagValue(event, name)` - get single tag value (searches hidden tags first)
-- **Article**: `getArticleTitle`, `getArticleSummary`, `getArticleImage`, `getArticlePublished`
-- **Highlight**: `getHighlightText`, `getHighlightSourceUrl`, `getHighlightSourceEventPointer`, `getHighlightSourceAddressPointer`, `getHighlightContext`, `getHighlightComment`
 - **Profile**: `getProfileContent(event)`, `getDisplayName(metadata, fallback)`
 - **Pointers**: `parseCoordinate(aTag)`, `getEventPointerFromETag`, `getAddressPointerFromATag`, `getProfilePointerFromPTag`
-- **Reactions**: `getReactionEventPointer(event)`, `getReactionAddressPointer(event)`
-- **Threading**: `getNip10References(event)` - parses NIP-10 thread tags
 - **Filters**: `isFilterEqual(a, b)`, `matchFilter(filter, event)`, `mergeFilters(...filters)`
-- **And 50+ more** - see `node_modules/applesauce-core/dist/helpers/index.d.ts`
+- **Relays**: `getSeenRelays`, `mergeRelaySets`, `getInboxes`, `getOutboxes`
+- **URL**: `normalizeURL`
+
+*From `applesauce-common/helpers` (social/NIP-specific):*
+- **Article**: `getArticleTitle`, `getArticleSummary`, `getArticleImage`, `getArticlePublished`
+- **Highlight**: `getHighlightText`, `getHighlightSourceUrl`, `getHighlightSourceEventPointer`, `getHighlightSourceAddressPointer`, `getHighlightContext`, `getHighlightComment`
+- **Threading**: `getNip10References(event)` - parses NIP-10 thread tags
+- **Comment**: `getCommentReplyPointer(event)` - parses NIP-22 comment replies
+- **Zap**: `getZapAmount`, `getZapSender`, `getZapRecipient`, `getZapComment`
+- **Reactions**: `getReactionEventPointer(event)`, `getReactionAddressPointer(event)`
+- **Lists**: `getRelaysFromList`
 
 **Custom Grimoire Helpers** (not in applesauce):
 - `getTagValues(event, name)` - plural version to get array of tag values (src/lib/nostr-utils.ts)

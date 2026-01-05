@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { NostrEvent, Filter } from "nostr-tools";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
+import { useEventStore, use$ } from "applesauce-react/hooks";
 import { createTimelineLoader } from "@/services/loaders";
 import pool from "@/services/relay-pool";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
@@ -72,7 +72,7 @@ export function useTimeline(
   }, [id, stableRelays, limit, eventStore, stableFilters]);
 
   // Watch store for matching events
-  const timeline = useObservableMemo(() => {
+  const timeline = use$(() => {
     return eventStore.timeline(filters, false);
   }, [id]);
 

@@ -1,7 +1,7 @@
 import { RichText } from "../RichText";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { kinds } from "nostr-tools";
-import { getNip10References } from "applesauce-core/helpers/threading";
+import { getNip10References } from "applesauce-common/helpers/threading";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { Reply } from "lucide-react";

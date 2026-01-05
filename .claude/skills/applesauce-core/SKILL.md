@@ -3,9 +3,15 @@ name: applesauce-core
 description: This skill should be used when working with applesauce-core library for Nostr client development, including event stores, queries, observables, and client utilities. Provides comprehensive knowledge of applesauce patterns for building reactive Nostr applications.
 ---
 
-# applesauce-core Skill
+# applesauce-core Skill (v5)
 
-This skill provides comprehensive knowledge and patterns for working with applesauce-core, a library that provides reactive utilities and patterns for building Nostr clients.
+This skill provides comprehensive knowledge and patterns for working with applesauce-core v5, a library that provides reactive utilities and patterns for building Nostr clients.
+
+**Note**: applesauce v5 introduced package reorganization:
+- Protocol-level code stays in `applesauce-core`
+- Social/NIP-specific helpers moved to `applesauce-common`
+- `EventFactory` moved from `applesauce-factory` to `applesauce-core/event-factory`
+- `ActionHub` renamed to `ActionRunner` in `applesauce-actions`
 
 ## When to Use This Skill
 
@@ -396,6 +402,8 @@ function getTagValues(event, tagName) {
 
 ### Article Helpers (NIP-23)
 
+**Note**: Article helpers moved to `applesauce-common` in v5.
+
 ```javascript
 import {
   getArticleTitle,
@@ -403,7 +411,7 @@ import {
   getArticleImage,
   getArticlePublished,
   isValidArticle
-} from 'applesauce-core/helpers';
+} from 'applesauce-common/helpers/article';
 
 // All cached automatically
 const title = getArticleTitle(event);
@@ -419,6 +427,8 @@ if (isValidArticle(event)) {
 
 ### Highlight Helpers (NIP-84)
 
+**Note**: Highlight helpers moved to `applesauce-common` in v5.
+
 ```javascript
 import {
   getHighlightText,
@@ -428,7 +438,7 @@ import {
   getHighlightContext,
   getHighlightComment,
   getHighlightAttributions
-} from 'applesauce-core/helpers';
+} from 'applesauce-common/helpers/highlight';
 
 // All cached - no useMemo needed
 const text = getHighlightText(event);
@@ -514,8 +524,10 @@ if (eventPointer) {
 
 ### Threading Helpers (NIP-10)
 
+**Note**: Threading helpers moved to `applesauce-common` in v5.
+
 ```javascript
-import { getNip10References } from 'applesauce-core/helpers';
+import { getNip10References } from 'applesauce-common/helpers/threading';
 
 // Parse NIP-10 thread structure (cached)
 const refs = getNip10References(event);
@@ -907,6 +919,7 @@ function createInfiniteScroll(timeline, pageSize = 50) {
 ## Related Skills
 
 - **nostr-tools** - Lower-level Nostr operations
+- **applesauce-common** - Social/NIP-specific helpers (article, highlight, threading, zap, etc.)
 - **applesauce-signers** - Event signing abstractions
 - **svelte** - Building reactive UIs
 - **nostr** - Nostr protocol fundamentals

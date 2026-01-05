@@ -5,7 +5,7 @@ import {
   isCommentAddressPointer,
   isCommentEventPointer,
   type CommentPointer,
-} from "applesauce-core/helpers/comment";
+} from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { Reply } from "lucide-react";

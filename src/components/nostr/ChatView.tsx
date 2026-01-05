@@ -6,12 +6,9 @@ import { UserName } from "./UserName";
 import { RichText } from "./RichText";
 import { Zap, CornerDownRight, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  getZapAmount,
-  getZapSender,
-  getTagValue,
-} from "applesauce-core/helpers";
-import { getNip10References } from "applesauce-core/helpers/threading";
+import { getTagValue } from "applesauce-core/helpers";
+import { getZapAmount, getZapSender } from "applesauce-common/helpers/zap";
+import { getNip10References } from "applesauce-common/helpers/threading";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 
 interface ChatViewProps {

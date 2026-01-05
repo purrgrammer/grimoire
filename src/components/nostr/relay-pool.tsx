@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import pool from "@/services/relay-pool";
-import { useObservableMemo } from "applesauce-react/hooks";
+import { use$ } from "applesauce-react/hooks";
 import { Relay } from "applesauce-relay";
 import { Server, ServerOff } from "lucide-react";
 
@@ -19,7 +19,7 @@ function RelayItem({ relay }: { relay: Relay }) {
 }
 
 export default function RelayPool() {
-  const relays = useObservableMemo(() => pool.relays$, []);
+  const relays = use$(pool.relays$);
   return (
     <div className="flex flex-col gap-1">
       {Array.from(relays.entries()).map(([url, relay]) => (

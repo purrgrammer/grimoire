@@ -6,12 +6,12 @@ import {
   getHighlightComment,
   getHighlightSourceEventPointer,
   getHighlightSourceAddressPointer,
-} from "applesauce-core/helpers/highlight";
+} from "applesauce-common/helpers/highlight";
 import { UserName } from "../UserName";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
 import { RichText } from "../RichText";
-import { getArticleTitle } from "applesauce-core/helpers";
+import { getArticleTitle } from "applesauce-common/helpers/article";
 import { KindBadge } from "@/components/KindBadge";
 
 /**

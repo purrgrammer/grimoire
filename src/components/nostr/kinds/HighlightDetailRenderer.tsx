@@ -7,7 +7,7 @@ import {
   getHighlightSourceUrl,
   getHighlightComment,
   getHighlightContext,
-} from "applesauce-core/helpers/highlight";
+} from "applesauce-common/helpers/highlight";
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { UserName } from "../UserName";
 import { useGrimoire } from "@/core/state";

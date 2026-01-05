@@ -6,7 +6,7 @@ import {
 import {
   getArticleTitle,
   getArticleSummary,
-} from "applesauce-core/helpers/article";
+} from "applesauce-common/helpers/article";
 
 /**
  * Renderer for Kind 30023 - Long-form Article

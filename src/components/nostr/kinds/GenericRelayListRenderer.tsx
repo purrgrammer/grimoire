@@ -1,5 +1,5 @@
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
-import { getRelaysFromList } from "applesauce-core/helpers/lists";
+import { getRelaysFromList } from "applesauce-common/helpers/lists";
 import { RelayLink } from "../RelayLink";
 
 /**

@@ -2,12 +2,13 @@ import {
   createEventLoader,
   createAddressLoader,
   createTimelineLoader,
+  createEventLoaderForStore,
 } from "applesauce-loaders/loaders";
 import type { EventPointer } from "nostr-tools/nip19";
 import { Observable } from "rxjs";
 import { getSeenRelays, mergeRelaySets } from "applesauce-core/helpers/relays";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
-import { getTagValue } from "applesauce-core/helpers/event-tags";
+import { getTagValue } from "applesauce-core/helpers/event";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
@@ -36,12 +37,9 @@ function extractRelayContext(event: NostrEvent): {
   const eTagRelays = event.tags
     .filter((t) => t[0] === "e")
     .map((tag) => {
-      try {
-        const pointer = getEventPointerFromETag(tag);
-        return pointer.relays?.[0]; // First relay hint from the pointer
-      } catch {
-        return undefined; // Invalid e tag, skip it
-      }
+      const pointer = getEventPointerFromETag(tag);
+      // v5: returns null for invalid tags instead of throwing
+      return pointer?.relays?.[0]; // First relay hint from the pointer
     })
     .filter((relay): relay is string => relay !== undefined);
 
@@ -183,3 +181,26 @@ export const profileLoader = createAddressLoader(pool, {
 
 // Timeline loader factory - creates loader for event feeds
 export { createTimelineLoader };
+
+/**
+ * Setup unified event loader for automatic missing event loading
+ *
+ * This attaches a loader to the EventStore that automatically fetches
+ * missing events when they're requested via:
+ * - eventStore.event({ id: "..." })
+ * - eventStore.replaceable({ kind, pubkey, identifier? })
+ *
+ * The loader handles both single events and replaceable/addressable events
+ * through a single interface, with automatic routing based on pointer type.
+ *
+ * Configuration:
+ * - bufferTime: 200ms - batches requests for efficiency
+ * - extraRelays: AGGREGATOR_RELAYS - fallback relay discovery
+ *
+ * Note: The custom eventLoader() function above is still available for
+ * explicit loading with smart relay hint merging from context events.
+ */
+createEventLoaderForStore(eventStore, pool, {
+  bufferTime: 200,
+  extraRelays: AGGREGATOR_RELAYS,
+});

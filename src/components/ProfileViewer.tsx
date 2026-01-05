@@ -11,7 +11,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
+import { useEventStore, use$ } from "applesauce-react/hooks";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { useCopy } from "../hooks/useCopy";
 import { RichText } from "./nostr/RichText";
@@ -100,7 +100,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   }, [resolvedPubkey, eventStore]);
 
   // Get mailbox relays (kind 10002) - will update when fresh data arrives
-  const mailboxEvent = useObservableMemo(
+  const mailboxEvent = use$(
     () =>
       resolvedPubkey
         ? eventStore.replaceable(kinds.RelayList, resolvedPubkey, "")
@@ -113,7 +113,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     mailboxEvent && mailboxEvent.tags ? getOutboxes(mailboxEvent) : [];
 
   // Get profile metadata event (kind 0)
-  const profileEvent = useObservableMemo(
+  const profileEvent = use$(
     () =>
       resolvedPubkey
         ? eventStore.replaceable(0, resolvedPubkey, "")

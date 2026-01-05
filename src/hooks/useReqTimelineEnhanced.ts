@@ -193,8 +193,7 @@ export function useReqTimelineEnhanced(
 
       return relay
         .subscription(filtersWithLimit, {
-          retries: 5,
-          reconnect: 5,
+          reconnect: 5, // v5: retries renamed to reconnect
           resubscribe: true,
         })
         .subscribe(

@@ -3,7 +3,7 @@ import accountManager from "@/services/accounts";
 import pool from "@/services/relay-pool";
 import { encodeSpell } from "@/lib/spell-conversion";
 import { markSpellPublished } from "@/services/spell-storage";
-import { EventFactory } from "applesauce-factory";
+import { EventFactory } from "applesauce-core/event-factory";
 import { SpellEvent } from "@/types/spell";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";

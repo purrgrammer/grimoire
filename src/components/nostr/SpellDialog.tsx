@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useObservableMemo } from "applesauce-react/hooks";
+import { use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 import { parseReqCommand } from "@/lib/req-parser";
 import { reconstructCommand } from "@/lib/spell-conversion";
@@ -75,7 +75,7 @@ export function SpellDialog({
   existingSpell,
   onSuccess,
 }: SpellDialogProps) {
-  const activeAccount = useObservableMemo(() => accounts.active$, []);
+  const activeAccount = use$(accounts.active$);
 
   // Form state
   const [alias, setAlias] = useState("");

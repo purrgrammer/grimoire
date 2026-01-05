@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
+import { useEventStore, use$ } from "applesauce-react/hooks";
 import { eventLoader, addressLoader } from "@/services/loaders";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -43,7 +43,7 @@ export function useNostrEvent(
   const eventStore = useEventStore();
 
   // Watch event store for the specific event
-  const event = useObservableMemo(() => {
+  const event = use$(() => {
     if (!pointer) return undefined;
 
     // Handle string ID

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
+import { useEventStore, use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 import { useGrimoire } from "@/core/state";
 import { addressLoader } from "@/services/loaders";
@@ -14,7 +14,7 @@ export function useAccountSync() {
   const eventStore = useEventStore();
 
   // Watch active account from accounts service
-  const activeAccount = useObservableMemo(() => accounts.active$, []);
+  const activeAccount = use$(accounts.active$);
 
   // Sync active account pubkey to state
   useEffect(() => {

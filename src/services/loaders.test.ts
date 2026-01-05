@@ -34,6 +34,7 @@ vi.mock("applesauce-loaders/loaders", () => ({
   ),
   createAddressLoader: vi.fn(() => () => ({ subscribe: () => {} })),
   createTimelineLoader: vi.fn(),
+  createEventLoaderForStore: vi.fn(),
 }));
 
 import eventStore from "./event-store";
@@ -172,10 +173,18 @@ describe("eventLoader", () => {
     });
 
     it("should extract relay hints from e tags", () => {
+      // Use valid 64-char hex event IDs (v5 validates event ID format)
+      const validEventId1 =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      const validEventId2 =
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+      const validEventId3 =
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
       const event = createEventWithTags([
-        ["e", "event-id-1", "wss://e-tag1.com/", "reply"],
-        ["e", "event-id-2", "wss://e-tag2.com/", "root"],
-        ["e", "event-id-3"], // No relay hint, should be skipped
+        ["e", validEventId1, "wss://e-tag1.com/", "reply"],
+        ["e", validEventId2, "wss://e-tag2.com/", "root"],
+        ["e", validEventId3], // No relay hint, should be skipped
       ]);
 
       const result = eventLoader({ id: "parent123" }, event);
@@ -209,11 +218,15 @@ describe("eventLoader", () => {
         "wss://cached.com/",
       ]);
 
+      // Use valid 64-char hex event ID (v5 validates event ID format)
+      const validEventId =
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
       const event = createMockEvent({
         tags: [
           ["p", "author-pubkey"],
           ["r", "wss://r-tag.com/"],
-          ["e", "event-id", "wss://e-tag.com/"],
+          ["e", validEventId, "wss://e-tag.com/"],
         ],
       });
 
@@ -321,9 +334,13 @@ describe("eventLoader", () => {
     });
 
     it("should handle invalid e tags gracefully", () => {
+      // Use valid 64-char hex event ID (v5 validates event ID format)
+      const validEventId =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
       const event = createEventWithTags([
-        ["e"], // Missing event ID
-        ["e", "valid-id", "wss://valid.com/"],
+        ["e"], // Missing event ID - invalid, should be skipped
+        ["e", validEventId, "wss://valid.com/"],
       ]);
 
       const result = eventLoader({ id: "test123" }, event);

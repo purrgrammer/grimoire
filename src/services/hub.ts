@@ -1,6 +1,6 @@
-import { ActionHub } from "applesauce-actions";
+import { ActionRunner } from "applesauce-actions";
 import eventStore from "./event-store";
-import { EventFactory } from "applesauce-factory";
+import { EventFactory } from "applesauce-core/event-factory";
 import pool from "./relay-pool";
 import { relayListCache } from "./relay-list-cache";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
@@ -40,7 +40,7 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
 const factory = new EventFactory();
 
 /**
- * Global action hub for Grimoire
+ * Global action runner for Grimoire
  * Used to register and execute actions throughout the application
  *
  * Configured with:
@@ -48,7 +48,7 @@ const factory = new EventFactory();
  * - EventFactory: Creates and signs events
  * - publishEvent: Publishes events to author's outbox relays (with fallback to seen relays)
  */
-export const hub = new ActionHub(eventStore, factory, publishEvent);
+export const hub = new ActionRunner(eventStore, factory, publishEvent);
 
 // Sync factory signer with active account
 // This ensures the hub can sign events when an account is active

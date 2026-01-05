@@ -4,7 +4,7 @@ import {
   getArticleSummary,
   getArticlePublished,
   getArticleImage,
-} from "applesauce-core/helpers/article";
+} from "applesauce-common/helpers/article";
 import { UserName } from "../UserName";
 import { MediaEmbed } from "../MediaEmbed";
 import { MarkdownContent } from "../MarkdownContent";

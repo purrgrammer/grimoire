@@ -1,8 +1,8 @@
 import type { ProfileContent } from "applesauce-core/helpers";
 import type { NostrEvent } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
-import { getNip10References } from "applesauce-core/helpers/threading";
-import { getCommentReplyPointer } from "applesauce-core/helpers/comment";
+import { getNip10References } from "applesauce-common/helpers/threading";
+import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 
 export function derivePlaceholderName(pubkey: string): string {

@@ -6,7 +6,33 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { selectRelaysForFilter } from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import relayListCache from "./relay-list-cache";
+
+// Helper to create valid test events
+function createRelayListEvent(
+  secretKey: Uint8Array,
+  tags: string[][],
+): NostrEvent {
+  return finalizeEvent(
+    {
+      kind: 10002,
+      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      content: "",
+    },
+    secretKey,
+  );
+}
+
+// Generate valid test keys using generateSecretKey
+const testSecretKeys: Uint8Array[] = [];
+const testPubkeys: string[] = [];
+for (let i = 0; i < 15; i++) {
+  const secretKey = generateSecretKey();
+  testSecretKeys.push(secretKey);
+  testPubkeys.push(getPublicKey(secretKey));
+}
 
 describe("selectRelaysForFilter", () => {
   let eventStore: EventStore;
@@ -44,23 +70,14 @@ describe("selectRelaysForFilter", () => {
 
   describe("author relay selection", () => {
     it("should select write relays for authors", async () => {
-      const authorPubkey =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
+      const authorPubkey = testPubkeys[0];
 
-      // Mock kind:10002 event with write relays
-      const relayListEvent: NostrEvent = {
-        id: "test-event-id",
-        pubkey: authorPubkey,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["r", "wss://relay.damus.io"],
-          ["r", "wss://nos.lol"],
-          ["r", "wss://relay.nostr.band", "read"],
-        ],
-        content: "",
-        sig: "test-sig",
-      };
+      // Create valid kind:10002 event with write relays
+      const relayListEvent = createRelayListEvent(testSecretKeys[0], [
+        ["r", "wss://relay.damus.io"],
+        ["r", "wss://nos.lol"],
+        ["r", "wss://relay.nostr.band", "read"],
+      ]);
 
       // Add to event store
       eventStore.add(relayListEvent);
@@ -86,31 +103,19 @@ describe("selectRelaysForFilter", () => {
     });
 
     it("should handle multiple authors", async () => {
-      const author1 =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
-      const author2 =
-        "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
+      const author1 = testPubkeys[0];
+      const author2 = testPubkeys[1];
 
-      // Mock relay lists for both authors
-      eventStore.add({
-        id: "event1",
-        pubkey: author1,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://relay.damus.io"]],
-        content: "",
-        sig: "sig1",
-      });
+      // Create valid relay lists for both authors
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[0], [
+          ["r", "wss://relay.damus.io"],
+        ]),
+      );
 
-      eventStore.add({
-        id: "event2",
-        pubkey: author2,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://nos.lol"]],
-        content: "",
-        sig: "sig2",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[1], [["r", "wss://nos.lol"]]),
+      );
 
       const result = await selectRelaysForFilter(
         eventStore,
@@ -130,23 +135,14 @@ describe("selectRelaysForFilter", () => {
 
   describe("p-tag relay selection", () => {
     it("should select read relays for #p tags", async () => {
-      const mentionedPubkey =
-        "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
+      const mentionedPubkey = testPubkeys[2];
 
-      // Mock kind:10002 event with read relays
-      const relayListEvent: NostrEvent = {
-        id: "test-event-id",
-        pubkey: mentionedPubkey,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["r", "wss://relay.damus.io", "write"],
-          ["r", "wss://nos.lol", "read"],
-          ["r", "wss://relay.nostr.band", "read"],
-        ],
-        content: "",
-        sig: "test-sig",
-      };
+      // Create valid kind:10002 event with read relays
+      const relayListEvent = createRelayListEvent(testSecretKeys[2], [
+        ["r", "wss://relay.damus.io", "write"],
+        ["r", "wss://nos.lol", "read"],
+        ["r", "wss://relay.nostr.band", "read"],
+      ]);
 
       eventStore.add(relayListEvent);
 
@@ -173,32 +169,22 @@ describe("selectRelaysForFilter", () => {
 
   describe("mixed authors and #p tags", () => {
     it("should combine outbox and inbox relays", async () => {
-      const author =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
-      const mentioned =
-        "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
+      const author = testPubkeys[3];
+      const mentioned = testPubkeys[4];
 
       // Author has write relays
-      eventStore.add({
-        id: "event1",
-        pubkey: author,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://author-relay.com"]],
-        content: "",
-        sig: "sig1",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[3], [
+          ["r", "wss://author-relay.com"],
+        ]),
+      );
 
       // Mentioned user has read relays
-      eventStore.add({
-        id: "event2",
-        pubkey: mentioned,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://mention-relay.com", "read"]],
-        content: "",
-        sig: "sig2",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[4], [
+          ["r", "wss://mention-relay.com", "read"],
+        ]),
+      );
 
       const result = await selectRelaysForFilter(
         eventStore,
@@ -229,56 +215,36 @@ describe("selectRelaysForFilter", () => {
     });
 
     it("should maintain diversity with multiple authors and p-tags", async () => {
-      const author1 =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
-      const author2 =
-        "42e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
-      const mentioned1 =
-        "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
-      const mentioned2 =
-        "92341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2";
+      const author1 = testPubkeys[5];
+      const author2 = testPubkeys[6];
+      const mentioned1 = testPubkeys[7];
+      const mentioned2 = testPubkeys[8];
 
       // Authors have write relays
-      eventStore.add({
-        id: "event1",
-        pubkey: author1,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://author1-relay.com"]],
-        content: "",
-        sig: "sig1",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[5], [
+          ["r", "wss://author1-relay.com"],
+        ]),
+      );
 
-      eventStore.add({
-        id: "event2",
-        pubkey: author2,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://author2-relay.com"]],
-        content: "",
-        sig: "sig2",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[6], [
+          ["r", "wss://author2-relay.com"],
+        ]),
+      );
 
       // Mentioned users have read relays
-      eventStore.add({
-        id: "event3",
-        pubkey: mentioned1,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://mention1-relay.com", "read"]],
-        content: "",
-        sig: "sig3",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[7], [
+          ["r", "wss://mention1-relay.com", "read"],
+        ]),
+      );
 
-      eventStore.add({
-        id: "event4",
-        pubkey: mentioned2,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["r", "wss://mention2-relay.com", "read"]],
-        content: "",
-        sig: "sig4",
-      });
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[8], [
+          ["r", "wss://mention2-relay.com", "read"],
+        ]),
+      );
 
       const result = await selectRelaysForFilter(
         eventStore,
@@ -314,22 +280,15 @@ describe("selectRelaysForFilter", () => {
 
   describe("relay limits", () => {
     it("should respect maxRelays limit", async () => {
-      // Create many authors with different relays
+      // Create many authors with different relays (use first 10 test keys)
       const authors = Array.from({ length: 10 }, (_, i) => ({
-        pubkey: `pubkey${i}`.padEnd(64, "0"),
+        secretKey: testSecretKeys[i],
+        pubkey: testPubkeys[i],
         relay: `wss://relay${i}.com`,
       }));
 
-      authors.forEach(({ pubkey, relay }) => {
-        eventStore.add({
-          id: `event-${pubkey}`,
-          pubkey,
-          kind: 10002,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [["r", relay]],
-          content: "",
-          sig: "sig",
-        });
+      authors.forEach(({ secretKey, relay }) => {
+        eventStore.add(createRelayListEvent(secretKey, [["r", relay]]));
       });
 
       const result = await selectRelaysForFilter(
@@ -347,8 +306,8 @@ describe("selectRelaysForFilter", () => {
 
   describe("edge cases", () => {
     it("should handle users with no relay lists", async () => {
-      const pubkeyWithoutList =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
+      // Use a pubkey that doesn't have a relay list added
+      const pubkeyWithoutList = testPubkeys[14];
 
       const result = await selectRelaysForFilter(
         eventStore,
@@ -363,22 +322,15 @@ describe("selectRelaysForFilter", () => {
     });
 
     it("should handle invalid relay URLs gracefully", async () => {
-      const pubkey =
-        "32e18273f41e70f79a220d7fb69b36269d74d67f569b8c4b7fc17e5b1d1a1e3e";
+      const pubkey = testPubkeys[10];
 
       // Add relay list with invalid URL
-      eventStore.add({
-        id: "event",
-        pubkey,
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
+      eventStore.add(
+        createRelayListEvent(testSecretKeys[10], [
           ["r", "not-a-valid-url"],
           ["r", "wss://valid-relay.com"],
-        ],
-        content: "",
-        sig: "sig",
-      });
+        ]),
+      );
 
       const result = await selectRelaysForFilter(
         eventStore,

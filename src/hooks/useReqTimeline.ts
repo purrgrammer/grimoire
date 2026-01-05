@@ -75,8 +75,7 @@ export function useReqTimeline(
     }));
 
     const observable = pool.subscription(relays, filtersWithLimit, {
-      retries: 5,
-      reconnect: 5,
+      reconnect: 5, // v5: retries renamed to reconnect
       resubscribe: true,
       eventStore,
     });

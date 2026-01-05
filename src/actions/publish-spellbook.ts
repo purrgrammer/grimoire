@@ -4,7 +4,6 @@ import { GrimoireState } from "@/types/app";
 import { SpellbookContent } from "@/types/spell";
 import accountManager from "@/services/accounts";
 import type { ActionContext } from "applesauce-actions";
-import type { NostrEvent } from "nostr-tools/core";
 
 export interface PublishSpellbookOptions {
   state: GrimoireState;
@@ -20,24 +19,23 @@ export interface PublishSpellbookOptions {
  * This action:
  * 1. Validates inputs (title, account, signer)
  * 2. Creates spellbook event from state or explicit content
- * 3. Signs the event using the action hub's factory
- * 4. Yields the signed event (ActionHub handles publishing)
+ * 3. Signs the event using the action runner's factory
+ * 4. Publishes the signed event via ActionRunner
  *
  * NOTE: This action does NOT mark the local spellbook as published.
  * The caller should use hub.exec() and call markSpellbookPublished()
  * AFTER successful publish to ensure data consistency.
  *
  * @param options - Spellbook publishing options
- * @returns Action generator for ActionHub
+ * @returns Action for ActionRunner
  *
  * @throws Error if title is empty, no active account, or no signer available
  *
  * @example
  * ```typescript
- * // Publish via ActionHub with proper side-effect handling
+ * // Publish via ActionRunner with proper side-effect handling
  * const event = await lastValueFrom(hub.exec(PublishSpellbook, options));
  * if (event) {
- *   await publishEvent(event);
  *   // Only mark as published AFTER successful relay publish
  *   await markSpellbookPublished(localId, event as SpellbookEvent);
  * }
@@ -46,9 +44,11 @@ export interface PublishSpellbookOptions {
 export function PublishSpellbook(options: PublishSpellbookOptions) {
   const { state, title, description, workspaceIds, content } = options;
 
-  return async function* ({
+  return async function ({
     factory,
-  }: ActionContext): AsyncGenerator<NostrEvent> {
+    sign,
+    publish,
+  }: ActionContext): Promise<void> {
     // 1. Validate inputs
     if (!title || !title.trim()) {
       throw new Error("Title is required");
@@ -101,12 +101,12 @@ export function PublishSpellbook(options: PublishSpellbookOptions) {
       tags: eventProps.tags,
     });
 
-    // 4. Sign the event
-    const event = (await factory.sign(draft)) as SpellbookEvent;
+    // 4. Sign and publish the event
+    const event = (await sign(draft)) as SpellbookEvent;
 
-    // 5. Yield signed event - ActionHub handles relay selection and publishing
+    // 5. Publish event - ActionRunner handles relay selection
     // NOTE: Caller is responsible for marking local spellbook as published
     // after successful publish using markSpellbookPublished()
-    yield event;
+    await publish(event);
   };
 }

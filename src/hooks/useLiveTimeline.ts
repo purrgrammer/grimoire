@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import pool from "@/services/relay-pool";
 import type { NostrEvent, Filter } from "nostr-tools";
-import { useEventStore, useObservableMemo } from "applesauce-react/hooks";
+import { useEventStore, use$ } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
 import { useStableValue, useStableArray } from "./useStable";
 
@@ -72,8 +72,7 @@ export function useLiveTimeline(
     }));
 
     const observable = pool.subscription(relays, filtersWithLimit, {
-      retries: 5,
-      reconnect: 5,
+      reconnect: 5, // v5: retries renamed to reconnect
       resubscribe: true,
       eventStore, // Automatically add events to store
     });
@@ -112,7 +111,7 @@ export function useLiveTimeline(
   }, [id, stableFilters, stableRelays, limit, stream, eventStore]);
 
   // 2. Observable Effect - Read from EventStore
-  const timelineEvents = useObservableMemo(() => {
+  const timelineEvents = use$(() => {
     // eventStore.timeline returns an Observable that emits sorted array of events matching filter
     // It updates whenever relevant events are added/removed from store
     return eventStore.timeline(filters);

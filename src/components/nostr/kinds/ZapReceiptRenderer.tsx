@@ -9,7 +9,7 @@ import {
   getZapAddressPointer,
   getZapSender,
   isValidZap,
-} from "applesauce-core/helpers/zap";
+} from "applesauce-common/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./index";
 import { RichText } from "../RichText";

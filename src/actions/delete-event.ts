@@ -1,6 +1,6 @@
 import accountManager from "@/services/accounts";
 import pool from "@/services/relay-pool";
-import { EventFactory } from "applesauce-factory";
+import { EventFactory } from "applesauce-core/event-factory";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
