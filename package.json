@@ -56,6 +56,7 @@
     "media-chrome": "^4.17.2",
     "prismjs": "^1.30.0",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-markdown": "^10.1.0",

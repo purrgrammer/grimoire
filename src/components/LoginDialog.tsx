@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Eye, Puzzle, Link2 } from "lucide-react";
+import { Eye, Puzzle, Link2, QrCode, Keyboard } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import accountManager from "@/services/accounts";
-import { ExtensionSigner, NostrConnectSigner } from "applesauce-signers";
+import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner } from "applesauce-signers";
 import { ExtensionAccount, NostrConnectAccount } from "applesauce-accounts/accounts";
 import { createAccountFromInput } from "@/lib/login-parser";
 
@@ -24,6 +25,92 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [readonlyInput, setReadonlyInput] = useState("");
   const [bunkerInput, setBunkerInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // NIP-46 QR mode state
+  const [useQrMode, setUseQrMode] = useState(true);
+  const [nostrConnectUri, setNostrConnectUri] = useState("");
+  const [remoteSigner, setRemoteSigner] = useState<NostrConnectSigner | null>(null);
+  const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
+
+  // Generate nostrconnect:// URI when dialog opens in QR mode
+  useEffect(() => {
+    if (open && useQrMode && !remoteSigner) {
+      const initQrMode = async () => {
+        try {
+          // Create a temporary client signer
+          const clientSigner = new PrivateKeySigner();
+
+          // Create NostrConnectSigner with default relays
+          const signer = new NostrConnectSigner({
+            signer: clientSigner,
+            relays: [
+              "wss://relay.nsec.app",
+              "wss://relay.damus.io",
+              "wss://nos.lol",
+            ],
+          });
+
+          await signer.open();
+
+          // Generate nostrconnect:// URI with app metadata
+          const uri = signer.getNostrConnectURI({
+            name: "Grimoire",
+            url: window.location.origin,
+          });
+
+          setNostrConnectUri(uri);
+          setRemoteSigner(signer);
+
+          // Start waiting for connection
+          setIsWaitingForConnection(true);
+
+          // Wait for remote signer to connect (with 5 minute timeout)
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+
+          try {
+            await signer.waitForSigner(abortController.signal);
+            clearTimeout(timeoutId);
+
+            // Connection established, get pubkey and create account
+            const pubkey = await signer.getPublicKey();
+            const account = new NostrConnectAccount(pubkey, signer);
+            accountManager.addAccount(account);
+            accountManager.setActive(account.id);
+
+            toast.success("Connected to remote signer");
+            onOpenChange(false);
+
+            // Cleanup
+            setRemoteSigner(null);
+            setNostrConnectUri("");
+            setIsWaitingForConnection(false);
+          } catch (error) {
+            clearTimeout(timeoutId);
+            if (error instanceof Error && error.name === "AbortError") {
+              toast.error("Connection timeout. Please try again.");
+            }
+            // Reset on error but keep dialog open
+            setIsWaitingForConnection(false);
+          }
+        } catch (error) {
+          console.error("Failed to initialize QR mode:", error);
+          toast.error("Failed to generate connection code");
+        }
+      };
+
+      initQrMode();
+    }
+
+    // Cleanup when dialog closes
+    return () => {
+      if (remoteSigner && !isWaitingForConnection) {
+        remoteSigner.close();
+        setRemoteSigner(null);
+        setNostrConnectUri("");
+      }
+    };
+  }, [open, useQrMode]);
 
   const handleReadonlyLogin = async () => {
     if (!readonlyInput.trim()) {
@@ -175,33 +262,90 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           </TabsContent>
 
           <TabsContent value="remote" className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label htmlFor="bunker-uri" className="text-sm font-medium">
-                Bunker URI
-              </label>
-              <Input
-                id="bunker-uri"
-                placeholder="bunker://..."
-                value={bunkerInput}
-                onChange={(e) => setBunkerInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRemoteSignerLogin();
-                }}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Connect to a remote signer using NIP-46 (Nostr Connect). Paste
-                your bunker:// URI from your remote signer app.
-              </p>
+            {/* Toggle between QR and manual input */}
+            <div className="flex gap-2">
+              <Button
+                variant={useQrMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseQrMode(true)}
+                className="flex-1"
+              >
+                <QrCode className="size-4 mr-2" />
+                QR Code
+              </Button>
+              <Button
+                variant={!useQrMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseQrMode(false)}
+                className="flex-1"
+              >
+                <Keyboard className="size-4 mr-2" />
+                Manual
+              </Button>
             </div>
 
-            <Button
-              onClick={handleRemoteSignerLogin}
-              disabled={loading || !bunkerInput.trim()}
-              className="w-full"
-            >
-              {loading ? "Connecting..." : "Connect Remote Signer"}
-            </Button>
+            {useQrMode ? (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                  {nostrConnectUri ? (
+                    <>
+                      <QRCodeSVG
+                        value={nostrConnectUri}
+                        size={256}
+                        level="M"
+                        className="border-4 border-white rounded"
+                      />
+                      {isWaitingForConnection && (
+                        <div className="text-center">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            Waiting for remote signer...
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      Generating connection code...
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Scan this QR code with your remote signer app (like Amber,
+                  nsec.app, or any NIP-46 compatible app)
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="bunker-uri" className="text-sm font-medium">
+                    Bunker URI
+                  </label>
+                  <Input
+                    id="bunker-uri"
+                    placeholder="bunker://..."
+                    value={bunkerInput}
+                    onChange={(e) => setBunkerInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRemoteSignerLogin();
+                    }}
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste your bunker:// URI from your remote signer app
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleRemoteSignerLogin}
+                  disabled={loading || !bunkerInput.trim()}
+                  className="w-full"
+                >
+                  {loading ? "Connecting..." : "Connect Remote Signer"}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>
