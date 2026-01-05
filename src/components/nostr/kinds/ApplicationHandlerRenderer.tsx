@@ -7,6 +7,7 @@ import {
   getAppName,
   getSupportedKinds,
   getAvailablePlatforms,
+  getAppWebsite,
 } from "@/lib/nip89-helpers";
 import { KindBadge } from "@/components/KindBadge";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ export function ApplicationHandlerRenderer({ event }: BaseEventProps) {
   const appName = getAppName(event);
   const supportedKinds = getSupportedKinds(event);
   const platforms = getAvailablePlatforms(event);
+  const website = getAppWebsite(event);
 
   // Show max 8 kinds in feed view
   const MAX_KINDS_IN_FEED = 8;
@@ -56,6 +58,19 @@ export function ApplicationHandlerRenderer({ event }: BaseEventProps) {
         >
           {appName}
         </ClickableEventTitle>
+
+        {/* Website */}
+        {website && (
+          <a
+            href={website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {website}
+          </a>
+        )}
 
         {/* Supported Kinds */}
         {displayKinds.length > 0 && (

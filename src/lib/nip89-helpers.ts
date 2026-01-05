@@ -123,14 +123,15 @@ export function getPlatformUrls(event: NostrEvent): Record<string, string> {
   }
 
   // Also check for any other platform tags
+  // Exclude common non-platform tags: d, k, r, t, client, etc.
+  const excludedTags = ["d", "k", "r", "t", "client", "alt", "e", "p", "a"];
   for (const tag of event.tags) {
     const tagName = tag[0];
     const tagValue = tag[1];
     if (
       tagValue &&
       !knownPlatforms.includes(tagName) &&
-      tagName !== "d" &&
-      tagName !== "k"
+      !excludedTags.includes(tagName)
     ) {
       // Could be a custom platform tag
       if (tagValue.includes("://") || tagValue.includes("<bech32>")) {
@@ -147,6 +148,26 @@ export function getPlatformUrls(event: NostrEvent): Record<string, string> {
  */
 export function getAvailablePlatforms(event: NostrEvent): string[] {
   return Object.keys(getPlatformUrls(event));
+}
+
+/**
+ * Extract website URL from kind 31990 event content JSON
+ */
+export function getAppWebsite(event: NostrEvent): string | undefined {
+  if (event.kind !== 31990 || !event.content) return undefined;
+
+  try {
+    const metadata = JSON.parse(event.content);
+    if (metadata && typeof metadata === "object") {
+      const website = metadata.website;
+      if (website && typeof website === "string") {
+        return website;
+      }
+    }
+  } catch {
+    // Invalid JSON
+  }
+  return undefined;
 }
 
 /**

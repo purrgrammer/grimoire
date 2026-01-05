@@ -45,11 +45,9 @@ function PlatformIcon({ platform }: { platform: string }) {
 function HandlerCard({
   address,
   platform,
-  relayHint,
 }: {
   address: { kind: number; pubkey: string; identifier: string };
   platform?: string;
-  relayHint?: string;
 }) {
   const { addWindow } = useGrimoire();
   const handlerEvent = useNostrEvent(address);
@@ -142,19 +140,14 @@ function HandlerCard({
       )}
 
       {/* Recommendation Context */}
-      {(platform || relayHint) && (
+      {platform && (
         <div className="flex flex-col gap-1 pt-2 border-t border-border text-xs text-muted-foreground">
-          {platform && (
-            <div>
-              Recommended for:{" "}
-              <Badge variant="outline" className="text-[10px] ml-1">
-                {platform}
-              </Badge>
-            </div>
-          )}
-          {relayHint && (
-            <div className="font-mono">Relay hint: {relayHint}</div>
-          )}
+          <div>
+            Recommended for:{" "}
+            <Badge variant="outline" className="text-[10px] ml-1">
+              {platform}
+            </Badge>
+          </div>
         </div>
       )}
     </div>
@@ -260,7 +253,6 @@ export function HandlerRecommendationDetailRenderer({
                 key={idx}
                 address={ref.address}
                 platform={ref.platform}
-                relayHint={ref.relayHint}
               />
             ))}
           </div>

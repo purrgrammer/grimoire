@@ -5,6 +5,7 @@ import {
   getSupportedKinds,
   getPlatformUrls,
   getHandlerIdentifier,
+  getAppWebsite,
 } from "@/lib/nip89-helpers";
 import { KindBadge } from "@/components/KindBadge";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   Globe,
   Smartphone,
   TabletSmartphone,
+  ExternalLink,
 } from "lucide-react";
 
 interface ApplicationHandlerDetailRendererProps {
@@ -76,6 +78,7 @@ export function ApplicationHandlerDetailRenderer({
   const supportedKinds = getSupportedKinds(event);
   const platformUrls = getPlatformUrls(event);
   const identifier = getHandlerIdentifier(event);
+  const website = getAppWebsite(event);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -87,6 +90,19 @@ export function ApplicationHandlerDetailRenderer({
         {/* Description */}
         {description && (
           <p className="text-muted-foreground text-lg">{description}</p>
+        )}
+
+        {/* Website */}
+        {website && (
+          <a
+            href={website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-primary hover:underline"
+          >
+            {website}
+            <ExternalLink className="size-3" />
+          </a>
         )}
 
         {/* Metadata Grid */}
