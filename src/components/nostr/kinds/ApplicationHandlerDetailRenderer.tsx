@@ -11,13 +11,13 @@ import { KindBadge } from "@/components/KindBadge";
 import { Badge } from "@/components/ui/badge";
 import { useCopy } from "@/hooks/useCopy";
 import { UserName } from "../UserName";
+import { ExternalLink } from "@/components/ExternalLink";
 import {
   Copy,
   CopyCheck,
   Globe,
   Smartphone,
   TabletSmartphone,
-  ExternalLink,
 } from "lucide-react";
 
 interface ApplicationHandlerDetailRendererProps {
@@ -94,15 +94,9 @@ export function ApplicationHandlerDetailRenderer({
 
         {/* Website */}
         {website && (
-          <a
-            href={website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary hover:underline"
-          >
+          <ExternalLink href={website} variant="default" size="base">
             {website}
-            <ExternalLink className="size-3" />
-          </a>
+          </ExternalLink>
         )}
 
         {/* Metadata Grid */}

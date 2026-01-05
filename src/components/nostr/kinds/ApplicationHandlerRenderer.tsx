@@ -11,6 +11,7 @@ import {
 } from "@/lib/nip89-helpers";
 import { KindBadge } from "@/components/KindBadge";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "@/components/ExternalLink";
 import { Globe, Smartphone, TabletSmartphone } from "lucide-react";
 
 /**
@@ -60,17 +61,7 @@ export function ApplicationHandlerRenderer({ event }: BaseEventProps) {
         </ClickableEventTitle>
 
         {/* Website */}
-        {website && (
-          <a
-            href={website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-primary hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {website}
-          </a>
-        )}
+        {website && <ExternalLink href={website}>{website}</ExternalLink>}
 
         {/* Supported Kinds */}
         {displayKinds.length > 0 && (
