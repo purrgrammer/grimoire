@@ -1,15 +1,15 @@
+import { useState } from "react";
 import { useObservableMemo } from "applesauce-react/hooks";
 import { Check, User, UserX, UserPlus, Eye, Puzzle } from "lucide-react";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
-import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Nip05 from "@/components/nostr/nip05";
+import LoginDialog from "@/components/LoginDialog";
 import type { IAccount } from "applesauce-accounts";
 import type { ISigner } from "applesauce-signers";
 
@@ -18,7 +18,7 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
 
   if (accountType === "grimoire-readonly" || accountType === "readonly") {
     return (
-      <Badge variant="secondary" className="text-xs">
+      <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
         <Eye className="size-3 mr-1" />
         Read-only
       </Badge>
@@ -27,7 +27,7 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
 
   if (accountType === "extension") {
     return (
-      <Badge variant="secondary" className="text-xs">
+      <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
         <Puzzle className="size-3 mr-1" />
         Extension
       </Badge>
@@ -70,29 +70,23 @@ function AccountCard({
     <Card className={isActive ? "border-primary" : ""}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            {isActive && (
-              <Check className="size-4 text-primary flex-shrink-0" />
-            )}
-            <Avatar className="size-10">
-              <AvatarImage src={profile?.picture} alt={displayName} />
-              <AvatarFallback>
-                <User className="size-5" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {isActive && (
+                <Check className="size-4 text-primary flex-shrink-0" />
+              )}
+              <div className="flex items-center justify-between gap-3 flex-1">
                 <div className="font-medium truncate">{displayName}</div>
                 {getAccountTypeBadge(account)}
               </div>
-              {profile && (
-                <div className="text-xs text-muted-foreground">
-                  <Nip05 pubkey={account.pubkey} profile={profile} />
-                </div>
-              )}
-              <div className="text-xs text-muted-foreground font-mono truncate">
-                {account.pubkey.slice(0, 8)}...{account.pubkey.slice(-8)}
+            </div>
+            {profile && (
+              <div className="text-xs text-muted-foreground">
+                <Nip05 pubkey={account.pubkey} profile={profile} />
               </div>
+            )}
+            <div className="text-xs text-muted-foreground font-mono truncate">
+              {account.pubkey.slice(0, 8)}...{account.pubkey.slice(-8)}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -128,14 +122,15 @@ function AccountCard({
 export default function AccountManager() {
   const activeAccount = useObservableMemo(() => accountManager.active$, []);
   const allAccounts = useObservableMemo(() => accountManager.accounts$, []);
-  const { openCommandLauncher } = useAppShell();
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
 
   const handleAddAccount = () => {
-    openCommandLauncher();
+    setShowLoginDialog(true);
   };
 
   return (
     <div className="h-full w-full overflow-auto p-6">
+      <LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
       <div className="max-w-3xl mx-auto space-y-6">
         <Card>
           <CardHeader>
@@ -157,11 +152,7 @@ export default function AccountManager() {
                 <User className="size-12 mx-auto mb-4 opacity-20" />
                 <p className="text-sm">No accounts yet</p>
                 <p className="text-xs mt-2">
-                  Use the "Add Account" button or type{" "}
-                  <code className="text-xs px-1 py-0.5 bg-muted rounded">
-                    login
-                  </code>{" "}
-                  in the command launcher
+                  Click "Add Account" to get started
                 </p>
               </div>
             ) : (

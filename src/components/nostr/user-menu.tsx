@@ -1,12 +1,9 @@
 import { User, Check, UserPlus, Eye, Puzzle } from "lucide-react";
 import accounts from "@/services/accounts";
-import { ExtensionSigner } from "applesauce-signers";
-import { ExtensionAccount } from "applesauce-accounts/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { useObservableMemo } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
-import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,10 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
+import LoginDialog from "@/components/LoginDialog";
 import { useState } from "react";
 import type { IAccount } from "applesauce-accounts";
 import type { ISigner } from "applesauce-signers";
@@ -31,7 +28,7 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
 
   if (accountType === "grimoire-readonly" || accountType === "readonly") {
     return (
-      <Badge variant="secondary" className="text-xs">
+      <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
         <Eye className="size-3 mr-1" />
         Read-only
       </Badge>
@@ -40,7 +37,7 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
 
   if (accountType === "extension") {
     return (
-      <Badge variant="secondary" className="text-xs">
+      <Badge variant="outline" className="text-xs text-muted-foreground border-muted">
         <Puzzle className="size-3 mr-1" />
         Extension
       </Badge>
@@ -48,21 +45,6 @@ function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
   }
 
   return null;
-}
-
-function UserAvatar({ pubkey }: { pubkey: string }) {
-  const profile = useProfile(pubkey);
-  return (
-    <Avatar className="size-4">
-      <AvatarImage
-        src={profile?.picture}
-        alt={getDisplayName(pubkey, profile)}
-      />
-      <AvatarFallback>
-        {getDisplayName(pubkey, profile).slice(2)}
-      </AvatarFallback>
-    </Avatar>
-  );
 }
 
 function UserLabel({
@@ -73,8 +55,8 @@ function UserLabel({
   const profile = useProfile(account.pubkey);
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <span className="text-sm">{getDisplayName(account.pubkey, profile)}</span>
+      <div className="flex items-center justify-between gap-3 w-full">
+        <span className="text-sm truncate">{getDisplayName(account.pubkey, profile)}</span>
         {getAccountTypeBadge(account)}
       </div>
       {profile ? (
@@ -90,9 +72,9 @@ export default function UserMenu() {
   const account = useObservableMemo(() => accounts.active$, []);
   const allAccounts = useObservableMemo(() => accounts.accounts$, []);
   const { state, addWindow } = useGrimoire();
-  const { openCommandLauncher } = useAppShell();
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
 
   // Get other accounts (not the active one)
   const otherAccounts = allAccounts.filter((acc) => acc.id !== account?.id);
@@ -106,16 +88,8 @@ export default function UserMenu() {
     );
   }
 
-  async function login() {
-    try {
-      const signer = new ExtensionSigner();
-      const pubkey = await signer.getPublicKey();
-      const account = new ExtensionAccount(pubkey, signer);
-      accounts.addAccount(account);
-      accounts.setActive(account);
-    } catch (err) {
-      console.error(err);
-    }
+  function login() {
+    setShowLoginDialog(true);
   }
 
   function switchAccount(targetAccount: IAccount<ISigner, unknown, unknown>) {
@@ -123,8 +97,7 @@ export default function UserMenu() {
   }
 
   function addAccount() {
-    // Open the command launcher (user will type "login" command)
-    openCommandLauncher();
+    setShowLoginDialog(true);
   }
 
   async function logout() {
@@ -135,6 +108,7 @@ export default function UserMenu() {
   return (
     <>
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -142,11 +116,7 @@ export default function UserMenu() {
             variant="link"
             aria-label={account ? "User menu" : "Log in"}
           >
-            {account ? (
-              <UserAvatar pubkey={account.pubkey} />
-            ) : (
-              <User onClick={login} className="size-4 text-muted-foreground" />
-            )}
+            <User className="size-4 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80" align="start">
@@ -179,10 +149,7 @@ export default function UserMenu() {
                         onClick={() => switchAccount(acc)}
                         className="cursor-crosshair"
                       >
-                        <div className="flex items-center gap-2">
-                          <UserAvatar pubkey={acc.pubkey} />
-                          <UserLabel account={acc} />
-                        </div>
+                        <UserLabel account={acc} />
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuGroup>

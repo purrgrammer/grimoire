@@ -5,7 +5,6 @@ import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
-import { createAccountFromInput } from "@/lib/login-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -93,53 +92,6 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "System",
     defaultProps: { cmd: "help" },
   },
-  login: {
-    name: "login",
-    section: "1",
-    synopsis: "login [identifier]",
-    description:
-      "Add a new Nostr account to Grimoire. Supports read-only accounts (npub, nip-05, hex pubkey, nprofile) and signing accounts (browser extension via NIP-07). When called without arguments, opens the login dialog with method selection.",
-    options: [
-      {
-        flag: "[identifier]",
-        description:
-          "Account identifier: npub1..., user@domain.com, hex pubkey, nprofile1..., or leave empty to open dialog",
-      },
-    ],
-    examples: [
-      "login                          Open login dialog",
-      "login npub1abc...              Add read-only account from npub",
-      "login alice@nostr.com          Add read-only account from NIP-05",
-      "login nprofile1...             Add read-only account with relay hints",
-      "login 3bf0c63f...              Add read-only account from hex pubkey",
-    ],
-    seeAlso: ["profile", "req"],
-    appId: "login-handler",
-    category: "System",
-    argParser: async (args: string[]) => {
-      const input = args.join(" ").trim();
-
-      // No input - open dialog
-      if (!input) {
-        return { action: "open-dialog" };
-      }
-
-      // Try to create account from input
-      try {
-        const account = await createAccountFromInput(input);
-        return {
-          action: "add-account",
-          account,
-        };
-      } catch (error) {
-        return {
-          action: "error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-    defaultProps: { action: "open-dialog" },
-  },
   accounts: {
     name: "accounts",
     section: "1",
@@ -147,35 +99,10 @@ export const manPages: Record<string, ManPageEntry> = {
     description:
       "View and manage all Nostr accounts in Grimoire. Shows all logged-in accounts with their connection types, allows switching between accounts, and provides account management options.",
     examples: ["accounts    View all accounts"],
-    seeAlso: ["login", "logout", "profile"],
+    seeAlso: ["profile"],
     appId: "account-manager",
     category: "System",
     defaultProps: {},
-  },
-  logout: {
-    name: "logout",
-    section: "1",
-    synopsis: "logout [--all]",
-    description:
-      "Remove the active Nostr account from Grimoire. Use the --all flag to remove all accounts at once.",
-    options: [
-      {
-        flag: "--all",
-        description: "Remove all accounts instead of just the active one",
-      },
-    ],
-    examples: [
-      "logout         Remove the active account",
-      "logout --all   Remove all accounts",
-    ],
-    seeAlso: ["login", "accounts"],
-    appId: "logout-handler",
-    category: "System",
-    argParser: (args: string[]) => {
-      const all = args.includes("--all");
-      return { action: all ? "logout-all" : "logout", all };
-    },
-    defaultProps: { action: "logout", all: false },
   },
   kinds: {
     name: "kinds",
