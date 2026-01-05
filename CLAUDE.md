@@ -195,6 +195,30 @@ describe("parseReqCommand", () => {
 });
 ```
 
+## Verification Requirements
+
+**CRITICAL**: Before marking any task complete, verify changes work correctly:
+
+1. **For any code change**: Run `npm run test:run` - tests must pass
+2. **For UI changes**: Run `npm run build` - build must succeed
+3. **For style/lint changes**: Run `npm run lint` - no new errors
+
+**Quick verification command**:
+```bash
+npm run lint && npm run test:run && npm run build
+```
+
+If tests fail, fix the issues before proceeding. Never leave broken tests or a failing build.
+
+### Slash Commands
+
+Use these commands for common workflows:
+- `/verify` - Run full verification suite (lint + test + build)
+- `/test` - Run tests and report results
+- `/lint-fix` - Auto-fix lint and formatting issues
+- `/commit-push-pr` - Create a commit and PR with proper formatting
+- `/review` - Review changes for quality and Nostr best practices
+
 ## Critical Notes
 
 - React 19 features in use (ensure compatibility)
@@ -202,3 +226,4 @@ describe("parseReqCommand", () => {
 - Dark mode is default (controlled via HTML class)
 - EventStore handles event deduplication and replaceability automatically
 - Run tests before committing changes to parsers or core logic
+- Always run `/verify` before creating a PR

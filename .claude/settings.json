@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(npm:*)",
+      "Bash(npx:*)",
       "Bash(git:*)",
       "Bash(gh:*)",
       "Bash(find:*)",
@@ -18,9 +19,31 @@
       "Bash(source ~/.zshrc)",
       "Bash(nvm use:*)",
       "Bash(nvm install:*)",
-      "Bash(node --version:*)"
+      "Bash(node --version:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(touch:*)",
+      "Bash(pwd)",
+      "Bash(which:*)",
+      "Bash(echo:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)"
     ],
-    "deny": [],
-    "ask": []
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx prettier --write \"$FILEPATH\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
   }
 }
