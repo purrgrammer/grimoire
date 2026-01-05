@@ -8,6 +8,16 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import Nip05 from "@/components/nostr/nip05";
 import LoginDialog from "@/components/LoginDialog";
 import type { IAccount } from "applesauce-accounts";
@@ -46,6 +56,7 @@ function AccountCard({
 }) {
   const profile = useProfile(account.pubkey);
   const displayName = getDisplayName(account.pubkey, profile);
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
 
   const handleSwitch = () => {
     accountManager.setActive(account.id);
@@ -55,64 +66,87 @@ function AccountCard({
   };
 
   const handleRemove = () => {
-    const confirmRemove = window.confirm(
-      `Remove account ${displayName}? This cannot be undone.`,
-    );
-    if (confirmRemove) {
-      accountManager.removeAccount(account);
-      toast.success("Account removed", {
-        description: `Removed ${displayName}`,
-      });
-    }
+    setShowRemoveDialog(true);
+  };
+
+  const confirmRemove = () => {
+    accountManager.removeAccount(account);
+    toast.success("Account removed", {
+      description: `Removed ${displayName}`,
+    });
+    setShowRemoveDialog(false);
   };
 
   return (
-    <Card className={isActive ? "border-primary" : ""}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              {isActive && (
-                <Check className="size-4 text-primary flex-shrink-0" />
+    <>
+      <Card className={isActive ? "border-primary" : ""}>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                {isActive && (
+                  <Check className="size-4 text-primary flex-shrink-0" />
+                )}
+                <div className="flex items-center justify-between gap-3 flex-1">
+                  <div className="font-medium truncate">{displayName}</div>
+                  {getAccountTypeBadge(account)}
+                </div>
+              </div>
+              {profile && (
+                <div className="text-xs text-muted-foreground">
+                  <Nip05 pubkey={account.pubkey} profile={profile} />
+                </div>
               )}
-              <div className="flex items-center justify-between gap-3 flex-1">
-                <div className="font-medium truncate">{displayName}</div>
-                {getAccountTypeBadge(account)}
+              <div className="text-xs text-muted-foreground font-mono truncate">
+                {account.pubkey.slice(0, 8)}...{account.pubkey.slice(-8)}
               </div>
             </div>
-            {profile && (
-              <div className="text-xs text-muted-foreground">
-                <Nip05 pubkey={account.pubkey} profile={profile} />
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground font-mono truncate">
-              {account.pubkey.slice(0, 8)}...{account.pubkey.slice(-8)}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!isActive && (
+            <div className="flex items-center gap-2">
+              {!isActive && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSwitch}
+                  className="cursor-crosshair"
+                >
+                  Switch
+                </Button>
+              )}
               <Button
                 size="sm"
-                variant="outline"
-                onClick={handleSwitch}
-                className="cursor-crosshair"
+                variant="ghost"
+                onClick={handleRemove}
+                className="cursor-crosshair text-destructive hover:text-destructive"
+                title="Remove account"
               >
-                Switch
+                <UserX className="size-4" />
               </Button>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleRemove}
-              className="cursor-crosshair text-destructive hover:text-destructive"
-              title="Remove account"
-            >
-              <UserX className="size-4" />
-            </Button>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{displayName}</strong>?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemove}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
