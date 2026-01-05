@@ -9,6 +9,7 @@ import {
   getPullRequestSubject,
 } from "@/lib/nip34-helpers";
 import { getCodeName } from "@/lib/nip-c0-helpers";
+import { getAppName } from "@/lib/nip89-helpers";
 import { getKindInfo } from "@/constants/kinds";
 
 /**
@@ -47,6 +48,9 @@ export function getEventDisplayTitle(
       break;
     case 1618: // Pull request
       title = getPullRequestSubject(event);
+      break;
+    case 31990: // Application Handler
+      title = getAppName(event);
       break;
   }
 
