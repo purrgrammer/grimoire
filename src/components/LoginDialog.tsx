@@ -54,10 +54,25 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
           await signer.open();
 
-          // Generate nostrconnect:// URI with app metadata
+          // Generate nostrconnect:// URI with app metadata and permissions
           const uri = signer.getNostrConnectURI({
             name: "Grimoire",
             url: window.location.origin,
+            permissions: [
+              "sign_event:1",  // Short text notes
+              "sign_event:3",  // Contact list
+              "sign_event:6",  // Reposts
+              "sign_event:7",  // Reactions
+              "sign_event:1984", // Reporting
+              "sign_event:9734", // Zap requests
+              "sign_event:9735", // Zap receipts
+              "sign_event:10002", // Relay list
+              "sign_event:30023", // Long-form content
+              "nip04_encrypt",
+              "nip04_decrypt",
+              "nip44_encrypt",
+              "nip44_decrypt",
+            ],
           });
 
           setNostrConnectUri(uri);
