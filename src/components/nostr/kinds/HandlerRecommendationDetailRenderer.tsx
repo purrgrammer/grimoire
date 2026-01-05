@@ -3,7 +3,6 @@ import {
   getRecommendedKind,
   getHandlerReferences,
   getRecommendedPlatforms,
-  formatAddressPointer,
   getAppName,
   getAppDescription,
   getSupportedKinds,
@@ -266,36 +265,6 @@ export function HandlerRecommendationDetailRenderer({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Raw Data Section */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Raw References</h2>
-        <div className="bg-muted/30 p-4 rounded-lg border border-border">
-          <div className="flex flex-col gap-2 text-sm font-mono">
-            {allHandlers.map((ref, idx) => (
-              <div key={idx} className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground">
-                  Reference {idx + 1}:
-                </div>
-                <div className="pl-2 border-l-2 border-muted flex flex-col gap-0.5 text-xs">
-                  <div>Address: {formatAddressPointer(ref.address)}</div>
-                  {ref.platform && <div>Platform: {ref.platform}</div>}
-                  {ref.relayHint && <div>Relay: {ref.relayHint}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Event Info */}
-      <div className="flex flex-col gap-2 pt-4 border-t border-border text-sm text-muted-foreground">
-        <div>
-          Event ID:{" "}
-          <code className="font-mono text-xs bg-muted px-1">{event.id}</code>
-        </div>
-        <div>Created: {new Date(event.created_at * 1000).toLocaleString()}</div>
       </div>
     </div>
   );

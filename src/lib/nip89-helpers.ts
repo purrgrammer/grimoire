@@ -32,7 +32,12 @@ export function getAppName(event: NostrEvent): string {
   if (event.content) {
     try {
       const metadata = JSON.parse(event.content);
-      if (metadata && typeof metadata === "object" && metadata.name && typeof metadata.name === "string") {
+      if (
+        metadata &&
+        typeof metadata === "object" &&
+        metadata.name &&
+        typeof metadata.name === "string"
+      ) {
         return metadata.name;
       }
     } catch {

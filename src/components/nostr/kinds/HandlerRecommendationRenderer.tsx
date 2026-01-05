@@ -48,7 +48,7 @@ function HandlerItem({
   const handlerEvent = useNostrEvent(address);
   const appName = handlerEvent
     ? getAppName(handlerEvent)
-    : (address?.identifier || "Unknown Handler");
+    : address?.identifier || "Unknown Handler";
 
   const handleClick = () => {
     addWindow("open", { pointer: address });

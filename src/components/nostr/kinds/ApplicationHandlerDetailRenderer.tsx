@@ -2,7 +2,6 @@ import { NostrEvent } from "@/types/nostr";
 import {
   getAppName,
   getAppDescription,
-  getAppImage,
   getSupportedKinds,
   getPlatformUrls,
   getHandlerIdentifier,
@@ -18,8 +17,6 @@ import {
   Smartphone,
   TabletSmartphone,
 } from "lucide-react";
-import { CopyableJsonViewer } from "@/components/JsonViewer";
-import { useMemo } from "react";
 
 interface ApplicationHandlerDetailRendererProps {
   event: NostrEvent;
@@ -76,34 +73,14 @@ export function ApplicationHandlerDetailRenderer({
 }: ApplicationHandlerDetailRendererProps) {
   const appName = getAppName(event);
   const description = getAppDescription(event);
-  const image = getAppImage(event);
   const supportedKinds = getSupportedKinds(event);
   const platformUrls = getPlatformUrls(event);
   const identifier = getHandlerIdentifier(event);
-
-  // Parse content JSON if available
-  const contentJson = useMemo(() => {
-    if (!event.content) return null;
-    try {
-      return JSON.parse(event.content);
-    } catch {
-      return null;
-    }
-  }, [event.content]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Header Section */}
       <div className="flex flex-col gap-3">
-        {/* App Image */}
-        {image && (
-          <img
-            src={image}
-            alt={appName}
-            className="w-20 h-20 rounded-lg object-cover border border-border"
-          />
-        )}
-
         {/* App Name */}
         <h1 className="text-3xl font-bold">{appName}</h1>
 
@@ -191,23 +168,6 @@ export function ApplicationHandlerDetailRenderer({
           </div>
         </div>
       )}
-
-      {/* Raw Metadata Section */}
-      {contentJson && Object.keys(contentJson).length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">Metadata</h2>
-          <CopyableJsonViewer json={JSON.stringify(contentJson, null, 2)} />
-        </div>
-      )}
-
-      {/* Event Info */}
-      <div className="flex flex-col gap-2 pt-4 border-t border-border text-sm text-muted-foreground">
-        <div>
-          Event ID:{" "}
-          <code className="font-mono text-xs bg-muted px-1">{event.id}</code>
-        </div>
-        <div>Created: {new Date(event.created_at * 1000).toLocaleString()}</div>
-      </div>
     </div>
   );
 }
