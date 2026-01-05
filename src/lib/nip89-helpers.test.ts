@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getAppName,
   getAppDescription,
-  getAppImage,
+  getAppWebsite,
   getSupportedKinds,
   getPlatformUrls,
   getAvailablePlatforms,
@@ -10,11 +10,7 @@ import {
   getRecommendedKind,
   parseAddressPointer,
   getHandlerReferences,
-  getHandlersByPlatform,
   getRecommendedPlatforms,
-  substituteTemplate,
-  hasPlaceholder,
-  formatAddressPointer,
 } from "./nip89-helpers";
 import { NostrEvent } from "@/types/nostr";
 
@@ -119,29 +115,24 @@ describe("Kind 31990 (Application Handler) Helpers", () => {
     });
   });
 
-  describe("getAppImage", () => {
-    it("should extract image from content JSON", () => {
+  describe("getAppWebsite", () => {
+    it("should extract website from content JSON", () => {
       const event = createHandlerEvent({
-        content: JSON.stringify({ image: "https://example.com/logo.png" }),
+        content: JSON.stringify({ website: "https://example.com" }),
       });
-      expect(getAppImage(event)).toBe("https://example.com/logo.png");
+      expect(getAppWebsite(event)).toBe("https://example.com");
     });
 
-    it("should extract picture field as fallback", () => {
+    it("should return undefined if no website field", () => {
       const event = createHandlerEvent({
-        content: JSON.stringify({ picture: "https://example.com/pic.png" }),
+        content: JSON.stringify({ name: "App" }),
       });
-      expect(getAppImage(event)).toBe("https://example.com/pic.png");
+      expect(getAppWebsite(event)).toBeUndefined();
     });
 
-    it("should prefer image over picture", () => {
-      const event = createHandlerEvent({
-        content: JSON.stringify({
-          image: "https://example.com/logo.png",
-          picture: "https://example.com/pic.png",
-        }),
-      });
-      expect(getAppImage(event)).toBe("https://example.com/logo.png");
+    it("should return undefined if content is empty", () => {
+      const event = createHandlerEvent({ content: "" });
+      expect(getAppWebsite(event)).toBeUndefined();
     });
   });
 
@@ -351,39 +342,6 @@ describe("Kind 31989 (Handler Recommendation) Helpers", () => {
     });
   });
 
-  describe("getHandlersByPlatform", () => {
-    it("should filter handlers by platform", () => {
-      const event = createRecommendationEvent({
-        tags: [
-          ["d", "9802"],
-          ["a", "31990:pubkey1:handler1", "", "web"],
-          ["a", "31990:pubkey2:handler2", "", "ios"],
-          ["a", "31990:pubkey3:handler3", "", "web"],
-        ],
-      });
-      const webHandlers = getHandlersByPlatform(event, "web");
-      expect(webHandlers).toHaveLength(2);
-      expect(webHandlers[0].platform).toBe("web");
-      expect(webHandlers[1].platform).toBe("web");
-
-      const iosHandlers = getHandlersByPlatform(event, "ios");
-      expect(iosHandlers).toHaveLength(1);
-      expect(iosHandlers[0].platform).toBe("ios");
-    });
-
-    it("should return all handlers if no platform specified", () => {
-      const event = createRecommendationEvent({
-        tags: [
-          ["d", "9802"],
-          ["a", "31990:pubkey1:handler1", "", "web"],
-          ["a", "31990:pubkey2:handler2", "", "ios"],
-        ],
-      });
-      const allHandlers = getHandlersByPlatform(event);
-      expect(allHandlers).toHaveLength(2);
-    });
-  });
-
   describe("getRecommendedPlatforms", () => {
     it("should return unique platforms from handler references", () => {
       const event = createRecommendationEvent({
@@ -407,49 +365,6 @@ describe("Kind 31989 (Handler Recommendation) Helpers", () => {
         ],
       });
       expect(getRecommendedPlatforms(event)).toEqual([]);
-    });
-  });
-});
-
-describe("URL Template Utilities", () => {
-  describe("substituteTemplate", () => {
-    it("should replace <bech32> placeholder with entity", () => {
-      const template = "https://app.com/view/<bech32>";
-      const result = substituteTemplate(template, "nevent1abc123");
-      expect(result).toBe("https://app.com/view/nevent1abc123");
-    });
-
-    it("should replace multiple occurrences", () => {
-      const template = "https://app.com/<bech32>/view/<bech32>";
-      const result = substituteTemplate(template, "note1xyz");
-      expect(result).toBe("https://app.com/note1xyz/view/note1xyz");
-    });
-
-    it("should return unchanged if no placeholder", () => {
-      const template = "https://app.com/view";
-      const result = substituteTemplate(template, "nevent1abc");
-      expect(result).toBe("https://app.com/view");
-    });
-  });
-
-  describe("hasPlaceholder", () => {
-    it("should return true if template contains <bech32>", () => {
-      expect(hasPlaceholder("https://app.com/<bech32>")).toBe(true);
-    });
-
-    it("should return false if template does not contain <bech32>", () => {
-      expect(hasPlaceholder("https://app.com/view")).toBe(false);
-    });
-  });
-
-  describe("formatAddressPointer", () => {
-    it("should format address pointer as string", () => {
-      const pointer = {
-        kind: 31990,
-        pubkey: "abcd1234",
-        identifier: "my-handler",
-      };
-      expect(formatAddressPointer(pointer)).toBe("31990:abcd1234:my-handler");
     });
   });
 });

@@ -23,26 +23,40 @@ function getTagValues(event: NostrEvent, tagName: string): string[] {
 // ============================================================================
 
 /**
+ * Get parsed metadata from kind 31990 event content JSON
+ * Caches the parsed result to avoid redundant JSON.parse calls
+ */
+function getAppMetadata(event: NostrEvent): Record<string, any> | null {
+  if (event.kind !== 31990 || !event.content) return null;
+
+  // Use a symbol as cache key to avoid property name conflicts
+  const cacheKey = Symbol.for("nip89-metadata");
+  const cached = (event as any)[cacheKey];
+  if (cached !== undefined) return cached;
+
+  try {
+    const metadata = JSON.parse(event.content);
+    if (metadata && typeof metadata === "object") {
+      (event as any)[cacheKey] = metadata;
+      return metadata;
+    }
+  } catch {
+    // Invalid JSON
+  }
+
+  (event as any)[cacheKey] = null;
+  return null;
+}
+
+/**
  * Extract app name from kind 31990 event content JSON or fallback to d tag
  */
 export function getAppName(event: NostrEvent): string {
   if (event.kind !== 31990) return "";
 
-  // Try to parse content as JSON
-  if (event.content) {
-    try {
-      const metadata = JSON.parse(event.content);
-      if (
-        metadata &&
-        typeof metadata === "object" &&
-        metadata.name &&
-        typeof metadata.name === "string"
-      ) {
-        return metadata.name;
-      }
-    } catch {
-      // Not valid JSON, continue to fallback
-    }
+  const metadata = getAppMetadata(event);
+  if (metadata?.name && typeof metadata.name === "string") {
+    return metadata.name;
   }
 
   // Fallback to d tag identifier
@@ -55,40 +69,31 @@ export function getAppName(event: NostrEvent): string {
  * Checks both 'description' and 'about' fields
  */
 export function getAppDescription(event: NostrEvent): string | undefined {
-  if (event.kind !== 31990 || !event.content) return undefined;
+  if (event.kind !== 31990) return undefined;
 
-  try {
-    const metadata = JSON.parse(event.content);
-    if (metadata && typeof metadata === "object") {
-      // Check description first, then about (common in kind 0 profile format)
-      const desc = metadata.description || metadata.about;
-      if (desc && typeof desc === "string") {
-        return desc;
-      }
+  const metadata = getAppMetadata(event);
+  if (metadata) {
+    // Check description first, then about (common in kind 0 profile format)
+    const desc = metadata.description || metadata.about;
+    if (desc && typeof desc === "string") {
+      return desc;
     }
-  } catch {
-    // Invalid JSON
   }
+
   return undefined;
 }
 
 /**
- * Extract app image URL from kind 31990 event content JSON
+ * Extract website URL from kind 31990 event content JSON
  */
-export function getAppImage(event: NostrEvent): string | undefined {
-  if (event.kind !== 31990 || !event.content) return undefined;
+export function getAppWebsite(event: NostrEvent): string | undefined {
+  if (event.kind !== 31990) return undefined;
 
-  try {
-    const metadata = JSON.parse(event.content);
-    if (metadata && typeof metadata === "object") {
-      const image = metadata.image || metadata.picture;
-      if (image && typeof image === "string") {
-        return image;
-      }
-    }
-  } catch {
-    // Invalid JSON
+  const metadata = getAppMetadata(event);
+  if (metadata?.website && typeof metadata.website === "string") {
+    return metadata.website;
   }
+
   return undefined;
 }
 
@@ -148,26 +153,6 @@ export function getPlatformUrls(event: NostrEvent): Record<string, string> {
  */
 export function getAvailablePlatforms(event: NostrEvent): string[] {
   return Object.keys(getPlatformUrls(event));
-}
-
-/**
- * Extract website URL from kind 31990 event content JSON
- */
-export function getAppWebsite(event: NostrEvent): string | undefined {
-  if (event.kind !== 31990 || !event.content) return undefined;
-
-  try {
-    const metadata = JSON.parse(event.content);
-    if (metadata && typeof metadata === "object") {
-      const website = metadata.website;
-      if (website && typeof website === "string") {
-        return website;
-      }
-    }
-  } catch {
-    // Invalid JSON
-  }
-  return undefined;
 }
 
 /**
@@ -256,20 +241,6 @@ export function getHandlerReferences(event: NostrEvent): HandlerReference[] {
 }
 
 /**
- * Get handler references filtered by platform
- */
-export function getHandlersByPlatform(
-  event: NostrEvent,
-  platform?: string,
-): HandlerReference[] {
-  const allRefs = getHandlerReferences(event);
-
-  if (!platform) return allRefs;
-
-  return allRefs.filter((ref) => ref.platform === platform);
-}
-
-/**
  * Get unique platforms from handler references in kind 31989
  */
 export function getRecommendedPlatforms(event: NostrEvent): string[] {
@@ -283,33 +254,4 @@ export function getRecommendedPlatforms(event: NostrEvent): string[] {
   }
 
   return Array.from(platforms).sort();
-}
-
-// ============================================================================
-// URL Template Utilities
-// ============================================================================
-
-/**
- * Substitute <bech32> placeholder in URL template with actual bech32 entity
- */
-export function substituteTemplate(
-  template: string,
-  bech32Entity: string,
-): string {
-  return template.replace(/<bech32>/g, bech32Entity);
-}
-
-/**
- * Check if a string contains the <bech32> placeholder
- */
-export function hasPlaceholder(template: string): boolean {
-  return template.includes("<bech32>");
-}
-
-/**
- * Format an address pointer as a string for display
- * Format: "kind:pubkey:identifier"
- */
-export function formatAddressPointer(pointer: AddressPointer): string {
-  return `${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`;
 }
