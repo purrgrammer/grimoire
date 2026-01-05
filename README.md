@@ -8,7 +8,6 @@ A Nostr protocol explorer and developer tool with a tiling window manager interf
 - **Command Palette** - Unix-style commands via `Cmd+K` to open apps and navigate
 - **Multi-workspace** - Virtual desktops with independent layouts
 - **Real-time** - Reactive event subscriptions with automatic updates
-- **Offline Support** - Event caching via IndexedDB
 
 ## Stack
 
