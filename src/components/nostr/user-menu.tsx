@@ -1,4 +1,4 @@
-import { User, Check, UserPlus } from "lucide-react";
+import { User, Check, UserPlus, Eye, Puzzle } from "lucide-react";
 import accounts from "@/services/accounts";
 import { ExtensionSigner } from "applesauce-signers";
 import { ExtensionAccount } from "applesauce-accounts/accounts";
@@ -8,6 +8,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,30 @@ import { useState } from "react";
 import type { IAccount } from "applesauce-accounts";
 import type { ISigner } from "applesauce-signers";
 
+function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
+  const accountType = (account.constructor as unknown as { type: string }).type;
+
+  if (accountType === "grimoire-readonly" || accountType === "readonly") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Eye className="size-3 mr-1" />
+        Read-only
+      </Badge>
+    );
+  }
+
+  if (accountType === "extension") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Puzzle className="size-3 mr-1" />
+        Extension
+      </Badge>
+    );
+  }
+
+  return null;
+}
+
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
   return (
@@ -40,14 +65,21 @@ function UserAvatar({ pubkey }: { pubkey: string }) {
   );
 }
 
-function UserLabel({ pubkey }: { pubkey: string }) {
-  const profile = useProfile(pubkey);
+function UserLabel({
+  account,
+}: {
+  account: IAccount<ISigner, unknown, unknown>;
+}) {
+  const profile = useProfile(account.pubkey);
   return (
-    <div className="flex flex-col gap-0">
-      <span className="text-sm">{getDisplayName(pubkey, profile)}</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span className="text-sm">{getDisplayName(account.pubkey, profile)}</span>
+        {getAccountTypeBadge(account)}
+      </div>
       {profile ? (
         <span className="text-xs text-muted-foreground">
-          <Nip05 pubkey={pubkey} profile={profile} />
+          <Nip05 pubkey={account.pubkey} profile={profile} />
         </span>
       ) : null}
     </div>
@@ -128,7 +160,7 @@ export default function UserMenu() {
                 >
                   <div className="flex items-center gap-2">
                     <Check className="size-4 text-primary" />
-                    <UserLabel pubkey={account.pubkey} />
+                    <UserLabel account={account} />
                   </div>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
@@ -149,7 +181,7 @@ export default function UserMenu() {
                       >
                         <div className="flex items-center gap-2">
                           <UserAvatar pubkey={acc.pubkey} />
-                          <UserLabel pubkey={acc.pubkey} />
+                          <UserLabel account={acc} />
                         </div>
                       </DropdownMenuItem>
                     ))}

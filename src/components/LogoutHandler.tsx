@@ -61,6 +61,15 @@ export default function LogoutHandler({ action, all }: LogoutHandlerProps) {
           return;
         }
 
+        // If there are other accounts, switch to the first one before removing current
+        const otherAccounts = allAccounts.filter(
+          (acc) => acc.id !== activeAccount.id,
+        );
+        if (otherAccounts.length > 0) {
+          accountManager.setActive(otherAccounts[0].id);
+        }
+
+        // Remove the account
         accountManager.removeAccount(activeAccount);
 
         toast.success("Logged out", {

@@ -1,16 +1,41 @@
 import { useObservableMemo } from "applesauce-react/hooks";
-import { Check, User, UserX, UserPlus } from "lucide-react";
+import { Check, User, UserX, UserPlus, Eye, Puzzle } from "lucide-react";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Nip05 from "@/components/nostr/nip05";
 import type { IAccount } from "applesauce-accounts";
 import type { ISigner } from "applesauce-signers";
+
+function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
+  const accountType = (account.constructor as unknown as { type: string }).type;
+
+  if (accountType === "grimoire-readonly" || accountType === "readonly") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Eye className="size-3 mr-1" />
+        Read-only
+      </Badge>
+    );
+  }
+
+  if (accountType === "extension") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Puzzle className="size-3 mr-1" />
+        Extension
+      </Badge>
+    );
+  }
+
+  return null;
+}
 
 function AccountCard({
   account,
@@ -56,7 +81,10 @@ function AccountCard({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="font-medium truncate">{displayName}</div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="font-medium truncate">{displayName}</div>
+                {getAccountTypeBadge(account)}
+              </div>
               {profile && (
                 <div className="text-xs text-muted-foreground">
                   <Nip05 pubkey={account.pubkey} profile={profile} />
