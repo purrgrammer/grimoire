@@ -47,14 +47,19 @@ export function getAppName(event: NostrEvent): string {
 
 /**
  * Extract app description from kind 31990 event content JSON
+ * Checks both 'description' and 'about' fields
  */
 export function getAppDescription(event: NostrEvent): string | undefined {
   if (event.kind !== 31990 || !event.content) return undefined;
 
   try {
     const metadata = JSON.parse(event.content);
-    if (metadata && typeof metadata === "object" && metadata.description && typeof metadata.description === "string") {
-      return metadata.description;
+    if (metadata && typeof metadata === "object") {
+      // Check description first, then about (common in kind 0 profile format)
+      const desc = metadata.description || metadata.about;
+      if (desc && typeof desc === "string") {
+        return desc;
+      }
     }
   } catch {
     // Invalid JSON

@@ -196,7 +196,7 @@ export function ApplicationHandlerDetailRenderer({
       {contentJson && Object.keys(contentJson).length > 0 && (
         <div className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold">Metadata</h2>
-          <CopyableJsonViewer json={contentJson} />
+          <CopyableJsonViewer json={JSON.stringify(contentJson, null, 2)} />
         </div>
       )}
 

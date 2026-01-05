@@ -91,6 +91,23 @@ describe("Kind 31990 (Application Handler) Helpers", () => {
       expect(getAppDescription(event)).toBe("A great app");
     });
 
+    it("should extract about field as fallback", () => {
+      const event = createHandlerEvent({
+        content: JSON.stringify({ about: "An awesome app" }),
+      });
+      expect(getAppDescription(event)).toBe("An awesome app");
+    });
+
+    it("should prefer description over about", () => {
+      const event = createHandlerEvent({
+        content: JSON.stringify({
+          description: "Description text",
+          about: "About text",
+        }),
+      });
+      expect(getAppDescription(event)).toBe("Description text");
+    });
+
     it("should return undefined if no content", () => {
       const event = createHandlerEvent({ content: "" });
       expect(getAppDescription(event)).toBeUndefined();
