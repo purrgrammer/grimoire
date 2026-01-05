@@ -27,7 +27,7 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
 
@@ -43,8 +43,11 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const { state } = useGrimoire();
   const accountPubkey = state.activeAccount?.pubkey;
 
-  // Resolve $me alias
-  const resolvedPubkey = pubkey === "$me" ? accountPubkey : pubkey;
+  // Resolve $me alias (memoized to trigger updates when account changes)
+  const resolvedPubkey = useMemo(
+    () => (pubkey === "$me" ? accountPubkey : pubkey),
+    [pubkey, accountPubkey],
+  );
 
   const profile = useProfile(resolvedPubkey);
   const eventStore = useEventStore();
