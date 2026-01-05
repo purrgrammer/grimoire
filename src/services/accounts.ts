@@ -1,5 +1,6 @@
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
+import { ReadOnlyAccount } from "@/lib/account-types";
 
 const ACCOUNTS = "nostr-accounts";
 const ACTIVE_ACCOUNT = "active-account";
@@ -13,7 +14,12 @@ function safeParse(s: string) {
 }
 
 const accountManager = new AccountManager();
+
+// Register common account types (ExtensionAccount, etc.)
 registerCommonAccountTypes(accountManager);
+
+// Register custom account types
+accountManager.registerType(ReadOnlyAccount);
 
 // load all accounts
 if (localStorage.getItem(ACCOUNTS)) {

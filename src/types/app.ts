@@ -18,7 +18,10 @@ export type AppId =
   | "conn"
   | "spells"
   | "spellbooks"
-  | "win";
+  | "win"
+  | "login-handler"
+  | "account-manager"
+  | "logout-handler";
 
 export interface WindowInstance {
   id: string;

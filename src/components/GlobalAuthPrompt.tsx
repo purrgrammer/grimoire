@@ -5,6 +5,8 @@ import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { useRelayState } from "@/hooks/useRelayState";
 import { RelayLink } from "./nostr/RelayLink";
+import { useObservableMemo } from "applesauce-react/hooks";
+import accountManager from "@/services/accounts";
 
 interface AuthToastProps {
   relayUrl: string;
@@ -116,10 +118,19 @@ export function GlobalAuthPrompt() {
     relays,
   } = useRelayState();
 
+  const activeAccount = useObservableMemo(() => accountManager.active$, []);
   const activeToasts = useRef<Map<string, string | number>>(new Map());
   const [authenticatingRelays, setAuthenticatingRelays] = useState<Set<string>>(
     new Set(),
   );
+
+  // Check if active account is read-only
+  const isReadOnly =
+    activeAccount &&
+    ((activeAccount.constructor as unknown as { type: string }).type ===
+      "grimoire-readonly" ||
+      (activeAccount.constructor as unknown as { type: string }).type ===
+        "readonly");
 
   // Watch for authentication success and show toast
   useEffect(() => {
@@ -139,6 +150,15 @@ export function GlobalAuthPrompt() {
   }, [relays, authenticatingRelays]);
 
   useEffect(() => {
+    // Don't show auth prompts if active account is read-only
+    if (isReadOnly) {
+      // Auto-reject all pending challenges for read-only accounts
+      pendingChallenges.forEach((challenge) => {
+        rejectAuth(challenge.relayUrl, true);
+      });
+      return;
+    }
+
     // Show toasts for new challenges
     pendingChallenges.forEach((challenge) => {
       const key = challenge.relayUrl;
@@ -224,7 +244,13 @@ export function GlobalAuthPrompt() {
         activeToasts.current.delete(relayUrl);
       }
     });
-  }, [pendingChallenges, authenticateRelay, rejectAuth, setAuthPreference]);
+  }, [
+    pendingChallenges,
+    authenticateRelay,
+    rejectAuth,
+    setAuthPreference,
+    isReadOnly,
+  ]);
 
   return null; // No UI needed - toasts handle everything
 }

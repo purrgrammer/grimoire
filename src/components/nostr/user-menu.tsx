@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, Check, UserPlus, Eye, Puzzle } from "lucide-react";
 import accounts from "@/services/accounts";
 import { ExtensionSigner } from "applesauce-signers";
 import { ExtensionAccount } from "applesauce-accounts/accounts";
@@ -6,7 +6,9 @@ import { useProfile } from "@/hooks/useProfile";
 import { useObservableMemo } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
+import { useAppShell } from "@/components/layouts/AppShellContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +23,32 @@ import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import { useState } from "react";
+import type { IAccount } from "applesauce-accounts";
+import type { ISigner } from "applesauce-signers";
+
+function getAccountTypeBadge(account: IAccount<ISigner, unknown, unknown>) {
+  const accountType = (account.constructor as unknown as { type: string }).type;
+
+  if (accountType === "grimoire-readonly" || accountType === "readonly") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Eye className="size-3 mr-1" />
+        Read-only
+      </Badge>
+    );
+  }
+
+  if (accountType === "extension") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Puzzle className="size-3 mr-1" />
+        Extension
+      </Badge>
+    );
+  }
+
+  return null;
+}
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -37,14 +65,21 @@ function UserAvatar({ pubkey }: { pubkey: string }) {
   );
 }
 
-function UserLabel({ pubkey }: { pubkey: string }) {
-  const profile = useProfile(pubkey);
+function UserLabel({
+  account,
+}: {
+  account: IAccount<ISigner, unknown, unknown>;
+}) {
+  const profile = useProfile(account.pubkey);
   return (
-    <div className="flex flex-col gap-0">
-      <span className="text-sm">{getDisplayName(pubkey, profile)}</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span className="text-sm">{getDisplayName(account.pubkey, profile)}</span>
+        {getAccountTypeBadge(account)}
+      </div>
       {profile ? (
         <span className="text-xs text-muted-foreground">
-          <Nip05 pubkey={pubkey} profile={profile} />
+          <Nip05 pubkey={account.pubkey} profile={profile} />
         </span>
       ) : null}
     </div>
@@ -53,9 +88,14 @@ function UserLabel({ pubkey }: { pubkey: string }) {
 
 export default function UserMenu() {
   const account = useObservableMemo(() => accounts.active$, []);
+  const allAccounts = useObservableMemo(() => accounts.accounts$, []);
   const { state, addWindow } = useGrimoire();
+  const { openCommandLauncher } = useAppShell();
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
+
+  // Get other accounts (not the active one)
+  const otherAccounts = allAccounts.filter((acc) => acc.id !== account?.id);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -76,6 +116,15 @@ export default function UserMenu() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function switchAccount(targetAccount: IAccount<ISigner, unknown, unknown>) {
+    accounts.setActive(targetAccount.id);
+  }
+
+  function addAccount() {
+    // Open the command launcher (user will type "login" command)
+    openCommandLauncher();
   }
 
   async function logout() {
@@ -103,15 +152,54 @@ export default function UserMenu() {
         <DropdownMenuContent className="w-80" align="start">
           {account ? (
             <>
+              {/* Active Account */}
               <DropdownMenuGroup>
                 <DropdownMenuLabel
                   className="cursor-crosshair hover:bg-muted/50"
                   onClick={openProfile}
                 >
-                  <UserLabel pubkey={account.pubkey} />
+                  <div className="flex items-center gap-2">
+                    <Check className="size-4 text-primary" />
+                    <UserLabel account={account} />
+                  </div>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
 
+              {/* Other Accounts */}
+              {otherAccounts.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      Switch Account
+                    </DropdownMenuLabel>
+                    {otherAccounts.map((acc) => (
+                      <DropdownMenuItem
+                        key={acc.id}
+                        onClick={() => switchAccount(acc)}
+                        className="cursor-crosshair"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserAvatar pubkey={acc.pubkey} />
+                          <UserLabel account={acc} />
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              {/* Add Account */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={addAccount}
+                className="cursor-crosshair"
+              >
+                <UserPlus className="mr-2 size-4" />
+                Add account
+              </DropdownMenuItem>
+
+              {/* Relays */}
               {relays && relays.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
@@ -134,15 +222,8 @@ export default function UserMenu() {
                 </>
               )}
 
+              {/* Logout */}
               <DropdownMenuSeparator />
-              {/* <DropdownMenuItem
-                onClick={() => setShowSettings(true)}
-                className="cursor-pointer"
-              >
-                <Settings className="mr-2 size-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator /> */}
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
