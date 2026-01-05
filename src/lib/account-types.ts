@@ -59,7 +59,7 @@ export class ReadOnlyAccount extends BaseAccount<
   void,
   ReadOnlyMetadata
 > {
-  static readonly type = "readonly";
+  static readonly type = "grimoire-readonly";
 
   constructor(pubkey: string, signer: ReadOnlySigner) {
     super(pubkey, signer);
