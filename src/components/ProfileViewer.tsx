@@ -292,13 +292,13 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
             <div className="flex flex-col gap-0">
               {/* Display Name */}
               <UserName
-                pubkey={pubkey}
+                pubkey={resolvedPubkey}
                 className="text-2xl font-bold pointer-events-none"
               />
               {/* NIP-05 */}
               {profile.nip05 && (
                 <div className="text-xs">
-                  <Nip05 pubkey={pubkey} profile={profile} />
+                  <Nip05 pubkey={resolvedPubkey} profile={profile} />
                 </div>
               )}
             </div>
