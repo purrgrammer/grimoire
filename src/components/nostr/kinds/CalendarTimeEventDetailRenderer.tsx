@@ -87,9 +87,7 @@ export function CalendarTimeEventDetailRenderer({
         {/* Time and Status: time left, badge right */}
         <div className="flex items-center justify-between">
           {timeRange && (
-            <span className="text-lg font-medium text-muted-foreground">
-              {timeRange}
-            </span>
+            <span className="text-sm text-muted-foreground">{timeRange}</span>
           )}
           <CalendarStatusBadge status={status} />
         </div>

@@ -90,9 +90,7 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
         {/* Date and status: time left, badge right */}
         <div className="flex items-center justify-between">
           {dateRange && (
-            <span className="text-sm font-medium text-muted-foreground">
-              {dateRange}
-            </span>
+            <span className="text-xs text-muted-foreground">{dateRange}</span>
           )}
           <CalendarStatusBadge status={status} />
         </div>
@@ -104,45 +102,51 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
           </p>
         )}
 
-        {/* Metadata row: location, participants, hashtags */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-          {/* Location */}
-          {parsed.locations.length > 0 && (
-            <div className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              <span className="truncate max-w-[200px]">
-                {parsed.locations[0]}
-                {parsed.locations.length > 1 &&
-                  ` +${parsed.locations.length - 1}`}
-              </span>
-            </div>
-          )}
+        {/* Location and participants */}
+        {(parsed.locations.length > 0 || parsed.participants.length > 0) && (
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {/* Location */}
+            {parsed.locations.length > 0 && (
+              <div className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                <span className="truncate max-w-[200px]">
+                  {parsed.locations[0]}
+                  {parsed.locations.length > 1 &&
+                    ` +${parsed.locations.length - 1}`}
+                </span>
+              </div>
+            )}
 
-          {/* Participant count */}
-          {parsed.participants.length > 0 && (
-            <div className="flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              <span>
-                {parsed.participants.length}{" "}
-                {parsed.participants.length === 1
-                  ? "participant"
-                  : "participants"}
-              </span>
-            </div>
-          )}
+            {/* Participant count */}
+            {parsed.participants.length > 0 && (
+              <div className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                <span>
+                  {parsed.participants.length}{" "}
+                  {parsed.participants.length === 1
+                    ? "participant"
+                    : "participants"}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
-          {/* Hashtags */}
-          {parsed.hashtags.slice(0, 3).map((tag) => (
-            <Label key={tag} size="sm">
-              {tag}
-            </Label>
-          ))}
-          {parsed.hashtags.length > 3 && (
-            <span className="text-muted-foreground">
-              +{parsed.hashtags.length - 3}
-            </span>
-          )}
-        </div>
+        {/* Hashtags */}
+        {parsed.hashtags.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {parsed.hashtags.slice(0, 3).map((tag) => (
+              <Label key={tag} size="sm">
+                {tag}
+              </Label>
+            ))}
+            {parsed.hashtags.length > 3 && (
+              <span className="text-xs text-muted-foreground">
+                +{parsed.hashtags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </BaseEventContainer>
   );
