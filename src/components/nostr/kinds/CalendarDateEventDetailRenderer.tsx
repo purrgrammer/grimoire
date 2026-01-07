@@ -7,6 +7,7 @@ import {
 } from "@/lib/calendar-event";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
+import { Label } from "@/components/ui/label";
 import {
   CalendarDays,
   MapPin,
@@ -72,20 +73,20 @@ export function CalendarDateEventDetailRenderer({
     <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
       {/* Event Header */}
       <header className="flex flex-col gap-4 border-b border-border pb-6">
-        {/* Status and Date */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <CalendarStatusBadge status={status} />
+        {/* Title */}
+        <h1 className="text-3xl font-bold">
+          {parsed.title || "Untitled Event"}
+        </h1>
+
+        {/* Date and Status: date left, badge right */}
+        <div className="flex items-center justify-between">
           {dateRange && (
             <span className="text-lg font-medium text-muted-foreground">
               {dateRange}
             </span>
           )}
+          <CalendarStatusBadge status={status} />
         </div>
-
-        {/* Title */}
-        <h1 className="text-3xl font-bold">
-          {parsed.title || "Untitled Event"}
-        </h1>
 
         {/* Organizer */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -140,9 +141,7 @@ export function CalendarDateEventDetailRenderer({
                 >
                   <UserName pubkey={participant.pubkey} />
                   {participant.role && (
-                    <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">
-                      {participant.role}
-                    </span>
+                    <Label size="sm">{participant.role}</Label>
                   )}
                 </li>
               ))}
@@ -159,12 +158,9 @@ export function CalendarDateEventDetailRenderer({
             </h2>
             <div className="flex flex-wrap gap-2">
               {parsed.hashtags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-2 py-1 text-sm bg-muted text-muted-foreground rounded"
-                >
-                  #{tag}
-                </span>
+                <Label key={tag} size="sm">
+                  {tag}
+                </Label>
               ))}
             </div>
           </section>
