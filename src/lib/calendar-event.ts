@@ -1,5 +1,5 @@
 import type { NostrEvent } from "@/types/nostr";
-import { getTagValue } from "applesauce-core/helpers";
+import { getTagValue, getOrComputeCachedValue } from "applesauce-core/helpers";
 
 /**
  * Participant in a calendar event (NIP-52)
@@ -14,7 +14,6 @@ export interface CalendarParticipant {
  * Parsed Date-Based Calendar Event (kind 31922)
  */
 export interface ParsedDateCalendarEvent {
-  event: NostrEvent;
   identifier: string;
   title: string;
   start: string; // YYYY-MM-DD
@@ -31,7 +30,6 @@ export interface ParsedDateCalendarEvent {
  * Parsed Time-Based Calendar Event (kind 31923)
  */
 export interface ParsedTimeCalendarEvent {
-  event: NostrEvent;
   identifier: string;
   title: string;
   start: number; // Unix timestamp
@@ -50,6 +48,10 @@ export interface ParsedTimeCalendarEvent {
  * Status of a calendar event relative to current time
  */
 export type CalendarEventStatus = "upcoming" | "ongoing" | "past";
+
+// Caching symbols for parsed calendar events
+const ParsedDateCalendarEventSymbol = Symbol("ParsedDateCalendarEvent");
+const ParsedTimeCalendarEventSymbol = Symbol("ParsedTimeCalendarEvent");
 
 /**
  * Get all values for a given tag name
@@ -74,12 +76,12 @@ function parseParticipants(event: NostrEvent): CalendarParticipant[] {
 
 /**
  * Parse a kind 31922 Date-Based Calendar Event
+ * Results are cached on the event object for performance
  */
 export function parseDateCalendarEvent(
   event: NostrEvent,
 ): ParsedDateCalendarEvent {
-  return {
-    event,
+  return getOrComputeCachedValue(event, ParsedDateCalendarEventSymbol, () => ({
     identifier: getTagValue(event, "d") || "",
     title: getTagValue(event, "title") || "",
     start: getTagValue(event, "start") || "",
@@ -90,33 +92,35 @@ export function parseDateCalendarEvent(
     participants: parseParticipants(event),
     hashtags: getTagValues(event, "t"),
     references: getTagValues(event, "r"),
-  };
+  }));
 }
 
 /**
  * Parse a kind 31923 Time-Based Calendar Event
+ * Results are cached on the event object for performance
  */
 export function parseTimeCalendarEvent(
   event: NostrEvent,
 ): ParsedTimeCalendarEvent {
-  const startStr = getTagValue(event, "start");
-  const endStr = getTagValue(event, "end");
+  return getOrComputeCachedValue(event, ParsedTimeCalendarEventSymbol, () => {
+    const startStr = getTagValue(event, "start");
+    const endStr = getTagValue(event, "end");
 
-  return {
-    event,
-    identifier: getTagValue(event, "d") || "",
-    title: getTagValue(event, "title") || "",
-    start: startStr ? parseInt(startStr, 10) : 0,
-    end: endStr ? parseInt(endStr, 10) : undefined,
-    startTzid: getTagValue(event, "start_tzid") || undefined,
-    endTzid: getTagValue(event, "end_tzid") || undefined,
-    description: event.content || "",
-    locations: getTagValues(event, "location"),
-    geohash: getTagValue(event, "g") || undefined,
-    participants: parseParticipants(event),
-    hashtags: getTagValues(event, "t"),
-    references: getTagValues(event, "r"),
-  };
+    return {
+      identifier: getTagValue(event, "d") || "",
+      title: getTagValue(event, "title") || "",
+      start: startStr ? parseInt(startStr, 10) : 0,
+      end: endStr ? parseInt(endStr, 10) : undefined,
+      startTzid: getTagValue(event, "start_tzid") || undefined,
+      endTzid: getTagValue(event, "end_tzid") || undefined,
+      description: event.content || "",
+      locations: getTagValues(event, "location"),
+      geohash: getTagValue(event, "g") || undefined,
+      participants: parseParticipants(event),
+      hashtags: getTagValues(event, "t"),
+      references: getTagValues(event, "r"),
+    };
+  });
 }
 
 /**

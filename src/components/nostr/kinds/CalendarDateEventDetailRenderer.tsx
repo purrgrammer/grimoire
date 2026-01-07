@@ -3,58 +3,12 @@ import {
   parseDateCalendarEvent,
   getDateEventStatus,
   formatDateRange,
-  type CalendarEventStatus,
 } from "@/lib/calendar-event";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
+import { CalendarStatusBadge } from "../calendar/CalendarStatusBadge";
 import { Label } from "@/components/ui/label";
-import {
-  CalendarDays,
-  MapPin,
-  Users,
-  Clock,
-  CheckCircle,
-  Hash,
-  ExternalLink,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-
-/**
- * Status badge for calendar events
- */
-function CalendarStatusBadge({ status }: { status: CalendarEventStatus }) {
-  const config = {
-    upcoming: {
-      label: "upcoming",
-      className: "text-blue-500",
-      icon: Clock,
-    },
-    ongoing: {
-      label: "now",
-      className: "text-green-500",
-      icon: CalendarDays,
-    },
-    past: {
-      label: "past",
-      className: "text-muted-foreground",
-      icon: CheckCircle,
-    },
-  }[status];
-
-  const Icon = config.icon;
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-1 text-sm flex-shrink-0",
-        config.className,
-      )}
-    >
-      <Icon className="w-4 h-4" />
-      <span>{config.label}</span>
-    </div>
-  );
-}
+import { MapPin, Users, Hash, ExternalLink } from "lucide-react";
 
 /**
  * Detail renderer for Kind 31922 - Date-Based Calendar Event
@@ -75,7 +29,7 @@ export function CalendarDateEventDetailRenderer({
       <header className="flex flex-col gap-4 border-b border-border pb-6">
         {/* Title */}
         <h1 className="text-3xl font-bold">
-          {parsed.title || "Untitled Event"}
+          {parsed.title || parsed.identifier}
         </h1>
 
         {/* Date and Status: date left, badge right */}
@@ -83,7 +37,7 @@ export function CalendarDateEventDetailRenderer({
           {dateRange && (
             <span className="text-sm text-muted-foreground">{dateRange}</span>
           )}
-          <CalendarStatusBadge status={status} />
+          <CalendarStatusBadge status={status} variant="date" size="md" />
         </div>
 
         {/* Organizer */}

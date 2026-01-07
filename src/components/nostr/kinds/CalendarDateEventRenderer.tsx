@@ -2,53 +2,15 @@ import {
   parseDateCalendarEvent,
   getDateEventStatus,
   formatDateRange,
-  type CalendarEventStatus,
 } from "@/lib/calendar-event";
 import {
   BaseEventContainer,
   ClickableEventTitle,
   type BaseEventProps,
 } from "./BaseEventRenderer";
+import { CalendarStatusBadge } from "../calendar/CalendarStatusBadge";
 import { Label } from "@/components/ui/label";
-import { CalendarDays, MapPin, Users, Clock, CheckCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-/**
- * Status badge for calendar events
- */
-function CalendarStatusBadge({ status }: { status: CalendarEventStatus }) {
-  const config = {
-    upcoming: {
-      label: "upcoming",
-      className: "text-blue-500",
-      icon: Clock,
-    },
-    ongoing: {
-      label: "now",
-      className: "text-green-500",
-      icon: CalendarDays,
-    },
-    past: {
-      label: "past",
-      className: "text-muted-foreground",
-      icon: CheckCircle,
-    },
-  }[status];
-
-  const Icon = config.icon;
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-1 text-xs flex-shrink-0",
-        config.className,
-      )}
-    >
-      <Icon className="w-3 h-3" />
-      <span>{config.label}</span>
-    </div>
-  );
-}
+import { MapPin, Users } from "lucide-react";
 
 /**
  * Renderer for Kind 31922 - Date-Based Calendar Event
@@ -67,7 +29,7 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
           event={event}
           className="text-lg font-semibold text-foreground"
         >
-          {parsed.title || "Untitled Event"}
+          {parsed.title || parsed.identifier}
         </ClickableEventTitle>
 
         {/* Date and status: time left, badge right */}
@@ -75,7 +37,7 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
           {dateRange && (
             <span className="text-xs text-muted-foreground">{dateRange}</span>
           )}
-          <CalendarStatusBadge status={status} />
+          <CalendarStatusBadge status={status} variant="date" size="sm" />
         </div>
 
         {/* Description preview */}
