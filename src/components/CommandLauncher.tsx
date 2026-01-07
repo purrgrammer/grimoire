@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { useAtom } from "jotai";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useNavigate, useLocation } from "react-router";
 import db from "@/services/db";
 import { useGrimoire } from "@/core/state";
 import { manPages } from "@/types/man";
@@ -10,6 +11,19 @@ import { commandLauncherEditModeAtom } from "@/core/command-launcher-state";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import "./command-launcher.css";
+
+/** Check if current path is a NIP-19 preview route (no window system) */
+function isNip19PreviewRoute(pathname: string): boolean {
+  // NIP-19 preview routes are single-segment paths starting with npub1, note1, nevent1, naddr1
+  const segment = pathname.slice(1); // Remove leading /
+  if (segment.includes("/")) return false; // Multi-segment paths are not NIP-19 previews
+  return (
+    segment.startsWith("npub1") ||
+    segment.startsWith("note1") ||
+    segment.startsWith("nevent1") ||
+    segment.startsWith("naddr1")
+  );
+}
 
 interface CommandLauncherProps {
   open: boolean;
@@ -23,6 +37,8 @@ export default function CommandLauncher({
   const [input, setInput] = useState("");
   const [editMode, setEditMode] = useAtom(commandLauncherEditModeAtom);
   const { state, addWindow, updateWindow } = useGrimoire();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Fetch spells with aliases
   const aliasedSpells =
@@ -107,6 +123,12 @@ export default function CommandLauncher({
       });
       setEditMode(null); // Clear edit mode
     } else {
+      // If on a NIP-19 preview route (no window system), navigate to dashboard first
+      // The window will appear after navigation since state persists
+      if (isNip19PreviewRoute(location.pathname)) {
+        navigate("/");
+      }
+
       // Normal mode: create new window
       addWindow(
         recognizedCommand.appId,
