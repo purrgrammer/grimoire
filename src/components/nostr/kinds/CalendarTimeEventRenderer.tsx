@@ -16,52 +16,35 @@ import { cn } from "@/lib/utils";
 /**
  * Status badge for calendar events
  */
-function CalendarStatusBadge({
-  status,
-  size = "sm",
-}: {
-  status: CalendarEventStatus;
-  size?: "sm" | "md";
-}) {
+function CalendarStatusBadge({ status }: { status: CalendarEventStatus }) {
   const config = {
     upcoming: {
-      label: "UPCOMING",
-      className: "bg-blue-600 text-white",
+      label: "upcoming",
+      className: "text-blue-500",
       icon: Clock,
     },
     ongoing: {
-      label: "NOW",
-      className: "bg-green-600 text-white",
+      label: "now",
+      className: "text-green-500",
       icon: CalendarClock,
     },
     past: {
-      label: "PAST",
-      className: "bg-neutral-600 text-white",
+      label: "past",
+      className: "text-muted-foreground",
       icon: CheckCircle,
     },
   }[status];
 
   const Icon = config.icon;
 
-  const sizeClasses = {
-    sm: "px-2 py-0.5 text-xs gap-1",
-    md: "px-3 py-1 text-sm gap-2",
-  };
-
-  const iconSizeClasses = {
-    sm: "w-3 h-3",
-    md: "w-4 h-4",
-  };
-
   return (
     <div
       className={cn(
-        "rounded font-bold flex items-center flex-shrink-0",
+        "flex items-center gap-1 text-xs flex-shrink-0",
         config.className,
-        sizeClasses[size],
       )}
     >
-      <Icon className={iconSizeClasses[size]} />
+      <Icon className="w-3 h-3" />
       <span>{config.label}</span>
     </div>
   );

@@ -20,23 +20,23 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Status badge for calendar events (larger variant for detail view)
+ * Status badge for calendar events
  */
 function CalendarStatusBadge({ status }: { status: CalendarEventStatus }) {
   const config = {
     upcoming: {
-      label: "Upcoming",
-      className: "bg-blue-600 text-white",
+      label: "upcoming",
+      className: "text-blue-500",
       icon: Clock,
     },
     ongoing: {
-      label: "Happening Now",
-      className: "bg-green-600 text-white",
+      label: "now",
+      className: "text-green-500",
       icon: CalendarDays,
     },
     past: {
-      label: "Past Event",
-      className: "bg-neutral-600 text-white",
+      label: "past",
+      className: "text-muted-foreground",
       icon: CheckCircle,
     },
   }[status];
@@ -46,7 +46,7 @@ function CalendarStatusBadge({ status }: { status: CalendarEventStatus }) {
   return (
     <div
       className={cn(
-        "rounded px-3 py-1.5 text-sm font-bold flex items-center gap-2 flex-shrink-0",
+        "flex items-center gap-1 text-sm flex-shrink-0",
         config.className,
       )}
     >
