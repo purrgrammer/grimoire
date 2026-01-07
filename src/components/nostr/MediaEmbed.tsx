@@ -13,7 +13,7 @@ interface MediaEmbedProps {
   url: string;
   type?: "image" | "video" | "audio" | "auto";
   alt?: string;
-  preset?: "inline" | "thumbnail" | "preview" | "banner";
+  preset?: "inline" | "thumbnail" | "grid" | "preview" | "banner";
   className?: string;
 
   // Image-specific
@@ -42,6 +42,12 @@ const PRESETS = {
     maxWidthClass: "max-w-[120px]",
     roundedClass: "rounded-md",
   },
+  grid: {
+    maxHeightClass: "",
+    maxWidthClass: "w-full",
+    roundedClass: "rounded-md",
+    objectFit: "cover" as const,
+  },
   preview: {
     maxHeightClass: "max-h-[500px]",
     maxWidthClass: "max-w-full",
@@ -61,7 +67,7 @@ const getDefaultAspectRatio = (
   mediaType: string,
   preset: string,
 ): string | undefined => {
-  if (preset === "thumbnail") return "1/1";
+  if (preset === "thumbnail" || preset === "grid") return "1/1";
   if (mediaType === "video") return "16/9";
   return undefined; // auto for images
 };
@@ -256,7 +262,8 @@ export function MediaEmbed({
             alt={alt || "Image"}
             loading="lazy"
             className={cn(
-              "w-full h-full object-contain",
+              "w-full h-full",
+              preset === "grid" ? "object-cover" : "object-contain",
               presetStyles.roundedClass,
               enableZoom && "cursor-zoom-in",
               fadeIn && "transition-opacity duration-300",

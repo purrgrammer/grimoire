@@ -36,13 +36,13 @@ export function Gallery({ node }: GalleryNodeProps) {
 
     if (isImageURL(url)) {
       if (shouldShowMedia && options.showImages) {
-        return <MediaEmbed url={url} type="image" preset="inline" enableZoom />;
+        return <MediaEmbed url={url} type="image" preset="grid" enableZoom />;
       }
       return <MediaPlaceholder type="image" />;
     }
     if (isVideoURL(url)) {
       if (shouldShowMedia && options.showVideos) {
-        return <MediaEmbed url={url} type="video" preset="inline" />;
+        return <MediaEmbed url={url} type="video" preset="grid" />;
       }
       return <MediaPlaceholder type="video" />;
     }
@@ -65,13 +65,28 @@ export function Gallery({ node }: GalleryNodeProps) {
   // Only show dialog for audio files
   const audioLinks = links.filter((url) => isAudioURL(url));
 
+  // Separate media types for layout
+  const imageLinks = links.filter((url) => isImageURL(url) || isVideoURL(url));
+  const audioOnlyLinks = links.filter((url) => isAudioURL(url));
+
   return (
     <>
-      <div className="my-2 flex flex-wrap gap-2">
-        {links.map((url: string, i: number) => (
-          <div key={i}>{renderLink(url, i)}</div>
-        ))}
-      </div>
+      {/* Grid layout for images/videos */}
+      {imageLinks.length > 0 && (
+        <div className="my-2 grid grid-cols-3 gap-1.5">
+          {imageLinks.map((url: string, i: number) => (
+            <div key={`${url}-${i}`}>{renderLink(url, links.indexOf(url))}</div>
+          ))}
+        </div>
+      )}
+      {/* Stack layout for audio */}
+      {audioOnlyLinks.length > 0 && (
+        <div className="my-2 flex flex-col gap-2">
+          {audioOnlyLinks.map((url: string, i: number) => (
+            <div key={`${url}-${i}`}>{renderLink(url, links.indexOf(url))}</div>
+          ))}
+        </div>
+      )}
       {audioLinks.length > 0 && (
         <MediaDialog
           open={dialogOpen}
