@@ -9,5 +9,4 @@ import "fake-indexeddb/auto";
 
 // Polyfill WebSocket - required by nostr-tools relay code
 import { WebSocket } from "ws";
-// @ts-expect-error - polyfilling global WebSocket for Node.js
-globalThis.WebSocket = WebSocket;
+globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket;

@@ -81,6 +81,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/shell-quote": "^1.7.5",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^4.0.15",
     "autoprefixer": "^10.4.20",
