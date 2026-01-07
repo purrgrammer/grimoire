@@ -1305,14 +1305,14 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   // },
   31922: {
     kind: 31922,
-    name: "Date-Based Event",
+    name: "Calendar Event",
     description: "Date-Based Calendar Event",
     nip: "52",
     icon: CalendarDays,
   },
   31923: {
     kind: 31923,
-    name: "Time-Based Event",
+    name: "Calendar Event",
     description: "Time-Based Calendar Event",
     nip: "52",
     icon: CalendarClock,

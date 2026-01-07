@@ -79,16 +79,6 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Header: Status badge and date */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <CalendarStatusBadge status={status} />
-          {dateRange && (
-            <span className="text-sm font-medium text-muted-foreground">
-              {dateRange}
-            </span>
-          )}
-        </div>
-
         {/* Title */}
         <ClickableEventTitle
           event={event}
@@ -96,6 +86,16 @@ export function CalendarDateEventRenderer({ event }: BaseEventProps) {
         >
           {parsed.title || "Untitled Event"}
         </ClickableEventTitle>
+
+        {/* Date and status: time left, badge right */}
+        <div className="flex items-center justify-between">
+          {dateRange && (
+            <span className="text-sm font-medium text-muted-foreground">
+              {dateRange}
+            </span>
+          )}
+          <CalendarStatusBadge status={status} />
+        </div>
 
         {/* Description preview */}
         {parsed.description && (

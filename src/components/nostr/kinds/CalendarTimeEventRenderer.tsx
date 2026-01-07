@@ -84,16 +84,6 @@ export function CalendarTimeEventRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Header: Status badge and time */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <CalendarStatusBadge status={status} />
-          {timeRange && (
-            <span className="text-sm font-medium text-muted-foreground">
-              {timeRange}
-            </span>
-          )}
-        </div>
-
         {/* Title */}
         <ClickableEventTitle
           event={event}
@@ -101,6 +91,16 @@ export function CalendarTimeEventRenderer({ event }: BaseEventProps) {
         >
           {parsed.title || "Untitled Event"}
         </ClickableEventTitle>
+
+        {/* Time and status: time left, badge right */}
+        <div className="flex items-center justify-between">
+          {timeRange && (
+            <span className="text-sm font-medium text-muted-foreground">
+              {timeRange}
+            </span>
+          )}
+          <CalendarStatusBadge status={status} />
+        </div>
 
         {/* Description preview */}
         {parsed.description && (
@@ -134,11 +134,6 @@ export function CalendarTimeEventRenderer({ event }: BaseEventProps) {
                   : "participants"}
               </span>
             </div>
-          )}
-
-          {/* Timezone indicator */}
-          {parsed.startTzid && (
-            <span className="text-muted-foreground/70">{parsed.startTzid}</span>
           )}
 
           {/* Hashtags */}
