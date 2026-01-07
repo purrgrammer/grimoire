@@ -48,6 +48,10 @@ import { ApplicationHandlerRenderer } from "./ApplicationHandlerRenderer";
 import { ApplicationHandlerDetailRenderer } from "./ApplicationHandlerDetailRenderer";
 import { HandlerRecommendationRenderer } from "./HandlerRecommendationRenderer";
 import { HandlerRecommendationDetailRenderer } from "./HandlerRecommendationDetailRenderer";
+import { CalendarDateEventRenderer } from "./CalendarDateEventRenderer";
+import { CalendarDateEventDetailRenderer } from "./CalendarDateEventDetailRenderer";
+import { CalendarTimeEventRenderer } from "./CalendarTimeEventRenderer";
+import { CalendarTimeEventDetailRenderer } from "./CalendarTimeEventDetailRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -94,6 +98,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30777: SpellbookRenderer, // Spellbook (Grimoire)
   30817: CommunityNIPRenderer, // Community NIP
+  31922: CalendarDateEventRenderer, // Date-Based Calendar Event (NIP-52)
+  31923: CalendarTimeEventRenderer, // Time-Based Calendar Event (NIP-52)
   31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
   31990: ApplicationHandlerRenderer, // Application Handler (NIP-89)
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
@@ -154,6 +160,8 @@ const detailRenderers: Record<
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
+  31922: CalendarDateEventDetailRenderer, // Date-Based Calendar Event Detail (NIP-52)
+  31923: CalendarTimeEventDetailRenderer, // Time-Based Calendar Event Detail (NIP-52)
   31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)
   31990: ApplicationHandlerDetailRenderer, // Application Handler Detail (NIP-89)
 };
