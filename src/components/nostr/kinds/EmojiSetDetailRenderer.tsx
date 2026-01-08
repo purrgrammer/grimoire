@@ -2,6 +2,7 @@ import { getTagValue } from "applesauce-core/helpers";
 import { getEmojiTags } from "@/lib/emoji-helpers";
 import { CustomEmoji } from "@/components/nostr/CustomEmoji";
 import { NostrEvent } from "@/types/nostr";
+import { Smile } from "lucide-react";
 
 /**
  * Kind 30030 Detail Renderer - Emoji Set (Detail View)
@@ -15,7 +16,10 @@ export function EmojiSetDetailRenderer({ event }: { event: NostrEvent }) {
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{identifier}</h2>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Smile className="size-6 text-muted-foreground" />
+          {identifier}
+        </h1>
         <p className="text-sm text-muted-foreground">
           {emojis.length} emoji{emojis.length !== 1 ? "s" : ""} in this set
         </p>
