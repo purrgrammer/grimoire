@@ -17,6 +17,7 @@ import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
@@ -126,6 +127,10 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   };
 
   const copyEventId = () => {
+    // Get relay hints from where the event has been seen
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
     // For replaceable/parameterized replaceable events, encode as naddr
     if (isAddressableKind(event.kind)) {
       // Find d-tag for identifier
@@ -134,6 +139,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         kind: event.kind,
         pubkey: event.pubkey,
         identifier: dTag,
+        relays: relays,
       });
       copy(naddr);
     } else {
@@ -141,6 +147,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       const nevent = nip19.neventEncode({
         id: event.id,
         author: event.pubkey,
+        relays: relays,
       });
       copy(nevent);
     }
