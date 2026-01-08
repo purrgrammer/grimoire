@@ -15,7 +15,7 @@ export function EmojiSetDetailRenderer({ event }: { event: NostrEvent }) {
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">:{identifier}:</h2>
+        <h2 className="text-lg font-semibold">{identifier}</h2>
         <p className="text-sm text-muted-foreground">
           {emojis.length} emoji{emojis.length !== 1 ? "s" : ""} in this set
         </p>

@@ -26,7 +26,7 @@ export function EmojiSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="text-sm font-medium text-foreground"
         >
-          :{identifier}:
+          {identifier}
         </ClickableEventTitle>
 
         {emojis.length === 0 ? (
