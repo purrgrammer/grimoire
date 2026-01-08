@@ -52,6 +52,8 @@ import { CalendarDateEventRenderer } from "./CalendarDateEventRenderer";
 import { CalendarDateEventDetailRenderer } from "./CalendarDateEventDetailRenderer";
 import { CalendarTimeEventRenderer } from "./CalendarTimeEventRenderer";
 import { CalendarTimeEventDetailRenderer } from "./CalendarTimeEventDetailRenderer";
+import { EmojiSetRenderer } from "./EmojiSetRenderer";
+import { EmojiSetDetailRenderer } from "./EmojiSetDetailRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -91,6 +93,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
+  30030: EmojiSetRenderer, // Emoji Sets (NIP-30)
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   34235: Kind21Renderer, // Horizontal Video (NIP-71 legacy)
   34236: Kind22Renderer, // Vertical Video (NIP-71 legacy)
@@ -155,6 +158,7 @@ const detailRenderers: Record<
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   777: SpellDetailRenderer, // Spell Detail
   30023: Kind30023DetailRenderer, // Long-form Article Detail
+  30030: EmojiSetDetailRenderer, // Emoji Sets Detail (NIP-30)
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
