@@ -97,14 +97,20 @@ Time bounds support both absolute Unix timestamps and relative expressions:
 ["since", "7d"]             7 days ago (relative)
 ["since", "24h"]            24 hours ago
 ["since", "30m"]            30 minutes ago
+["since", "2w"]             2 weeks ago
+["since", "1y"]             1 year ago
 ["until", "now"]            Current time at execution
 ["until", "1704153600"]     Absolute Unix timestamp
 ```
 
 Relative formats:
-- `<number>d` — days ago
-- `<number>h` — hours ago
+- `<number>s` — seconds ago
 - `<number>m` — minutes ago
+- `<number>h` — hours ago
+- `<number>d` — days ago
+- `<number>w` — weeks ago
+- `<number>mo` — months ago (30 days)
+- `<number>y` — years ago (365 days)
 - `now` — current timestamp
 
 Clients MUST evaluate relative timestamps at execution time, not at event creation.
