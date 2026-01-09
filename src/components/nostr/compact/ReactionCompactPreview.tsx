@@ -4,6 +4,7 @@ import { Heart, ThumbsUp, ThumbsDown, Flame, Smile } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";
+import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 
 /**
  * Compact preview for Kind 7 (Reaction)
@@ -26,7 +27,7 @@ export function ReactionCompactPreview({ event }: { event: NostrEvent }) {
 
   // Parse reaction content for custom emoji
   const parsedReaction = useMemo(() => {
-    const match = reaction.match(/^:([a-zA-Z0-9_]+):$/);
+    const match = reaction.match(EMOJI_SHORTCODE_REGEX);
     if (match && customEmojis[match[1]]) {
       return {
         type: "custom" as const,

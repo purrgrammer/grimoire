@@ -2,6 +2,12 @@ import { getOrComputeCachedValue } from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
+ * Regex pattern to match NIP-30 custom emoji shortcodes like :shortcode:
+ * Supports alphanumeric characters, underscores, and dashes
+ */
+export const EMOJI_SHORTCODE_REGEX = /^:([a-zA-Z0-9_-]+):$/;
+
+/**
  * Represents a parsed emoji tag from NIP-30
  */
 export interface EmojiTag {
