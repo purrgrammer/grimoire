@@ -6,6 +6,7 @@ import { NostrEvent } from "@/types/nostr";
 import { KindRenderer } from "./index";
 import { EventCardSkeleton } from "@/components/ui/skeleton";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
+import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 
 /**
  * Renderer for Kind 7 - Reactions
@@ -32,7 +33,7 @@ export function Kind7Renderer({ event }: BaseEventProps) {
   // Parse reaction content to detect custom emoji shortcodes
   // Format: :shortcode: in the content
   const parsedReaction = useMemo(() => {
-    const match = reaction.match(/^:([a-zA-Z0-9_-]+):$/);
+    const match = reaction.match(EMOJI_SHORTCODE_REGEX);
     if (match && customEmojis[match[1]]) {
       return {
         type: "custom" as const,
