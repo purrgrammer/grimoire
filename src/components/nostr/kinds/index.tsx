@@ -37,6 +37,7 @@ import { RepositoryStateRenderer } from "./RepositoryStateRenderer";
 import { RepositoryStateDetailRenderer } from "./RepositoryStateDetailRenderer";
 import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
+import { PublicChatsRenderer } from "./PublicChatsRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
 import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
 import { SpellRenderer, SpellDetailRenderer } from "./SpellRenderer";
@@ -89,6 +90,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
   10006: GenericRelayListRenderer, // Blocked Relays (NIP-51)
   10007: GenericRelayListRenderer, // Search Relays (NIP-51)
+  10009: PublicChatsRenderer, // Public Chats List (NIP-51)
   10012: GenericRelayListRenderer, // Favorite Relays (NIP-51)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)

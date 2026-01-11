@@ -8,6 +8,8 @@ import type {
   ProtocolIdentifier,
   ChatCapabilities,
   LoadMessagesOptions,
+  Participant,
+  ParticipantRole,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
 import eventStore from "@/services/event-store";
@@ -370,7 +372,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const event = await factory.sign(draft);
 
     // Publish only to the group relay
-    await publishEventToRelays(event, [conversation?.metadata?.relayUrl]);
+    await publishEventToRelays(event, [relayUrl]);
   }
 
   /**
