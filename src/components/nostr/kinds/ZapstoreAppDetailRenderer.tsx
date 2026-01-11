@@ -156,7 +156,7 @@ export function ZapstoreAppDetailRenderer({
   const license = getAppLicense(event);
   const identifier = getAppIdentifier(event);
 
-  // Query for releases that reference this app (from same author only)
+  // Query for releases that reference this app
   const releasesFilter = useMemo(() => {
     if (!identifier) {
       // Return a filter that matches nothing when no identifier
@@ -164,7 +164,6 @@ export function ZapstoreAppDetailRenderer({
     }
     return {
       kinds: [30063],
-      authors: [event.pubkey],
       "#a": [`32267:${event.pubkey}:${identifier}`],
     };
   }, [event.pubkey, identifier]);
