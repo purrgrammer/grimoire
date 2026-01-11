@@ -174,4 +174,70 @@ describe("nipReferences transformer", () => {
       expect(nips[1].number).toBe("999");
     });
   });
+
+  describe("hex NIP support", () => {
+    it("should parse hex NIP-C7", () => {
+      const tree = createTree("Code snippets are defined in NIP-C7");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(1);
+      expect(nips[0].number).toBe("C7");
+      expect(nips[0].raw).toBe("NIP-C7");
+    });
+
+    it("should parse lowercase hex nip-c7", () => {
+      const tree = createTree("See nip-c7 for code snippets");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(1);
+      expect(nips[0].number).toBe("C7"); // Normalized to uppercase
+      expect(nips[0].raw).toBe("nip-c7");
+    });
+
+    it("should parse NIP-C0", () => {
+      const tree = createTree("NIP-C0 defines something");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(1);
+      expect(nips[0].number).toBe("C0");
+    });
+
+    it("should parse NIP-A0", () => {
+      const tree = createTree("Check NIP-A0");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(1);
+      expect(nips[0].number).toBe("A0");
+    });
+
+    it("should handle mixed decimal and hex NIPs", () => {
+      const tree = createTree("NIP-01, NIP-C7, and NIP-19 together");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(3);
+      expect(nips[0].number).toBe("01");
+      expect(nips[1].number).toBe("C7");
+      expect(nips[2].number).toBe("19");
+    });
+
+    it("should normalize mixed case hex to uppercase", () => {
+      const tree = createTree("nip-c7 NIP-C7 nip-C7 NIP-c7");
+      const transformer = nipReferences();
+      transformer(tree);
+
+      const nips = getNodesOfType<NipNode>(tree, "nip");
+      expect(nips).toHaveLength(4);
+      expect(nips.every((n) => n.number === "C7")).toBe(true);
+    });
+  });
 });
