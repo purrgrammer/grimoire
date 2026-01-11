@@ -1,8 +1,10 @@
 import { use$ } from "applesauce-react/hooks";
 import { map } from "rxjs/operators";
+import { useEffect } from "react";
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
 import { GroupLink } from "../GroupLink";
 import eventStore from "@/services/event-store";
+import pool from "@/services/relay-pool";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -39,6 +41,41 @@ export function PublicChatsRenderer({ event }: BaseEventProps) {
   // Batch-load metadata for all groups at once
   // Filter out "_" which is the unmanaged relay group (doesn't have metadata)
   const groupIds = groups.map((g) => g.groupId).filter((id) => id !== "_");
+
+  // Subscribe to relays to fetch group metadata
+  // Extract unique relay URLs from groups
+  const relayUrls = Array.from(new Set(groups.map((g) => g.relayUrl)));
+
+  useEffect(() => {
+    if (groupIds.length === 0) return;
+
+    console.log(
+      `[PublicChatsRenderer] Fetching metadata for ${groupIds.length} groups from ${relayUrls.length} relays`,
+    );
+
+    // Subscribe to fetch metadata events (kind 39000) from the group relays
+    const subscription = pool
+      .subscription(
+        relayUrls,
+        [{ kinds: [39000], "#d": groupIds }],
+        { eventStore }, // Automatically add to store
+      )
+      .subscribe({
+        next: (response) => {
+          if (typeof response === "string") {
+            console.log("[PublicChatsRenderer] EOSE received for metadata");
+          } else {
+            console.log(
+              `[PublicChatsRenderer] Received metadata: ${response.id.slice(0, 8)}...`,
+            );
+          }
+        },
+      });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [groupIds.join(","), relayUrls.join(",")]);
 
   const groupMetadataMap = use$(
     () =>

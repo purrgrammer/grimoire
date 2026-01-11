@@ -1,13 +1,16 @@
-import { useMemo, useState, memo, useCallback } from "react";
+import { useMemo, useState, memo, useCallback, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from } from "rxjs";
-import { Virtuoso } from "react-virtuoso";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
+import { Reply } from "lucide-react";
+import accountManager from "@/services/accounts";
+import eventStore from "@/services/event-store";
 import type {
   ChatProtocol,
   ProtocolIdentifier,
   Conversation,
 } from "@/types/chat";
-import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";
+// import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
@@ -27,25 +30,88 @@ interface ChatViewerProps {
 }
 
 /**
+ * ComposerReplyPreview - Shows who is being replied to in the composer
+ */
+const ComposerReplyPreview = memo(function ComposerReplyPreview({
+  replyToId,
+  onClear,
+}: {
+  replyToId: string;
+  onClear: () => void;
+}) {
+  const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+
+  if (!replyEvent) {
+    return (
+      <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-1.5 overflow-hidden">
+        <span className="flex-1 min-w-0 truncate">
+          Replying to {replyToId.slice(0, 8)}...
+        </span>
+        <button
+          onClick={onClear}
+          className="ml-auto text-muted-foreground hover:text-foreground flex-shrink-0"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-1.5 overflow-hidden">
+      <span className="flex-shrink-0">↳</span>
+      <UserName
+        pubkey={replyEvent.pubkey}
+        className="font-medium flex-shrink-0"
+      />
+      <span className="flex-1 min-w-0 truncate text-muted-foreground">
+        {replyEvent.content}
+      </span>
+      <button
+        onClick={onClear}
+        className="ml-auto text-muted-foreground hover:text-foreground flex-shrink-0"
+      >
+        ✕
+      </button>
+    </div>
+  );
+});
+
+/**
  * MessageItem - Memoized message component for performance
  */
 const MessageItem = memo(function MessageItem({
   message,
   adapter,
   conversation,
+  onReply,
+  canReply,
+  onScrollToMessage,
 }: {
   message: Message;
   adapter: ChatProtocolAdapter;
   conversation: Conversation;
+  onReply?: (messageId: string) => void;
+  canReply: boolean;
+  onScrollToMessage?: (messageId: string) => void;
 }) {
   return (
-    <div className="group flex items-start hover:bg-muted/50 px-3 py-2">
+    <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <UserName pubkey={message.author} className="font-semibold text-sm" />
           <span className="text-xs text-muted-foreground">
             <Timestamp timestamp={message.timestamp} />
           </span>
+          {canReply && onReply && (
+            <button
+              onClick={() => onReply(message.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+              title="Reply to this message"
+            >
+              <Reply className="size-3" />
+            </button>
+          )}
         </div>
         <div className="text-sm leading-relaxed break-words overflow-hidden">
           {message.event ? (
@@ -55,6 +121,7 @@ const MessageItem = memo(function MessageItem({
                   replyToId={message.replyTo}
                   adapter={adapter}
                   conversation={conversation}
+                  onScrollToMessage={onScrollToMessage}
                 />
               )}
             </RichText>
@@ -82,6 +149,10 @@ export function ChatViewer({
 }: ChatViewerProps) {
   const { addWindow } = useGrimoire();
 
+  // Get active account
+  const activeAccount = use$(accountManager.active$);
+  const hasActiveAccount = !!activeAccount;
+
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -100,12 +171,36 @@ export function ChatViewer({
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
+  // Ref to Virtuoso for programmatic scrolling
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+
   // Handle sending messages
   const handleSend = async (content: string, replyToId?: string) => {
-    if (!conversation) return;
+    if (!conversation || !hasActiveAccount) return;
     await adapter.sendMessage(conversation, content, replyToId);
     setReplyTo(undefined); // Clear reply context after sending
   };
+
+  // Handle reply button click
+  const handleReply = useCallback((messageId: string) => {
+    setReplyTo(messageId);
+  }, []);
+
+  // Handle scroll to message (when clicking on reply preview)
+  const handleScrollToMessage = useCallback(
+    (messageId: string) => {
+      if (!messages) return;
+      const index = messages.findIndex((m) => m.id === messageId);
+      if (index !== -1 && virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({
+          index,
+          align: "center",
+          behavior: "smooth",
+        });
+      }
+    },
+    [messages],
+  );
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
@@ -158,6 +253,7 @@ export function ChatViewer({
       <div className="flex-1 overflow-hidden">
         {messages && messages.length > 0 ? (
           <Virtuoso
+            ref={virtuosoRef}
             data={messages}
             initialTopMostItemIndex={messages.length - 1}
             followOutput="smooth"
@@ -167,6 +263,9 @@ export function ChatViewer({
                 message={message}
                 adapter={adapter}
                 conversation={conversation}
+                onReply={handleReply}
+                canReply={hasActiveAccount}
+                onScrollToMessage={handleScrollToMessage}
               />
             )}
             style={{ height: "100%" }}
@@ -178,71 +277,78 @@ export function ChatViewer({
         )}
       </div>
 
-      {/* Message composer */}
-      <div className="border-t px-3 py-2">
-        {replyTo && (
-          <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-2">
-            <span>Replying to {replyTo.slice(0, 8)}...</span>
-            <button
-              onClick={() => setReplyTo(undefined)}
-              className="ml-auto text-muted-foreground hover:text-foreground"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.currentTarget;
-            const input = form.elements.namedItem(
-              "message",
-            ) as HTMLTextAreaElement;
-            if (input.value.trim()) {
-              handleSend(input.value, replyTo);
-              input.value = "";
-            }
-          }}
-          className="flex gap-2"
-        >
-          <textarea
-            name="message"
-            autoFocus
-            placeholder="Type a message..."
-            className="flex-1 resize-none bg-background px-3 py-2 text-sm border rounded-md min-w-0"
-            rows={1}
-            onKeyDown={(e) => {
-              // Submit on Enter (without Shift)
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
+      {/* Message composer - only show if user has active account */}
+      {hasActiveAccount ? (
+        <div className="border-t px-3 py-2">
+          {replyTo && (
+            <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-2">
+              <span>Replying to {replyTo.slice(0, 8)}...</span>
+              <button
+                onClick={() => setReplyTo(undefined)}
+                className="ml-auto text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const input = form.elements.namedItem(
+                "message",
+              ) as HTMLTextAreaElement;
+              if (input.value.trim()) {
+                handleSend(input.value, replyTo);
+                input.value = "";
               }
             }}
-          />
-          <Button type="submit" variant="secondary" className="flex-shrink-0">
-            Send
-          </Button>
-        </form>
-      </div>
+            className="flex gap-2"
+          >
+            <textarea
+              name="message"
+              autoFocus
+              placeholder="Type a message..."
+              className="flex-1 resize-none bg-background px-3 py-2 text-sm border rounded-md min-w-0"
+              rows={1}
+              onKeyDown={(e) => {
+                // Submit on Enter (without Shift)
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+            <Button type="submit" variant="secondary" className="flex-shrink-0">
+              Send
+            </Button>
+          </form>
+        </div>
+      ) : (
+        <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">
+          Sign in to send messages
+        </div>
+      )}
     </div>
   );
 }
 
 /**
  * Get the appropriate adapter for a protocol
- * TODO: Add other adapters as they're implemented
+ * Currently only NIP-29 (relay-based groups) is supported
+ * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
-    case "nip-c7":
-      return new NipC7Adapter();
+    // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
+    //   return new NipC7Adapter();
     case "nip-29":
       return new Nip29Adapter();
-    // case "nip-17":
+    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
     //   return new Nip17Adapter();
-    // case "nip-28":
+    // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
-    // case "nip-53":
+    // case "nip-53":  // Phase 5 - Live activity chat (coming soon)
     //   return new Nip53Adapter();
     default:
       throw new Error(`Unsupported protocol: ${protocol}`);

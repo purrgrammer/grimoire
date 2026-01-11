@@ -186,6 +186,38 @@ const text = getHighlightText(event);
 - Provides diagnostic UI with retry capability and error details
 - Error boundaries auto-reset when event changes
 
+## Chat System
+
+**Current Status**: Only NIP-29 (relay-based groups) is supported. Other protocols are planned for future releases.
+
+**Architecture**: Protocol adapter pattern for supporting multiple Nostr messaging protocols:
+- `src/lib/chat/adapters/base-adapter.ts` - Base interface all adapters implement
+- `src/lib/chat/adapters/nip-29-adapter.ts` - NIP-29 relay groups (currently enabled)
+- Other adapters (NIP-C7, NIP-17, NIP-28, NIP-53) are implemented but commented out
+
+**NIP-29 Group Format**: `relay'group-id` (wss:// prefix optional)
+- Examples: `relay.example.com'bitcoin-dev`, `wss://nos.lol'welcome`
+- Groups are hosted on a single relay that enforces membership and moderation
+- Messages are kind 9, metadata is kind 39000, admins are kind 39001, members are kind 39002
+
+**Key Components**:
+- `src/components/ChatViewer.tsx` - Main chat interface (protocol-agnostic)
+- `src/components/chat/ReplyPreview.tsx` - Shows reply context with scroll-to functionality
+- `src/lib/chat-parser.ts` - Auto-detects protocol from identifier format
+- `src/types/chat.ts` - Protocol-agnostic types (Conversation, Message, etc.)
+
+**Usage**:
+```bash
+chat relay.example.com'bitcoin-dev        # Join NIP-29 group
+chat wss://nos.lol'welcome                # Join with explicit wss:// prefix
+```
+
+**Adding New Protocols** (for future work):
+1. Create new adapter extending `ChatProtocolAdapter` in `src/lib/chat/adapters/`
+2. Implement all required methods (parseIdentifier, resolveConversation, loadMessages, sendMessage)
+3. Uncomment adapter registration in `src/lib/chat-parser.ts` and `src/components/ChatViewer.tsx`
+4. Update command docs in `src/types/man.ts` if needed
+
 ## Testing
 
 **Test Framework**: Vitest with node environment

@@ -1,5 +1,5 @@
-import { Observable, firstValueFrom, Subject } from "rxjs";
-import { map, first, skipUntil } from "rxjs/operators";
+import { Observable, firstValueFrom } from "rxjs";
+import { map, first } from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import type { Filter } from "nostr-tools";
 import { ChatProtocolAdapter } from "./base-adapter";
@@ -156,10 +156,7 @@ export class NipC7Adapter extends ChatProtocolAdapter {
       filter.since = options.after;
     }
 
-    // Create a subject to track EOSE
-    const eoseSubject = new Subject<void>();
-
-    // Start subscription to populate EventStore and track EOSE
+    // Start subscription to populate EventStore
     pool
       .subscription([], [filter], {
         eventStore, // Automatically add to store
@@ -169,21 +166,23 @@ export class NipC7Adapter extends ChatProtocolAdapter {
           if (typeof response === "string") {
             // EOSE received
             console.log("[NIP-C7] EOSE received for messages");
-            eoseSubject.next();
-            eoseSubject.complete();
+          } else {
+            // Event received
+            console.log(
+              `[NIP-C7] Received message: ${response.id.slice(0, 8)}...`,
+            );
           }
         },
       });
 
-    // Return observable from EventStore
-    // Wait for EOSE before emitting to prevent scroll jumping during initial load
+    // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(
-      skipUntil(eoseSubject),
-      map((events) =>
-        events
+      map((events) => {
+        console.log(`[NIP-C7] Timeline has ${events.length} messages`);
+        return events
           .map((event) => this.eventToMessage(event, conversation.id))
-          .sort((a, b) => a.timestamp - b.timestamp),
-      ),
+          .sort((a, b) => a.timestamp - b.timestamp);
+      }),
     );
   }
 

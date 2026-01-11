@@ -26,7 +26,7 @@ import { getTagValues } from "@/lib/nostr-utils";
 import { getLiveHost } from "@/lib/live-activity";
 import type { NostrEvent } from "@/types/nostr";
 import { getZapSender } from "applesauce-common/helpers/zap";
-import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";
+// import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
 import { useState, useEffect } from "react";
@@ -562,10 +562,11 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     const identifier = props.identifier as ProtocolIdentifier;
 
     // Get adapter and resolve conversation
+    // Currently only NIP-29 is supported
     const getAdapter = () => {
       switch (protocol) {
-        case "nip-c7":
-          return new NipC7Adapter();
+        // case "nip-c7":  // Coming soon
+        //   return new NipC7Adapter();
         case "nip-29":
           return new Nip29Adapter();
         default:

@@ -1,5 +1,5 @@
-import { Observable, Subject } from "rxjs";
-import { map, first, skipUntil } from "rxjs/operators";
+import { Observable } from "rxjs";
+import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { ChatProtocolAdapter } from "./base-adapter";
 import type {
@@ -292,9 +292,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       filter.since = options.after;
     }
 
-    // Create a subject to track EOSE
-    const eoseSubject = new Subject<void>();
-
     // Start a persistent subscription to the group relay
     // This will feed new messages into the EventStore in real-time
     pool
@@ -306,8 +303,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
           if (typeof response === "string") {
             // EOSE received
             console.log("[NIP-29] EOSE received for messages");
-            eoseSubject.next();
-            eoseSubject.complete();
           } else {
             // Event received
             console.log(
@@ -318,9 +313,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       });
 
     // Return observable from EventStore which will update automatically
-    // Wait for EOSE before emitting to prevent scroll jumping during initial load
     return eventStore.timeline(filter).pipe(
-      skipUntil(eoseSubject),
       map((events) => {
         console.log(`[NIP-29] Timeline has ${events.length} messages`);
         return events

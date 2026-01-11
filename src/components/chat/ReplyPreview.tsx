@@ -10,6 +10,7 @@ interface ReplyPreviewProps {
   replyToId: string;
   adapter: ChatProtocolAdapter;
   conversation: Conversation;
+  onScrollToMessage?: (messageId: string) => void;
 }
 
 /**
@@ -20,6 +21,7 @@ export const ReplyPreview = memo(function ReplyPreview({
   replyToId,
   adapter,
   conversation,
+  onScrollToMessage,
 }: ReplyPreviewProps) {
   // Load the event being replied to (reactive - updates when event arrives)
   const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
@@ -36,6 +38,12 @@ export const ReplyPreview = memo(function ReplyPreview({
     }
   }, [replyEvent, adapter, conversation, replyToId]);
 
+  const handleClick = () => {
+    if (onScrollToMessage) {
+      onScrollToMessage(replyToId);
+    }
+  };
+
   if (!replyEvent) {
     return (
       <div className="text-xs text-muted-foreground mb-0.5">
@@ -45,7 +53,11 @@ export const ReplyPreview = memo(function ReplyPreview({
   }
 
   return (
-    <div className="text-xs text-muted-foreground flex items-baseline gap-1 mb-0.5 overflow-hidden">
+    <div
+      className="text-xs text-muted-foreground flex items-baseline gap-1 mb-0.5 overflow-hidden cursor-pointer hover:text-foreground transition-colors"
+      onClick={handleClick}
+      title="Click to scroll to message"
+    >
       <span className="flex-shrink-0">↳</span>
       <UserName
         pubkey={replyEvent.pubkey}
