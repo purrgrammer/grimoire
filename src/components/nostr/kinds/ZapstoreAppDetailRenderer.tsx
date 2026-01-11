@@ -8,11 +8,18 @@ import {
   getAppRepository,
   getAppLicense,
   getAppIdentifier,
+  getReleaseVersion,
+  getReleaseFileEventId,
 } from "@/lib/zapstore-helpers";
 import type { Platform } from "@/lib/zapstore-helpers";
 import { UserName } from "../UserName";
 import { ExternalLink } from "@/components/ExternalLink";
 import { MediaEmbed } from "../MediaEmbed";
+import { Badge } from "@/components/ui/badge";
+import { use$ } from "applesauce-react/hooks";
+import eventStore from "@/services/event-store";
+import { useMemo } from "react";
+import { useGrimoire } from "@/core/state";
 import {
   Package,
   Globe,
@@ -20,10 +27,66 @@ import {
   TabletSmartphone,
   Monitor,
   Laptop,
+  FileDown,
 } from "lucide-react";
 
 interface ZapstoreAppDetailRendererProps {
   event: NostrEvent;
+}
+
+/**
+ * Release item component showing version and download link
+ */
+function ReleaseItem({ release }: { release: NostrEvent }) {
+  const { addWindow } = useGrimoire();
+  const version = getReleaseVersion(release);
+  const fileEventId = getReleaseFileEventId(release);
+
+  const handleClick = () => {
+    addWindow("open", {
+      pointer: {
+        kind: release.kind,
+        pubkey: release.pubkey,
+        identifier: release.tags.find((t) => t[0] === "d")?.[1] || "",
+      },
+    });
+  };
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (fileEventId) {
+      addWindow("open", { pointer: { id: fileEventId } });
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors">
+      <button
+        onClick={handleClick}
+        className="flex items-center gap-2 hover:underline cursor-crosshair"
+      >
+        <Package className="size-4 text-muted-foreground" />
+        <span className="font-medium">
+          {version ? `Version ${version}` : "Release"}
+        </span>
+        {version && (
+          <Badge variant="secondary" className="text-xs">
+            v{version}
+          </Badge>
+        )}
+      </button>
+
+      {fileEventId && (
+        <button
+          onClick={handleDownload}
+          className="flex items-center gap-1.5 text-primary hover:underline text-sm"
+        >
+          <FileDown className="size-4" />
+          <span>Download</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -79,7 +142,7 @@ function PlatformItem({ platform }: { platform: Platform }) {
 
 /**
  * Detail renderer for Kind 32267 - App
- * Shows comprehensive app information including screenshots and platforms
+ * Shows comprehensive app information including screenshots, platforms, and releases
  */
 export function ZapstoreAppDetailRenderer({
   event,
@@ -92,6 +155,36 @@ export function ZapstoreAppDetailRenderer({
   const repository = getAppRepository(event);
   const license = getAppLicense(event);
   const identifier = getAppIdentifier(event);
+
+  // Query for releases that reference this app
+  const releasesFilter = useMemo(() => {
+    if (!identifier) {
+      // Return a filter that matches nothing when no identifier
+      return { kinds: [30063], ids: [] };
+    }
+    return {
+      kinds: [30063],
+      "#a": [`32267:${event.pubkey}:${identifier}`],
+    };
+  }, [event.pubkey, identifier]);
+
+  const releases = use$(
+    () => eventStore.timeline(releasesFilter),
+    [releasesFilter],
+  );
+
+  // Sort releases by version (newest first) or created_at
+  const sortedReleases = useMemo(() => {
+    const releasesList = releases || [];
+    return [...releasesList].sort((a, b) => {
+      const versionA = getReleaseVersion(a);
+      const versionB = getReleaseVersion(b);
+      if (versionA && versionB) {
+        return versionB.localeCompare(versionA, undefined, { numeric: true });
+      }
+      return b.created_at - a.created_at;
+    });
+  }, [releases]);
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
@@ -164,6 +257,20 @@ export function ZapstoreAppDetailRenderer({
           <div className="flex flex-wrap gap-2">
             {platforms.map((platform) => (
               <PlatformItem key={platform} platform={platform} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Releases Section */}
+      {sortedReleases.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-xl font-semibold">
+            Releases ({sortedReleases.length})
+          </h2>
+          <div className="flex flex-col gap-2">
+            {sortedReleases.map((release) => (
+              <ReleaseItem key={release.id} release={release} />
             ))}
           </div>
         </div>
