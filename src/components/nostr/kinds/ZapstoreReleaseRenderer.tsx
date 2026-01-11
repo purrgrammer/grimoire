@@ -42,51 +42,43 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex gap-3">
-        {/* Icon */}
-        <div className="size-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Package className="size-6 text-primary" />
-        </div>
+      <div className="flex flex-col gap-2">
+        {/* Title */}
+        <ClickableEventTitle
+          event={event}
+          className="text-base font-semibold text-foreground"
+        >
+          {appName && `${appName} `}
+          {version && (
+            <Badge variant="secondary" className="text-xs ml-1">
+              v{version}
+            </Badge>
+          )}
+        </ClickableEventTitle>
 
-        {/* Release Info */}
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          {/* Title */}
-          <ClickableEventTitle
-            event={event}
-            className="text-base font-semibold text-foreground"
-          >
-            {appName && `${appName} `}
-            {version && (
-              <Badge variant="secondary" className="text-xs ml-1">
-                v{version}
-              </Badge>
-            )}
-          </ClickableEventTitle>
+        {/* Links */}
+        <div className="flex items-center gap-3 flex-wrap text-sm">
+          {/* App Link */}
+          {appName && (
+            <button
+              onClick={handleAppClick}
+              className="flex items-center gap-1.5 text-primary hover:underline"
+            >
+              <Package className="size-3" />
+              <span>View App</span>
+            </button>
+          )}
 
-          {/* Links */}
-          <div className="flex items-center gap-3 flex-wrap text-sm">
-            {/* App Link */}
-            {appName && (
-              <button
-                onClick={handleAppClick}
-                className="flex items-center gap-1.5 text-primary hover:underline"
-              >
-                <Package className="size-3" />
-                <span>View App</span>
-              </button>
-            )}
-
-            {/* File Link */}
-            {fileEventId && (
-              <button
-                onClick={handleFileClick}
-                className="flex items-center gap-1.5 text-primary hover:underline"
-              >
-                <FileDown className="size-3" />
-                <span>Download File</span>
-              </button>
-            )}
-          </div>
+          {/* File Link */}
+          {fileEventId && (
+            <button
+              onClick={handleFileClick}
+              className="flex items-center gap-1.5 text-primary hover:underline"
+            >
+              <FileDown className="size-3" />
+              <span>Download File</span>
+            </button>
+          )}
         </div>
       </div>
     </BaseEventContainer>

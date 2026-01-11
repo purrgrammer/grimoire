@@ -20,26 +20,56 @@ import {
 import type { Platform } from "@/lib/zapstore-helpers";
 
 /**
- * Platform icon component
+ * Platform icon component with label
  */
 function PlatformIcon({ platform }: { platform: Platform }) {
   const iconClass = "size-4 text-muted-foreground";
 
-  switch (platform) {
-    case "android":
-      return <TabletSmartphone className={iconClass} />;
-    case "ios":
-      return <Smartphone className={iconClass} />;
-    case "web":
-      return <Globe className={iconClass} />;
-    case "macos":
-      return <Laptop className={iconClass} />;
-    case "windows":
-    case "linux":
-      return <Monitor className={iconClass} />;
-    default:
-      return null;
-  }
+  const getPlatformLabel = () => {
+    switch (platform) {
+      case "android":
+        return "Android";
+      case "ios":
+        return "iOS";
+      case "web":
+        return "Web";
+      case "macos":
+        return "macOS";
+      case "windows":
+        return "Windows";
+      case "linux":
+        return "Linux";
+      default:
+        return platform;
+    }
+  };
+
+  const getIcon = () => {
+    switch (platform) {
+      case "android":
+        return <TabletSmartphone className={iconClass} />;
+      case "ios":
+        return <Smartphone className={iconClass} />;
+      case "web":
+        return <Globe className={iconClass} />;
+      case "macos":
+        return <Laptop className={iconClass} />;
+      case "windows":
+      case "linux":
+        return <Monitor className={iconClass} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {getIcon()}
+      <span className="text-xs text-muted-foreground">
+        {getPlatformLabel()}
+      </span>
+    </div>
+  );
 }
 
 /**
