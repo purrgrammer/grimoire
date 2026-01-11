@@ -39,15 +39,15 @@ const MessageItem = memo(function MessageItem({
   conversation: Conversation;
 }) {
   return (
-    <div className="group flex items-start hover:bg-muted/50">
-      <div className="">
+    <div className="group flex items-start hover:bg-muted/50 px-3 py-2">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <UserName pubkey={message.author} className="font-semibold text-sm" />
           <span className="text-xs text-muted-foreground">
             <Timestamp timestamp={message.timestamp} />
           </span>
         </div>
-        <div className="text-sm leading-relaxed">
+        <div className="text-sm leading-relaxed break-words overflow-hidden">
           {message.event ? (
             <RichText event={message.event}>
               {message.replyTo && (
@@ -59,7 +59,9 @@ const MessageItem = memo(function MessageItem({
               )}
             </RichText>
           ) : (
-            <span className="whitespace-pre-wrap">{message.content}</span>
+            <span className="whitespace-pre-wrap break-words">
+              {message.content}
+            </span>
           )}
         </div>
       </div>
@@ -177,9 +179,9 @@ export function ChatViewer({
       </div>
 
       {/* Message composer */}
-      <div className="">
+      <div className="border-t px-3 py-2">
         {replyTo && (
-          <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs">
+          <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-2">
             <span>Replying to {replyTo.slice(0, 8)}...</span>
             <button
               onClick={() => setReplyTo(undefined)}
@@ -207,7 +209,7 @@ export function ChatViewer({
             name="message"
             autoFocus
             placeholder="Type a message..."
-            className="flex-1 resize-none bg-background px-2 py-1.5 text-sm"
+            className="flex-1 resize-none bg-background px-3 py-2 text-sm border rounded-md min-w-0"
             rows={1}
             onKeyDown={(e) => {
               // Submit on Enter (without Shift)
@@ -217,7 +219,7 @@ export function ChatViewer({
               }
             }}
           />
-          <Button type="submit" variant="secondary">
+          <Button type="submit" variant="secondary" className="flex-shrink-0">
             Send
           </Button>
         </form>

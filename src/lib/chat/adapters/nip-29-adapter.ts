@@ -282,7 +282,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const filter: Filter = {
       kinds: [9],
       "#h": [groupId],
-      limit: options?.limit || 200,
+      limit: options?.limit || 50,
     };
 
     if (options?.before) {
