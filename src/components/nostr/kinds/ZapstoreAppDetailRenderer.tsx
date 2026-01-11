@@ -4,19 +4,77 @@ import {
   getAppSummary,
   getAppIcon,
   getAppImages,
-  getAppPlatforms,
+  detectPlatforms,
   getAppRepository,
   getAppLicense,
   getAppIdentifier,
 } from "@/lib/zapstore-helpers";
-import { Badge } from "@/components/ui/badge";
+import type { Platform } from "@/lib/zapstore-helpers";
 import { UserName } from "../UserName";
 import { ExternalLink } from "@/components/ExternalLink";
 import { MediaEmbed } from "../MediaEmbed";
-import { Package } from "lucide-react";
+import {
+  Package,
+  Globe,
+  Smartphone,
+  TabletSmartphone,
+  Monitor,
+  Laptop,
+} from "lucide-react";
 
 interface ZapstoreAppDetailRendererProps {
   event: NostrEvent;
+}
+
+/**
+ * Platform icon and label component
+ */
+function PlatformItem({ platform }: { platform: Platform }) {
+  const iconClass = "size-5";
+
+  const getPlatformName = () => {
+    switch (platform) {
+      case "android":
+        return "Android";
+      case "ios":
+        return "iOS";
+      case "web":
+        return "Web";
+      case "macos":
+        return "macOS";
+      case "windows":
+        return "Windows";
+      case "linux":
+        return "Linux";
+      default:
+        return platform;
+    }
+  };
+
+  const getIcon = () => {
+    switch (platform) {
+      case "android":
+        return <TabletSmartphone className={iconClass} />;
+      case "ios":
+        return <Smartphone className={iconClass} />;
+      case "web":
+        return <Globe className={iconClass} />;
+      case "macos":
+        return <Laptop className={iconClass} />;
+      case "windows":
+      case "linux":
+        return <Monitor className={iconClass} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
+      {getIcon()}
+      <span className="text-sm font-medium">{getPlatformName()}</span>
+    </div>
+  );
 }
 
 /**
@@ -31,7 +89,7 @@ export function ZapstoreAppDetailRenderer({
   const summary = getAppSummary(event);
   const iconUrl = getAppIcon(event);
   const images = getAppImages(event);
-  const platforms = getAppPlatforms(event);
+  const platforms = detectPlatforms(event);
   const repository = getAppRepository(event);
   const license = getAppLicense(event);
   const identifier = getAppIdentifier(event);
@@ -103,18 +161,10 @@ export function ZapstoreAppDetailRenderer({
       {/* Platforms Section */}
       {platforms.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">
-            Platforms ({platforms.length})
-          </h2>
+          <h2 className="text-xl font-semibold">Available On</h2>
           <div className="flex flex-wrap gap-2">
             {platforms.map((platform) => (
-              <Badge
-                key={platform}
-                variant="secondary"
-                className="text-sm px-3 py-1"
-              >
-                {platform}
-              </Badge>
+              <PlatformItem key={platform} platform={platform} />
             ))}
           </div>
         </div>

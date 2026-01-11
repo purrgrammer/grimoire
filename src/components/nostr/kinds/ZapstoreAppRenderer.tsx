@@ -7,25 +7,50 @@ import {
   getAppName,
   getAppSummary,
   getAppIcon,
-  getAppPlatforms,
-  getAppRepository,
-  getAppLicense,
+  detectPlatforms,
 } from "@/lib/zapstore-helpers";
-import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "@/components/ExternalLink";
-import { Package } from "lucide-react";
+import {
+  Package,
+  Globe,
+  Smartphone,
+  TabletSmartphone,
+  Monitor,
+  Laptop,
+} from "lucide-react";
+import type { Platform } from "@/lib/zapstore-helpers";
+
+/**
+ * Platform icon component
+ */
+function PlatformIcon({ platform }: { platform: Platform }) {
+  const iconClass = "size-4 text-muted-foreground";
+
+  switch (platform) {
+    case "android":
+      return <TabletSmartphone className={iconClass} />;
+    case "ios":
+      return <Smartphone className={iconClass} />;
+    case "web":
+      return <Globe className={iconClass} />;
+    case "macos":
+      return <Laptop className={iconClass} />;
+    case "windows":
+    case "linux":
+      return <Monitor className={iconClass} />;
+    default:
+      return null;
+  }
+}
 
 /**
  * Renderer for Kind 32267 - Zapstore App Metadata
- * Displays app name, icon, summary, and platforms in feed
+ * Displays app name, icon, summary, and platform icons in feed
  */
 export function ZapstoreAppRenderer({ event }: BaseEventProps) {
   const appName = getAppName(event);
   const summary = getAppSummary(event);
   const iconUrl = getAppIcon(event);
-  const platforms = getAppPlatforms(event);
-  const repository = getAppRepository(event);
-  const license = getAppLicense(event);
+  const platforms = detectPlatforms(event);
 
   return (
     <BaseEventContainer event={event}>
@@ -61,41 +86,13 @@ export function ZapstoreAppRenderer({ event }: BaseEventProps) {
             </p>
           )}
 
-          {/* Platforms & License */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {platforms.length > 0 && (
-              <>
-                {platforms.slice(0, 4).map((platform) => (
-                  <Badge
-                    key={platform}
-                    variant="secondary"
-                    className="text-[10px] px-2 py-0.5"
-                  >
-                    {platform}
-                  </Badge>
-                ))}
-                {platforms.length > 4 && (
-                  <Badge variant="outline" className="text-[10px] px-2 py-0">
-                    +{platforms.length - 4} more
-                  </Badge>
-                )}
-              </>
-            )}
-            {license && (
-              <Badge variant="outline" className="text-[10px] px-2 py-0.5">
-                {license}
-              </Badge>
-            )}
-          </div>
-
-          {/* Repository Link */}
-          {repository && (
-            <ExternalLink
-              href={repository}
-              className="text-xs truncate max-w-full"
-            >
-              {repository}
-            </ExternalLink>
+          {/* Platform Icons */}
+          {platforms.length > 0 && (
+            <div className="flex items-center gap-2">
+              {platforms.map((platform) => (
+                <PlatformIcon key={platform} platform={platform} />
+              ))}
+            </div>
           )}
         </div>
       </div>

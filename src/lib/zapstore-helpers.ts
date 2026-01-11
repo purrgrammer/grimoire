@@ -102,6 +102,53 @@ export function getAppPlatforms(event: NostrEvent): string[] {
 }
 
 /**
+ * Platform names for display
+ */
+export type Platform =
+  | "android"
+  | "ios"
+  | "web"
+  | "linux"
+  | "windows"
+  | "macos";
+
+/**
+ * Detect unique platforms from f tags
+ * Normalizes architecture-specific tags (e.g., "android-arm64-v8a" → "android")
+ */
+export function detectPlatforms(event: NostrEvent): Platform[] {
+  if (event.kind !== 32267 && event.kind !== 1063) return [];
+
+  const fTags = getTagValues(event, "f");
+  const platformSet = new Set<Platform>();
+
+  for (const tag of fTags) {
+    const lower = tag.toLowerCase();
+
+    if (lower.startsWith("android")) {
+      platformSet.add("android");
+    } else if (lower.startsWith("ios") || lower.includes("iphone")) {
+      platformSet.add("ios");
+    } else if (lower === "web" || lower.includes("web")) {
+      platformSet.add("web");
+    } else if (lower.includes("linux")) {
+      platformSet.add("linux");
+    } else if (lower.includes("windows") || lower.includes("win")) {
+      platformSet.add("windows");
+    } else if (
+      lower.includes("macos") ||
+      lower.includes("mac") ||
+      lower.includes("darwin")
+    ) {
+      platformSet.add("macos");
+    }
+  }
+
+  // Sort for consistent order
+  return Array.from(platformSet).sort();
+}
+
+/**
  * Get release artifact references from kind 32267 a tags (usually kind 30063)
  */
 export function getAppReleases(event: NostrEvent): AddressPointer[] {
