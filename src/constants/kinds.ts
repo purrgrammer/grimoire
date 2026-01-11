@@ -1172,8 +1172,8 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   // },
   30063: {
     kind: 30063,
-    name: "Release Artifact Set",
-    description: "Release artifact sets",
+    name: "App Release",
+    description: "Application release with version and files",
     nip: "51",
     icon: Package,
   },
@@ -1193,8 +1193,8 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   },
   30267: {
     kind: 30267,
-    name: "App Curation",
-    description: "App curation sets",
+    name: "App Collection",
+    description: "Curated collection of applications",
     nip: "51",
     icon: BookHeart,
   },
@@ -1345,13 +1345,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "89",
     icon: Package,
   },
-  // 32267: {
-  //   kind: 32267,
-  //   name: "Software App",
-  //   description: "Software Application",
-  //   nip: "",
-  //   icon: AppWindow,
-  // },
+  32267: {
+    kind: 32267,
+    name: "App",
+    description: "Application metadata with platforms and screenshots",
+    nip: "",
+    icon: Package,
+  },
   34235: {
     kind: 34235,
     name: "Video",
