@@ -191,6 +191,66 @@ export function getAppReferences(event: NostrEvent): AppReference[] {
 }
 
 // ============================================================================
+// Kind 30063 (Release) Helpers
+// ============================================================================
+
+/**
+ * Get release identifier from kind 30063 d tag
+ * Usually in format: package@version (e.g., "com.wavves.app@1.0.0")
+ */
+export function getReleaseIdentifier(event: NostrEvent): string | undefined {
+  if (event.kind !== 30063) return undefined;
+  return getTagValue(event, "d");
+}
+
+/**
+ * Get version from release identifier
+ * Extracts version from "package@version" format
+ */
+export function getReleaseVersion(event: NostrEvent): string | undefined {
+  if (event.kind !== 30063) return undefined;
+
+  const identifier = getReleaseIdentifier(event);
+  if (!identifier) return undefined;
+
+  // Try to extract version after @ symbol
+  const atIndex = identifier.lastIndexOf("@");
+  if (atIndex !== -1 && atIndex < identifier.length - 1) {
+    return identifier.substring(atIndex + 1);
+  }
+
+  return undefined;
+}
+
+/**
+ * Get file metadata event ID from kind 30063 e tag
+ * Points to kind 1063 (File Metadata) event
+ */
+export function getReleaseFileEventId(event: NostrEvent): string | undefined {
+  if (event.kind !== 30063) return undefined;
+  return getTagValue(event, "e");
+}
+
+/**
+ * Get app metadata pointer from kind 30063 a tag
+ * Points to kind 32267 (App Metadata) event
+ */
+export function getReleaseAppPointer(event: NostrEvent): AddressPointer | null {
+  if (event.kind !== 30063) return null;
+
+  const aTag = getTagValue(event, "a");
+  if (!aTag) return null;
+
+  const pointer = parseAddressPointer(aTag);
+  // Verify it points to an app metadata event
+  if (pointer && pointer.kind === 32267) {
+    return pointer;
+  }
+
+  return null;
+}
+
+// ============================================================================
 // Shared Helpers
 // ============================================================================
 

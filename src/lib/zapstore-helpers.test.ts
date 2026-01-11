@@ -12,6 +12,10 @@ import {
   getCurationSetName,
   getCurationSetIdentifier,
   getAppReferences,
+  getReleaseIdentifier,
+  getReleaseVersion,
+  getReleaseFileEventId,
+  getReleaseAppPointer,
   parseAddressPointer,
 } from "./zapstore-helpers";
 import { NostrEvent } from "@/types/nostr";
@@ -430,6 +434,178 @@ describe("Kind 30267 (App Curation Set) Helpers", () => {
         tags: [["a", "32267:pubkey:app"]],
       });
       expect(getAppReferences(event)).toEqual([]);
+    });
+  });
+});
+
+describe("Kind 30063 (Release) Helpers", () => {
+  // Helper to create a minimal kind 30063 event (Release)
+  function createReleaseEvent(overrides?: Partial<NostrEvent>): NostrEvent {
+    return {
+      id: "test-id",
+      pubkey: "test-pubkey",
+      created_at: 1234567890,
+      kind: 30063,
+      tags: [],
+      content: "",
+      sig: "test-sig",
+      ...overrides,
+    };
+  }
+
+  describe("getReleaseIdentifier", () => {
+    it("should extract release identifier from d tag", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "com.wavves.app@1.0.0"]],
+      });
+      expect(getReleaseIdentifier(event)).toBe("com.wavves.app@1.0.0");
+    });
+
+    it("should return undefined if no d tag", () => {
+      const event = createReleaseEvent({
+        tags: [],
+      });
+      expect(getReleaseIdentifier(event)).toBeUndefined();
+    });
+
+    it("should return undefined for non-30063 events", () => {
+      const event = createReleaseEvent({
+        kind: 1,
+        tags: [["d", "test"]],
+      });
+      expect(getReleaseIdentifier(event)).toBeUndefined();
+    });
+  });
+
+  describe("getReleaseVersion", () => {
+    it("should extract version from identifier with @ symbol", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "com.wavves.app@1.0.0"]],
+      });
+      expect(getReleaseVersion(event)).toBe("1.0.0");
+    });
+
+    it("should handle version with multiple parts", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "com.example.app@2.5.1-beta"]],
+      });
+      expect(getReleaseVersion(event)).toBe("2.5.1-beta");
+    });
+
+    it("should handle identifier with multiple @ symbols (use last one)", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "com.example@app@3.0.0"]],
+      });
+      expect(getReleaseVersion(event)).toBe("3.0.0");
+    });
+
+    it("should return undefined if no @ in identifier", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "no-version-here"]],
+      });
+      expect(getReleaseVersion(event)).toBeUndefined();
+    });
+
+    it("should return undefined if @ is at end", () => {
+      const event = createReleaseEvent({
+        tags: [["d", "com.example.app@"]],
+      });
+      expect(getReleaseVersion(event)).toBeUndefined();
+    });
+
+    it("should return undefined if no d tag", () => {
+      const event = createReleaseEvent({
+        tags: [],
+      });
+      expect(getReleaseVersion(event)).toBeUndefined();
+    });
+
+    it("should return undefined for non-30063 events", () => {
+      const event = createReleaseEvent({
+        kind: 1,
+        tags: [["d", "test@1.0.0"]],
+      });
+      expect(getReleaseVersion(event)).toBeUndefined();
+    });
+  });
+
+  describe("getReleaseFileEventId", () => {
+    it("should extract file event ID from e tag", () => {
+      const event = createReleaseEvent({
+        tags: [
+          [
+            "e",
+            "365a0e4a1da3c13c839f0ab170fc3dfadf246368f3a5fc6df2bb18b2db9fcb7e",
+          ],
+        ],
+      });
+      expect(getReleaseFileEventId(event)).toBe(
+        "365a0e4a1da3c13c839f0ab170fc3dfadf246368f3a5fc6df2bb18b2db9fcb7e",
+      );
+    });
+
+    it("should return undefined if no e tag", () => {
+      const event = createReleaseEvent({
+        tags: [],
+      });
+      expect(getReleaseFileEventId(event)).toBeUndefined();
+    });
+
+    it("should return undefined for non-30063 events", () => {
+      const event = createReleaseEvent({
+        kind: 1,
+        tags: [["e", "test123"]],
+      });
+      expect(getReleaseFileEventId(event)).toBeUndefined();
+    });
+  });
+
+  describe("getReleaseAppPointer", () => {
+    it("should extract app metadata pointer from a tag", () => {
+      const event = createReleaseEvent({
+        tags: [
+          [
+            "a",
+            "32267:7a42d5fa97d51fb73e90406f55dc2fb05f49b54c1910496ddc4b66c92a34779e:com.wavves.app",
+          ],
+        ],
+      });
+      const pointer = getReleaseAppPointer(event);
+      expect(pointer).toEqual({
+        kind: 32267,
+        pubkey:
+          "7a42d5fa97d51fb73e90406f55dc2fb05f49b54c1910496ddc4b66c92a34779e",
+        identifier: "com.wavves.app",
+      });
+    });
+
+    it("should return null if a tag points to wrong kind", () => {
+      const event = createReleaseEvent({
+        tags: [["a", "30023:pubkey:article"]],
+      });
+      expect(getReleaseAppPointer(event)).toBeNull();
+    });
+
+    it("should return null if a tag is invalid", () => {
+      const event = createReleaseEvent({
+        tags: [["a", "invalid-format"]],
+      });
+      expect(getReleaseAppPointer(event)).toBeNull();
+    });
+
+    it("should return null if no a tag", () => {
+      const event = createReleaseEvent({
+        tags: [],
+      });
+      expect(getReleaseAppPointer(event)).toBeNull();
+    });
+
+    it("should return null for non-30063 events", () => {
+      const event = createReleaseEvent({
+        kind: 1,
+        tags: [["a", "32267:pubkey:app"]],
+      });
+      expect(getReleaseAppPointer(event)).toBeNull();
     });
   });
 });

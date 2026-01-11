@@ -58,6 +58,8 @@ import { ZapstoreAppRenderer } from "./ZapstoreAppRenderer";
 import { ZapstoreAppDetailRenderer } from "./ZapstoreAppDetailRenderer";
 import { ZapstoreAppSetRenderer } from "./ZapstoreAppSetRenderer";
 import { ZapstoreAppSetDetailRenderer } from "./ZapstoreAppSetDetailRenderer";
+import { ZapstoreReleaseRenderer } from "./ZapstoreReleaseRenderer";
+import { ZapstoreReleaseDetailRenderer } from "./ZapstoreReleaseDetailRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -98,6 +100,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
   30030: EmojiSetRenderer, // Emoji Sets (NIP-30)
+  30063: ZapstoreReleaseRenderer, // App Release (Zapstore)
   30267: ZapstoreAppSetRenderer, // App Curation Set (Zapstore)
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   34235: Kind21Renderer, // Horizontal Video (NIP-71 legacy)
@@ -165,6 +168,7 @@ const detailRenderers: Record<
   777: SpellDetailRenderer, // Spell Detail
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30030: EmojiSetDetailRenderer, // Emoji Sets Detail (NIP-30)
+  30063: ZapstoreReleaseDetailRenderer, // App Release Detail (Zapstore)
   30267: ZapstoreAppSetDetailRenderer, // App Curation Set Detail (Zapstore)
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
