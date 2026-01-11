@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Hooks } from "applesauce-react";
 import { textNoteTransformers } from "applesauce-content/text";
-import { createContext, useContext, useState, useMemo } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { Text } from "./RichText/Text";
 import { Hashtag } from "./RichText/Hashtag";
 import { Mention } from "./RichText/Mention";
@@ -14,7 +14,7 @@ import type { NostrEvent } from "@/types/nostr";
 import type { Root } from "applesauce-content/nast";
 
 /** Transformer function type compatible with applesauce-content */
-type ContentTransformer = () => (tree: Root) => void;
+export type ContentTransformer = () => (tree: Root) => void;
 
 const { useRenderedContent } = Hooks;
 
@@ -22,7 +22,7 @@ const { useRenderedContent } = Hooks;
 const GrimoireContentSymbol = Symbol.for("grimoire-content");
 
 // Default transformers including our custom NIP transformer
-const defaultTransformers = [...textNoteTransformers, nipReferences];
+export const defaultTransformers = [...textNoteTransformers, nipReferences];
 
 // Context for passing depth through RichText rendering
 const DepthContext = createContext<number>(1);
@@ -69,8 +69,6 @@ export function useRichTextOptions() {
 export interface ParserOptions {
   /** Custom transformers to use instead of defaults */
   transformers?: ContentTransformer[];
-  /** Maximum content length before truncation (characters) */
-  maxLength?: number;
   /** Custom cache key (pass null to disable caching) */
   cacheKey?: symbol | null;
 }
@@ -112,24 +110,11 @@ export function RichText({
   parserOptions = {},
   children,
 }: RichTextProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   // Merge provided options with defaults
   const mergedOptions: Required<RichTextOptions> = {
     ...defaultOptions,
     ...options,
   };
-
-  // Get content string for length checking
-  const contentString = content ?? event?.content ?? "";
-
-  // Determine if content might need truncation
-  const maxLength = parserOptions.maxLength;
-  const mightBeTruncated = maxLength && contentString.length > maxLength;
-
-  // Use effective maxLength based on expansion state
-  const effectiveMaxLength =
-    isExpanded || !mightBeTruncated ? undefined : maxLength;
 
   // Prepare transformers - use provided or defaults
   const transformers = parserOptions.transformers ?? defaultTransformers;
@@ -144,10 +129,9 @@ export function RichText({
   const hookOptions = useMemo(
     () => ({
       transformers,
-      maxLength: effectiveMaxLength,
       cacheKey,
     }),
-    [transformers, effectiveMaxLength, cacheKey],
+    [transformers, cacheKey],
   );
 
   // Call hook unconditionally - it will handle undefined/null
@@ -168,9 +152,6 @@ export function RichText({
     hookOptions,
   );
 
-  // Show expand button only when content is truncated and not expanded
-  const showExpandButton = mightBeTruncated && !isExpanded;
-
   return (
     <DepthContext.Provider value={depth}>
       <OptionsContext.Provider value={mergedOptions}>
@@ -180,14 +161,6 @@ export function RichText({
         >
           {children}
           {renderedContent}
-          {showExpandButton && (
-            <button
-              onClick={() => setIsExpanded(true)}
-              className="text-primary hover:underline text-sm mt-1 block"
-            >
-              Show more
-            </button>
-          )}
         </div>
       </OptionsContext.Provider>
     </DepthContext.Provider>
