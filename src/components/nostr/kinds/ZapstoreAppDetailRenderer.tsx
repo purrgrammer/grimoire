@@ -156,7 +156,7 @@ export function ZapstoreAppDetailRenderer({
   const license = getAppLicense(event);
   const identifier = getAppIdentifier(event);
 
-  // Query for releases that reference this app
+  // Query for releases that reference this app (from same author only)
   const releasesFilter = useMemo(() => {
     if (!identifier) {
       // Return a filter that matches nothing when no identifier
@@ -164,6 +164,7 @@ export function ZapstoreAppDetailRenderer({
     }
     return {
       kinds: [30063],
+      authors: [event.pubkey],
       "#a": [`32267:${event.pubkey}:${identifier}`],
     };
   }, [event.pubkey, identifier]);
@@ -287,6 +288,7 @@ export function ZapstoreAppDetailRenderer({
               <MediaEmbed
                 key={idx}
                 url={imageUrl}
+                type="image"
                 preset="preview"
                 enableZoom
                 className="w-full rounded-lg overflow-hidden aspect-video"
