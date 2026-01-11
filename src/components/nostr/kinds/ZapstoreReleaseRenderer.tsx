@@ -15,8 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Package, FileDown } from "lucide-react";
 
 /**
- * Renderer for Kind 30063 - Zapstore Release
- * Displays release version and links to app and file metadata
+ * Renderer for Kind 30063 - App Release
+ * Displays release version with links to app and download file
  */
 export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
   const { addWindow } = useGrimoire();
@@ -24,7 +24,6 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
   const fileEventId = getReleaseFileEventId(event);
   const appPointer = getReleaseAppPointer(event);
 
-  // Fetch app metadata to show app name
   const appEvent = useNostrEvent(appPointer || undefined);
   const appName = appEvent ? getAppName(appEvent) : appPointer?.identifier;
 
@@ -43,7 +42,6 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Title */}
         <ClickableEventTitle
           event={event}
           className="text-base font-semibold text-foreground"
@@ -56,9 +54,7 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
           )}
         </ClickableEventTitle>
 
-        {/* Links */}
         <div className="flex items-center gap-3 flex-wrap text-sm">
-          {/* App Link - show app name with icon */}
           {appName && (
             <button
               onClick={handleAppClick}
@@ -69,7 +65,6 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
             </button>
           )}
 
-          {/* File Link */}
           {fileEventId && (
             <button
               onClick={handleFileClick}

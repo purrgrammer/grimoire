@@ -78,9 +78,8 @@ function PlatformItem({ platform }: { platform: Platform }) {
 }
 
 /**
- * Detail renderer for Kind 32267 - Zapstore App Metadata
- * Shows comprehensive app information including screenshots
- * Note: Zapstore helpers wrap getTagValue which caches internally
+ * Detail renderer for Kind 32267 - App
+ * Shows comprehensive app information including screenshots and platforms
  */
 export function ZapstoreAppDetailRenderer({
   event,

@@ -23,8 +23,8 @@ interface ZapstoreReleaseDetailRendererProps {
 }
 
 /**
- * Detail renderer for Kind 30063 - Zapstore Release
- * Shows comprehensive release information including file metadata
+ * Detail renderer for Kind 30063 - App Release
+ * Shows release information with embedded file metadata
  */
 export function ZapstoreReleaseDetailRenderer({
   event,
@@ -35,12 +35,10 @@ export function ZapstoreReleaseDetailRenderer({
   const fileEventId = getReleaseFileEventId(event);
   const appPointer = getReleaseAppPointer(event);
 
-  // Fetch related events
   const appEvent = useNostrEvent(appPointer || undefined);
-  // Load file event with release event as context for better relay selection
   const fileEvent = useNostrEvent(
     fileEventId ? { id: fileEventId } : undefined,
-    event, // Pass release event as context to use author's relays
+    event,
   );
 
   const appName = appEvent ? getAppName(appEvent) : appPointer?.identifier;
@@ -54,9 +52,7 @@ export function ZapstoreReleaseDetailRenderer({
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
-      {/* Header Section */}
       <div className="flex gap-4">
-        {/* App Icon or Package Icon */}
         {appIcon ? (
           <img
             src={appIcon}
@@ -70,7 +66,6 @@ export function ZapstoreReleaseDetailRenderer({
           </div>
         )}
 
-        {/* Release Title */}
         <div className="flex flex-col gap-2 flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h1 className="text-3xl font-bold">{appName || "Release"}</h1>
@@ -81,7 +76,6 @@ export function ZapstoreReleaseDetailRenderer({
             )}
           </div>
 
-          {/* App Link */}
           {appName && appPointer && (
             <button
               onClick={handleAppClick}
@@ -94,15 +88,12 @@ export function ZapstoreReleaseDetailRenderer({
         </div>
       </div>
 
-      {/* Metadata Grid */}
       <div className="grid grid-cols-2 gap-4 text-sm">
-        {/* Publisher */}
         <div className="flex flex-col gap-1">
           <h3 className="text-muted-foreground">Publisher</h3>
           <UserName pubkey={event.pubkey} />
         </div>
 
-        {/* Release Identifier */}
         {identifier && (
           <div className="flex flex-col gap-1">
             <h3 className="text-muted-foreground">Release ID</h3>
@@ -113,7 +104,6 @@ export function ZapstoreReleaseDetailRenderer({
         )}
       </div>
 
-      {/* File Metadata Section */}
       {fileEvent && (
         <div className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold flex items-center gap-2">
@@ -126,7 +116,6 @@ export function ZapstoreReleaseDetailRenderer({
         </div>
       )}
 
-      {/* Loading/Missing States */}
       {fileEventId && !fileEvent && (
         <div className="flex items-center gap-2 p-4 bg-muted/20 rounded-lg text-muted-foreground">
           <FileDown className="size-5" />

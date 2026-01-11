@@ -12,9 +12,6 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
 import { Package } from "lucide-react";
 
-/**
- * Individual app item - fetches and displays app info
- */
 function AppItem({
   address,
 }: {
@@ -44,8 +41,8 @@ function AppItem({
 }
 
 /**
- * Renderer for Kind 30267 - Zapstore App Curation Set
- * Displays collection name and list of all apps with compact layout
+ * Renderer for Kind 30267 - App Collection
+ * Compact feed view listing all apps similar to relay lists
  */
 export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
   const setName = getCurationSetName(event);
@@ -54,7 +51,6 @@ export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Collection Name */}
         <ClickableEventTitle
           event={event}
           className="text-base font-semibold text-foreground"
@@ -62,12 +58,10 @@ export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
           {setName}
         </ClickableEventTitle>
 
-        {/* App Count */}
         <p className="text-sm text-muted-foreground">
           {apps.length} {apps.length === 1 ? "app" : "apps"}
         </p>
 
-        {/* App List - Show all apps with compact spacing like relay lists */}
         {apps.length > 0 && (
           <div className="flex flex-col gap-0.5">
             {apps.map((ref, idx) => (
