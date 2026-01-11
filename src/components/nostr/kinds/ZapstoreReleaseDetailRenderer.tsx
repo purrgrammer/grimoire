@@ -37,8 +37,10 @@ export function ZapstoreReleaseDetailRenderer({
 
   // Fetch related events
   const appEvent = useNostrEvent(appPointer || undefined);
+  // Load file event with release event as context for better relay selection
   const fileEvent = useNostrEvent(
     fileEventId ? { id: fileEventId } : undefined,
+    event, // Pass release event as context to use author's relays
   );
 
   const appName = appEvent ? getAppName(appEvent) : appPointer?.identifier;

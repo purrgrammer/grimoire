@@ -5,17 +5,77 @@ import {
   getAppName,
   getAppSummary,
   getAppIcon,
-  getAppPlatforms,
+  detectPlatforms,
   getCurationSetIdentifier,
 } from "@/lib/zapstore-helpers";
-import { Badge } from "@/components/ui/badge";
+import type { Platform } from "@/lib/zapstore-helpers";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
 import { UserName } from "../UserName";
-import { Package } from "lucide-react";
+import {
+  Package,
+  Globe,
+  Smartphone,
+  TabletSmartphone,
+  Monitor,
+  Laptop,
+} from "lucide-react";
 
 interface ZapstoreAppSetDetailRendererProps {
   event: NostrEvent;
+}
+
+/**
+ * Platform icon component with label
+ */
+function PlatformIcon({ platform }: { platform: Platform }) {
+  const iconClass = "size-4 text-muted-foreground";
+
+  const getPlatformLabel = () => {
+    switch (platform) {
+      case "android":
+        return "Android";
+      case "ios":
+        return "iOS";
+      case "web":
+        return "Web";
+      case "macos":
+        return "macOS";
+      case "windows":
+        return "Windows";
+      case "linux":
+        return "Linux";
+      default:
+        return platform;
+    }
+  };
+
+  const getIcon = () => {
+    switch (platform) {
+      case "android":
+        return <TabletSmartphone className={iconClass} />;
+      case "ios":
+        return <Smartphone className={iconClass} />;
+      case "web":
+        return <Globe className={iconClass} />;
+      case "macos":
+        return <Laptop className={iconClass} />;
+      case "windows":
+      case "linux":
+        return <Monitor className={iconClass} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {getIcon()}
+      <span className="text-xs text-muted-foreground">
+        {getPlatformLabel()}
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -45,7 +105,7 @@ function AppCard({
   const appName = getAppName(appEvent);
   const summary = getAppSummary(appEvent);
   const iconUrl = getAppIcon(appEvent);
-  const platforms = getAppPlatforms(appEvent);
+  const platforms = detectPlatforms(appEvent);
 
   const handleClick = () => {
     addWindow("open", { pointer: address });
@@ -84,23 +144,12 @@ function AppCard({
           </p>
         )}
 
-        {/* Platforms */}
+        {/* Platform Icons */}
         {platforms.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {platforms.slice(0, 6).map((platform) => (
-              <Badge
-                key={platform}
-                variant="secondary"
-                className="text-[10px] px-2 py-0.5"
-              >
-                {platform}
-              </Badge>
+          <div className="flex items-center gap-2">
+            {platforms.map((platform) => (
+              <PlatformIcon key={platform} platform={platform} />
             ))}
-            {platforms.length > 6 && (
-              <Badge variant="outline" className="text-[10px] px-2 py-0">
-                +{platforms.length - 6} more
-              </Badge>
-            )}
           </div>
         )}
       </div>

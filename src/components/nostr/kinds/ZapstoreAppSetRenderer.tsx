@@ -45,16 +45,11 @@ function AppItem({
 
 /**
  * Renderer for Kind 30267 - Zapstore App Curation Set
- * Displays collection name and list of apps
+ * Displays collection name and list of all apps with compact layout
  */
 export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
   const setName = getCurationSetName(event);
   const apps = getAppReferences(event);
-
-  // Show max 5 apps in feed view
-  const MAX_APPS_IN_FEED = 5;
-  const displayApps = apps.slice(0, MAX_APPS_IN_FEED);
-  const remainingCount = apps.length - displayApps.length;
 
   return (
     <BaseEventContainer event={event}>
@@ -72,17 +67,12 @@ export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
           {apps.length} {apps.length === 1 ? "app" : "apps"}
         </p>
 
-        {/* App List */}
-        {displayApps.length > 0 && (
-          <div className="flex flex-col gap-1.5 pl-4 border-l-2 border-muted">
-            {displayApps.map((ref, idx) => (
+        {/* App List - Show all apps with compact spacing like relay lists */}
+        {apps.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            {apps.map((ref, idx) => (
               <AppItem key={idx} address={ref.address} />
             ))}
-            {remainingCount > 0 && (
-              <span className="text-xs text-muted-foreground">
-                +{remainingCount} more app{remainingCount > 1 ? "s" : ""}
-              </span>
-            )}
           </div>
         )}
       </div>

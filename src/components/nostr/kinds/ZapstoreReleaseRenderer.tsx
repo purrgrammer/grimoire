@@ -58,14 +58,14 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
 
         {/* Links */}
         <div className="flex items-center gap-3 flex-wrap text-sm">
-          {/* App Link */}
+          {/* App Link - show app name with icon */}
           {appName && (
             <button
               onClick={handleAppClick}
               className="flex items-center gap-1.5 text-primary hover:underline"
             >
               <Package className="size-3" />
-              <span>View App</span>
+              <span>{appName}</span>
             </button>
           )}
 
@@ -76,7 +76,7 @@ export function ZapstoreReleaseRenderer({ event }: BaseEventProps) {
               className="flex items-center gap-1.5 text-primary hover:underline"
             >
               <FileDown className="size-3" />
-              <span>Download File</span>
+              <span>Download</span>
             </button>
           )}
         </div>
