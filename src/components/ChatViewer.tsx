@@ -411,33 +411,60 @@ export function ChatViewer({
     | LiveActivityMetadata
     | undefined;
 
-  // Derive participants from messages for live activities (unique pubkeys who have chatted)
+  // Derive participants from messages for live activities and communikeys (unique pubkeys who have chatted)
   const derivedParticipants = useMemo(() => {
-    if (conversation?.type !== "live-chat" || !messages) {
-      return conversation?.participants || [];
-    }
+    // For communikeys, derive members from messages with community pubkey as admin
+    if (conversation?.protocol === "communikeys" && messages) {
+      const communityPubkey = conversation.metadata?.communityPubkey as
+        | string
+        | undefined;
+      const participants: { pubkey: string; role: "host" | "member" }[] = [];
 
-    const hostPubkey = liveActivity?.hostPubkey;
-    const participants: { pubkey: string; role: "host" | "member" }[] = [];
-
-    // Host always first
-    if (hostPubkey) {
-      participants.push({ pubkey: hostPubkey, role: "host" });
-    }
-
-    // Add other participants from messages (excluding host)
-    const seen = new Set(hostPubkey ? [hostPubkey] : []);
-    for (const msg of messages) {
-      if (msg.type !== "system" && !seen.has(msg.author)) {
-        seen.add(msg.author);
-        participants.push({ pubkey: msg.author, role: "member" });
+      // Community pubkey is the admin (host)
+      if (communityPubkey) {
+        participants.push({ pubkey: communityPubkey, role: "host" });
       }
+
+      // Add other participants from messages (excluding admin)
+      const seen = new Set(communityPubkey ? [communityPubkey] : []);
+      for (const msg of messages) {
+        if (msg.type !== "system" && !seen.has(msg.author)) {
+          seen.add(msg.author);
+          participants.push({ pubkey: msg.author, role: "member" });
+        }
+      }
+
+      return participants;
     }
 
-    return participants;
+    // For live activities, derive from messages with host pubkey
+    if (conversation?.type === "live-chat" && messages) {
+      const hostPubkey = liveActivity?.hostPubkey;
+      const participants: { pubkey: string; role: "host" | "member" }[] = [];
+
+      // Host always first
+      if (hostPubkey) {
+        participants.push({ pubkey: hostPubkey, role: "host" });
+      }
+
+      // Add other participants from messages (excluding host)
+      const seen = new Set(hostPubkey ? [hostPubkey] : []);
+      for (const msg of messages) {
+        if (msg.type !== "system" && !seen.has(msg.author)) {
+          seen.add(msg.author);
+          participants.push({ pubkey: msg.author, role: "member" });
+        }
+      }
+
+      return participants;
+    }
+
+    return conversation?.participants || [];
   }, [
+    conversation?.protocol,
     conversation?.type,
     conversation?.participants,
+    conversation?.metadata?.communityPubkey,
     messages,
     liveActivity?.hostPubkey,
   ]);

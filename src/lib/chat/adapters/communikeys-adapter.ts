@@ -210,7 +210,8 @@ export class CommunikeysAdapter extends ChatProtocolAdapter {
       type: "group",
       protocol: "communikeys",
       title: displayName,
-      participants: [], // Could fetch from badge holders later
+      // Community pubkey is the admin, other members derived from messages in ChatViewer
+      participants: [{ pubkey: communityPubkey, role: "host" as const }],
       metadata: {
         communityPubkey,
         communityRelays,
