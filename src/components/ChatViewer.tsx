@@ -756,7 +756,7 @@ export function ChatViewer({
 
       {/* Message composer - only show if user has active account */}
       {hasActiveAccount ? (
-        <div className="border-t px-2 py-1">
+        <div className="border-t px-2 py-1 pb-0">
           {replyTo && (
             <ComposerReplyPreview
               replyToId={replyTo}
