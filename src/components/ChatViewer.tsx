@@ -34,6 +34,12 @@ import {
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { Label } from "./ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -177,15 +183,15 @@ const MessageItem = memo(function MessageItem({
     const zapRequest = message.event ? getZapRequest(message.event) : null;
 
     return (
-      <div className="px-3 py-1">
+      <div className="pl-2">
         <div
-          className="rounded-lg p-[1px]"
+          className="p-[1px]"
           style={{
             background:
               "linear-gradient(to right, rgb(250 204 21), rgb(251 146 60), rgb(168 85 247), rgb(34 211 238))",
           }}
         >
-          <div className="rounded-lg bg-background px-3 py-1.5">
+          <div className="bg-background px-1">
             <div className="flex items-center gap-2">
               <UserName
                 pubkey={message.author}
@@ -439,25 +445,87 @@ export function ChatViewer({
       <div className="pl-4 pr-0 border-b w-full py-0.5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
-            <div className="flex-1 flex flex-row gap-2 items-center min-w-0">
-              <h2 className="text-sm font-semibold truncate">
-                {customTitle || conversation.title}
-              </h2>
-              {/* Live activity status badge - small, icon only */}
-              {liveActivity?.status && (
-                <StatusBadge status={liveActivity.status} size="sm" hideLabel />
-              )}
-              {/* Show host for live activities */}
-              {liveActivity?.hostPubkey && (
-                <span className="text-xs text-muted-foreground flex-shrink-0">
-                  by{" "}
-                  <UserName
-                    pubkey={liveActivity.hostPubkey}
-                    className="text-xs"
-                  />
-                </span>
-              )}
-            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="text-sm font-semibold truncate cursor-help text-left">
+                    {customTitle || conversation.title}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  align="start"
+                  className="max-w-md p-3"
+                >
+                  <div className="flex flex-col gap-2">
+                    {/* Icon + Name */}
+                    <div className="flex items-center gap-2">
+                      {conversation.metadata?.icon && (
+                        <img
+                          src={conversation.metadata.icon}
+                          alt=""
+                          className="size-6 rounded object-cover flex-shrink-0"
+                          onError={(e) => {
+                            // Hide image if it fails to load
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      )}
+                      <span className="font-semibold">
+                        {conversation.title}
+                      </span>
+                    </div>
+                    {/* Description */}
+                    {conversation.metadata?.description && (
+                      <p className="text-xs text-primary-foreground/90">
+                        {conversation.metadata.description}
+                      </p>
+                    )}
+                    {/* Protocol Type - Clickable */}
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {(conversation.type === "group" ||
+                        conversation.type === "live-chat") && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNipClick();
+                          }}
+                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                        >
+                          {conversation.protocol.toUpperCase()}
+                        </button>
+                      )}
+                      {(conversation.type === "group" ||
+                        conversation.type === "live-chat") && (
+                        <span className="text-primary-foreground/60">•</span>
+                      )}
+                      <span className="capitalize text-primary-foreground/80">
+                        {conversation.type}
+                      </span>
+                    </div>
+                    {/* Live Activity Status */}
+                    {liveActivity?.status && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-primary-foreground/80">
+                          Status:
+                        </span>
+                        <StatusBadge status={liveActivity.status} size="xs" />
+                      </div>
+                    )}
+                    {/* Host Info */}
+                    {liveActivity?.hostPubkey && (
+                      <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
+                        <span>Host:</span>
+                        <UserName
+                          pubkey={liveActivity.hostPubkey}
+                          className="text-xs text-primary-foreground"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />

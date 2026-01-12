@@ -4,7 +4,7 @@ import type { LiveStatus } from "@/types/live-activity";
 
 interface StatusBadgeProps {
   status: LiveStatus;
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   hideLabel?: boolean;
 }
 
@@ -34,11 +34,13 @@ export function StatusBadge({
   const Icon = config.icon;
 
   const sizeClasses = {
+    xs: "px-1.5 py-0.5 text-[10px] gap-0.5",
     sm: "px-2 py-1 text-xs gap-1",
     md: "px-3 py-1.5 text-sm gap-2",
   };
 
   const iconSizeClasses = {
+    xs: "w-2.5 h-2.5",
     sm: "w-3 h-3",
     md: "w-4 h-4",
   };
