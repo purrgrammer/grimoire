@@ -399,18 +399,31 @@ export function ChatViewer({
     if (conversation?.type !== "live-chat" || !messages) {
       return conversation?.participants || [];
     }
-    // Get unique pubkeys from messages
-    const pubkeys = new Set<string>();
+
+    const hostPubkey = liveActivity?.hostPubkey;
+    const participants: { pubkey: string; role: "host" | "member" }[] = [];
+
+    // Host always first
+    if (hostPubkey) {
+      participants.push({ pubkey: hostPubkey, role: "host" });
+    }
+
+    // Add other participants from messages (excluding host)
+    const seen = new Set(hostPubkey ? [hostPubkey] : []);
     for (const msg of messages) {
-      if (msg.type !== "system") {
-        pubkeys.add(msg.author);
+      if (msg.type !== "system" && !seen.has(msg.author)) {
+        seen.add(msg.author);
+        participants.push({ pubkey: msg.author, role: "member" });
       }
     }
-    return Array.from(pubkeys).map((pubkey) => ({
-      pubkey,
-      role: "member" as const,
-    }));
-  }, [conversation?.type, conversation?.participants, messages]);
+
+    return participants;
+  }, [
+    conversation?.type,
+    conversation?.participants,
+    messages,
+    liveActivity?.hostPubkey,
+  ]);
 
   if (!conversation) {
     return (

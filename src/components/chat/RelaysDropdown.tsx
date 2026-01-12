@@ -24,8 +24,15 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
   // Get relays for this conversation
   const relays: string[] = [];
 
-  // NIP-29: Single group relay
-  if (conversation.metadata?.relayUrl) {
+  // NIP-53: Multiple relays from liveActivity
+  const liveActivityRelays = conversation.metadata?.liveActivity?.relays as
+    | string[]
+    | undefined;
+  if (liveActivityRelays?.length) {
+    relays.push(...liveActivityRelays);
+  }
+  // NIP-29: Single group relay (fallback)
+  else if (conversation.metadata?.relayUrl) {
     relays.push(conversation.metadata.relayUrl);
   }
 
