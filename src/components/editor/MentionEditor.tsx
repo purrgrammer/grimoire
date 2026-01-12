@@ -61,6 +61,7 @@ export interface MentionEditorHandle {
   getSerializedContent: () => SerializedContent;
   isEmpty: () => boolean;
   submit: () => void;
+  insertText: (text: string) => void;
 }
 
 // Create emoji extension by extending Mention with a different name and custom node view
@@ -533,6 +534,9 @@ export const MentionEditor = forwardRef<
           if (editor) {
             handleSubmit(editor);
           }
+        },
+        insertText: (text: string) => {
+          editor?.commands.insertContent(text);
         },
       }),
       [editor, serializeContent, handleSubmit],
