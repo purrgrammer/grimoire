@@ -52,6 +52,41 @@ function UserLabel({ pubkey }: { pubkey: string }) {
   );
 }
 
+function WalletMenuItem({
+  walletPubkey,
+  balance,
+  onClick,
+}: {
+  walletPubkey: string;
+  balance: number;
+  onClick: () => void;
+}) {
+  const profile = useProfile(walletPubkey);
+
+  function formatBalance(msats: number): string {
+    const sats = Math.floor(msats / 1000);
+    if (sats >= 1000000) {
+      return `${(sats / 1000000).toFixed(2)}M`;
+    } else if (sats >= 1000) {
+      return `${(sats / 1000).toFixed(2)}K`;
+    }
+    return sats.toString();
+  }
+
+  return (
+    <DropdownMenuItem onClick={onClick} className="cursor-crosshair">
+      <Wallet className="mr-2 size-4" />
+      <div className="flex flex-col gap-0">
+        <span className="text-sm">{getDisplayName(walletPubkey, profile)}</span>
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Zap className="size-3" />
+          {formatBalance(balance)} sats
+        </span>
+      </div>
+    </DropdownMenuItem>
+  );
+}
+
 export default function UserMenu() {
   const account = use$(accounts.active$);
   const walletState = use$(walletManager.state$);
@@ -77,20 +112,6 @@ export default function UserMenu() {
 
   function openWallet() {
     addWindow("wallet", {}, "Wallet");
-  }
-
-  function disconnectWallet() {
-    walletManager.disconnect();
-  }
-
-  function formatBalance(msats: number): string {
-    const sats = Math.floor(msats / 1000);
-    if (sats >= 1000000) {
-      return `${(sats / 1000000).toFixed(2)}M`;
-    } else if (sats >= 1000) {
-      return `${(sats / 1000).toFixed(2)}K`;
-    }
-    return sats.toString();
   }
 
   return (
@@ -157,27 +178,11 @@ export default function UserMenu() {
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
                     Wallet
                   </DropdownMenuLabel>
-                  <DropdownMenuItem
+                  <WalletMenuItem
+                    walletPubkey={walletState.info.pubkey}
+                    balance={walletState.info.balance}
                     onClick={openWallet}
-                    className="cursor-crosshair"
-                  >
-                    <Wallet className="mr-2 size-4" />
-                    <div className="flex flex-col gap-0">
-                      <span className="text-sm">
-                        {walletState.info.alias || "Connected Wallet"}
-                      </span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Zap className="size-3" />
-                        {formatBalance(walletState.info.balance)} sats
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={disconnectWallet}
-                    className="cursor-pointer text-muted-foreground"
-                  >
-                    Disconnect Wallet
-                  </DropdownMenuItem>
+                  />
                 </DropdownMenuGroup>
               ) : (
                 <DropdownMenuGroup>
