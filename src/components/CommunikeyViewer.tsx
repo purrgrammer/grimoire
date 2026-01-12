@@ -109,16 +109,20 @@ export function CommunikeyViewer({ pubkey, relays }: CommunikeyViewerProps) {
     : undefined;
   const tos = communityEvent ? getCommunikeyTos(communityEvent) : undefined;
 
-  // Check if chat is supported (kind 9 in any section)
-  const hasChat = contentSections.some((section) => section.kinds.includes(9));
-
   // Generate npub for copying
   const npub = resolvedPubkey ? nip19.npubEncode(resolvedPubkey) : "";
 
   // Open chat for this community
   const openChat = () => {
     if (resolvedPubkey) {
-      addWindow("chat", { identifier: npub });
+      addWindow("chat", {
+        protocol: "communikeys",
+        identifier: {
+          type: "communikey",
+          value: resolvedPubkey,
+          relays: communityRelays,
+        },
+      });
     }
   };
 
@@ -209,12 +213,10 @@ export function CommunikeyViewer({ pubkey, relays }: CommunikeyViewerProps) {
                 </div>
               </div>
 
-              {hasChat && (
-                <Button onClick={openChat} className="gap-2">
-                  <MessageCircle className="size-4" />
-                  Open Chat
-                </Button>
-              )}
+              <Button onClick={openChat} className="gap-2">
+                <MessageCircle className="size-4" />
+                Open Chat
+              </Button>
             </div>
 
             {/* Description */}
