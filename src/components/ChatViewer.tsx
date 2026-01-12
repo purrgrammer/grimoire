@@ -15,6 +15,7 @@ import type {
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
+import { CommunikeysAdapter } from "@/lib/chat/adapters/communikeys-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import { UserName } from "./nostr/UserName";
@@ -392,8 +393,18 @@ export function ChatViewer({
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
+    } else if (conversation?.protocol === "communikeys") {
+      // Communikeys is a community NIP, open the community viewer
+      const communityPubkey = conversation.metadata?.communityPubkey;
+      if (communityPubkey) {
+        addWindow("communikey", { pubkey: communityPubkey });
+      }
     }
-  }, [conversation?.protocol, addWindow]);
+  }, [
+    conversation?.protocol,
+    conversation?.metadata?.communityPubkey,
+    addWindow,
+  ]);
 
   // Get live activity metadata if this is a NIP-53 chat
   const liveActivity = conversation?.metadata?.liveActivity as
@@ -645,6 +656,8 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     //   return new Nip28Adapter();
     case "nip-53":
       return new Nip53Adapter();
+    case "communikeys":
+      return new CommunikeysAdapter();
     default:
       throw new Error(`Unsupported protocol: ${protocol}`);
   }
