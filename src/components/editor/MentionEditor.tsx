@@ -4,8 +4,10 @@ import {
   useImperativeHandle,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -375,11 +377,35 @@ export const MentionEditor = forwardRef<
       [onSubmit, serializeContent],
     );
 
+    // Ref to access handleSubmit from keyboard extension without recreating it
+    const handleSubmitRef = useRef(handleSubmit);
+    handleSubmitRef.current = handleSubmit;
+
     // Build extensions array
     const extensions = useMemo(() => {
+      // Custom extension for keyboard shortcuts (runs before suggestion plugins)
+      const SubmitShortcut = Extension.create({
+        name: "submitShortcut",
+        addKeyboardShortcuts() {
+          return {
+            // Ctrl/Cmd+Enter always submits
+            "Mod-Enter": ({ editor }) => {
+              handleSubmitRef.current(editor);
+              return true;
+            },
+            // Plain Enter submits (Shift+Enter handled by hardBreak for newlines)
+            Enter: ({ editor }) => {
+              handleSubmitRef.current(editor);
+              return true;
+            },
+          };
+        },
+      });
+
       const exts = [
+        SubmitShortcut,
         StarterKit.configure({
-          // Disable Enter to submit via Mod-Enter instead
+          // Shift+Enter inserts hard break (newline)
           hardBreak: {
             keepMarks: false,
           },
@@ -459,21 +485,7 @@ export const MentionEditor = forwardRef<
       editorProps: {
         attributes: {
           class:
-            "prose prose-sm max-w-none focus:outline-none min-h-[2rem] px-3 py-1.5",
-        },
-        handleKeyDown: (view, event) => {
-          // Submit on Enter (without Shift) or Ctrl/Cmd+Enter
-          if (
-            event.key === "Enter" &&
-            (!event.shiftKey || event.ctrlKey || event.metaKey)
-          ) {
-            event.preventDefault();
-            // Get editor from view state
-            const editorInstance = (view as any).editor;
-            handleSubmit(editorInstance);
-            return true;
-          }
-          return false;
+            "prose prose-sm max-w-none focus:outline-none min-h-[2rem] px-3 py-1.5 whitespace-nowrap",
         },
       },
       autofocus: autoFocus,
@@ -513,9 +525,12 @@ export const MentionEditor = forwardRef<
 
     return (
       <div
-        className={`rounded-md border bg-background transition-colors focus-within:border-primary h-[2.5rem] flex items-center ${className}`}
+        className={`rounded-md border bg-background transition-colors focus-within:border-primary h-[2.5rem] flex items-center overflow-hidden ${className}`}
       >
-        <EditorContent editor={editor} className="flex-1" />
+        <EditorContent
+          editor={editor}
+          className="flex-1 min-w-0 overflow-x-auto"
+        />
       </div>
     );
   },
