@@ -423,7 +423,6 @@ export function ChatViewer({
                   handleSend(content, replyTo);
                 }
               }}
-              autoFocus
               className="flex-1 min-w-0"
             />
             <Button

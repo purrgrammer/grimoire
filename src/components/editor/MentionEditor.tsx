@@ -47,7 +47,7 @@ export const MentionEditor = forwardRef<
       placeholder = "Type a message...",
       onSubmit,
       searchProfiles,
-      autoFocus = true,
+      autoFocus = false,
       className = "",
     },
     ref,
@@ -216,8 +216,11 @@ export const MentionEditor = forwardRef<
             "prose prose-sm max-w-none focus:outline-none min-h-[2rem] px-3 py-1.5",
         },
         handleKeyDown: (view, event) => {
-          // Submit on Enter (without Shift)
-          if (event.key === "Enter" && !event.shiftKey) {
+          // Submit on Enter (without Shift) or Ctrl/Cmd+Enter
+          if (
+            event.key === "Enter" &&
+            (!event.shiftKey || event.ctrlKey || event.metaKey)
+          ) {
             event.preventDefault();
             // Get editor from view state
             const editorInstance = (view as any).editor;
