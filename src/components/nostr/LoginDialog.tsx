@@ -175,11 +175,18 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       });
       signerRef.current = signer;
 
+      // IMPORTANT: Open the connection FIRST before showing QR
+      // This ensures we're listening when the signer responds
+      await signer.open();
+
       // Generate the nostrconnect:// URI
       const uri = signer.getNostrConnectURI({
         name: "Grimoire",
         url: window.location.origin,
       });
+
+      // Log for debugging
+      console.log("[NIP-46] Generated nostrconnect URI:", uri);
       setConnectUri(uri);
 
       // Generate QR code with extra margin for better scanning
@@ -193,19 +200,19 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       });
       setQrDataUrl(dataUrl);
 
-      // Open the signer to start listening
-      await signer.open();
-
       // Set up abort controller for cancellation
       abortControllerRef.current = new AbortController();
 
       setLoading(false);
 
       // Wait for the remote signer to connect
+      console.log("[NIP-46] Waiting for remote signer...");
       await signer.waitForSigner(abortControllerRef.current.signal);
+      console.log("[NIP-46] Remote signer connected!");
 
       // Get the user's pubkey
       const pubkey = await signer.getPublicKey();
+      console.log("[NIP-46] Got pubkey:", pubkey);
 
       const account = new NostrConnectAccount(pubkey, signer);
       handleSuccess(account);
