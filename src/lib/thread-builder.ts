@@ -177,13 +177,10 @@ export function buildThreadTags(
  * @param content - Message content with nostr:npub... mentions
  * @returns Array of pubkeys mentioned in content
  */
-export function extractMentionsFromContent(content: string): string[] {
-  const mentionRegex = /nostr:npub1[a-z0-9]{58}/g;
-  const matches = content.match(mentionRegex) || [];
-
+export function extractMentionsFromContent(_content: string): string[] {
   const pubkeys = new Set<string>();
 
-  // TODO: decode npub to pubkey from matches
+  // TODO: decode npub to pubkey from content
   // The MentionEditor already handles encoding, so we can extract from tags instead
   // This function is a placeholder for future enhancement
 
