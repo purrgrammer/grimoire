@@ -1,3 +1,4 @@
+import React, { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -5,7 +6,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { useState, useCallback } from "react";
 import { Hash, AtSign, Code, Link } from "lucide-react";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import type { ProfileSearchResult } from "@/services/profile-search";

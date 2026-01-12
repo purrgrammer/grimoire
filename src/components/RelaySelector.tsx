@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -137,7 +137,9 @@ export function RelaySelector({
                     relay={relay}
                     status={getRelayStatus(relay)}
                     selected={true}
-                    onToggle={() => handleRemoveRelay(relay)}
+                    onToggle={() => {
+                      handleRemoveRelay(relay);
+                    }}
                   />
                 ))}
               </div>
@@ -158,7 +160,9 @@ export function RelaySelector({
                     relay={relay}
                     status={getRelayStatus(relay)}
                     selected={false}
-                    onToggle={() => handleToggleRelay(relay)}
+                    onToggle={() => {
+                      handleToggleRelay(relay);
+                    }}
                   />
                 ))}
 
