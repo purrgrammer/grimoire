@@ -3,6 +3,7 @@ import { use$ } from "applesauce-react/hooks";
 import { from } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Reply, Zap } from "lucide-react";
+import { getZapRequest } from "applesauce-common/helpers/zap";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
 import type {
@@ -175,6 +176,8 @@ const MessageItem = memo(function MessageItem({
   if (message.type === "zap") {
     const zapAmount = message.metadata?.zapAmount || 0;
     const zapRecipient = message.metadata?.zapRecipient;
+    // Get the zap request event for RichText (contains emoji tags)
+    const zapRequest = message.event ? getZapRequest(message.event) : null;
 
     return (
       <div className="px-3 py-1">
@@ -196,17 +199,24 @@ const MessageItem = memo(function MessageItem({
                 {zapAmount.toLocaleString("en", { notation: "compact" })}
               </span>
               {zapRecipient && (
-                <>
-                  <span className="text-muted-foreground text-xs">→</span>
-                  <UserName pubkey={zapRecipient} className="text-sm" />
-                </>
+                <UserName pubkey={zapRecipient} className="text-sm" />
               )}
               <span className="text-xs text-muted-foreground ml-auto">
                 <Timestamp timestamp={message.timestamp} />
               </span>
             </div>
             {message.content && (
-              <div className="mt-1 text-sm break-words">{message.content}</div>
+              <div className="mt-1 text-sm break-words">
+                {zapRequest ? (
+                  <RichText
+                    event={zapRequest}
+                    className="text-sm leading-tight"
+                    options={{ showMedia: false, showEventEmbeds: false }}
+                  />
+                ) : (
+                  message.content
+                )}
+              </div>
             )}
           </div>
         </div>
