@@ -96,6 +96,49 @@ export function reconstructCommand(window: WindowInstance): string {
       case "debug":
         return "debug";
 
+      case "chat": {
+        // Reconstruct chat command from protocol and identifier
+        const { protocol, identifier } = props;
+
+        if (!identifier) {
+          return "chat";
+        }
+
+        // NIP-29 relay groups: chat relay'group-id
+        if (protocol === "nip-29" && identifier.type === "group") {
+          const relayUrl = identifier.relays?.[0] || "";
+          const groupId = identifier.value;
+
+          if (relayUrl && groupId) {
+            // Strip wss:// prefix for cleaner command
+            const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
+            return `chat ${cleanRelay}'${groupId}`;
+          }
+        }
+
+        // NIP-53 live activities: chat naddr1...
+        if (protocol === "nip-53" && identifier.type === "live-activity") {
+          const { pubkey, identifier: dTag } = identifier.value || {};
+          const relays = identifier.relays;
+
+          if (pubkey && dTag) {
+            try {
+              const naddr = nip19.naddrEncode({
+                kind: 30311,
+                pubkey,
+                identifier: dTag,
+                relays,
+              });
+              return `chat ${naddr}`;
+            } catch {
+              // Fallback if encoding fails
+            }
+          }
+        }
+
+        return "chat";
+      }
+
       default:
         return appId; // Fallback to just the command name
     }
