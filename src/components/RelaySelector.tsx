@@ -68,22 +68,6 @@ export function RelaySelector({
     [selectedRelays, onRelaysChange],
   );
 
-  // Handle toggle relay
-  const handleToggleRelay = useCallback(
-    (relay: string) => {
-      if (selectedRelays.includes(relay)) {
-        handleRemoveRelay(relay);
-      } else {
-        if (selectedRelays.length >= maxRelays) {
-          alert(`Maximum ${maxRelays} relays allowed`);
-          return;
-        }
-        onRelaysChange([...selectedRelays, relay]);
-      }
-    },
-    [selectedRelays, handleRemoveRelay, onRelaysChange, maxRelays],
-  );
-
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
