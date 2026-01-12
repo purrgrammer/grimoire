@@ -2,7 +2,7 @@ import { useMemo, useState, memo, useCallback, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Reply, Zap } from "lucide-react";
+import { Loader2, Reply, Zap } from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
@@ -358,6 +358,10 @@ export function ChatViewer({
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
+  // State for loading older messages
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
@@ -398,6 +402,32 @@ export function ChatViewer({
     },
     [messages],
   );
+
+  // Handle loading older messages
+  const handleLoadOlder = useCallback(async () => {
+    if (!conversation || !messages || messages.length === 0 || isLoadingOlder) {
+      return;
+    }
+
+    setIsLoadingOlder(true);
+    try {
+      // Get the timestamp of the oldest message
+      const oldestMessage = messages[0];
+      const olderMessages = await adapter.loadMoreMessages(
+        conversation,
+        oldestMessage.timestamp,
+      );
+
+      // If we got fewer messages than expected, there might be no more
+      if (olderMessages.length < 50) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Failed to load older messages:", error);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [conversation, messages, adapter, isLoadingOlder]);
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
@@ -564,6 +594,27 @@ export function ChatViewer({
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput="smooth"
+            components={{
+              Header: () =>
+                hasMore ? (
+                  <div className="flex justify-center py-2">
+                    <button
+                      onClick={handleLoadOlder}
+                      disabled={isLoadingOlder}
+                      className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {isLoadingOlder ? (
+                        <>
+                          <Loader2 className="size-3 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Load older messages"
+                      )}
+                    </button>
+                  </div>
+                ) : null,
+            }}
             itemContent={(_index, item) => {
               if (item.type === "day-marker") {
                 return (

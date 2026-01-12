@@ -1,5 +1,5 @@
-import { Observable } from "rxjs";
-import { map, first } from "rxjs/operators";
+import { Observable, firstValueFrom } from "rxjs";
+import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
@@ -311,11 +311,64 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    * Load more historical messages (pagination)
    */
   async loadMoreMessages(
-    _conversation: Conversation,
-    _before: number,
+    conversation: Conversation,
+    before: number,
   ): Promise<Message[]> {
-    // Pagination to be implemented later
-    return [];
+    const activityAddress = conversation.metadata?.activityAddress;
+    const liveActivity = conversation.metadata?.liveActivity as
+      | {
+          relays?: string[];
+        }
+      | undefined;
+
+    if (!activityAddress) {
+      throw new Error("Activity address required");
+    }
+
+    const { pubkey, identifier } = activityAddress;
+    const aTagValue = `30311:${pubkey}:${identifier}`;
+
+    // Get relays from live activity metadata or fall back to relayUrl
+    const relays = liveActivity?.relays || [];
+    if (relays.length === 0 && conversation.metadata?.relayUrl) {
+      relays.push(conversation.metadata.relayUrl);
+    }
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for live chat");
+    }
+
+    console.log(
+      `[NIP-53] Loading older messages for ${aTagValue} before ${before}`,
+    );
+
+    // Same filter as loadMessages but with until for pagination
+    const filter: Filter = {
+      kinds: [1311, 9735],
+      "#a": [aTagValue],
+      until: before,
+      limit: 50,
+    };
+
+    // One-shot request to fetch older messages
+    const events = await firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    console.log(`[NIP-53] Loaded ${events.length} older events`);
+
+    // Convert events to messages
+    const messages = events
+      .map((event) => {
+        if (event.kind === 9735) {
+          if (!isValidZap(event)) return null;
+          return this.zapToMessage(event, conversation.id);
+        }
+        return this.eventToMessage(event, conversation.id);
+      })
+      .filter((msg): msg is Message => msg !== null);
+
+    return messages.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   /**

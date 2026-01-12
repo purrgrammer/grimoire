@@ -1,5 +1,5 @@
-import { Observable } from "rxjs";
-import { map, first } from "rxjs/operators";
+import { Observable, firstValueFrom } from "rxjs";
+import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
@@ -369,11 +369,44 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    * Load more historical messages (pagination)
    */
   async loadMoreMessages(
-    _conversation: Conversation,
-    _before: number,
+    conversation: Conversation,
+    before: number,
   ): Promise<Message[]> {
-    // For now, return empty - pagination to be implemented in Phase 6
-    return [];
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+
+    if (!groupId || !relayUrl) {
+      throw new Error("Group ID and relay URL required");
+    }
+
+    console.log(
+      `[NIP-29] Loading older messages for ${groupId} before ${before}`,
+    );
+
+    // Same filter as loadMessages but with until for pagination
+    const filter: Filter = {
+      kinds: [9, 9000, 9001, 9321],
+      "#h": [groupId],
+      until: before,
+      limit: 50,
+    };
+
+    // One-shot request to fetch older messages
+    const events = await firstValueFrom(
+      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
+    );
+
+    console.log(`[NIP-29] Loaded ${events.length} older events`);
+
+    // Convert events to messages
+    const messages = events.map((event) => {
+      if (event.kind === 9321) {
+        return this.nutzapToMessage(event, conversation.id);
+      }
+      return this.eventToMessage(event, conversation.id);
+    });
+
+    return messages.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   /**
