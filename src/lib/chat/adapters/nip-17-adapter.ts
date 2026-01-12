@@ -310,63 +310,62 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       `[NIP-17] Loading messages for conversation with ${partnerPubkey.slice(0, 8)}...`,
     );
 
-    // Start async process to set up subscription
-    const setupSubscription = async () => {
-      // Get DM relays for receiving
-      const dmRelays = await this.getOwnDmRelays();
+    // Return observable that first sets up subscription, then watches timeline
+    return from(this.getOwnDmRelays()).pipe(
+      switchMap((dmRelays) => {
+        console.log(
+          `[NIP-17] Subscribing to ${dmRelays.length} DM relays:`,
+          dmRelays,
+        );
 
-      console.log(`[NIP-17] Subscribing to ${dmRelays.length} DM relays`);
+        // Subscribe to kind 1059 (gift wraps) addressed to us
+        const filter: Filter = {
+          kinds: [1059],
+          "#p": [activePubkey],
+          limit: options?.limit || 100,
+        };
 
-      // Subscribe to kind 1059 (gift wraps) addressed to us
-      const filter: Filter = {
-        kinds: [1059],
-        "#p": [activePubkey],
-        limit: options?.limit || 100,
-      };
+        if (options?.before) {
+          filter.until = options.before;
+        }
+        if (options?.after) {
+          filter.since = options.after;
+        }
 
-      if (options?.before) {
-        filter.until = options.before;
-      }
-      if (options?.after) {
-        filter.since = options.after;
-      }
+        // Clean up any existing subscription for this conversation
+        this.cleanup(conversation.id);
 
-      // Clean up any existing subscription for this conversation
-      this.cleanup(conversation.id);
+        // Start a persistent subscription to DM relays
+        const subscription = pool
+          .subscription(dmRelays, [filter], {
+            eventStore,
+          })
+          .subscribe({
+            next: (response) => {
+              if (typeof response === "string") {
+                console.log("[NIP-17] EOSE received");
+              } else {
+                console.log(
+                  `[NIP-17] Received gift wrap: ${response.id.slice(0, 8)}...`,
+                );
+              }
+            },
+            error: (err) => {
+              console.error("[NIP-17] Subscription error:", err);
+            },
+          });
 
-      // Start a persistent subscription to DM relays
-      const subscription = pool
-        .subscription(dmRelays, [filter], {
-          eventStore,
-        })
-        .subscribe({
-          next: (response) => {
-            if (typeof response === "string") {
-              console.log("[NIP-17] EOSE received");
-            } else {
-              console.log(
-                `[NIP-17] Received gift wrap: ${response.id.slice(0, 8)}...`,
-              );
-            }
-          },
-        });
+        // Store subscription for cleanup
+        this.subscriptions.set(conversation.id, subscription);
 
-      // Store subscription for cleanup
-      this.subscriptions.set(conversation.id, subscription);
-    };
+        // Now watch the timeline for gift wraps
+        const giftWrapFilter: Filter = {
+          kinds: [1059],
+          "#p": [activePubkey],
+        };
 
-    // Start subscription setup
-    setupSubscription().catch((err) => {
-      console.error("[NIP-17] Error setting up subscription:", err);
-    });
-
-    // Return observable from EventStore that decrypts gift wraps
-    const giftWrapFilter: Filter = {
-      kinds: [1059],
-      "#p": [activePubkey],
-    };
-
-    return eventStore.timeline(giftWrapFilter).pipe(
+        return eventStore.timeline(giftWrapFilter);
+      }),
       switchMap((giftWraps) => {
         // Decrypt all gift wraps and filter for this conversation
         return from(
