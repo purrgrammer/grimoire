@@ -181,9 +181,15 @@ const MessageItem = memo(function MessageItem({
   // Zap messages have special styling with gradient border
   if (message.type === "zap") {
     const zapRequest = message.event ? getZapRequest(message.event) : null;
+    // For NIP-57 zaps, reply target is in the zap request's e-tag
+    // For NIP-61 nutzaps, reply target is already in message.replyTo
+    const zapReplyTo =
+      message.replyTo ||
+      zapRequest?.tags.find((t) => t[0] === "e")?.[1] ||
+      undefined;
 
     return (
-      <div className="pl-2">
+      <div className="pl-2 mb-1">
         <div
           className="p-[1px]"
           style={{
@@ -213,11 +219,19 @@ const MessageItem = memo(function MessageItem({
                 <Timestamp timestamp={message.timestamp} />
               </span>
             </div>
+            {zapReplyTo && (
+              <ReplyPreview
+                replyToId={zapReplyTo}
+                adapter={adapter}
+                conversation={conversation}
+                onScrollToMessage={onScrollToMessage}
+              />
+            )}
             {message.content && (
               <RichText
                 content={message.content}
-                event={zapRequest || undefined}
-                className="mt-1 text-sm leading-tight break-words"
+                event={zapRequest || message.event}
+                className="text-sm leading-tight break-words"
                 options={{ showMedia: false, showEventEmbeds: false }}
               />
             )}

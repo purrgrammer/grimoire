@@ -676,22 +676,29 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const pTag = event.tags.find((t) => t[0] === "p");
     const recipient = pTag?.[1] || "";
 
-    // Amount is sum of proof amounts from the proof tag
-    // proof tag format: ["proof", "<JSON proofs array>"]
-    const proofTag = event.tags.find((t) => t[0] === "proof");
+    // Reply target is the e-tag (the event being nutzapped)
+    const eTag = event.tags.find((t) => t[0] === "e");
+    const replyTo = eTag?.[1];
+
+    // Amount is sum of proof amounts from all proof tags
+    // NIP-61 allows multiple proof tags, each containing a JSON-encoded Cashu proof
     let amount = 0;
-    if (proofTag?.[1]) {
-      try {
-        const proofs = JSON.parse(proofTag[1]);
-        if (Array.isArray(proofs)) {
-          amount = proofs.reduce(
-            (sum: number, proof: { amount?: number }) =>
-              sum + (proof.amount || 0),
-            0,
-          );
+    for (const tag of event.tags) {
+      if (tag[0] === "proof" && tag[1]) {
+        try {
+          const proof = JSON.parse(tag[1]);
+          // Proof can be a single object or an array of proofs
+          if (Array.isArray(proof)) {
+            amount += proof.reduce(
+              (sum: number, p: { amount?: number }) => sum + (p.amount || 0),
+              0,
+            );
+          } else if (typeof proof === "object" && proof.amount) {
+            amount += proof.amount;
+          }
+        } catch {
+          // Invalid proof JSON, skip this tag
         }
-      } catch {
-        // Invalid proof JSON, amount stays 0
       }
     }
 
@@ -709,6 +716,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       content: comment,
       timestamp: event.created_at,
       type: "zap", // Render the same as zaps
+      replyTo,
       protocol: "nip-29",
       metadata: {
         encrypted: false,
