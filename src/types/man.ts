@@ -374,6 +374,18 @@ export const manPages: Record<string, ManPageEntry> = {
       };
     },
   },
+  wallet: {
+    name: "wallet",
+    section: "1",
+    synopsis: "wallet",
+    description:
+      "View and manage your connected Lightning wallet via Nostr Wallet Connect (NIP-47). Shows wallet balance, connection info, and supported methods. Connect a wallet from the user menu if not already connected.",
+    examples: ["wallet    Open wallet viewer"],
+    seeAlso: ["profile", "debug"],
+    appId: "wallet",
+    category: "Nostr",
+    defaultProps: {},
+  },
   profile: {
     name: "profile",
     section: "1",
