@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, PenSquare } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -19,6 +19,7 @@ import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
+import { ComposeDialog } from "@/components/compose";
 import { useState } from "react";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
@@ -56,6 +57,7 @@ export default function UserMenu() {
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showCompose, setShowCompose] = useState(false);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -75,6 +77,11 @@ export default function UserMenu() {
     <>
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
       <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
+      <ComposeDialog
+        open={showCompose}
+        onOpenChange={setShowCompose}
+        kind={1}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -100,6 +107,15 @@ export default function UserMenu() {
                   <UserLabel pubkey={account.pubkey} />
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setShowCompose(true)}
+                className="cursor-pointer"
+              >
+                <PenSquare className="mr-2 size-4" />
+                Compose Note
+              </DropdownMenuItem>
 
               {relays && relays.length > 0 && (
                 <>

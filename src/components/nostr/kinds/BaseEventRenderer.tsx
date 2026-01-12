@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink } from "lucide-react";
+import { Menu, Copy, Check, FileJson, ExternalLink, Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -21,6 +21,9 @@ import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
+import { ComposeDialog } from "@/components/compose";
+import { use$ } from "applesauce-react/hooks";
+import accountManager from "@/services/accounts";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -101,9 +104,11 @@ function ReplyPreview({
  * Event menu - universal actions for any event
  */
 export function EventMenu({ event }: { event: NostrEvent }) {
+  const account = use$(accountManager.active$);
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
+  const [showReply, setShowReply] = useState(false);
 
   const openEventDetail = () => {
     let pointer;
@@ -181,6 +186,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           <ExternalLink className="size-4 mr-2" />
           Open
         </DropdownMenuItem>
+        {account && (
+          <DropdownMenuItem onClick={() => setShowReply(true)}>
+            <Reply className="size-4 mr-2" />
+            Reply
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (
@@ -200,6 +211,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         open={jsonDialogOpen}
         onOpenChange={setJsonDialogOpen}
         title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
+      />
+      <ComposeDialog
+        open={showReply}
+        onOpenChange={setShowReply}
+        replyTo={event}
+        kind={1}
       />
     </DropdownMenu>
   );
