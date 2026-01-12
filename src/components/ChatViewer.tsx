@@ -14,6 +14,7 @@ import type {
   LiveActivityMetadata,
 } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -508,7 +509,9 @@ export function ChatViewer({
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
-    if (conversation?.protocol === "nip-29") {
+    if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
+    } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
@@ -631,22 +634,16 @@ export function ChatViewer({
                     )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNipClick();
-                          }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
-                        >
-                          {conversation.protocol.toUpperCase()}
-                        </button>
-                      )}
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNipClick();
+                        }}
+                        className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                      >
+                        {conversation.protocol.toUpperCase()}
+                      </button>
+                      <span className="text-primary-foreground/60">•</span>
                       <span className="capitalize text-primary-foreground/80">
                         {conversation.type}
                       </span>
@@ -678,15 +675,12 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
-            )}
+            <button
+              onClick={handleNipClick}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+            >
+              {conversation.protocol.toUpperCase()}
+            </button>
           </div>
         </div>
       </div>
@@ -800,18 +794,17 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
- * Other protocols will be enabled in future phases
+ * Currently NIP-17, NIP-29, and NIP-53 are supported
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
-    // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
+    // case "nip-c7":  // Simple chat (disabled - NIP-17 preferred)
     //   return new NipC7Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     case "nip-29":
       return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
-    // case "nip-28":  // Phase 3 - Public channels (coming soon)
+    // case "nip-28":  // Public channels (coming soon)
     //   return new Nip28Adapter();
     case "nip-53":
       return new Nip53Adapter();

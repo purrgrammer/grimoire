@@ -1,9 +1,9 @@
 import type { ChatCommandResult } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
+import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 // Import other adapters as they're implemented
-// import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
 
 /**
@@ -36,11 +36,11 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
-    // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
-    // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
+    new Nip29Adapter(), // Relay groups (NIP-29)
+    new Nip53Adapter(), // Live activity chat (NIP-53)
+    new Nip17Adapter(), // Encrypted DMs (NIP-17) - checked after group/live formats
+    // new NipC7Adapter(), // Simple chat (disabled - NIP-17 preferred)
   ];
 
   for (const adapter of adapters) {
@@ -57,20 +57,18 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   throw new Error(
     `Unable to determine chat protocol from identifier: ${identifier}
 
-Currently supported formats:
-  - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
-    Examples:
-      chat relay.example.com'bitcoin-dev
-      chat wss://relay.example.com'nostr-dev
-  - naddr1... (NIP-29 group metadata, kind 39000)
-    Example:
-      chat naddr1qqxnzdesxqmnxvpexqmny...
-  - naddr1... (NIP-53 live activity chat, kind 30311)
-    Example:
-      chat naddr1... (live stream address)
+Supported formats:
+  - npub1... / nprofile1... (NIP-17 encrypted DM)
+  - hex pubkey (NIP-17 encrypted DM)
+  - user@domain.com (NIP-05 → NIP-17 encrypted DM)
+  - relay.com'group-id (NIP-29 relay group)
+  - naddr1... kind 39000 (NIP-29 group metadata)
+  - naddr1... kind 30311 (NIP-53 live activity chat)
 
-More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
-  - note/nevent (NIP-28 public channels)`,
+Examples:
+  chat npub1abc123...              # DM with user
+  chat alice@example.com           # DM via NIP-05
+  chat relay.example.com'bitcoin   # Join relay group
+  chat naddr1...                   # Live stream chat`,
   );
 }
