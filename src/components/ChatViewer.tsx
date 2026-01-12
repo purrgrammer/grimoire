@@ -756,14 +756,14 @@ export function ChatViewer({
 
       {/* Message composer - only show if user has active account */}
       {hasActiveAccount ? (
-        <div className="border-t px-2 py-1 pb-0">
+        <div className="border-t px-2 py-1">
           {replyTo && (
             <ComposerReplyPreview
               replyToId={replyTo}
               onClear={() => setReplyTo(undefined)}
             />
           )}
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-1.5 items-center">
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
@@ -779,13 +779,14 @@ export function ChatViewer({
             <Button
               type="button"
               variant="secondary"
-              className="flex-shrink-0 h-[2.5rem]"
+              size="sm"
+              className="flex-shrink-0 h-7 px-2 text-xs"
               disabled={isSending}
               onClick={() => {
                 editorRef.current?.submit();
               }}
             >
-              {isSending ? <Loader2 className="size-4 animate-spin" /> : "Send"}
+              {isSending ? <Loader2 className="size-3 animate-spin" /> : "Send"}
             </Button>
           </div>
         </div>
