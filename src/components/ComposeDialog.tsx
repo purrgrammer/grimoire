@@ -24,10 +24,9 @@ import type { NostrEvent } from "nostr-tools/core";
 import { relayListCache } from "@/services/relay-list-cache";
 import { Send, Eye, Edit3, AtSign, X } from "lucide-react";
 import { getDisplayName } from "@/lib/nostr-utils";
-import { useProfile } from "applesauce-react/hooks";
+import { useProfile } from "@/hooks/useProfile";
 import { RelaySelector } from "@/components/RelaySelector";
 import { PowerTools } from "@/components/PowerTools";
-import type { EventFactory } from "applesauce-core/event-factory";
 
 export interface ComposeDialogProps {
   /** Whether dialog is open */
@@ -140,13 +139,12 @@ export function ComposeDialog({
         }
 
         // Create and sign event
-        const event = await hub.run(
-          async ({ factory }: { factory: EventFactory }) => {
-            const unsigned = factory.event(kind, messageContent, tags);
-            const signed = await factory.sign(unsigned);
-            return signed;
-          },
-        );
+        const draft = await hub.factory.build({
+          kind,
+          content: messageContent,
+          tags,
+        });
+        const event = await hub.factory.sign(draft);
 
         // Publish to selected relays
         await publishEventToRelays(event, selectedRelays);

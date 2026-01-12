@@ -1,5 +1,6 @@
 import type { NostrEvent } from "nostr-tools/core";
 import { getNip10References } from "applesauce-common/helpers/threading";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
 
 /**
  * Thread tags for an event reply
@@ -29,28 +30,34 @@ export function buildNip10Tags(
   const tags: string[][] = [];
   const references = getNip10References(replyTo);
 
+  // Get relay hint from where event was seen
+  const seenRelaysSet = getSeenRelays(replyTo);
+  const relayHint = seenRelaysSet ? Array.from(seenRelaysSet)[0] : undefined;
+
   // Add root tag
   if (references.root) {
     const root = references.root.e || references.root.a;
     if (root && "id" in root) {
       // EventPointer
-      const relay = root.relays?.[0];
+      const relay = root.relays?.[0] || relayHint;
       tags.push(
         relay ? ["e", root.id, relay, "root"] : ["e", root.id, "", "root"],
       );
     }
   } else {
     // This is the root - mark it as such
-    const relay = replyTo.relay;
     tags.push(
-      relay ? ["e", replyTo.id, relay, "root"] : ["e", replyTo.id, "", "root"],
+      relayHint
+        ? ["e", replyTo.id, relayHint, "root"]
+        : ["e", replyTo.id, "", "root"],
     );
   }
 
   // Add reply tag (always the event we're directly replying to)
-  const relay = replyTo.relay;
   tags.push(
-    relay ? ["e", replyTo.id, relay, "reply"] : ["e", replyTo.id, "", "reply"],
+    relayHint
+      ? ["e", replyTo.id, relayHint, "reply"]
+      : ["e", replyTo.id, "", "reply"],
   );
 
   // Collect all mentioned pubkeys
@@ -58,16 +65,6 @@ export function buildNip10Tags(
 
   // Add author of reply-to event
   mentionedPubkeys.add(replyTo.pubkey);
-
-  // Add authors from thread history
-  if (references.mentions) {
-    for (const mention of references.mentions) {
-      const pointer = mention.e || mention.a;
-      if (pointer && "pubkey" in pointer && pointer.pubkey) {
-        mentionedPubkeys.add(pointer.pubkey);
-      }
-    }
-  }
 
   // Add additional mentions
   for (const pubkey of additionalMentions) {
@@ -81,7 +78,7 @@ export function buildNip10Tags(
 
   return {
     tags,
-    relayHint: relay,
+    relayHint,
   };
 }
 
@@ -104,6 +101,10 @@ export function buildNip22Tags(
 ): ThreadTags {
   const tags: string[][] = [];
 
+  // Get relay hint from where event was seen
+  const seenRelaysSet = getSeenRelays(replyTo);
+  const relayHint = seenRelaysSet ? Array.from(seenRelaysSet)[0] : undefined;
+
   // Add K tag (kind of parent event)
   tags.push(["K", String(replyTo.kind)]);
 
@@ -114,14 +115,12 @@ export function buildNip22Tags(
     // Use A tag for parameterized replaceable events
     const dTag = replyTo.tags.find((t: string[]) => t[0] === "d")?.[1] || "";
     const coordinate = `${replyTo.kind}:${replyTo.pubkey}:${dTag}`;
-    const relay = replyTo.relay;
-    tags.push(relay ? ["A", coordinate, relay] : ["A", coordinate]);
+    tags.push(relayHint ? ["A", coordinate, relayHint] : ["A", coordinate]);
   } else {
     // Use E tag for regular and replaceable events
-    const relay = replyTo.relay;
     tags.push(
-      relay
-        ? ["E", replyTo.id, relay, replyTo.pubkey]
+      relayHint
+        ? ["E", replyTo.id, relayHint, replyTo.pubkey]
         : ["E", replyTo.id, "", replyTo.pubkey],
     );
   }
@@ -145,7 +144,7 @@ export function buildNip22Tags(
 
   return {
     tags,
-    relayHint: replyTo.relay,
+    relayHint,
   };
 }
 
