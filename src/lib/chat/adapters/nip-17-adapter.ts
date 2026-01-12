@@ -294,15 +294,11 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    const partner = conversation.participants.find(
-      (p) => p.pubkey !== activePubkey,
-    );
-    if (!partner) {
-      throw new Error("No conversation partner found");
-    }
+    // Extract partner pubkey from conversation ID (handles self-chat correctly)
+    const partnerPubkey = conversation.id.replace("nip-17:", "");
 
     console.log(
-      `[NIP-17] Loading messages for conversation with ${partner.pubkey.slice(0, 8)}...`,
+      `[NIP-17] Loading messages for conversation with ${partnerPubkey.slice(0, 8)}...`,
     );
 
     // Start async process to set up subscription
@@ -368,7 +364,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           this.decryptAndFilterMessages(
             giftWraps,
             activePubkey,
-            partner.pubkey,
+            partnerPubkey,
             conversation.id,
           ),
         );
@@ -460,15 +456,11 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    const partner = conversation.participants.find(
-      (p) => p.pubkey !== activePubkey,
-    );
-    if (!partner) {
-      throw new Error("No conversation partner found");
-    }
+    // Extract partner pubkey from conversation ID (handles self-chat correctly)
+    const partnerPubkey = conversation.id.replace("nip-17:", "");
 
     console.log(
-      `[NIP-17] Loading older messages before ${before} for ${partner.pubkey.slice(0, 8)}`,
+      `[NIP-17] Loading older messages before ${before} for ${partnerPubkey.slice(0, 8)}`,
     );
 
     // Get DM relays
@@ -516,7 +508,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     const messages = await this.decryptAndFilterMessages(
       giftWraps,
       activePubkey,
-      partner.pubkey,
+      partnerPubkey,
       conversation.id,
     );
 
@@ -538,21 +530,17 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    const partner = conversation.participants.find(
-      (p) => p.pubkey !== activePubkey,
-    );
-    if (!partner) {
-      throw new Error("No conversation partner found");
-    }
+    // Extract partner pubkey from conversation ID (handles self-chat correctly)
+    const partnerPubkey = conversation.id.replace("nip-17:", "");
 
-    console.log(`[NIP-17] Sending message to ${partner.pubkey.slice(0, 8)}...`);
+    console.log(`[NIP-17] Sending message to ${partnerPubkey.slice(0, 8)}...`);
 
     // Create event factory and sign
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
     // Build the wrapped message rumor using applesauce blueprint
-    const participants = [activePubkey, partner.pubkey];
+    const participants = [activePubkey, partnerPubkey];
 
     // Create the message rumor using factory.create with blueprint
     let rumor = await factory.create(
@@ -582,33 +570,54 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       };
     }
 
-    // Get recipient's DM relays
-    const recipientRelays = await this.getRecipientDmRelays(partner.pubkey);
-    const ownRelays = await this.getOwnDmRelays();
+    // For self-chat, partner and self are the same - only need one copy
+    const isSelfChat = partnerPubkey === activePubkey;
 
-    // Send gift-wrapped copy to recipient
-    const recipientGiftWrap = await factory.create(
-      GiftWrapBlueprint,
-      partner.pubkey,
-      rumor,
-    );
-    const signedRecipientWrap = await factory.sign(recipientGiftWrap);
+    if (isSelfChat) {
+      // Self-chat: one gift wrap to ourselves
+      const ownRelays = await this.getOwnDmRelays();
+      const selfGiftWrap = await factory.create(
+        GiftWrapBlueprint,
+        activePubkey,
+        rumor,
+      );
+      const signedSelfWrap = await factory.sign(selfGiftWrap);
 
-    console.log(
-      `[NIP-17] Publishing to ${recipientRelays.length} recipient relays`,
-    );
-    await publishEventToRelays(signedRecipientWrap, recipientRelays);
+      console.log(
+        `[NIP-17] Publishing self-chat to ${ownRelays.length} relays`,
+      );
+      await publishEventToRelays(signedSelfWrap, ownRelays);
+    } else {
+      // Normal DM: gift wrap to recipient + copy to self
+      const recipientRelays = await this.getRecipientDmRelays(partnerPubkey);
+      const ownRelays = await this.getOwnDmRelays();
 
-    // Send gift-wrapped copy to ourselves (for syncing across devices)
-    const selfGiftWrap = await factory.create(
-      GiftWrapBlueprint,
-      activePubkey,
-      rumor,
-    );
-    const signedSelfWrap = await factory.sign(selfGiftWrap);
+      // Send gift-wrapped copy to recipient
+      const recipientGiftWrap = await factory.create(
+        GiftWrapBlueprint,
+        partnerPubkey,
+        rumor,
+      );
+      const signedRecipientWrap = await factory.sign(recipientGiftWrap);
 
-    console.log(`[NIP-17] Publishing self-copy to ${ownRelays.length} relays`);
-    await publishEventToRelays(signedSelfWrap, ownRelays);
+      console.log(
+        `[NIP-17] Publishing to ${recipientRelays.length} recipient relays`,
+      );
+      await publishEventToRelays(signedRecipientWrap, recipientRelays);
+
+      // Send gift-wrapped copy to ourselves (for syncing across devices)
+      const selfGiftWrap = await factory.create(
+        GiftWrapBlueprint,
+        activePubkey,
+        rumor,
+      );
+      const signedSelfWrap = await factory.sign(selfGiftWrap);
+
+      console.log(
+        `[NIP-17] Publishing self-copy to ${ownRelays.length} relays`,
+      );
+      await publishEventToRelays(signedSelfWrap, ownRelays);
+    }
 
     console.log("[NIP-17] Message sent successfully");
   }
