@@ -229,7 +229,6 @@ const MessageItem = memo(function MessageItem({
             )}
             {message.content && (
               <RichText
-                content={message.content}
                 event={zapRequest || message.event}
                 className="text-sm leading-tight break-words"
                 options={{ showMedia: false, showEventEmbeds: false }}
