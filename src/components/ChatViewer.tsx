@@ -25,8 +25,10 @@ import { Button } from "./ui/button";
 import {
   MentionEditor,
   type MentionEditorHandle,
+  type EmojiTag,
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
+import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { Label } from "./ui/label";
 
 interface ChatViewerProps {
@@ -228,6 +230,9 @@ export function ChatViewer({
   // Profile search for mentions
   const { searchProfiles } = useProfileSearch();
 
+  // Emoji search for custom emoji autocomplete
+  const { searchEmojis } = useEmojiSearch();
+
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -288,9 +293,16 @@ export function ChatViewer({
   const editorRef = useRef<MentionEditorHandle>(null);
 
   // Handle sending messages
-  const handleSend = async (content: string, replyToId?: string) => {
+  const handleSend = async (
+    content: string,
+    replyToId?: string,
+    emojiTags?: EmojiTag[],
+  ) => {
     if (!conversation || !hasActiveAccount) return;
-    await adapter.sendMessage(conversation, content, replyToId);
+    await adapter.sendMessage(conversation, content, {
+      replyTo: replyToId,
+      emojiTags,
+    });
     setReplyTo(undefined); // Clear reply context after sending
   };
 
@@ -418,9 +430,10 @@ export function ChatViewer({
               ref={editorRef}
               placeholder="Type a message..."
               searchProfiles={searchProfiles}
-              onSubmit={(content) => {
+              searchEmojis={searchEmojis}
+              onSubmit={(content, emojiTags) => {
                 if (content.trim()) {
-                  handleSend(content, replyTo);
+                  handleSend(content, replyTo, emojiTags);
                 }
               }}
               className="flex-1 min-w-0"

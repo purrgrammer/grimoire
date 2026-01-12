@@ -2,7 +2,7 @@ import { Observable } from "rxjs";
 import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { ChatProtocolAdapter } from "./base-adapter";
+import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
   Message,
@@ -377,7 +377,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   async sendMessage(
     conversation: Conversation,
     content: string,
-    replyTo?: string,
+    options?: SendMessageOptions,
   ): Promise<void> {
     const activePubkey = accountManager.active$.value?.pubkey;
     const activeSigner = accountManager.active$.value?.signer;
@@ -399,9 +399,16 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     const tags: string[][] = [["h", groupId]];
 
-    if (replyTo) {
+    if (options?.replyTo) {
       // NIP-29 uses q-tag for replies (same as NIP-C7)
-      tags.push(["q", replyTo]);
+      tags.push(["q", options.replyTo]);
+    }
+
+    // Add NIP-30 emoji tags
+    if (options?.emojiTags) {
+      for (const emoji of options.emojiTags) {
+        tags.push(["emoji", emoji.shortcode, emoji.url]);
+      }
     }
 
     // Use kind 9 for group chat messages

@@ -12,6 +12,16 @@ import type {
 import type { NostrEvent } from "@/types/nostr";
 
 /**
+ * Options for sending a message
+ */
+export interface SendMessageOptions {
+  /** Event ID being replied to */
+  replyTo?: string;
+  /** NIP-30 custom emoji tags */
+  emojiTags?: Array<{ shortcode: string; url: string }>;
+}
+
+/**
  * Abstract base class for all chat protocol adapters
  *
  * Each adapter implements protocol-specific logic for:
@@ -62,7 +72,7 @@ export abstract class ChatProtocolAdapter {
   abstract sendMessage(
     conversation: Conversation,
     content: string,
-    replyTo?: string,
+    options?: SendMessageOptions,
   ): Promise<void>;
 
   /**
