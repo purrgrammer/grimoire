@@ -511,7 +511,7 @@ export const MentionEditor = forwardRef<
       editorProps: {
         attributes: {
           class:
-            "prose prose-sm max-w-none focus:outline-none min-h-[2rem] px-3 py-1.5 whitespace-nowrap",
+            "prose prose-sm max-w-none focus:outline-none min-h-[1.25rem] px-2 py-1 whitespace-nowrap text-sm",
         },
       },
       autofocus: autoFocus,
@@ -551,7 +551,7 @@ export const MentionEditor = forwardRef<
 
     return (
       <div
-        className={`rounded-md border bg-background transition-colors focus-within:border-primary h-[2.5rem] flex items-center overflow-hidden ${className}`}
+        className={`rounded border bg-background transition-colors focus-within:border-primary h-7 flex items-center overflow-hidden ${className}`}
       >
         <EditorContent
           editor={editor}
