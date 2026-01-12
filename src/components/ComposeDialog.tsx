@@ -391,13 +391,9 @@ function MentionBadge({
   const displayName = getDisplayName(pubkey, profile);
 
   return (
-    <Badge
-      variant="secondary"
-      className="pl-2 pr-1 py-1 flex items-center gap-2"
-      asChild={false}
-    >
+    <div className="inline-flex items-center gap-2 pl-2 pr-1 py-1 rounded-full bg-secondary text-secondary-foreground">
       <AtSign className="w-3 h-3" />
-      <span>{displayName}</span>
+      <span className="text-sm">{displayName}</span>
       <Button
         variant="ghost"
         size="icon"
@@ -407,6 +403,6 @@ function MentionBadge({
         <X className="h-3 w-3" />
         <span className="sr-only">Remove {displayName}</span>
       </Button>
-    </Badge>
+    </div>
   );
 }

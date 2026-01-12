@@ -104,7 +104,7 @@ export function RelaySelector({
   );
 
   // Get all known relays from pool
-  const knownRelays = Array.from(relayStats.keys());
+  const knownRelays: string[] = Array.from(relayStats.keys()) as string[];
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>

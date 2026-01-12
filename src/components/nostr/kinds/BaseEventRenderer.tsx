@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
 import { KindBadge } from "@/components/KindBadge";

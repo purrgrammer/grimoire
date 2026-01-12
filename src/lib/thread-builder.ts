@@ -1,5 +1,4 @@
 import type { NostrEvent } from "nostr-tools/core";
-import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { getNip10References } from "applesauce-common/helpers/threading";
 
 /**
@@ -108,13 +107,12 @@ export function buildNip22Tags(
   // Add K tag (kind of parent event)
   tags.push(["K", String(replyTo.kind)]);
 
-  // Check if this is a replaceable event (30000-39999)
-  const isReplaceable = replyTo.kind >= 30000 && replyTo.kind < 40000;
+  // Check if this is a parameterized replaceable event (30000-39999)
   const isParameterized = replyTo.kind >= 30000 && replyTo.kind < 40000;
 
   if (isParameterized) {
     // Use A tag for parameterized replaceable events
-    const dTag = replyTo.tags.find((t) => t[0] === "d")?.[1] || "";
+    const dTag = replyTo.tags.find((t: string[]) => t[0] === "d")?.[1] || "";
     const coordinate = `${replyTo.kind}:${replyTo.pubkey}:${dTag}`;
     const relay = replyTo.relay;
     tags.push(relay ? ["A", coordinate, relay] : ["A", coordinate]);
@@ -187,10 +185,10 @@ export function extractMentionsFromContent(content: string): string[] {
 
   for (const match of matches) {
     try {
-      // Remove "nostr:" prefix and decode npub
-      const npub = match.replace("nostr:", "");
-      // We'll need to decode this - for now just extract the pattern
+      // Remove "nostr:" prefix
+      // TODO: decode npub to pubkey
       // The MentionEditor already handles encoding, so we can extract from tags instead
+      // This function is a placeholder for future enhancement
     } catch {
       // Skip invalid npubs
     }
