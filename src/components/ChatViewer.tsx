@@ -172,7 +172,7 @@ const MessageItem = memo(function MessageItem({
       <div className="flex items-center px-3 py-1">
         <span className="text-xs text-muted-foreground">
           * <UserName pubkey={message.author} className="text-xs" />{" "}
-          {message.content}
+          {message.content} <Timestamp timestamp={message.timestamp} />
         </span>
       </div>
     );
