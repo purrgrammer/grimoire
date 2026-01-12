@@ -1,4 +1,4 @@
-import { Observable } from "rxjs";
+import { Observable, combineLatest } from "rxjs";
 import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
@@ -22,6 +22,12 @@ import {
   getLiveStatus,
   getLiveHost,
 } from "@/lib/live-activity";
+import {
+  getZapAmount,
+  getZapRequest,
+  getZapSender,
+  isValidZap,
+} from "applesauce-common/helpers/zap";
 import { EventFactory } from "applesauce-core/event-factory";
 
 /**
@@ -222,6 +228,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const liveActivity = conversation.metadata?.liveActivity as
       | {
           relays?: string[];
+          hostPubkey?: string;
         }
       | undefined;
 
@@ -246,23 +253,32 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       `[NIP-53] Loading messages for ${aTagValue} from ${relays.length} relays`,
     );
 
-    // Subscribe to live chat messages (kind 1311)
-    const filter: Filter = {
+    // Filter for live chat messages (kind 1311)
+    const chatFilter: Filter = {
       kinds: [1311],
       "#a": [aTagValue],
       limit: options?.limit || 50,
     };
 
+    // Filter for zaps (kind 9735) targeting this activity
+    const zapFilter: Filter = {
+      kinds: [9735],
+      "#a": [aTagValue],
+      limit: options?.limit || 50,
+    };
+
     if (options?.before) {
-      filter.until = options.before;
+      chatFilter.until = options.before;
+      zapFilter.until = options.before;
     }
     if (options?.after) {
-      filter.since = options.after;
+      chatFilter.since = options.after;
+      zapFilter.since = options.after;
     }
 
-    // Start a persistent subscription to the relays
+    // Start persistent subscriptions to the relays for both chat and zaps
     pool
-      .subscription(relays, [filter], {
+      .subscription(relays, [chatFilter], {
         eventStore,
       })
       .subscribe({
@@ -277,13 +293,40 @@ export class Nip53Adapter extends ChatProtocolAdapter {
         },
       });
 
-    // Return observable from EventStore which will update automatically
-    return eventStore.timeline(filter).pipe(
-      map((events) => {
-        console.log(`[NIP-53] Timeline has ${events.length} messages`);
-        return events
-          .map((event) => this.eventToMessage(event, conversation.id))
-          .sort((a, b) => a.timestamp - b.timestamp);
+    pool
+      .subscription(relays, [zapFilter], {
+        eventStore,
+      })
+      .subscribe({
+        next: (response) => {
+          if (typeof response === "string") {
+            console.log("[NIP-53] EOSE received for zaps");
+          } else {
+            console.log(`[NIP-53] Received zap: ${response.id.slice(0, 8)}...`);
+          }
+        },
+      });
+
+    // Combine chat messages and zaps from EventStore
+    const chatMessages$ = eventStore.timeline(chatFilter);
+    const zapMessages$ = eventStore.timeline(zapFilter);
+
+    return combineLatest([chatMessages$, zapMessages$]).pipe(
+      map(([chatEvents, zapEvents]) => {
+        const chatMsgs = chatEvents.map((event) =>
+          this.eventToMessage(event, conversation.id),
+        );
+
+        const zapMsgs = zapEvents
+          .filter((event) => isValidZap(event))
+          .map((event) => this.zapToMessage(event, conversation.id));
+
+        const allMessages = [...chatMsgs, ...zapMsgs];
+        console.log(
+          `[NIP-53] Timeline has ${chatMsgs.length} messages, ${zapMsgs.length} zaps`,
+        );
+
+        return allMessages.sort((a, b) => a.timestamp - b.timestamp);
       }),
     );
   }
@@ -519,6 +562,41 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       protocol: "nip-53",
       metadata: {
         encrypted: false,
+      },
+      event,
+    };
+  }
+
+  /**
+   * Helper: Convert zap receipt to Message
+   */
+  private zapToMessage(event: NostrEvent, conversationId: string): Message {
+    const zapSender = getZapSender(event);
+    const zapAmount = getZapAmount(event);
+    const zapRequest = getZapRequest(event);
+
+    // Convert from msats to sats
+    const amountInSats = zapAmount ? Math.floor(zapAmount / 1000) : 0;
+
+    // Get zap comment from request
+    const zapComment = zapRequest?.content || "";
+
+    // The recipient is the pubkey in the p tag of the zap receipt
+    const pTag = event.tags.find((t) => t[0] === "p");
+    const zapRecipient = pTag?.[1] || event.pubkey;
+
+    return {
+      id: event.id,
+      conversationId,
+      author: zapSender || event.pubkey,
+      content: zapComment,
+      timestamp: event.created_at,
+      type: "zap",
+      protocol: "nip-53",
+      metadata: {
+        encrypted: false,
+        zapAmount: amountInSats,
+        zapRecipient,
       },
       event,
     };

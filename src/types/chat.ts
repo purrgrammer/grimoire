@@ -90,12 +90,15 @@ export interface MessageMetadata {
   zaps?: NostrEvent[];
   deleted?: boolean;
   hidden?: boolean; // NIP-28 channel hide
+  // Zap-specific metadata (for type: "zap" messages)
+  zapAmount?: number; // Amount in sats
+  zapRecipient?: string; // Pubkey of zap recipient
 }
 
 /**
- * Message type - system messages for events like join/leave, user messages for chat
+ * Message type - system messages for events like join/leave, user messages for chat, zaps for stream tips
  */
-export type MessageType = "user" | "system";
+export type MessageType = "user" | "system" | "zap";
 
 /**
  * Generic message abstraction

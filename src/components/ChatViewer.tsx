@@ -2,7 +2,7 @@ import { useMemo, useState, memo, useCallback, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Reply } from "lucide-react";
+import { Reply, Zap } from "lucide-react";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
 import type {
@@ -167,6 +167,49 @@ const MessageItem = memo(function MessageItem({
           * <UserName pubkey={message.author} className="text-xs" />{" "}
           {message.content}
         </span>
+      </div>
+    );
+  }
+
+  // Zap messages have special styling with gradient border
+  if (message.type === "zap") {
+    const zapAmount = message.metadata?.zapAmount || 0;
+    const zapRecipient = message.metadata?.zapRecipient;
+
+    return (
+      <div className="px-3 py-1">
+        <div
+          className="rounded-lg p-[1px]"
+          style={{
+            background:
+              "linear-gradient(to right, rgb(250 204 21), rgb(251 146 60), rgb(168 85 247), rgb(34 211 238))",
+          }}
+        >
+          <div className="rounded-lg bg-background px-3 py-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <UserName
+                pubkey={message.author}
+                className="font-semibold text-sm"
+              />
+              <Zap className="size-4 fill-yellow-500 text-yellow-500" />
+              <span className="text-yellow-500 font-bold">
+                {zapAmount.toLocaleString("en", { notation: "compact" })}
+              </span>
+              {zapRecipient && (
+                <>
+                  <span className="text-muted-foreground text-xs">→</span>
+                  <UserName pubkey={zapRecipient} className="text-sm" />
+                </>
+              )}
+              <span className="text-xs text-muted-foreground ml-auto">
+                <Timestamp timestamp={message.timestamp} />
+              </span>
+            </div>
+            {message.content && (
+              <div className="mt-1 text-sm break-words">{message.content}</div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
