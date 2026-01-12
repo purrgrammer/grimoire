@@ -1,5 +1,5 @@
-import { Observable } from "rxjs";
-import { map, first } from "rxjs/operators";
+import { Observable, firstValueFrom } from "rxjs";
+import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
@@ -312,12 +312,13 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
 
-    // Subscribe to group messages (kind 9) and admin events (9000-9022)
+    // Single filter for all group events:
     // kind 9: chat messages
     // kind 9000: put-user (admin adds user)
     // kind 9001: remove-user (admin removes user)
+    // kind 9321: nutzaps (NIP-61)
     const filter: Filter = {
-      kinds: [9, 9000, 9001],
+      kinds: [9, 9000, 9001, 9321],
       "#h": [groupId],
       limit: options?.limit || 50,
     };
@@ -330,20 +331,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Start a persistent subscription to the group relay
-    // This will feed new messages into the EventStore in real-time
     pool
       .subscription([relayUrl], [filter], {
-        eventStore, // Automatically add to store
+        eventStore,
       })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            // EOSE received
-            console.log("[NIP-29] EOSE received for messages");
+            console.log("[NIP-29] EOSE received");
           } else {
-            // Event received
             console.log(
-              `[NIP-29] Received message: ${response.id.slice(0, 8)}...`,
+              `[NIP-29] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
             );
           }
         },
@@ -352,10 +350,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(
       map((events) => {
-        console.log(`[NIP-29] Timeline has ${events.length} messages`);
-        return events
-          .map((event) => this.eventToMessage(event, conversation.id))
-          .sort((a, b) => a.timestamp - b.timestamp); // Oldest first for flex-col-reverse
+        const messages = events.map((event) => {
+          // Convert nutzaps (kind 9321) using nutzapToMessage
+          if (event.kind === 9321) {
+            return this.nutzapToMessage(event, conversation.id);
+          }
+          // All other events use eventToMessage
+          return this.eventToMessage(event, conversation.id);
+        });
+
+        console.log(`[NIP-29] Timeline has ${messages.length} events`);
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
       }),
     );
   }
@@ -364,11 +369,44 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    * Load more historical messages (pagination)
    */
   async loadMoreMessages(
-    _conversation: Conversation,
-    _before: number,
+    conversation: Conversation,
+    before: number,
   ): Promise<Message[]> {
-    // For now, return empty - pagination to be implemented in Phase 6
-    return [];
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+
+    if (!groupId || !relayUrl) {
+      throw new Error("Group ID and relay URL required");
+    }
+
+    console.log(
+      `[NIP-29] Loading older messages for ${groupId} before ${before}`,
+    );
+
+    // Same filter as loadMessages but with until for pagination
+    const filter: Filter = {
+      kinds: [9, 9000, 9001, 9321],
+      "#h": [groupId],
+      until: before,
+      limit: 50,
+    };
+
+    // One-shot request to fetch older messages
+    const events = await firstValueFrom(
+      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
+    );
+
+    console.log(`[NIP-29] Loaded ${events.length} older events`);
+
+    // Convert events to messages
+    const messages = events.map((event) => {
+      if (event.kind === 9321) {
+        return this.nutzapToMessage(event, conversation.id);
+      }
+      return this.eventToMessage(event, conversation.id);
+    });
+
+    return messages.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   /**
@@ -624,6 +662,70 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       protocol: "nip-29",
       metadata: {
         encrypted: false, // kind 9 messages are always public
+      },
+      event,
+    };
+  }
+
+  /**
+   * Helper: Convert nutzap event (kind 9321) to Message
+   * NIP-61 nutzaps are P2PK-locked Cashu token transfers
+   */
+  private nutzapToMessage(event: NostrEvent, conversationId: string): Message {
+    // Sender is the event author
+    const sender = event.pubkey;
+
+    // Recipient is the p-tag value
+    const pTag = event.tags.find((t) => t[0] === "p");
+    const recipient = pTag?.[1] || "";
+
+    // Reply target is the e-tag (the event being nutzapped)
+    const eTag = event.tags.find((t) => t[0] === "e");
+    const replyTo = eTag?.[1];
+
+    // Amount is sum of proof amounts from all proof tags
+    // NIP-61 allows multiple proof tags, each containing a JSON-encoded Cashu proof
+    let amount = 0;
+    for (const tag of event.tags) {
+      if (tag[0] === "proof" && tag[1]) {
+        try {
+          const proof = JSON.parse(tag[1]);
+          // Proof can be a single object or an array of proofs
+          if (Array.isArray(proof)) {
+            amount += proof.reduce(
+              (sum: number, p: { amount?: number }) => sum + (p.amount || 0),
+              0,
+            );
+          } else if (typeof proof === "object" && proof.amount) {
+            amount += proof.amount;
+          }
+        } catch {
+          // Invalid proof JSON, skip this tag
+        }
+      }
+    }
+
+    // Unit defaults to "sat" per NIP-61
+    const unitTag = event.tags.find((t) => t[0] === "unit");
+    const unit = unitTag?.[1] || "sat";
+
+    // Comment is in the content field
+    const comment = event.content || "";
+
+    return {
+      id: event.id,
+      conversationId,
+      author: sender,
+      content: comment,
+      timestamp: event.created_at,
+      type: "zap", // Render the same as zaps
+      replyTo,
+      protocol: "nip-29",
+      metadata: {
+        encrypted: false,
+        zapAmount: amount, // In the unit specified (usually sats)
+        zapRecipient: recipient,
+        nutzapUnit: unit, // Store unit for potential future use
       },
       event,
     };

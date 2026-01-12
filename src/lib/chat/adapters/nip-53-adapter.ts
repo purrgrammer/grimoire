@@ -1,5 +1,5 @@
-import { Observable, combineLatest } from "rxjs";
-import { map, first } from "rxjs/operators";
+import { Observable, firstValueFrom } from "rxjs";
+import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
@@ -254,80 +254,55 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       `[NIP-53] Loading messages for ${aTagValue} from ${relays.length} relays`,
     );
 
-    // Filter for live chat messages (kind 1311)
-    const chatFilter: Filter = {
-      kinds: [1311],
-      "#a": [aTagValue],
-      limit: options?.limit || 50,
-    };
-
-    // Filter for zaps (kind 9735) targeting this activity
-    const zapFilter: Filter = {
-      kinds: [9735],
+    // Single filter for live chat messages (kind 1311) and zaps (kind 9735)
+    const filter: Filter = {
+      kinds: [1311, 9735],
       "#a": [aTagValue],
       limit: options?.limit || 50,
     };
 
     if (options?.before) {
-      chatFilter.until = options.before;
-      zapFilter.until = options.before;
+      filter.until = options.before;
     }
     if (options?.after) {
-      chatFilter.since = options.after;
-      zapFilter.since = options.after;
+      filter.since = options.after;
     }
 
-    // Start persistent subscriptions to the relays for both chat and zaps
+    // Start a persistent subscription to the relays
     pool
-      .subscription(relays, [chatFilter], {
+      .subscription(relays, [filter], {
         eventStore,
       })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-53] EOSE received for messages");
+            console.log("[NIP-53] EOSE received");
           } else {
             console.log(
-              `[NIP-53] Received message: ${response.id.slice(0, 8)}...`,
+              `[NIP-53] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
             );
           }
         },
       });
 
-    pool
-      .subscription(relays, [zapFilter], {
-        eventStore,
-      })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            console.log("[NIP-53] EOSE received for zaps");
-          } else {
-            console.log(`[NIP-53] Received zap: ${response.id.slice(0, 8)}...`);
-          }
-        },
-      });
+    // Return observable from EventStore which will update automatically
+    return eventStore.timeline(filter).pipe(
+      map((events) => {
+        const messages = events
+          .map((event) => {
+            // Convert zaps (kind 9735) using zapToMessage
+            if (event.kind === 9735) {
+              // Only include valid zaps
+              if (!isValidZap(event)) return null;
+              return this.zapToMessage(event, conversation.id);
+            }
+            // All other events (kind 1311) use eventToMessage
+            return this.eventToMessage(event, conversation.id);
+          })
+          .filter((msg): msg is Message => msg !== null);
 
-    // Combine chat messages and zaps from EventStore
-    const chatMessages$ = eventStore.timeline(chatFilter);
-    const zapMessages$ = eventStore.timeline(zapFilter);
-
-    return combineLatest([chatMessages$, zapMessages$]).pipe(
-      map(([chatEvents, zapEvents]) => {
-        const chatMsgs = chatEvents.map((event) =>
-          this.eventToMessage(event, conversation.id),
-        );
-
-        const zapMsgs = zapEvents
-          .filter((event) => isValidZap(event))
-          .map((event) => this.zapToMessage(event, conversation.id));
-
-        const allMessages = [...chatMsgs, ...zapMsgs];
-        console.log(
-          `[NIP-53] Timeline has ${chatMsgs.length} messages, ${zapMsgs.length} zaps`,
-        );
-
-        return allMessages.sort((a, b) => a.timestamp - b.timestamp);
+        console.log(`[NIP-53] Timeline has ${messages.length} events`);
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
       }),
     );
   }
@@ -336,11 +311,64 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    * Load more historical messages (pagination)
    */
   async loadMoreMessages(
-    _conversation: Conversation,
-    _before: number,
+    conversation: Conversation,
+    before: number,
   ): Promise<Message[]> {
-    // Pagination to be implemented later
-    return [];
+    const activityAddress = conversation.metadata?.activityAddress;
+    const liveActivity = conversation.metadata?.liveActivity as
+      | {
+          relays?: string[];
+        }
+      | undefined;
+
+    if (!activityAddress) {
+      throw new Error("Activity address required");
+    }
+
+    const { pubkey, identifier } = activityAddress;
+    const aTagValue = `30311:${pubkey}:${identifier}`;
+
+    // Get relays from live activity metadata or fall back to relayUrl
+    const relays = liveActivity?.relays || [];
+    if (relays.length === 0 && conversation.metadata?.relayUrl) {
+      relays.push(conversation.metadata.relayUrl);
+    }
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for live chat");
+    }
+
+    console.log(
+      `[NIP-53] Loading older messages for ${aTagValue} before ${before}`,
+    );
+
+    // Same filter as loadMessages but with until for pagination
+    const filter: Filter = {
+      kinds: [1311, 9735],
+      "#a": [aTagValue],
+      until: before,
+      limit: 50,
+    };
+
+    // One-shot request to fetch older messages
+    const events = await firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    console.log(`[NIP-53] Loaded ${events.length} older events`);
+
+    // Convert events to messages
+    const messages = events
+      .map((event) => {
+        if (event.kind === 9735) {
+          if (!isValidZap(event)) return null;
+          return this.zapToMessage(event, conversation.id);
+        }
+        return this.eventToMessage(event, conversation.id);
+      })
+      .filter((msg): msg is Message => msg !== null);
+
+    return messages.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   /**

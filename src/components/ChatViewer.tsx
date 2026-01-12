@@ -2,7 +2,7 @@ import { useMemo, useState, memo, useCallback, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Reply, Zap } from "lucide-react";
+import { Loader2, Reply, Zap } from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
@@ -181,17 +181,23 @@ const MessageItem = memo(function MessageItem({
   // Zap messages have special styling with gradient border
   if (message.type === "zap") {
     const zapRequest = message.event ? getZapRequest(message.event) : null;
+    // For NIP-57 zaps, reply target is in the zap request's e-tag
+    // For NIP-61 nutzaps, reply target is already in message.replyTo
+    const zapReplyTo =
+      message.replyTo ||
+      zapRequest?.tags.find((t) => t[0] === "e")?.[1] ||
+      undefined;
 
     return (
-      <div className="pl-2">
+      <div className="pl-2 mb-1">
         <div
-          className="p-[1px]"
+          className="p-[1px] rounded"
           style={{
             background:
               "linear-gradient(to right, rgb(250 204 21), rgb(251 146 60), rgb(168 85 247), rgb(34 211 238))",
           }}
         >
-          <div className="bg-background px-1">
+          <div className="bg-background px-1 rounded-sm">
             <div className="flex items-center gap-2">
               <UserName
                 pubkey={message.author}
@@ -213,11 +219,18 @@ const MessageItem = memo(function MessageItem({
                 <Timestamp timestamp={message.timestamp} />
               </span>
             </div>
+            {zapReplyTo && (
+              <ReplyPreview
+                replyToId={zapReplyTo}
+                adapter={adapter}
+                conversation={conversation}
+                onScrollToMessage={onScrollToMessage}
+              />
+            )}
             {message.content && (
               <RichText
-                content={message.content}
-                event={zapRequest || undefined}
-                className="mt-1 text-sm leading-tight break-words"
+                event={zapRequest || message.event}
+                className="text-sm leading-tight break-words"
                 options={{ showMedia: false, showEventEmbeds: false }}
               />
             )}
@@ -345,6 +358,10 @@ export function ChatViewer({
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
+  // State for loading older messages
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
@@ -385,6 +402,32 @@ export function ChatViewer({
     },
     [messages],
   );
+
+  // Handle loading older messages
+  const handleLoadOlder = useCallback(async () => {
+    if (!conversation || !messages || messages.length === 0 || isLoadingOlder) {
+      return;
+    }
+
+    setIsLoadingOlder(true);
+    try {
+      // Get the timestamp of the oldest message
+      const oldestMessage = messages[0];
+      const olderMessages = await adapter.loadMoreMessages(
+        conversation,
+        oldestMessage.timestamp,
+      );
+
+      // If we got fewer messages than expected, there might be no more
+      if (olderMessages.length < 50) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Failed to load older messages:", error);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [conversation, messages, adapter, isLoadingOlder]);
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
@@ -551,6 +594,27 @@ export function ChatViewer({
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput="smooth"
+            components={{
+              Header: () =>
+                hasMore ? (
+                  <div className="flex justify-center py-2">
+                    <button
+                      onClick={handleLoadOlder}
+                      disabled={isLoadingOlder}
+                      className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {isLoadingOlder ? (
+                        <>
+                          <Loader2 className="size-3 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Load older messages"
+                      )}
+                    </button>
+                  </div>
+                ) : null,
+            }}
             itemContent={(_index, item) => {
               if (item.type === "day-marker") {
                 return (

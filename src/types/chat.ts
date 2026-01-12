@@ -93,6 +93,8 @@ export interface MessageMetadata {
   // Zap-specific metadata (for type: "zap" messages)
   zapAmount?: number; // Amount in sats
   zapRecipient?: string; // Pubkey of zap recipient
+  // NIP-61 nutzap-specific metadata
+  nutzapUnit?: string; // Unit for nutzap amount (sat, usd, eur, etc.)
 }
 
 /**
