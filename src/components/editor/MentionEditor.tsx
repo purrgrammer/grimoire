@@ -65,6 +65,29 @@ export interface MentionEditorHandle {
 const EmojiMention = Mention.extend({
   name: "emoji",
 
+  // Add custom attributes for emoji (url and source)
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      url: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-url"),
+        renderHTML: (attributes) => {
+          if (!attributes.url) return {};
+          return { "data-url": attributes.url };
+        },
+      },
+      source: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-source"),
+        renderHTML: (attributes) => {
+          if (!attributes.source) return {};
+          return { "data-source": attributes.source };
+        },
+      },
+    };
+  },
+
   addNodeView() {
     return ({ node, HTMLAttributes }) => {
       // Create wrapper span
