@@ -157,6 +157,9 @@ export const MentionEditor = forwardRef<
     },
     ref,
   ) => {
+    // Ref to access handleSubmit from suggestion plugins (defined early so useMemo can access it)
+    const handleSubmitRef = useRef<(editor: any) => void>(() => {});
+
     // Create mention suggestion configuration for @ mentions
     const mentionSuggestion: Omit<SuggestionOptions, "editor"> = useMemo(
       () => ({
@@ -168,9 +171,11 @@ export const MentionEditor = forwardRef<
         render: () => {
           let component: ReactRenderer<ProfileSuggestionListHandle>;
           let popup: TippyInstance[];
+          let editorRef: any;
 
           return {
             onStart: (props) => {
+              editorRef = props.editor;
               component = new ReactRenderer(ProfileSuggestionList, {
                 props: {
                   items: props.items,
@@ -218,6 +223,16 @@ export const MentionEditor = forwardRef<
                 return true;
               }
 
+              // Ctrl/Cmd+Enter submits the message
+              if (
+                props.event.key === "Enter" &&
+                (props.event.ctrlKey || props.event.metaKey)
+              ) {
+                popup[0]?.hide();
+                handleSubmitRef.current(editorRef);
+                return true;
+              }
+
               return component.ref?.onKeyDown(props.event) ?? false;
             },
 
@@ -244,9 +259,11 @@ export const MentionEditor = forwardRef<
               render: () => {
                 let component: ReactRenderer<EmojiSuggestionListHandle>;
                 let popup: TippyInstance[];
+                let editorRef: any;
 
                 return {
                   onStart: (props) => {
+                    editorRef = props.editor;
                     component = new ReactRenderer(EmojiSuggestionList, {
                       props: {
                         items: props.items,
@@ -291,6 +308,16 @@ export const MentionEditor = forwardRef<
                   onKeyDown(props) {
                     if (props.event.key === "Escape") {
                       popup[0]?.hide();
+                      return true;
+                    }
+
+                    // Ctrl/Cmd+Enter submits the message
+                    if (
+                      props.event.key === "Enter" &&
+                      (props.event.ctrlKey || props.event.metaKey)
+                    ) {
+                      popup[0]?.hide();
+                      handleSubmitRef.current(editorRef);
                       return true;
                     }
 
@@ -377,8 +404,7 @@ export const MentionEditor = forwardRef<
       [onSubmit, serializeContent],
     );
 
-    // Ref to access handleSubmit from keyboard extension without recreating it
-    const handleSubmitRef = useRef(handleSubmit);
+    // Keep ref updated with latest handleSubmit
     handleSubmitRef.current = handleSubmit;
 
     // Build extensions array
