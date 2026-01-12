@@ -25,6 +25,22 @@ export interface Participant {
 }
 
 /**
+ * Live activity metadata for NIP-53
+ */
+export interface LiveActivityMetadata {
+  status: "planned" | "live" | "ended";
+  streaming?: string;
+  recording?: string;
+  starts?: number;
+  ends?: number;
+  hostPubkey: string;
+  currentParticipants?: number;
+  totalParticipants?: number;
+  hashtags: string[];
+  relays: string[];
+}
+
+/**
  * Protocol-specific conversation metadata
  */
 export interface ConversationMetadata {
@@ -43,6 +59,7 @@ export interface ConversationMetadata {
     pubkey: string;
     identifier: string;
   };
+  liveActivity?: LiveActivityMetadata;
 
   // NIP-17 DM
   encrypted?: boolean;

@@ -9,9 +9,11 @@ import type {
   ChatProtocol,
   ProtocolIdentifier,
   Conversation,
+  LiveActivityMetadata,
 } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
+import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import { UserName } from "./nostr/UserName";
@@ -20,6 +22,7 @@ import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
+import { StatusBadge } from "./live/StatusBadge";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
 import {
@@ -331,8 +334,15 @@ export function ChatViewer({
   const handleNipClick = useCallback(() => {
     if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
+    } else if (conversation?.protocol === "nip-53") {
+      addWindow("nip", { number: 53 });
     }
   }, [conversation?.protocol, addWindow]);
+
+  // Get live activity metadata if this is a NIP-53 chat
+  const liveActivity = conversation?.metadata?.liveActivity as
+    | LiveActivityMetadata
+    | undefined;
 
   if (!conversation) {
     return (
@@ -348,11 +358,26 @@ export function ChatViewer({
       <div className="px-4 border-b w-full py-0.5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
+            {/* Live activity status badge */}
+            {liveActivity?.status && (
+              <StatusBadge status={liveActivity.status} size="sm" />
+            )}
             <div className="flex-1 flex flex-row gap-2 items-baseline min-w-0">
-              <h2 className="flex-1 text-base font-semibold">
+              <h2 className="flex-1 text-base font-semibold truncate">
                 {customTitle || conversation.title}
               </h2>
-              {conversation.metadata?.description && (
+              {/* Show host for live activities */}
+              {liveActivity?.hostPubkey && (
+                <span className="text-xs text-muted-foreground flex-shrink-0">
+                  by{" "}
+                  <UserName
+                    pubkey={liveActivity.hostPubkey}
+                    className="text-xs"
+                  />
+                </span>
+              )}
+              {/* Show description for groups */}
+              {!liveActivity && conversation.metadata?.description && (
                 <p className="text-xs text-muted-foreground line-clamp-1">
                   {conversation.metadata.description}
                 </p>
@@ -362,7 +387,8 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={conversation.participants} />
             <RelaysDropdown conversation={conversation} />
-            {conversation.type === "group" && (
+            {(conversation.type === "group" ||
+              conversation.type === "live-chat") && (
               <button
                 onClick={handleNipClick}
                 className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
@@ -461,7 +487,7 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently only NIP-29 (relay-based groups) is supported
+ * Currently NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
@@ -474,8 +500,8 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
-    // case "nip-53":  // Phase 5 - Live activity chat (coming soon)
-    //   return new Nip53Adapter();
+    case "nip-53":
+      return new Nip53Adapter();
     default:
       throw new Error(`Unsupported protocol: ${protocol}`);
   }

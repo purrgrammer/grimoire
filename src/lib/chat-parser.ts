@@ -1,10 +1,10 @@
 import type { ChatCommandResult } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
+import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 // Import other adapters as they're implemented
 // import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
-// import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 
 /**
  * Parse a chat command identifier and auto-detect the protocol
@@ -38,8 +38,8 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   const adapters = [
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups (currently only enabled)
-    // new Nip53Adapter(),  // Phase 5
+    new Nip29Adapter(), // Phase 4 - Relay groups
+    new Nip53Adapter(), // Phase 5 - Live activity chat
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
@@ -65,10 +65,12 @@ Currently supported formats:
   - naddr1... (NIP-29 group metadata, kind 39000)
     Example:
       chat naddr1qqxnzdesxqmnxvpexqmny...
+  - naddr1... (NIP-53 live activity chat, kind 30311)
+    Example:
+      chat naddr1... (live stream address)
 
 More formats coming soon:
   - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
-  - note/nevent (NIP-28 public channels)
-  - naddr (NIP-53 live activity chat)`,
+  - note/nevent (NIP-28 public channels)`,
   );
 }
