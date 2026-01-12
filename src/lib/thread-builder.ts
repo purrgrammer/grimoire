@@ -183,16 +183,9 @@ export function extractMentionsFromContent(content: string): string[] {
 
   const pubkeys = new Set<string>();
 
-  for (const match of matches) {
-    try {
-      // Remove "nostr:" prefix
-      // TODO: decode npub to pubkey
-      // The MentionEditor already handles encoding, so we can extract from tags instead
-      // This function is a placeholder for future enhancement
-    } catch {
-      // Skip invalid npubs
-    }
-  }
+  // TODO: decode npub to pubkey from matches
+  // The MentionEditor already handles encoding, so we can extract from tags instead
+  // This function is a placeholder for future enhancement
 
   return Array.from(pubkeys);
 }
