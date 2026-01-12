@@ -335,15 +335,14 @@ export const MentionEditor = forwardRef<
                 const url = child.attrs?.url;
                 const source = child.attrs?.source;
 
-                if (shortcode) {
+                if (source === "unicode" && url) {
+                  // Unicode emoji - output the actual character
+                  text += url;
+                } else if (shortcode) {
+                  // Custom emoji - output :shortcode: and add tag
                   text += `:${shortcode}:`;
 
-                  // Only add emoji tag for custom emojis (not unicode)
-                  if (
-                    url &&
-                    source !== "unicode" &&
-                    !seenEmojis.has(shortcode)
-                  ) {
+                  if (url && !seenEmojis.has(shortcode)) {
                     seenEmojis.add(shortcode);
                     emojiTags.push({ shortcode, url });
                   }
