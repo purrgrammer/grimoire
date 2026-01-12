@@ -5,6 +5,7 @@ import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
+import { parseChatCommand } from "@/lib/chat-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -342,6 +343,35 @@ export const manPages: Record<string, ManPageEntry> = {
     argParser: (args: string[]) => {
       const parsed = parseOpenCommand(args);
       return parsed;
+    },
+  },
+  chat: {
+    name: "chat",
+    section: "1",
+    synopsis: "chat <group-identifier>",
+    description:
+      "Join and participate in NIP-29 relay-based group chats. Groups are hosted on a single relay that enforces membership and moderation rules. Use the format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional) and group-id is the group identifier.",
+    options: [
+      {
+        flag: "<group-identifier>",
+        description:
+          "NIP-29 group identifier in format: relay'group-id (wss:// prefix optional)",
+      },
+    ],
+    examples: [
+      "chat relay.example.com'bitcoin-dev        Join relay group (wss:// prefix optional)",
+      "chat wss://relay.example.com'nostr-dev    Join relay group with explicit protocol",
+      "chat nos.lol'welcome                      Join welcome group on nos.lol",
+    ],
+    seeAlso: ["profile", "open", "req"],
+    appId: "chat",
+    category: "Nostr",
+    argParser: async (args: string[]) => {
+      const result = parseChatCommand(args);
+      return {
+        protocol: result.protocol,
+        identifier: result.identifier,
+      };
     },
   },
   profile: {

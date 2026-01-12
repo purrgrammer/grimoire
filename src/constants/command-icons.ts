@@ -14,6 +14,7 @@ import {
   Layout,
   Bug,
   Wifi,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   feed: {
     icon: Rss,
     description: "View event feed",
+  },
+  chat: {
+    icon: MessageSquare,
+    description: "Join and participate in NIP-29 relay-based group chats",
   },
 
   // Utility commands

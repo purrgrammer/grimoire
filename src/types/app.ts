@@ -16,6 +16,7 @@ export type AppId =
   | "relay"
   | "debug"
   | "conn"
+  | "chat"
   | "spells"
   | "spellbooks"
   | "win";

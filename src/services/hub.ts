@@ -55,3 +55,21 @@ export const hub = new ActionRunner(eventStore, factory, publishEvent);
 accountManager.active$.subscribe((account) => {
   factory.setSigner(account?.signer || undefined);
 });
+
+export async function publishEventToRelays(
+  event: NostrEvent,
+  relays: string[],
+): Promise<void> {
+  // If no relays, throw error
+  if (relays.length === 0) {
+    throw new Error(
+      "No relays found for publishing. Please configure relay list (kind 10002) or ensure event has relay hints.",
+    );
+  }
+
+  // Publish to relay pool
+  await pool.publish(relays, event);
+
+  // Add to EventStore for immediate local availability
+  eventStore.add(event);
+}

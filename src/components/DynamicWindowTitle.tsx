@@ -26,6 +26,10 @@ import { getTagValues } from "@/lib/nostr-utils";
 import { getLiveHost } from "@/lib/live-activity";
 import type { NostrEvent } from "@/types/nostr";
 import { getZapSender } from "applesauce-common/helpers/zap";
+// import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
+import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
+import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
+import { useState, useEffect } from "react";
 
 export interface WindowTitleData {
   title: string | ReactElement;
@@ -546,6 +550,47 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     return `Relay Pool (${connectedCount}/${relayList.length})`;
   }, [appId, relays]);
 
+  // Chat viewer title - resolve conversation to get partner name
+  const [chatTitle, setChatTitle] = useState<string | null>(null);
+  useEffect(() => {
+    if (appId !== "chat") {
+      setChatTitle(null);
+      return;
+    }
+
+    const protocol = props.protocol as ChatProtocol;
+    const identifier = props.identifier as ProtocolIdentifier;
+
+    // Get adapter and resolve conversation
+    // Currently only NIP-29 is supported
+    const getAdapter = () => {
+      switch (protocol) {
+        // case "nip-c7":  // Coming soon
+        //   return new NipC7Adapter();
+        case "nip-29":
+          return new Nip29Adapter();
+        default:
+          return null;
+      }
+    };
+
+    const adapter = getAdapter();
+    if (!adapter) {
+      setChatTitle("Chat");
+      return;
+    }
+
+    // Resolve conversation asynchronously
+    adapter
+      .resolveConversation(identifier)
+      .then((conversation) => {
+        setChatTitle(conversation.title);
+      })
+      .catch(() => {
+        setChatTitle("Chat");
+      });
+  }, [appId, props]);
+
   // Generate final title data with icon and tooltip
   return useMemo(() => {
     let title: ReactElement | string;
@@ -619,6 +664,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = connTitle;
       icon = getCommandIcon("conn");
       tooltip = rawCommand;
+    } else if (chatTitle && appId === "chat") {
+      title = chatTitle;
+      icon = getCommandIcon("chat");
+      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
@@ -642,6 +691,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     kindsTitle,
     debugTitle,
     connTitle,
+    chatTitle,
     staticTitle,
   ]);
 }

@@ -27,6 +27,9 @@ const DebugViewer = lazy(() =>
   import("./DebugViewer").then((m) => ({ default: m.DebugViewer })),
 );
 const ConnViewer = lazy(() => import("./ConnViewer"));
+const ChatViewer = lazy(() =>
+  import("./ChatViewer").then((m) => ({ default: m.ChatViewer })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -168,6 +171,15 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "conn":
         content = <ConnViewer />;
+        break;
+      case "chat":
+        content = (
+          <ChatViewer
+            protocol={window.props.protocol}
+            identifier={window.props.identifier}
+            customTitle={window.customTitle}
+          />
+        );
         break;
       case "spells":
         content = <SpellsViewer />;
