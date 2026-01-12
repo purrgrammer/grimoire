@@ -294,7 +294,27 @@ export function ChatViewer({
   const { searchEmojis } = useEmojiSearch();
 
   // Get the appropriate adapter for this protocol
-  const adapter = useMemo(() => getAdapter(protocol), [protocol]);
+  const adapter = useMemo(() => {
+    if (!protocol) {
+      return null;
+    }
+    return getAdapter(protocol);
+  }, [protocol]);
+
+  // Handle missing protocol
+  if (!protocol || !adapter) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <div className="text-center text-muted-foreground">
+          <p className="font-semibold">Invalid chat configuration</p>
+          <p className="text-sm mt-2">
+            Missing protocol. Please use the chat command with a valid
+            identifier.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Resolve conversation from identifier (async operation)
   const conversation = use$(
