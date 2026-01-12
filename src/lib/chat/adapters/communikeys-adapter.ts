@@ -40,6 +40,7 @@ const COMMUNIKEY_KIND = 10222;
  * Identifier formats:
  * - npub1... (any npub can be a community)
  * - nprofile1... (with relay hints)
+ * - naddr1... (kind 10222 community definition)
  * - hex pubkey (64 chars)
  */
 export class CommunikeysAdapter extends ChatProtocolAdapter {
@@ -47,8 +48,8 @@ export class CommunikeysAdapter extends ChatProtocolAdapter {
   readonly type = "group" as const;
 
   /**
-   * Parse identifier - accepts npub, nprofile, or hex pubkey
-   * Returns null if identifier doesn't look like a pubkey
+   * Parse identifier - accepts npub, nprofile, naddr (kind 10222), or hex pubkey
+   * Returns null if identifier doesn't look like a pubkey or communikey address
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
     // Try npub format
@@ -72,6 +73,23 @@ export class CommunikeysAdapter extends ChatProtocolAdapter {
       try {
         const decoded = nip19.decode(input);
         if (decoded.type === "nprofile") {
+          return {
+            type: "communikey",
+            value: decoded.data.pubkey,
+            relays: decoded.data.relays || [],
+          };
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    // Try naddr format (kind 10222 community definition)
+    if (input.startsWith("naddr1")) {
+      try {
+        const decoded = nip19.decode(input);
+        if (decoded.type === "naddr" && decoded.data.kind === COMMUNIKEY_KIND) {
+          // For kind 10222, the pubkey IS the community identifier
           return {
             type: "communikey",
             value: decoded.data.pubkey,

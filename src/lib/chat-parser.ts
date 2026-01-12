@@ -72,6 +72,9 @@ Currently supported formats:
     Examples:
       chat npub1...
       chat nprofile1...
+  - naddr1... (Communikey community definition, kind 10222)
+    Example:
+      chat naddr1... (kind 10222 address)
   - naddr1... (NIP-53 live activity chat, kind 30311)
     Example:
       chat naddr1... (live stream address)

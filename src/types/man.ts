@@ -351,12 +351,12 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat <identifier>",
     description:
-      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, Communikey communities, and NIP-53 live activity chat. NIP-29 groups use 'relay'group-id' format. Communikey communities use npub, nprofile, or hex pubkey. NIP-53 live activities use naddr of a kind 30311 event.",
+      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, Communikey communities, and NIP-53 live activity chat. NIP-29 groups use 'relay'group-id' format. Communikey communities use npub, nprofile, hex pubkey, or naddr (kind 10222). NIP-53 live activities use naddr of a kind 30311 event.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "NIP-29: relay'group-id | Communikey: npub/nprofile/hex | NIP-53: naddr (kind 30311)",
+          "NIP-29: relay'group-id | Communikey: npub/nprofile/hex/naddr (10222) | NIP-53: naddr (30311)",
       },
     ],
     examples: [
@@ -364,7 +364,8 @@ export const manPages: Record<string, ManPageEntry> = {
       "chat wss://nos.lol'welcome                NIP-29 with explicit protocol",
       "chat npub1...                             Communikey community",
       "chat nprofile1...                         Communikey with relay hints",
-      "chat naddr1...                            NIP-53 live activity chat",
+      "chat naddr1... (kind 10222)               Communikey definition address",
+      "chat naddr1... (kind 30311)               NIP-53 live activity chat",
     ],
     seeAlso: ["profile", "communikey", "open", "req", "live"],
     appId: "chat",
