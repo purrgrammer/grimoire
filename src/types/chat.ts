@@ -120,14 +120,74 @@ export interface Message {
 }
 
 /**
- * Protocol-specific identifier
+ * NIP-29 group identifier
+ */
+export interface GroupIdentifier {
+  type: "group";
+  /** Group ID (e.g., "bitcoin-dev") */
+  value: string;
+  /** Relay URL where the group is hosted (required for NIP-29) */
+  relays: string[];
+}
+
+/**
+ * NIP-53 live activity identifier
+ */
+export interface LiveActivityIdentifier {
+  type: "live-activity";
+  /** Address pointer for the live activity */
+  value: {
+    kind: 30311;
+    pubkey: string;
+    identifier: string;
+  };
+  /** Relay hints from naddr encoding */
+  relays?: string[];
+}
+
+/**
+ * NIP-C7/NIP-17 direct message identifier (resolved pubkey)
+ */
+export interface DMIdentifier {
+  type: "dm-recipient" | "chat-partner";
+  /** Recipient pubkey (hex) */
+  value: string;
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
+ * NIP-C7 NIP-05 identifier (needs resolution)
+ */
+export interface NIP05Identifier {
+  type: "chat-partner-nip05";
+  /** NIP-05 address to resolve */
+  value: string;
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
+ * NIP-28 channel identifier (future)
+ */
+export interface ChannelIdentifier {
+  type: "channel";
+  /** Channel creation event ID or address */
+  value: string;
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
+ * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
-export interface ProtocolIdentifier {
-  type: string; // e.g., 'dm-recipient', 'channel-event', 'group-id'
-  value: any; // Protocol-specific value
-  relays?: string[]; // Relay hints from bech32 encoding
-}
+export type ProtocolIdentifier =
+  | GroupIdentifier
+  | LiveActivityIdentifier
+  | DMIdentifier
+  | NIP05Identifier
+  | ChannelIdentifier;
 
 /**
  * Chat command parsing result

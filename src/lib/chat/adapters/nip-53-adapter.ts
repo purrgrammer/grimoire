@@ -84,11 +84,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
-    const { pubkey, identifier: dTag } = identifier.value as {
-      kind: number;
-      pubkey: string;
-      identifier: string;
-    };
+    // This adapter only handles live-activity identifiers
+    if (identifier.type !== "live-activity") {
+      throw new Error(
+        `NIP-53 adapter cannot handle identifier type: ${identifier.type}`,
+      );
+    }
+    const { pubkey, identifier: dTag } = identifier.value;
     const relayHints = identifier.relays || [];
 
     const activePubkey = accountManager.active$.value?.pubkey;
@@ -311,7 +313,10 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           .filter((msg): msg is Message => msg !== null);
 
         console.log(`[NIP-53] Timeline has ${messages.length} events`);
-        return messages.sort((a, b) => a.timestamp - b.timestamp);
+        // EventStore timeline returns events sorted by created_at desc,
+        // we need ascending order for chat. Since it's already sorted,
+        // just reverse instead of full sort (O(n) vs O(n log n))
+        return messages.reverse();
       }),
     );
   }
@@ -380,7 +385,9 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       })
       .filter((msg): msg is Message => msg !== null);
 
-    return messages.sort((a, b) => a.timestamp - b.timestamp);
+    // loadMoreMessages returns events in desc order from relay,
+    // reverse for ascending chronological order
+    return messages.reverse();
   }
 
   /**

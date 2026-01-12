@@ -1,6 +1,6 @@
 import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
-import { from, catchError, of, map, Observable } from "rxjs";
+import { from, catchError, of, map } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Loader2, Reply, Zap, AlertTriangle, RefreshCw } from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
