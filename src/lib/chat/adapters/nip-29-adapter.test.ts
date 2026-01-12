@@ -35,16 +35,25 @@ describe("Nip29Adapter", () => {
 
     it("should parse various group-id formats", () => {
       const result1 = adapter.parseIdentifier("relay.example.com'bitcoin-dev");
-      expect(result1?.value).toBe("bitcoin-dev");
-      expect(result1?.relays).toEqual(["wss://relay.example.com"]);
+      expect(result1?.type).toBe("group");
+      if (result1?.type === "group") {
+        expect(result1.value).toBe("bitcoin-dev");
+        expect(result1.relays).toEqual(["wss://relay.example.com"]);
+      }
 
       const result2 = adapter.parseIdentifier("nos.lol'welcome");
-      expect(result2?.value).toBe("welcome");
-      expect(result2?.relays).toEqual(["wss://nos.lol"]);
+      expect(result2?.type).toBe("group");
+      if (result2?.type === "group") {
+        expect(result2.value).toBe("welcome");
+        expect(result2.relays).toEqual(["wss://nos.lol"]);
+      }
 
       const result3 = adapter.parseIdentifier("relay.test.com'my_group_123");
-      expect(result3?.value).toBe("my_group_123");
-      expect(result3?.relays).toEqual(["wss://relay.test.com"]);
+      expect(result3?.type).toBe("group");
+      if (result3?.type === "group") {
+        expect(result3.value).toBe("my_group_123");
+        expect(result3.relays).toEqual(["wss://relay.test.com"]);
+      }
     });
 
     it("should handle relay URLs with ports", () => {

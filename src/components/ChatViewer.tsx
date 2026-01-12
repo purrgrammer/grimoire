@@ -25,6 +25,7 @@ import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
+import { ConversationList } from "./chat/ConversationList";
 import { StatusBadge } from "./live/StatusBadge";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
@@ -318,6 +319,23 @@ export function ChatViewer({
   customTitle,
 }: ChatViewerProps) {
   const { addWindow } = useGrimoire();
+
+  // Handle conversation list mode
+  const handleSelectConversation = useCallback(
+    (pubkey: string) => {
+      // Open a new chat window with the selected conversation
+      addWindow("chat", {
+        protocol: "nip-17",
+        identifier: { type: "chat-partner", value: pubkey },
+      });
+    },
+    [addWindow],
+  );
+
+  // Show conversation list if identifier is conversation-list type
+  if (identifier.type === "conversation-list") {
+    return <ConversationList onSelectConversation={handleSelectConversation} />;
+  }
 
   // Get active account
   const activeAccount = use$(accountManager.active$);

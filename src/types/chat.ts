@@ -180,6 +180,15 @@ export interface ChannelIdentifier {
 }
 
 /**
+ * Conversation list identifier - shows all conversations for a protocol
+ */
+export interface ConversationListIdentifier {
+  type: "conversation-list";
+  /** Protocol to show conversations for */
+  protocol: ChatProtocol;
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -188,7 +197,8 @@ export type ProtocolIdentifier =
   | LiveActivityIdentifier
   | DMIdentifier
   | NIP05Identifier
-  | ChannelIdentifier;
+  | ChannelIdentifier
+  | ConversationListIdentifier;
 
 /**
  * Chat command parsing result

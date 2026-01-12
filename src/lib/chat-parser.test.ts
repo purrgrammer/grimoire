@@ -55,24 +55,33 @@ describe("parseChatCommand", () => {
       const result = parseChatCommand(["relay.example.com'bitcoin-dev"]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("bitcoin-dev");
-      expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      expect(result.identifier.type).toBe("group");
+      if (result.identifier.type === "group") {
+        expect(result.identifier.value).toBe("bitcoin-dev");
+        expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      }
     });
 
     it("should parse NIP-29 group with different relay when split", () => {
       const result = parseChatCommand(["relay.example.com", "bitcoin-dev"]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("bitcoin-dev");
-      expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      expect(result.identifier.type).toBe("group");
+      if (result.identifier.type === "group") {
+        expect(result.identifier.value).toBe("bitcoin-dev");
+        expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      }
     });
 
     it("should parse NIP-29 group from nos.lol", () => {
       const result = parseChatCommand(["nos.lol'welcome"]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("welcome");
-      expect(result.identifier.relays).toEqual(["wss://nos.lol"]);
+      expect(result.identifier.type).toBe("group");
+      if (result.identifier.type === "group") {
+        expect(result.identifier.value).toBe("welcome");
+        expect(result.identifier.relays).toEqual(["wss://nos.lol"]);
+      }
     });
   });
 
@@ -146,16 +155,19 @@ describe("parseChatCommand", () => {
       const result = parseChatCommand([naddr]);
 
       expect(result.protocol).toBe("nip-53");
-      expect(result.identifier.value).toEqual({
-        kind: 30311,
-        pubkey:
-          "0000000000000000000000000000000000000000000000000000000000000001",
-        identifier: "podcast-episode-42",
-      });
-      expect(result.identifier.relays).toEqual([
-        "wss://relay1.example.com",
-        "wss://relay2.example.com",
-      ]);
+      expect(result.identifier.type).toBe("live-activity");
+      if (result.identifier.type === "live-activity") {
+        expect(result.identifier.value).toEqual({
+          kind: 30311,
+          pubkey:
+            "0000000000000000000000000000000000000000000000000000000000000001",
+          identifier: "podcast-episode-42",
+        });
+        expect(result.identifier.relays).toEqual([
+          "wss://relay1.example.com",
+          "wss://relay2.example.com",
+        ]);
+      }
     });
 
     it("should not parse NIP-29 group naddr as NIP-53", () => {
