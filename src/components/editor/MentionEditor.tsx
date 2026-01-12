@@ -88,28 +88,34 @@ const EmojiMention = Mention.extend({
     };
   },
 
-  addNodeView() {
-    return ({ node, HTMLAttributes }) => {
-      // Create wrapper span
-      const dom = document.createElement("span");
-      dom.className = "emoji-node";
-      Object.entries(HTMLAttributes).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          dom.setAttribute(key, String(value));
-        }
-      });
+  // Override renderText to return empty string (nodeView handles display)
+  renderText({ node }) {
+    // Return the emoji character for unicode, or empty for custom
+    // This is what gets copied to clipboard
+    if (node.attrs.source === "unicode") {
+      return node.attrs.url || "";
+    }
+    return `:${node.attrs.id}:`;
+  },
 
+  addNodeView() {
+    return ({ node }) => {
       const { url, source, id } = node.attrs;
       const isUnicode = source === "unicode";
 
-      if (isUnicode) {
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className = "emoji-node";
+      dom.setAttribute("data-emoji", id || "");
+
+      if (isUnicode && url) {
         // Unicode emoji - render as text span
         const span = document.createElement("span");
         span.className = "emoji-unicode";
         span.textContent = url;
         span.title = `:${id}:`;
         dom.appendChild(span);
-      } else {
+      } else if (url) {
         // Custom emoji - render as image
         const img = document.createElement("img");
         img.src = url;
@@ -117,7 +123,14 @@ const EmojiMention = Mention.extend({
         img.title = `:${id}:`;
         img.className = "emoji-image";
         img.draggable = false;
+        img.onerror = () => {
+          // Fallback to shortcode if image fails to load
+          dom.textContent = `:${id}:`;
+        };
         dom.appendChild(img);
+      } else {
+        // Fallback if no url - show shortcode
+        dom.textContent = `:${id}:`;
       }
 
       return {
@@ -434,9 +447,7 @@ export const MentionEditor = forwardRef<
                   .run();
               },
             },
-            renderLabel({ node }) {
-              return `:${node.attrs.label}:`;
-            },
+            // Note: renderLabel is not used when nodeView is defined
           }),
         );
       }
