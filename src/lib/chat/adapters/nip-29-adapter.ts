@@ -330,8 +330,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       filter.since = options.after;
     }
 
+    // Clean up any existing subscription for this conversation
+    const conversationId = `nip-29:${relayUrl}'${groupId}`;
+    this.cleanup(conversationId);
+
     // Start a persistent subscription to the group relay
-    pool
+    const subscription = pool
       .subscription([relayUrl], [filter], {
         eventStore,
       })
@@ -346,6 +350,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
           }
         },
       });
+
+    // Store subscription for cleanup
+    this.subscriptions.set(conversationId, subscription);
 
     // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(

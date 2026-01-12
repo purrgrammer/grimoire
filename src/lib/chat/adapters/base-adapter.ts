@@ -1,4 +1,4 @@
-import type { Observable } from "rxjs";
+import type { Observable, Subscription } from "rxjs";
 import type {
   Conversation,
   Message,
@@ -29,10 +29,37 @@ export interface SendMessageOptions {
  * - Message loading and sending
  * - Conversation management
  * - Protocol capabilities
+ *
+ * Adapters manage their own relay subscriptions. Call cleanup() when
+ * a conversation is closed to prevent memory leaks.
  */
 export abstract class ChatProtocolAdapter {
   abstract readonly protocol: ChatProtocol;
   abstract readonly type: ConversationType;
+
+  /** Active relay subscriptions by conversation ID */
+  protected subscriptions = new Map<string, Subscription>();
+
+  /**
+   * Cleanup subscriptions for a specific conversation
+   * Should be called when a chat window is closed
+   */
+  cleanup(conversationId: string): void {
+    const sub = this.subscriptions.get(conversationId);
+    if (sub) {
+      sub.unsubscribe();
+      this.subscriptions.delete(conversationId);
+    }
+  }
+
+  /**
+   * Cleanup all subscriptions
+   * Should be called when the adapter is no longer needed
+   */
+  cleanupAll(): void {
+    this.subscriptions.forEach((sub) => sub.unsubscribe());
+    this.subscriptions.clear();
+  }
 
   /**
    * Parse an identifier string to determine if this adapter can handle it

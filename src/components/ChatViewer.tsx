@@ -1,9 +1,10 @@
-import { useMemo, useState, memo, useCallback, useRef } from "react";
+import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
-import { from } from "rxjs";
+import { from, catchError, of, map, Observable } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Loader2, Reply, Zap } from "lucide-react";
+import { Loader2, Reply, Zap, AlertTriangle, RefreshCw } from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
+import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
 import type {
@@ -99,6 +100,28 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
     date1.getDate() !== date2.getDate()
   );
 }
+
+/**
+ * Type guard for LiveActivityMetadata
+ */
+function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.status === "string" &&
+    typeof obj.hostPubkey === "string" &&
+    Array.isArray(obj.hashtags) &&
+    Array.isArray(obj.relays)
+  );
+}
+
+/**
+ * Conversation resolution result - either success with conversation or error
+ */
+type ConversationResult =
+  | { status: "loading" }
+  | { status: "success"; conversation: Conversation }
+  | { status: "error"; error: string };
 
 /**
  * ComposerReplyPreview - Shows who is being replied to in the composer
@@ -308,11 +331,46 @@ export function ChatViewer({
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
-  // Resolve conversation from identifier (async operation)
-  const conversation = use$(
-    () => from(adapter.resolveConversation(identifier)),
-    [adapter, identifier],
+  // State for retry trigger
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Resolve conversation from identifier with error handling
+  const conversationResult = use$(
+    () =>
+      from(adapter.resolveConversation(identifier)).pipe(
+        map(
+          (conv): ConversationResult => ({
+            status: "success",
+            conversation: conv,
+          }),
+        ),
+        catchError((err) => {
+          console.error("[Chat] Failed to resolve conversation:", err);
+          const errorMessage =
+            err instanceof Error ? err.message : "Failed to load conversation";
+          return of<ConversationResult>({
+            status: "error",
+            error: errorMessage,
+          });
+        }),
+      ),
+    [adapter, identifier, retryCount],
   );
+
+  // Extract conversation from result (null while loading or on error)
+  const conversation =
+    conversationResult?.status === "success"
+      ? conversationResult.conversation
+      : null;
+
+  // Cleanup subscriptions when conversation changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (conversation) {
+        adapter.cleanup(conversation.id);
+      }
+    };
+  }, [adapter, conversation]);
 
   // Load messages for this conversation (reactive)
   const messages = use$(
@@ -368,18 +426,33 @@ export function ChatViewer({
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
 
-  // Handle sending messages
+  // State for send in progress (prevents double-sends)
+  const [isSending, setIsSending] = useState(false);
+
+  // Handle sending messages with error handling
   const handleSend = async (
     content: string,
     replyToId?: string,
     emojiTags?: EmojiTag[],
   ) => {
-    if (!conversation || !hasActiveAccount) return;
-    await adapter.sendMessage(conversation, content, {
-      replyTo: replyToId,
-      emojiTags,
-    });
-    setReplyTo(undefined); // Clear reply context after sending
+    if (!conversation || !hasActiveAccount || isSending) return;
+
+    setIsSending(true);
+    try {
+      await adapter.sendMessage(conversation, content, {
+        replyTo: replyToId,
+        emojiTags,
+      });
+      setReplyTo(undefined); // Clear reply context only on success
+    } catch (error) {
+      console.error("[Chat] Failed to send message:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to send message";
+      toast.error(errorMessage);
+      // Don't clear replyTo so user can retry
+    } finally {
+      setIsSending(false);
+    }
   };
 
   // Handle reply button click
@@ -388,10 +461,14 @@ export function ChatViewer({
   }, []);
 
   // Handle scroll to message (when clicking on reply preview)
+  // Must search in messagesWithMarkers since that's what Virtuoso renders
   const handleScrollToMessage = useCallback(
     (messageId: string) => {
-      if (!messages) return;
-      const index = messages.findIndex((m) => m.id === messageId);
+      if (!messagesWithMarkers) return;
+      // Find index in the rendered array (which includes day markers)
+      const index = messagesWithMarkers.findIndex(
+        (item) => item.type === "message" && item.data.id === messageId,
+      );
       if (index !== -1 && virtuosoRef.current) {
         virtuosoRef.current.scrollToIndex({
           index,
@@ -400,7 +477,7 @@ export function ChatViewer({
         });
       }
     },
-    [messages],
+    [messagesWithMarkers],
   );
 
   // Handle loading older messages
@@ -438,10 +515,12 @@ export function ChatViewer({
     }
   }, [conversation?.protocol, addWindow]);
 
-  // Get live activity metadata if this is a NIP-53 chat
-  const liveActivity = conversation?.metadata?.liveActivity as
-    | LiveActivityMetadata
-    | undefined;
+  // Get live activity metadata if this is a NIP-53 chat (with type guard)
+  const liveActivity = isLiveActivityMetadata(
+    conversation?.metadata?.liveActivity,
+  )
+    ? conversation?.metadata?.liveActivity
+    : undefined;
 
   // Derive participants from messages for live activities (unique pubkeys who have chatted)
   const derivedParticipants = useMemo(() => {
@@ -474,12 +553,38 @@ export function ChatViewer({
     liveActivity?.hostPubkey,
   ]);
 
-  if (!conversation) {
+  // Handle loading state
+  if (!conversationResult || conversationResult.status === "loading") {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        Loading conversation...
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-6 animate-spin" />
+        <span>Loading conversation...</span>
       </div>
     );
+  }
+
+  // Handle error state with retry option
+  if (conversationResult.status === "error") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground p-4">
+        <AlertTriangle className="size-8 text-destructive" />
+        <span className="text-center text-sm">{conversationResult.error}</span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRetryCount((c) => c + 1)}
+          className="gap-2"
+        >
+          <RefreshCw className="size-3" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // At this point conversation is guaranteed to exist
+  if (!conversation) {
+    return null; // Should never happen, but satisfies TypeScript
   }
 
   return (
@@ -675,11 +780,12 @@ export function ChatViewer({
               type="button"
               variant="secondary"
               className="flex-shrink-0 h-[2.5rem]"
+              disabled={isSending}
               onClick={() => {
                 editorRef.current?.submit();
               }}
             >
-              Send
+              {isSending ? <Loader2 className="size-4 animate-spin" /> : "Send"}
             </Button>
           </div>
         </div>
