@@ -436,11 +436,11 @@ export function ChatViewer({
   return (
     <div className="flex h-full flex-col">
       {/* Header with conversation info and controls */}
-      <div className="px-4 border-b w-full py-0.5">
-        <div className="flex items-start justify-between gap-3">
+      <div className="pl-4 pr-0 border-b w-full py-0.5">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
             <div className="flex-1 flex flex-row gap-2 items-center min-w-0">
-              <h2 className="text-base font-semibold truncate">
+              <h2 className="text-sm font-semibold truncate">
                 {customTitle || conversation.title}
               </h2>
               {/* Live activity status badge - small, icon only */}
@@ -456,12 +456,6 @@ export function ChatViewer({
                     className="text-xs"
                   />
                 </span>
-              )}
-              {/* Show description for groups */}
-              {!liveActivity && conversation.metadata?.description && (
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {conversation.metadata.description}
-                </p>
               )}
             </div>
           </div>
