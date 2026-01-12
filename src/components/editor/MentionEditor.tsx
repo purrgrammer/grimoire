@@ -47,7 +47,7 @@ export const MentionEditor = forwardRef<
       placeholder = "Type a message...",
       onSubmit,
       searchProfiles,
-      autoFocus = true,
+      autoFocus = false,
       className = "",
     },
     ref,
