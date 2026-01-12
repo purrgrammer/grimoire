@@ -410,7 +410,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         }
 
         // Convert rumor to message
-        const message = this.rumorToMessage(rumor, conversationId, giftWrap);
+        const message = this.rumorToMessage(rumor, conversationId);
         messages.push(message);
       } catch (err) {
         // Decryption failed - might not be for us or corrupted
@@ -663,11 +663,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   /**
    * Helper: Convert Rumor to Message
    */
-  private rumorToMessage(
-    rumor: Rumor,
-    conversationId: string,
-    giftWrap: NostrEvent,
-  ): Message {
+  private rumorToMessage(rumor: Rumor, conversationId: string): Message {
     const sender = getWrappedMessageSender(rumor);
     const replyTo = getWrappedMessageParent(rumor);
 
@@ -693,9 +689,10 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       metadata: {
         encrypted: true,
       },
-      // Store the gift wrap as the "event" for reference
-      // (the actual rumor is unsigned so we reference the wrapper)
-      event: giftWrap,
+      // Use the rumor as the event for rendering (has decrypted content + tags)
+      // Cast to NostrEvent since RichText only needs content/tags/pubkey for rendering
+      // The rumor is unsigned but has all fields needed for display
+      event: rumor as unknown as NostrEvent,
     };
   }
 
