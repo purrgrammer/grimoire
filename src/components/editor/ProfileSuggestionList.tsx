@@ -38,7 +38,7 @@ export const ProfileSuggestionList = forwardRef<
         return true;
       }
 
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
         if (items[selectedIndex]) {
           command(items[selectedIndex]);
         }
