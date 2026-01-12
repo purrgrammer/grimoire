@@ -1,4 +1,4 @@
-import { Observable, combineLatest } from "rxjs";
+import { Observable } from "rxjs";
 import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
@@ -312,85 +312,55 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
 
-    // Subscribe to group messages (kind 9) and admin events (9000-9022)
+    // Single filter for all group events:
     // kind 9: chat messages
     // kind 9000: put-user (admin adds user)
     // kind 9001: remove-user (admin removes user)
-    const chatFilter: Filter = {
-      kinds: [9, 9000, 9001],
-      "#h": [groupId],
-      limit: options?.limit || 50,
-    };
-
-    // Filter for nutzaps (kind 9321) targeting this group
-    const nutzapFilter: Filter = {
-      kinds: [9321],
+    // kind 9321: nutzaps (NIP-61)
+    const filter: Filter = {
+      kinds: [9, 9000, 9001, 9321],
       "#h": [groupId],
       limit: options?.limit || 50,
     };
 
     if (options?.before) {
-      chatFilter.until = options.before;
-      nutzapFilter.until = options.before;
+      filter.until = options.before;
     }
     if (options?.after) {
-      chatFilter.since = options.after;
-      nutzapFilter.since = options.after;
+      filter.since = options.after;
     }
 
-    // Start persistent subscriptions for both chat and nutzaps
+    // Start a persistent subscription to the group relay
     pool
-      .subscription([relayUrl], [chatFilter], {
+      .subscription([relayUrl], [filter], {
         eventStore,
       })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-29] EOSE received for messages");
+            console.log("[NIP-29] EOSE received");
           } else {
             console.log(
-              `[NIP-29] Received message: ${response.id.slice(0, 8)}...`,
+              `[NIP-29] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
             );
           }
         },
       });
 
-    pool
-      .subscription([relayUrl], [nutzapFilter], {
-        eventStore,
-      })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            console.log("[NIP-29] EOSE received for nutzaps");
-          } else {
-            console.log(
-              `[NIP-29] Received nutzap: ${response.id.slice(0, 8)}...`,
-            );
+    // Return observable from EventStore which will update automatically
+    return eventStore.timeline(filter).pipe(
+      map((events) => {
+        const messages = events.map((event) => {
+          // Convert nutzaps (kind 9321) using nutzapToMessage
+          if (event.kind === 9321) {
+            return this.nutzapToMessage(event, conversation.id);
           }
-        },
-      });
+          // All other events use eventToMessage
+          return this.eventToMessage(event, conversation.id);
+        });
 
-    // Combine chat messages and nutzaps from EventStore
-    const chatMessages$ = eventStore.timeline(chatFilter);
-    const nutzapMessages$ = eventStore.timeline(nutzapFilter);
-
-    return combineLatest([chatMessages$, nutzapMessages$]).pipe(
-      map(([chatEvents, nutzapEvents]) => {
-        const chatMsgs = chatEvents.map((event) =>
-          this.eventToMessage(event, conversation.id),
-        );
-
-        const nutzapMsgs = nutzapEvents.map((event) =>
-          this.nutzapToMessage(event, conversation.id),
-        );
-
-        const allMessages = [...chatMsgs, ...nutzapMsgs];
-        console.log(
-          `[NIP-29] Timeline has ${chatMsgs.length} messages, ${nutzapMsgs.length} nutzaps`,
-        );
-
-        return allMessages.sort((a, b) => a.timestamp - b.timestamp);
+        console.log(`[NIP-29] Timeline has ${messages.length} events`);
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
       }),
     );
   }

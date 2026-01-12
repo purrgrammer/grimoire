@@ -191,13 +191,13 @@ const MessageItem = memo(function MessageItem({
     return (
       <div className="pl-2 mb-1">
         <div
-          className="p-[1px]"
+          className="p-[1px] rounded"
           style={{
             background:
               "linear-gradient(to right, rgb(250 204 21), rgb(251 146 60), rgb(168 85 247), rgb(34 211 238))",
           }}
         >
-          <div className="bg-background px-1">
+          <div className="bg-background px-1 rounded-sm">
             <div className="flex items-center gap-2">
               <UserName
                 pubkey={message.author}
