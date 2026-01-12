@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { useState, useCallback } from "react";
-import { Hash, AtSign, Code, Link, Image, Zap, Sparkles } from "lucide-react";
+import { Hash, AtSign, Code, Link } from "lucide-react";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import { nip19 } from "nostr-tools";
@@ -94,8 +94,10 @@ export function PowerTools({ onInsert, onAddMention }: PowerToolsProps) {
               <Input
                 placeholder="Enter tag..."
                 value={hashtagInput}
-                onChange={(e) => setHashtagInput(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setHashtagInput(e.target.value)
+                }
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
                     handleHashtagInsert();
                   }
@@ -128,14 +130,16 @@ export function PowerTools({ onInsert, onAddMention }: PowerToolsProps) {
             <Input
               placeholder="Search profiles..."
               value={mentionQuery}
-              onChange={(e) => handleMentionSearch(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleMentionSearch(e.target.value)
+              }
               className="text-sm"
             />
 
             {/* Results */}
             {mentionResults.length > 0 && (
               <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                {mentionResults.map((result) => (
+                {mentionResults.map((result: ProfileSearchResult) => (
                   <button
                     key={result.pubkey}
                     className="w-full text-left p-2 rounded hover:bg-muted transition-colors"

@@ -28,6 +28,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { useProfile } from "applesauce-react/hooks";
 import { RelaySelector } from "@/components/RelaySelector";
 import { PowerTools } from "@/components/PowerTools";
+import type { EventFactory } from "applesauce-core/event-factory";
 
 export interface ComposeDialogProps {
   /** Whether dialog is open */
@@ -140,11 +141,13 @@ export function ComposeDialog({
         }
 
         // Create and sign event
-        const event = await hub.run(async ({ factory }) => {
-          const unsigned = factory.event(kind, messageContent, tags);
-          const signed = await factory.sign(unsigned);
-          return signed;
-        });
+        const event = await hub.run(
+          async ({ factory }: { factory: EventFactory }) => {
+            const unsigned = factory.event(kind, messageContent, tags);
+            const signed = await factory.sign(unsigned);
+            return signed;
+          },
+        );
 
         // Publish to selected relays
         await publishEventToRelays(event, selectedRelays);
@@ -214,7 +217,7 @@ export function ComposeDialog({
         <div className="flex-1 overflow-hidden flex flex-col">
           <Tabs
             value={showPreview ? "preview" : "edit"}
-            onValueChange={(v) => setShowPreview(v === "preview")}
+            onValueChange={(v: string) => setShowPreview(v === "preview")}
             className="flex-1 flex flex-col"
           >
             {/* Tab Navigation */}
@@ -268,11 +271,13 @@ export function ComposeDialog({
                       Additional Mentions
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {additionalMentions.map((pubkey) => (
+                      {additionalMentions.map((pubkey: string) => (
                         <MentionBadge
                           key={pubkey}
                           pubkey={pubkey}
-                          onRemove={() => handleRemoveMention(pubkey)}
+                          onRemove={() => {
+                            handleRemoveMention(pubkey);
+                          }}
                         />
                       ))}
                     </div>
@@ -389,6 +394,7 @@ function MentionBadge({
     <Badge
       variant="secondary"
       className="pl-2 pr-1 py-1 flex items-center gap-2"
+      asChild={false}
     >
       <AtSign className="w-3 h-3" />
       <span>{displayName}</span>

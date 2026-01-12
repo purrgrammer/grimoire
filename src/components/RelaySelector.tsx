@@ -1,14 +1,13 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, X, Plus, Wifi, WifiOff, Settings2 } from "lucide-react";
+import { X, Plus, Wifi, WifiOff, Settings2 } from "lucide-react";
 import { normalizeURL } from "applesauce-core/helpers";
 import pool from "@/services/relay-pool";
 import { use$ } from "applesauce-react/hooks";
@@ -132,7 +131,7 @@ export function RelaySelector({
                 SELECTED ({selectedRelays.length})
               </div>
               <div className="space-y-2">
-                {selectedRelays.map((relay) => (
+                {selectedRelays.map((relay: string) => (
                   <RelayItem
                     key={relay}
                     relay={relay}
@@ -152,8 +151,8 @@ export function RelaySelector({
                 AVAILABLE
               </div>
               {knownRelays
-                .filter((relay) => !selectedRelays.includes(relay))
-                .map((relay) => (
+                .filter((relay: string) => !selectedRelays.includes(relay))
+                .map((relay: string) => (
                   <RelayItem
                     key={relay}
                     relay={relay}
@@ -163,8 +162,8 @@ export function RelaySelector({
                   />
                 ))}
 
-              {knownRelays.filter((r) => !selectedRelays.includes(r)).length ===
-                0 && (
+              {knownRelays.filter((r: string) => !selectedRelays.includes(r))
+                .length === 0 && (
                 <div className="text-sm text-muted-foreground italic py-4 text-center">
                   No other relays available
                 </div>
@@ -178,8 +177,10 @@ export function RelaySelector({
               <Input
                 placeholder="wss://relay.example.com"
                 value={newRelayUrl}
-                onChange={(e) => setNewRelayUrl(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setNewRelayUrl(e.target.value)
+                }
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
                     handleAddRelay();
                   }
