@@ -163,10 +163,13 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     // Fetch DM relays for both parties in parallel
     // (for self-chat, this fetches the same relays twice but that's fine)
-    await Promise.all([
+    const [ownRelays, partnerRelays] = await Promise.all([
       this.fetchDmRelays(activePubkey),
       this.fetchDmRelays(partnerPubkey),
     ]);
+
+    // Combine and deduplicate relays from both parties
+    const allRelays = [...new Set([...ownRelays, ...partnerRelays])];
 
     // Get display name for partner (the person we're chatting with)
     const metadataEvent = await this.getMetadata(partnerPubkey);
@@ -187,6 +190,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       metadata: {
         encrypted: true,
         giftWrapped: true,
+        dmRelays: allRelays,
       },
       unreadCount: 0,
     };

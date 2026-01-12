@@ -64,6 +64,7 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+  dmRelays?: string[]; // DM inbox relays for the conversation
 }
 
 /**
