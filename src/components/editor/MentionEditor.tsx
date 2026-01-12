@@ -56,6 +56,7 @@ export interface MentionEditorProps {
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
+  onCommandExecute?: (action: ChatAction) => Promise<void>;
   autoFocus?: boolean;
   className?: string;
 }
@@ -159,6 +160,7 @@ export const MentionEditor = forwardRef<
       searchProfiles,
       searchEmojis,
       searchCommands,
+      onCommandExecute,
       autoFocus = false,
       className = "",
     },
@@ -620,15 +622,17 @@ export const MentionEditor = forwardRef<
               ...slashCommandSuggestion,
               command: ({ editor, props }: any) => {
                 // props is the ChatAction
-                // Replace the entire content with just the command
-                editor
-                  .chain()
-                  .focus()
-                  .deleteRange({ from: 0, to: editor.state.doc.content.size })
-                  .insertContentAt(0, [
-                    { type: "text", text: `/${props.name}` },
-                  ])
-                  .run();
+                // Execute the command immediately and clear the editor
+                editor.commands.clearContent();
+                if (onCommandExecute) {
+                  // Execute action asynchronously
+                  onCommandExecute(props).catch((error) => {
+                    console.error(
+                      "[MentionEditor] Command execution failed:",
+                      error,
+                    );
+                  });
+                }
               },
             },
             renderLabel({ node }) {
@@ -643,6 +647,7 @@ export const MentionEditor = forwardRef<
       mentionSuggestion,
       emojiSuggestion,
       slashCommandSuggestion,
+      onCommandExecute,
       placeholder,
     ]);
 
