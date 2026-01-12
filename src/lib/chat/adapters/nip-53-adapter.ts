@@ -84,11 +84,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
-    const { pubkey, identifier: dTag } = identifier.value as {
-      kind: number;
-      pubkey: string;
-      identifier: string;
-    };
+    // This adapter only handles live-activity identifiers
+    if (identifier.type !== "live-activity") {
+      throw new Error(
+        `NIP-53 adapter cannot handle identifier type: ${identifier.type}`,
+      );
+    }
+    const { pubkey, identifier: dTag } = identifier.value;
     const relayHints = identifier.relays || [];
 
     const activePubkey = accountManager.active$.value?.pubkey;
@@ -241,10 +243,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const aTagValue = `30311:${pubkey}:${identifier}`;
 
     // Get relays from live activity metadata or fall back to relayUrl
-    const relays = liveActivity?.relays || [];
-    if (relays.length === 0 && conversation.metadata?.relayUrl) {
-      relays.push(conversation.metadata.relayUrl);
-    }
+    // Use immutable pattern to avoid mutating metadata
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
 
     if (relays.length === 0) {
       throw new Error("No relays available for live chat");
@@ -268,8 +273,11 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       filter.since = options.after;
     }
 
+    // Clean up any existing subscription for this conversation
+    this.cleanup(conversation.id);
+
     // Start a persistent subscription to the relays
-    pool
+    const subscription = pool
       .subscription(relays, [filter], {
         eventStore,
       })
@@ -284,6 +292,9 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           }
         },
       });
+
+    // Store subscription for cleanup
+    this.subscriptions.set(conversation.id, subscription);
 
     // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(
@@ -302,7 +313,10 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           .filter((msg): msg is Message => msg !== null);
 
         console.log(`[NIP-53] Timeline has ${messages.length} events`);
-        return messages.sort((a, b) => a.timestamp - b.timestamp);
+        // EventStore timeline returns events sorted by created_at desc,
+        // we need ascending order for chat. Since it's already sorted,
+        // just reverse instead of full sort (O(n) vs O(n log n))
+        return messages.reverse();
       }),
     );
   }
@@ -329,10 +343,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const aTagValue = `30311:${pubkey}:${identifier}`;
 
     // Get relays from live activity metadata or fall back to relayUrl
-    const relays = liveActivity?.relays || [];
-    if (relays.length === 0 && conversation.metadata?.relayUrl) {
-      relays.push(conversation.metadata.relayUrl);
-    }
+    // Use immutable pattern to avoid mutating metadata
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
 
     if (relays.length === 0) {
       throw new Error("No relays available for live chat");
@@ -368,7 +385,9 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       })
       .filter((msg): msg is Message => msg !== null);
 
-    return messages.sort((a, b) => a.timestamp - b.timestamp);
+    // loadMoreMessages returns events in desc order from relay,
+    // reverse for ascending chronological order
+    return messages.reverse();
   }
 
   /**
@@ -400,11 +419,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const { pubkey, identifier } = activityAddress;
     const aTagValue = `30311:${pubkey}:${identifier}`;
 
-    // Get relays
-    const relays = liveActivity?.relays || [];
-    if (relays.length === 0 && conversation.metadata?.relayUrl) {
-      relays.push(conversation.metadata.relayUrl);
-    }
+    // Get relays - use immutable pattern to avoid mutating metadata
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
 
     if (relays.length === 0) {
       throw new Error("No relays available for sending message");
@@ -475,10 +496,14 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           relays?: string[];
         }
       | undefined;
-    const relays = liveActivity?.relays || [];
-    if (relays.length === 0 && conversation.metadata?.relayUrl) {
-      relays.push(conversation.metadata.relayUrl);
-    }
+
+    // Get relays - use immutable pattern to avoid mutating metadata
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
 
     if (relays.length === 0) {
       console.warn("[NIP-53] No relays for loading reply message");

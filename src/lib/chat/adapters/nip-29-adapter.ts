@@ -101,6 +101,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
+    // This adapter only handles group identifiers
+    if (identifier.type !== "group") {
+      throw new Error(
+        `NIP-29 adapter cannot handle identifier type: ${identifier.type}`,
+      );
+    }
     const groupId = identifier.value;
     const relayUrl = identifier.relays?.[0];
 
@@ -330,8 +336,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       filter.since = options.after;
     }
 
+    // Clean up any existing subscription for this conversation
+    const conversationId = `nip-29:${relayUrl}'${groupId}`;
+    this.cleanup(conversationId);
+
     // Start a persistent subscription to the group relay
-    pool
+    const subscription = pool
       .subscription([relayUrl], [filter], {
         eventStore,
       })
@@ -347,6 +357,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         },
       });
 
+    // Store subscription for cleanup
+    this.subscriptions.set(conversationId, subscription);
+
     // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(
       map((events) => {
@@ -360,7 +373,10 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         });
 
         console.log(`[NIP-29] Timeline has ${messages.length} events`);
-        return messages.sort((a, b) => a.timestamp - b.timestamp);
+        // EventStore timeline returns events sorted by created_at desc,
+        // we need ascending order for chat. Since it's already sorted,
+        // just reverse instead of full sort (O(n) vs O(n log n))
+        return messages.reverse();
       }),
     );
   }
@@ -406,7 +422,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       return this.eventToMessage(event, conversation.id);
     });
 
-    return messages.sort((a, b) => a.timestamp - b.timestamp);
+    // loadMoreMessages returns events in desc order from relay,
+    // reverse for ascending chronological order
+    return messages.reverse();
   }
 
   /**

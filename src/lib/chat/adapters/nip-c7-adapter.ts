@@ -93,8 +93,15 @@ export class NipC7Adapter extends ChatProtocolAdapter {
         throw new Error(`Failed to resolve NIP-05: ${identifier.value}`);
       }
       pubkey = resolved;
-    } else {
+    } else if (
+      identifier.type === "chat-partner" ||
+      identifier.type === "dm-recipient"
+    ) {
       pubkey = identifier.value;
+    } else {
+      throw new Error(
+        `NIP-C7 adapter cannot handle identifier type: ${identifier.type}`,
+      );
     }
 
     const activePubkey = accountManager.active$.value?.pubkey;

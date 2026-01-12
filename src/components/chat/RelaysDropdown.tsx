@@ -21,35 +21,34 @@ interface RelaysDropdownProps {
 export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
   const { relays: relayStates } = useRelayState();
 
-  // Get relays for this conversation
-  const relays: string[] = [];
+  // Get relays for this conversation (immutable pattern)
+  const liveActivityRelays = conversation.metadata?.liveActivity?.relays;
+  const relays: string[] =
+    Array.isArray(liveActivityRelays) && liveActivityRelays.length > 0
+      ? liveActivityRelays
+      : conversation.metadata?.relayUrl
+        ? [conversation.metadata.relayUrl]
+        : [];
 
-  // NIP-53: Multiple relays from liveActivity
-  const liveActivityRelays = conversation.metadata?.liveActivity?.relays as
-    | string[]
-    | undefined;
-  if (liveActivityRelays?.length) {
-    relays.push(...liveActivityRelays);
-  }
-  // NIP-29: Single group relay (fallback)
-  else if (conversation.metadata?.relayUrl) {
-    relays.push(conversation.metadata.relayUrl);
-  }
-
-  // Normalize URLs for state lookup
-  const normalizedRelays = relays.map((url) => {
+  // Pre-compute normalized URLs and state lookups in a single pass (O(n))
+  const relayData = relays.map((url) => {
+    let normalizedUrl: string;
     try {
-      return normalizeRelayURL(url);
+      normalizedUrl = normalizeRelayURL(url);
     } catch {
-      return url;
+      normalizedUrl = url;
     }
+    const state = relayStates[normalizedUrl];
+    return {
+      url,
+      normalizedUrl,
+      state,
+      isConnected: state?.connectionState === "connected",
+    };
   });
 
   // Count connected relays
-  const connectedCount = normalizedRelays.filter((url) => {
-    const state = relayStates[url];
-    return state?.connectionState === "connected";
-  }).length;
+  const connectedCount = relayData.filter((r) => r.isConnected).length;
 
   if (relays.length === 0) {
     return null; // Don't show if no relays
@@ -70,9 +69,7 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
           Relays ({relays.length})
         </div>
         <div className="space-y-1 p-1">
-          {relays.map((url) => {
-            const normalizedUrl = normalizedRelays[relays.indexOf(url)];
-            const state = relayStates[normalizedUrl];
+          {relayData.map(({ url, state }) => {
             const connIcon = getConnectionIcon(state);
             const authIcon = getAuthIcon(state);
 
