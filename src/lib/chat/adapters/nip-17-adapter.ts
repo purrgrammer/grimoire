@@ -319,10 +319,10 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         );
 
         // Subscribe to kind 1059 (gift wraps) addressed to us
+        // No limit - fetch all gift wraps to ensure we don't miss any
         const filter: Filter = {
           kinds: [1059],
           "#p": [activePubkey],
-          limit: options?.limit || 100,
         };
 
         if (options?.before) {
