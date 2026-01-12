@@ -1,5 +1,16 @@
-import { useState } from "react";
-import { Wallet, Zap, RefreshCw, Copy, Check } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  Wallet,
+  Zap,
+  RefreshCw,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Clock,
+} from "lucide-react";
 import { use$ } from "applesauce-react/hooks";
 import walletManager from "@/services/wallet";
 import { Button } from "@/components/ui/button";
@@ -7,12 +18,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import WalletConnectDialog from "./WalletConnectDialog";
 import { npubEncode } from "applesauce-core/helpers";
+import { formatDistanceToNow } from "date-fns";
+import type { Transaction } from "applesauce-wallet-connect/helpers/methods";
 
 export default function WalletViewer() {
   const walletState = use$(walletManager.state$);
   const [showConnect, setShowConnect] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedPubkey, setCopiedPubkey] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -43,6 +59,32 @@ export default function WalletViewer() {
     const sats = Math.floor(msats / 1000);
     return sats.toLocaleString();
   }
+
+  const supportsTransactions =
+    walletState.info?.methods.includes("list_transactions");
+
+  const loadTransactions = useCallback(async () => {
+    const wallet = walletManager.getWallet();
+    if (!wallet || !supportsTransactions) return;
+
+    setIsLoadingTx(true);
+    try {
+      const result = await wallet.listTransactions({
+        limit: 50,
+      });
+      setTransactions(result.transactions || []);
+    } catch (_error) {
+      toast.error("Failed to load transactions");
+    } finally {
+      setIsLoadingTx(false);
+    }
+  }, [supportsTransactions]);
+
+  useEffect(() => {
+    if (showTransactions && transactions.length === 0) {
+      loadTransactions();
+    }
+  }, [showTransactions, transactions.length, loadTransactions]);
 
   if (!walletState.connected || !walletState.info) {
     return (
@@ -152,6 +194,47 @@ export default function WalletViewer() {
           </CardContent>
         </Card>
 
+        {/* Transactions */}
+        {supportsTransactions && (
+          <Card>
+            <CardHeader
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => setShowTransactions(!showTransactions)}
+            >
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">
+                  Transactions
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {isLoadingTx && (
+                    <RefreshCw className="size-4 animate-spin text-muted-foreground" />
+                  )}
+                  {showTransactions ? (
+                    <ChevronDown className="size-4" />
+                  ) : (
+                    <ChevronRight className="size-4" />
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            {showTransactions && (
+              <CardContent className="space-y-2">
+                {transactions.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    {isLoadingTx ? "Loading..." : "No transactions"}
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {transactions.map((tx) => (
+                      <TransactionItem key={tx.payment_hash} tx={tx} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        )}
+
         {/* Actions */}
         <div className="flex gap-2">
           <Button
@@ -161,6 +244,57 @@ export default function WalletViewer() {
           >
             Disconnect Wallet
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransactionItem({ tx }: { tx: Transaction }) {
+  const isIncoming = tx.type === "incoming";
+  const sats = Math.floor(tx.amount / 1000);
+  const feesSats = tx.fees_paid ? Math.floor(tx.fees_paid / 1000) : 0;
+
+  const timestamp = tx.settled_at || tx.created_at || Date.now() / 1000;
+  const timeAgo = formatDistanceToNow(new Date(timestamp * 1000), {
+    addSuffix: true,
+  });
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-md border bg-card hover:bg-muted/50">
+      <div
+        className={`mt-1 ${isIncoming ? "text-green-500" : "text-orange-500"}`}
+      >
+        {isIncoming ? (
+          <ArrowDownLeft className="size-4" />
+        ) : (
+          <ArrowUpRight className="size-4" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">
+              {tx.description || (isIncoming ? "Received" : "Sent")}
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+              <Clock className="size-3" />
+              {timeAgo}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div
+              className={`text-sm font-semibold ${isIncoming ? "text-green-600 dark:text-green-400" : "text-foreground"}`}
+            >
+              {isIncoming ? "+" : "-"}
+              {sats.toLocaleString()}
+            </div>
+            {feesSats > 0 && (
+              <div className="text-xs text-muted-foreground">
+                fee: {feesSats}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
