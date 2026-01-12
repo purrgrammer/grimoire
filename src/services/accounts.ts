@@ -1,5 +1,7 @@
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
+import { NostrConnectSigner } from "applesauce-signers";
+import pool from "./relay-pool";
 
 const ACCOUNTS = "nostr-accounts";
 const ACTIVE_ACCOUNT = "active-account";
@@ -14,6 +16,10 @@ function safeParse(s: string) {
 
 const accountManager = new AccountManager();
 registerCommonAccountTypes(accountManager);
+
+// Set up NostrConnectSigner pool BEFORE loading accounts
+// This is required for NIP-46 accounts to restore properly
+NostrConnectSigner.pool = pool;
 
 // load all accounts
 if (localStorage.getItem(ACCOUNTS)) {
