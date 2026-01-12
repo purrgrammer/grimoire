@@ -69,19 +69,25 @@ export function DefaultCompactPreview({ event }: { event: NostrEvent }) {
   // Try to get a title, fall back to content preview
   const title = getEventDisplayTitle(event, false);
 
-  // If title is the content itself, truncate it
-  const displayText =
-    title === event.content && title.length > 80
-      ? title.slice(0, 80) + "..."
-      : title;
+  // If event has a specific title (not the content itself), show it as plain text
+  // Otherwise, render the full event content with RichText for custom emoji support
+  const hasSpecificTitle = title !== event.content;
 
   return (
     <span className="truncate line-clamp-1 text-muted-foreground text-sm">
-      <RichText
-        content={displayText}
-        className="inline text-sm leading-none"
-        options={{ showMedia: false, showEventEmbeds: false }}
-      />
+      {hasSpecificTitle ? (
+        <RichText
+          content={title}
+          className="inline text-sm leading-none"
+          options={{ showMedia: false, showEventEmbeds: false }}
+        />
+      ) : (
+        <RichText
+          event={event}
+          className="inline text-sm leading-none"
+          options={{ showMedia: false, showEventEmbeds: false }}
+        />
+      )}
     </span>
   );
 }
