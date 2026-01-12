@@ -344,6 +344,24 @@ export function ChatViewer({
     | LiveActivityMetadata
     | undefined;
 
+  // Derive participants from messages for live activities (unique pubkeys who have chatted)
+  const derivedParticipants = useMemo(() => {
+    if (conversation?.type !== "live-chat" || !messages) {
+      return conversation?.participants || [];
+    }
+    // Get unique pubkeys from messages
+    const pubkeys = new Set<string>();
+    for (const msg of messages) {
+      if (msg.type !== "system") {
+        pubkeys.add(msg.author);
+      }
+    }
+    return Array.from(pubkeys).map((pubkey) => ({
+      pubkey,
+      role: "member" as const,
+    }));
+  }, [conversation?.type, conversation?.participants, messages]);
+
   if (!conversation) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -358,14 +376,14 @@ export function ChatViewer({
       <div className="px-4 border-b w-full py-0.5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
-            {/* Live activity status badge */}
-            {liveActivity?.status && (
-              <StatusBadge status={liveActivity.status} size="sm" />
-            )}
-            <div className="flex-1 flex flex-row gap-2 items-baseline min-w-0">
-              <h2 className="flex-1 text-base font-semibold truncate">
+            <div className="flex-1 flex flex-row gap-2 items-center min-w-0">
+              <h2 className="text-base font-semibold truncate">
                 {customTitle || conversation.title}
               </h2>
+              {/* Live activity status badge - small, icon only */}
+              {liveActivity?.status && (
+                <StatusBadge status={liveActivity.status} size="sm" hideLabel />
+              )}
               {/* Show host for live activities */}
               {liveActivity?.hostPubkey && (
                 <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -385,7 +403,7 @@ export function ChatViewer({
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={conversation.participants} />
+            <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
             {(conversation.type === "group" ||
               conversation.type === "live-chat") && (
