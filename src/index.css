@@ -314,3 +314,23 @@ body.animating-layout
 .ProseMirror .mention:hover {
   background-color: hsl(var(--primary) / 0.2);
 }
+
+/* Emoji styles */
+.ProseMirror .emoji-node {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.ProseMirror .emoji-image {
+  height: 1.2em;
+  width: auto;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+.ProseMirror .emoji-unicode {
+  font-size: 1.1em;
+  line-height: 1;
+  vertical-align: middle;
+}

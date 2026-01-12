@@ -5,8 +5,7 @@ import {
   useMemo,
   useCallback,
 } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import { ReactRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -62,9 +61,47 @@ export interface MentionEditorHandle {
   submit: () => void;
 }
 
-// Create emoji extension by extending Mention with a different name
+// Create emoji extension by extending Mention with a different name and custom node view
 const EmojiMention = Mention.extend({
   name: "emoji",
+
+  addNodeView() {
+    return ({ node, HTMLAttributes }) => {
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className = "emoji-node";
+      Object.entries(HTMLAttributes).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          dom.setAttribute(key, String(value));
+        }
+      });
+
+      const { url, source, id } = node.attrs;
+      const isUnicode = source === "unicode";
+
+      if (isUnicode) {
+        // Unicode emoji - render as text span
+        const span = document.createElement("span");
+        span.className = "emoji-unicode";
+        span.textContent = url;
+        span.title = `:${id}:`;
+        dom.appendChild(span);
+      } else {
+        // Custom emoji - render as image
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = `:${id}:`;
+        img.title = `:${id}:`;
+        img.className = "emoji-image";
+        img.draggable = false;
+        dom.appendChild(img);
+      }
+
+      return {
+        dom,
+      };
+    };
+  },
 });
 
 export const MentionEditor = forwardRef<
