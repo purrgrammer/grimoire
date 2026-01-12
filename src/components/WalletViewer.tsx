@@ -28,7 +28,7 @@ export default function WalletViewer() {
   const [copiedPubkey, setCopiedPubkey] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState(false);
-  const [showTransactions, setShowTransactions] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(true);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -80,11 +80,25 @@ export default function WalletViewer() {
     }
   }, [supportsTransactions]);
 
+  // Load transactions when wallet is connected and section is expanded
   useEffect(() => {
-    if (showTransactions && transactions.length === 0) {
+    if (
+      walletState.connected &&
+      supportsTransactions &&
+      showTransactions &&
+      transactions.length === 0 &&
+      !isLoadingTx
+    ) {
       loadTransactions();
     }
-  }, [showTransactions, transactions.length, loadTransactions]);
+  }, [
+    walletState.connected,
+    supportsTransactions,
+    showTransactions,
+    transactions.length,
+    isLoadingTx,
+    loadTransactions,
+  ]);
 
   if (!walletState.connected || !walletState.info) {
     return (
