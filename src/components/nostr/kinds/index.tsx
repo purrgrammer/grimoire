@@ -7,6 +7,7 @@ import { Kind3DetailView } from "./ContactListRenderer";
 import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./ReactionRenderer";
 import { Kind9Renderer } from "./ChatMessageRenderer";
+import { LiveChatMessageRenderer } from "./LiveChatMessageRenderer";
 import { Kind20Renderer } from "./PictureRenderer";
 import { Kind21Renderer } from "./VideoRenderer";
 import { Kind22Renderer } from "./ShortVideoRenderer";
@@ -85,6 +86,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1111Renderer, // Post (NIP-22)
   1222: VoiceMessageRenderer, // Voice Message (NIP-A0)
+  1311: LiveChatMessageRenderer, // Live Chat Message (NIP-53)
   1244: VoiceMessageRenderer, // Voice Message Reply (NIP-A0)
   1337: Kind1337Renderer, // Code Snippet (NIP-C0)
   1617: PatchRenderer, // Patch (NIP-34)
@@ -227,6 +229,10 @@ export {
 } from "./RepostRenderer";
 export { Kind7Renderer } from "./ReactionRenderer";
 export { Kind9Renderer } from "./ChatMessageRenderer";
+export {
+  LiveChatMessageRenderer,
+  Kind1311Renderer,
+} from "./LiveChatMessageRenderer";
 export { Kind20Renderer } from "./PictureRenderer";
 export { Kind21Renderer } from "./VideoRenderer";
 export { Kind22Renderer } from "./ShortVideoRenderer";
