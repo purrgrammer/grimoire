@@ -174,9 +174,6 @@ const MessageItem = memo(function MessageItem({
 
   // Zap messages have special styling with gradient border
   if (message.type === "zap") {
-    const zapAmount = message.metadata?.zapAmount || 0;
-    const zapRecipient = message.metadata?.zapRecipient;
-    // Get the zap request event for RichText (contains emoji tags)
     const zapRequest = message.event ? getZapRequest(message.event) : null;
 
     return (
@@ -189,34 +186,34 @@ const MessageItem = memo(function MessageItem({
           }}
         >
           <div className="rounded-lg bg-background px-3 py-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <UserName
                 pubkey={message.author}
                 className="font-semibold text-sm"
               />
               <Zap className="size-4 fill-yellow-500 text-yellow-500" />
               <span className="text-yellow-500 font-bold">
-                {zapAmount.toLocaleString("en", { notation: "compact" })}
+                {(message.metadata?.zapAmount || 0).toLocaleString("en", {
+                  notation: "compact",
+                })}
               </span>
-              {zapRecipient && (
-                <UserName pubkey={zapRecipient} className="text-sm" />
+              {message.metadata?.zapRecipient && (
+                <UserName
+                  pubkey={message.metadata.zapRecipient}
+                  className="text-sm"
+                />
               )}
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="text-xs text-muted-foreground">
                 <Timestamp timestamp={message.timestamp} />
               </span>
             </div>
             {message.content && (
-              <div className="mt-1 text-sm break-words">
-                {zapRequest ? (
-                  <RichText
-                    event={zapRequest}
-                    className="text-sm leading-tight"
-                    options={{ showMedia: false, showEventEmbeds: false }}
-                  />
-                ) : (
-                  message.content
-                )}
-              </div>
+              <RichText
+                content={message.content}
+                event={zapRequest || undefined}
+                className="mt-1 text-sm leading-tight break-words"
+                options={{ showMedia: false, showEventEmbeds: false }}
+              />
             )}
           </div>
         </div>
