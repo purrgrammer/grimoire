@@ -332,6 +332,18 @@ export function ChatViewer({
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
+  // Slash command search for action autocomplete
+  const searchCommands = useCallback(
+    async (query: string) => {
+      const availableActions = adapter.getActions();
+      const lowerQuery = query.toLowerCase();
+      return availableActions.filter((action) =>
+        action.name.toLowerCase().includes(lowerQuery),
+      );
+    },
+    [adapter],
+  );
+
   // State for retry trigger
   const [retryCount, setRetryCount] = useState(0);
 
@@ -800,6 +812,7 @@ export function ChatViewer({
               placeholder="Type a message..."
               searchProfiles={searchProfiles}
               searchEmojis={searchEmojis}
+              searchCommands={searchCommands}
               onSubmit={(content, emojiTags) => {
                 if (content.trim()) {
                   handleSend(content, replyTo, emojiTags);

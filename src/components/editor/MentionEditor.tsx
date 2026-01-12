@@ -23,8 +23,13 @@ import {
   EmojiSuggestionList,
   type EmojiSuggestionListHandle,
 } from "./EmojiSuggestionList";
+import {
+  SlashCommandSuggestionList,
+  type SlashCommandSuggestionListHandle,
+} from "./SlashCommandSuggestionList";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
 
 /**
@@ -50,6 +55,7 @@ export interface MentionEditorProps {
   onSubmit?: (content: string, emojiTags: EmojiTag[]) => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
+  searchCommands?: (query: string) => Promise<ChatAction[]>;
   autoFocus?: boolean;
   className?: string;
 }
@@ -152,6 +158,7 @@ export const MentionEditor = forwardRef<
       onSubmit,
       searchProfiles,
       searchEmojis,
+      searchCommands,
       autoFocus = false,
       className = "",
     },
@@ -335,6 +342,101 @@ export const MentionEditor = forwardRef<
       [searchEmojis],
     );
 
+    // Create slash command suggestion configuration for / commands
+    const slashCommandSuggestion: Omit<SuggestionOptions, "editor"> | null =
+      useMemo(
+        () =>
+          searchCommands
+            ? {
+                char: "/",
+                allowSpaces: false,
+                items: async ({ query }) => {
+                  return await searchCommands(query);
+                },
+                render: () => {
+                  let component: ReactRenderer<SlashCommandSuggestionListHandle>;
+                  let popup: TippyInstance[];
+                  let editorRef: any;
+
+                  return {
+                    onStart: (props) => {
+                      editorRef = props.editor;
+                      component = new ReactRenderer(
+                        SlashCommandSuggestionList,
+                        {
+                          props: {
+                            items: props.items,
+                            command: props.command,
+                            onClose: () => {
+                              popup[0]?.hide();
+                            },
+                          },
+                          editor: props.editor,
+                        },
+                      );
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup = tippy("body", {
+                        getReferenceClientRect:
+                          props.clientRect as () => DOMRect,
+                        appendTo: () => document.body,
+                        content: component.element,
+                        showOnCreate: true,
+                        interactive: true,
+                        trigger: "manual",
+                        placement: "top-start",
+                      });
+                    },
+
+                    onUpdate(props) {
+                      component.updateProps({
+                        items: props.items,
+                        command: props.command,
+                      });
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup[0]?.setProps({
+                        getReferenceClientRect:
+                          props.clientRect as () => DOMRect,
+                      });
+                    },
+
+                    onKeyDown(props) {
+                      if (props.event.key === "Escape") {
+                        popup[0]?.hide();
+                        return true;
+                      }
+
+                      // Ctrl/Cmd+Enter submits the message
+                      if (
+                        props.event.key === "Enter" &&
+                        (props.event.ctrlKey || props.event.metaKey)
+                      ) {
+                        popup[0]?.hide();
+                        handleSubmitRef.current(editorRef);
+                        return true;
+                      }
+
+                      return component.ref?.onKeyDown(props.event) ?? false;
+                    },
+
+                    onExit() {
+                      popup[0]?.destroy();
+                      component.destroy();
+                    },
+                  };
+                },
+              }
+            : null,
+        [searchCommands],
+      );
+
     // Helper function to serialize editor content with mentions and emojis
     const serializeContent = useCallback(
       (editorInstance: any): SerializedContent => {
@@ -503,8 +605,46 @@ export const MentionEditor = forwardRef<
         );
       }
 
+      // Add slash command extension if search is provided
+      if (slashCommandSuggestion) {
+        const SlashCommand = Mention.extend({
+          name: "slashCommand",
+        });
+
+        exts.push(
+          SlashCommand.configure({
+            HTMLAttributes: {
+              class: "slash-command",
+            },
+            suggestion: {
+              ...slashCommandSuggestion,
+              command: ({ editor, props }: any) => {
+                // props is the ChatAction
+                // Replace the entire content with just the command
+                editor
+                  .chain()
+                  .focus()
+                  .deleteRange({ from: 0, to: editor.state.doc.content.size })
+                  .insertContentAt(0, [
+                    { type: "text", text: `/${props.name}` },
+                  ])
+                  .run();
+              },
+            },
+            renderLabel({ node }) {
+              return `/${node.attrs.label}`;
+            },
+          }),
+        );
+      }
+
       return exts;
-    }, [mentionSuggestion, emojiSuggestion, placeholder]);
+    }, [
+      mentionSuggestion,
+      emojiSuggestion,
+      slashCommandSuggestion,
+      placeholder,
+    ]);
 
     const editor = useEditor({
       extensions,
