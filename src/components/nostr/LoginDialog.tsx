@@ -131,10 +131,11 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       // Set up pool methods for the signer
       NostrConnectSigner.pool = pool;
 
+      // fromBunkerURI parses the URI, creates the signer, and connects automatically
       const signer = await NostrConnectSigner.fromBunkerURI(bunkerUrl);
       signerRef.current = signer;
 
-      await signer.open();
+      // Get the user's pubkey (signer is already connected)
       const pubkey = await signer.getPublicKey();
 
       const account = new NostrConnectAccount(pubkey, signer);
@@ -181,10 +182,10 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       });
       setConnectUri(uri);
 
-      // Generate QR code
+      // Generate QR code with extra margin for better scanning
       const dataUrl = await QRCode.toDataURL(uri, {
-        width: 256,
-        margin: 2,
+        width: 280,
+        margin: 4,
         color: {
           dark: "#000000",
           light: "#ffffff",
