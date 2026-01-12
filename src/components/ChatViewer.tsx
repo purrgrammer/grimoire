@@ -22,11 +22,70 @@ import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
+import {
+  MentionEditor,
+  type MentionEditorHandle,
+} from "./editor/MentionEditor";
+import { useProfileSearch } from "@/hooks/useProfileSearch";
+import { Label } from "./ui/label";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
   identifier: ProtocolIdentifier;
   customTitle?: string;
+}
+
+/**
+ * Helper: Format timestamp as a readable day marker
+ */
+function formatDayMarker(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Reset time parts for comparison
+  const dateOnly = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const todayOnly = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const yesterdayOnly = new Date(
+    yesterday.getFullYear(),
+    yesterday.getMonth(),
+    yesterday.getDate(),
+  );
+
+  if (dateOnly.getTime() === todayOnly.getTime()) {
+    return "Today";
+  } else if (dateOnly.getTime() === yesterdayOnly.getTime()) {
+    return "Yesterday";
+  } else {
+    // Format as "Jan 15" (short month, no year, respects locale)
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
+}
+
+/**
+ * Helper: Check if two timestamps are on different days
+ */
+function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
+  const date1 = new Date(timestamp1 * 1000);
+  const date2 = new Date(timestamp2 * 1000);
+
+  return (
+    date1.getFullYear() !== date2.getFullYear() ||
+    date1.getMonth() !== date2.getMonth() ||
+    date1.getDate() !== date2.getDate()
+  );
 }
 
 /**
@@ -95,6 +154,19 @@ const MessageItem = memo(function MessageItem({
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
 }) {
+  // System messages (join/leave) have special styling
+  if (message.type === "system") {
+    return (
+      <div className="flex items-center px-3 py-1">
+        <span className="text-xs text-muted-foreground">
+          * <UserName pubkey={message.author} className="text-xs" />{" "}
+          {message.content}
+        </span>
+      </div>
+    );
+  }
+
+  // Regular user messages
   return (
     <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
@@ -113,9 +185,9 @@ const MessageItem = memo(function MessageItem({
             </button>
           )}
         </div>
-        <div className="text-sm leading-relaxed break-words overflow-hidden">
+        <div className="break-words overflow-hidden">
           {message.event ? (
-            <RichText event={message.event}>
+            <RichText className="text-sm leading-tight" event={message.event}>
               {message.replyTo && (
                 <ReplyPreview
                   replyToId={message.replyTo}
@@ -153,6 +225,9 @@ export function ChatViewer({
   const activeAccount = use$(accountManager.active$);
   const hasActiveAccount = !!activeAccount;
 
+  // Profile search for mentions
+  const { searchProfiles } = useProfileSearch();
+
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -168,11 +243,49 @@ export function ChatViewer({
     [adapter, conversation],
   );
 
+  // Process messages to include day markers
+  const messagesWithMarkers = useMemo(() => {
+    if (!messages || messages.length === 0) return [];
+
+    const items: Array<
+      | { type: "message"; data: Message }
+      | { type: "day-marker"; data: string; timestamp: number }
+    > = [];
+
+    messages.forEach((message, index) => {
+      // Add day marker if this is the first message or if day changed
+      if (index === 0) {
+        items.push({
+          type: "day-marker",
+          data: formatDayMarker(message.timestamp),
+          timestamp: message.timestamp,
+        });
+      } else {
+        const prevMessage = messages[index - 1];
+        if (isDifferentDay(prevMessage.timestamp, message.timestamp)) {
+          items.push({
+            type: "day-marker",
+            data: formatDayMarker(message.timestamp),
+            timestamp: message.timestamp,
+          });
+        }
+      }
+
+      // Add the message itself
+      items.push({ type: "message", data: message });
+    });
+
+    return items;
+  }, [messages]);
+
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  // Ref to MentionEditor for programmatic submission
+  const editorRef = useRef<MentionEditorHandle>(null);
 
   // Handle sending messages
   const handleSend = async (content: string, replyToId?: string) => {
@@ -251,23 +364,37 @@ export function ChatViewer({
 
       {/* Message timeline with virtualization */}
       <div className="flex-1 overflow-hidden">
-        {messages && messages.length > 0 ? (
+        {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
           <Virtuoso
             ref={virtuosoRef}
-            data={messages}
-            initialTopMostItemIndex={messages.length - 1}
+            data={messagesWithMarkers}
+            initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput="smooth"
-            itemContent={(_index, message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                adapter={adapter}
-                conversation={conversation}
-                onReply={handleReply}
-                canReply={hasActiveAccount}
-                onScrollToMessage={handleScrollToMessage}
-              />
-            )}
+            itemContent={(_index, item) => {
+              if (item.type === "day-marker") {
+                return (
+                  <div
+                    className="flex justify-center py-2"
+                    key={`marker-${item.timestamp}`}
+                  >
+                    <Label className="text-[10px] text-muted-foreground">
+                      {item.data}
+                    </Label>
+                  </div>
+                );
+              }
+              return (
+                <MessageItem
+                  key={item.data.id}
+                  message={item.data}
+                  adapter={adapter}
+                  conversation={conversation}
+                  onReply={handleReply}
+                  canReply={hasActiveAccount}
+                  onScrollToMessage={handleScrollToMessage}
+                />
+              );
+            }}
             style={{ height: "100%" }}
           />
         ) : (
@@ -279,50 +406,37 @@ export function ChatViewer({
 
       {/* Message composer - only show if user has active account */}
       {hasActiveAccount ? (
-        <div className="border-t px-3 py-2">
+        <div className="border-t px-2 py-1 pb-0">
           {replyTo && (
-            <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-2">
-              <span>Replying to {replyTo.slice(0, 8)}...</span>
-              <button
-                onClick={() => setReplyTo(undefined)}
-                className="ml-auto text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
+            <ComposerReplyPreview
+              replyToId={replyTo}
+              onClear={() => setReplyTo(undefined)}
+            />
           )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget;
-              const input = form.elements.namedItem(
-                "message",
-              ) as HTMLTextAreaElement;
-              if (input.value.trim()) {
-                handleSend(input.value, replyTo);
-                input.value = "";
-              }
-            }}
-            className="flex gap-2"
-          >
-            <textarea
-              name="message"
-              autoFocus
+          <div className="flex gap-2 items-center">
+            <MentionEditor
+              ref={editorRef}
               placeholder="Type a message..."
-              className="flex-1 resize-none bg-background px-3 py-2 text-sm border rounded-md min-w-0"
-              rows={1}
-              onKeyDown={(e) => {
-                // Submit on Enter (without Shift)
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
+              searchProfiles={searchProfiles}
+              onSubmit={(content) => {
+                if (content.trim()) {
+                  handleSend(content, replyTo);
                 }
               }}
+              autoFocus
+              className="flex-1 min-w-0"
             />
-            <Button type="submit" variant="secondary" className="flex-shrink-0">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-shrink-0 h-[2.5rem]"
+              onClick={() => {
+                editorRef.current?.submit();
+              }}
+            >
               Send
             </Button>
-          </form>
+          </div>
         </div>
       ) : (
         <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">

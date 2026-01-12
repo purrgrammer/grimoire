@@ -1,6 +1,7 @@
 import { Observable } from "rxjs";
 import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter } from "./base-adapter";
 import type {
   Conversation,
@@ -36,12 +37,45 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   readonly type = "group" as const;
 
   /**
-   * Parse identifier - accepts group ID format: relay'group-id
+   * Parse identifier - accepts group ID format or naddr
    * Examples:
    *   - wss://relay.example.com'bitcoin-dev
    *   - relay.example.com'bitcoin-dev (wss:// prefix is optional)
+   *   - naddr1... (kind 39000 group metadata address)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
+    // Try naddr format first (kind 39000 group metadata)
+    if (input.startsWith("naddr1")) {
+      try {
+        const decoded = nip19.decode(input);
+        if (decoded.type === "naddr" && decoded.data.kind === 39000) {
+          const { identifier, relays } = decoded.data;
+          const relayUrl = relays?.[0];
+
+          if (!identifier || !relayUrl) {
+            return null;
+          }
+
+          // Ensure relay URL has wss:// prefix
+          let normalizedRelay = relayUrl;
+          if (
+            !normalizedRelay.startsWith("ws://") &&
+            !normalizedRelay.startsWith("wss://")
+          ) {
+            normalizedRelay = `wss://${normalizedRelay}`;
+          }
+
+          return {
+            type: "group",
+            value: identifier,
+            relays: [normalizedRelay],
+          };
+        }
+      } catch {
+        // Not a valid naddr, fall through to try other formats
+      }
+    }
+
     // NIP-29 format: [wss://]relay'group-id
     const match = input.match(/^((?:wss?:\/\/)?[^']+)'([^']+)$/);
     if (!match) return null;
@@ -278,9 +312,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
 
-    // Subscribe to group messages (kind 9)
+    // Subscribe to group messages (kind 9) and admin events (9000-9022)
+    // kind 9: chat messages
+    // kind 9000: put-user (admin adds user)
+    // kind 9001: remove-user (admin removes user)
     const filter: Filter = {
-      kinds: [9],
+      kinds: [9, 9000, 9001],
       "#h": [groupId],
       limit: options?.limit || 50,
     };
@@ -534,6 +571,37 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    * Helper: Convert Nostr event to Message
    */
   private eventToMessage(event: NostrEvent, conversationId: string): Message {
+    // Handle admin events (join/leave) as system messages
+    if (event.kind === 9000 || event.kind === 9001) {
+      // Extract the affected user's pubkey from p-tag
+      const pTags = event.tags.filter((t) => t[0] === "p");
+      const affectedPubkey = pTags[0]?.[1] || event.pubkey; // Fall back to event author
+
+      let content = "";
+      if (event.kind === 9000) {
+        // put-user: admin adds someone (show as joined)
+        content = "joined";
+      } else if (event.kind === 9001) {
+        // remove-user: admin removes someone
+        content = affectedPubkey === event.pubkey ? "left" : "was removed";
+      }
+
+      return {
+        id: event.id,
+        conversationId,
+        author: affectedPubkey, // Show the user who joined/left
+        content,
+        timestamp: event.created_at,
+        type: "system",
+        protocol: "nip-29",
+        metadata: {
+          encrypted: false,
+        },
+        event,
+      };
+    }
+
+    // Regular chat message (kind 9)
     // Look for reply q-tags (NIP-29 uses q-tags like NIP-C7)
     const qTags = getTagValues(event, "q");
     const replyTo = qTags[0]; // First q-tag is the reply target
@@ -544,6 +612,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       author: event.pubkey,
       content: event.content,
       timestamp: event.created_at,
+      type: "user",
       replyTo,
       protocol: "nip-29",
       metadata: {

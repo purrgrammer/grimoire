@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { nip19 } from "nostr-tools";
 import { Nip29Adapter } from "./nip-29-adapter";
 
 describe("Nip29Adapter", () => {
@@ -70,8 +71,92 @@ describe("Nip29Adapter", () => {
       // These should not match NIP-29 format
       expect(adapter.parseIdentifier("npub1...")).toBeNull();
       expect(adapter.parseIdentifier("note1...")).toBeNull();
-      expect(adapter.parseIdentifier("naddr1...")).toBeNull();
       expect(adapter.parseIdentifier("alice@example.com")).toBeNull();
+    });
+
+    it("should parse kind 39000 naddr (group metadata)", () => {
+      // Create a valid kind 39000 naddr
+      const naddr = nip19.naddrEncode({
+        kind: 39000,
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "bitcoin-dev",
+        relays: ["wss://relay.example.com"],
+      });
+
+      const result = adapter.parseIdentifier(naddr);
+      expect(result).toEqual({
+        type: "group",
+        value: "bitcoin-dev",
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should handle naddr with multiple relays (uses first)", () => {
+      const naddr = nip19.naddrEncode({
+        kind: 39000,
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "test-group",
+        relays: [
+          "wss://relay1.example.com",
+          "wss://relay2.example.com",
+          "wss://relay3.example.com",
+        ],
+      });
+
+      const result = adapter.parseIdentifier(naddr);
+      expect(result).toEqual({
+        type: "group",
+        value: "test-group",
+        relays: ["wss://relay1.example.com"],
+      });
+    });
+
+    it("should add wss:// prefix to naddr relay if missing", () => {
+      const naddr = nip19.naddrEncode({
+        kind: 39000,
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "test-group",
+        relays: ["relay.example.com"], // No protocol prefix
+      });
+
+      const result = adapter.parseIdentifier(naddr);
+      expect(result).toEqual({
+        type: "group",
+        value: "test-group",
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should return null for non-39000 kind naddr", () => {
+      // kind 30311 (live activity) should not work for NIP-29
+      const naddr = nip19.naddrEncode({
+        kind: 30311,
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "some-event",
+        relays: ["wss://relay.example.com"],
+      });
+
+      expect(adapter.parseIdentifier(naddr)).toBeNull();
+    });
+
+    it("should return null for naddr without relays", () => {
+      const naddr = nip19.naddrEncode({
+        kind: 39000,
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "test-group",
+        relays: [], // No relays
+      });
+
+      expect(adapter.parseIdentifier(naddr)).toBeNull();
+    });
+
+    it("should return null for malformed naddr", () => {
+      expect(adapter.parseIdentifier("naddr1invaliddata")).toBeNull();
     });
   });
 

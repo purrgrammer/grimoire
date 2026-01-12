@@ -57,11 +57,14 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   throw new Error(
     `Unable to determine chat protocol from identifier: ${identifier}
 
-Currently supported format:
+Currently supported formats:
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
       chat wss://relay.example.com'nostr-dev
+  - naddr1... (NIP-29 group metadata, kind 39000)
+    Example:
+      chat naddr1qqxnzdesxqmnxvpexqmny...
 
 More formats coming soon:
   - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)

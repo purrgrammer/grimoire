@@ -76,6 +76,11 @@ export interface MessageMetadata {
 }
 
 /**
+ * Message type - system messages for events like join/leave, user messages for chat
+ */
+export type MessageType = "user" | "system";
+
+/**
  * Generic message abstraction
  * Works across all messaging protocols
  */
@@ -85,6 +90,7 @@ export interface Message {
   author: string; // pubkey
   content: string;
   timestamp: number;
+  type?: MessageType; // Defaults to "user" if not specified
   replyTo?: string; // Parent message ID
   metadata?: MessageMetadata;
   protocol: ChatProtocol;
