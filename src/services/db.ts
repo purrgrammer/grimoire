@@ -80,6 +80,21 @@ export interface LocalSpellbook {
   deletedAt?: number;
 }
 
+/**
+ * Decrypted NIP-17 DM message (rumor from gift wrap)
+ * Stored to avoid re-decrypting the same messages
+ */
+export interface DecryptedMessage {
+  id: string; // Rumor ID
+  giftWrapId: string; // Original gift wrap event ID
+  conversationId: string; // nip-17:pubkey format
+  senderPubkey: string; // Who sent the message
+  content: string; // Decrypted message content
+  tags: string[][]; // Rumor tags (for reply references, etc.)
+  createdAt: number; // Message timestamp
+  decryptedAt: number; // When we decrypted it
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -90,6 +105,7 @@ class GrimoireDb extends Dexie {
   relayLiveness!: Table<RelayLivenessEntry>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  decryptedMessages!: Table<DecryptedMessage>;
 
   constructor(name: string) {
     super(name);
@@ -310,6 +326,22 @@ class GrimoireDb extends Dexie {
       relayLiveness: "&url",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 15: Add decrypted NIP-17 messages cache
+    this.version(15).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      // Index by giftWrapId (for dedup), conversationId (for queries), senderPubkey (for filtering)
+      decryptedMessages:
+        "&id, giftWrapId, conversationId, senderPubkey, createdAt",
     });
   }
 }

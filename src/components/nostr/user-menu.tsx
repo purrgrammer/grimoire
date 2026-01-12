@@ -20,6 +20,8 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import { useState } from "react";
+import eventStore from "@/services/event-store";
+import { getRelaysFromList } from "applesauce-common/helpers";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -56,6 +58,16 @@ export default function UserMenu() {
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+
+  // Get DM relays (kind 10050) for the active user
+  const dmRelayListEvent = use$(
+    () =>
+      account?.pubkey
+        ? eventStore.replaceable(10050, account.pubkey)
+        : undefined,
+    [account?.pubkey],
+  );
+  const dmRelays = dmRelayListEvent ? getRelaysFromList(dmRelayListEvent) : [];
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -117,6 +129,26 @@ export default function UserMenu() {
                         url={relay.url}
                         read={relay.read}
                         write={relay.write}
+                      />
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              {dmRelays.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      DM Relays (NIP-17)
+                    </DropdownMenuLabel>
+                    {dmRelays.map((url) => (
+                      <RelayLink
+                        className="px-2 py-1"
+                        urlClassname="text-sm"
+                        iconClassname="size-4"
+                        key={url}
+                        url={url}
                       />
                     ))}
                   </DropdownMenuGroup>
