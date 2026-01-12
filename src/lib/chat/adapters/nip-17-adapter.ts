@@ -39,7 +39,7 @@ import {
 } from "applesauce-common/helpers/wrapped-messages";
 import { GiftWrapBlueprint } from "applesauce-common/blueprints/gift-wrap";
 import { WrappedMessageBlueprint } from "applesauce-common/blueprints/wrapped-message";
-import db, { type DecryptedMessage } from "@/services/db";
+import db, { type DecryptedRumor } from "@/services/db";
 
 /**
  * NIP-17 Adapter - Private Direct Messages
@@ -410,31 +410,31 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     // Get gift wrap IDs for DB lookup
     const giftWrapIds = giftWraps.map((gw) => gw.id);
 
-    // Load cached decrypted messages from DB
-    const cachedMessages = await db.decryptedMessages
+    // Load cached decrypted rumors from DB
+    const cachedRumors = await db.decryptedRumors
       .where("giftWrapId")
       .anyOf(giftWrapIds)
       .toArray();
 
     const cachedByGiftWrapId = new Map(
-      cachedMessages.map((m) => [m.giftWrapId, m]),
+      cachedRumors.map((r) => [r.giftWrapId, r]),
     );
 
     console.log(
-      `[NIP-17] Found ${cachedMessages.length}/${giftWraps.length} cached messages`,
+      `[NIP-17] Found ${cachedRumors.length}/${giftWraps.length} cached rumors`,
     );
 
-    // Track newly decrypted messages to save to DB
-    const newDecryptedMessages: DecryptedMessage[] = [];
+    // Track newly decrypted rumors to save to DB
+    const newDecryptedRumors: DecryptedRumor[] = [];
 
     for (const giftWrap of giftWraps) {
       try {
         // Check DB cache first
         const cached = cachedByGiftWrapId.get(giftWrap.id);
         if (cached) {
-          // Only include if it belongs to this conversation
-          if (cached.conversationId === conversationId) {
-            messages.push(this.cachedMessageToMessage(cached));
+          // Only include kind 14 messages that belong to this conversation
+          if (cached.kind === 14 && cached.conversationId === conversationId) {
+            messages.push(this.cachedRumorToMessage(cached));
           }
           continue;
         }
@@ -454,7 +454,29 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           continue;
         }
 
-        // Only process kind 14 (NIP-17 direct messages)
+        // Save all decrypted rumors to DB (any kind)
+        const sender = getWrappedMessageSender(rumor);
+
+        // For kind 14 (DMs), calculate conversation ID
+        let messageConversationId: string | undefined;
+        if (rumor.kind === 14) {
+          const messageParticipants = getConversationParticipants(rumor);
+          messageConversationId = `nip-17:${messageParticipants.find((p) => p !== selfPubkey) || selfPubkey}`;
+        }
+
+        newDecryptedRumors.push({
+          id: rumor.id,
+          giftWrapId: giftWrap.id,
+          kind: rumor.kind,
+          pubkey: sender,
+          content: rumor.content,
+          tags: rumor.tags,
+          createdAt: rumor.created_at,
+          decryptedAt: Math.floor(Date.now() / 1000),
+          conversationId: messageConversationId,
+        });
+
+        // Only process kind 14 (NIP-17 direct messages) for this adapter
         if (rumor.kind !== 14) {
           continue;
         }
@@ -462,20 +484,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         // Check if this message belongs to this conversation
         const messageParticipants = getConversationParticipants(rumor);
         const participantKey = messageParticipants.sort().join(":");
-        const messageConversationId = `nip-17:${messageParticipants.find((p) => p !== selfPubkey) || selfPubkey}`;
-
-        // Save to DB cache (regardless of conversation match)
-        const sender = getWrappedMessageSender(rumor);
-        newDecryptedMessages.push({
-          id: rumor.id,
-          giftWrapId: giftWrap.id,
-          conversationId: messageConversationId,
-          senderPubkey: sender,
-          content: rumor.content,
-          tags: rumor.tags,
-          createdAt: rumor.created_at,
-          decryptedAt: Math.floor(Date.now() / 1000),
-        });
 
         if (participantKey !== expectedParticipants) {
           // Message is for a different conversation - saved to DB but not returned
@@ -494,15 +502,15 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // Bulk save newly decrypted messages to DB
-    if (newDecryptedMessages.length > 0) {
+    // Bulk save newly decrypted rumors to DB
+    if (newDecryptedRumors.length > 0) {
       try {
-        await db.decryptedMessages.bulkPut(newDecryptedMessages);
+        await db.decryptedRumors.bulkPut(newDecryptedRumors);
         console.log(
-          `[NIP-17] Cached ${newDecryptedMessages.length} newly decrypted messages`,
+          `[NIP-17] Cached ${newDecryptedRumors.length} newly decrypted rumors`,
         );
       } catch (err) {
-        console.error("[NIP-17] Failed to save decrypted messages to DB:", err);
+        console.error("[NIP-17] Failed to save decrypted rumors to DB:", err);
       }
     }
 
@@ -510,15 +518,15 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Convert a cached DB message to a Message object
+   * Convert a cached DB rumor to a Message object
    */
-  private cachedMessageToMessage(cached: DecryptedMessage): Message {
+  private cachedRumorToMessage(cached: DecryptedRumor): Message {
     // Reconstruct a rumor-like object for processing
     const rumorLike = {
       id: cached.id,
-      pubkey: cached.senderPubkey,
+      pubkey: cached.pubkey,
       created_at: cached.createdAt,
-      kind: 14,
+      kind: cached.kind,
       tags: cached.tags,
       content: cached.content,
     };
@@ -535,8 +543,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     return {
       id: cached.id,
-      conversationId: cached.conversationId,
-      author: cached.senderPubkey,
+      conversationId: cached.conversationId || "",
+      author: cached.pubkey,
       content: cached.content,
       timestamp: cached.createdAt,
       type: "user",
@@ -761,16 +769,16 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     }
 
     // Check DB cache first (eventId is the rumor ID)
-    const cached = await db.decryptedMessages.get(eventId);
+    const cached = await db.decryptedRumors.get(eventId);
     if (cached) {
       console.log(
-        `[NIP-17] Found reply message ${eventId.slice(0, 8)} in DB cache`,
+        `[NIP-17] Found reply rumor ${eventId.slice(0, 8)} in DB cache`,
       );
       return {
         id: cached.id,
-        pubkey: cached.senderPubkey,
+        pubkey: cached.pubkey,
         created_at: cached.createdAt,
-        kind: 14,
+        kind: cached.kind,
         tags: cached.tags,
         content: cached.content,
         sig: "", // Rumors don't have signatures
@@ -803,18 +811,24 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         if (rumor && rumor.id === eventId) {
           // Found it - save to DB for future lookups
           const sender = getWrappedMessageSender(rumor);
-          const participants = getConversationParticipants(rumor);
-          const conversationId = `nip-17:${participants.find((p) => p !== activePubkey) || activePubkey}`;
 
-          await db.decryptedMessages.put({
+          // Calculate conversationId for kind 14 (DMs)
+          let conversationId: string | undefined;
+          if (rumor.kind === 14) {
+            const participants = getConversationParticipants(rumor);
+            conversationId = `nip-17:${participants.find((p) => p !== activePubkey) || activePubkey}`;
+          }
+
+          await db.decryptedRumors.put({
             id: rumor.id,
             giftWrapId: giftWrap.id,
-            conversationId,
-            senderPubkey: sender,
+            kind: rumor.kind,
+            pubkey: sender,
             content: rumor.content,
             tags: rumor.tags,
             createdAt: rumor.created_at,
             decryptedAt: Math.floor(Date.now() / 1000),
+            conversationId,
           });
 
           return rumor as unknown as NostrEvent;
@@ -825,7 +839,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     }
 
     console.log(
-      `[NIP-17] Reply message ${eventId.slice(0, 8)} not found in cache or gift wraps`,
+      `[NIP-17] Reply rumor ${eventId.slice(0, 8)} not found in cache or gift wraps`,
     );
     return null;
   }

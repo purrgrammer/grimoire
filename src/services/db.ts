@@ -81,18 +81,21 @@ export interface LocalSpellbook {
 }
 
 /**
- * Decrypted NIP-17 DM message (rumor from gift wrap)
- * Stored to avoid re-decrypting the same messages
+ * Decrypted rumor from a NIP-59 gift wrap
+ * Stored to avoid re-decrypting the same events
+ * Works with any kind inside the gift wrap (NIP-17 DMs, etc.)
  */
-export interface DecryptedMessage {
+export interface DecryptedRumor {
   id: string; // Rumor ID
   giftWrapId: string; // Original gift wrap event ID
-  conversationId: string; // nip-17:pubkey format
-  senderPubkey: string; // Who sent the message
-  content: string; // Decrypted message content
-  tags: string[][]; // Rumor tags (for reply references, etc.)
-  createdAt: number; // Message timestamp
+  kind: number; // Event kind (14 for NIP-17 DMs, etc.)
+  pubkey: string; // Rumor author pubkey
+  content: string; // Decrypted content
+  tags: string[][]; // Rumor tags
+  createdAt: number; // Event timestamp
   decryptedAt: number; // When we decrypted it
+  // Optional: for DM-specific indexing
+  conversationId?: string; // nip-17:pubkey format (for kind 14)
 }
 
 class GrimoireDb extends Dexie {
@@ -105,7 +108,7 @@ class GrimoireDb extends Dexie {
   relayLiveness!: Table<RelayLivenessEntry>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
-  decryptedMessages!: Table<DecryptedMessage>;
+  decryptedRumors!: Table<DecryptedRumor>;
 
   constructor(name: string) {
     super(name);
@@ -328,7 +331,7 @@ class GrimoireDb extends Dexie {
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
 
-    // Version 15: Add decrypted NIP-17 messages cache
+    // Version 15: Add decrypted rumors cache (NIP-59 gift wrap contents)
     this.version(15).stores({
       profiles: "&pubkey",
       nip05: "&nip05",
@@ -339,9 +342,10 @@ class GrimoireDb extends Dexie {
       relayLiveness: "&url",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
-      // Index by giftWrapId (for dedup), conversationId (for queries), senderPubkey (for filtering)
-      decryptedMessages:
-        "&id, giftWrapId, conversationId, senderPubkey, createdAt",
+      // Index by giftWrapId (for dedup), kind (for filtering), pubkey (for filtering)
+      // conversationId is optional (only for DM kinds)
+      decryptedRumors:
+        "&id, giftWrapId, kind, pubkey, conversationId, createdAt",
     });
   }
 }
