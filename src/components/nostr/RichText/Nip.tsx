@@ -1,4 +1,3 @@
-import { FileText } from "lucide-react";
 import type { NipNode } from "@/lib/nip-transformer";
 import { useGrimoire } from "@/core/state";
 import { getNIPInfo } from "@/lib/nip-icons";
@@ -26,11 +25,10 @@ export function Nip({ node }: NipNodeProps) {
   return (
     <button
       onClick={openNIP}
-      className="inline-flex items-center gap-0.5 text-muted-foreground underline decoration-dotted hover:text-foreground cursor-crosshair"
+      className="text-muted-foreground underline decoration-dotted hover:text-foreground cursor-crosshair"
       title={nipInfo?.description ?? `View NIP-${number} specification`}
     >
-      <FileText className="size-3" />
-      <span>{raw}</span>
+      {raw}
     </button>
   );
 }
