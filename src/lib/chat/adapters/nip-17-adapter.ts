@@ -59,9 +59,25 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   private dmRelayCache = new Map<string, string[]>();
 
   /**
-   * Parse identifier - accepts npub, nprofile, hex pubkey, or NIP-05
+   * Parse identifier - accepts npub, nprofile, hex pubkey, NIP-05, or $me
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
+    // Handle $me alias (case-insensitive)
+    if (input.toLowerCase() === "$me") {
+      const activePubkey = accountManager.active$.value?.pubkey;
+      if (activePubkey) {
+        return {
+          type: "dm-recipient",
+          value: activePubkey,
+        };
+      }
+      // Return special marker if no account - will error in resolveConversation
+      return {
+        type: "dm-recipient",
+        value: "$me",
+      };
+    }
+
     // Try bech32 decoding (npub/nprofile)
     try {
       const decoded = nip19.decode(input);
@@ -107,7 +123,12 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
-    let pubkey: string;
+    const activePubkey = accountManager.active$.value?.pubkey;
+    if (!activePubkey) {
+      throw new Error("No active account. Sign in to use NIP-17 DMs.");
+    }
+
+    let partnerPubkey: string;
 
     // Resolve NIP-05 if needed
     if (identifier.type === "chat-partner-nip05") {
@@ -115,48 +136,49 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       if (!resolved) {
         throw new Error(`Failed to resolve NIP-05: ${identifier.value}`);
       }
-      pubkey = resolved;
+      partnerPubkey = resolved;
     } else if (
       identifier.type === "dm-recipient" ||
       identifier.type === "chat-partner"
     ) {
-      pubkey = identifier.value;
+      // Handle $me marker (from parseIdentifier when no account was active)
+      if (identifier.value === "$me") {
+        partnerPubkey = activePubkey;
+      } else {
+        partnerPubkey = identifier.value;
+      }
     } else {
       throw new Error(
         `NIP-17 adapter cannot handle identifier type: ${identifier.type}`,
       );
     }
 
-    const activePubkey = accountManager.active$.value?.pubkey;
-    if (!activePubkey) {
-      throw new Error("No active account");
-    }
-
     console.log(
-      `[NIP-17] Resolving conversation with ${pubkey.slice(0, 8)}...`,
+      `[NIP-17] Resolving conversation with ${partnerPubkey.slice(0, 8)}...`,
     );
 
     // Fetch DM relays for both parties in parallel
+    // (for self-chat, this fetches the same relays twice but that's fine)
     await Promise.all([
       this.fetchDmRelays(activePubkey),
-      this.fetchDmRelays(pubkey),
+      this.fetchDmRelays(partnerPubkey),
     ]);
 
-    // Get display name for partner
-    const metadataEvent = await this.getMetadata(pubkey);
+    // Get display name for partner (the person we're chatting with)
+    const metadataEvent = await this.getMetadata(partnerPubkey);
     const metadata = metadataEvent
       ? getProfileContent(metadataEvent)
       : undefined;
-    const title = getDisplayName(pubkey, metadata);
+    const title = getDisplayName(partnerPubkey, metadata);
 
     return {
-      id: `nip-17:${pubkey}`,
+      id: `nip-17:${partnerPubkey}`,
       type: "dm",
       protocol: "nip-17",
       title,
       participants: [
         { pubkey: activePubkey, role: "member" },
-        { pubkey, role: "member" },
+        { pubkey: partnerPubkey, role: "member" },
       ],
       metadata: {
         encrypted: true,
