@@ -21,7 +21,11 @@ import { isValidHexPubkey } from "@/lib/nostr-validation";
 import { getProfileContent } from "applesauce-core/helpers";
 import { getRelaysFromList } from "applesauce-common/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
-import { addressLoader, AGGREGATOR_RELAYS } from "@/services/loaders";
+import {
+  addressLoader,
+  profileLoader,
+  AGGREGATOR_RELAYS,
+} from "@/services/loaders";
 import {
   unlockGiftWrap,
   isGiftWrapUnlocked,
@@ -728,11 +732,20 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Helper: Get user metadata
+   * Helper: Get user metadata (fetches from relays if not in store)
    */
   private async getMetadata(pubkey: string): Promise<NostrEvent | undefined> {
-    return firstValueFrom(eventStore.replaceable(0, pubkey), {
-      defaultValue: undefined,
-    });
+    try {
+      // Use profileLoader to actually fetch the profile from relays
+      const event = await firstValueFrom(
+        profileLoader({ kind: 0, pubkey, identifier: "" }).pipe(
+          catchError(() => of(undefined)),
+        ),
+        { defaultValue: undefined },
+      );
+      return event ?? undefined;
+    } catch {
+      return undefined;
+    }
   }
 }
