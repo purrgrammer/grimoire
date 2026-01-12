@@ -175,9 +175,10 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       participants.unshift({ pubkey: hostPubkey, role: "host" });
     }
 
-    // Determine relays for chat - prefer activity's relays tag, fallback to relay hints
-    const chatRelays =
-      activity.relays.length > 0 ? activity.relays : relayHints;
+    // Combine activity relays, relay hints, and host outboxes for comprehensive coverage
+    const chatRelays = [
+      ...new Set([...activity.relays, ...relayHints, ...authorOutboxes]),
+    ];
 
     console.log(
       `[NIP-53] Resolved: "${activity.title}" (${status}), ${participants.length} participants, ${chatRelays.length} relays`,
