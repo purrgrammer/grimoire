@@ -1415,6 +1415,27 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "51",
     icon: Play,
   },
+  39000: {
+    kind: 39000,
+    name: "Group",
+    description: "Group Metadata",
+    nip: "29",
+    icon: Users,
+  },
+  39001: {
+    kind: 39001,
+    name: "Group Admins",
+    description: "Group Admins List",
+    nip: "29",
+    icon: UserCheck,
+  },
+  39002: {
+    kind: 39002,
+    name: "Group Members",
+    description: "Group Members List",
+    nip: "29",
+    icon: Users,
+  },
   39701: {
     kind: 39701,
     name: "Web Bookmark",

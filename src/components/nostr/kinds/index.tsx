@@ -61,6 +61,7 @@ import { ZapstoreAppSetRenderer } from "./ZapstoreAppSetRenderer";
 import { ZapstoreAppSetDetailRenderer } from "./ZapstoreAppSetDetailRenderer";
 import { ZapstoreReleaseRenderer } from "./ZapstoreReleaseRenderer";
 import { ZapstoreReleaseDetailRenderer } from "./ZapstoreReleaseDetailRenderer";
+import { GroupMetadataRenderer } from "./GroupMetadataRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -116,6 +117,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
   31990: ApplicationHandlerRenderer, // Application Handler (NIP-89)
   32267: ZapstoreAppRenderer, // Zapstore App
+  39000: GroupMetadataRenderer, // Group Metadata (NIP-29)
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
 
