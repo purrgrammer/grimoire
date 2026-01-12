@@ -348,22 +348,22 @@ export const manPages: Record<string, ManPageEntry> = {
   chat: {
     name: "chat",
     section: "1",
-    synopsis: "chat <group-identifier>",
+    synopsis: "chat <identifier>",
     description:
-      "Join and participate in NIP-29 relay-based group chats. Groups are hosted on a single relay that enforces membership and moderation rules. Use the format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional) and group-id is the group identifier.",
+      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups and NIP-53 live activity chat. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event to join its chat.",
     options: [
       {
-        flag: "<group-identifier>",
+        flag: "<identifier>",
         description:
-          "NIP-29 group identifier in format: relay'group-id (wss:// prefix optional)",
+          "NIP-29 group (relay'group-id) or NIP-53 live activity (naddr1...)",
       },
     ],
     examples: [
-      "chat relay.example.com'bitcoin-dev        Join relay group (wss:// prefix optional)",
-      "chat wss://relay.example.com'nostr-dev    Join relay group with explicit protocol",
-      "chat nos.lol'welcome                      Join welcome group on nos.lol",
+      "chat relay.example.com'bitcoin-dev        Join NIP-29 relay group",
+      "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
+      "chat naddr1...                            Join NIP-53 live activity chat",
     ],
-    seeAlso: ["profile", "open", "req"],
+    seeAlso: ["profile", "open", "req", "live"],
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
