@@ -6,6 +6,7 @@ import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
+import { parseCommunikeyCommand } from "@/lib/communikey-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -350,20 +351,22 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat <identifier>",
     description:
-      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups and NIP-53 live activity chat. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event to join its chat.",
+      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, Communikey communities, and NIP-53 live activity chat. NIP-29 groups use 'relay'group-id' format. Communikey communities use npub, nprofile, or hex pubkey. NIP-53 live activities use naddr of a kind 30311 event.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "NIP-29 group (relay'group-id) or NIP-53 live activity (naddr1...)",
+          "NIP-29: relay'group-id | Communikey: npub/nprofile/hex | NIP-53: naddr (kind 30311)",
       },
     ],
     examples: [
-      "chat relay.example.com'bitcoin-dev        Join NIP-29 relay group",
-      "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
-      "chat naddr1...                            Join NIP-53 live activity chat",
+      "chat relay.example.com'bitcoin-dev        NIP-29 relay group",
+      "chat wss://nos.lol'welcome                NIP-29 with explicit protocol",
+      "chat npub1...                             Communikey community",
+      "chat nprofile1...                         Communikey with relay hints",
+      "chat naddr1...                            NIP-53 live activity chat",
     ],
-    seeAlso: ["profile", "open", "req", "live"],
+    seeAlso: ["profile", "communikey", "open", "req", "live"],
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
@@ -399,6 +402,33 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[], activeAccountPubkey?: string) => {
       const parsed = await parseProfileCommand(args, activeAccountPubkey);
+      return parsed;
+    },
+  },
+  communikey: {
+    name: "communikey",
+    section: "1",
+    synopsis: "communikey <identifier>",
+    description:
+      "View a Communikey community. Communikeys allow any existing npub to become a community with its own relays, content sections, and configuration. Accepts npub, nprofile, hex pubkeys, NIP-05 identifiers, and the $me alias.",
+    options: [
+      {
+        flag: "<identifier>",
+        description:
+          "Community identifier in any supported format (npub, nprofile, hex pubkey, NIP-05)",
+      },
+    ],
+    examples: [
+      "communikey npub1...                   View community by npub",
+      "communikey nprofile1...               View community with relay hints",
+      "communikey community@example.com      View community by NIP-05",
+      "communikey $me                        View your own community",
+    ],
+    seeAlso: ["profile", "chat", "req"],
+    appId: "communikey",
+    category: "Nostr",
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      const parsed = await parseCommunikeyCommand(args, activeAccountPubkey);
       return parsed;
     },
   },

@@ -3,7 +3,13 @@ import type { NostrEvent } from "./nostr";
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol = "nip-c7" | "nip-17" | "nip-28" | "nip-29" | "nip-53";
+export type ChatProtocol =
+  | "nip-c7"
+  | "nip-17"
+  | "nip-28"
+  | "nip-29"
+  | "nip-53"
+  | "communikeys";
 
 /**
  * Conversation type
@@ -64,6 +70,10 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+
+  // Communikeys
+  communityPubkey?: string; // Community identifier (pubkey)
+  communityRelays?: string[]; // Community's relays from kind:10222
 }
 
 /**

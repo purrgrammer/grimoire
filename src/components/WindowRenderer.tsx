@@ -30,6 +30,9 @@ const ConnViewer = lazy(() => import("./ConnViewer"));
 const ChatViewer = lazy(() =>
   import("./ChatViewer").then((m) => ({ default: m.ChatViewer })),
 );
+const CommunikeyViewer = lazy(() =>
+  import("./CommunikeyViewer").then((m) => ({ default: m.CommunikeyViewer })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -178,6 +181,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             protocol={window.props.protocol}
             identifier={window.props.identifier}
             customTitle={window.customTitle}
+          />
+        );
+        break;
+      case "communikey":
+        content = (
+          <CommunikeyViewer
+            pubkey={window.props.pubkey}
+            relays={window.props.relays}
           />
         );
         break;

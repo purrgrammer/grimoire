@@ -53,6 +53,7 @@ import {
   Smile,
   Star,
   Tag,
+  Target,
   Trash2,
   User,
   UserCheck,
@@ -849,6 +850,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "66",
     icon: Activity,
   },
+  10222: {
+    kind: 10222,
+    name: "Communikey",
+    description: "Community Definition",
+    nip: "Communikeys",
+    icon: Users,
+  },
   10317: {
     kind: 10317,
     name: "Grasp List",
@@ -1190,6 +1198,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Relay Discovery",
     nip: "66",
     icon: Compass,
+  },
+  30222: {
+    kind: 30222,
+    name: "Targeted Publication",
+    description: "Publication targeted at communities",
+    nip: "Communikeys",
+    icon: Target,
   },
   30267: {
     kind: 30267,

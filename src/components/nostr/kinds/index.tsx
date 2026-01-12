@@ -31,6 +31,10 @@ import { Kind30023Renderer } from "./ArticleRenderer";
 import { Kind30023DetailRenderer } from "./ArticleDetailRenderer";
 import { CommunityNIPRenderer } from "./CommunityNIPRenderer";
 import { CommunityNIPDetailRenderer } from "./CommunityNIPDetailRenderer";
+import { CommunikeyRenderer } from "./CommunikeyRenderer";
+import { CommunikeyDetailRenderer } from "./CommunikeyDetailRenderer";
+import { TargetedPublicationRenderer } from "./TargetedPublicationRenderer";
+import { TargetedPublicationDetailRenderer } from "./TargetedPublicationDetailRenderer";
 import { RepositoryRenderer } from "./RepositoryRenderer";
 import { RepositoryDetailRenderer } from "./RepositoryDetailRenderer";
 import { RepositoryStateRenderer } from "./RepositoryStateRenderer";
@@ -111,6 +115,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30777: SpellbookRenderer, // Spellbook (Grimoire)
   30817: CommunityNIPRenderer, // Community NIP
+  10222: CommunikeyRenderer, // Communikey (Community Definition)
+  30222: TargetedPublicationRenderer, // Targeted Publication (Communikeys)
   31922: CalendarDateEventRenderer, // Date-Based Calendar Event (NIP-52)
   31923: CalendarTimeEventRenderer, // Time-Based Calendar Event (NIP-52)
   31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
@@ -177,6 +183,8 @@ const detailRenderers: Record<
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
+  10222: CommunikeyDetailRenderer, // Communikey Detail (Community Definition)
+  30222: TargetedPublicationDetailRenderer, // Targeted Publication Detail (Communikeys)
   31922: CalendarDateEventDetailRenderer, // Date-Based Calendar Event Detail (NIP-52)
   31923: CalendarTimeEventDetailRenderer, // Time-Based Calendar Event Detail (NIP-52)
   31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)

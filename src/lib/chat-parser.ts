@@ -2,6 +2,7 @@ import type { ChatCommandResult } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
+import { CommunikeysAdapter } from "./chat/adapters/communikeys-adapter";
 // Import other adapters as they're implemented
 // import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
@@ -13,8 +14,9 @@ import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
  * 1. NIP-17 (encrypted DMs) - prioritized for privacy
  * 2. NIP-28 (channels) - specific event format (kind 40)
  * 3. NIP-29 (groups) - specific group ID format
- * 4. NIP-53 (live chat) - specific addressable format (kind 30311)
- * 5. NIP-C7 (simple chat) - fallback for generic pubkeys
+ * 4. Communikeys (communities) - npub/nprofile/hex pubkey format
+ * 5. NIP-53 (live chat) - specific addressable format (kind 30311)
+ * 6. NIP-C7 (simple chat) - fallback for generic pubkeys
  *
  * @param args - Command arguments (first arg is the identifier)
  * @returns Parsed result with protocol and identifier
@@ -38,9 +40,10 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   const adapters = [
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
-    // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
+    new Nip29Adapter(), // Relay groups (relay'group-id format)
+    new CommunikeysAdapter(), // Communikey communities (npub/nprofile/hex format)
+    new Nip53Adapter(), // Live activity chat (naddr kind 30311)
+    // new NipC7Adapter(), // Simple chat (disabled for now)
   ];
 
   for (const adapter of adapters) {
@@ -65,6 +68,10 @@ Currently supported formats:
   - naddr1... (NIP-29 group metadata, kind 39000)
     Example:
       chat naddr1qqxnzdesxqmnxvpexqmny...
+  - npub1.../nprofile1.../hex (Communikey community)
+    Examples:
+      chat npub1...
+      chat nprofile1...
   - naddr1... (NIP-53 live activity chat, kind 30311)
     Example:
       chat naddr1... (live stream address)
