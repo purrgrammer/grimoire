@@ -1,7 +1,5 @@
 import { User } from "lucide-react";
 import accounts from "@/services/accounts";
-import { ExtensionSigner } from "applesauce-signers";
-import { ExtensionAccount } from "applesauce-accounts/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
@@ -20,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
+import LoginDialog from "./LoginDialog";
 import { useState } from "react";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
@@ -56,6 +55,7 @@ export default function UserMenu() {
   const { state, addWindow } = useGrimoire();
   const relays = state.activeAccount?.relays;
   const [showSettings, setShowSettings] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -66,18 +66,6 @@ export default function UserMenu() {
     );
   }
 
-  async function login() {
-    try {
-      const signer = new ExtensionSigner();
-      const pubkey = await signer.getPublicKey();
-      const account = new ExtensionAccount(pubkey, signer);
-      accounts.addAccount(account);
-      accounts.setActive(account);
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   async function logout() {
     if (!account) return;
     accounts.removeAccount(account);
@@ -86,6 +74,7 @@ export default function UserMenu() {
   return (
     <>
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -96,7 +85,7 @@ export default function UserMenu() {
             {account ? (
               <UserAvatar pubkey={account.pubkey} />
             ) : (
-              <User onClick={login} className="size-4 text-muted-foreground" />
+              <User className="size-4 text-muted-foreground" />
             )}
           </Button>
         </DropdownMenuTrigger>
@@ -148,7 +137,9 @@ export default function UserMenu() {
               </DropdownMenuItem>
             </>
           ) : (
-            <DropdownMenuItem onClick={login}>Log in</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowLogin(true)}>
+              Log in
+            </DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
