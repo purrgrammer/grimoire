@@ -18,6 +18,7 @@ import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
+import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
@@ -437,6 +438,35 @@ export function ChatViewer({
   ) => {
     if (!conversation || !hasActiveAccount || isSending) return;
 
+    // Check if this is a slash command
+    const slashCmd = parseSlashCommand(content);
+    if (slashCmd) {
+      // Execute action instead of sending message
+      setIsSending(true);
+      try {
+        const result = await adapter.executeAction(slashCmd.command, {
+          activePubkey: activeAccount.pubkey,
+          activeSigner: activeAccount.signer,
+          conversation,
+        });
+
+        if (result.success) {
+          toast.success(result.message || "Action completed");
+        } else {
+          toast.error(result.message || "Action failed");
+        }
+      } catch (error) {
+        console.error("[Chat] Failed to execute action:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Action failed";
+        toast.error(errorMessage);
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
+
+    // Regular message sending
     setIsSending(true);
     try {
       await adapter.sendMessage(conversation, content, {

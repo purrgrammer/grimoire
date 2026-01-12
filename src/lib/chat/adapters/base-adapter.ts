@@ -10,6 +10,11 @@ import type {
   CreateConversationParams,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
+import type {
+  ChatAction,
+  ChatActionContext,
+  ChatActionResult,
+} from "@/types/chat-actions";
 
 /**
  * Options for sending a message
@@ -141,4 +146,33 @@ export abstract class ChatProtocolAdapter {
    * Optional - only for protocols with leave semantics (groups)
    */
   leaveConversation?(conversation: Conversation): Promise<void>;
+
+  /**
+   * Get available actions for this protocol
+   * Actions are protocol-specific slash commands like /join, /leave, etc.
+   * Returns empty array by default
+   */
+  getActions(): ChatAction[] {
+    return [];
+  }
+
+  /**
+   * Execute a chat action by name
+   * Returns error if action not found
+   */
+  async executeAction(
+    actionName: string,
+    context: ChatActionContext,
+  ): Promise<ChatActionResult> {
+    const action = this.getActions().find((a) => a.name === actionName);
+
+    if (!action) {
+      return {
+        success: false,
+        message: `Unknown action: /${actionName}`,
+      };
+    }
+
+    return action.handler(context);
+  }
 }
