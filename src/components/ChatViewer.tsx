@@ -46,6 +46,8 @@ interface ChatViewerProps {
   protocol: ChatProtocol;
   identifier: ProtocolIdentifier;
   customTitle?: string;
+  /** Optional content to render before the title (e.g., sidebar toggle on mobile) */
+  headerPrefix?: React.ReactNode;
 }
 
 /**
@@ -315,6 +317,7 @@ export function ChatViewer({
   protocol,
   identifier,
   customTitle,
+  headerPrefix,
 }: ChatViewerProps) {
   const { addWindow } = useGrimoire();
 
@@ -590,9 +593,10 @@ export function ChatViewer({
   return (
     <div className="flex h-full flex-col">
       {/* Header with conversation info and controls */}
-      <div className="pl-4 pr-0 border-b w-full py-0.5">
+      <div className="pl-2 pr-0 border-b w-full py-0.5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
+            {headerPrefix}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

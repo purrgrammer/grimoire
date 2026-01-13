@@ -123,9 +123,11 @@ const MemoizedChatViewer = memo(
   function MemoizedChatViewer({
     groupId,
     relayUrl,
+    headerPrefix,
   }: {
     groupId: string;
     relayUrl: string;
+    headerPrefix?: React.ReactNode;
   }) {
     return (
       <ChatViewer
@@ -137,10 +139,12 @@ const MemoizedChatViewer = memo(
             relays: [relayUrl],
           } as ProtocolIdentifier
         }
+        headerPrefix={headerPrefix}
       />
     );
   },
   // Custom comparison: only re-render if group actually changed
+  // Note: headerPrefix is intentionally excluded - it's expected to be stable or change with isMobile
   (prev, next) =>
     prev.groupId === next.groupId && prev.relayUrl === next.relayUrl,
 );
@@ -469,11 +473,25 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     </div>
   );
 
+  // Sidebar toggle button for mobile - passed to ChatViewer's headerPrefix
+  const sidebarToggle = isMobile ? (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7 flex-shrink-0"
+      onClick={() => setSidebarOpen(true)}
+    >
+      <PanelLeft className="size-4" />
+      <span className="sr-only">Toggle sidebar</span>
+    </Button>
+  ) : null;
+
   // Chat view content
   const chatContent = selectedGroup ? (
     <MemoizedChatViewer
       groupId={selectedGroup.groupId}
       relayUrl={selectedGroup.relayUrl}
+      headerPrefix={sidebarToggle}
     />
   ) : (
     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -496,37 +514,6 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
   if (isMobile) {
     return (
       <div className="flex h-full flex-col">
-        {/* Mobile header with sidebar toggle */}
-        <div className="flex items-center gap-2 border-b px-2 py-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <PanelLeft className="size-4" />
-            <span className="sr-only">Toggle sidebar</span>
-          </Button>
-          {selectedGroup && (
-            <span className="text-sm font-medium truncate">
-              {groupsWithRecency.find(
-                (g) =>
-                  g.groupId === selectedGroup.groupId &&
-                  g.relayUrl === selectedGroup.relayUrl,
-              )?.metadata
-                ? getTagValue(
-                    groupsWithRecency.find(
-                      (g) =>
-                        g.groupId === selectedGroup.groupId &&
-                        g.relayUrl === selectedGroup.relayUrl,
-                    )!.metadata!,
-                    "name",
-                  ) || selectedGroup.groupId
-                : selectedGroup.groupId}
-            </span>
-          )}
-        </div>
-
         {/* Mobile sheet sidebar */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent side="left" className="w-[280px] p-0">
@@ -537,7 +524,7 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
           </SheetContent>
         </Sheet>
 
-        {/* Chat content */}
+        {/* Chat content - takes full height, sidebar toggle is in ChatViewer header */}
         <div className="flex-1 min-h-0">{chatContent}</div>
       </div>
     );
