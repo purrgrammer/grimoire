@@ -19,6 +19,7 @@ import pool from "@/services/relay-pool";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getTagValues } from "@/lib/nostr-utils";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
 
 /**
@@ -855,6 +856,28 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
+   * Helper: Check if a tag matches a group by ID and relay URL (normalized comparison)
+   */
+  private isMatchingGroupTag(
+    tag: string[],
+    groupId: string,
+    normalizedRelayUrl: string,
+  ): boolean {
+    if (tag[0] !== "group" || tag[1] !== groupId) {
+      return false;
+    }
+    // Normalize the tag's relay URL for comparison
+    try {
+      const tagRelayUrl = tag[2];
+      if (!tagRelayUrl) return false;
+      return normalizeRelayURL(tagRelayUrl) === normalizedRelayUrl;
+    } catch {
+      // If normalization fails, try exact match as fallback
+      return tag[2] === normalizedRelayUrl;
+    }
+  }
+
+  /**
    * Add a group to the user's group list (kind 10009)
    */
   async bookmarkGroup(
@@ -874,6 +897,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
+    // Normalize the relay URL for comparison
+    const normalizedRelayUrl = normalizeRelayURL(relayUrl);
+
     // Fetch current kind 10009 event (group list)
     const currentEvent = await firstValueFrom(
       eventStore.replaceable(10009, activePubkey, ""),
@@ -887,9 +913,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       // Copy existing tags
       tags = [...currentEvent.tags];
 
-      // Check if group is already in the list
-      const existingGroup = tags.find(
-        (t) => t[0] === "group" && t[1] === groupId && t[2] === relayUrl,
+      // Check if group is already in the list (using normalized URL comparison)
+      const existingGroup = tags.find((t) =>
+        this.isMatchingGroupTag(t, groupId, normalizedRelayUrl),
       );
 
       if (existingGroup) {
@@ -897,8 +923,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // Add the new group tag
-    tags.push(["group", groupId, relayUrl]);
+    // Add the new group tag (use normalized URL for consistency)
+    tags.push(["group", groupId, normalizedRelayUrl]);
 
     // Create and publish the updated event
     const factory = new EventFactory();
@@ -933,6 +959,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
+    // Normalize the relay URL for comparison
+    const normalizedRelayUrl = normalizeRelayURL(relayUrl);
+
     // Fetch current kind 10009 event (group list)
     const currentEvent = await firstValueFrom(
       eventStore.replaceable(10009, activePubkey, ""),
@@ -943,10 +972,10 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("No group list found");
     }
 
-    // Find and remove the group tag
+    // Find and remove the group tag (using normalized URL comparison)
     const originalLength = currentEvent.tags.length;
     const tags = currentEvent.tags.filter(
-      (t) => !(t[0] === "group" && t[1] === groupId && t[2] === relayUrl),
+      (t) => !this.isMatchingGroupTag(t, groupId, normalizedRelayUrl),
     );
 
     if (tags.length === originalLength) {
