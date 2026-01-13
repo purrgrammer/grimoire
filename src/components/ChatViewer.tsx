@@ -2,7 +2,14 @@ import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from, catchError, of, map } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Loader2, Reply, Zap, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  Reply,
+  Zap,
+  AlertTriangle,
+  RefreshCw,
+  Paperclip,
+} from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
@@ -43,6 +50,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -333,6 +341,22 @@ export function ChatViewer({
   // Emoji search for custom emoji autocomplete
   const { searchEmojis } = useEmojiSearch();
 
+  // Ref to MentionEditor for programmatic submission
+  const editorRef = useRef<MentionEditorHandle>(null);
+
+  // Blossom upload hook for file attachments
+  const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
+    accept: "image/*,video/*,audio/*",
+    onSuccess: (results) => {
+      if (results.length > 0 && editorRef.current) {
+        // Insert the first successful upload URL into the editor
+        const url = results[0].blob.url;
+        editorRef.current.insertText(url);
+        editorRef.current.focus();
+      }
+    },
+  });
+
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -443,9 +467,6 @@ export function ChatViewer({
 
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-
-  // Ref to MentionEditor for programmatic submission
-  const editorRef = useRef<MentionEditorHandle>(null);
 
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
@@ -846,6 +867,25 @@ export function ChatViewer({
             />
           )}
           <div className="flex gap-1.5 items-center">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
+                    onClick={openUpload}
+                    disabled={isSending}
+                  >
+                    <Paperclip className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Attach media</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
@@ -873,6 +913,7 @@ export function ChatViewer({
               {isSending ? <Loader2 className="size-3 animate-spin" /> : "Send"}
             </Button>
           </div>
+          {uploadDialog}
         </div>
       ) : (
         <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">
