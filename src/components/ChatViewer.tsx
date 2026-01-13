@@ -940,9 +940,9 @@ export function ChatViewer({
             {uploadDialog}
           </div>
         ) : (
-          <div className="border-t text-center">
+          <div className="border-t text-center pt-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setShowLogin(true)}
             >
