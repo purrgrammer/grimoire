@@ -529,6 +529,10 @@ export const manPages: Record<string, ManPageEntry> = {
           "Show your configured Blossom servers from kind 10063 event",
       },
       {
+        flag: "server <url>",
+        description: "View info about a specific Blossom server",
+      },
+      {
         flag: "upload",
         description:
           "Open file upload dialog to upload files to your Blossom servers",
@@ -536,7 +540,7 @@ export const manPages: Record<string, ManPageEntry> = {
       {
         flag: "list [pubkey]",
         description:
-          "List blobs uploaded by a user (defaults to your account). Supports npub, hex, or $me",
+          "List blobs uploaded by a user. Supports npub, hex, NIP-05 (user@domain.com), or $me",
       },
       {
         flag: "blob <sha256> [server]",
@@ -555,9 +559,10 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: [
       "blossom                              Show your Blossom servers",
       "blossom servers                      Show your Blossom servers",
+      "blossom server blossom.primal.net    View specific server info",
       "blossom upload                       Open file upload dialog",
       "blossom list                         List your uploaded blobs",
-      "blossom list $me                     List your uploaded blobs",
+      "blossom list fiatjaf.com             List blobs for a NIP-05 user",
       "blossom list npub1...                List blobs for another user",
       "blossom blob abc123...               View blob details",
       "blossom mirror https://... cdn.example.com  Mirror blob to server",
@@ -565,8 +570,8 @@ export const manPages: Record<string, ManPageEntry> = {
     seeAlso: ["profile"],
     appId: "blossom",
     category: "Nostr",
-    argParser: (args: string[], activeAccountPubkey?: string) => {
-      return parseBlossomCommand(args, activeAccountPubkey);
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      return await parseBlossomCommand(args, activeAccountPubkey);
     },
     defaultProps: { subcommand: "servers" },
   },

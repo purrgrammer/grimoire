@@ -14,11 +14,11 @@ export function BlossomServerListRenderer({ event }: BaseEventProps) {
   const servers = getServersFromEvent(event);
 
   const handleServerClick = (serverUrl: string) => {
-    // Open the blossom viewer with server info
+    // Open the blossom viewer with specific server info
     addWindow(
       "blossom",
-      { subcommand: "servers", serverUrl },
-      `blossom servers`,
+      { subcommand: "server", serverUrl },
+      `blossom server ${serverUrl}`,
       undefined,
     );
   };
@@ -79,8 +79,8 @@ export function BlossomServerListDetailRenderer({
   const handleServerClick = (serverUrl: string) => {
     addWindow(
       "blossom",
-      { subcommand: "servers", serverUrl },
-      `blossom servers`,
+      { subcommand: "server", serverUrl },
+      `blossom server ${serverUrl}`,
       undefined,
     );
   };

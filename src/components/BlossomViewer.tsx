@@ -67,6 +67,8 @@ export function BlossomViewer({
   switch (subcommand) {
     case "servers":
       return <ServersView />;
+    case "server":
+      return <ServerView serverUrl={serverUrl!} />;
     case "upload":
       return <UploadView />;
     case "list":
@@ -301,6 +303,134 @@ function ServerRow({
         >
           <ExternalLink className="size-4" />
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ServerView - View info about a specific Blossom server
+ */
+function ServerView({ serverUrl }: { serverUrl: string }) {
+  const { copy, copied } = useCopy();
+  const [status, setStatus] = useState<ServerCheckResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check server status on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      setLoading(true);
+      const result = await checkServer(serverUrl);
+      if (!cancelled) {
+        setStatus(result);
+        setLoading(false);
+      }
+    };
+
+    check();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [serverUrl]);
+
+  const hostname = (() => {
+    try {
+      return new URL(serverUrl).hostname;
+    } catch {
+      return serverUrl;
+    }
+  })();
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="border-b px-4 py-2 flex items-center gap-2">
+        <HardDrive className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Blossom Server</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Server Info */}
+        <div className="border rounded-lg divide-y">
+          <div className="px-4 py-3">
+            <div className="text-xs text-muted-foreground uppercase mb-1">
+              URL
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="text-sm break-all flex-1">{serverUrl}</code>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copy(serverUrl)}
+              >
+                {copied ? (
+                  <CopyCheck className="size-4" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => window.open(serverUrl, "_blank")}
+              >
+                <ExternalLink className="size-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="px-4 py-3">
+            <div className="text-xs text-muted-foreground uppercase mb-1">
+              Hostname
+            </div>
+            <div className="text-sm">{hostname}</div>
+          </div>
+
+          <div className="px-4 py-3">
+            <div className="text-xs text-muted-foreground uppercase mb-1">
+              Status
+            </div>
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Checking...
+                </span>
+              </div>
+            ) : status ? (
+              <div className="flex items-center gap-2">
+                {status.online ? (
+                  <>
+                    <CheckCircle className="size-4 text-green-500" />
+                    <span className="text-sm text-green-600">
+                      Online ({status.responseTime}ms)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="size-4 text-red-500" />
+                    <span className="text-sm text-red-600">{status.error}</span>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => window.open(serverUrl, "_blank")}
+          >
+            <ExternalLink className="size-4 mr-2" />
+            Open in Browser
+          </Button>
+        </div>
       </div>
     </div>
   );

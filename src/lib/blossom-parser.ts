@@ -3,6 +3,7 @@
  *
  * Parses arguments for the blossom command with subcommands:
  * - servers: Show/manage user's Blossom server list
+ * - server <url>: View info about a specific Blossom server
  * - upload: Upload a file (handled by UI file picker)
  * - list [pubkey]: List blobs for a user
  * - blob <sha256> [server]: View a specific blob
@@ -11,9 +12,12 @@
  */
 
 import { nip19 } from "nostr-tools";
+import { isNip05, resolveNip05 } from "./nip05";
+import { isValidHexPubkey, normalizeHex } from "./nostr-validation";
 
 export type BlossomSubcommand =
   | "servers"
+  | "server"
   | "upload"
   | "list"
   | "blob"
@@ -43,20 +47,20 @@ function normalizeServerUrl(url: string): string {
 }
 
 /**
- * Resolve a pubkey from various formats (npub, nprofile, hex, $me)
+ * Resolve a pubkey from various formats (npub, nprofile, hex, NIP-05, $me)
  */
-function resolvePubkey(
+async function resolvePubkey(
   input: string,
   activeAccountPubkey?: string,
-): string | undefined {
+): Promise<string | undefined> {
   // Handle $me alias
   if (input === "$me") {
     return activeAccountPubkey;
   }
 
   // Handle hex pubkey
-  if (/^[0-9a-f]{64}$/i.test(input)) {
-    return input.toLowerCase();
+  if (isValidHexPubkey(input)) {
+    return normalizeHex(input);
   }
 
   // Handle npub
@@ -83,6 +87,14 @@ function resolvePubkey(
     }
   }
 
+  // Handle NIP-05 identifier (user@domain.com or domain.com)
+  if (isNip05(input)) {
+    const pubkey = await resolveNip05(input);
+    if (pubkey) {
+      return pubkey;
+    }
+  }
+
   return undefined;
 }
 
@@ -91,16 +103,17 @@ function resolvePubkey(
  *
  * Usage:
  *   blossom servers              - Show your Blossom servers
+ *   blossom server <url>         - View info about a specific server
  *   blossom upload               - Open upload dialog
  *   blossom list [pubkey]        - List blobs (defaults to $me)
  *   blossom blob <sha256> [server] - View blob details
  *   blossom mirror <url> <server> - Mirror blob to server
  *   blossom delete <sha256> <server> - Delete blob from server
  */
-export function parseBlossomCommand(
+export async function parseBlossomCommand(
   args: string[],
   activeAccountPubkey?: string,
-): BlossomCommandResult {
+): Promise<BlossomCommandResult> {
   // Default to 'servers' if no subcommand
   if (args.length === 0) {
     return { subcommand: "servers" };
@@ -110,8 +123,18 @@ export function parseBlossomCommand(
 
   switch (subcommand) {
     case "servers":
-    case "server":
       return { subcommand: "servers" };
+
+    case "server": {
+      // View info about a specific Blossom server
+      if (args.length < 2) {
+        throw new Error("Server URL required. Usage: blossom server <url>");
+      }
+      return {
+        subcommand: "server",
+        serverUrl: normalizeServerUrl(args[1]),
+      };
+    }
 
     case "upload":
       return { subcommand: "upload" };
@@ -123,10 +146,10 @@ export function parseBlossomCommand(
       let pubkey: string | undefined;
 
       if (pubkeyArg) {
-        pubkey = resolvePubkey(pubkeyArg, activeAccountPubkey);
+        pubkey = await resolvePubkey(pubkeyArg, activeAccountPubkey);
         if (!pubkey) {
           throw new Error(
-            `Invalid pubkey format: ${pubkeyArg}. Use npub, nprofile, hex, or $me`,
+            `Invalid pubkey format: ${pubkeyArg}. Use npub, nprofile, hex, user@domain.com, or $me`,
           );
         }
       } else {
@@ -194,6 +217,7 @@ export function parseBlossomCommand(
 
 Available subcommands:
   servers              Show your configured Blossom servers
+  server <url>         View info about a specific server
   upload               Open file upload dialog
   list [pubkey]        List blobs (defaults to your account)
   blob <sha256> [server] View blob details
