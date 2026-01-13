@@ -18,6 +18,22 @@ import type {
 } from "@/types/chat-actions";
 
 /**
+ * Blob attachment metadata for imeta tags (NIP-92)
+ */
+export interface BlobAttachmentMeta {
+  /** The URL of the blob */
+  url: string;
+  /** SHA256 hash of the blob content */
+  sha256: string;
+  /** MIME type of the blob */
+  mimeType?: string;
+  /** Size in bytes */
+  size?: number;
+  /** Blossom server URL */
+  server?: string;
+}
+
+/**
  * Options for sending a message
  */
 export interface SendMessageOptions {
@@ -25,6 +41,8 @@ export interface SendMessageOptions {
   replyTo?: string;
   /** NIP-30 custom emoji tags */
   emojiTags?: Array<{ shortcode: string; url: string }>;
+  /** Blob attachments for imeta tags (NIP-92) */
+  blobAttachments?: BlobAttachmentMeta[];
 }
 
 /**

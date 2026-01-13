@@ -469,6 +469,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
+    // Add NIP-92 imeta tags for blob attachments
+    if (options?.blobAttachments) {
+      for (const blob of options.blobAttachments) {
+        const imetaParts = [`url ${blob.url}`];
+        if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
+        if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
+        if (blob.size) imetaParts.push(`size ${blob.size}`);
+        tags.push(["imeta", ...imetaParts]);
+      }
+    }
+
     // Use kind 9 for group chat messages
     const draft = await factory.build({ kind: 9, content, tags });
     const event = await factory.sign(draft);

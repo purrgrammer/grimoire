@@ -40,6 +40,7 @@ import {
   MentionEditor,
   type MentionEditorHandle,
   type EmojiTag,
+  type BlobAttachment,
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
@@ -349,9 +350,15 @@ export function ChatViewer({
     accept: "image/*,video/*,audio/*",
     onSuccess: (results) => {
       if (results.length > 0 && editorRef.current) {
-        // Insert the first successful upload URL into the editor
-        const url = results[0].blob.url;
-        editorRef.current.insertText(url);
+        // Insert the first successful upload as a blob attachment with metadata
+        const { blob, server } = results[0];
+        editorRef.current.insertBlob({
+          url: blob.url,
+          sha256: blob.sha256,
+          mimeType: blob.type,
+          size: blob.size,
+          server,
+        });
         editorRef.current.focus();
       }
     },
@@ -476,6 +483,7 @@ export function ChatViewer({
     content: string,
     replyToId?: string,
     emojiTags?: EmojiTag[],
+    blobAttachments?: BlobAttachment[],
   ) => {
     if (!conversation || !hasActiveAccount || isSending) return;
 
@@ -513,6 +521,7 @@ export function ChatViewer({
       await adapter.sendMessage(conversation, content, {
         replyTo: replyToId,
         emojiTags,
+        blobAttachments,
       });
       setReplyTo(undefined); // Clear reply context only on success
     } catch (error) {
@@ -893,9 +902,9 @@ export function ChatViewer({
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}
-              onSubmit={(content, emojiTags) => {
+              onSubmit={(content, emojiTags, blobAttachments) => {
                 if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags);
+                  handleSend(content, replyTo, emojiTags, blobAttachments);
                 }
               }}
               className="flex-1 min-w-0"
