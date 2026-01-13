@@ -59,8 +59,8 @@ const GroupListItem = memo(function GroupListItem({
   return (
     <div
       className={cn(
-        "flex flex-col gap-1 px-3 py-2 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
-        isSelected && "bg-muted",
+        "flex flex-col gap-0 px-2 py-0.5 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
+        isSelected && "bg-muted/70",
       )}
       onClick={onClick}
     >
