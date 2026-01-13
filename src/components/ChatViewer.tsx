@@ -481,6 +481,9 @@ export function ChatViewer({
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
 
+  // State for tooltip open (for mobile tap support)
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+
   // Handle sending messages with error handling
   const handleSend = async (
     content: string,
@@ -710,9 +713,12 @@ export function ChatViewer({
           <div className="flex flex-1 min-w-0 items-center gap-2">
             {headerPrefix}
             <TooltipProvider>
-              <Tooltip>
+              <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
-                  <button className="text-sm font-semibold truncate cursor-help text-left">
+                  <button
+                    className="text-sm font-semibold truncate cursor-help text-left"
+                    onClick={() => setTooltipOpen(!tooltipOpen)}
+                  >
                     {customTitle || conversation.title}
                   </button>
                 </TooltipTrigger>
