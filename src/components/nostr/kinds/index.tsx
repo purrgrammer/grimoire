@@ -63,6 +63,67 @@ import { ZapstoreAppSetDetailRenderer } from "./ZapstoreAppSetDetailRenderer";
 import { ZapstoreReleaseRenderer } from "./ZapstoreReleaseRenderer";
 import { ZapstoreReleaseDetailRenderer } from "./ZapstoreReleaseDetailRenderer";
 import { GroupMetadataRenderer } from "./GroupMetadataRenderer";
+// NIP-51 List Renderers
+import { MuteListRenderer, MuteListDetailRenderer } from "./MuteListRenderer";
+import { PinListRenderer, PinListDetailRenderer } from "./PinListRenderer";
+import {
+  BookmarkListRenderer,
+  BookmarkListDetailRenderer,
+} from "./BookmarkListRenderer";
+import {
+  CommunityListRenderer,
+  CommunityListDetailRenderer,
+} from "./CommunityListRenderer";
+import {
+  ChannelListRenderer,
+  ChannelListDetailRenderer,
+} from "./ChannelListRenderer";
+import {
+  InterestListRenderer,
+  InterestListDetailRenderer,
+  InterestSetRenderer,
+  InterestSetDetailRenderer,
+} from "./InterestListRenderer";
+import {
+  MediaFollowListRenderer,
+  MediaFollowListDetailRenderer,
+} from "./MediaFollowListRenderer";
+import {
+  EmojiListRenderer,
+  EmojiListDetailRenderer,
+} from "./EmojiListRenderer";
+import {
+  WikiAuthorsRenderer,
+  WikiAuthorsDetailRenderer,
+  WikiRelaysRenderer,
+  WikiRelaysDetailRenderer,
+} from "./WikiListRenderer";
+import {
+  FollowSetRenderer,
+  FollowSetDetailRenderer,
+} from "./FollowSetRenderer";
+import {
+  BookmarkSetRenderer,
+  BookmarkSetDetailRenderer,
+} from "./BookmarkSetRenderer";
+import {
+  ArticleCurationSetRenderer,
+  ArticleCurationSetDetailRenderer,
+  VideoCurationSetRenderer,
+  VideoCurationSetDetailRenderer,
+  PictureCurationSetRenderer,
+  PictureCurationSetDetailRenderer,
+} from "./CurationSetRenderer";
+import {
+  KindMuteSetRenderer,
+  KindMuteSetDetailRenderer,
+} from "./KindMuteSetRenderer";
+import {
+  StarterPackRenderer,
+  StarterPackDetailRenderer,
+  MediaStarterPackRenderer,
+  MediaStarterPackDetailRenderer,
+} from "./StarterPackRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 
@@ -95,14 +156,31 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
   777: SpellRenderer, // Spell (Grimoire)
+  10000: MuteListRenderer, // Mute List (NIP-51)
+  10001: PinListRenderer, // Pin List (NIP-51)
   10002: Kind10002Renderer, // Relay List Metadata (NIP-65)
-  10317: Kind10317Renderer, // User Grasp List (NIP-34)
+  10003: BookmarkListRenderer, // Bookmark List (NIP-51)
+  10004: CommunityListRenderer, // Community List (NIP-51)
+  10005: ChannelListRenderer, // Public Chats/Channels List (NIP-51)
   10006: GenericRelayListRenderer, // Blocked Relays (NIP-51)
   10007: GenericRelayListRenderer, // Search Relays (NIP-51)
-  10009: PublicChatsRenderer, // Public Chats List (NIP-51)
+  10009: PublicChatsRenderer, // User Groups List (NIP-51)
   10012: GenericRelayListRenderer, // Favorite Relays (NIP-51)
+  10015: InterestListRenderer, // Interest List (NIP-51)
+  10020: MediaFollowListRenderer, // Media Follow List (NIP-51)
+  10030: EmojiListRenderer, // User Emoji List (NIP-51)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
+  10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
+  10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
+  10317: Kind10317Renderer, // User Grasp List (NIP-34)
+  30000: FollowSetRenderer, // Follow Sets (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
+  30003: BookmarkSetRenderer, // Bookmark Sets (NIP-51)
+  30004: ArticleCurationSetRenderer, // Article Curation Sets (NIP-51)
+  30005: VideoCurationSetRenderer, // Video Curation Sets (NIP-51)
+  30006: PictureCurationSetRenderer, // Picture Curation Sets (NIP-51)
+  30007: KindMuteSetRenderer, // Kind Mute Sets (NIP-51)
+  30015: InterestSetRenderer, // Interest Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
   30030: EmojiSetRenderer, // Emoji Sets (NIP-30)
   30063: ZapstoreReleaseRenderer, // Zapstore App Release
@@ -120,6 +198,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   31990: ApplicationHandlerRenderer, // Application Handler (NIP-89)
   32267: ZapstoreAppRenderer, // Zapstore App
   39000: GroupMetadataRenderer, // Group Metadata (NIP-29)
+  39089: StarterPackRenderer, // Starter Pack (NIP-51)
+  39092: MediaStarterPackRenderer, // Media Starter Pack (NIP-51)
   39701: Kind39701Renderer, // Web Bookmarks (NIP-B0)
 };
 
@@ -164,14 +244,31 @@ const detailRenderers: Record<
 > = {
   0: Kind0DetailRenderer, // Profile Metadata Detail
   3: Kind3DetailView, // Contact List Detail
+  777: SpellDetailRenderer, // Spell Detail
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
   9802: Kind9802DetailRenderer, // Highlight Detail
+  10000: MuteListDetailRenderer, // Mute List Detail (NIP-51)
+  10001: PinListDetailRenderer, // Pin List Detail (NIP-51)
   10002: Kind10002DetailRenderer, // Relay List Detail (NIP-65)
+  10003: BookmarkListDetailRenderer, // Bookmark List Detail (NIP-51)
+  10004: CommunityListDetailRenderer, // Community List Detail (NIP-51)
+  10005: ChannelListDetailRenderer, // Channel List Detail (NIP-51)
+  10015: InterestListDetailRenderer, // Interest List Detail (NIP-51)
+  10020: MediaFollowListDetailRenderer, // Media Follow List Detail (NIP-51)
+  10030: EmojiListDetailRenderer, // User Emoji List Detail (NIP-51)
+  10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)
+  10102: WikiRelaysDetailRenderer, // Good Wiki Relays Detail (NIP-51)
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
-  777: SpellDetailRenderer, // Spell Detail
+  30000: FollowSetDetailRenderer, // Follow Sets Detail (NIP-51)
+  30003: BookmarkSetDetailRenderer, // Bookmark Sets Detail (NIP-51)
+  30004: ArticleCurationSetDetailRenderer, // Article Curation Sets Detail (NIP-51)
+  30005: VideoCurationSetDetailRenderer, // Video Curation Sets Detail (NIP-51)
+  30006: PictureCurationSetDetailRenderer, // Picture Curation Sets Detail (NIP-51)
+  30007: KindMuteSetDetailRenderer, // Kind Mute Sets Detail (NIP-51)
+  30015: InterestSetDetailRenderer, // Interest Sets Detail (NIP-51)
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30030: EmojiSetDetailRenderer, // Emoji Sets Detail (NIP-30)
   30063: ZapstoreReleaseDetailRenderer, // Zapstore App Release Detail
@@ -186,6 +283,8 @@ const detailRenderers: Record<
   31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)
   31990: ApplicationHandlerDetailRenderer, // Application Handler Detail (NIP-89)
   32267: ZapstoreAppDetailRenderer, // Zapstore App Detail
+  39089: StarterPackDetailRenderer, // Starter Pack Detail (NIP-51)
+  39092: MediaStarterPackDetailRenderer, // Media Starter Pack Detail (NIP-51)
 };
 
 /**
