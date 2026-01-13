@@ -62,6 +62,43 @@ export function getTagValues(event: NostrEvent, tagName: string): string[] {
     .map((tag) => tag[1]);
 }
 
+/**
+ * Symbol used by applesauce to store hidden/decrypted tags on events.
+ * These tags are populated after decrypting NIP-51 list content.
+ */
+const HIDDEN_TAGS_SYMBOL = Symbol.for("hidden-tags");
+
+/**
+ * Get all tag values including hidden/encrypted tags (after decryption).
+ * This is useful for NIP-51 lists that may have private (encrypted) tags.
+ *
+ * @param event - Nostr event that may have hidden tags
+ * @param tagName - Tag name to extract values for (e.g., "t", "p", "a")
+ * @returns Array of all tag values (public + hidden), deduplicated
+ */
+export function getAllTagValues(event: NostrEvent, tagName: string): string[] {
+  // Get public tags
+  const publicValues = event.tags
+    .filter((tag) => tag[0] === tagName && tag[1])
+    .map((tag) => tag[1]);
+
+  // Check for hidden tags (populated by applesauce after decryption)
+  const hiddenTags = (event as any)[HIDDEN_TAGS_SYMBOL] as
+    | string[][]
+    | undefined;
+
+  if (hiddenTags && Array.isArray(hiddenTags)) {
+    const hiddenValues = hiddenTags
+      .filter((tag) => tag[0] === tagName && tag[1])
+      .map((tag) => tag[1]);
+
+    // Deduplicate and combine
+    return Array.from(new Set([...publicValues, ...hiddenValues]));
+  }
+
+  return publicValues;
+}
+
 export function getDisplayName(
   pubkey: string,
   metadata?: ProfileContent,
@@ -76,17 +113,50 @@ export function getDisplayName(
 }
 
 /**
- * Resolve $me and $contacts aliases in a Nostr filter (case-insensitive)
- * @param filter - Filter that may contain $me or $contacts aliases
- * @param accountPubkey - Current user's pubkey (for $me resolution)
- * @param contacts - Array of contact pubkeys (for $contacts resolution)
- * @returns Resolved filter with aliases replaced by actual pubkeys
+ * Options for resolving filter aliases
+ */
+export interface ResolveFilterAliasesOptions {
+  /** Current user's pubkey (for $me resolution) */
+  accountPubkey?: string;
+  /** Array of contact pubkeys (for $contacts resolution) */
+  contacts?: string[];
+  /** Array of hashtags from interest list (for $hashtags resolution) */
+  hashtags?: string[];
+}
+
+/**
+ * Resolve $me, $contacts, and $hashtags aliases in a Nostr filter (case-insensitive)
+ * @param filter - Filter that may contain aliases
+ * @param accountPubkey - Current user's pubkey (for $me resolution) - DEPRECATED, use options
+ * @param contacts - Array of contact pubkeys (for $contacts resolution) - DEPRECATED, use options
+ * @param options - Options object with all resolution data
+ * @returns Resolved filter with aliases replaced by actual values
  */
 export function resolveFilterAliases(
   filter: NostrFilter,
-  accountPubkey: string | undefined,
-  contacts: string[],
+  accountPubkey: string | undefined | ResolveFilterAliasesOptions,
+  contacts?: string[],
+  options?: ResolveFilterAliasesOptions,
 ): NostrFilter {
+  // Support both old signature and new options-based signature
+  let opts: ResolveFilterAliasesOptions;
+  if (typeof accountPubkey === "object" && accountPubkey !== null) {
+    // New signature: resolveFilterAliases(filter, options)
+    opts = accountPubkey;
+  } else {
+    // Old signature: resolveFilterAliases(filter, accountPubkey, contacts, options?)
+    opts = {
+      accountPubkey: accountPubkey as string | undefined,
+      contacts: contacts ?? [],
+      ...options,
+    };
+  }
+
+  const {
+    accountPubkey: pubkey,
+    contacts: contactList = [],
+    hashtags = [],
+  } = opts;
   const resolved = { ...filter };
 
   // Resolve aliases in authors array
@@ -96,11 +166,11 @@ export function resolveFilterAliases(
     for (const author of resolved.authors) {
       const normalized = author.toLowerCase();
       if (normalized === "$me") {
-        if (accountPubkey) {
-          resolvedAuthors.push(accountPubkey);
+        if (pubkey) {
+          resolvedAuthors.push(pubkey);
         }
       } else if (normalized === "$contacts") {
-        resolvedAuthors.push(...contacts);
+        resolvedAuthors.push(...contactList);
       } else {
         resolvedAuthors.push(author);
       }
@@ -117,11 +187,11 @@ export function resolveFilterAliases(
     for (const pTag of resolved["#p"]) {
       const normalized = pTag.toLowerCase();
       if (normalized === "$me") {
-        if (accountPubkey) {
-          resolvedPTags.push(accountPubkey);
+        if (pubkey) {
+          resolvedPTags.push(pubkey);
         }
       } else if (normalized === "$contacts") {
-        resolvedPTags.push(...contacts);
+        resolvedPTags.push(...contactList);
       } else {
         resolvedPTags.push(pTag);
       }
@@ -138,11 +208,11 @@ export function resolveFilterAliases(
     for (const pTag of resolved["#P"]) {
       const normalized = pTag.toLowerCase();
       if (normalized === "$me") {
-        if (accountPubkey) {
-          resolvedPTagsUppercase.push(accountPubkey);
+        if (pubkey) {
+          resolvedPTagsUppercase.push(pubkey);
         }
       } else if (normalized === "$contacts") {
-        resolvedPTagsUppercase.push(...contacts);
+        resolvedPTagsUppercase.push(...contactList);
       } else {
         resolvedPTagsUppercase.push(pTag);
       }
@@ -150,6 +220,23 @@ export function resolveFilterAliases(
 
     // Deduplicate
     resolved["#P"] = Array.from(new Set(resolvedPTagsUppercase));
+  }
+
+  // Resolve $hashtags alias in #t tags array
+  if (resolved["#t"] && resolved["#t"].length > 0) {
+    const resolvedTTags: string[] = [];
+
+    for (const tTag of resolved["#t"]) {
+      const normalized = tTag.toLowerCase();
+      if (normalized === "$hashtags") {
+        resolvedTTags.push(...hashtags);
+      } else {
+        resolvedTTags.push(tTag);
+      }
+    }
+
+    // Deduplicate
+    resolved["#t"] = Array.from(new Set(resolvedTTags));
   }
 
   return resolved;
