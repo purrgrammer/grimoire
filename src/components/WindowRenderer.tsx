@@ -30,6 +30,9 @@ const ConnViewer = lazy(() => import("./ConnViewer"));
 const ChatViewer = lazy(() =>
   import("./ChatViewer").then((m) => ({ default: m.ChatViewer })),
 );
+const GroupListViewer = lazy(() =>
+  import("./GroupListViewer").then((m) => ({ default: m.GroupListViewer })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -180,6 +183,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             customTitle={window.customTitle}
           />
         );
+        break;
+      case "chats":
+        content = <GroupListViewer />;
         break;
       case "spells":
         content = <SpellsViewer />;

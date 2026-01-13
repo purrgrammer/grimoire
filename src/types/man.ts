@@ -363,7 +363,7 @@ export const manPages: Record<string, ManPageEntry> = {
       "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
       "chat naddr1...                            Join NIP-53 live activity chat",
     ],
-    seeAlso: ["profile", "open", "req", "live"],
+    seeAlso: ["chats", "profile", "open", "req", "live"],
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
@@ -373,6 +373,18 @@ export const manPages: Record<string, ManPageEntry> = {
         identifier: result.identifier,
       };
     },
+  },
+  chats: {
+    name: "chats",
+    section: "1",
+    synopsis: "chats",
+    description:
+      "Open a multi-room chat interface showing all your NIP-29 groups. Displays groups from your kind 10009 (User Group List) event, sorted by most recent activity. Click any group to view its chat. Provides an overview of all your group conversations in one place.",
+    examples: ["chats    Open multi-room chat interface"],
+    seeAlso: ["chat", "profile"],
+    appId: "chats",
+    category: "Nostr",
+    defaultProps: {},
   },
   profile: {
     name: "profile",
