@@ -113,11 +113,13 @@ export function GroupListViewer() {
     () =>
       activePubkey
         ? eventStore.replaceable(10009, activePubkey).pipe(
-            map((events) => {
-              console.log(
-                `[GroupListViewer] Loaded ${events.length} group list events`,
-              );
-              return events[0]; // replaceable() returns array, take most recent
+            map((event) => {
+              if (event) {
+                console.log(
+                  `[GroupListViewer] Loaded group list event: ${event.id.slice(0, 8)}...`,
+                );
+              }
+              return event;
             }),
           )
         : undefined,

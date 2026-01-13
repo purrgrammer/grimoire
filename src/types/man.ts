@@ -350,20 +350,21 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat <identifier>",
     description:
-      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups and NIP-53 live activity chat. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event to join its chat.",
+      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, NIP-53 live activity chat, and multi-room group list interface. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event. For multi-room interface, pass the naddr of a kind 10009 group list event.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "NIP-29 group (relay'group-id) or NIP-53 live activity (naddr1...)",
+          "NIP-29 group (relay'group-id), NIP-53 live activity (naddr1... kind 30311), or group list (naddr1... kind 10009)",
       },
     ],
     examples: [
       "chat relay.example.com'bitcoin-dev        Join NIP-29 relay group",
       "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
-      "chat naddr1...                            Join NIP-53 live activity chat",
+      "chat naddr1...30311...                    Join NIP-53 live activity chat",
+      "chat naddr1...10009...                    Open multi-room group list interface",
     ],
-    seeAlso: ["chats", "profile", "open", "req", "live"],
+    seeAlso: ["profile", "open", "req", "live"],
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
@@ -373,18 +374,6 @@ export const manPages: Record<string, ManPageEntry> = {
         identifier: result.identifier,
       };
     },
-  },
-  chats: {
-    name: "chats",
-    section: "1",
-    synopsis: "chats",
-    description:
-      "Open a multi-room chat interface showing all your NIP-29 groups. Displays groups from your kind 10009 (User Group List) event, sorted by most recent activity. Click any group to view its chat. Provides an overview of all your group conversations in one place.",
-    examples: ["chats    Open multi-room chat interface"],
-    seeAlso: ["chat", "profile"],
-    appId: "chats",
-    category: "Nostr",
-    defaultProps: {},
   },
   profile: {
     name: "profile",

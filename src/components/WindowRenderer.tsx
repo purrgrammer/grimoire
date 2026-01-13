@@ -176,16 +176,18 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         content = <ConnViewer />;
         break;
       case "chat":
-        content = (
-          <ChatViewer
-            protocol={window.props.protocol}
-            identifier={window.props.identifier}
-            customTitle={window.customTitle}
-          />
-        );
-        break;
-      case "chats":
-        content = <GroupListViewer />;
+        // Check if this is a group list (kind 10009) - render multi-room interface
+        if (window.props.identifier?.type === "group-list") {
+          content = <GroupListViewer />;
+        } else {
+          content = (
+            <ChatViewer
+              protocol={window.props.protocol}
+              identifier={window.props.identifier}
+              customTitle={window.customTitle}
+            />
+          );
+        }
         break;
       case "spells":
         content = <SpellsViewer />;

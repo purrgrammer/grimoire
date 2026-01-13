@@ -179,6 +179,22 @@ export interface ChannelIdentifier {
 }
 
 /**
+ * Group list identifier (kind 10009)
+ * Used to open multi-room chat interface
+ */
+export interface GroupListIdentifier {
+  type: "group-list";
+  /** Address pointer for the group list (kind 10009) */
+  value: {
+    kind: 10009;
+    pubkey: string;
+    identifier: string;
+  };
+  /** Relay hints from naddr encoding */
+  relays?: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -187,7 +203,8 @@ export type ProtocolIdentifier =
   | LiveActivityIdentifier
   | DMIdentifier
   | NIP05Identifier
-  | ChannelIdentifier;
+  | ChannelIdentifier
+  | GroupListIdentifier;
 
 /**
  * Chat command parsing result
