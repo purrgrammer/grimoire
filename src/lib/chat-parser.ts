@@ -1,7 +1,8 @@
-import type { ChatCommandResult } from "@/types/chat";
+import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
+import { nip19 } from "nostr-tools";
 // Import other adapters as they're implemented
 // import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
@@ -32,6 +33,31 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     // Looks like "relay.com" "group-id" split by shell-quote
     // Rejoin with apostrophe for NIP-29 format
     identifier = `${args[0]}'${args[1]}`;
+  }
+
+  // Check for kind 10009 (group list) naddr - open multi-room interface
+  if (identifier.startsWith("naddr1")) {
+    try {
+      const decoded = nip19.decode(identifier);
+      if (decoded.type === "naddr" && decoded.data.kind === 10009) {
+        const groupListIdentifier: GroupListIdentifier = {
+          type: "group-list",
+          value: {
+            kind: 10009,
+            pubkey: decoded.data.pubkey,
+            identifier: decoded.data.identifier,
+          },
+          relays: decoded.data.relays,
+        };
+        return {
+          protocol: "nip-29", // Use nip-29 as the protocol designation
+          identifier: groupListIdentifier,
+          adapter: null, // No adapter needed for group list view
+        };
+      }
+    } catch (e) {
+      // Not a valid naddr, continue to adapter parsing
+    }
   }
 
   // Try each adapter in priority order
@@ -68,6 +94,9 @@ Currently supported formats:
   - naddr1... (NIP-53 live activity chat, kind 30311)
     Example:
       chat naddr1... (live stream address)
+  - naddr1... (Multi-room group list, kind 10009)
+    Example:
+      chat naddr1... (group list address)
 
 More formats coming soon:
   - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
