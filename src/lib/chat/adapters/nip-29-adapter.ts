@@ -13,7 +13,7 @@ import type {
   ParticipantRole,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import type { ChatAction } from "@/types/chat-actions";
+import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
@@ -493,9 +493,84 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
   /**
    * Get available actions for NIP-29 groups
-   * Returns simple join/leave commands without parameters
+   * Filters actions based on user's membership status:
+   * - /join: only shown when user is NOT a member/admin
+   * - /leave: only shown when user IS a member
    */
-  getActions(): ChatAction[] {
+  getActions(options?: GetActionsOptions): ChatAction[] {
+    const actions: ChatAction[] = [];
+
+    // Check if we have context to filter actions
+    if (!options?.conversation || !options?.activePubkey) {
+      // No context - return all actions
+      return this.getAllActions();
+    }
+
+    const { conversation, activePubkey } = options;
+
+    // Find user's participant info
+    const userParticipant = conversation.participants.find(
+      (p) => p.pubkey === activePubkey,
+    );
+
+    const isMember = !!userParticipant;
+
+    // Add /join if user is NOT a member
+    if (!isMember) {
+      actions.push({
+        name: "join",
+        description: "Request to join the group",
+        handler: async (context) => {
+          try {
+            await this.joinConversation(context.conversation);
+            return {
+              success: true,
+              message: "Join request sent",
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message:
+                error instanceof Error ? error.message : "Failed to join group",
+            };
+          }
+        },
+      });
+    }
+
+    // Add /leave if user IS a member
+    if (isMember) {
+      actions.push({
+        name: "leave",
+        description: "Leave the group",
+        handler: async (context) => {
+          try {
+            await this.leaveConversation(context.conversation);
+            return {
+              success: true,
+              message: "You left the group",
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to leave group",
+            };
+          }
+        },
+      });
+    }
+
+    return actions;
+  }
+
+  /**
+   * Get all possible actions (used when no context available)
+   * @private
+   */
+  private getAllActions(): ChatAction[] {
     return [
       {
         name: "join",

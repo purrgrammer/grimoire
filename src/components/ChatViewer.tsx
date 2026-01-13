@@ -333,18 +333,6 @@ export function ChatViewer({
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
-  // Slash command search for action autocomplete
-  const searchCommands = useCallback(
-    async (query: string) => {
-      const availableActions = adapter.getActions();
-      const lowerQuery = query.toLowerCase();
-      return availableActions.filter((action) =>
-        action.name.toLowerCase().includes(lowerQuery),
-      );
-    },
-    [adapter],
-  );
-
   // State for retry trigger
   const [retryCount, setRetryCount] = useState(0);
 
@@ -376,6 +364,22 @@ export function ChatViewer({
     conversationResult?.status === "success"
       ? conversationResult.conversation
       : null;
+
+  // Slash command search for action autocomplete
+  // Context-aware: only shows relevant actions based on membership status
+  const searchCommands = useCallback(
+    async (query: string) => {
+      const availableActions = adapter.getActions({
+        conversation: conversation || undefined,
+        activePubkey: activeAccount?.pubkey,
+      });
+      const lowerQuery = query.toLowerCase();
+      return availableActions.filter((action) =>
+        action.name.toLowerCase().includes(lowerQuery),
+      );
+    },
+    [adapter, conversation, activeAccount],
+  );
 
   // Cleanup subscriptions when conversation changes or component unmounts
   useEffect(() => {

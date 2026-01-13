@@ -14,6 +14,7 @@ import type {
   ChatAction,
   ChatActionContext,
   ChatActionResult,
+  GetActionsOptions,
 } from "@/types/chat-actions";
 
 /**
@@ -150,9 +151,10 @@ export abstract class ChatProtocolAdapter {
   /**
    * Get available actions for this protocol
    * Actions are protocol-specific slash commands like /join, /leave, etc.
+   * Can be filtered based on conversation and user context
    * Returns empty array by default
    */
-  getActions(): ChatAction[] {
+  getActions(_options?: GetActionsOptions): ChatAction[] {
     return [];
   }
 
@@ -164,7 +166,11 @@ export abstract class ChatProtocolAdapter {
     actionName: string,
     context: ChatActionContext,
   ): Promise<ChatActionResult> {
-    const action = this.getActions().find((a) => a.name === actionName);
+    // Get actions with context for validation
+    const action = this.getActions({
+      conversation: context.conversation,
+      activePubkey: context.activePubkey,
+    }).find((a) => a.name === actionName);
 
     if (!action) {
       return {

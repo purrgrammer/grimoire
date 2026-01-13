@@ -35,3 +35,14 @@ export interface ChatAction {
   /** Handler function */
   handler: (context: ChatActionContext) => Promise<ChatActionResult>;
 }
+
+/**
+ * Options for filtering available actions
+ */
+export interface GetActionsOptions {
+  /** Current conversation */
+  conversation?: Conversation;
+
+  /** Active user's pubkey */
+  activePubkey?: string;
+}
