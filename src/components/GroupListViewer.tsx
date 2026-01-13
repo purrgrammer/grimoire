@@ -1,8 +1,7 @@
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { map } from "rxjs/operators";
 import { Loader2 } from "lucide-react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
@@ -141,6 +140,38 @@ export function GroupListViewer() {
     groupId: string;
     relayUrl: string;
   } | null>(null);
+
+  // State for sidebar width
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [isResizing, setIsResizing] = useState(false);
+
+  // Handle resize
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+
+      const startX = e.clientX;
+      const startWidth = sidebarWidth;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const newWidth = startWidth + deltaX;
+        // Clamp between 200px and 500px
+        setSidebarWidth(Math.max(200, Math.min(500, newWidth)));
+      };
+
+      const handleMouseUp = () => {
+        setIsResizing(false);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [sidebarWidth],
+  );
 
   // Load user's kind 10009 (group list) event
   const groupListEvent = use$(
@@ -355,10 +386,13 @@ export function GroupListViewer() {
   }
 
   return (
-    <PanelGroup direction="horizontal" className="h-full">
-      {/* Left panel: Group list */}
-      <Panel defaultSize={25} minSize={15} maxSize={40}>
-        <div className="flex h-full flex-col overflow-y-auto">
+    <div className="flex h-full">
+      {/* Left sidebar: Group list */}
+      <aside
+        className="flex flex-col border-r bg-background"
+        style={{ width: sidebarWidth }}
+      >
+        <div className="flex-1 overflow-y-auto">
           {groupsWithRecency.map((group) => (
             <GroupListItem
               key={`${group.relayUrl}'${group.groupId}`}
@@ -376,13 +410,19 @@ export function GroupListViewer() {
             />
           ))}
         </div>
-      </Panel>
+      </aside>
 
-      {/* Resizable handle */}
-      <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
+      {/* Resize handle */}
+      <div
+        className={cn(
+          "w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors",
+          isResizing && "bg-primary",
+        )}
+        onMouseDown={handleMouseDown}
+      />
 
       {/* Right panel: Chat view */}
-      <Panel defaultSize={75}>
+      <div className="flex-1 min-w-0">
         {selectedGroup ? (
           <MemoizedChatViewer
             groupId={selectedGroup.groupId}
@@ -393,7 +433,7 @@ export function GroupListViewer() {
             Select a group to view chat
           </div>
         )}
-      </Panel>
-    </PanelGroup>
+      </div>
+    </div>
   );
 }
