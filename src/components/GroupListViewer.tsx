@@ -145,7 +145,7 @@ export function GroupListViewer() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
 
-  // Handle resize
+  // Handle resize with proper cleanup
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -169,29 +169,31 @@ export function GroupListViewer() {
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+
+      // Cleanup listeners on component unmount (stored in ref)
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
     },
     [sidebarWidth],
   );
 
+  // Cleanup resize event listeners on unmount
+  useEffect(() => {
+    return () => {
+      setIsResizing(false);
+    };
+  }, []);
+
   // Load user's kind 10009 (group list) event
   const groupListEvent = use$(
     () =>
-      activePubkey
-        ? eventStore.replaceable(10009, activePubkey).pipe(
-            map((event) => {
-              if (event) {
-                console.log(
-                  `[GroupListViewer] Loaded group list event: ${event.id.slice(0, 8)}...`,
-                );
-              }
-              return event;
-            }),
-          )
-        : undefined,
+      activePubkey ? eventStore.replaceable(10009, activePubkey) : undefined,
     [activePubkey],
   );
 
-  // Extract groups from the event
+  // Extract groups from the event with relay URL validation
   const groups = useMemo(() => {
     if (!groupListEvent) return [];
 
@@ -202,14 +204,28 @@ export function GroupListViewer() {
 
     for (const tag of groupListEvent.tags) {
       if (tag[0] === "group" && tag[1] && tag[2]) {
-        extractedGroups.push({
-          groupId: tag[1],
-          relayUrl: tag[2],
-        });
+        // Validate relay URL before adding
+        const relayUrl = tag[2];
+        try {
+          const url = new URL(
+            relayUrl.startsWith("ws://") || relayUrl.startsWith("wss://")
+              ? relayUrl
+              : `wss://${relayUrl}`,
+          );
+          // Only accept ws:// or wss:// protocols
+          if (url.protocol === "ws:" || url.protocol === "wss:") {
+            extractedGroups.push({
+              groupId: tag[1],
+              relayUrl: url.toString(),
+            });
+          }
+        } catch {
+          // Invalid URL, skip this group
+          continue;
+        }
       }
     }
 
-    console.log(`[GroupListViewer] Found ${extractedGroups.length} groups`);
     return extractedGroups;
   }, [groupListEvent]);
 
@@ -222,25 +238,11 @@ export function GroupListViewer() {
 
     if (groupIds.length === 0) return;
 
-    console.log(
-      `[GroupListViewer] Subscribing to metadata for ${groupIds.length} groups from ${relayUrls.length} relays`,
-    );
-
     const subscription = pool
       .subscription(relayUrls, [{ kinds: [39000], "#d": groupIds }], {
         eventStore,
       })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            console.log("[GroupListViewer] EOSE received for metadata");
-          } else {
-            console.log(
-              `[GroupListViewer] Received metadata: ${response.id.slice(0, 8)}...`,
-            );
-          }
-        },
-      });
+      .subscribe();
 
     return () => {
       subscription.unsubscribe();
@@ -267,17 +269,14 @@ export function GroupListViewer() {
   }, [groups]);
 
   // Subscribe to latest messages (kind 9) for all groups to get recency
+  // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
   useEffect(() => {
     if (groups.length === 0) return;
 
     const relayUrls = Array.from(new Set(groups.map((g) => g.relayUrl)));
     const groupIds = groups.map((g) => g.groupId);
 
-    console.log(
-      `[GroupListViewer] Subscribing to latest messages for ${groupIds.length} groups`,
-    );
-
-    // Subscribe to latest message from each group (limit 1 per group)
+    // One filter per group to ensure limit:1 applies per group, not globally
     const subscription = pool
       .subscription(
         relayUrls,
@@ -288,15 +287,7 @@ export function GroupListViewer() {
         })),
         { eventStore },
       )
-      .subscribe({
-        next: (response) => {
-          if (typeof response !== "string") {
-            console.log(
-              `[GroupListViewer] Received latest message: ${response.id.slice(0, 8)}...`,
-            );
-          }
-        },
-      });
+      .subscribe();
 
     return () => {
       subscription.unsubscribe();
