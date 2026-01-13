@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { nip19 } from "nostr-tools";
 import type { NostrEvent } from "@/types/nostr";
 import type { ParsedSpellbook } from "@/types/spell";
-import { useProfile } from "@/hooks/useProfile";
 import { relayListCache } from "@/services/relay-list-cache";
 
 interface ShareSpellbookDialogProps {
@@ -29,11 +28,10 @@ export function ShareSpellbookDialog({
   event,
   spellbook,
 }: ShareSpellbookDialogProps) {
-  const profile = useProfile(event.pubkey);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [naddr, setNaddr] = useState<string>("");
 
-  const actor = profile?.nip05 || nip19.npubEncode(event.pubkey);
+  const actor = nip19.npubEncode(event.pubkey);
   const webLink = `${window.location.origin}/${actor}/${spellbook.slug}`;
 
   useEffect(() => {
