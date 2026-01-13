@@ -282,8 +282,7 @@ body.animating-layout
 /* TipTap Editor Styles */
 .ProseMirror {
   min-height: 1.25rem;
-  display: flex;
-  align-items: center;
+  line-height: 1.25rem;
 }
 
 .ProseMirror:focus {
@@ -292,8 +291,7 @@ body.animating-layout
 
 .ProseMirror p {
   margin: 0;
-  flex: 1;
-  min-width: 0;
+  line-height: 1.25rem;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
