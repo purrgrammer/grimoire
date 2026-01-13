@@ -584,6 +584,9 @@ export const MentionEditor = forwardRef<
             node.content?.forEach((child: any) => {
               if (child.type === "text") {
                 text += child.text;
+              } else if (child.type === "hardBreak") {
+                // Preserve newlines from Shift+Enter
+                text += "\n";
               } else if (child.type === "mention") {
                 const pubkey = child.attrs?.id;
                 if (pubkey) {
