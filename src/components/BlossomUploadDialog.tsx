@@ -12,6 +12,7 @@ import {
   Archive,
   CheckCircle,
   XCircle,
+  Globe,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +34,16 @@ import {
   type UploadResult,
 } from "@/services/blossom";
 import type { Subscription } from "rxjs";
+
+/**
+ * Well-known public Blossom servers that can be used as fallbacks
+ * when the user doesn't have their own server list configured
+ */
+const FALLBACK_SERVERS = [
+  "https://blossom.primal.net",
+  "https://nostr.download",
+  "https://files.v0l.io",
+];
 
 interface BlossomUploadDialogProps {
   /** Whether the dialog is open */
@@ -75,6 +86,7 @@ export function BlossomUploadDialog({
     new Set(),
   );
   const [loadingServers, setLoadingServers] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -93,26 +105,46 @@ export function BlossomUploadDialog({
       setUploadResults([]);
       setUploadErrors([]);
       setUploading(false);
+      setUsingFallback(false);
     }
   }, [open]);
 
+  // Helper to set fallback servers
+  const useFallbackServers = useCallback(() => {
+    setServers(FALLBACK_SERVERS);
+    setSelectedServers(new Set([FALLBACK_SERVERS[0]])); // Select first by default
+    setUsingFallback(true);
+    setLoadingServers(false);
+  }, []);
+
   // Fetch servers when dialog opens
   useEffect(() => {
-    if (!open || !pubkey) {
+    if (!open) {
       setLoadingServers(false);
       return;
     }
 
+    // If no pubkey (not logged in), use fallback servers
+    if (!pubkey) {
+      useFallbackServers();
+      return;
+    }
+
     setLoadingServers(true);
+    setUsingFallback(false);
     let subscription: Subscription | null = null;
+    let foundUserServers = false;
 
     // Check existing event first
     const event = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
     if (event) {
       const s = getServersFromEvent(event);
-      setServers(s);
-      setSelectedServers(new Set(s)); // Select all by default
-      setLoadingServers(false);
+      if (s.length > 0) {
+        setServers(s);
+        setSelectedServers(new Set(s)); // Select all by default
+        setLoadingServers(false);
+        foundUserServers = true;
+      }
     }
 
     // Also fetch from network
@@ -125,21 +157,31 @@ export function BlossomUploadDialog({
         const e = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
         if (e) {
           const s = getServersFromEvent(e);
-          setServers(s);
-          setSelectedServers((prev) => (prev.size === 0 ? new Set(s) : prev));
+          if (s.length > 0) {
+            setServers(s);
+            setSelectedServers((prev) => (prev.size === 0 ? new Set(s) : prev));
+            setUsingFallback(false);
+            foundUserServers = true;
+          }
         }
         setLoadingServers(false);
       },
       error: () => setLoadingServers(false),
     });
 
-    const timeout = setTimeout(() => setLoadingServers(false), 3000);
+    // After timeout, use fallbacks if no user servers found
+    const timeout = setTimeout(() => {
+      setLoadingServers(false);
+      if (!foundUserServers) {
+        useFallbackServers();
+      }
+    }, 3000);
 
     return () => {
       subscription?.unsubscribe();
       clearTimeout(timeout);
     };
-  }, [open, pubkey, eventStore]);
+  }, [open, pubkey, eventStore, useFallbackServers]);
 
   // Create preview URL for selected file
   useEffect(() => {
@@ -341,12 +383,20 @@ export function BlossomUploadDialog({
             <div className="flex items-center justify-center py-4">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
-          ) : servers.length > 0 ? (
+          ) : (
             <div className="border rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">
-                  Servers ({selectedServers.size}/{servers.length})
-                </span>
+                <div className="flex items-center gap-2">
+                  {usingFallback ? (
+                    <Globe className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <HardDrive className="size-3.5 text-muted-foreground" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {usingFallback ? "Public Servers" : "Your Servers"} (
+                    {selectedServers.size}/{servers.length})
+                  </span>
+                </div>
                 <div className="flex gap-1">
                   <Button
                     variant="ghost"
@@ -368,6 +418,11 @@ export function BlossomUploadDialog({
                   </Button>
                 </div>
               </div>
+              {usingFallback && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  No server list found. Using public servers.
+                </p>
+              )}
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {servers.map((server) => (
                   <label
@@ -379,23 +434,17 @@ export function BlossomUploadDialog({
                       onCheckedChange={() => toggleServer(server)}
                       disabled={uploading}
                     />
-                    <HardDrive className="size-3.5 text-muted-foreground flex-shrink-0" />
+                    {usingFallback ? (
+                      <Globe className="size-3.5 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <HardDrive className="size-3.5 text-muted-foreground flex-shrink-0" />
+                    )}
                     <span className="font-mono text-xs truncate flex-1">
                       {server}
                     </span>
                   </label>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="border rounded-lg p-4 text-center">
-              <HardDrive className="size-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                No Blossom servers configured
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Publish a kind 10063 server list to use this feature
-              </p>
             </div>
           )}
 
