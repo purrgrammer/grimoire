@@ -124,9 +124,9 @@ export function BlossomUploadDialog({
       return;
     }
 
-    // If no pubkey (not logged in), use fallback servers
+    // If no pubkey (not logged in), can't upload - auth required
     if (!pubkey) {
-      useFallbackServers();
+      setLoadingServers(false);
       return;
     }
 
