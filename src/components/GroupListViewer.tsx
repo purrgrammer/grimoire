@@ -74,7 +74,7 @@ const GroupListItem = memo(function GroupListItem({
       </div>
       {/* Last message preview - hide images and event embeds */}
       {lastMessageAuthor && lastMessageContent && (
-        <div className="text-xs text-muted-foreground truncate">
+        <div className="text-xs text-muted-foreground truncate line-clamp-1">
           <UserName
             pubkey={lastMessageAuthor}
             className="text-xs font-medium"
@@ -82,7 +82,7 @@ const GroupListItem = memo(function GroupListItem({
           :{" "}
           <span className="inline truncate">
             <RichText
-              content={lastMessageContent}
+              event={group.lastMessage}
               className="inline"
               options={{
                 showImages: false,
