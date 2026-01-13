@@ -54,10 +54,13 @@ export function InterestListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Sparkles className="size-4 text-purple-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <Sparkles className="size-4 text-muted-foreground" />
           <span>Interests</span>
-        </div>
+        </ClickableEventTitle>
 
         {hashtags.length > 0 && (
           <HashtagListPreview hashtags={hashtags} previewLimit={8} />
@@ -83,7 +86,7 @@ export function InterestListDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <Sparkles className="size-6 text-purple-500" />
+        <Sparkles className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Interests</span>
       </div>
 
@@ -95,7 +98,7 @@ export function InterestListDetailRenderer({ event }: { event: NostrEvent }) {
         <EventRefListFull
           addressPointers={interestSets}
           label="Interest Sets"
-          icon={<Sparkles className="size-5 text-purple-500" />}
+          icon={<Sparkles className="size-5" />}
         />
       )}
 
@@ -124,7 +127,7 @@ export function InterestSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Sparkles className="size-4 text-purple-500" />
+          <Sparkles className="size-4 text-muted-foreground" />
           <span>{title}</span>
         </ClickableEventTitle>
 
@@ -161,7 +164,7 @@ export function InterestSetDetailRenderer({ event }: { event: NostrEvent }) {
           />
         )}
         <div className="flex items-center gap-2">
-          <Sparkles className="size-6 text-purple-500" />
+          <Sparkles className="size-6 text-muted-foreground" />
           <span className="text-lg font-semibold">{title}</span>
         </div>
         {description && (

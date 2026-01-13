@@ -1,6 +1,10 @@
 import { MessageCircle, Hash } from "lucide-react";
 import { getEventPointerFromETag } from "applesauce-core/helpers";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { EventRefListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer } from "nostr-tools/nip19";
@@ -41,10 +45,13 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <MessageCircle className="size-4 text-cyan-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <MessageCircle className="size-4 text-muted-foreground" />
           <span>Public Channels</span>
-        </div>
+        </ClickableEventTitle>
 
         <div className="flex items-center gap-1.5 text-xs">
           <Hash className="size-3.5 text-muted-foreground" />
@@ -64,7 +71,7 @@ export function ChannelListDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <MessageCircle className="size-6 text-cyan-500" />
+        <MessageCircle className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Public Channels</span>
       </div>
 

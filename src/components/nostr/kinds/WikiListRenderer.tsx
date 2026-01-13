@@ -1,7 +1,11 @@
 import { BookOpen, Users, Server } from "lucide-react";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getRelaysFromList } from "applesauce-common/helpers/lists";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { PubkeyListPreview, PubkeyListFull } from "../lists";
 import { RelayLink } from "../RelayLink";
 import type { NostrEvent } from "@/types/nostr";
@@ -26,10 +30,13 @@ export function WikiAuthorsRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <BookOpen className="size-4 text-teal-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <BookOpen className="size-4 text-muted-foreground" />
           <span>Wiki Authors</span>
-        </div>
+        </ClickableEventTitle>
 
         <PubkeyListPreview
           pubkeys={pubkeys}
@@ -51,7 +58,7 @@ export function WikiAuthorsDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <BookOpen className="size-6 text-teal-500" />
+        <BookOpen className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Trusted Wiki Authors</span>
       </div>
 
@@ -84,10 +91,13 @@ export function WikiRelaysRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <BookOpen className="size-4 text-teal-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <BookOpen className="size-4 text-muted-foreground" />
           <span>Wiki Relays</span>
-        </div>
+        </ClickableEventTitle>
 
         <div className="flex items-center gap-1.5 text-xs">
           <Server className="size-3.5 text-muted-foreground" />
@@ -107,7 +117,7 @@ export function WikiRelaysDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <BookOpen className="size-6 text-teal-500" />
+        <BookOpen className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Trusted Wiki Relays</span>
       </div>
 

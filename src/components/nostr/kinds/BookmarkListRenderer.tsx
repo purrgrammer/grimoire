@@ -4,7 +4,11 @@ import {
   getEventPointerFromETag,
   getAddressPointerFromATag,
 } from "applesauce-core/helpers";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { EventRefListFull, UrlListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -66,10 +70,13 @@ export function BookmarkListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Bookmark className="size-4 text-amber-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <Bookmark className="size-4 text-muted-foreground" />
           <span>Bookmarks</span>
-        </div>
+        </ClickableEventTitle>
 
         <div className="flex flex-col gap-1.5 text-xs">
           {(eventPointers.length > 0 || addressPointers.length > 0) && (
@@ -103,7 +110,7 @@ export function BookmarkListDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <Bookmark className="size-6 text-amber-500" />
+        <Bookmark className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Bookmarks</span>
       </div>
 

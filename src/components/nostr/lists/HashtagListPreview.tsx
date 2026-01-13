@@ -1,5 +1,6 @@
 import { Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
 
 interface HashtagListPreviewProps {
   hashtags: string[];
@@ -41,12 +42,7 @@ export function HashtagListPreview({
       </div>
       <div className="flex flex-wrap gap-1">
         {previewTags.map((tag) => (
-          <span
-            key={tag}
-            className="text-xs px-1.5 py-0.5 bg-muted rounded text-muted-foreground"
-          >
-            #{tag}
-          </span>
+          <Label key={tag}>#{tag}</Label>
         ))}
         {remaining > 0 && (
           <span className="text-xs text-muted-foreground">
@@ -84,19 +80,16 @@ export function HashtagListFull({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-center gap-2">
-        <Hash className="size-5" />
+        <Hash className="size-5 text-muted-foreground" />
         <span className="font-semibold">
           {label} ({hashtags.length})
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {hashtags.map((tag) => (
-          <span
-            key={tag}
-            className="text-sm px-2 py-1 bg-muted rounded text-muted-foreground"
-          >
+          <Label key={tag} size="md">
             #{tag}
-          </span>
+          </Label>
         ))}
       </div>
     </div>

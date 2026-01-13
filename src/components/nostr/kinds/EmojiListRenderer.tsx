@@ -2,7 +2,11 @@ import { Smile } from "lucide-react";
 import { getAddressPointerFromATag } from "applesauce-core/helpers";
 import { getEmojiTags } from "@/lib/emoji-helpers";
 import { CustomEmoji } from "@/components/nostr/CustomEmoji";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { EventRefListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
 import type { AddressPointer } from "nostr-tools/nip19";
@@ -49,10 +53,13 @@ export function EmojiListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Smile className="size-4 text-yellow-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <Smile className="size-4 text-muted-foreground" />
           <span>Emoji Preferences</span>
-        </div>
+        </ClickableEventTitle>
 
         {emojis.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center">
@@ -96,7 +103,7 @@ export function EmojiListDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <Smile className="size-6 text-yellow-500" />
+        <Smile className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Emoji Preferences</span>
       </div>
 
@@ -127,7 +134,7 @@ export function EmojiListDetailRenderer({ event }: { event: NostrEvent }) {
         <EventRefListFull
           addressPointers={emojiSets}
           label="Emoji Sets"
-          icon={<Smile className="size-5 text-yellow-500" />}
+          icon={<Smile className="size-5" />}
         />
       )}
 

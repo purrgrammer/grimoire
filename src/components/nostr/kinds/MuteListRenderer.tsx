@@ -1,7 +1,11 @@
 import { VolumeX, Users, Hash, Type, FileText } from "lucide-react";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getEventPointerFromETag } from "applesauce-core/helpers";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import {
   PubkeyListFull,
   HashtagListFull,
@@ -56,10 +60,13 @@ export function MuteListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <VolumeX className="size-4 text-destructive" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <VolumeX className="size-4 text-muted-foreground" />
           <span>Mute List</span>
-        </div>
+        </ClickableEventTitle>
 
         <div className="flex flex-col gap-1.5 text-xs">
           {mutedPubkeys.length > 0 && (
@@ -104,7 +111,7 @@ export function MuteListDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <VolumeX className="size-6 text-destructive" />
+        <VolumeX className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Mute List</span>
       </div>
 
@@ -112,7 +119,7 @@ export function MuteListDetailRenderer({ event }: { event: NostrEvent }) {
         <PubkeyListFull
           pubkeys={mutedPubkeys}
           label="Muted People"
-          icon={<Users className="size-5 text-destructive" />}
+          icon={<Users className="size-5" />}
         />
       )}
 
@@ -126,7 +133,7 @@ export function MuteListDetailRenderer({ event }: { event: NostrEvent }) {
         <EventRefListFull
           eventPointers={mutedThreads}
           label="Muted Threads"
-          icon={<FileText className="size-5 text-destructive" />}
+          icon={<FileText className="size-5" />}
         />
       )}
 

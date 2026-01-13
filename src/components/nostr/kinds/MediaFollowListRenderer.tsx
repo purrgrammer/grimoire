@@ -1,6 +1,10 @@
 import { Video, Users } from "lucide-react";
 import { getTagValues } from "@/lib/nostr-utils";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { PubkeyListPreview, PubkeyListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -24,10 +28,13 @@ export function MediaFollowListRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Video className="size-4 text-pink-500" />
+        <ClickableEventTitle
+          event={event}
+          className="flex items-center gap-1.5 text-sm font-medium"
+        >
+          <Video className="size-4 text-muted-foreground" />
           <span>Media Follows</span>
-        </div>
+        </ClickableEventTitle>
 
         <PubkeyListPreview
           pubkeys={pubkeys}
@@ -53,7 +60,7 @@ export function MediaFollowListDetailRenderer({
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <Video className="size-6 text-pink-500" />
+        <Video className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Media Follows</span>
       </div>
 

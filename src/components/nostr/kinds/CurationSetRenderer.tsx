@@ -154,7 +154,7 @@ export function ArticleCurationSetRenderer({ event }: BaseEventProps) {
   return (
     <GenericCurationSetRenderer
       event={event}
-      icon={<Library className="size-4 text-indigo-500" />}
+      icon={<Library className="size-4 text-muted-foreground" />}
       contentLabel="Articles"
     />
   );
@@ -171,7 +171,7 @@ export function ArticleCurationSetDetailRenderer({
   return (
     <GenericCurationSetDetailRenderer
       event={event}
-      icon={<Library className="size-6 text-indigo-500" />}
+      icon={<Library className="size-6 text-muted-foreground" />}
       contentLabel="Articles"
     />
   );
@@ -185,7 +185,7 @@ export function VideoCurationSetRenderer({ event }: BaseEventProps) {
   return (
     <GenericCurationSetRenderer
       event={event}
-      icon={<Video className="size-4 text-red-500" />}
+      icon={<Video className="size-4 text-muted-foreground" />}
       contentLabel="Videos"
     />
   );
@@ -202,7 +202,7 @@ export function VideoCurationSetDetailRenderer({
   return (
     <GenericCurationSetDetailRenderer
       event={event}
-      icon={<Video className="size-6 text-red-500" />}
+      icon={<Video className="size-6 text-muted-foreground" />}
       contentLabel="Videos"
     />
   );
@@ -216,7 +216,7 @@ export function PictureCurationSetRenderer({ event }: BaseEventProps) {
   return (
     <GenericCurationSetRenderer
       event={event}
-      icon={<Image className="size-4 text-emerald-500" />}
+      icon={<Image className="size-4 text-muted-foreground" />}
       contentLabel="Pictures"
     />
   );
@@ -233,7 +233,7 @@ export function PictureCurationSetDetailRenderer({
   return (
     <GenericCurationSetDetailRenderer
       event={event}
-      icon={<Image className="size-6 text-emerald-500" />}
+      icon={<Image className="size-6 text-muted-foreground" />}
       contentLabel="Pictures"
     />
   );

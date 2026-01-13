@@ -25,7 +25,7 @@ export function StarterPackRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Package className="size-4 text-orange-500" />
+          <Package className="size-4 text-muted-foreground" />
           <span>{title}</span>
         </ClickableEventTitle>
 
@@ -66,7 +66,7 @@ export function StarterPackDetailRenderer({ event }: { event: NostrEvent }) {
           />
         )}
         <div className="flex items-center gap-2">
-          <Package className="size-6 text-orange-500" />
+          <Package className="size-6 text-muted-foreground" />
           <span className="text-lg font-semibold">{title}</span>
         </div>
         {description && (
@@ -99,7 +99,7 @@ export function MediaStarterPackRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Video className="size-4 text-pink-500" />
+          <Video className="size-4 text-muted-foreground" />
           <span>{title}</span>
         </ClickableEventTitle>
 
@@ -144,7 +144,7 @@ export function MediaStarterPackDetailRenderer({
           />
         )}
         <div className="flex items-center gap-2">
-          <Video className="size-6 text-pink-500" />
+          <Video className="size-6 text-muted-foreground" />
           <span className="text-lg font-semibold">{title}</span>
         </div>
         {description && (

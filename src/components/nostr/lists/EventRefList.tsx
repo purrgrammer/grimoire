@@ -1,6 +1,7 @@
 import { FileText, ExternalLink } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
+import { EmbeddedEvent } from "../EmbeddedEvent";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 
 interface EventRefListPreviewProps {
@@ -96,17 +97,21 @@ interface EventRefListFullProps {
   label?: string;
   /** Icon for the header */
   icon?: React.ReactNode;
+  /** Show embedded events instead of links */
+  embedded?: boolean;
   className?: string;
 }
 
 /**
  * Full list of event references for detail views
+ * When embedded=true, shows full event renderers for each reference
  */
 export function EventRefListFull({
   eventPointers = [],
   addressPointers = [],
   label = "Items",
   icon,
+  embedded = true,
   className,
 }: EventRefListFullProps) {
   const total = eventPointers.length + addressPointers.length;
@@ -122,22 +127,41 @@ export function EventRefListFull({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-center gap-2">
-        {icon || <FileText className="size-5" />}
+        {icon || <FileText className="size-5 text-muted-foreground" />}
         <span className="font-semibold">
           {label} ({total})
         </span>
       </div>
-      <div className="flex flex-col gap-1">
-        {eventPointers.map((pointer) => (
-          <EventRefItem key={pointer.id} eventPointer={pointer} />
-        ))}
-        {addressPointers.map((pointer) => (
-          <EventRefItem
-            key={`${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`}
-            addressPointer={pointer}
-          />
-        ))}
-      </div>
+      {embedded ? (
+        <div className="flex flex-col gap-2">
+          {eventPointers.map((pointer) => (
+            <EmbeddedEvent
+              key={pointer.id}
+              eventId={pointer.id}
+              className="border border-muted rounded overflow-hidden"
+            />
+          ))}
+          {addressPointers.map((pointer) => (
+            <EmbeddedEvent
+              key={`${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`}
+              addressPointer={pointer}
+              className="border border-muted rounded overflow-hidden"
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {eventPointers.map((pointer) => (
+            <EventRefItem key={pointer.id} eventPointer={pointer} />
+          ))}
+          {addressPointers.map((pointer) => (
+            <EventRefItem
+              key={`${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`}
+              addressPointer={pointer}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

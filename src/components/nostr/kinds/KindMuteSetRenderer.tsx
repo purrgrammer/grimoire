@@ -27,7 +27,7 @@ export function KindMuteSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <VolumeX className="size-4 text-destructive" />
+          <VolumeX className="size-4 text-muted-foreground" />
           <span>Kind Mute</span>
         </ClickableEventTitle>
 
@@ -66,7 +66,7 @@ export function KindMuteSetDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <VolumeX className="size-6 text-destructive" />
+        <VolumeX className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Kind Mute Set</span>
       </div>
 
@@ -81,7 +81,7 @@ export function KindMuteSetDetailRenderer({ event }: { event: NostrEvent }) {
         <PubkeyListFull
           pubkeys={pubkeys}
           label="Muted Authors"
-          icon={<Users className="size-5 text-destructive" />}
+          icon={<Users className="size-5 text-muted-foreground" />}
         />
       ) : (
         <div className="text-sm text-muted-foreground">

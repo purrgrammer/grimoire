@@ -68,7 +68,7 @@ export function BookmarkSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Bookmark className="size-4 text-amber-500" />
+          <Bookmark className="size-4 text-muted-foreground" />
           <span>{title}</span>
         </ClickableEventTitle>
 
@@ -122,7 +122,7 @@ export function BookmarkSetDetailRenderer({ event }: { event: NostrEvent }) {
           />
         )}
         <div className="flex items-center gap-2">
-          <Bookmark className="size-6 text-amber-500" />
+          <Bookmark className="size-6 text-muted-foreground" />
           <span className="text-lg font-semibold">{title}</span>
         </div>
         {description && (

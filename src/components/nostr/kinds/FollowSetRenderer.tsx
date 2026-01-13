@@ -26,7 +26,7 @@ export function FollowSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Users className="size-4 text-accent" />
+          <Users className="size-4 text-muted-foreground" />
           <span>{title}</span>
         </ClickableEventTitle>
 
@@ -67,7 +67,7 @@ export function FollowSetDetailRenderer({ event }: { event: NostrEvent }) {
           />
         )}
         <div className="flex items-center gap-2">
-          <Users className="size-6 text-accent" />
+          <Users className="size-6 text-muted-foreground" />
           <span className="text-lg font-semibold">{title}</span>
         </div>
         {description && (
