@@ -6,6 +6,7 @@ import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
+import { parseBlossomCommand } from "@/lib/blossom-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -514,5 +515,64 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "spells",
     category: "Nostr",
     defaultProps: {},
+  },
+  blossom: {
+    name: "blossom",
+    section: "1",
+    synopsis: "blossom <subcommand> [options]",
+    description:
+      "Manage blob storage on Blossom servers. Upload, list, and manage media files using the Blossom protocol (BUD specs). Your Blossom server list is stored in a kind 10063 event.",
+    options: [
+      {
+        flag: "servers",
+        description:
+          "Show your configured Blossom servers from kind 10063 event",
+      },
+      {
+        flag: "server <url>",
+        description: "View info about a specific Blossom server",
+      },
+      {
+        flag: "upload",
+        description:
+          "Open file upload dialog to upload files to your Blossom servers",
+      },
+      {
+        flag: "list [pubkey]",
+        description:
+          "List blobs uploaded by a user. Supports npub, hex, NIP-05 (user@domain.com), or $me",
+      },
+      {
+        flag: "blob <sha256> [server]",
+        description:
+          "View details and preview of a specific blob by its SHA256 hash",
+      },
+      {
+        flag: "mirror <url> <server>",
+        description: "Mirror a blob from a URL to another Blossom server",
+      },
+      {
+        flag: "delete <sha256> <server>",
+        description: "Delete a blob from a Blossom server",
+      },
+    ],
+    examples: [
+      "blossom                              Show your Blossom servers",
+      "blossom servers                      Show your Blossom servers",
+      "blossom server blossom.primal.net    View specific server info",
+      "blossom upload                       Open file upload dialog",
+      "blossom list                         List your uploaded blobs",
+      "blossom list fiatjaf.com             List blobs for a NIP-05 user",
+      "blossom list npub1...                List blobs for another user",
+      "blossom blob abc123...               View blob details",
+      "blossom mirror https://... cdn.example.com  Mirror blob to server",
+    ],
+    seeAlso: ["profile"],
+    appId: "blossom",
+    category: "Nostr",
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      return await parseBlossomCommand(args, activeAccountPubkey);
+    },
+    defaultProps: { subcommand: "servers" },
   },
 };

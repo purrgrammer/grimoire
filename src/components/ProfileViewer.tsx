@@ -9,6 +9,8 @@ import {
   Inbox,
   Send,
   Wifi,
+  HardDrive,
+  ExternalLink,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
@@ -27,9 +29,10 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
+import { USER_SERVER_LIST_KIND, getServersFromEvent } from "@/services/blossom";
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -120,6 +123,48 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         : undefined,
     [eventStore, resolvedPubkey],
   );
+
+  // Blossom servers state (kind 10063)
+  const [blossomServers, setBlossomServers] = useState<string[]>([]);
+
+  // Fetch Blossom server list (kind 10063)
+  useEffect(() => {
+    if (!resolvedPubkey) return;
+
+    let subscription: Subscription | null = null;
+
+    // Check if we already have the event in store
+    const existingEvent = eventStore.getReplaceable(
+      USER_SERVER_LIST_KIND,
+      resolvedPubkey,
+      "",
+    );
+    if (existingEvent) {
+      setBlossomServers(getServersFromEvent(existingEvent));
+    }
+
+    // Also fetch from network
+    subscription = addressLoader({
+      kind: USER_SERVER_LIST_KIND,
+      pubkey: resolvedPubkey,
+      identifier: "",
+    }).subscribe({
+      next: () => {
+        const event = eventStore.getReplaceable(
+          USER_SERVER_LIST_KIND,
+          resolvedPubkey,
+          "",
+        );
+        if (event) {
+          setBlossomServers(getServersFromEvent(event));
+        }
+      },
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [resolvedPubkey, eventStore]);
 
   // Combine all relays (inbox + outbox) for nprofile
   const allRelays = [...new Set([...inboxRelays, ...outboxRelays])];
@@ -271,6 +316,36 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
                     </DropdownMenuItem>
                   );
                 })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Blossom servers dropdown */}
+          {blossomServers.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={`${blossomServers.length} Blossom server${blossomServers.length !== 1 ? "s" : ""}`}
+                >
+                  <HardDrive className="size-3" />
+                  <span>{blossomServers.length}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                {blossomServers.map((url) => (
+                  <DropdownMenuItem
+                    key={url}
+                    className="flex items-center justify-between gap-2"
+                    onClick={() => window.open(url, "_blank")}
+                  >
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <HardDrive className="size-3 text-muted-foreground flex-shrink-0" />
+                      <span className="font-mono text-xs truncate">{url}</span>
+                    </div>
+                    <ExternalLink className="size-3 text-muted-foreground flex-shrink-0" />
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
