@@ -148,6 +148,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
             needsAccount={window.props.needsAccount}
+            needsInterestList={window.props.needsInterestList}
           />
         );
         break;
