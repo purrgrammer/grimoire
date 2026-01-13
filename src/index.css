@@ -283,6 +283,7 @@ body.animating-layout
 .ProseMirror {
   min-height: 1.25rem;
   line-height: 1.25rem;
+  width: 100%;
 }
 
 .ProseMirror:focus {
@@ -292,6 +293,8 @@ body.animating-layout
 .ProseMirror p {
   margin: 0;
   line-height: 1.25rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

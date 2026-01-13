@@ -875,12 +875,9 @@ export const MentionEditor = forwardRef<
 
     return (
       <div
-        className={`rounded border bg-background transition-colors focus-within:border-primary h-7 flex items-center overflow-hidden ${className}`}
+        className={`rounded border bg-background transition-colors focus-within:border-primary min-h-7 max-h-32 flex items-start overflow-y-auto overflow-x-hidden ${className}`}
       >
-        <EditorContent
-          editor={editor}
-          className="flex-1 min-w-0 overflow-x-auto"
-        />
+        <EditorContent editor={editor} className="flex-1 min-w-0" />
       </div>
     );
   },
