@@ -1,5 +1,6 @@
 import { Type } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
 
 interface WordListPreviewProps {
   words: string[];
@@ -36,12 +37,12 @@ export function WordListPreview({
       </div>
       <div className="flex flex-wrap gap-1">
         {previewWords.map((word) => (
-          <span
+          <Label
             key={word}
-            className="text-xs px-1.5 py-0.5 bg-destructive/10 text-destructive rounded font-mono"
+            className="border-destructive/50 text-destructive font-mono"
           >
             {word}
-          </span>
+          </Label>
         ))}
         {remaining > 0 && (
           <span className="text-xs text-muted-foreground">
@@ -86,12 +87,13 @@ export function WordListFull({
       </div>
       <div className="flex flex-wrap gap-1.5">
         {words.map((word) => (
-          <span
+          <Label
             key={word}
-            className="text-sm px-2 py-1 bg-destructive/10 text-destructive rounded font-mono"
+            size="md"
+            className="border-destructive/50 text-destructive font-mono"
           >
             {word}
-          </span>
+          </Label>
         ))}
       </div>
     </div>
