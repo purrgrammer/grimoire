@@ -7,7 +7,7 @@ import {
   useRef,
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
-import { Extension } from "@tiptap/core";
+import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -41,6 +41,22 @@ export interface EmojiTag {
 }
 
 /**
+ * Represents a blob attachment for imeta tags (NIP-92)
+ */
+export interface BlobAttachment {
+  /** The URL of the blob */
+  url: string;
+  /** SHA256 hash of the blob content */
+  sha256: string;
+  /** MIME type of the blob */
+  mimeType?: string;
+  /** Size in bytes */
+  size?: number;
+  /** Blossom server URL */
+  server?: string;
+}
+
+/**
  * Result of serializing editor content
  */
 export interface SerializedContent {
@@ -48,11 +64,17 @@ export interface SerializedContent {
   text: string;
   /** Emoji tags to include in the event (NIP-30) */
   emojiTags: EmojiTag[];
+  /** Blob attachments for imeta tags (NIP-92) */
+  blobAttachments: BlobAttachment[];
 }
 
 export interface MentionEditorProps {
   placeholder?: string;
-  onSubmit?: (content: string, emojiTags: EmojiTag[]) => void;
+  onSubmit?: (
+    content: string,
+    emojiTags: EmojiTag[],
+    blobAttachments: BlobAttachment[],
+  ) => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
@@ -68,6 +90,10 @@ export interface MentionEditorHandle {
   getSerializedContent: () => SerializedContent;
   isEmpty: () => boolean;
   submit: () => void;
+  /** Insert text at the current cursor position */
+  insertText: (text: string) => void;
+  /** Insert a blob attachment with rich preview */
+  insertBlob: (blob: BlobAttachment) => void;
 }
 
 // Create emoji extension by extending Mention with a different name and custom node view
@@ -148,6 +174,107 @@ const EmojiMention = Mention.extend({
     };
   },
 });
+
+// Create blob attachment extension for media previews
+const BlobAttachmentNode = Node.create({
+  name: "blobAttachment",
+  group: "inline",
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      url: { default: null },
+      sha256: { default: null },
+      mimeType: { default: null },
+      size: { default: null },
+      server: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-blob-attachment="true"]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-blob-attachment": "true" }),
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { url, mimeType, size } = node.attrs;
+
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className =
+        "blob-attachment inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border border-border text-xs align-middle";
+      dom.contentEditable = "false";
+
+      const isImage = mimeType?.startsWith("image/");
+      const isVideo = mimeType?.startsWith("video/");
+      const isAudio = mimeType?.startsWith("audio/");
+
+      if (isImage && url) {
+        // Show image thumbnail
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "attachment";
+        img.className = "h-4 w-4 object-cover rounded";
+        img.draggable = false;
+        dom.appendChild(img);
+      } else {
+        // Show icon based on type
+        const icon = document.createElement("span");
+        icon.className = "text-muted-foreground";
+        if (isVideo) {
+          icon.textContent = "🎬";
+        } else if (isAudio) {
+          icon.textContent = "🎵";
+        } else {
+          icon.textContent = "📎";
+        }
+        dom.appendChild(icon);
+      }
+
+      // Add type label
+      const label = document.createElement("span");
+      label.className = "text-muted-foreground truncate max-w-[80px]";
+      if (isImage) {
+        label.textContent = "image";
+      } else if (isVideo) {
+        label.textContent = "video";
+      } else if (isAudio) {
+        label.textContent = "audio";
+      } else {
+        label.textContent = "file";
+      }
+      dom.appendChild(label);
+
+      // Add size if available
+      if (size) {
+        const sizeEl = document.createElement("span");
+        sizeEl.className = "text-muted-foreground/70";
+        sizeEl.textContent = formatBlobSize(size);
+        dom.appendChild(sizeEl);
+      }
+
+      return { dom };
+    };
+  },
+});
+
+function formatBlobSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
 
 export const MentionEditor = forwardRef<
   MentionEditorHandle,
@@ -442,12 +569,14 @@ export const MentionEditor = forwardRef<
         [searchCommands],
       );
 
-    // Helper function to serialize editor content with mentions and emojis
+    // Helper function to serialize editor content with mentions, emojis, and blobs
     const serializeContent = useCallback(
       (editorInstance: any): SerializedContent => {
         let text = "";
         const emojiTags: EmojiTag[] = [];
+        const blobAttachments: BlobAttachment[] = [];
         const seenEmojis = new Set<string>();
+        const seenBlobs = new Set<string>();
         const json = editorInstance.getJSON();
 
         json.content?.forEach((node: any) => {
@@ -483,6 +612,23 @@ export const MentionEditor = forwardRef<
                     emojiTags.push({ shortcode, url });
                   }
                 }
+              } else if (child.type === "blobAttachment") {
+                // Blob attachment - output URL and track for imeta tag
+                const { url, sha256, mimeType, size, server } = child.attrs;
+                if (url) {
+                  text += url;
+                  // Add to blob attachments for imeta tags (dedupe by sha256)
+                  if (sha256 && !seenBlobs.has(sha256)) {
+                    seenBlobs.add(sha256);
+                    blobAttachments.push({
+                      url,
+                      sha256,
+                      mimeType: mimeType || undefined,
+                      size: size || undefined,
+                      server: server || undefined,
+                    });
+                  }
+                }
               }
             });
             text += "\n";
@@ -492,6 +638,7 @@ export const MentionEditor = forwardRef<
         return {
           text: text.trim(),
           emojiTags,
+          blobAttachments,
         };
       },
       [],
@@ -502,9 +649,10 @@ export const MentionEditor = forwardRef<
       (editorInstance: any) => {
         if (!editorInstance || !onSubmit) return;
 
-        const { text, emojiTags } = serializeContent(editorInstance);
+        const { text, emojiTags, blobAttachments } =
+          serializeContent(editorInstance);
         if (text) {
-          onSubmit(text, emojiTags);
+          onSubmit(text, emojiTags, blobAttachments);
           editorInstance.commands.clearContent();
         }
       },
@@ -574,6 +722,8 @@ export const MentionEditor = forwardRef<
         Placeholder.configure({
           placeholder,
         }),
+        // Add blob attachment extension for media previews
+        BlobAttachmentNode,
       ];
 
       // Add emoji extension if search is provided
@@ -673,13 +823,39 @@ export const MentionEditor = forwardRef<
         clear: () => editor?.commands.clearContent(),
         getContent: () => editor?.getText() || "",
         getSerializedContent: () => {
-          if (!editor) return { text: "", emojiTags: [] };
+          if (!editor) return { text: "", emojiTags: [], blobAttachments: [] };
           return serializeContent(editor);
         },
         isEmpty: () => editor?.isEmpty ?? true,
         submit: () => {
           if (editor) {
             handleSubmit(editor);
+          }
+        },
+        insertText: (text: string) => {
+          if (editor) {
+            editor.chain().focus().insertContent(text).run();
+          }
+        },
+        insertBlob: (blob: BlobAttachment) => {
+          if (editor) {
+            editor
+              .chain()
+              .focus()
+              .insertContent([
+                {
+                  type: "blobAttachment",
+                  attrs: {
+                    url: blob.url,
+                    sha256: blob.sha256,
+                    mimeType: blob.mimeType,
+                    size: blob.size,
+                    server: blob.server,
+                  },
+                },
+                { type: "text", text: " " },
+              ])
+              .run();
           }
         },
       }),

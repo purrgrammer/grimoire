@@ -2,7 +2,14 @@ import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from, catchError, of, map } from "rxjs";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Loader2, Reply, Zap, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  Reply,
+  Zap,
+  AlertTriangle,
+  RefreshCw,
+  Paperclip,
+} from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
@@ -33,6 +40,7 @@ import {
   MentionEditor,
   type MentionEditorHandle,
   type EmojiTag,
+  type BlobAttachment,
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
@@ -43,6 +51,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -336,6 +345,28 @@ export function ChatViewer({
   // Emoji search for custom emoji autocomplete
   const { searchEmojis } = useEmojiSearch();
 
+  // Ref to MentionEditor for programmatic submission
+  const editorRef = useRef<MentionEditorHandle>(null);
+
+  // Blossom upload hook for file attachments
+  const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
+    accept: "image/*,video/*,audio/*",
+    onSuccess: (results) => {
+      if (results.length > 0 && editorRef.current) {
+        // Insert the first successful upload as a blob attachment with metadata
+        const { blob, server } = results[0];
+        editorRef.current.insertBlob({
+          url: blob.url,
+          sha256: blob.sha256,
+          mimeType: blob.type,
+          size: blob.size,
+          server,
+        });
+        editorRef.current.focus();
+      }
+    },
+  });
+
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -447,9 +478,6 @@ export function ChatViewer({
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Ref to MentionEditor for programmatic submission
-  const editorRef = useRef<MentionEditorHandle>(null);
-
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
 
@@ -458,6 +486,7 @@ export function ChatViewer({
     content: string,
     replyToId?: string,
     emojiTags?: EmojiTag[],
+    blobAttachments?: BlobAttachment[],
   ) => {
     if (!conversation || !hasActiveAccount || isSending) return;
 
@@ -495,6 +524,7 @@ export function ChatViewer({
       await adapter.sendMessage(conversation, content, {
         replyTo: replyToId,
         emojiTags,
+        blobAttachments,
       });
       setReplyTo(undefined); // Clear reply context only on success
     } catch (error) {
@@ -851,6 +881,25 @@ export function ChatViewer({
             />
           )}
           <div className="flex gap-1.5 items-center">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
+                    onClick={openUpload}
+                    disabled={isSending}
+                  >
+                    <Paperclip className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Attach media</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
@@ -858,9 +907,9 @@ export function ChatViewer({
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}
-              onSubmit={(content, emojiTags) => {
+              onSubmit={(content, emojiTags, blobAttachments) => {
                 if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags);
+                  handleSend(content, replyTo, emojiTags, blobAttachments);
                 }
               }}
               className="flex-1 min-w-0"
@@ -878,6 +927,7 @@ export function ChatViewer({
               {isSending ? <Loader2 className="size-3 animate-spin" /> : "Send"}
             </Button>
           </div>
+          {uploadDialog}
         </div>
       ) : (
         <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">

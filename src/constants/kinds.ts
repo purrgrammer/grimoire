@@ -27,6 +27,7 @@ import {
   GitMerge,
   GitPullRequest,
   BookHeart,
+  HardDrive,
   Hash,
   Heart,
   Highlighter,
@@ -828,13 +829,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   //   nip: "Marmot",
   //   icon: Key,
   // },
-  // 10063: {
-  //   kind: 10063,
-  //   name: "User Server List",
-  //   description: "User server list",
-  //   nip: "Blossom",
-  //   icon: Server,
-  // },
+  10063: {
+    kind: 10063,
+    name: "Blossom Server List",
+    description: "User's Blossom blob storage servers",
+    nip: "BUD-03",
+    icon: HardDrive,
+  },
   10096: {
     kind: 10096,
     name: "File Storage",

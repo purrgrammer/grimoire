@@ -39,6 +39,9 @@ const SpellsViewer = lazy(() =>
 const SpellbooksViewer = lazy(() =>
   import("./SpellbooksViewer").then((m) => ({ default: m.SpellbooksViewer })),
 );
+const BlossomViewer = lazy(() =>
+  import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -194,6 +197,18 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "spellbooks":
         content = <SpellbooksViewer />;
+        break;
+      case "blossom":
+        content = (
+          <BlossomViewer
+            subcommand={window.props.subcommand}
+            serverUrl={window.props.serverUrl}
+            pubkey={window.props.pubkey}
+            sourceUrl={window.props.sourceUrl}
+            targetServer={window.props.targetServer}
+            sha256={window.props.sha256}
+          />
+        );
         break;
       default:
         content = (

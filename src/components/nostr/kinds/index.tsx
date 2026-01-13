@@ -26,6 +26,10 @@ import { Kind9802Renderer } from "./HighlightRenderer";
 import { Kind9802DetailRenderer } from "./HighlightDetailRenderer";
 import { Kind10002Renderer } from "./RelayListRenderer";
 import { Kind10002DetailRenderer } from "./RelayListDetailRenderer";
+import {
+  BlossomServerListRenderer,
+  BlossomServerListDetailRenderer,
+} from "./BlossomServerListRenderer";
 import { Kind10317Renderer } from "./GraspListRenderer";
 import { Kind10317DetailRenderer } from "./GraspListDetailRenderer";
 import { Kind30023Renderer } from "./ArticleRenderer";
@@ -170,6 +174,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10020: MediaFollowListRenderer, // Media Follow List (NIP-51)
   10030: EmojiListRenderer, // User Emoji List (NIP-51)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
+  10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
   10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
@@ -259,6 +264,7 @@ const detailRenderers: Record<
   10015: InterestListDetailRenderer, // Interest List Detail (NIP-51)
   10020: MediaFollowListDetailRenderer, // Media Follow List Detail (NIP-51)
   10030: EmojiListDetailRenderer, // User Emoji List Detail (NIP-51)
+  10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
   10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)
   10102: WikiRelaysDetailRenderer, // Good Wiki Relays Detail (NIP-51)
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
