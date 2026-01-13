@@ -820,8 +820,7 @@ export const MentionEditor = forwardRef<
       extensions,
       editorProps: {
         attributes: {
-          class:
-            "prose prose-sm max-w-none focus:outline-none min-h-[1.25rem] px-2 py-1 whitespace-nowrap text-sm",
+          class: "prose prose-sm max-w-none focus:outline-none text-sm",
         },
       },
       autofocus: autoFocus,
@@ -887,11 +886,11 @@ export const MentionEditor = forwardRef<
 
     return (
       <div
-        className={`rounded border bg-background transition-colors focus-within:border-primary h-7 flex items-center overflow-hidden ${className}`}
+        className={`rounded border bg-background transition-colors focus-within:border-primary h-7 flex items-center overflow-hidden px-2 ${className}`}
       >
         <EditorContent
           editor={editor}
-          className="flex-1 min-w-0 overflow-x-auto"
+          className="flex-1 min-w-0 flex items-center"
         />
       </div>
     );
