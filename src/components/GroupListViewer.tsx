@@ -2,11 +2,7 @@ import { useState, useMemo, memo } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { map } from "rxjs/operators";
 import { Loader2 } from "lucide-react";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "react-resizable-panels";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
@@ -359,9 +355,9 @@ export function GroupListViewer() {
   }
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
+    <PanelGroup direction="horizontal" className="h-full">
       {/* Left panel: Group list */}
-      <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+      <Panel defaultSize={25} minSize={15} maxSize={40}>
         <div className="flex h-full flex-col overflow-y-auto">
           {groupsWithRecency.map((group) => (
             <GroupListItem
@@ -380,13 +376,13 @@ export function GroupListViewer() {
             />
           ))}
         </div>
-      </ResizablePanel>
+      </Panel>
 
       {/* Resizable handle */}
-      <ResizableHandle withHandle />
+      <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
 
       {/* Right panel: Chat view */}
-      <ResizablePanel defaultSize={75}>
+      <Panel defaultSize={75}>
         {selectedGroup ? (
           <MemoizedChatViewer
             groupId={selectedGroup.groupId}
@@ -397,7 +393,7 @@ export function GroupListViewer() {
             Select a group to view chat
           </div>
         )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+      </Panel>
+    </PanelGroup>
   );
 }
