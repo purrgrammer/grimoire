@@ -584,6 +584,9 @@ export const MentionEditor = forwardRef<
             node.content?.forEach((child: any) => {
               if (child.type === "text") {
                 text += child.text;
+              } else if (child.type === "hardBreak") {
+                // Preserve newlines from Shift+Enter
+                text += "\n";
               } else if (child.type === "mention") {
                 const pubkey = child.attrs?.id;
                 if (pubkey) {
@@ -664,6 +667,9 @@ export const MentionEditor = forwardRef<
 
     // Build extensions array
     const extensions = useMemo(() => {
+      // Detect mobile devices (touch support)
+      const isMobile = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
       // Custom extension for keyboard shortcuts (runs before suggestion plugins)
       const SubmitShortcut = Extension.create({
         name: "submitShortcut",
@@ -674,10 +680,16 @@ export const MentionEditor = forwardRef<
               handleSubmitRef.current(editor);
               return true;
             },
-            // Plain Enter submits (Shift+Enter handled by hardBreak for newlines)
+            // Plain Enter behavior depends on device
             Enter: ({ editor }) => {
-              handleSubmitRef.current(editor);
-              return true;
+              if (isMobile) {
+                // On mobile, Enter inserts a newline (hardBreak)
+                return editor.commands.setHardBreak();
+              } else {
+                // On desktop, Enter submits the message
+                handleSubmitRef.current(editor);
+                return true;
+              }
             },
           };
         },
