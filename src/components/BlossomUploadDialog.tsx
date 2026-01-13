@@ -42,7 +42,6 @@ import type { Subscription } from "rxjs";
 const FALLBACK_SERVERS = [
   "https://blossom.primal.net",
   "https://nostr.download",
-  "https://files.v0l.io",
 ];
 
 interface BlossomUploadDialogProps {
