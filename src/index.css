@@ -283,6 +283,7 @@ body.animating-layout
 .ProseMirror {
   min-height: 1.25rem;
   line-height: 1.25rem;
+  position: relative;
 }
 
 .ProseMirror:focus {
@@ -298,6 +299,9 @@ body.animating-layout
   content: attr(data-placeholder);
   color: hsl(var(--muted-foreground));
   pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 /* Mention styles */
