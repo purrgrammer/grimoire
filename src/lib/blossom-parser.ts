@@ -3,33 +3,33 @@
  *
  * Parses arguments for the blossom command with subcommands:
  * - servers: Show/manage user's Blossom server list
- * - check <server>: Check if a server is online
- * - upload <file>: Upload a file (handled by UI file picker)
+ * - upload: Upload a file (handled by UI file picker)
  * - list [pubkey]: List blobs for a user
+ * - blob <sha256> [server]: View a specific blob
  * - mirror <url> <server>: Mirror a blob to another server
+ * - delete <sha256> <server>: Delete a blob from a server
  */
 
 import { nip19 } from "nostr-tools";
 
 export type BlossomSubcommand =
   | "servers"
-  | "check"
   | "upload"
   | "list"
+  | "blob"
   | "mirror"
   | "delete";
 
 export interface BlossomCommandResult {
   subcommand: BlossomSubcommand;
-  // For 'check' subcommand
+  // For 'blob' and 'delete' subcommands
+  sha256?: string;
   serverUrl?: string;
   // For 'list' subcommand
   pubkey?: string;
   // For 'mirror' subcommand
   sourceUrl?: string;
   targetServer?: string;
-  // For 'delete' subcommand
-  sha256?: string;
 }
 
 /**
@@ -91,9 +91,9 @@ function resolvePubkey(
  *
  * Usage:
  *   blossom servers              - Show your Blossom servers
- *   blossom check <server>       - Check server health
  *   blossom upload               - Open upload dialog
  *   blossom list [pubkey]        - List blobs (defaults to $me)
+ *   blossom blob <sha256> [server] - View blob details
  *   blossom mirror <url> <server> - Mirror blob to server
  *   blossom delete <sha256> <server> - Delete blob from server
  */
@@ -112,16 +112,6 @@ export function parseBlossomCommand(
     case "servers":
     case "server":
       return { subcommand: "servers" };
-
-    case "check": {
-      if (args.length < 2) {
-        throw new Error("Server URL required. Usage: blossom check <server>");
-      }
-      return {
-        subcommand: "check",
-        serverUrl: normalizeServerUrl(args[1]),
-      };
-    }
 
     case "upload":
       return { subcommand: "upload" };
@@ -146,6 +136,24 @@ export function parseBlossomCommand(
       return {
         subcommand: "list",
         pubkey,
+      };
+    }
+
+    case "blob":
+    case "view": {
+      if (args.length < 2) {
+        throw new Error(
+          "SHA256 hash required. Usage: blossom blob <sha256> [server]",
+        );
+      }
+      const sha256 = args[1].toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(sha256)) {
+        throw new Error("Invalid SHA256 hash. Must be 64 hex characters.");
+      }
+      return {
+        subcommand: "blob",
+        sha256,
+        serverUrl: args[2] ? normalizeServerUrl(args[2]) : undefined,
       };
     }
 
@@ -186,9 +194,9 @@ export function parseBlossomCommand(
 
 Available subcommands:
   servers              Show your configured Blossom servers
-  check <server>       Check if a server is online
   upload               Open file upload dialog
   list [pubkey]        List blobs (defaults to your account)
+  blob <sha256> [server] View blob details
   mirror <url> <server> Mirror a blob to another server
   delete <sha256> <server> Delete a blob from a server`,
       );

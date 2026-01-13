@@ -529,10 +529,6 @@ export const manPages: Record<string, ManPageEntry> = {
           "Show your configured Blossom servers from kind 10063 event",
       },
       {
-        flag: "check <server>",
-        description: "Check if a Blossom server is online and responsive",
-      },
-      {
         flag: "upload",
         description:
           "Open file upload dialog to upload files to your Blossom servers",
@@ -541,6 +537,11 @@ export const manPages: Record<string, ManPageEntry> = {
         flag: "list [pubkey]",
         description:
           "List blobs uploaded by a user (defaults to your account). Supports npub, hex, or $me",
+      },
+      {
+        flag: "blob <sha256> [server]",
+        description:
+          "View details and preview of a specific blob by its SHA256 hash",
       },
       {
         flag: "mirror <url> <server>",
@@ -554,11 +555,11 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: [
       "blossom                              Show your Blossom servers",
       "blossom servers                      Show your Blossom servers",
-      "blossom check cdn.satellite.earth    Check if server is online",
       "blossom upload                       Open file upload dialog",
       "blossom list                         List your uploaded blobs",
       "blossom list $me                     List your uploaded blobs",
       "blossom list npub1...                List blobs for another user",
+      "blossom blob abc123...               View blob details",
       "blossom mirror https://... cdn.example.com  Mirror blob to server",
     ],
     seeAlso: ["profile"],

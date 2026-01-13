@@ -20,8 +20,11 @@ import {
   Music,
   FileText,
   Archive,
+  ArrowLeft,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useGrimoire } from "@/core/state";
 import { useEventStore } from "applesauce-react/hooks";
 import { addressLoader } from "@/services/loaders";
@@ -64,12 +67,12 @@ export function BlossomViewer({
   switch (subcommand) {
     case "servers":
       return <ServersView />;
-    case "check":
-      return <CheckServerView serverUrl={serverUrl!} />;
     case "upload":
       return <UploadView />;
     case "list":
       return <ListBlobsView pubkey={pubkey} />;
+    case "blob":
+      return <BlobDetailView sha256={sha256!} serverUrl={serverUrl} />;
     case "mirror":
       return <MirrorView sourceUrl={sourceUrl!} targetServer={targetServer!} />;
     case "delete":
@@ -304,67 +307,20 @@ function ServerRow({
 }
 
 /**
- * CheckServerView - Check a specific server's health
- */
-function CheckServerView({ serverUrl }: { serverUrl: string }) {
-  const [status, setStatus] = useState<ServerCheckResult | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const check = async () => {
-      setLoading(true);
-      const result = await checkServer(serverUrl);
-      setStatus(result);
-      setLoading(false);
-    };
-    check();
-  }, [serverUrl]);
-
-  return (
-    <div className="h-full flex flex-col items-center justify-center gap-4 p-8">
-      {loading ? (
-        <>
-          <Loader2 className="size-12 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Checking {serverUrl}...</p>
-        </>
-      ) : status ? (
-        <>
-          {status.online ? (
-            <CheckCircle className="size-16 text-green-500" />
-          ) : (
-            <XCircle className="size-16 text-red-500" />
-          )}
-          <h3 className="text-xl font-semibold">
-            {status.online ? "Server Online" : "Server Offline"}
-          </h3>
-          <code className="text-sm bg-muted px-2 py-1 rounded">
-            {serverUrl}
-          </code>
-          {status.online && status.responseTime && (
-            <p className="text-muted-foreground">
-              Response time: {status.responseTime}ms
-            </p>
-          )}
-          {!status.online && status.error && (
-            <p className="text-red-600 text-sm">{status.error}</p>
-          )}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * UploadView - File upload interface
+ * UploadView - File upload interface with server selection
  */
 function UploadView() {
   const { state } = useGrimoire();
   const eventStore = useEventStore();
   const pubkey = state.activeAccount?.pubkey;
   const [servers, setServers] = useState<string[]>([]);
+  const [selectedServers, setSelectedServers] = useState<Set<string>>(
+    new Set(),
+  );
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState<UploadResult[]>([]);
   const [errors, setErrors] = useState<{ server: string; error: string }[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { copy, copied } = useCopy();
 
@@ -374,7 +330,10 @@ function UploadView() {
 
     const event = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
     if (event) {
-      setServers(getServersFromEvent(event));
+      const s = getServersFromEvent(event);
+      setServers(s);
+      // Select all by default
+      setSelectedServers(new Set(s));
     }
 
     const subscription = addressLoader({
@@ -385,7 +344,10 @@ function UploadView() {
       next: () => {
         const e = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
         if (e) {
-          setServers(getServersFromEvent(e));
+          const s = getServersFromEvent(e);
+          setServers(s);
+          // Select all by default if not already set
+          setSelectedServers((prev) => (prev.size === 0 ? new Set(s) : prev));
         }
       },
     });
@@ -393,14 +355,38 @@ function UploadView() {
     return () => subscription.unsubscribe();
   }, [pubkey, eventStore]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (files && files.length > 0) {
+      setSelectedFile(files[0]);
+      setResults([]);
+      setErrors([]);
+    }
+  };
 
-    const file = files[0];
+  const toggleServer = (server: string) => {
+    setSelectedServers((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(server)) {
+        newSet.delete(server);
+      } else {
+        newSet.add(server);
+      }
+      return newSet;
+    });
+  };
 
-    if (servers.length === 0) {
-      toast.error("No Blossom servers configured");
+  const selectAll = () => setSelectedServers(new Set(servers));
+  const selectNone = () => setSelectedServers(new Set());
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      toast.error("No file selected");
+      return;
+    }
+
+    if (selectedServers.size === 0) {
+      toast.error("Select at least one server");
       return;
     }
 
@@ -410,14 +396,14 @@ function UploadView() {
 
     try {
       const { results: uploadResults, errors: uploadErrors } =
-        await uploadBlobToServers(file, servers);
+        await uploadBlobToServers(selectedFile, Array.from(selectedServers));
 
       setResults(uploadResults);
       setErrors(uploadErrors);
 
       if (uploadResults.length > 0) {
         toast.success(
-          `Uploaded to ${uploadResults.length}/${servers.length} servers`,
+          `Uploaded to ${uploadResults.length}/${selectedServers.size} servers`,
         );
       } else {
         toast.error("Upload failed on all servers");
@@ -426,9 +412,6 @@ function UploadView() {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
@@ -452,38 +435,109 @@ function UploadView() {
         <span className="text-sm font-medium">Upload to Blossom</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        {/* Upload Area */}
-        <div className="border-2 border-dashed rounded-lg p-8 text-center mb-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* File Selection */}
+        <div className="border-2 border-dashed rounded-lg p-6 text-center">
           <input
             ref={fileInputRef}
             type="file"
-            onChange={handleFileSelect}
+            onChange={handleFileChange}
             className="hidden"
-            disabled={uploading || servers.length === 0}
+            disabled={uploading}
           />
-          {uploading ? (
+          {selectedFile ? (
             <div className="flex flex-col items-center gap-2">
-              <Loader2 className="size-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground">Uploading...</p>
+              {getFileIcon(selectedFile.type, "size-8")}
+              <p className="font-medium truncate max-w-full">
+                {selectedFile.name}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {formatSize(selectedFile.size)} -{" "}
+                {selectedFile.type || "Unknown type"}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                Change File
+              </Button>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
               <Upload className="size-8 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {servers.length === 0
-                  ? "No servers configured"
-                  : `Upload to ${servers.length} server${servers.length !== 1 ? "s" : ""}`}
-              </p>
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={servers.length === 0}
-              >
+              <p className="text-muted-foreground">Select a file to upload</p>
+              <Button onClick={() => fileInputRef.current?.click()}>
                 Select File
               </Button>
             </div>
           )}
         </div>
+
+        {/* Server Selection */}
+        {servers.length > 0 && (
+          <div className="border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium">
+                Upload to ({selectedServers.size}/{servers.length} selected)
+              </h4>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={selectAll}>
+                  All
+                </Button>
+                <Button variant="ghost" size="sm" onClick={selectNone}>
+                  None
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {servers.map((server) => (
+                <label
+                  key={server}
+                  className="flex items-center gap-3 p-2 rounded hover:bg-muted/50 cursor-pointer"
+                >
+                  <Checkbox
+                    checked={selectedServers.has(server)}
+                    onCheckedChange={() => toggleServer(server)}
+                    disabled={uploading}
+                  />
+                  <HardDrive className="size-4 text-muted-foreground flex-shrink-0" />
+                  <span className="font-mono text-sm truncate flex-1">
+                    {server}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {servers.length === 0 && (
+          <div className="border rounded-lg p-4 text-center text-muted-foreground">
+            <HardDrive className="size-8 mx-auto mb-2" />
+            <p className="text-sm">No Blossom servers configured</p>
+          </div>
+        )}
+
+        {/* Upload Button */}
+        <Button
+          className="w-full"
+          onClick={handleUpload}
+          disabled={uploading || !selectedFile || selectedServers.size === 0}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="size-4 animate-spin mr-2" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload className="size-4 mr-2" />
+              Upload to {selectedServers.size} Server
+              {selectedServers.size !== 1 ? "s" : ""}
+            </>
+          )}
+        </Button>
 
         {/* Results */}
         {results.length > 0 && (
@@ -521,7 +575,7 @@ function UploadView() {
 
         {/* Errors */}
         {errors.length > 0 && (
-          <div className="space-y-2 mt-4">
+          <div className="space-y-2">
             <h4 className="text-sm font-medium text-red-600">
               Failed ({errors.length})
             </h4>
@@ -544,15 +598,15 @@ function UploadView() {
 /**
  * Get icon for file type
  */
-function getFileIcon(mimeType?: string) {
-  if (!mimeType) return <FileIcon className="size-4" />;
-  if (mimeType.startsWith("image/")) return <ImageIcon className="size-4" />;
-  if (mimeType.startsWith("video/")) return <Film className="size-4" />;
-  if (mimeType.startsWith("audio/")) return <Music className="size-4" />;
-  if (mimeType.startsWith("text/")) return <FileText className="size-4" />;
+function getFileIcon(mimeType?: string, className = "size-4") {
+  if (!mimeType) return <FileIcon className={className} />;
+  if (mimeType.startsWith("image/")) return <ImageIcon className={className} />;
+  if (mimeType.startsWith("video/")) return <Film className={className} />;
+  if (mimeType.startsWith("audio/")) return <Music className={className} />;
+  if (mimeType.startsWith("text/")) return <FileText className={className} />;
   if (mimeType.includes("zip") || mimeType.includes("archive"))
-    return <Archive className="size-4" />;
-  return <FileIcon className="size-4" />;
+    return <Archive className={className} />;
+  return <FileIcon className={className} />;
 }
 
 /**
@@ -579,7 +633,7 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
   const [blobs, setBlobs] = useState<BlobDescriptor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
-  const { copy, copied } = useCopy();
+  const [selectedBlob, setSelectedBlob] = useState<BlobDescriptor | null>(null);
 
   // Fetch servers for the target pubkey
   useEffect(() => {
@@ -652,6 +706,17 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
     fetchBlobs();
   }, [selectedServer, targetPubkey]);
 
+  // Show blob detail view if a blob is selected
+  if (selectedBlob) {
+    return (
+      <BlobDetailView
+        blob={selectedBlob}
+        serverUrl={selectedServer!}
+        onBack={() => setSelectedBlob(null)}
+      />
+    );
+  }
+
   if (!targetPubkey) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
@@ -712,51 +777,11 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
         ) : (
           <div className="divide-y">
             {blobs.map((blob) => (
-              <div
+              <BlobRow
                 key={blob.sha256}
-                className="px-4 py-3 hover:bg-muted/30 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  {getFileIcon(blob.type)}
-                  <div className="min-w-0 flex-1">
-                    <div className="font-mono text-xs truncate">
-                      {blob.sha256.slice(0, 16)}...
-                    </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                      <span>{formatSize(blob.size)}</span>
-                      {blob.type && <span>{blob.type}</span>}
-                      {blob.uploaded && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="size-3" />
-                          {formatDistanceToNow(blob.uploaded * 1000, {
-                            addSuffix: true,
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copy(blob.url)}
-                  >
-                    {copied ? (
-                      <CopyCheck className="size-4" />
-                    ) : (
-                      <Copy className="size-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => window.open(blob.url, "_blank")}
-                  >
-                    <ExternalLink className="size-4" />
-                  </Button>
-                </div>
-              </div>
+                blob={blob}
+                onClick={() => setSelectedBlob(blob)}
+              />
             ))}
           </div>
         )}
@@ -766,7 +791,259 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
 }
 
 /**
- * MirrorView - Mirror a blob to another server (placeholder)
+ * BlobRow - Single blob in list view
+ */
+function BlobRow({
+  blob,
+  onClick,
+}: {
+  blob: BlobDescriptor;
+  onClick: () => void;
+}) {
+  const { copy, copied } = useCopy();
+
+  return (
+    <div
+      className="px-4 py-3 hover:bg-muted/30 flex items-center justify-between cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {getFileIcon(blob.type)}
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-xs truncate">
+            {blob.sha256.slice(0, 16)}...
+          </div>
+          <div className="text-xs text-muted-foreground flex items-center gap-2">
+            <span>{formatSize(blob.size)}</span>
+            {blob.type && <span>{blob.type}</span>}
+            {blob.uploaded && (
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                {formatDistanceToNow(blob.uploaded * 1000, {
+                  addSuffix: true,
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            copy(blob.url);
+          }}
+        >
+          {copied ? (
+            <CopyCheck className="size-4" />
+          ) : (
+            <Copy className="size-4" />
+          )}
+        </Button>
+        <Button variant="ghost" size="icon">
+          <Eye className="size-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BlobDetailView - Detailed view of a single blob
+ */
+function BlobDetailView({
+  sha256,
+  serverUrl,
+  blob: initialBlob,
+  onBack,
+}: {
+  sha256?: string;
+  serverUrl?: string;
+  blob?: BlobDescriptor;
+  onBack?: () => void;
+}) {
+  const { copy, copied } = useCopy();
+  const blob = initialBlob;
+
+  // If we have a blob descriptor, use that data
+  const blobUrl =
+    blob?.url || (serverUrl && sha256 ? `${serverUrl}/${sha256}` : null);
+  const blobSha256 = blob?.sha256 || sha256;
+  const mimeType = blob?.type;
+
+  const isImage = mimeType?.startsWith("image/");
+  const isVideo = mimeType?.startsWith("video/");
+  const isAudio = mimeType?.startsWith("audio/");
+
+  if (!blobSha256) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+        <FileIcon className="size-12 text-muted-foreground" />
+        <h3 className="text-lg font-semibold">No Blob Selected</h3>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="border-b px-4 py-2 flex items-center gap-2">
+        {onBack && (
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="size-4" />
+          </Button>
+        )}
+        <FileIcon className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Blob Details</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Preview */}
+        {blobUrl && (
+          <div className="border rounded-lg overflow-hidden bg-muted/30">
+            {isImage && (
+              <img
+                src={blobUrl}
+                alt="Blob preview"
+                className="max-w-full max-h-64 mx-auto object-contain"
+              />
+            )}
+            {isVideo && (
+              <video
+                src={blobUrl}
+                controls
+                className="max-w-full max-h-64 mx-auto"
+              />
+            )}
+            {isAudio && (
+              <div className="p-4">
+                <audio src={blobUrl} controls className="w-full" />
+              </div>
+            )}
+            {!isImage && !isVideo && !isAudio && (
+              <div className="p-8 text-center">
+                {getFileIcon(
+                  mimeType,
+                  "size-16 mx-auto mb-2 text-muted-foreground",
+                )}
+                <p className="text-sm text-muted-foreground">
+                  Preview not available
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="border rounded-lg divide-y">
+          <div className="px-4 py-3">
+            <div className="text-xs text-muted-foreground uppercase mb-1">
+              SHA256
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="text-xs break-all flex-1">{blobSha256}</code>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copy(blobSha256)}
+              >
+                {copied ? (
+                  <CopyCheck className="size-4" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {blobUrl && (
+            <div className="px-4 py-3">
+              <div className="text-xs text-muted-foreground uppercase mb-1">
+                URL
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="text-xs break-all flex-1">{blobUrl}</code>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => copy(blobUrl)}
+                >
+                  {copied ? (
+                    <CopyCheck className="size-4" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => window.open(blobUrl, "_blank")}
+                >
+                  <ExternalLink className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {serverUrl && (
+            <div className="px-4 py-3">
+              <div className="text-xs text-muted-foreground uppercase mb-1">
+                Server
+              </div>
+              <div className="flex items-center gap-2">
+                <HardDrive className="size-4 text-muted-foreground" />
+                <code className="text-xs">{serverUrl}</code>
+              </div>
+            </div>
+          )}
+
+          {blob && (
+            <>
+              <div className="px-4 py-3">
+                <div className="text-xs text-muted-foreground uppercase mb-1">
+                  Size
+                </div>
+                <div className="text-sm">{formatSize(blob.size)}</div>
+              </div>
+
+              {blob.type && (
+                <div className="px-4 py-3">
+                  <div className="text-xs text-muted-foreground uppercase mb-1">
+                    Type
+                  </div>
+                  <div className="text-sm">{blob.type}</div>
+                </div>
+              )}
+
+              {blob.uploaded && (
+                <div className="px-4 py-3">
+                  <div className="text-xs text-muted-foreground uppercase mb-1">
+                    Uploaded
+                  </div>
+                  <div className="text-sm">
+                    {new Date(blob.uploaded * 1000).toLocaleString()}
+                    <span className="text-muted-foreground ml-2">
+                      (
+                      {formatDistanceToNow(blob.uploaded * 1000, {
+                        addSuffix: true,
+                      })}
+                      )
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MirrorView - Mirror a blob to another server
  */
 function MirrorView({
   sourceUrl,
@@ -797,7 +1074,7 @@ function MirrorView({
 }
 
 /**
- * DeleteView - Delete a blob from a server (placeholder)
+ * DeleteView - Delete a blob from a server
  */
 function DeleteView({
   sha256,
