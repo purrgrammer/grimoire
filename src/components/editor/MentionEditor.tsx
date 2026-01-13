@@ -345,6 +345,7 @@ export const MentionEditor = forwardRef<
     );
 
     // Create slash command suggestion configuration for / commands
+    // Only triggers when / is at the very beginning of the input
     const slashCommandSuggestion: Omit<SuggestionOptions, "editor"> | null =
       useMemo(
         () =>
@@ -352,6 +353,8 @@ export const MentionEditor = forwardRef<
             ? {
                 char: "/",
                 allowSpaces: false,
+                // Only allow slash commands at the start of input (position 1 in TipTap = first char)
+                allow: ({ range }) => range.from === 1,
                 items: async ({ query }) => {
                   return await searchCommands(query);
                 },
