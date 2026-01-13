@@ -9,7 +9,6 @@ import { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { NostrEvent } from "@/types/nostr";
 import { Layout, ExternalLink, Eye, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useProfile } from "@/hooks/useProfile";
 import { nip19 } from "nostr-tools";
 import { useNavigate } from "react-router";
 import { KindBadge } from "@/components/KindBadge";
@@ -33,7 +32,7 @@ function getSpellbookKinds(spellbook: ParsedSpellbook): number[] {
 
 /**
  * Preview Button Component
- * Navigates to /<npub|nip05>/<identifier>
+ * Navigates to /<npub>/<identifier>
  */
 function PreviewButton({
   event,
@@ -46,12 +45,11 @@ function PreviewButton({
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
 }) {
-  const profile = useProfile(event.pubkey);
   const navigate = useNavigate();
 
   const handlePreview = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const actor = profile?.nip05 || nip19.npubEncode(event.pubkey);
+    const actor = nip19.npubEncode(event.pubkey);
     navigate(`/preview/${actor}/${identifier}`, { state: { fromApp: true } });
   };
 
