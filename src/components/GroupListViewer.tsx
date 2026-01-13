@@ -1,7 +1,12 @@
-import { useState, useMemo, useCallback, memo } from "react";
+import { useState, useMemo, memo } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { map } from "rxjs/operators";
-import { Loader2, MessageSquare, GripVertical } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "react-resizable-panels";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
@@ -65,81 +70,36 @@ const GroupListItem = memo(function GroupListItem({
       onClick={onClick}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <MessageSquare className="size-4 flex-shrink-0 text-muted-foreground" />
-          <span className="text-sm font-medium truncate">{groupName}</span>
-        </div>
+        <span className="text-sm font-medium truncate">{groupName}</span>
         {group.lastMessage && (
           <span className="text-xs text-muted-foreground flex-shrink-0">
             <Timestamp timestamp={group.lastMessage.created_at} />
           </span>
         )}
       </div>
-      {/* Last message preview */}
+      {/* Last message preview - hide images and event embeds */}
       {lastMessageAuthor && lastMessageContent && (
-        <div className="text-xs text-muted-foreground pl-6 truncate">
+        <div className="text-xs text-muted-foreground truncate">
           <UserName
             pubkey={lastMessageAuthor}
             className="text-xs font-medium"
           />
           :{" "}
           <span className="inline truncate">
-            <RichText content={lastMessageContent} className="inline" />
+            <RichText
+              content={lastMessageContent}
+              className="inline"
+              options={{
+                showImages: false,
+                showEventEmbeds: false,
+              }}
+            />
           </span>
         </div>
       )}
     </div>
   );
 });
-
-/**
- * ResizableDivider - Draggable divider for resizing panels
- */
-function ResizableDivider({
-  onResize,
-}: {
-  onResize: (deltaX: number) => void;
-}) {
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      setIsDragging(true);
-
-      const startX = e.clientX;
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        const deltaX = moveEvent.clientX - startX;
-        onResize(deltaX);
-      };
-
-      const handleMouseUp = () => {
-        setIsDragging(false);
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    },
-    [onResize],
-  );
-
-  return (
-    <div
-      className={cn(
-        "w-1 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center transition-colors relative group",
-        isDragging && "bg-primary",
-      )}
-      onMouseDown={handleMouseDown}
-    >
-      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripVertical className="size-3 text-muted-foreground" />
-      </div>
-    </div>
-  );
-}
 
 /**
  * MemoizedChatViewer - Memoized chat viewer to prevent unnecessary re-renders
@@ -185,18 +145,6 @@ export function GroupListViewer() {
     groupId: string;
     relayUrl: string;
   } | null>(null);
-
-  // State for sidebar width
-  const [sidebarWidth, setSidebarWidth] = useState(280);
-
-  // Handle resize
-  const handleResize = useCallback((deltaX: number) => {
-    setSidebarWidth((prev) => {
-      const newWidth = prev + deltaX;
-      // Clamp between 200px and 500px
-      return Math.max(200, Math.min(500, newWidth));
-    });
-  }, []);
 
   // Load user's kind 10009 (group list) event
   const groupListEvent = use$(
@@ -411,19 +359,10 @@ export function GroupListViewer() {
   }
 
   return (
-    <div className="flex h-full">
+    <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* Left panel: Group list */}
-      <div className="flex flex-col border-r" style={{ width: sidebarWidth }}>
-        {/* Header matching ChatViewer style */}
-        <div className="pl-4 pr-4 border-b w-full py-0.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold">Groups</div>
-            <div className="text-xs text-muted-foreground">
-              {groupsWithRecency.length}
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
+      <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+        <div className="flex h-full flex-col overflow-y-auto">
           {groupsWithRecency.map((group) => (
             <GroupListItem
               key={`${group.relayUrl}'${group.groupId}`}
@@ -441,13 +380,13 @@ export function GroupListViewer() {
             />
           ))}
         </div>
-      </div>
+      </ResizablePanel>
 
-      {/* Resizable divider */}
-      <ResizableDivider onResize={handleResize} />
+      {/* Resizable handle */}
+      <ResizableHandle withHandle />
 
       {/* Right panel: Chat view */}
-      <div className="flex-1 min-w-0">
+      <ResizablePanel defaultSize={75}>
         {selectedGroup ? (
           <MemoizedChatViewer
             groupId={selectedGroup.groupId}
@@ -458,7 +397,7 @@ export function GroupListViewer() {
             Select a group to view chat
           </div>
         )}
-      </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
