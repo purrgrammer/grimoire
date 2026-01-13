@@ -8,7 +8,7 @@ import accountManager from "@/services/accounts";
 import { ChatViewer } from "./ChatViewer";
 import { getTagValue } from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
-import type { ProtocolIdentifier } from "@/types/chat";
+import type { ProtocolIdentifier, GroupListIdentifier } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import Timestamp from "./Timestamp";
 import { useEffect } from "react";
@@ -125,15 +125,29 @@ const MemoizedChatViewer = memo(
     prev.groupId === next.groupId && prev.relayUrl === next.relayUrl,
 );
 
+interface GroupListViewerProps {
+  identifier?: GroupListIdentifier;
+}
+
 /**
  * GroupListViewer - Multi-room chat interface
  *
- * Left panel: List of groups from user's kind 10009, sorted by recency
+ * Left panel: List of groups from kind 10009, sorted by recency
  * Right panel: Chat view for selected group
+ *
+ * @param identifier - Optional group list identifier. If provided, loads that specific
+ *                     kind 10009 event. If not provided, loads active user's list.
  */
-export function GroupListViewer() {
+export function GroupListViewer({ identifier }: GroupListViewerProps) {
   const activeAccount = use$(accountManager.active$);
   const activePubkey = activeAccount?.pubkey;
+
+  // Determine which pubkey/identifier to load:
+  // - If identifier prop is provided, use that (allows viewing other users' lists)
+  // - Otherwise, use active user's pubkey (default behavior)
+  const targetPubkey = identifier?.value.pubkey || activePubkey;
+  const targetIdentifier = identifier?.value.identifier || ""; // Empty string is default d-tag for kind 10009
+  const targetRelays = identifier?.relays;
 
   // State for selected group
   const [selectedGroup, setSelectedGroup] = useState<{
@@ -186,11 +200,30 @@ export function GroupListViewer() {
     };
   }, []);
 
-  // Load user's kind 10009 (group list) event
+  // Load kind 10009 (group list) event
+  // If identifier is provided with relays, subscribe to those relays first
+  useEffect(() => {
+    if (!targetPubkey || !targetRelays || targetRelays.length === 0) return;
+
+    const subscription = pool
+      .subscription(
+        targetRelays,
+        [{ kinds: [10009], authors: [targetPubkey], "#d": [targetIdentifier] }],
+        { eventStore },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [targetPubkey, targetIdentifier, targetRelays]);
+
   const groupListEvent = use$(
     () =>
-      activePubkey ? eventStore.replaceable(10009, activePubkey) : undefined,
-    [activePubkey],
+      targetPubkey
+        ? eventStore.replaceable(10009, targetPubkey, targetIdentifier)
+        : undefined,
+    [targetPubkey, targetIdentifier],
   );
 
   // Extract groups from the event with relay URL validation
@@ -342,7 +375,8 @@ export function GroupListViewer() {
       );
   }, [groups, groupMetadataMap]);
 
-  if (!activePubkey) {
+  // Only require sign-in if no identifier is provided (viewing own groups)
+  if (!targetPubkey) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Sign in to view your groups

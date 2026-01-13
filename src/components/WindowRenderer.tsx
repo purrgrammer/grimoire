@@ -178,7 +178,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
       case "chat":
         // Check if this is a group list (kind 10009) - render multi-room interface
         if (window.props.identifier?.type === "group-list") {
-          content = <GroupListViewer />;
+          content = <GroupListViewer identifier={window.props.identifier} />;
         } else {
           content = (
             <ChatViewer
