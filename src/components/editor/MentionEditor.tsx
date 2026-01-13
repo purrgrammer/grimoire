@@ -809,7 +809,7 @@ export const MentionEditor = forwardRef<
       editorProps: {
         attributes: {
           class:
-            "prose prose-sm max-w-none focus:outline-none min-h-[1.25rem] px-2 py-1 whitespace-nowrap text-sm",
+            "prose prose-sm max-w-none focus:outline-none min-h-[1.25rem] px-2 py-1 text-sm",
         },
       },
       autofocus: autoFocus,
