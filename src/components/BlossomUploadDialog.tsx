@@ -109,7 +109,7 @@ export function BlossomUploadDialog({
   }, [open]);
 
   // Helper to set fallback servers
-  const useFallbackServers = useCallback(() => {
+  const applyFallbackServers = useCallback(() => {
     setServers(FALLBACK_SERVERS);
     setSelectedServers(new Set([FALLBACK_SERVERS[0]])); // Select first by default
     setUsingFallback(true);
@@ -172,7 +172,7 @@ export function BlossomUploadDialog({
     const timeout = setTimeout(() => {
       setLoadingServers(false);
       if (!foundUserServers) {
-        useFallbackServers();
+        applyFallbackServers();
       }
     }, 3000);
 
@@ -180,7 +180,7 @@ export function BlossomUploadDialog({
       subscription?.unsubscribe();
       clearTimeout(timeout);
     };
-  }, [open, pubkey, eventStore, useFallbackServers]);
+  }, [open, pubkey, eventStore, applyFallbackServers]);
 
   // Create preview URL for selected file
   useEffect(() => {
