@@ -940,7 +940,7 @@ export function ChatViewer({
             {uploadDialog}
           </div>
         ) : (
-          <div className="border-t px-3 py-2 text-center">
+          <div className="border-t text-center">
             <Button
               variant="outline"
               size="sm"
