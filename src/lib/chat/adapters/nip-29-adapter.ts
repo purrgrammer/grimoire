@@ -16,9 +16,10 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { publishEventToRelays } from "@/services/hub";
+import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getTagValues } from "@/lib/nostr-utils";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
 
 /**
@@ -496,6 +497,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    * Filters actions based on user's membership status:
    * - /join: only shown when user is NOT a member/admin
    * - /leave: only shown when user IS a member
+   * - /bookmark: only shown when group is NOT in user's kind 10009 list
+   * - /unbookmark: only shown when group IS in user's kind 10009 list
    */
   getActions(options?: GetActionsOptions): ChatAction[] {
     const actions: ChatAction[] = [];
@@ -563,6 +566,55 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       });
     }
 
+    // Add bookmark/unbookmark actions
+    // These are always available - the handler checks current state
+    actions.push({
+      name: "bookmark",
+      description: "Add group to your group list",
+      handler: async (context) => {
+        try {
+          await this.bookmarkGroup(context.conversation, context.activePubkey);
+          return {
+            success: true,
+            message: "Group added to your list",
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to bookmark group",
+          };
+        }
+      },
+    });
+
+    actions.push({
+      name: "unbookmark",
+      description: "Remove group from your group list",
+      handler: async (context) => {
+        try {
+          await this.unbookmarkGroup(
+            context.conversation,
+            context.activePubkey,
+          );
+          return {
+            success: true,
+            message: "Group removed from your list",
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to unbookmark group",
+          };
+        }
+      },
+    });
+
     return actions;
   }
 
@@ -608,6 +660,54 @@ export class Nip29Adapter extends ChatProtocolAdapter {
                 error instanceof Error
                   ? error.message
                   : "Failed to leave group",
+            };
+          }
+        },
+      },
+      {
+        name: "bookmark",
+        description: "Add group to your group list",
+        handler: async (context) => {
+          try {
+            await this.bookmarkGroup(
+              context.conversation,
+              context.activePubkey,
+            );
+            return {
+              success: true,
+              message: "Group added to your list",
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to bookmark group",
+            };
+          }
+        },
+      },
+      {
+        name: "unbookmark",
+        description: "Remove group from your group list",
+        handler: async (context) => {
+          try {
+            await this.unbookmarkGroup(
+              context.conversation,
+              context.activePubkey,
+            );
+            return {
+              success: true,
+              message: "Group removed from your list",
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to unbookmark group",
             };
           }
         },
@@ -753,6 +853,146 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     });
     const event = await factory.sign(draft);
     await publishEventToRelays(event, [relayUrl]);
+  }
+
+  /**
+   * Helper: Check if a tag matches a group by ID and relay URL (normalized comparison)
+   */
+  private isMatchingGroupTag(
+    tag: string[],
+    groupId: string,
+    normalizedRelayUrl: string,
+  ): boolean {
+    if (tag[0] !== "group" || tag[1] !== groupId) {
+      return false;
+    }
+    // Normalize the tag's relay URL for comparison
+    try {
+      const tagRelayUrl = tag[2];
+      if (!tagRelayUrl) return false;
+      return normalizeRelayURL(tagRelayUrl) === normalizedRelayUrl;
+    } catch {
+      // If normalization fails, try exact match as fallback
+      return tag[2] === normalizedRelayUrl;
+    }
+  }
+
+  /**
+   * Add a group to the user's group list (kind 10009)
+   */
+  async bookmarkGroup(
+    conversation: Conversation,
+    activePubkey: string,
+  ): Promise<void> {
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activeSigner) {
+      throw new Error("No active signer");
+    }
+
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+
+    if (!groupId || !relayUrl) {
+      throw new Error("Group ID and relay URL required");
+    }
+
+    // Normalize the relay URL for comparison
+    const normalizedRelayUrl = normalizeRelayURL(relayUrl);
+
+    // Fetch current kind 10009 event (group list)
+    const currentEvent = await firstValueFrom(
+      eventStore.replaceable(10009, activePubkey, ""),
+      { defaultValue: undefined },
+    );
+
+    // Build new tags array
+    let tags: string[][] = [];
+
+    if (currentEvent) {
+      // Copy existing tags
+      tags = [...currentEvent.tags];
+
+      // Check if group is already in the list (using normalized URL comparison)
+      const existingGroup = tags.find((t) =>
+        this.isMatchingGroupTag(t, groupId, normalizedRelayUrl),
+      );
+
+      if (existingGroup) {
+        throw new Error("Group is already in your list");
+      }
+    }
+
+    // Add the new group tag (use normalized URL for consistency)
+    tags.push(["group", groupId, normalizedRelayUrl]);
+
+    // Create and publish the updated event
+    const factory = new EventFactory();
+    factory.setSigner(activeSigner);
+
+    const draft = await factory.build({
+      kind: 10009,
+      content: "",
+      tags,
+    });
+    const event = await factory.sign(draft);
+    await publishEvent(event);
+  }
+
+  /**
+   * Remove a group from the user's group list (kind 10009)
+   */
+  async unbookmarkGroup(
+    conversation: Conversation,
+    activePubkey: string,
+  ): Promise<void> {
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activeSigner) {
+      throw new Error("No active signer");
+    }
+
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+
+    if (!groupId || !relayUrl) {
+      throw new Error("Group ID and relay URL required");
+    }
+
+    // Normalize the relay URL for comparison
+    const normalizedRelayUrl = normalizeRelayURL(relayUrl);
+
+    // Fetch current kind 10009 event (group list)
+    const currentEvent = await firstValueFrom(
+      eventStore.replaceable(10009, activePubkey, ""),
+      { defaultValue: undefined },
+    );
+
+    if (!currentEvent) {
+      throw new Error("No group list found");
+    }
+
+    // Find and remove the group tag (using normalized URL comparison)
+    const originalLength = currentEvent.tags.length;
+    const tags = currentEvent.tags.filter(
+      (t) => !this.isMatchingGroupTag(t, groupId, normalizedRelayUrl),
+    );
+
+    if (tags.length === originalLength) {
+      throw new Error("Group is not in your list");
+    }
+
+    // Create and publish the updated event
+    const factory = new EventFactory();
+    factory.setSigner(activeSigner);
+
+    const draft = await factory.build({
+      kind: 10009,
+      content: "",
+      tags,
+    });
+    const event = await factory.sign(draft);
+    await publishEvent(event);
   }
 
   /**
