@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { map } from "rxjs/operators";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, GripVertical } from "lucide-react";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
@@ -12,12 +12,14 @@ import type { ProtocolIdentifier } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import Timestamp from "./Timestamp";
 import { useEffect } from "react";
+import { UserName } from "./nostr/UserName";
+import { RichText } from "./nostr/RichText";
 
 interface GroupInfo {
   groupId: string;
   relayUrl: string;
   metadata?: NostrEvent;
-  lastMessageTimestamp?: number;
+  lastMessage?: NostrEvent;
 }
 
 /**
@@ -30,7 +32,7 @@ function formatRelayForDisplay(url: string): string {
 /**
  * GroupListItem - Single group in the list
  */
-function GroupListItem({
+const GroupListItem = memo(function GroupListItem({
   group,
   isSelected,
   onClick,
@@ -50,47 +52,123 @@ function GroupListItem({
     groupName = group.groupId;
   }
 
-  // Extract group icon
-  const groupIcon =
-    !isUnmanagedGroup && group.metadata && group.metadata.kind === 39000
-      ? getTagValue(group.metadata, "picture")
-      : undefined;
+  // Get last message author and content
+  const lastMessageAuthor = group.lastMessage?.pubkey;
+  const lastMessageContent = group.lastMessage?.content;
 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-3 py-2 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
+        "flex flex-col gap-1 px-3 py-2 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
         isSelected && "bg-muted",
       )}
       onClick={onClick}
     >
-      <div className="flex-shrink-0">
-        {groupIcon ? (
-          <img
-            src={groupIcon}
-            alt=""
-            className="size-8 rounded object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-          />
-        ) : (
-          <div className="size-8 rounded bg-muted flex items-center justify-center">
-            <MessageSquare className="size-4 text-muted-foreground" />
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <MessageSquare className="size-4 flex-shrink-0 text-muted-foreground" />
+          <span className="text-sm font-medium truncate">{groupName}</span>
+        </div>
+        {group.lastMessage && (
+          <span className="text-xs text-muted-foreground flex-shrink-0">
+            <Timestamp timestamp={group.lastMessage.created_at} />
+          </span>
         )}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{groupName}</div>
-        {group.lastMessageTimestamp && (
-          <div className="text-xs text-muted-foreground">
-            <Timestamp timestamp={group.lastMessageTimestamp} />
-          </div>
-        )}
+      {/* Last message preview */}
+      {lastMessageAuthor && lastMessageContent && (
+        <div className="text-xs text-muted-foreground pl-6 truncate">
+          <UserName
+            pubkey={lastMessageAuthor}
+            className="text-xs font-medium"
+          />
+          :{" "}
+          <span className="inline truncate">
+            <RichText content={lastMessageContent} className="inline" />
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * ResizableDivider - Draggable divider for resizing panels
+ */
+function ResizableDivider({
+  onResize,
+}: {
+  onResize: (deltaX: number) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+
+      const startX = e.clientX;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        onResize(deltaX);
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [onResize],
+  );
+
+  return (
+    <div
+      className={cn(
+        "w-1 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center transition-colors relative group",
+        isDragging && "bg-primary",
+      )}
+      onMouseDown={handleMouseDown}
+    >
+      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <GripVertical className="size-3 text-muted-foreground" />
       </div>
     </div>
   );
 }
+
+/**
+ * MemoizedChatViewer - Memoized chat viewer to prevent unnecessary re-renders
+ */
+const MemoizedChatViewer = memo(
+  function MemoizedChatViewer({
+    groupId,
+    relayUrl,
+  }: {
+    groupId: string;
+    relayUrl: string;
+  }) {
+    return (
+      <ChatViewer
+        protocol="nip-29"
+        identifier={
+          {
+            type: "group",
+            value: groupId,
+            relays: [relayUrl],
+          } as ProtocolIdentifier
+        }
+      />
+    );
+  },
+  // Custom comparison: only re-render if group actually changed
+  (prev, next) =>
+    prev.groupId === next.groupId && prev.relayUrl === next.relayUrl,
+);
 
 /**
  * GroupListViewer - Multi-room chat interface
@@ -107,6 +185,18 @@ export function GroupListViewer() {
     groupId: string;
     relayUrl: string;
   } | null>(null);
+
+  // State for sidebar width
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+
+  // Handle resize
+  const handleResize = useCallback((deltaX: number) => {
+    setSidebarWidth((prev) => {
+      const newWidth = prev + deltaX;
+      // Clamp between 200px and 500px
+      return Math.max(200, Math.min(500, newWidth));
+    });
+  }, []);
 
   // Load user's kind 10009 (group list) event
   const groupListEvent = use$(
@@ -254,14 +344,14 @@ export function GroupListViewer() {
       )
       .pipe(
         map((events) => {
-          // Create a map of groupId -> latest message timestamp
-          const recencyMap = new Map<string, number>();
+          // Create a map of groupId -> latest message
+          const messageMap = new Map<string, NostrEvent>();
           for (const evt of events) {
             const hTag = evt.tags.find((t) => t[0] === "h");
             if (hTag && hTag[1]) {
-              const existing = recencyMap.get(hTag[1]);
-              if (!existing || evt.created_at > existing) {
-                recencyMap.set(hTag[1], evt.created_at);
+              const existing = messageMap.get(hTag[1]);
+              if (!existing || evt.created_at > existing.created_at) {
+                messageMap.set(hTag[1], evt);
               }
             }
           }
@@ -271,13 +361,13 @@ export function GroupListViewer() {
             groupId: g.groupId,
             relayUrl: g.relayUrl,
             metadata: groupMetadataMap?.get(g.groupId),
-            lastMessageTimestamp: recencyMap.get(g.groupId),
+            lastMessage: messageMap.get(g.groupId),
           }));
 
           // Sort by recency (most recent first)
           groupsWithInfo.sort((a, b) => {
-            const aTime = a.lastMessageTimestamp || 0;
-            const bTime = b.lastMessageTimestamp || 0;
+            const aTime = a.lastMessage?.created_at || 0;
+            const bTime = b.lastMessage?.created_at || 0;
             return bTime - aTime;
           });
 
@@ -285,17 +375,6 @@ export function GroupListViewer() {
         }),
       );
   }, [groups, groupMetadataMap]);
-
-  // Auto-select first group if none selected
-  useEffect(() => {
-    if (!selectedGroup && groupsWithRecency && groupsWithRecency.length > 0) {
-      const first = groupsWithRecency[0];
-      setSelectedGroup({
-        groupId: first.groupId,
-        relayUrl: first.relayUrl,
-      });
-    }
-  }, [selectedGroup, groupsWithRecency]);
 
   if (!activePubkey) {
     return (
@@ -334,12 +413,14 @@ export function GroupListViewer() {
   return (
     <div className="flex h-full">
       {/* Left panel: Group list */}
-      <div className="w-64 border-r flex flex-col">
-        <div className="border-b px-3 py-2">
-          <div className="text-sm font-semibold">Groups</div>
-          <div className="text-xs text-muted-foreground">
-            {groupsWithRecency.length}{" "}
-            {groupsWithRecency.length === 1 ? "group" : "groups"}
+      <div className="flex flex-col border-r" style={{ width: sidebarWidth }}>
+        {/* Header matching ChatViewer style */}
+        <div className="pl-4 pr-4 border-b w-full py-0.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold">Groups</div>
+            <div className="text-xs text-muted-foreground">
+              {groupsWithRecency.length}
+            </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -362,18 +443,15 @@ export function GroupListViewer() {
         </div>
       </div>
 
+      {/* Resizable divider */}
+      <ResizableDivider onResize={handleResize} />
+
       {/* Right panel: Chat view */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         {selectedGroup ? (
-          <ChatViewer
-            protocol="nip-29"
-            identifier={
-              {
-                type: "group",
-                value: selectedGroup.groupId,
-                relays: [selectedGroup.relayUrl],
-              } as ProtocolIdentifier
-            }
+          <MemoizedChatViewer
+            groupId={selectedGroup.groupId}
+            relayUrl={selectedGroup.relayUrl}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
