@@ -188,12 +188,20 @@ const text = getHighlightText(event);
 
 ## Chat System
 
-**Current Status**: Only NIP-29 (relay-based groups) is supported. Other protocols are planned for future releases.
+**Current Status**: NIP-28 (public channels) and NIP-29 (relay-based groups) are supported. NIP-53 (live activity chat) is also supported. Other protocols (NIP-C7, NIP-17) are planned for future releases.
 
 **Architecture**: Protocol adapter pattern for supporting multiple Nostr messaging protocols:
 - `src/lib/chat/adapters/base-adapter.ts` - Base interface all adapters implement
+- `src/lib/chat/adapters/nip-28-adapter.ts` - NIP-28 public channels (currently enabled)
 - `src/lib/chat/adapters/nip-29-adapter.ts` - NIP-29 relay groups (currently enabled)
-- Other adapters (NIP-C7, NIP-17, NIP-28, NIP-53) are implemented but commented out
+- `src/lib/chat/adapters/nip-53-adapter.ts` - NIP-53 live activity chat (currently enabled)
+- Other adapters (NIP-C7, NIP-17) are planned but not yet implemented
+
+**NIP-28 Channel Format**: `note1.../nevent1...` (kind 40 channel creation event)
+- Examples: `chat note1abc...`, `chat nevent1...` (with relay hints)
+- Open public channels - anyone can post messages
+- Client-side moderation (hide messages with kind 43, mute users with kind 44)
+- Messages are kind 42, channel metadata is kind 40/41
 
 **NIP-29 Group Format**: `relay'group-id` (wss:// prefix optional)
 - Examples: `relay.example.com'bitcoin-dev`, `wss://nos.lol'welcome`
@@ -208,6 +216,7 @@ const text = getHighlightText(event);
 
 **Usage**:
 ```bash
+chat note1abc...                          # Join NIP-28 public channel
 chat relay.example.com'bitcoin-dev        # Join NIP-29 group
 chat wss://nos.lol'welcome                # Join with explicit wss:// prefix
 ```

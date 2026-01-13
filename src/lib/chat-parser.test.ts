@@ -76,6 +76,45 @@ describe("parseChatCommand", () => {
     });
   });
 
+  describe("NIP-28 public channels", () => {
+    it("should parse note1 identifier (kind 40 channel)", () => {
+      // Create a valid note1 encoding for testing
+      const eventId =
+        "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+      const note = nip19.noteEncode(eventId);
+
+      const result = parseChatCommand([note]);
+
+      expect(result.protocol).toBe("nip-28");
+      expect(result.identifier).toEqual({
+        type: "channel",
+        value: eventId,
+        relays: [],
+      });
+      expect(result.adapter.protocol).toBe("nip-28");
+    });
+
+    it("should parse nevent1 identifier with relay hints", () => {
+      // Create a valid nevent1 encoding with relay hints
+      const eventId =
+        "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+      const nevent = nip19.neventEncode({
+        id: eventId,
+        relays: ["wss://relay.example.com", "wss://nos.lol"],
+      });
+
+      const result = parseChatCommand([nevent]);
+
+      expect(result.protocol).toBe("nip-28");
+      expect(result.identifier).toEqual({
+        type: "channel",
+        value: eventId,
+        relays: ["wss://relay.example.com", "wss://nos.lol"],
+      });
+      expect(result.adapter.protocol).toBe("nip-28");
+    });
+  });
+
   describe("error handling", () => {
     it("should throw error when no identifier provided", () => {
       expect(() => parseChatCommand([])).toThrow(
@@ -95,7 +134,7 @@ describe("parseChatCommand", () => {
       );
     });
 
-    it("should throw error for note/nevent (NIP-28 not implemented)", () => {
+    it("should throw error for malformed note", () => {
       expect(() => parseChatCommand(["note1xyz"])).toThrow(
         /Unable to determine chat protocol/,
       );

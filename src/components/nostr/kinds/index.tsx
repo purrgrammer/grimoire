@@ -8,6 +8,10 @@ import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./ReactionRenderer";
 import { Kind9Renderer } from "./ChatMessageRenderer";
 import { LiveChatMessageRenderer } from "./LiveChatMessageRenderer";
+import { ChannelMetadataRenderer } from "./ChannelMetadataRenderer";
+import { ChannelMessageRenderer } from "./ChannelMessageRenderer";
+import { ChannelHideRenderer } from "./ChannelHideRenderer";
+import { ChannelMuteRenderer } from "./ChannelMuteRenderer";
 import { Kind20Renderer } from "./PictureRenderer";
 import { Kind21Renderer } from "./VideoRenderer";
 import { Kind22Renderer } from "./ShortVideoRenderer";
@@ -148,6 +152,11 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   20: Kind20Renderer, // Picture (NIP-68)
   21: Kind21Renderer, // Video Event (NIP-71)
   22: Kind22Renderer, // Short Video (NIP-71)
+  40: ChannelMetadataRenderer, // Channel Creation (NIP-28)
+  41: ChannelMetadataRenderer, // Channel Metadata (NIP-28)
+  42: ChannelMessageRenderer, // Channel Message (NIP-28)
+  43: ChannelHideRenderer, // Channel Hide Message (NIP-28)
+  44: ChannelMuteRenderer, // Channel Mute User (NIP-28)
   1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1111Renderer, // Post (NIP-22)
   1222: VoiceMessageRenderer, // Voice Message (NIP-A0)
