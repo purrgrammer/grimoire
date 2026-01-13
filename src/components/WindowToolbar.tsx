@@ -5,6 +5,7 @@ import {
   WandSparkles,
   Copy,
   CopyCheck,
+  ArrowRightFromLine,
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -16,6 +17,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { SpellDialog } from "@/components/nostr/SpellDialog";
@@ -23,6 +28,7 @@ import { reconstructCommand as reconstructReqCommand } from "@/lib/spell-convers
 import { toast } from "sonner";
 import { useCopy } from "@/hooks/useCopy";
 import { useNip } from "@/hooks/useNip";
+import { useGrimoire } from "@/core/state";
 
 interface WindowToolbarProps {
   window?: WindowInstance;
@@ -37,6 +43,23 @@ export function WindowToolbar({
 }: WindowToolbarProps) {
   const setEditMode = useSetAtom(commandLauncherEditModeAtom);
   const [showSpellDialog, setShowSpellDialog] = useState(false);
+  const { state, moveWindowToWorkspace, setActiveWorkspace } = useGrimoire();
+
+  // Get workspaces for move action
+  const otherWorkspaces = Object.values(state.workspaces)
+    .filter((ws) => ws.id !== state.activeWorkspaceId)
+    .sort((a, b) => a.number - b.number);
+  const hasMultipleWorkspaces = Object.keys(state.workspaces).length > 1;
+
+  const handleMoveToWorkspace = (targetWorkspaceId: string) => {
+    if (!window) return;
+    const targetWorkspace = state.workspaces[targetWorkspaceId];
+    moveWindowToWorkspace(window.id, targetWorkspaceId);
+    setActiveWorkspace(targetWorkspaceId);
+    toast.success(
+      `Moved to tab ${targetWorkspace.number}${targetWorkspace.label ? ` (${targetWorkspace.label})` : ""}`,
+    );
+  };
 
   const handleEdit = () => {
     if (!window) return;
@@ -131,8 +154,8 @@ export function WindowToolbar({
             </Button>
           )}
 
-          {/* More actions menu - only for REQ windows for now */}
-          {isReqWindow && (
+          {/* More actions menu - shows when multiple workspaces exist */}
+          {hasMultipleWorkspaces && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -146,10 +169,37 @@ export function WindowToolbar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleTurnIntoSpell}>
-                  <WandSparkles className="size-4 mr-2" />
-                  Save as spell
-                </DropdownMenuItem>
+                {/* Move to tab submenu */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger
+                    disabled={otherWorkspaces.length === 0}
+                  >
+                    <ArrowRightFromLine className="size-4 mr-2" />
+                    Move to tab
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {otherWorkspaces.map((ws) => (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        onClick={() => handleMoveToWorkspace(ws.id)}
+                      >
+                        {ws.number}
+                        {ws.label ? ` ${ws.label}` : ""}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* REQ-specific actions */}
+                {isReqWindow && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleTurnIntoSpell}>
+                      <WandSparkles className="size-4 mr-2" />
+                      Save as spell
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
