@@ -428,13 +428,24 @@ describe("resolveFilterAliases", () => {
       expect(result["#t"]).not.toContain("$hashtags");
     });
 
-    it("should handle $hashtags with empty hashtag list", () => {
+    it("should remove #t from filter when $hashtags resolves to empty", () => {
       const filter: NostrFilter = { "#t": ["$hashtags"] };
       const result = resolveFilterAliases(filter, undefined, [], {
         hashtags: [],
       });
 
-      expect(result["#t"]).toEqual([]);
+      // Empty #t should be removed from filter entirely
+      expect(result["#t"]).toBeUndefined();
+    });
+
+    it("should preserve other hashtags when $hashtags resolves to empty", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags", "nostr", "bitcoin"] };
+      const result = resolveFilterAliases(filter, undefined, [], {
+        hashtags: [],
+      });
+
+      // Other hashtags should be preserved
+      expect(result["#t"]).toEqual(["nostr", "bitcoin"]);
     });
 
     it("should preserve other hashtags when resolving $hashtags", () => {
@@ -520,7 +531,8 @@ describe("resolveFilterAliases", () => {
       const result = resolveFilterAliases(filter, accountPubkey, []);
 
       expect(result.authors).toEqual([accountPubkey]);
-      expect(result["#t"]).toEqual([]); // Empty when no hashtags provided
+      // Empty #t should be removed from filter entirely
+      expect(result["#t"]).toBeUndefined();
     });
   });
 

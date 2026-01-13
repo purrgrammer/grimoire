@@ -704,6 +704,16 @@ export default function ReqViewer({
     [interestListEvent],
   );
 
+  // Compute interest list status for UI feedback
+  const interestListStatus = useMemo(() => {
+    if (!needsInterestList) return null;
+    if (!accountPubkey) return null; // Account required error handles this
+    if (interestListEvent === undefined) return "loading";
+    if (interestListEvent === null) return "not-found";
+    if (hashtags.length === 0) return "empty";
+    return "ok";
+  }, [needsInterestList, accountPubkey, interestListEvent, hashtags.length]);
+
   // Resolve $me, $contacts, and $hashtags aliases (memoized to prevent unnecessary object creation)
   const resolvedFilter = useMemo(
     () =>
@@ -1281,6 +1291,28 @@ export default function ReqViewer({
         <div className="border-b border-border px-4 py-2 bg-destructive/10">
           <span className="text-xs font-mono text-destructive">
             Error: {error.message}
+          </span>
+        </div>
+      )}
+
+      {/* Interest List Warning Banner */}
+      {interestListStatus === "not-found" && (
+        <div className="border-b border-border px-4 py-2 bg-warning/10 flex items-center gap-2">
+          <Hash className="size-4 text-warning" />
+          <span className="text-xs text-warning">
+            No interest list found (kind 10015).{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">$hashtags</code>{" "}
+            ignored.
+          </span>
+        </div>
+      )}
+      {interestListStatus === "empty" && (
+        <div className="border-b border-border px-4 py-2 bg-warning/10 flex items-center gap-2">
+          <Hash className="size-4 text-warning" />
+          <span className="text-xs text-warning">
+            Interest list has no hashtags.{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">$hashtags</code>{" "}
+            ignored.
           </span>
         </div>
       )}

@@ -236,7 +236,14 @@ export function resolveFilterAliases(
     }
 
     // Deduplicate
-    resolved["#t"] = Array.from(new Set(resolvedTTags));
+    const deduped = Array.from(new Set(resolvedTTags));
+
+    // If result is empty, remove #t from filter entirely to avoid unusable query
+    if (deduped.length === 0) {
+      delete resolved["#t"];
+    } else {
+      resolved["#t"] = deduped;
+    }
   }
 
   return resolved;
