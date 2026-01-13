@@ -162,9 +162,12 @@ const ComposerReplyPreview = memo(function ComposerReplyPreview({
         pubkey={replyEvent.pubkey}
         className="font-medium flex-shrink-0"
       />
-      <span className="flex-1 min-w-0 truncate text-muted-foreground">
-        {replyEvent.content}
-      </span>
+      <div className="flex-1 min-w-0 line-clamp-1 overflow-hidden text-muted-foreground">
+        <RichText
+          event={replyEvent}
+          options={{ showMedia: false, showEventEmbeds: false }}
+        />
+      </div>
       <button
         onClick={onClear}
         className="ml-auto text-muted-foreground hover:text-foreground flex-shrink-0"
@@ -538,6 +541,8 @@ export function ChatViewer({
   // Handle reply button click
   const handleReply = useCallback((messageId: string) => {
     setReplyTo(messageId);
+    // Focus the editor so user can start typing immediately
+    editorRef.current?.focus();
   }, []);
 
   // Handle scroll to message (when clicking on reply preview)
