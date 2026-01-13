@@ -558,7 +558,7 @@ export function ChatViewer({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="size-6 animate-spin" />
-        <span>Loading conversation...</span>
+        <span className="text-xs">Loading conversation...</span>
       </div>
     );
   }
@@ -701,22 +701,23 @@ export function ChatViewer({
             followOutput="smooth"
             components={{
               Header: () =>
-                hasMore ? (
+                hasMore && conversationResult.status === "success" ? (
                   <div className="flex justify-center py-2">
-                    <button
+                    <Button
                       onClick={handleLoadOlder}
                       disabled={isLoadingOlder}
-                      className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
+                      variant="ghost"
+                      size="sm"
                     >
                       {isLoadingOlder ? (
                         <>
                           <Loader2 className="size-3 animate-spin" />
-                          Loading...
+                          <span className="text-xs">Loading...</span>
                         </>
                       ) : (
                         "Load older messages"
                       )}
-                    </button>
+                    </Button>
                   </div>
                 ) : null,
             }}
