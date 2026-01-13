@@ -30,6 +30,7 @@ import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
+import LoginDialog from "./nostr/LoginDialog";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
@@ -338,6 +339,9 @@ export function ChatViewer({
   // Get active account
   const activeAccount = use$(accountManager.active$);
   const hasActiveAccount = !!activeAccount;
+
+  // Login dialog state
+  const [showLogin, setShowLogin] = useState(false);
 
   // Profile search for mentions
   const { searchProfiles } = useProfileSearch();
@@ -703,238 +707,251 @@ export function ChatViewer({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header with conversation info and controls */}
-      <div className="pl-2 pr-0 border-b w-full py-0.5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-1 min-w-0 items-center gap-2">
-            {headerPrefix}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-sm font-semibold truncate cursor-help text-left">
-                    {customTitle || conversation.title}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="bottom"
-                  align="start"
-                  className="max-w-md p-3"
-                >
-                  <div className="flex flex-col gap-2">
-                    {/* Icon + Name */}
-                    <div className="flex items-center gap-2">
-                      {conversation.metadata?.icon && (
-                        <img
-                          src={conversation.metadata.icon}
-                          alt=""
-                          className="size-6 rounded object-cover flex-shrink-0"
-                          onError={(e) => {
-                            // Hide image if it fails to load
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="font-semibold">
-                        {conversation.title}
-                      </span>
-                    </div>
-                    {/* Description */}
-                    {conversation.metadata?.description && (
-                      <p className="text-xs text-primary-foreground/90">
-                        {conversation.metadata.description}
-                      </p>
-                    )}
-                    {/* Protocol Type - Clickable */}
-                    <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNipClick();
-                          }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
-                        >
-                          {conversation.protocol.toUpperCase()}
-                        </button>
-                      )}
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
-                      )}
-                      <span className="capitalize text-primary-foreground/80">
-                        {conversation.type}
-                      </span>
-                    </div>
-                    {/* Live Activity Status */}
-                    {liveActivity?.status && (
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <span className="text-primary-foreground/80">
-                          Status:
+    <>
+      <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
+      <div className="flex h-full flex-col">
+        {/* Header with conversation info and controls */}
+        <div className="pl-2 pr-0 border-b w-full py-0.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-1 min-w-0 items-center gap-2">
+              {headerPrefix}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="text-sm font-semibold truncate cursor-help text-left">
+                      {customTitle || conversation.title}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="bottom"
+                    align="start"
+                    className="max-w-md p-3"
+                  >
+                    <div className="flex flex-col gap-2">
+                      {/* Icon + Name */}
+                      <div className="flex items-center gap-2">
+                        {conversation.metadata?.icon && (
+                          <img
+                            src={conversation.metadata.icon}
+                            alt=""
+                            className="size-6 rounded object-cover flex-shrink-0"
+                            onError={(e) => {
+                              // Hide image if it fails to load
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        )}
+                        <span className="font-semibold">
+                          {conversation.title}
                         </span>
-                        <StatusBadge status={liveActivity.status} size="xs" />
                       </div>
-                    )}
-                    {/* Host Info */}
-                    {liveActivity?.hostPubkey && (
-                      <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
-                        <span>Host:</span>
-                        <UserName
-                          pubkey={liveActivity.hostPubkey}
-                          className="text-xs text-primary-foreground"
-                        />
+                      {/* Description */}
+                      {conversation.metadata?.description && (
+                        <p className="text-xs text-primary-foreground/90">
+                          {conversation.metadata.description}
+                        </p>
+                      )}
+                      {/* Protocol Type - Clickable */}
+                      <div className="flex items-center gap-1.5 text-xs">
+                        {(conversation.type === "group" ||
+                          conversation.type === "live-chat") && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNipClick();
+                            }}
+                            className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                          >
+                            {conversation.protocol.toUpperCase()}
+                          </button>
+                        )}
+                        {(conversation.type === "group" ||
+                          conversation.type === "live-chat") && (
+                          <span className="text-primary-foreground/60">•</span>
+                        )}
+                        <span className="capitalize text-primary-foreground/80">
+                          {conversation.type}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={derivedParticipants} />
-            <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
-            )}
+                      {/* Live Activity Status */}
+                      {liveActivity?.status && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-primary-foreground/80">
+                            Status:
+                          </span>
+                          <StatusBadge status={liveActivity.status} size="xs" />
+                        </div>
+                      )}
+                      {/* Host Info */}
+                      {liveActivity?.hostPubkey && (
+                        <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
+                          <span>Host:</span>
+                          <UserName
+                            pubkey={liveActivity.hostPubkey}
+                            className="text-xs text-primary-foreground"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
+              <MembersDropdown participants={derivedParticipants} />
+              <RelaysDropdown conversation={conversation} />
+              {(conversation.type === "group" ||
+                conversation.type === "live-chat") && (
+                <button
+                  onClick={handleNipClick}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+                >
+                  {conversation.protocol.toUpperCase()}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Message timeline with virtualization */}
-      <div className="flex-1 overflow-hidden">
-        {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={messagesWithMarkers}
-            initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput="smooth"
-            components={{
-              Header: () =>
-                hasMore && conversationResult.status === "success" ? (
-                  <div className="flex justify-center py-2">
-                    <Button
-                      onClick={handleLoadOlder}
-                      disabled={isLoadingOlder}
-                      variant="ghost"
-                      size="sm"
+        {/* Message timeline with virtualization */}
+        <div className="flex-1 overflow-hidden">
+          {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
+            <Virtuoso
+              ref={virtuosoRef}
+              data={messagesWithMarkers}
+              initialTopMostItemIndex={messagesWithMarkers.length - 1}
+              followOutput="smooth"
+              components={{
+                Header: () =>
+                  hasMore && conversationResult.status === "success" ? (
+                    <div className="flex justify-center py-2">
+                      <Button
+                        onClick={handleLoadOlder}
+                        disabled={isLoadingOlder}
+                        variant="ghost"
+                        size="sm"
+                      >
+                        {isLoadingOlder ? (
+                          <>
+                            <Loader2 className="size-3 animate-spin" />
+                            <span className="text-xs">Loading...</span>
+                          </>
+                        ) : (
+                          "Load older messages"
+                        )}
+                      </Button>
+                    </div>
+                  ) : null,
+              }}
+              itemContent={(_index, item) => {
+                if (item.type === "day-marker") {
+                  return (
+                    <div
+                      className="flex justify-center py-2"
+                      key={`marker-${item.timestamp}`}
                     >
-                      {isLoadingOlder ? (
-                        <>
-                          <Loader2 className="size-3 animate-spin" />
-                          <span className="text-xs">Loading...</span>
-                        </>
-                      ) : (
-                        "Load older messages"
-                      )}
-                    </Button>
-                  </div>
-                ) : null,
-            }}
-            itemContent={(_index, item) => {
-              if (item.type === "day-marker") {
+                      <Label className="text-[10px] text-muted-foreground">
+                        {item.data}
+                      </Label>
+                    </div>
+                  );
+                }
                 return (
-                  <div
-                    className="flex justify-center py-2"
-                    key={`marker-${item.timestamp}`}
-                  >
-                    <Label className="text-[10px] text-muted-foreground">
-                      {item.data}
-                    </Label>
-                  </div>
+                  <MessageItem
+                    key={item.data.id}
+                    message={item.data}
+                    adapter={adapter}
+                    conversation={conversation}
+                    onReply={handleReply}
+                    canReply={hasActiveAccount}
+                    onScrollToMessage={handleScrollToMessage}
+                  />
                 );
-              }
-              return (
-                <MessageItem
-                  key={item.data.id}
-                  message={item.data}
-                  adapter={adapter}
-                  conversation={conversation}
-                  onReply={handleReply}
-                  canReply={hasActiveAccount}
-                  onScrollToMessage={handleScrollToMessage}
-                />
-              );
-            }}
-            style={{ height: "100%" }}
-          />
+              }}
+              style={{ height: "100%" }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              No messages yet. Start the conversation!
+            </div>
+          )}
+        </div>
+
+        {/* Message composer - only show if user has active account */}
+        {hasActiveAccount ? (
+          <div className="border-t px-2 py-1 pb-0">
+            {replyTo && (
+              <ComposerReplyPreview
+                replyToId={replyTo}
+                onClear={() => setReplyTo(undefined)}
+              />
+            )}
+            <div className="flex gap-1.5 items-center">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
+                      onClick={openUpload}
+                      disabled={isSending}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>Attach media</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <MentionEditor
+                ref={editorRef}
+                placeholder="Type a message..."
+                searchProfiles={searchProfiles}
+                searchEmojis={searchEmojis}
+                searchCommands={searchCommands}
+                onCommandExecute={handleCommandExecute}
+                onSubmit={(content, emojiTags, blobAttachments) => {
+                  if (content.trim()) {
+                    handleSend(content, replyTo, emojiTags, blobAttachments);
+                  }
+                }}
+                className="flex-1 min-w-0"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="flex-shrink-0 h-7 px-2 text-xs"
+                disabled={isSending}
+                onClick={() => {
+                  editorRef.current?.submit();
+                }}
+              >
+                {isSending ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  "Send"
+                )}
+              </Button>
+            </div>
+            {uploadDialog}
+          </div>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            No messages yet. Start the conversation!
+          <div className="border-t px-3 py-2 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLogin(true)}
+            >
+              Sign in to send messages
+            </Button>
           </div>
         )}
       </div>
-
-      {/* Message composer - only show if user has active account */}
-      {hasActiveAccount ? (
-        <div className="border-t px-2 py-1 pb-0">
-          {replyTo && (
-            <ComposerReplyPreview
-              replyToId={replyTo}
-              onClear={() => setReplyTo(undefined)}
-            />
-          )}
-          <div className="flex gap-1.5 items-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
-                    onClick={openUpload}
-                    disabled={isSending}
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Attach media</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <MentionEditor
-              ref={editorRef}
-              placeholder="Type a message..."
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              searchCommands={searchCommands}
-              onCommandExecute={handleCommandExecute}
-              onSubmit={(content, emojiTags, blobAttachments) => {
-                if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags, blobAttachments);
-                }
-              }}
-              className="flex-1 min-w-0"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="flex-shrink-0 h-7 px-2 text-xs"
-              disabled={isSending}
-              onClick={() => {
-                editorRef.current?.submit();
-              }}
-            >
-              {isSending ? <Loader2 className="size-3 animate-spin" /> : "Send"}
-            </Button>
-          </div>
-          {uploadDialog}
-        </div>
-      ) : (
-        <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">
-          Sign in to send messages
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 

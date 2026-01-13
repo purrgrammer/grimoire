@@ -93,11 +93,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const { pubkey, identifier: dTag } = identifier.value;
     const relayHints = identifier.relays || [];
 
-    const activePubkey = accountManager.active$.value?.pubkey;
-    if (!activePubkey) {
-      throw new Error("No active account");
-    }
-
     console.log(
       `[NIP-53] Fetching live activity ${dTag} by ${pubkey.slice(0, 8)}...`,
     );

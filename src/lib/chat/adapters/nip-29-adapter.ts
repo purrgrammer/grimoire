@@ -116,11 +116,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("NIP-29 groups require a relay URL");
     }
 
-    const activePubkey = accountManager.active$.value?.pubkey;
-    if (!activePubkey) {
-      throw new Error("No active account");
-    }
-
     console.log(
       `[NIP-29] Fetching group metadata for ${groupId} from ${relayUrl}`,
     );
