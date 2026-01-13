@@ -302,6 +302,7 @@ body.animating-layout
   color: hsl(var(--muted-foreground));
   pointer-events: none;
   height: 0;
+  position: absolute;
 }
 
 /* Mention styles */
