@@ -346,9 +346,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No conversation recipient found");
     }
 
-    // Track existing gift wrap IDs before sending
-    const existingIds = new Set(this.giftWraps$.value.map((g) => g.id));
-
     // Use applesauce's SendWrappedMessage action
     // This handles:
     // - Creating the wrapped message rumor
@@ -360,42 +357,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       `[NIP-17] Sent wrapped message to ${recipientPubkey.slice(0, 8)}...${isSelfConversation ? " (saved)" : ""}`,
     );
 
-    // After sending, check eventStore for new gift wraps addressed to us
-    // The publishEvent function adds events to eventStore, so our own gift wrap should be there
-    this.pickUpNewGiftWrapsFromStore(activePubkey, existingIds);
-  }
-
-  /**
-   * Pick up new gift wraps from eventStore that we don't have yet
-   * Used after sending to ensure sent message appears immediately
-   */
-  private async pickUpNewGiftWrapsFromStore(
-    pubkey: string,
-    existingIds: Set<string>,
-  ): Promise<void> {
-    try {
-      // Query eventStore for gift wraps addressed to us
-      const giftWraps = await firstValueFrom(
-        eventStore
-          .timeline([{ kinds: [GIFT_WRAP_KIND], "#p": [pubkey] }])
-          .pipe(first()),
-        { defaultValue: [] },
-      );
-
-      let added = 0;
-      for (const giftWrap of giftWraps) {
-        if (!existingIds.has(giftWrap.id)) {
-          this.handleGiftWrap(giftWrap);
-          added++;
-        }
-      }
-
-      if (added > 0) {
-        console.log(`[NIP-17] Picked up ${added} new gift wrap(s) from store`);
-      }
-    } catch (error) {
-      console.warn("[NIP-17] Failed to pick up gift wraps from store:", error);
-    }
+    // Note: The sent gift wrap will be picked up automatically via eventStore.insert$ subscription
   }
 
   /**
@@ -687,6 +649,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
   /**
    * Subscribe to gift wraps for the user from their inbox relays
+   * Also subscribes to eventStore.insert$ to catch locally published gift wraps
    */
   private async subscribeToGiftWraps(pubkey: string): Promise<void> {
     // Don't create duplicate subscriptions
@@ -694,6 +657,23 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       console.log("[NIP-17] Subscription already active, skipping");
       return;
     }
+
+    this.subscriptionActive = true;
+
+    // Subscribe to eventStore.insert$ to catch gift wraps added locally (e.g., after sending)
+    // This is critical for immediate display of sent messages
+    const insertSub = eventStore.insert$.subscribe((event) => {
+      if (
+        event.kind === GIFT_WRAP_KIND &&
+        event.tags.some((t) => t[0] === "p" && t[1] === pubkey)
+      ) {
+        console.log(
+          `[NIP-17] Detected gift wrap from eventStore.insert$: ${event.id.slice(0, 8)}...`,
+        );
+        this.handleGiftWrap(event);
+      }
+    });
+    this.subscriptions.set(`nip-17:insert:${pubkey}`, insertSub);
 
     const conversationId = `nip-17:inbox:${pubkey}`;
 
@@ -703,6 +683,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       console.warn(
         "[NIP-17] No inbox relays found. Configure kind 10050 to receive DMs.",
       );
+      // Still keep subscriptionActive true for insert$ subscription
       return;
     }
 
@@ -711,15 +692,13 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       inboxRelays,
     );
 
-    // Subscribe to gift wraps addressed to this user
+    // Subscribe to gift wraps addressed to this user from relays
     const filter: Filter = {
       kinds: [GIFT_WRAP_KIND],
       "#p": [pubkey],
     };
 
-    this.subscriptionActive = true;
-
-    const subscription = pool
+    const relaySub = pool
       .subscription(inboxRelays, [filter], { eventStore })
       .subscribe({
         next: (response) => {
@@ -727,24 +706,22 @@ export class Nip17Adapter extends ChatProtocolAdapter {
             // EOSE
             console.log("[NIP-17] EOSE received for gift wraps");
           } else {
-            // New gift wrap received
+            // New gift wrap received from relay
             console.log(
-              `[NIP-17] Received gift wrap: ${response.id.slice(0, 8)}...`,
+              `[NIP-17] Received gift wrap from relay: ${response.id.slice(0, 8)}...`,
             );
             this.handleGiftWrap(response);
           }
         },
         error: (err) => {
-          console.error("[NIP-17] Subscription error:", err);
-          this.subscriptionActive = false;
+          console.error("[NIP-17] Relay subscription error:", err);
         },
         complete: () => {
-          console.log("[NIP-17] Subscription completed");
-          this.subscriptionActive = false;
+          console.log("[NIP-17] Relay subscription completed");
         },
       });
 
-    this.subscriptions.set(conversationId, subscription);
+    this.subscriptions.set(conversationId, relaySub);
   }
 
   /**
