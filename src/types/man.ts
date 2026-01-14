@@ -7,6 +7,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parseWalletCommand } from "@/lib/wallet-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -574,5 +575,35 @@ export const manPages: Record<string, ManPageEntry> = {
       return await parseBlossomCommand(args, activeAccountPubkey);
     },
     defaultProps: { subcommand: "servers" },
+  },
+  wallet: {
+    name: "wallet",
+    section: "1",
+    synopsis: "wallet [command] [options]",
+    description:
+      "Manage Nostr Wallet Connect (NIP-47) connections for Lightning payments. View wallet balances, manage connections, and configure payment settings.",
+    options: [
+      {
+        flag: "connect <uri>",
+        description:
+          "Add a new NWC connection using a connection URI (nostr+walletconnect://...)",
+      },
+      {
+        flag: "--name <name>",
+        description: "Set a custom name for the wallet connection",
+      },
+    ],
+    examples: [
+      "wallet                                   Open wallet manager",
+      "wallet connect nostr+walletconnect://... Add NWC connection",
+      'wallet connect nwc://... --name "Alby"  Add with custom name',
+    ],
+    seeAlso: ["profile"],
+    appId: "wallet",
+    category: "System",
+    argParser: (args: string[]) => {
+      return parseWalletCommand(args);
+    },
+    defaultProps: { action: "view" },
   },
 };

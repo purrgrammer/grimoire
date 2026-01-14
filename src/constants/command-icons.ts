@@ -15,6 +15,7 @@ import {
   Bug,
   Wifi,
   MessageSquare,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -98,6 +99,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   conn: {
     icon: Wifi,
     description: "View relay pool connection and authentication status",
+  },
+  wallet: {
+    icon: Wallet,
+    description: "Manage Nostr Wallet Connect connections",
   },
 };
 
