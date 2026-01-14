@@ -155,18 +155,6 @@ export function WindowToolbar({
             <Pencil className="size-4" />
           </Button>
 
-          {/* Pop Out button */}
-          <Button
-            variant="link"
-            size="icon"
-            className="text-muted-foreground"
-            onClick={handlePopOut}
-            title="Pop out window"
-            aria-label="Pop out window"
-          >
-            <ExternalLink className="size-4" />
-          </Button>
-
           {/* Copy button for NIPs */}
           {isNipWindow && (
             <Button
@@ -182,55 +170,64 @@ export function WindowToolbar({
             </Button>
           )}
 
-          {/* More actions menu - shows when multiple workspaces exist */}
-          {hasMultipleWorkspaces && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="link"
-                  size="icon"
-                  className="text-muted-foreground"
-                  title="More actions"
-                  aria-label="More actions"
-                >
-                  <MoreVertical className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {/* Move to tab submenu */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    disabled={otherWorkspaces.length === 0}
-                  >
-                    <ArrowRightFromLine className="size-4 mr-2" />
-                    Move to tab
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {otherWorkspaces.map((ws) => (
-                      <DropdownMenuItem
-                        key={ws.id}
-                        onClick={() => handleMoveToWorkspace(ws.id)}
-                      >
-                        {ws.number}
-                        {ws.label ? ` ${ws.label}` : ""}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+          {/* More actions menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="link"
+                size="icon"
+                className="text-muted-foreground"
+                title="More actions"
+                aria-label="More actions"
+              >
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {/* Pop out window */}
+              <DropdownMenuItem onClick={handlePopOut}>
+                <ExternalLink className="size-4 mr-2" />
+                Pop out window
+              </DropdownMenuItem>
 
-                {/* REQ-specific actions */}
-                {isReqWindow && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleTurnIntoSpell}>
-                      <WandSparkles className="size-4 mr-2" />
-                      Save as spell
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              {/* Move to tab submenu - only show if multiple workspaces */}
+              {hasMultipleWorkspaces && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      disabled={otherWorkspaces.length === 0}
+                    >
+                      <ArrowRightFromLine className="size-4 mr-2" />
+                      Move to tab
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {otherWorkspaces.map((ws) => (
+                        <DropdownMenuItem
+                          key={ws.id}
+                          onClick={() => handleMoveToWorkspace(ws.id)}
+                        >
+                          {ws.number}
+                          {ws.label ? ` ${ws.label}` : ""}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </>
+              )}
+
+              {/* REQ-specific actions */}
+              {isReqWindow && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleTurnIntoSpell}>
+                    <WandSparkles className="size-4 mr-2" />
+                    Save as spell
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Spell Dialog */}
           {isReqWindow && (
