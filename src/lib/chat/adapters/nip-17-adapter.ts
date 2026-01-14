@@ -51,6 +51,7 @@ import { SendWrappedMessage } from "applesauce-actions/actions";
  */
 const GIFT_WRAP_KIND = 1059;
 const DM_RUMOR_KIND = 14;
+const DM_RELAY_LIST_KIND = 10050;
 
 /**
  * NIP-17 Adapter - Gift Wrapped Private DMs
@@ -481,13 +482,27 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   // ==================== Private Methods ====================
 
   /**
-   * Subscribe to gift wraps for the user
+   * Subscribe to gift wraps for the user from their inbox relays
    */
-  private subscribeToGiftWraps(pubkey: string): void {
+  private async subscribeToGiftWraps(pubkey: string): Promise<void> {
     const conversationId = `nip-17:inbox:${pubkey}`;
 
     // Clean up existing subscription
     this.cleanup(conversationId);
+
+    // Get user's private inbox relays (kind 10050)
+    const inboxRelays = await this.getInboxRelays(pubkey);
+    if (inboxRelays.length === 0) {
+      console.warn(
+        "[NIP-17] No inbox relays found. Configure kind 10050 to receive DMs.",
+      );
+      return;
+    }
+
+    console.log(
+      `[NIP-17] Subscribing to ${inboxRelays.length} inbox relays:`,
+      inboxRelays,
+    );
 
     // Subscribe to gift wraps addressed to this user
     const filter: Filter = {
@@ -496,7 +511,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     };
 
     const subscription = pool
-      .subscription([], [filter], { eventStore })
+      .subscription(inboxRelays, [filter], { eventStore })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
@@ -525,6 +540,65 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       });
 
     this.subscriptions.set(conversationId, subscription);
+  }
+
+  /**
+   * Get private inbox relays for a user (kind 10050)
+   */
+  private async getInboxRelays(pubkey: string): Promise<string[]> {
+    // Try to fetch from EventStore first
+    const existing = await firstValueFrom(
+      eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey, ""),
+      { defaultValue: undefined },
+    );
+
+    if (existing) {
+      const relays = this.extractRelaysFromEvent(existing);
+      if (relays.length > 0) {
+        return relays;
+      }
+    }
+
+    // Fetch from default relays if not in store
+    const filter: Filter = {
+      kinds: [DM_RELAY_LIST_KIND],
+      authors: [pubkey],
+      limit: 1,
+    };
+
+    // Use user's outbox relays or fallback relays to find their inbox list
+    const events: NostrEvent[] = [];
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 5000);
+      const sub = pool.subscription([], [filter], { eventStore }).subscribe({
+        next: (response) => {
+          if (typeof response === "string") {
+            clearTimeout(timeout);
+            sub.unsubscribe();
+            resolve();
+          } else {
+            events.push(response);
+          }
+        },
+        error: () => {
+          clearTimeout(timeout);
+          resolve();
+        },
+      });
+    });
+
+    if (events.length > 0) {
+      return this.extractRelaysFromEvent(events[0]);
+    }
+
+    return [];
+  }
+
+  /**
+   * Extract relay URLs from kind 10050 event
+   */
+  private extractRelaysFromEvent(event: NostrEvent): string[] {
+    return event.tags.filter((t) => t[0] === "relay" && t[1]).map((t) => t[1]);
   }
 
   /**
