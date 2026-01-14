@@ -6,7 +6,6 @@ import {
 } from "@/lib/command-parser";
 import { useGrimoire } from "@/core/state";
 import { WindowRenderer } from "@/components/WindowRenderer";
-import { ExternalLink } from "lucide-react";
 
 /**
  * RunCommandPage - Standalone command execution route
@@ -87,9 +86,6 @@ export default function RunCommandPage() {
     );
   }
 
-  const title =
-    parsed.globalFlags?.windowProps?.title || parsed.command.name.toUpperCase();
-
   // Construct a minimal WindowInstance for rendering
   const windowInstance = {
     id: "pop-out",
@@ -100,25 +96,6 @@ export default function RunCommandPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <ExternalLink className="h-4 w-4 text-muted-foreground" />
-          <h1 className="text-sm font-semibold">{title}</h1>
-        </div>
-        <div className="text-xs font-mono text-muted-foreground">
-          {parsed.fullInput}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        <WindowRenderer
-          window={windowInstance}
-          onClose={() => window.close()}
-        />
-      </div>
-    </div>
+    <WindowRenderer window={windowInstance} onClose={() => window.close()} />
   );
 }
