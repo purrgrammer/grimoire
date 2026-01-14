@@ -12,7 +12,6 @@ import giftWrapManager from "@/services/gift-wrap";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
 import db, { DecryptedGiftWrap } from "@/services/db";
-import { getInboxes } from "applesauce-core/helpers";
 
 interface InboxViewerProps {
   action?: "decrypt-pending" | "clear-failed" | null;
