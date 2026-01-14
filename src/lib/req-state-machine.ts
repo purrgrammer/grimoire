@@ -214,16 +214,16 @@ export function getStatusColor(status: ReqOverallStatus): string {
     case "discovering":
     case "connecting":
     case "loading":
-      return "text-yellow-500";
+      return "text-warning";
     case "live":
-      return "text-green-500";
+      return "text-success";
     case "partial":
-      return "text-yellow-500";
+      return "text-warning";
     case "closed":
       return "text-muted-foreground";
     case "offline":
     case "failed":
-      return "text-red-500";
+      return "text-destructive";
   }
 }
 
@@ -244,21 +244,21 @@ export function getRelayStateBadge(
 
   // Prioritize subscription state
   if (subscriptionState === "receiving") {
-    return { text: "RECEIVING", color: "text-green-500" };
+    return { text: "RECEIVING", color: "text-success" };
   }
   if (subscriptionState === "eose") {
-    return { text: "EOSE", color: "text-blue-500" };
+    return { text: "EOSE", color: "text-info" };
   }
   if (subscriptionState === "error") {
-    return { text: "ERROR", color: "text-red-500" };
+    return { text: "ERROR", color: "text-destructive" };
   }
 
   // Show connection state if not connected
   if (connectionState === "connecting") {
-    return { text: "CONNECTING", color: "text-yellow-500" };
+    return { text: "CONNECTING", color: "text-warning" };
   }
   if (connectionState === "error") {
-    return { text: "ERROR", color: "text-red-500" };
+    return { text: "ERROR", color: "text-destructive" };
   }
   if (connectionState === "disconnected") {
     return { text: "OFFLINE", color: "text-muted-foreground" };

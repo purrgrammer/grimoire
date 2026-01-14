@@ -597,14 +597,14 @@ describe("getStatusTooltip", () => {
 
 describe("getStatusColor", () => {
   it("should return correct colors for each status", () => {
-    expect(getStatusColor("discovering")).toBe("text-yellow-500");
-    expect(getStatusColor("connecting")).toBe("text-yellow-500");
-    expect(getStatusColor("loading")).toBe("text-yellow-500");
-    expect(getStatusColor("live")).toBe("text-green-500");
-    expect(getStatusColor("partial")).toBe("text-yellow-500");
+    expect(getStatusColor("discovering")).toBe("text-warning");
+    expect(getStatusColor("connecting")).toBe("text-warning");
+    expect(getStatusColor("loading")).toBe("text-warning");
+    expect(getStatusColor("live")).toBe("text-success");
+    expect(getStatusColor("partial")).toBe("text-warning");
     expect(getStatusColor("closed")).toBe("text-muted-foreground");
-    expect(getStatusColor("offline")).toBe("text-red-500");
-    expect(getStatusColor("failed")).toBe("text-red-500");
+    expect(getStatusColor("offline")).toBe("text-destructive");
+    expect(getStatusColor("failed")).toBe("text-destructive");
   });
 });
 
@@ -633,7 +633,7 @@ describe("getRelayStateBadge", () => {
       eventCount: 5,
     });
     expect(badge?.text).toBe("RECEIVING");
-    expect(badge?.color).toBe("text-green-500");
+    expect(badge?.color).toBe("text-success");
   });
 
   it("should return eose badge", () => {
@@ -644,7 +644,7 @@ describe("getRelayStateBadge", () => {
       eventCount: 10,
     });
     expect(badge?.text).toBe("EOSE");
-    expect(badge?.color).toBe("text-blue-500");
+    expect(badge?.color).toBe("text-info");
   });
 
   it("should return error badge", () => {
@@ -655,7 +655,7 @@ describe("getRelayStateBadge", () => {
       eventCount: 0,
     });
     expect(badge?.text).toBe("ERROR");
-    expect(badge?.color).toBe("text-red-500");
+    expect(badge?.color).toBe("text-destructive");
   });
 
   it("should return offline badge for disconnected", () => {

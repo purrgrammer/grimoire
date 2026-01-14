@@ -1,4 +1,4 @@
-import { User, HardDrive } from "lucide-react";
+import { User, HardDrive, Palette } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -13,6 +13,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
@@ -20,6 +23,7 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import { useState } from "react";
+import { useTheme } from "@/lib/themes";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -57,6 +61,7 @@ export default function UserMenu() {
   const blossomServers = state.activeAccount?.blossomServers;
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const { themeId, setTheme, availableThemes } = useTheme();
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -153,22 +158,66 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
-              {/* <DropdownMenuItem
-                onClick={() => setShowSettings(true)}
-                className="cursor-pointer"
-              >
-                <Settings className="mr-2 size-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator /> */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
             </>
           ) : (
-            <DropdownMenuItem onClick={() => setShowLogin(true)}>
-              Log in
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowLogin(true)}>
+                Log in
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>

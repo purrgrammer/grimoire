@@ -65,13 +65,15 @@ export default {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        chart: {
-          1: "hsl(var(--chart-1))",
-          2: "hsl(var(--chart-2))",
-          3: "hsl(var(--chart-3))",
-          4: "hsl(var(--chart-4))",
-          5: "hsl(var(--chart-5))",
-        },
+        // Status colors
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        info: "hsl(var(--info))",
+        // Nostr-specific colors
+        zap: "hsl(var(--zap))",
+        live: "hsl(var(--live))",
+        // UI highlight (active user, self-references)
+        highlight: "hsl(var(--highlight))",
       },
     },
   },

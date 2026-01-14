@@ -5,10 +5,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar styling */
+/* Custom scrollbar styling - uses theme variables */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
 *::-webkit-scrollbar {
@@ -17,20 +17,21 @@
 }
 
 *::-webkit-scrollbar-track {
-  background: transparent;
+  background: hsl(var(--scrollbar-track));
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: hsl(var(--scrollbar-thumb));
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: hsl(var(--scrollbar-thumb-hover));
 }
 
 @layer base {
   :root {
+    /* Core colors - light theme defaults (overridden by ThemeProvider) */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -51,12 +52,50 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --warning: 45 93% 47%;
+    --info: 199 89% 48%;
+
+    /* Nostr-specific colors */
+    --zap: 45 93% 40%;
+    --live: 0 72% 45%;
+
+    /* UI highlight (active user, self-references) */
+    --highlight: 25 90% 35%;
+
+    /* Syntax highlighting */
+    --syntax-comment: 215.4 16.3% 46.9%;
+    --syntax-punctuation: 222.2 84% 30%;
+    --syntax-property: 222.2 47.4% 11.2%;
+    --syntax-string: 142 60% 30%;
+    --syntax-keyword: 270 80% 50%;
+    --syntax-function: 222.2 47.4% 11.2%;
+    --syntax-variable: 222.2 84% 4.9%;
+    --syntax-operator: 222.2 84% 20%;
+
+    /* Diff colors */
+    --diff-inserted: 142 60% 30%;
+    --diff-inserted-bg: 142 60% 50% / 0.15;
+    --diff-deleted: 0 70% 45%;
+    --diff-deleted-bg: 0 70% 50% / 0.15;
+    --diff-meta: 199 80% 40%;
+    --diff-meta-bg: 199 80% 50% / 0.1;
+
+    /* Scrollbar */
+    --scrollbar-thumb: 222.2 84% 4.9% / 0.2;
+    --scrollbar-thumb-hover: 222.2 84% 4.9% / 0.3;
+    --scrollbar-track: 0 0% 0% / 0;
+
+    /* Gradient colors (RGB values) */
+    --gradient-1: 234 179 8;
+    --gradient-2: 249 115 22;
+    --gradient-3: 147 51 234;
+    --gradient-4: 6 182 212;
   }
+
+  /* Dark theme - applied via .dark class or ThemeProvider */
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -77,11 +116,47 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --warning: 45 93% 47%;
+    --info: 199 89% 48%;
+
+    /* Nostr-specific colors */
+    --zap: 45 93% 58%;
+    --live: 0 72% 51%;
+
+    /* UI highlight (active user, self-references) */
+    --highlight: 27 96% 61%;
+
+    /* Syntax highlighting */
+    --syntax-comment: 215 20.2% 70%;
+    --syntax-punctuation: 210 40% 70%;
+    --syntax-property: 210 40% 98%;
+    --syntax-string: 215 20.2% 70%;
+    --syntax-keyword: 210 40% 98%;
+    --syntax-function: 210 40% 98%;
+    --syntax-variable: 210 40% 98%;
+    --syntax-operator: 210 40% 98%;
+
+    /* Diff colors */
+    --diff-inserted: 134 60% 76%;
+    --diff-inserted-bg: 145 63% 42% / 0.1;
+    --diff-deleted: 0 100% 76%;
+    --diff-deleted-bg: 0 100% 60% / 0.1;
+    --diff-meta: 190 77% 70%;
+    --diff-meta-bg: 190 77% 70% / 0.08;
+
+    /* Scrollbar */
+    --scrollbar-thumb: 0 0% 100% / 0.2;
+    --scrollbar-thumb-hover: 0 0% 100% / 0.3;
+    --scrollbar-track: 0 0% 0% / 0;
+
+    /* Gradient colors (RGB values) */
+    --gradient-1: 250 204 21;
+    --gradient-2: 251 146 60;
+    --gradient-3: 168 85 247;
+    --gradient-4: 34 211 238;
   }
 }
 
@@ -106,10 +181,10 @@
   .text-grimoire-gradient {
     background: linear-gradient(
       to bottom,
-      rgb(250 204 21),
-      /* yellow-400 */ rgb(251 146 60),
-      /* orange-400 */ rgb(168 85 247),
-      /* purple-500 */ rgb(34 211 238) /* cyan-400 */
+      rgb(var(--gradient-1)),
+      rgb(var(--gradient-2)),
+      rgb(var(--gradient-3)),
+      rgb(var(--gradient-4))
     );
     background-clip: text;
     -webkit-background-clip: text;
@@ -117,16 +192,16 @@
   }
 }
 
-/* react-medium-image-zoom dark theme customization */
+/* react-medium-image-zoom theme customization - uses background with opacity */
 [data-rmiz-modal-overlay] {
-  background-color: rgba(12, 12, 18, 0.92) !important;
+  background-color: hsl(var(--background) / 0.92) !important;
 }
 
 [data-rmiz-modal-content] {
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 40px hsl(var(--foreground) / 0.2);
 }
 
-/* React Mosaic Dark Theme Customization */
+/* React Mosaic Theme Customization */
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme {
   background: hsl(var(--background));
 }

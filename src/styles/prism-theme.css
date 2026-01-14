@@ -1,4 +1,4 @@
-/* Grimoire Prism Theme - Matches dark theme using CSS variables */
+/* Grimoire Prism Theme - Uses CSS theme variables */
 
 code[class*="language-"],
 pre[class*="language-"] {
@@ -19,8 +19,8 @@ pre[class*="language-"] {
 
 /* Deleted lines (red) - subtle background, no strikethrough */
 .token.deleted {
-  color: #ff8787;
-  background: rgba(255, 59, 48, 0.1);
+  color: hsl(var(--diff-deleted));
+  background: hsl(var(--diff-deleted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
@@ -28,8 +28,8 @@ pre[class*="language-"] {
 
 /* Added lines (green) - subtle background */
 .token.inserted {
-  color: #69db7c;
-  background: rgba(52, 199, 89, 0.1);
+  color: hsl(var(--diff-inserted));
+  background: hsl(var(--diff-inserted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
@@ -38,8 +38,8 @@ pre[class*="language-"] {
 /* Hunk headers (@@ -1,5 +1,7 @@) - cyan/blue */
 .token.diff.coord,
 .token.coord {
-  color: #66d9ef;
-  background: rgba(102, 217, 239, 0.08);
+  color: hsl(var(--diff-meta));
+  background: hsl(var(--diff-meta-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
@@ -66,11 +66,11 @@ pre[class*="language-"] {
 .token.prolog,
 .token.doctype,
 .token.cdata {
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--syntax-comment));
 }
 
 .token.punctuation {
-  color: hsl(var(--foreground) / 0.7);
+  color: hsl(var(--syntax-punctuation));
 }
 
 .token.property,
@@ -79,7 +79,7 @@ pre[class*="language-"] {
 .token.number,
 .token.constant,
 .token.symbol {
-  color: hsl(var(--primary));
+  color: hsl(var(--syntax-property));
 }
 
 .token.selector,
@@ -87,8 +87,7 @@ pre[class*="language-"] {
 .token.string,
 .token.char,
 .token.builtin {
-  color: hsl(var(--muted-foreground));
-  font-weight: 500;
+  color: hsl(var(--syntax-string));
 }
 
 .token.operator,
@@ -96,25 +95,25 @@ pre[class*="language-"] {
 .token.url,
 .language-css .token.string,
 .style .token.string {
-  color: hsl(var(--foreground));
+  color: hsl(var(--syntax-operator));
 }
 
 .token.atrule,
 .token.attr-value,
 .token.keyword {
-  color: hsl(var(--primary));
+  color: hsl(var(--syntax-keyword));
 }
 
 .token.function,
 .token.class-name {
-  color: hsl(var(--primary));
+  color: hsl(var(--syntax-function));
   font-weight: bold;
 }
 
 .token.regex,
 .token.important,
 .token.variable {
-  color: hsl(var(--primary));
+  color: hsl(var(--syntax-variable));
 }
 
 .token.important,
