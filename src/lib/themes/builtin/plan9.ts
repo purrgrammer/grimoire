@@ -27,9 +27,9 @@ export const plan9Theme: Theme = {
     popover: "60 100% 97%",
     popoverForeground: "0 0% 0%",
 
-    // Dark blue for interactive elements
-    primary: "220 100% 25%",
-    primaryForeground: "60 100% 94%",
+    // Muted blue for interactive elements (subtler than before)
+    primary: "220 50% 35%",
+    primaryForeground: "60 100% 96%",
 
     // Muted green secondary
     secondary: "120 30% 88%",
@@ -41,54 +41,54 @@ export const plan9Theme: Theme = {
 
     // Muted yellow for subdued elements
     muted: "60 30% 88%",
-    mutedForeground: "0 0% 35%",
+    mutedForeground: "0 0% 25%",
 
     // Red for destructive
-    destructive: "0 70% 45%",
+    destructive: "0 70% 40%",
     destructiveForeground: "0 0% 100%",
 
-    // Dark blue borders
-    border: "220 40% 50%",
+    // Subtle borders
+    border: "60 20% 75%",
     input: "60 30% 92%",
-    ring: "220 100% 25%",
+    ring: "220 50% 35%",
 
-    // Status colors
-    success: "120 60% 30%",
-    warning: "45 90% 45%",
-    info: "200 80% 40%",
+    // Status colors (darker for contrast)
+    success: "120 60% 25%",
+    warning: "35 90% 35%",
+    info: "200 70% 35%",
   },
 
   syntax: {
     // Acme-inspired syntax colors
     comment: "0 0% 45%", // Gray
     punctuation: "0 0% 25%", // Dark gray
-    property: "220 100% 25%", // Dark blue
+    property: "220 50% 35%", // Muted blue
     string: "120 60% 28%", // Forest green
-    keyword: "280 60% 35%", // Purple
-    function: "220 100% 25%", // Dark blue
+    keyword: "280 50% 35%", // Muted purple
+    function: "220 50% 35%", // Muted blue
     variable: "0 0% 0%", // Black
     operator: "0 0% 15%", // Near black
 
     // Diff colors - subtle on yellow background
     diffInserted: "120 60% 25%",
-    diffInsertedBg: "120 50% 85%",
-    diffDeleted: "0 65% 40%",
-    diffDeletedBg: "0 50% 90%",
-    diffMeta: "200 70% 35%",
-    diffMetaBg: "200 50% 88%",
+    diffInsertedBg: "120 40% 85%",
+    diffDeleted: "0 60% 40%",
+    diffDeletedBg: "0 40% 90%",
+    diffMeta: "200 50% 35%",
+    diffMetaBg: "200 40% 88%",
   },
 
   scrollbar: {
-    thumb: "220 30% 55%",
-    thumbHover: "220 40% 45%",
-    track: "60 30% 90%",
+    thumb: "60 20% 70%",
+    thumbHover: "60 25% 60%",
+    track: "60 30% 92%",
   },
 
   gradient: {
-    // Muted gradient for Plan9 aesthetic
-    color1: "180 140 20", // Olive/mustard
-    color2: "200 120 50", // Burnt orange
-    color3: "100 60 180", // Muted purple
-    color4: "40 160 180", // Teal
+    // Darker gradient for contrast on pale yellow background
+    color1: "140 110 20", // Dark olive/mustard
+    color2: "180 90 40", // Dark burnt orange
+    color3: "80 50 140", // Dark muted purple
+    color4: "30 120 130", // Dark teal
   },
 };

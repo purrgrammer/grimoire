@@ -13,6 +13,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
@@ -155,33 +158,30 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                  <Palette className="size-3.5" />
-                  <span>Theme</span>
-                </DropdownMenuLabel>
-                {availableThemes.map((theme) => (
-                  <DropdownMenuItem
-                    key={theme.id}
-                    className="cursor-crosshair"
-                    onClick={() => setTheme(theme.id)}
-                  >
-                    <span
-                      className={`size-3 rounded-full mr-2 ${
-                        themeId === theme.id
-                          ? "bg-primary"
-                          : "bg-muted-foreground/30"
-                      }`}
-                    />
-                    <span className="text-sm">{theme.name}</span>
-                    {themeId === theme.id && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        active
-                      </span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
@@ -189,33 +189,30 @@ export default function UserMenu() {
             </>
           ) : (
             <>
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                  <Palette className="size-3.5" />
-                  <span>Theme</span>
-                </DropdownMenuLabel>
-                {availableThemes.map((theme) => (
-                  <DropdownMenuItem
-                    key={theme.id}
-                    className="cursor-crosshair"
-                    onClick={() => setTheme(theme.id)}
-                  >
-                    <span
-                      className={`size-3 rounded-full mr-2 ${
-                        themeId === theme.id
-                          ? "bg-primary"
-                          : "bg-muted-foreground/30"
-                      }`}
-                    />
-                    <span className="text-sm">{theme.name}</span>
-                    {themeId === theme.id && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        active
-                      </span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowLogin(true)}>
                 Log in

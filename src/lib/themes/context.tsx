@@ -108,9 +108,16 @@ export function ThemeProvider({
   children,
   defaultTheme,
 }: ThemeProviderProps): React.ReactElement {
-  // Initialize from localStorage or default
+  // Initialize from localStorage, falling back to defaultTheme prop or DEFAULT_THEME_ID
   const [themeId, setThemeIdState] = React.useState<string>(() => {
-    return defaultTheme || getSavedThemeId();
+    const saved = getSavedThemeId();
+    // Only use defaultTheme if nothing is saved (saved returns DEFAULT_THEME_ID when empty)
+    // Check localStorage directly to see if user has explicitly chosen a theme
+    const hasExplicitSave = localStorage.getItem(STORAGE_KEY) !== null;
+    if (hasExplicitSave) {
+      return saved;
+    }
+    return defaultTheme || DEFAULT_THEME_ID;
   });
 
   const [customThemes, setCustomThemes] = React.useState<Theme[]>(() => {

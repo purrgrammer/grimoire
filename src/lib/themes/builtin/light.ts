@@ -25,23 +25,23 @@ export const lightTheme: Theme = {
     secondary: "210 40% 96.1%",
     secondaryForeground: "222.2 47.4% 11.2%",
 
-    accent: "270 80% 60%",
+    accent: "270 70% 55%",
     accentForeground: "0 0% 100%",
 
     muted: "210 40% 96.1%",
-    mutedForeground: "215.4 16.3% 46.9%",
+    mutedForeground: "215.4 16.3% 40%",
 
-    destructive: "0 84.2% 60.2%",
-    destructiveForeground: "210 40% 98%",
+    destructive: "0 72% 51%",
+    destructiveForeground: "0 0% 100%",
 
-    border: "214.3 31.8% 91.4%",
+    border: "214.3 31.8% 85%",
     input: "214.3 31.8% 91.4%",
     ring: "222.2 84% 4.9%",
 
-    // Status colors
-    success: "142 76% 36%",
-    warning: "45 93% 47%",
-    info: "199 89% 48%",
+    // Status colors (darker for better contrast)
+    success: "142 70% 30%",
+    warning: "38 92% 40%",
+    info: "199 80% 40%",
   },
 
   syntax: {
