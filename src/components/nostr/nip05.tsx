@@ -1,5 +1,8 @@
 import { useNip05 } from "@/hooks/useNip05";
 import { ProfileContent } from "applesauce-core/helpers";
+import { isGrimoirePremium, isGrimoireNip05 } from "@/lib/nip05-grimoire";
+import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 
 export function QueryNip05({
   pubkey,
@@ -9,8 +12,27 @@ export function QueryNip05({
   nip05: string;
 }) {
   const nip05pubkey = useNip05(nip05);
-  if (nip05pubkey === pubkey) return nip05.replace(/^_@/, "");
-  return null;
+
+  // Only show if verified
+  if (nip05pubkey !== pubkey) return null;
+
+  // Check if this is a grimoire.app premium user (by pubkey or NIP-05)
+  const isPremium = isGrimoirePremium(pubkey) || isGrimoireNip05(nip05);
+  const displayNip05 = nip05.replace(/^_@/, "");
+
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1",
+        isPremium && "text-grimoire-gradient font-semibold",
+      )}
+    >
+      {displayNip05}
+      {isPremium && (
+        <Check className="inline-block h-3 w-3 text-grimoire-gradient" />
+      )}
+    </span>
+  );
 }
 
 export default function Nip05({
