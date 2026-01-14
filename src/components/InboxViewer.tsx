@@ -2,9 +2,10 @@
  * InboxViewer - Private DM Inbox (NIP-17/59 Gift Wrapped Messages)
  *
  * Displays list of encrypted DM conversations using gift wraps.
- * Messages are cached after decryption to avoid re-decryption on page load.
+ * Requires GiftWrapService to be enabled for subscription and decryption.
  *
  * Features:
+ * - Toggle to enable/disable gift wrap subscription
  * - Lists all DM conversations from decrypted gift wraps
  * - Shows pending (undecrypted) message count
  * - Explicit decrypt button (no auto-decrypt)
@@ -20,8 +21,12 @@ import {
   AlertCircle,
   PanelLeft,
   Bookmark,
+  Power,
+  PowerOff,
 } from "lucide-react";
+import { toast } from "sonner";
 import accountManager from "@/services/accounts";
+import { giftWrapService } from "@/services/gift-wrap-service";
 import { ChatViewer } from "./ChatViewer";
 import type { ProtocolIdentifier } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -242,11 +247,40 @@ const MemoizedChatViewer = memo(
 );
 
 /**
+ * EnableGiftWrapPrompt - Shown when gift wrap is not enabled
+ */
+function EnableGiftWrapPrompt({ onEnable }: { onEnable: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground p-6 text-center">
+      <Lock className="size-12 opacity-50" />
+      <div className="space-y-2">
+        <h3 className="text-lg font-medium text-foreground">
+          Gift Wrap Subscription Disabled
+        </h3>
+        <p className="text-sm max-w-sm">
+          Enable gift wrap subscription to receive and decrypt private messages.
+          Gift wraps (NIP-59) are used for encrypted communication.
+        </p>
+      </div>
+      <Button onClick={onEnable} className="gap-2">
+        <Power className="size-4" />
+        Enable Gift Wraps
+      </Button>
+    </div>
+  );
+}
+
+/**
  * InboxViewer - Main inbox component
  */
 export function InboxViewer() {
   const activeAccount = use$(accountManager.active$);
   const activePubkey = activeAccount?.pubkey;
+
+  // Gift wrap service state
+  const isGiftWrapEnabled =
+    use$(() => giftWrapService.isEnabled$(), []) ?? false;
+  const pendingCount = use$(() => giftWrapService.getPendingCount$(), []) ?? 0;
 
   // Mobile detection
   const isMobile = useIsMobile();
@@ -258,23 +292,13 @@ export function InboxViewer() {
   const [isResizing, setIsResizing] = useState(false);
   const [isDecrypting, setIsDecrypting] = useState(false);
 
-  // NIP-17 adapter singleton instance
-  const adapter = nip17Adapter;
-
-  // Ensure subscription is active when component mounts
-  useEffect(() => {
-    if (activePubkey) {
-      adapter.ensureSubscription();
-    }
-  }, [adapter, activePubkey]);
-
-  // Get pending count
-  const pendingCount = use$(() => adapter.getPendingCount$(), [adapter]) ?? 0;
-
-  // Get conversations from adapter
+  // Get conversations from adapter (requires gift wrap service to be enabled)
   const conversations = use$(
-    () => (activePubkey ? adapter.getConversations$() : undefined),
-    [adapter, activePubkey],
+    () =>
+      activePubkey && isGiftWrapEnabled
+        ? nip17Adapter.getConversations$()
+        : undefined,
+    [activePubkey, isGiftWrapEnabled],
   );
 
   // Track inbox relays for each partner
@@ -284,7 +308,7 @@ export function InboxViewer() {
 
   // Fetch inbox relays for conversation partners
   useEffect(() => {
-    if (!conversations) return;
+    if (!conversations || !isGiftWrapEnabled) return;
 
     const fetchRelays = async () => {
       const newRelays = new Map<string, string[]>();
@@ -302,7 +326,7 @@ export function InboxViewer() {
         }
 
         try {
-          const relays = await adapter.getInboxRelays(partner.pubkey);
+          const relays = await nip17Adapter.getInboxRelays(partner.pubkey);
           newRelays.set(partner.pubkey, relays);
         } catch {
           newRelays.set(partner.pubkey, []);
@@ -313,7 +337,7 @@ export function InboxViewer() {
     };
 
     fetchRelays();
-  }, [conversations, activePubkey, adapter, partnerRelays]);
+  }, [conversations, activePubkey, partnerRelays, isGiftWrapEnabled]);
 
   // Convert to display format
   const conversationList = useMemo(() => {
@@ -358,20 +382,43 @@ export function InboxViewer() {
     [isMobile],
   );
 
+  // Handle enable gift wrap
+  const handleEnableGiftWrap = useCallback(() => {
+    giftWrapService.enable();
+    toast.success("Gift wrap subscription enabled");
+  }, []);
+
+  // Handle disable gift wrap
+  const handleDisableGiftWrap = useCallback(() => {
+    giftWrapService.disable();
+    toast.info("Gift wrap subscription disabled");
+  }, []);
+
   // Handle decrypt
   const handleDecrypt = useCallback(async () => {
     setIsDecrypting(true);
     try {
-      const result = await adapter.decryptPending();
+      const result = await giftWrapService.decryptPending();
       console.log(
         `[Inbox] Decrypted ${result.success} messages, ${result.failed} failed`,
       );
+      if (result.success > 0) {
+        toast.success(
+          `Decrypted ${result.success} message${result.success !== 1 ? "s" : ""}`,
+        );
+      }
+      if (result.failed > 0) {
+        toast.warning(
+          `${result.failed} message${result.failed !== 1 ? "s" : ""} failed to decrypt`,
+        );
+      }
     } catch (error) {
       console.error("[Inbox] Decrypt error:", error);
+      toast.error("Failed to decrypt messages");
     } finally {
       setIsDecrypting(false);
     }
-  }, [adapter]);
+  }, []);
 
   // Handle resize
   const handleMouseDown = useCallback(
@@ -405,13 +452,6 @@ export function InboxViewer() {
     [sidebarWidth],
   );
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      adapter.cleanupAll();
-    };
-  }, [adapter]);
-
   // Not signed in
   if (!activePubkey) {
     return (
@@ -422,14 +462,39 @@ export function InboxViewer() {
     );
   }
 
+  // Gift wrap not enabled
+  if (!isGiftWrapEnabled) {
+    return <EnableGiftWrapPrompt onEnable={handleEnableGiftWrap} />;
+  }
+
   // Sidebar content
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 border-b">
-        <div className="flex items-center gap-2 mb-3">
-          <Mail className="size-5" />
-          <h2 className="font-semibold">Private Messages</h2>
+      <div className="p-3 border-b space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Mail className="size-5" />
+            <h2 className="font-semibold">Private Messages</h2>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 gap-1 text-xs"
+            onClick={() => {
+              if (isGiftWrapEnabled) {
+                handleDisableGiftWrap();
+              } else {
+                handleEnableGiftWrap();
+              }
+            }}
+          >
+            {isGiftWrapEnabled ? (
+              <Power className="size-3 text-green-500" />
+            ) : (
+              <PowerOff className="size-3 text-muted-foreground" />
+            )}
+          </Button>
         </div>
         <DecryptButton
           pendingCount={pendingCount || 0}

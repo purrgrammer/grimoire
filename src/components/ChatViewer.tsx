@@ -15,6 +15,7 @@ import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
+import { giftWrapService } from "@/services/gift-wrap-service";
 import type {
   ChatProtocol,
   ProtocolIdentifier,
@@ -372,28 +373,21 @@ export function ChatViewer({
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
-  // Ensure NIP-17 subscription is active when ChatViewer mounts
-  useEffect(() => {
-    if (protocol === "nip-17") {
-      nip17Adapter.ensureSubscription();
-    }
-  }, [protocol]);
-
-  // NIP-17 decrypt state
+  // NIP-17 decrypt state - uses global GiftWrapService
   const [isDecrypting, setIsDecrypting] = useState(false);
   const pendingCount =
     use$(
       () =>
-        protocol === "nip-17" ? nip17Adapter.getPendingCount$() : undefined,
+        protocol === "nip-17" ? giftWrapService.getPendingCount$() : undefined,
       [protocol],
     ) ?? 0;
 
-  // Handle decrypt for NIP-17
+  // Handle decrypt for NIP-17 - delegates to GiftWrapService
   const handleDecrypt = useCallback(async () => {
     if (protocol !== "nip-17") return;
     setIsDecrypting(true);
     try {
-      const result = await nip17Adapter.decryptPending();
+      const result = await giftWrapService.decryptPending();
       console.log(
         `[Chat] Decrypted ${result.success} messages, ${result.failed} failed`,
       );
