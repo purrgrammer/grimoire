@@ -237,20 +237,15 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       });
   }, [account]);
 
-  // Memoize relay lists to avoid unnecessary recalculations
+  // Get relays where event was already seen
   const seenRelays = useMemo(() => {
     const seenRelaysSet = getSeenRelays(event);
     return seenRelaysSet ? Array.from(seenRelaysSet) : [];
   }, [event]);
 
-  // Connected relays: seen relays that are not in user's relay list
-  const connectedRelays = useMemo(() => {
-    return seenRelays.filter((relay) => !myRelays.includes(relay));
-  }, [seenRelays, myRelays]);
-
-  // All available relays (for checking if submenu should be disabled)
-  const allRelays = useMemo(() => {
-    return Array.from(new Set([...myRelays, ...seenRelays]));
+  // User's relays where event has NOT been seen yet (these are the ones we can republish to)
+  const unpublishedRelays = useMemo(() => {
+    return myRelays.filter((relay) => !seenRelays.includes(relay));
   }, [myRelays, seenRelays]);
 
   // Check if any publish operation is in progress
@@ -309,11 +304,11 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   }, []);
 
   /**
-   * Publish event to all user's outbox relays
+   * Publish event to all user's relays where it hasn't been seen yet
    */
   const handleRepublishToMyRelays = useCallback(async () => {
-    if (myRelays.length === 0) {
-      toast.error("No relays found in your relay list");
+    if (unpublishedRelays.length === 0) {
+      toast.error("Event already published to all your relays");
       return;
     }
 
@@ -322,21 +317,21 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       return;
     }
 
-    // Mark all relays as publishing
-    setPublishingRelays(new Set(myRelays));
+    // Mark all unpublished relays as publishing
+    setPublishingRelays(new Set(unpublishedRelays));
 
     try {
-      await publishEventToRelays(event, myRelays);
+      await publishEventToRelays(event, unpublishedRelays);
 
       // Mark event as seen on all relays after successful publish
       // This updates the event's internal state so it appears in "Seen on" dropdown
-      myRelays.forEach((relay) => addSeenRelay(event, relay));
+      unpublishedRelays.forEach((relay) => addSeenRelay(event, relay));
 
       // Mark all as published in UI
-      setPublishedRelays((prev) => new Set([...prev, ...myRelays]));
+      setPublishedRelays((prev) => new Set([...prev, ...unpublishedRelays]));
 
       toast.success(
-        `Published to ${myRelays.length} relay${myRelays.length > 1 ? "s" : ""}`,
+        `Published to ${unpublishedRelays.length} relay${unpublishedRelays.length > 1 ? "s" : ""}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -345,7 +340,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     } finally {
       setPublishingRelays(new Set());
     }
-  }, [event, myRelays, isPublishing]);
+  }, [event, unpublishedRelays, isPublishing]);
 
   /**
    * Publish event to a specific relay
@@ -414,13 +409,37 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 
         {/* Republish submenu */}
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={allRelays.length === 0}>
+          <DropdownMenuSubTrigger
+            disabled={!account || unpublishedRelays.length === 0}
+          >
             <Send className="size-4 mr-2" />
             Republish
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-72 max-h-96 overflow-y-auto">
-            {/* Quick action: Publish to all user's outbox relays */}
-            {account && myRelays.length > 0 && (
+            {/* No account */}
+            {!account && (
+              <div
+                className="px-2 py-6 text-center text-sm text-muted-foreground"
+                role="status"
+              >
+                Sign in to republish events
+              </div>
+            )}
+
+            {/* All relays already have the event */}
+            {account && unpublishedRelays.length === 0 && (
+              <div
+                className="px-2 py-6 text-center text-sm text-muted-foreground"
+                role="status"
+              >
+                {myRelays.length === 0
+                  ? "No relays in your relay list"
+                  : "Already published to all your relays"}
+              </div>
+            )}
+
+            {/* Quick action: Publish to all unpublished relays */}
+            {account && unpublishedRelays.length > 0 && (
               <>
                 <div className="px-1 py-1">
                   <Button
@@ -428,7 +447,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
                     className="w-full"
                     onClick={handleRepublishToMyRelays}
                     disabled={isPublishing}
-                    aria-label={`Publish event to all ${myRelays.length} of your relays`}
+                    aria-label={`Publish event to ${unpublishedRelays.length} relays`}
                   >
                     {isPublishing ? (
                       <Loader2
@@ -438,60 +457,19 @@ export function EventMenu({ event }: { event: NostrEvent }) {
                     ) : (
                       <Send className="size-3 mr-2" aria-hidden="true" />
                     )}
-                    Publish to all my relays ({myRelays.length})
+                    Publish to all ({unpublishedRelays.length})
                   </Button>
                 </div>
                 <DropdownMenuSeparator />
-              </>
-            )}
-
-            {/* No relays available */}
-            {allRelays.length === 0 && (
-              <div
-                className="px-2 py-6 text-center text-sm text-muted-foreground"
-                role="status"
-              >
-                No relays available
-              </div>
-            )}
-
-            {/* User's outbox relays */}
-            {account && myRelays.length > 0 && (
-              <>
                 <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
-                  My relays
+                  Select relays
                 </DropdownMenuLabel>
                 <div
                   className="px-1 space-y-0.5"
                   role="group"
-                  aria-label="Your outbox relays"
+                  aria-label="Relays where event hasn't been published yet"
                 >
-                  {myRelays.map((relay) => (
-                    <RelayPublishItem
-                      key={relay}
-                      url={relay}
-                      isPublishing={publishingRelays.has(relay)}
-                      isPublished={publishedRelays.has(relay)}
-                      onClick={() => handleRepublishToRelay(relay)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Connected relays (seen on but not in user's list) */}
-            {connectedRelays.length > 0 && (
-              <>
-                {account && myRelays.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
-                  Connected relays
-                </DropdownMenuLabel>
-                <div
-                  className="px-1 space-y-0.5"
-                  role="group"
-                  aria-label="Relays where this event was seen"
-                >
-                  {connectedRelays.map((relay) => (
+                  {unpublishedRelays.map((relay) => (
                     <RelayPublishItem
                       key={relay}
                       url={relay}
