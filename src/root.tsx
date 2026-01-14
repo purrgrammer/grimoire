@@ -3,6 +3,7 @@ import { AppShell } from "./components/layouts/AppShell";
 import DashboardPage from "./components/pages/DashboardPage";
 import SpellbookPage from "./components/pages/SpellbookPage";
 import Nip19PreviewRouter from "./components/pages/Nip19PreviewRouter";
+import RunCommandPage from "./components/pages/RunCommandPage";
 
 const router = createBrowserRouter([
   {
@@ -12,6 +13,10 @@ const router = createBrowserRouter([
         <DashboardPage />
       </AppShell>
     ),
+  },
+  {
+    path: "/run",
+    element: <RunCommandPage />,
   },
   {
     path: "/preview/:actor/:identifier",

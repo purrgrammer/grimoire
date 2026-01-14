@@ -6,6 +6,7 @@ import {
   Copy,
   CopyCheck,
   ArrowRightFromLine,
+  ExternalLink,
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -91,6 +92,21 @@ export function WindowToolbar({
     setShowSpellDialog(true);
   };
 
+  const handlePopOut = () => {
+    if (!window) return;
+
+    // Get command string (existing or reconstructed)
+    const commandString = window.commandString || reconstructCommand(window);
+
+    // Construct the /run URL with the command as a query parameter
+    const popOutUrl = `/run?cmd=${encodeURIComponent(commandString)}`;
+
+    // Open in a new window/tab
+    globalThis.window.open(popOutUrl, "_blank");
+
+    toast.success("Window popped out");
+  };
+
   // Copy functionality for NIPs
   const { copy, copied } = useCopy();
   const isNipWindow = window?.appId === "nip";
@@ -137,6 +153,18 @@ export function WindowToolbar({
             aria-label="Edit command"
           >
             <Pencil className="size-4" />
+          </Button>
+
+          {/* Pop Out button */}
+          <Button
+            variant="link"
+            size="icon"
+            className="text-muted-foreground"
+            onClick={handlePopOut}
+            title="Pop out window"
+            aria-label="Pop out window"
+          >
+            <ExternalLink className="size-4" />
           </Button>
 
           {/* Copy button for NIPs */}
