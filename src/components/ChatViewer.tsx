@@ -804,7 +804,8 @@ export function ChatViewer({
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
             {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
+              conversation.type === "live-chat" ||
+              conversation.type === "dm") && (
               <button
                 onClick={handleNipClick}
                 className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
