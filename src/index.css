@@ -105,15 +105,16 @@
 
   .text-grimoire-gradient {
     background: linear-gradient(
-      to bottom,
-      rgb(250 204 21),
-      /* yellow-400 */ rgb(251 146 60),
-      /* orange-400 */ rgb(168 85 247),
-      /* purple-500 */ rgb(34 211 238) /* cyan-400 */
+      135deg,
+      rgb(251 191 36) 0%,
+      /* amber-400 */ rgb(251 146 60) 50%,
+      /* orange-400 */ rgb(249 115 22) 100% /* orange-500 */
     );
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(251, 146, 60, 0.5);
+    filter: drop-shadow(0 0 8px rgba(251, 146, 60, 0.4));
   }
 }
 

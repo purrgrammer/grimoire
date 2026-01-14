@@ -1,7 +1,6 @@
 import { useNip05 } from "@/hooks/useNip05";
 import { ProfileContent } from "applesauce-core/helpers";
 import { isGrimoirePremium, isGrimoireNip05 } from "@/lib/nip05-grimoire";
-import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 
 export function QueryNip05({
@@ -21,16 +20,9 @@ export function QueryNip05({
   const displayNip05 = nip05.replace(/^_@/, "");
 
   return (
-    <span
-      className={cn(
-        "flex items-center gap-1",
-        isPremium && "text-grimoire-gradient font-semibold",
-      )}
-    >
+    <span className="flex items-center gap-1">
       {displayNip05}
-      {isPremium && (
-        <Check className="inline-block h-3 w-3 text-grimoire-gradient" />
-      )}
+      {isPremium && <Check className="inline-block h-3 w-3 text-orange-400" />}
     </span>
   );
 }
