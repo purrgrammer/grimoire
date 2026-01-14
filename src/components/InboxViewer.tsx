@@ -48,19 +48,22 @@ export default function InboxViewer({ action }: InboxViewerProps) {
     const syncGiftWraps = async () => {
       setLoading(true);
       try {
-        // Get inbox relays from user's kind 10002 relay list event
-        const relayListEvent = await firstValueFrom(
-          eventStore.replaceable({ kind: 10002, pubkey }),
+        // Get DM relays from user's kind 10050 relay list (NIP-17)
+        const dmRelayListEvent = await firstValueFrom(
+          eventStore.replaceable({ kind: 10050, pubkey }),
         );
 
-        const inboxRelays = relayListEvent
-          ? Array.from(getInboxes(relayListEvent))
+        // Kind 10050 uses read/write relay tags
+        const dmRelays = dmRelayListEvent
+          ? dmRelayListEvent.tags
+              .filter((t) => t[0] === "relay" && (!t[2] || t[2] === "read"))
+              .map((t) => t[1])
           : [];
 
-        // Fallback to default relays if no inbox relays
+        // Fallback to default relays if no DM relays configured
         const relays =
-          inboxRelays.length > 0
-            ? inboxRelays
+          dmRelays.length > 0
+            ? dmRelays
             : [
                 "wss://relay.damus.io",
                 "wss://nos.lol",
