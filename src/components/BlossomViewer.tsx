@@ -72,7 +72,7 @@ export function BlossomViewer({
     case "upload":
       return <UploadView />;
     case "list":
-      return <ListBlobsView pubkey={pubkey} />;
+      return <ListBlobsView pubkey={pubkey} serverUrl={serverUrl} />;
     case "blob":
       return <BlobDetailView sha256={sha256!} serverUrl={serverUrl} />;
     case "mirror":
@@ -753,7 +753,13 @@ function formatSize(bytes: number): string {
 /**
  * ListBlobsView - List blobs for a user
  */
-function ListBlobsView({ pubkey }: { pubkey?: string }) {
+function ListBlobsView({
+  pubkey,
+  serverUrl,
+}: {
+  pubkey?: string;
+  serverUrl?: string;
+}) {
   const { state } = useGrimoire();
   const eventStore = useEventStore();
   const accountPubkey = state.activeAccount?.pubkey;
@@ -762,7 +768,9 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
   const [servers, setServers] = useState<string[]>([]);
   const [blobs, setBlobs] = useState<BlobDescriptor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedServer, setSelectedServer] = useState<string | null>(null);
+  const [selectedServer, setSelectedServer] = useState<string | null>(
+    serverUrl || null,
+  );
   const [selectedBlob, setSelectedBlob] = useState<BlobDescriptor | null>(null);
 
   // Fetch servers for the target pubkey
@@ -780,7 +788,8 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
     if (event) {
       const s = getServersFromEvent(event);
       setServers(s);
-      if (s.length > 0 && !selectedServer) {
+      // Only set default server if no serverUrl was provided and no server is selected
+      if (s.length > 0 && !selectedServer && !serverUrl) {
         setSelectedServer(s[0]);
       }
     }
@@ -799,7 +808,8 @@ function ListBlobsView({ pubkey }: { pubkey?: string }) {
         if (e) {
           const s = getServersFromEvent(e);
           setServers(s);
-          if (s.length > 0 && !selectedServer) {
+          // Only set default server if no serverUrl was provided and no server is selected
+          if (s.length > 0 && !selectedServer && !serverUrl) {
             setSelectedServer(s[0]);
           }
         }

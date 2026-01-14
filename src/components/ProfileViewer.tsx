@@ -10,7 +10,6 @@ import {
   Send,
   Wifi,
   HardDrive,
-  ExternalLink,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
@@ -43,7 +42,7 @@ export interface ProfileViewerProps {
  * Shows profile metadata, inbox/outbox relays, and raw JSON
  */
 export function ProfileViewer({ pubkey }: ProfileViewerProps) {
-  const { state } = useGrimoire();
+  const { state, addWindow } = useGrimoire();
   const accountPubkey = state.activeAccount?.pubkey;
 
   // Resolve $me alias
@@ -336,14 +335,25 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
                 {blossomServers.map((url) => (
                   <DropdownMenuItem
                     key={url}
-                    className="flex items-center justify-between gap-2"
-                    onClick={() => window.open(url, "_blank")}
+                    className="flex items-center justify-between gap-2 cursor-crosshair"
+                    onClick={() => {
+                      if (resolvedPubkey) {
+                        addWindow(
+                          "blossom",
+                          {
+                            subcommand: "list",
+                            pubkey: resolvedPubkey,
+                            serverUrl: url,
+                          },
+                          `Files on ${url}`,
+                        );
+                      }
+                    }}
                   >
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       <HardDrive className="size-3 text-muted-foreground flex-shrink-0" />
                       <span className="font-mono text-xs truncate">{url}</span>
                     </div>
-                    <ExternalLink className="size-3 text-muted-foreground flex-shrink-0" />
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
