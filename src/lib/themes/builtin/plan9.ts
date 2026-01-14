@@ -90,8 +90,8 @@ export const plan9Theme: Theme = {
 
   gradient: {
     // Darker gradient for contrast on pale yellow background
-    color1: "140 110 20", // Dark olive/mustard
-    color2: "180 90 40", // Dark burnt orange
+    color1: "120 90 15", // Darker olive/mustard
+    color2: "140 60 25", // Darker burnt orange
     color3: "80 50 140", // Dark muted purple
     color4: "30 120 130", // Dark teal
   },

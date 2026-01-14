@@ -24,11 +24,11 @@ export function getConnectionIcon(relay: RelayState | undefined) {
 
   const iconMap = {
     connected: {
-      icon: <Wifi className="size-3 text-green-600/70" />,
+      icon: <Wifi className="size-3 text-success/70" />,
       label: "Connected",
     },
     connecting: {
-      icon: <Loader2 className="size-3 text-yellow-600/70 animate-spin" />,
+      icon: <Loader2 className="size-3 text-warning/70 animate-spin" />,
       label: "Connecting",
     },
     disconnected: {
@@ -36,7 +36,7 @@ export function getConnectionIcon(relay: RelayState | undefined) {
       label: "Disconnected",
     },
     error: {
-      icon: <XCircle className="size-3 text-red-600/70" />,
+      icon: <XCircle className="size-3 text-destructive/70" />,
       label: "Connection Error",
     },
   };
@@ -57,19 +57,19 @@ export function getAuthIcon(relay: RelayState | undefined) {
 
   const iconMap = {
     authenticated: {
-      icon: <ShieldCheck className="size-3 text-green-600/70" />,
+      icon: <ShieldCheck className="size-3 text-success/70" />,
       label: "Authenticated",
     },
     challenge_received: {
-      icon: <ShieldQuestion className="size-3 text-yellow-600/70" />,
+      icon: <ShieldQuestion className="size-3 text-warning/70" />,
       label: "Challenge Received",
     },
     authenticating: {
-      icon: <Loader2 className="size-3 text-yellow-600/70 animate-spin" />,
+      icon: <Loader2 className="size-3 text-warning/70 animate-spin" />,
       label: "Authenticating",
     },
     failed: {
-      icon: <ShieldX className="size-3 text-red-600/70" />,
+      icon: <ShieldX className="size-3 text-destructive/70" />,
       label: "Authentication Failed",
     },
     rejected: {

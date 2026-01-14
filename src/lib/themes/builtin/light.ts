@@ -74,8 +74,8 @@ export const lightTheme: Theme = {
   },
 
   gradient: {
-    color1: "202 138 4", // yellow-600 (darker for light bg)
-    color2: "194 65 12", // orange-700 (much darker)
+    color1: "161 98 7", // yellow-700 (darker for light bg)
+    color2: "154 52 18", // orange-800 (even darker)
     color3: "126 34 206", // purple-700
     color4: "8 145 178", // cyan-600
   },
