@@ -33,6 +33,9 @@ const ChatViewer = lazy(() =>
 const GroupListViewer = lazy(() =>
   import("./GroupListViewer").then((m) => ({ default: m.GroupListViewer })),
 );
+const InboxViewer = lazy(() =>
+  import("./InboxViewer").then((m) => ({ default: m.default })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -191,6 +194,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             />
           );
         }
+        break;
+      case "inbox":
+        content = <InboxViewer action={window.props.action} />;
         break;
       case "spells":
         content = <SpellsViewer />;

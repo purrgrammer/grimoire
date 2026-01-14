@@ -87,6 +87,22 @@ export interface LocalSpellbook {
   deletedAt?: number;
 }
 
+export interface DecryptedGiftWrap {
+  giftWrapId: string; // kind 1059 event ID (primary key)
+  rumorId: string; // Unwrapped rumor ID
+  rumor: NostrEvent; // Actual unsigned event (JSON)
+  sealPubkey: string; // Who sent it (from seal)
+  decryptedAt: number; // When we decrypted
+  receivedAt: number; // Gift wrap created_at (for sorting)
+}
+
+export interface GiftWrapDecryptionError {
+  giftWrapId: string; // kind 1059 event ID (primary key)
+  attemptCount: number; // Number of failed decrypt attempts
+  lastAttempt: number; // Timestamp of last attempt
+  errorMessage: string; // Error message from last attempt
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -98,6 +114,8 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  decryptedGiftWraps!: Table<DecryptedGiftWrap>;
+  giftWrapErrors!: Table<GiftWrapDecryptionError>;
 
   constructor(name: string) {
     super(name);
@@ -332,6 +350,22 @@ class GrimoireDb extends Dexie {
       blossomServers: "&pubkey, updatedAt",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 16: Add gift wrap storage
+    this.version(16).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      decryptedGiftWraps: "&giftWrapId, sealPubkey, receivedAt, decryptedAt",
+      giftWrapErrors: "&giftWrapId, lastAttempt",
     });
   }
 }

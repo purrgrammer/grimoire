@@ -139,6 +139,19 @@ export function reconstructCommand(window: WindowInstance): string {
         return "chat";
       }
 
+      case "inbox": {
+        // Reconstruct inbox command with action flags
+        const { action } = props;
+
+        if (action === "decrypt-pending") {
+          return "inbox --decrypt-pending";
+        } else if (action === "clear-failed") {
+          return "inbox --clear-failed";
+        }
+
+        return "inbox";
+      }
+
       default:
         return appId; // Fallback to just the command name
     }

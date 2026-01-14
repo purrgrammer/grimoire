@@ -351,21 +351,22 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat <identifier>",
     description:
-      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, NIP-53 live activity chat, and multi-room group list interface. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event. For multi-room interface, pass the naddr of a kind 10009 group list event.",
+      "Join and participate in Nostr chat conversations. Supports NIP-17 private DMs, NIP-29 relay-based groups, NIP-53 live activity chat, and multi-room group list interface. For private DMs, provide npub/nprofile/hex pubkey. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event. For multi-room interface, pass the naddr of a kind 10009 group list event.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "NIP-29 group (relay'group-id), NIP-53 live activity (naddr1... kind 30311), or group list (naddr1... kind 10009)",
+          "npub/nprofile/hex (NIP-17), NIP-29 group (relay'group-id), NIP-53 live activity (naddr1... kind 30311), or group list (naddr1... kind 10009)",
       },
     ],
     examples: [
+      "chat npub1...                             Open NIP-17 private DM",
       "chat relay.example.com'bitcoin-dev        Join NIP-29 relay group",
       "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
       "chat naddr1...30311...                    Join NIP-53 live activity chat",
       "chat naddr1...10009...                    Open multi-room group list interface",
     ],
-    seeAlso: ["profile", "open", "req", "live"],
+    seeAlso: ["inbox", "profile", "open", "req", "live"],
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
@@ -375,6 +376,40 @@ export const manPages: Record<string, ManPageEntry> = {
         identifier: result.identifier,
       };
     },
+  },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox [--decrypt-pending | --clear-failed]",
+    description:
+      "View and manage encrypted gift wrap messages (NIP-59). Shows pending, decrypted, and failed gift wraps. Gift wraps are used for private messages (NIP-17) and other private events. Use --decrypt-pending to decrypt all pending gift wraps, or --clear-failed to reset failed decryption attempts.",
+    options: [
+      {
+        flag: "--decrypt-pending",
+        description: "Decrypt all pending gift wraps",
+      },
+      {
+        flag: "--clear-failed",
+        description: "Clear failed decryption attempts",
+      },
+    ],
+    examples: [
+      "inbox                     Open inbox viewer",
+      "inbox --decrypt-pending   Decrypt all pending gift wraps",
+      "inbox --clear-failed      Clear failed decryption attempts",
+    ],
+    seeAlso: ["chat", "profile"],
+    appId: "inbox",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      const action = args.includes("--decrypt-pending")
+        ? "decrypt-pending"
+        : args.includes("--clear-failed")
+          ? "clear-failed"
+          : null;
+      return { action };
+    },
+    defaultProps: { action: null },
   },
   profile: {
     name: "profile",
