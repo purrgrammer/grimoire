@@ -13,7 +13,7 @@ interface UserNameProps {
  * Component that displays a user's name from their Nostr profile
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
- * Uses orange-400 color for the logged-in user
+ * Uses zap color for the logged-in user (themeable gold/amber)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -33,7 +33,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       dir="auto"
       className={cn(
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
-        isActiveAccount ? "text-orange-400" : "text-accent",
+        isActiveAccount ? "text-zap" : "text-accent",
         className,
       )}
       onClick={handleClick}

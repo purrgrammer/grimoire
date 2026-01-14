@@ -42,7 +42,7 @@ export function MePlaceholder({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-bold text-orange-400 select-none",
+        "inline-flex items-center gap-1.5 font-bold text-zap select-none",
         pubkey && "cursor-crosshair hover:underline decoration-dotted",
         size === "sm" ? "text-xs" : size === "md" ? "text-sm" : "text-lg",
         className,
