@@ -74,11 +74,19 @@ function useIsMobile() {
 }
 
 /**
+ * Format relay URL for display
+ */
+function formatRelayForDisplay(url: string): string {
+  return url.replace(/^wss?:\/\//, "").replace(/\/$/, "");
+}
+
+/**
  * Conversation info for display
  */
 interface ConversationInfo {
   id: string;
   partnerPubkey: string;
+  inboxRelays?: string[];
   lastMessage?: {
     content: string;
     timestamp: number;
@@ -101,12 +109,12 @@ const ConversationListItem = memo(function ConversationListItem({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 px-3 py-2 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
+        "flex items-center gap-2 px-2 py-1.5 cursor-crosshair hover:bg-muted/50 transition-colors border-b",
         isSelected && "bg-muted/70",
       )}
       onClick={onClick}
     >
-      <UserAvatar pubkey={conversation.partnerPubkey} className="size-10" />
+      <UserAvatar pubkey={conversation.partnerPubkey} className="size-9" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <UserName
@@ -119,6 +127,12 @@ const ConversationListItem = memo(function ConversationListItem({
             </span>
           )}
         </div>
+        {/* Inbox relays */}
+        {conversation.inboxRelays && conversation.inboxRelays.length > 0 && (
+          <div className="text-[10px] text-muted-foreground/60 truncate">
+            {conversation.inboxRelays.map(formatRelayForDisplay).join(", ")}
+          </div>
+        )}
         {conversation.lastMessage && (
           <div className="text-xs text-muted-foreground truncate">
             {conversation.lastMessage.isOwn && (
@@ -209,7 +223,7 @@ export function InboxViewer() {
   // State
   const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
   const [isDecrypting, setIsDecrypting] = useState(false);
 
@@ -225,15 +239,55 @@ export function InboxViewer() {
     [adapter, activePubkey],
   );
 
+  // Track inbox relays for each partner
+  const [partnerRelays, setPartnerRelays] = useState<Map<string, string[]>>(
+    new Map(),
+  );
+
+  // Fetch inbox relays for conversation partners
+  useEffect(() => {
+    if (!conversations) return;
+
+    const fetchRelays = async () => {
+      const newRelays = new Map<string, string[]>();
+
+      for (const conv of conversations) {
+        const partner = conv.participants.find(
+          (p) => p.pubkey !== activePubkey,
+        );
+        if (!partner) continue;
+
+        // Skip if already fetched
+        if (partnerRelays.has(partner.pubkey)) {
+          newRelays.set(partner.pubkey, partnerRelays.get(partner.pubkey)!);
+          continue;
+        }
+
+        try {
+          const relays = await adapter.getInboxRelays(partner.pubkey);
+          newRelays.set(partner.pubkey, relays);
+        } catch {
+          newRelays.set(partner.pubkey, []);
+        }
+      }
+
+      setPartnerRelays(newRelays);
+    };
+
+    fetchRelays();
+  }, [conversations, activePubkey, adapter, partnerRelays]);
+
   // Convert to display format
   const conversationList = useMemo(() => {
     if (!conversations || !activePubkey) return [];
 
     return conversations.map((conv): ConversationInfo => {
       const partner = conv.participants.find((p) => p.pubkey !== activePubkey);
+      const partnerPubkey = partner?.pubkey || "";
       return {
         id: conv.id,
-        partnerPubkey: partner?.pubkey || "",
+        partnerPubkey,
+        inboxRelays: partnerRelays.get(partnerPubkey),
         lastMessage: conv.lastMessage
           ? {
               content: conv.lastMessage.content,
@@ -243,7 +297,7 @@ export function InboxViewer() {
           : undefined,
       };
     });
-  }, [conversations, activePubkey]);
+  }, [conversations, activePubkey, partnerRelays]);
 
   // Handle conversation selection
   const handleSelect = useCallback(
@@ -405,7 +459,7 @@ export function InboxViewer() {
     return (
       <div className="flex h-full flex-col">
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-[300px] p-0">
+          <SheetContent side="left" className="w-[280px] p-0">
             <VisuallyHidden.Root>
               <SheetTitle>Messages</SheetTitle>
             </VisuallyHidden.Root>

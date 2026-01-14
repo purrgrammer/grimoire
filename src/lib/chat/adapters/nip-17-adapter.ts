@@ -496,7 +496,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     this.cleanup(conversationId);
 
     // Get user's private inbox relays (kind 10050)
-    const inboxRelays = await this.getInboxRelays(pubkey);
+    const inboxRelays = await this.fetchInboxRelays(pubkey);
     if (inboxRelays.length === 0) {
       console.warn(
         "[NIP-17] No inbox relays found. Configure kind 10050 to receive DMs.",
@@ -547,10 +547,28 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     this.subscriptions.set(conversationId, subscription);
   }
 
+  /** Cache for inbox relays */
+  private inboxRelayCache = new Map<string, string[]>();
+
   /**
-   * Get private inbox relays for a user (kind 10050)
+   * Get inbox relays for a user (public API for UI display)
+   * Returns cached value or fetches from network
    */
-  private async getInboxRelays(pubkey: string): Promise<string[]> {
+  async getInboxRelays(pubkey: string): Promise<string[]> {
+    const cached = this.inboxRelayCache.get(pubkey);
+    if (cached) return cached;
+
+    const relays = await this.fetchInboxRelays(pubkey);
+    if (relays.length > 0) {
+      this.inboxRelayCache.set(pubkey, relays);
+    }
+    return relays;
+  }
+
+  /**
+   * Fetch private inbox relays for a user (kind 10050)
+   */
+  private async fetchInboxRelays(pubkey: string): Promise<string[]> {
     // Try to fetch from EventStore first
     const existing = await firstValueFrom(
       eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey, ""),
