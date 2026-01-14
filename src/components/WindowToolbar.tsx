@@ -6,6 +6,7 @@ import {
   Copy,
   CopyCheck,
   ArrowRightFromLine,
+  ExternalLink,
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -91,6 +92,21 @@ export function WindowToolbar({
     setShowSpellDialog(true);
   };
 
+  const handlePopOut = () => {
+    if (!window) return;
+
+    // Get command string (existing or reconstructed)
+    const commandString = window.commandString || reconstructCommand(window);
+
+    // Construct the /run URL with the command as a query parameter
+    const popOutUrl = `/run?cmd=${encodeURIComponent(commandString)}`;
+
+    // Open in a new window/tab
+    globalThis.window.open(popOutUrl, "_blank");
+
+    toast.success("Window popped out");
+  };
+
   // Copy functionality for NIPs
   const { copy, copied } = useCopy();
   const isNipWindow = window?.appId === "nip";
@@ -154,55 +170,64 @@ export function WindowToolbar({
             </Button>
           )}
 
-          {/* More actions menu - shows when multiple workspaces exist */}
-          {hasMultipleWorkspaces && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="link"
-                  size="icon"
-                  className="text-muted-foreground"
-                  title="More actions"
-                  aria-label="More actions"
-                >
-                  <MoreVertical className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {/* Move to tab submenu */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    disabled={otherWorkspaces.length === 0}
-                  >
-                    <ArrowRightFromLine className="size-4 mr-2" />
-                    Move to tab
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {otherWorkspaces.map((ws) => (
-                      <DropdownMenuItem
-                        key={ws.id}
-                        onClick={() => handleMoveToWorkspace(ws.id)}
-                      >
-                        {ws.number}
-                        {ws.label ? ` ${ws.label}` : ""}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+          {/* More actions menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="link"
+                size="icon"
+                className="text-muted-foreground"
+                title="More actions"
+                aria-label="More actions"
+              >
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {/* Pop out window */}
+              <DropdownMenuItem onClick={handlePopOut}>
+                <ExternalLink className="size-4 mr-2" />
+                Pop out window
+              </DropdownMenuItem>
 
-                {/* REQ-specific actions */}
-                {isReqWindow && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleTurnIntoSpell}>
-                      <WandSparkles className="size-4 mr-2" />
-                      Save as spell
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              {/* Move to tab submenu - only show if multiple workspaces */}
+              {hasMultipleWorkspaces && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      disabled={otherWorkspaces.length === 0}
+                    >
+                      <ArrowRightFromLine className="size-4 mr-2" />
+                      Move to tab
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {otherWorkspaces.map((ws) => (
+                        <DropdownMenuItem
+                          key={ws.id}
+                          onClick={() => handleMoveToWorkspace(ws.id)}
+                        >
+                          {ws.number}
+                          {ws.label ? ` ${ws.label}` : ""}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </>
+              )}
+
+              {/* REQ-specific actions */}
+              {isReqWindow && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleTurnIntoSpell}>
+                    <WandSparkles className="size-4 mr-2" />
+                    Save as spell
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Spell Dialog */}
           {isReqWindow && (
