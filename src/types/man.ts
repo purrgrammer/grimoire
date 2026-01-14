@@ -346,6 +346,18 @@ export const manPages: Record<string, ManPageEntry> = {
       return parsed;
     },
   },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox",
+    description:
+      "View your encrypted private messages (NIP-17 gift-wrapped DMs). Messages are encrypted using NIP-44 and wrapped in NIP-59 gift wraps for privacy. Decrypted messages are cached locally so you only decrypt once. Click 'Decrypt' to unlock pending messages.",
+    examples: ["inbox    Open your private message inbox"],
+    seeAlso: ["chat", "profile"],
+    appId: "inbox",
+    category: "Nostr",
+    defaultProps: {},
+  },
   chat: {
     name: "chat",
     section: "1",

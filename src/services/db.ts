@@ -80,6 +80,37 @@ export interface LocalSpellbook {
   deletedAt?: number;
 }
 
+/**
+ * Cached Nostr event for offline access
+ */
+export interface CachedEvent {
+  id: string;
+  event: NostrEvent;
+  cachedAt: number;
+}
+
+/**
+ * Decrypted rumor from gift wrap (NIP-59)
+ * Stored separately so we don't have to re-decrypt
+ */
+export interface DecryptedRumor {
+  /** Gift wrap event ID */
+  giftWrapId: string;
+  /** The decrypted rumor (unsigned event) */
+  rumor: {
+    id: string;
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+  };
+  /** Pubkey that decrypted this (for multi-account support) */
+  decryptedBy: string;
+  /** When it was decrypted */
+  decryptedAt: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -90,6 +121,8 @@ class GrimoireDb extends Dexie {
   relayLiveness!: Table<RelayLivenessEntry>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  events!: Table<CachedEvent>;
+  decryptedRumors!: Table<DecryptedRumor>;
 
   constructor(name: string) {
     super(name);
@@ -310,6 +343,21 @@ class GrimoireDb extends Dexie {
       relayLiveness: "&url",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 15: Add event cache and decrypted rumor storage for NIP-59 gift wraps
+    this.version(15).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      events: "&id, cachedAt",
+      decryptedRumors: "&giftWrapId, decryptedBy",
     });
   }
 }

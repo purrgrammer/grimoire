@@ -23,6 +23,7 @@ import type {
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import type { ChatAction } from "@/types/chat-actions";
@@ -630,6 +631,8 @@ export function ChatViewer({
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
+    } else if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
     }
   }, [conversation?.protocol, addWindow]);
 
@@ -955,8 +958,8 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     //   return new NipC7Adapter();
     case "nip-29":
       return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
     case "nip-53":
