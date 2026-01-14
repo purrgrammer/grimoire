@@ -48,7 +48,7 @@ export const darkTheme: Theme = {
     live: "0 72% 51%", // Red for live indicator
 
     // UI highlight (active user, self-references)
-    highlight: "38 92% 55%", // Warm amber
+    highlight: "27 96% 61%", // orange-400 (original color)
   },
 
   syntax: {
