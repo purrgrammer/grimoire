@@ -34,6 +34,7 @@ import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { StatusBadge } from "./live/StatusBadge";
+import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
 import {
@@ -279,8 +280,8 @@ const MessageItem = memo(function MessageItem({
     );
   }
 
-  // Regular user messages
-  return (
+  // Regular user messages - wrap in context menu if event exists
+  const messageContent = (
     <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -319,6 +320,20 @@ const MessageItem = memo(function MessageItem({
       </div>
     </div>
   );
+
+  // Wrap in context menu if event exists
+  if (message.event) {
+    return (
+      <ChatMessageContextMenu
+        event={message.event}
+        onReply={canReply && onReply ? () => onReply(message.id) : undefined}
+      >
+        {messageContent}
+      </ChatMessageContextMenu>
+    );
+  }
+
+  return messageContent;
 });
 
 /**
