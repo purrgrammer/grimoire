@@ -371,6 +371,13 @@ export function ChatViewer({
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
+  // Ensure NIP-17 subscription is active when ChatViewer mounts
+  useEffect(() => {
+    if (protocol === "nip-17") {
+      nip17Adapter.ensureSubscription();
+    }
+  }, [protocol]);
+
   // State for retry trigger
   const [retryCount, setRetryCount] = useState(0);
 

@@ -261,6 +261,13 @@ export function InboxViewer() {
   // NIP-17 adapter singleton instance
   const adapter = nip17Adapter;
 
+  // Ensure subscription is active when component mounts
+  useEffect(() => {
+    if (activePubkey) {
+      adapter.ensureSubscription();
+    }
+  }, [adapter, activePubkey]);
+
   // Get pending count
   const pendingCount = use$(() => adapter.getPendingCount$(), [adapter]) ?? 0;
 

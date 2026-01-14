@@ -65,8 +65,14 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   /** Track pending (undecrypted) gift wrap IDs */
   private pendingGiftWraps$ = new BehaviorSubject<Set<string>>(new Set());
 
+  /** Track failed (could not decrypt) gift wrap IDs */
+  private failedGiftWraps$ = new BehaviorSubject<Set<string>>(new Set());
+
   /** Observable of gift wrap events from event store */
   private giftWraps$ = new BehaviorSubject<NostrEvent[]>([]);
+
+  /** Track if subscription is active */
+  private subscriptionActive = false;
 
   /**
    * Parse identifier - accepts npub, nprofile, hex pubkey, NIP-05, or $me
@@ -340,6 +346,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No conversation recipient found");
     }
 
+    // Track existing gift wrap IDs before sending
+    const existingIds = new Set(this.giftWraps$.value.map((g) => g.id));
+
     // Use applesauce's SendWrappedMessage action
     // This handles:
     // - Creating the wrapped message rumor
@@ -350,6 +359,43 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     console.log(
       `[NIP-17] Sent wrapped message to ${recipientPubkey.slice(0, 8)}...${isSelfConversation ? " (saved)" : ""}`,
     );
+
+    // After sending, check eventStore for new gift wraps addressed to us
+    // The publishEvent function adds events to eventStore, so our own gift wrap should be there
+    this.pickUpNewGiftWrapsFromStore(activePubkey, existingIds);
+  }
+
+  /**
+   * Pick up new gift wraps from eventStore that we don't have yet
+   * Used after sending to ensure sent message appears immediately
+   */
+  private async pickUpNewGiftWrapsFromStore(
+    pubkey: string,
+    existingIds: Set<string>,
+  ): Promise<void> {
+    try {
+      // Query eventStore for gift wraps addressed to us
+      const giftWraps = await firstValueFrom(
+        eventStore
+          .timeline([{ kinds: [GIFT_WRAP_KIND], "#p": [pubkey] }])
+          .pipe(first()),
+        { defaultValue: [] },
+      );
+
+      let added = 0;
+      for (const giftWrap of giftWraps) {
+        if (!existingIds.has(giftWrap.id)) {
+          this.handleGiftWrap(giftWrap);
+          added++;
+        }
+      }
+
+      if (added > 0) {
+        console.log(`[NIP-17] Picked up ${added} new gift wrap(s) from store`);
+      }
+    } catch (error) {
+      console.warn("[NIP-17] Failed to pick up gift wraps from store:", error);
+    }
   }
 
   /**
@@ -398,17 +444,32 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Get count of pending (undecrypted) gift wraps
+   * Get count of pending (undecrypted) gift wraps (excludes failed)
    */
   getPendingCount(): number {
-    return this.pendingGiftWraps$.value.size;
+    const pending = this.pendingGiftWraps$.value;
+    const failed = this.failedGiftWraps$.value;
+    // Only count pending that haven't failed
+    return Array.from(pending).filter((id) => !failed.has(id)).length;
   }
 
   /**
-   * Get observable of pending gift wrap count
+   * Get observable of pending gift wrap count (excludes failed)
    */
   getPendingCount$(): Observable<number> {
-    return this.pendingGiftWraps$.pipe(map((set) => set.size));
+    return this.pendingGiftWraps$.pipe(
+      map((pending) => {
+        const failed = this.failedGiftWraps$.value;
+        return Array.from(pending).filter((id) => !failed.has(id)).length;
+      }),
+    );
+  }
+
+  /**
+   * Get count of failed gift wraps
+   */
+  getFailedCount(): number {
+    return this.failedGiftWraps$.value.size;
   }
 
   /**
@@ -422,7 +483,11 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    const pendingIds = Array.from(this.pendingGiftWraps$.value);
+    // Only try pending that haven't already failed
+    const failedSet = this.failedGiftWraps$.value;
+    const pendingIds = Array.from(this.pendingGiftWraps$.value).filter(
+      (id) => !failedSet.has(id),
+    );
     let success = 0;
     let failed = 0;
 
@@ -434,6 +499,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         );
 
         if (!giftWrap) {
+          // Mark as failed - couldn't find the event
+          this.markAsFailed(giftWrapId);
           failed++;
           continue;
         }
@@ -441,9 +508,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         // Already unlocked?
         if (isGiftWrapUnlocked(giftWrap)) {
           // Remove from pending
-          const pending = new Set(this.pendingGiftWraps$.value);
-          pending.delete(giftWrapId);
-          this.pendingGiftWraps$.next(pending);
+          this.removeFromPending(giftWrapId);
           success++;
           continue;
         }
@@ -451,10 +516,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         // Decrypt using signer - applesauce handles caching automatically
         await unlockGiftWrap(giftWrap, signer);
 
-        // Remove from pending
-        const pending = new Set(this.pendingGiftWraps$.value);
-        pending.delete(giftWrapId);
-        this.pendingGiftWraps$.next(pending);
+        // Remove from pending (success)
+        this.removeFromPending(giftWrapId);
 
         // Refresh gift wraps list
         this.giftWraps$.next([...this.giftWraps$.value]);
@@ -465,11 +528,31 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           `[NIP-17] Failed to decrypt gift wrap ${giftWrapId}:`,
           error,
         );
+        // Mark as failed so we don't retry
+        this.markAsFailed(giftWrapId);
         failed++;
       }
     }
 
     return { success, failed };
+  }
+
+  /**
+   * Mark a gift wrap as failed (won't retry decryption)
+   */
+  private markAsFailed(giftWrapId: string): void {
+    const failed = new Set(this.failedGiftWraps$.value);
+    failed.add(giftWrapId);
+    this.failedGiftWraps$.next(failed);
+  }
+
+  /**
+   * Remove a gift wrap from pending
+   */
+  private removeFromPending(giftWrapId: string): void {
+    const pending = new Set(this.pendingGiftWraps$.value);
+    pending.delete(giftWrapId);
+    this.pendingGiftWraps$.next(pending);
   }
 
   /**
@@ -574,16 +657,45 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     );
   }
 
+  // ==================== Public Methods for Subscription Management ====================
+
+  /**
+   * Ensure gift wrap subscription is active for the current user
+   * Call this when InboxViewer or ChatViewer mounts
+   */
+  ensureSubscription(): void {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    if (!activePubkey) {
+      console.warn("[NIP-17] Cannot start subscription: no active account");
+      return;
+    }
+
+    if (!this.subscriptionActive) {
+      console.log("[NIP-17] Starting gift wrap subscription");
+      this.subscribeToGiftWraps(activePubkey);
+    }
+  }
+
+  /**
+   * Check if subscription is currently active
+   */
+  isSubscriptionActive(): boolean {
+    return this.subscriptionActive;
+  }
+
   // ==================== Private Methods ====================
 
   /**
    * Subscribe to gift wraps for the user from their inbox relays
    */
   private async subscribeToGiftWraps(pubkey: string): Promise<void> {
-    const conversationId = `nip-17:inbox:${pubkey}`;
+    // Don't create duplicate subscriptions
+    if (this.subscriptionActive) {
+      console.log("[NIP-17] Subscription already active, skipping");
+      return;
+    }
 
-    // Clean up existing subscription
-    this.cleanup(conversationId);
+    const conversationId = `nip-17:inbox:${pubkey}`;
 
     // Get user's private inbox relays (kind 10050)
     const inboxRelays = await this.fetchInboxRelays(pubkey);
@@ -605,6 +717,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       "#p": [pubkey],
     };
 
+    this.subscriptionActive = true;
+
     const subscription = pool
       .subscription(inboxRelays, [filter], { eventStore })
       .subscribe({
@@ -617,24 +731,40 @@ export class Nip17Adapter extends ChatProtocolAdapter {
             console.log(
               `[NIP-17] Received gift wrap: ${response.id.slice(0, 8)}...`,
             );
-
-            // Add to gift wraps list
-            const current = this.giftWraps$.value;
-            if (!current.find((g) => g.id === response.id)) {
-              this.giftWraps$.next([...current, response]);
-            }
-
-            // Check if unlocked (cached) or pending
-            if (!isGiftWrapUnlocked(response)) {
-              const pending = new Set(this.pendingGiftWraps$.value);
-              pending.add(response.id);
-              this.pendingGiftWraps$.next(pending);
-            }
+            this.handleGiftWrap(response);
           }
+        },
+        error: (err) => {
+          console.error("[NIP-17] Subscription error:", err);
+          this.subscriptionActive = false;
+        },
+        complete: () => {
+          console.log("[NIP-17] Subscription completed");
+          this.subscriptionActive = false;
         },
       });
 
     this.subscriptions.set(conversationId, subscription);
+  }
+
+  /**
+   * Handle a received or sent gift wrap
+   */
+  private handleGiftWrap(giftWrap: NostrEvent): void {
+    // Add to gift wraps list if not already present
+    const current = this.giftWraps$.value;
+    if (!current.find((g) => g.id === giftWrap.id)) {
+      this.giftWraps$.next([...current, giftWrap]);
+    }
+
+    // Check if unlocked (cached) or pending (skip if already failed)
+    if (!isGiftWrapUnlocked(giftWrap)) {
+      if (!this.failedGiftWraps$.value.has(giftWrap.id)) {
+        const pending = new Set(this.pendingGiftWraps$.value);
+        pending.add(giftWrap.id);
+        this.pendingGiftWraps$.next(pending);
+      }
+    }
   }
 
   /** Cache for inbox relays */
