@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
 import { KindBadge } from "@/components/KindBadge";
@@ -126,6 +126,7 @@ function formatRelayUrlForDisplay(url: string): string {
 
 /**
  * RelayPublishItem - Clickable relay item for republish submenu
+ * Shows relay info (icon, name, URL) with publish status
  */
 function RelayPublishItem({
   url,
@@ -141,13 +142,22 @@ function RelayPublishItem({
   const relayInfo = useRelayInfo(url);
   const displayUrl = formatRelayUrlForDisplay(url);
 
+  // Determine button label for accessibility
+  const ariaLabel = isPublished
+    ? `${displayUrl} - Already published`
+    : isPublishing
+      ? `${displayUrl} - Publishing...`
+      : `Publish event to ${displayUrl}`;
+
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={isPublishing}
+      aria-label={ariaLabel}
       className={cn(
         "flex items-center gap-2 px-2 py-2 w-full text-left rounded-sm transition-colors",
-        "hover:bg-accent/10 focus:bg-accent/10",
+        "hover:bg-accent/10 focus:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         isPublished && "bg-green-500/10",
       )}
@@ -159,9 +169,13 @@ function RelayPublishItem({
             src={relayInfo.icon}
             alt=""
             className="size-4 flex-shrink-0 rounded-sm"
+            aria-hidden="true"
           />
         ) : (
-          <div className="size-4 flex-shrink-0 rounded-sm bg-muted/50" />
+          <div
+            className="size-4 flex-shrink-0 rounded-sm bg-muted/50"
+            aria-hidden="true"
+          />
         )}
         <div className="flex flex-col min-w-0 flex-1">
           {relayInfo?.name && (
@@ -176,7 +190,7 @@ function RelayPublishItem({
       </div>
 
       {/* Status icon */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0" aria-hidden="true">
         {isPublishing ? (
           <Loader2 className="size-3 animate-spin text-muted-foreground" />
         ) : isPublished ? (
@@ -205,24 +219,42 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   );
   const account = use$(accountManager.active$);
 
-  // Get user's outbox relays and seen relays
-  const seenRelaysSet = getSeenRelays(event);
-  const seenRelays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-
-  // Fetch user's relay list on mount
+  // Fetch user's outbox relays when account changes
   useEffect(() => {
     if (!account) {
       setMyRelays([]);
       return;
     }
 
-    relayListCache.getOutboxRelays(account.pubkey).then((relays) => {
-      setMyRelays(relays || []);
-    });
+    relayListCache
+      .getOutboxRelays(account.pubkey)
+      .then((relays) => {
+        setMyRelays(relays || []);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch outbox relays:", error);
+        setMyRelays([]);
+      });
   }, [account]);
 
-  // Combine and deduplicate relays for the list
-  const allRelays = Array.from(new Set([...myRelays, ...seenRelays]));
+  // Memoize relay lists to avoid unnecessary recalculations
+  const seenRelays = useMemo(() => {
+    const seenRelaysSet = getSeenRelays(event);
+    return seenRelaysSet ? Array.from(seenRelaysSet) : [];
+  }, [event]);
+
+  // Connected relays: seen relays that are not in user's relay list
+  const connectedRelays = useMemo(() => {
+    return seenRelays.filter((relay) => !myRelays.includes(relay));
+  }, [seenRelays, myRelays]);
+
+  // All available relays (for checking if submenu should be disabled)
+  const allRelays = useMemo(() => {
+    return Array.from(new Set([...myRelays, ...seenRelays]));
+  }, [myRelays, seenRelays]);
+
+  // Check if any publish operation is in progress
+  const isPublishing = publishingRelays.size > 0;
 
   const openEventDetail = () => {
     let pointer;
@@ -272,13 +304,21 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     }
   };
 
-  const viewEventJson = () => {
+  const viewEventJson = useCallback(() => {
     setJsonDialogOpen(true);
-  };
+  }, []);
 
-  const handleRepublishToMyRelays = async () => {
+  /**
+   * Publish event to all user's outbox relays
+   */
+  const handleRepublishToMyRelays = useCallback(async () => {
     if (myRelays.length === 0) {
       toast.error("No relays found in your relay list");
+      return;
+    }
+
+    // Prevent duplicate publishes
+    if (isPublishing) {
       return;
     }
 
@@ -289,50 +329,63 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       await publishEventToRelays(event, myRelays);
 
       // Mark event as seen on all relays after successful publish
+      // This updates the event's internal state so it appears in "Seen on" dropdown
       myRelays.forEach((relay) => addSeenRelay(event, relay));
 
-      // Mark all as published
-      setPublishedRelays(new Set(myRelays));
+      // Mark all as published in UI
+      setPublishedRelays((prev) => new Set([...prev, ...myRelays]));
 
       toast.success(
         `Published to ${myRelays.length} relay${myRelays.length > 1 ? "s" : ""}`,
       );
     } catch (error) {
-      toast.error(
-        `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to publish to relays:", error);
+      toast.error(`Failed to publish: ${message}`);
     } finally {
       setPublishingRelays(new Set());
     }
-  };
+  }, [event, myRelays, isPublishing]);
 
-  const handleRepublishToRelay = async (relay: string) => {
-    // Mark this relay as publishing
-    setPublishingRelays((prev) => new Set([...prev, relay]));
+  /**
+   * Publish event to a specific relay
+   */
+  const handleRepublishToRelay = useCallback(
+    async (relay: string) => {
+      // Prevent duplicate publishes to the same relay
+      if (publishingRelays.has(relay)) {
+        return;
+      }
 
-    try {
-      await publishEventToRelays(event, [relay]);
+      // Mark this relay as publishing
+      setPublishingRelays((prev) => new Set([...prev, relay]));
 
-      // Mark event as seen on this relay after successful publish
-      addSeenRelay(event, relay);
+      try {
+        await publishEventToRelays(event, [relay]);
 
-      // Mark as published
-      setPublishedRelays((prev) => new Set([...prev, relay]));
+        // Mark event as seen on this relay after successful publish
+        addSeenRelay(event, relay);
 
-      toast.success("Published successfully");
-    } catch (error) {
-      toast.error(
-        `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    } finally {
-      // Remove from publishing set
-      setPublishingRelays((prev) => {
-        const next = new Set(prev);
-        next.delete(relay);
-        return next;
-      });
-    }
-  };
+        // Mark as published in UI
+        setPublishedRelays((prev) => new Set([...prev, relay]));
+
+        toast.success("Published successfully");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(`Failed to publish to ${relay}:`, error);
+        toast.error(`Failed to publish: ${message}`);
+      } finally {
+        // Remove from publishing set
+        setPublishingRelays((prev) => {
+          const next = new Set(prev);
+          next.delete(relay);
+          return next;
+        });
+      }
+    },
+    [event, publishingRelays],
+  );
 
   return (
     <DropdownMenu>
@@ -366,7 +419,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
             Republish
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-72 max-h-96 overflow-y-auto">
-            {/* Quick action: Republish to my relays */}
+            {/* Quick action: Publish to all user's outbox relays */}
             {account && myRelays.length > 0 && (
               <>
                 <div className="px-1 py-1">
@@ -374,12 +427,16 @@ export function EventMenu({ event }: { event: NostrEvent }) {
                     size="sm"
                     className="w-full"
                     onClick={handleRepublishToMyRelays}
-                    disabled={publishingRelays.size > 0}
+                    disabled={isPublishing}
+                    aria-label={`Publish event to all ${myRelays.length} of your relays`}
                   >
-                    {publishingRelays.size > 0 ? (
-                      <Loader2 className="size-3 mr-2 animate-spin" />
+                    {isPublishing ? (
+                      <Loader2
+                        className="size-3 mr-2 animate-spin"
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <Send className="size-3 mr-2" />
+                      <Send className="size-3 mr-2" aria-hidden="true" />
                     )}
                     Publish to all my relays ({myRelays.length})
                   </Button>
@@ -390,18 +447,25 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 
             {/* No relays available */}
             {allRelays.length === 0 && (
-              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+              <div
+                className="px-2 py-6 text-center text-sm text-muted-foreground"
+                role="status"
+              >
                 No relays available
               </div>
             )}
 
-            {/* My relays list */}
+            {/* User's outbox relays */}
             {account && myRelays.length > 0 && (
               <>
                 <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
                   My relays
                 </DropdownMenuLabel>
-                <div className="px-1 space-y-0.5">
+                <div
+                  className="px-1 space-y-0.5"
+                  role="group"
+                  aria-label="Your outbox relays"
+                >
                   {myRelays.map((relay) => (
                     <RelayPublishItem
                       key={relay}
@@ -415,25 +479,27 @@ export function EventMenu({ event }: { event: NostrEvent }) {
               </>
             )}
 
-            {/* Connected relays (seen relays not in my relays) */}
-            {seenRelays.filter((r) => !myRelays.includes(r)).length > 0 && (
+            {/* Connected relays (seen on but not in user's list) */}
+            {connectedRelays.length > 0 && (
               <>
                 {account && myRelays.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
                   Connected relays
                 </DropdownMenuLabel>
-                <div className="px-1 space-y-0.5">
-                  {seenRelays
-                    .filter((r) => !myRelays.includes(r))
-                    .map((relay) => (
-                      <RelayPublishItem
-                        key={relay}
-                        url={relay}
-                        isPublishing={publishingRelays.has(relay)}
-                        isPublished={publishedRelays.has(relay)}
-                        onClick={() => handleRepublishToRelay(relay)}
-                      />
-                    ))}
+                <div
+                  className="px-1 space-y-0.5"
+                  role="group"
+                  aria-label="Relays where this event was seen"
+                >
+                  {connectedRelays.map((relay) => (
+                    <RelayPublishItem
+                      key={relay}
+                      url={relay}
+                      isPublishing={publishingRelays.has(relay)}
+                      isPublished={publishedRelays.has(relay)}
+                      onClick={() => handleRepublishToRelay(relay)}
+                    />
+                  ))}
                 </div>
               </>
             )}
