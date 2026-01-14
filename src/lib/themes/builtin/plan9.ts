@@ -9,7 +9,6 @@ import type { Theme } from "../types";
  * - Black text for high contrast
  * - Bright yellow selections
  * - Dark blue accents
- * - No rounded corners (squared aesthetic)
  */
 export const plan9Theme: Theme = {
   id: "plan9",
@@ -92,7 +91,4 @@ export const plan9Theme: Theme = {
     color3: "100 60 180", // Muted purple
     color4: "40 160 180", // Teal
   },
-
-  // Plan9 has no rounded corners - everything is squared
-  radius: "0",
 };

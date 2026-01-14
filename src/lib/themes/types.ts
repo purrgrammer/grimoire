@@ -126,9 +126,6 @@ export interface Theme {
 
   /** Gradient colors */
   gradient: ThemeGradient;
-
-  /** Border radius base value (e.g., "0.5rem", "0") */
-  radius: string;
 }
 
 /** Theme metadata for listings (without full color data) */

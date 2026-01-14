@@ -75,6 +75,4 @@ export const darkTheme: Theme = {
     color3: "168 85 247", // purple-500
     color4: "34 211 238", // cyan-400
   },
-
-  radius: "0.5rem",
 };

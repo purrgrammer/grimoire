@@ -81,12 +81,6 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty("--gradient-2", theme.gradient.color2);
   root.style.setProperty("--gradient-3", theme.gradient.color3);
   root.style.setProperty("--gradient-4", theme.gradient.color4);
-
-  // Layout
-  root.style.setProperty("--radius", theme.radius);
-
-  // Remove the dark class management - we now handle this via CSS variables directly
-  // The dark class is no longer needed as themes apply their own color values
 }
 
 /**
@@ -144,7 +138,5 @@ export function getThemeVariables(): string[] {
     "--gradient-2",
     "--gradient-3",
     "--gradient-4",
-    // Layout
-    "--radius",
   ];
 }

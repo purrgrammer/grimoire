@@ -75,6 +75,4 @@ export const lightTheme: Theme = {
     color3: "147 51 234", // purple-600
     color4: "6 182 212", // cyan-500
   },
-
-  radius: "0.5rem",
 };
