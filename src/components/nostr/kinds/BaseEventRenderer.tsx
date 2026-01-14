@@ -12,7 +12,6 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import {
   Menu,
@@ -29,7 +28,7 @@ import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
-import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { getSeenRelays, addSeenRelay } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
@@ -39,6 +38,7 @@ import accountManager from "@/services/accounts";
 import { toast } from "sonner";
 import { use$ } from "applesauce-react/hooks";
 import { Button } from "@/components/ui/button";
+import { useRelayInfo } from "@/hooks/useRelayInfo";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -116,6 +116,80 @@ function ReplyPreview({
 */
 
 /**
+ * Format relay URL for display by removing protocol and trailing slashes
+ */
+function formatRelayUrlForDisplay(url: string): string {
+  return url
+    .replace(/^wss?:\/\//, "") // Remove ws:// or wss://
+    .replace(/\/$/, ""); // Remove trailing slash
+}
+
+/**
+ * RelayPublishItem - Clickable relay item for republish submenu
+ */
+function RelayPublishItem({
+  url,
+  isPublishing,
+  isPublished,
+  onClick,
+}: {
+  url: string;
+  isPublishing: boolean;
+  isPublished: boolean;
+  onClick: () => void;
+}) {
+  const relayInfo = useRelayInfo(url);
+  const displayUrl = formatRelayUrlForDisplay(url);
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isPublishing}
+      className={cn(
+        "flex items-center gap-2 px-2 py-2 w-full text-left rounded-sm transition-colors",
+        "hover:bg-accent/10 focus:bg-accent/10",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        isPublished && "bg-green-500/10",
+      )}
+    >
+      {/* Relay icon and info */}
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {relayInfo?.icon ? (
+          <img
+            src={relayInfo.icon}
+            alt=""
+            className="size-4 flex-shrink-0 rounded-sm"
+          />
+        ) : (
+          <div className="size-4 flex-shrink-0 rounded-sm bg-muted/50" />
+        )}
+        <div className="flex flex-col min-w-0 flex-1">
+          {relayInfo?.name && (
+            <span className="text-xs font-medium truncate">
+              {relayInfo.name}
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground truncate">
+            {displayUrl}
+          </span>
+        </div>
+      </div>
+
+      {/* Status icon */}
+      <div className="flex-shrink-0">
+        {isPublishing ? (
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+        ) : isPublished ? (
+          <Check className="size-3 text-green-500" />
+        ) : (
+          <Send className="size-3 text-muted-foreground" />
+        )}
+      </div>
+    </button>
+  );
+}
+
+/**
  * Event menu - universal actions for any event
  */
 export function EventMenu({ event }: { event: NostrEvent }) {
@@ -123,8 +197,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
   const [myRelays, setMyRelays] = useState<string[]>([]);
-  const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishingRelays, setPublishingRelays] = useState<Set<string>>(
+    new Set(),
+  );
+  const [publishedRelays, setPublishedRelays] = useState<Set<string>>(
+    new Set(),
+  );
   const account = use$(accountManager.active$);
 
   // Get user's outbox relays and seen relays
@@ -143,7 +221,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     });
   }, [account]);
 
-  // Combine and deduplicate relays for the checkbox list
+  // Combine and deduplicate relays for the list
   const allRelays = Array.from(new Set([...myRelays, ...seenRelays]));
 
   const openEventDetail = () => {
@@ -204,9 +282,18 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       return;
     }
 
-    setIsPublishing(true);
+    // Mark all relays as publishing
+    setPublishingRelays(new Set(myRelays));
+
     try {
       await publishEventToRelays(event, myRelays);
+
+      // Mark event as seen on all relays after successful publish
+      myRelays.forEach((relay) => addSeenRelay(event, relay));
+
+      // Mark all as published
+      setPublishedRelays(new Set(myRelays));
+
       toast.success(
         `Published to ${myRelays.length} relay${myRelays.length > 1 ? "s" : ""}`,
       );
@@ -215,43 +302,36 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
-      setIsPublishing(false);
+      setPublishingRelays(new Set());
     }
   };
 
-  const handleRepublishToSelected = async () => {
-    const relaysArray = Array.from(selectedRelays);
-    if (relaysArray.length === 0) {
-      toast.error("No relays selected");
-      return;
-    }
+  const handleRepublishToRelay = async (relay: string) => {
+    // Mark this relay as publishing
+    setPublishingRelays((prev) => new Set([...prev, relay]));
 
-    setIsPublishing(true);
     try {
-      await publishEventToRelays(event, relaysArray);
-      toast.success(
-        `Published to ${relaysArray.length} relay${relaysArray.length > 1 ? "s" : ""}`,
-      );
-      setSelectedRelays(new Set()); // Clear selection after successful publish
+      await publishEventToRelays(event, [relay]);
+
+      // Mark event as seen on this relay after successful publish
+      addSeenRelay(event, relay);
+
+      // Mark as published
+      setPublishedRelays((prev) => new Set([...prev, relay]));
+
+      toast.success("Published successfully");
     } catch (error) {
       toast.error(
         `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
-      setIsPublishing(false);
-    }
-  };
-
-  const toggleRelay = (relay: string) => {
-    setSelectedRelays((prev) => {
-      const next = new Set(prev);
-      if (next.has(relay)) {
+      // Remove from publishing set
+      setPublishingRelays((prev) => {
+        const next = new Set(prev);
         next.delete(relay);
-      } else {
-        next.add(relay);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
   };
 
   return (
@@ -281,39 +361,30 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 
         {/* Republish submenu */}
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger
-            disabled={isPublishing || allRelays.length === 0}
-          >
-            {isPublishing ? (
-              <Loader2 className="size-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="size-4 mr-2" />
-            )}
+          <DropdownMenuSubTrigger disabled={allRelays.length === 0}>
+            <Send className="size-4 mr-2" />
             Republish
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-64 max-h-96 overflow-y-auto">
+          <DropdownMenuSubContent className="w-72 max-h-96 overflow-y-auto">
             {/* Quick action: Republish to my relays */}
             {account && myRelays.length > 0 && (
               <>
-                <div className="px-2 py-1.5">
+                <div className="px-1 py-1">
                   <Button
                     size="sm"
                     className="w-full"
                     onClick={handleRepublishToMyRelays}
-                    disabled={isPublishing}
+                    disabled={publishingRelays.size > 0}
                   >
-                    {isPublishing ? (
+                    {publishingRelays.size > 0 ? (
                       <Loader2 className="size-3 mr-2 animate-spin" />
                     ) : (
                       <Send className="size-3 mr-2" />
                     )}
-                    My relays ({myRelays.length})
+                    Publish to all my relays ({myRelays.length})
                   </Button>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
-                  Select relays
-                </DropdownMenuLabel>
               </>
             )}
 
@@ -324,65 +395,45 @@ export function EventMenu({ event }: { event: NostrEvent }) {
               </div>
             )}
 
-            {/* Checkbox list: My relays */}
+            {/* My relays list */}
             {account && myRelays.length > 0 && (
               <>
-                <DropdownMenuLabel className="text-xs px-2 py-1">
+                <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
                   My relays
                 </DropdownMenuLabel>
-                {myRelays.map((relay) => (
-                  <DropdownMenuCheckboxItem
-                    key={relay}
-                    checked={selectedRelays.has(relay)}
-                    onCheckedChange={() => toggleRelay(relay)}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <span className="truncate text-xs">{relay}</span>
-                  </DropdownMenuCheckboxItem>
-                ))}
+                <div className="px-1 space-y-0.5">
+                  {myRelays.map((relay) => (
+                    <RelayPublishItem
+                      key={relay}
+                      url={relay}
+                      isPublishing={publishingRelays.has(relay)}
+                      isPublished={publishedRelays.has(relay)}
+                      onClick={() => handleRepublishToRelay(relay)}
+                    />
+                  ))}
+                </div>
               </>
             )}
 
-            {/* Checkbox list: Connected relays (seen relays not in my relays) */}
+            {/* Connected relays (seen relays not in my relays) */}
             {seenRelays.filter((r) => !myRelays.includes(r)).length > 0 && (
               <>
-                <DropdownMenuLabel className="text-xs px-2 py-1 mt-1">
+                {account && myRelays.length > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
                   Connected relays
                 </DropdownMenuLabel>
-                {seenRelays
-                  .filter((r) => !myRelays.includes(r))
-                  .map((relay) => (
-                    <DropdownMenuCheckboxItem
-                      key={relay}
-                      checked={selectedRelays.has(relay)}
-                      onCheckedChange={() => toggleRelay(relay)}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      <span className="truncate text-xs">{relay}</span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-              </>
-            )}
-
-            {/* Publish button for selected relays */}
-            {selectedRelays.size > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={handleRepublishToSelected}
-                    disabled={isPublishing}
-                  >
-                    {isPublishing ? (
-                      <Loader2 className="size-3 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="size-3 mr-2" />
-                    )}
-                    Publish to {selectedRelays.size} selected
-                  </Button>
+                <div className="px-1 space-y-0.5">
+                  {seenRelays
+                    .filter((r) => !myRelays.includes(r))
+                    .map((relay) => (
+                      <RelayPublishItem
+                        key={relay}
+                        url={relay}
+                        isPublishing={publishingRelays.has(relay)}
+                        isPublished={publishedRelays.has(relay)}
+                        onClick={() => handleRepublishToRelay(relay)}
+                      />
+                    ))}
                 </div>
               </>
             )}
