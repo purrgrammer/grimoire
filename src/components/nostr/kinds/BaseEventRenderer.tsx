@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
 import { KindBadge } from "@/components/KindBadge";
@@ -9,8 +9,20 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink } from "lucide-react";
+import {
+  Menu,
+  Copy,
+  Check,
+  FileJson,
+  ExternalLink,
+  Send,
+  Loader2,
+} from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -21,6 +33,12 @@ import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
+import { publishEventToRelays } from "@/services/hub";
+import { relayListCache } from "@/services/relay-list-cache";
+import accountManager from "@/services/accounts";
+import { toast } from "sonner";
+import { use$ } from "applesauce-react/hooks";
+import { Button } from "@/components/ui/button";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -104,6 +122,29 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
+  const [myRelays, setMyRelays] = useState<string[]>([]);
+  const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
+  const [isPublishing, setIsPublishing] = useState(false);
+  const account = use$(accountManager.active$);
+
+  // Get user's outbox relays and seen relays
+  const seenRelaysSet = getSeenRelays(event);
+  const seenRelays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+  // Fetch user's relay list on mount
+  useEffect(() => {
+    if (!account) {
+      setMyRelays([]);
+      return;
+    }
+
+    relayListCache.getOutboxRelays(account.pubkey).then((relays) => {
+      setMyRelays(relays || []);
+    });
+  }, [account]);
+
+  // Combine and deduplicate relays for the checkbox list
+  const allRelays = Array.from(new Set([...myRelays, ...seenRelays]));
 
   const openEventDetail = () => {
     let pointer;
@@ -157,6 +198,62 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     setJsonDialogOpen(true);
   };
 
+  const handleRepublishToMyRelays = async () => {
+    if (myRelays.length === 0) {
+      toast.error("No relays found in your relay list");
+      return;
+    }
+
+    setIsPublishing(true);
+    try {
+      await publishEventToRelays(event, myRelays);
+      toast.success(
+        `Published to ${myRelays.length} relay${myRelays.length > 1 ? "s" : ""}`,
+      );
+    } catch (error) {
+      toast.error(
+        `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleRepublishToSelected = async () => {
+    const relaysArray = Array.from(selectedRelays);
+    if (relaysArray.length === 0) {
+      toast.error("No relays selected");
+      return;
+    }
+
+    setIsPublishing(true);
+    try {
+      await publishEventToRelays(event, relaysArray);
+      toast.success(
+        `Published to ${relaysArray.length} relay${relaysArray.length > 1 ? "s" : ""}`,
+      );
+      setSelectedRelays(new Set()); // Clear selection after successful publish
+    } catch (error) {
+      toast.error(
+        `Failed to publish: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const toggleRelay = (relay: string) => {
+    setSelectedRelays((prev) => {
+      const next = new Set(prev);
+      if (next.has(relay)) {
+        next.delete(relay);
+      } else {
+        next.add(relay);
+      }
+      return next;
+    });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -181,6 +278,117 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           <ExternalLink className="size-4 mr-2" />
           Open
         </DropdownMenuItem>
+
+        {/* Republish submenu */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            disabled={isPublishing || allRelays.length === 0}
+          >
+            {isPublishing ? (
+              <Loader2 className="size-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="size-4 mr-2" />
+            )}
+            Republish
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-64 max-h-96 overflow-y-auto">
+            {/* Quick action: Republish to my relays */}
+            {account && myRelays.length > 0 && (
+              <>
+                <div className="px-2 py-1.5">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={handleRepublishToMyRelays}
+                    disabled={isPublishing}
+                  >
+                    {isPublishing ? (
+                      <Loader2 className="size-3 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="size-3 mr-2" />
+                    )}
+                    My relays ({myRelays.length})
+                  </Button>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Select relays
+                </DropdownMenuLabel>
+              </>
+            )}
+
+            {/* No relays available */}
+            {allRelays.length === 0 && (
+              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                No relays available
+              </div>
+            )}
+
+            {/* Checkbox list: My relays */}
+            {account && myRelays.length > 0 && (
+              <>
+                <DropdownMenuLabel className="text-xs px-2 py-1">
+                  My relays
+                </DropdownMenuLabel>
+                {myRelays.map((relay) => (
+                  <DropdownMenuCheckboxItem
+                    key={relay}
+                    checked={selectedRelays.has(relay)}
+                    onCheckedChange={() => toggleRelay(relay)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate text-xs">{relay}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </>
+            )}
+
+            {/* Checkbox list: Connected relays (seen relays not in my relays) */}
+            {seenRelays.filter((r) => !myRelays.includes(r)).length > 0 && (
+              <>
+                <DropdownMenuLabel className="text-xs px-2 py-1 mt-1">
+                  Connected relays
+                </DropdownMenuLabel>
+                {seenRelays
+                  .filter((r) => !myRelays.includes(r))
+                  .map((relay) => (
+                    <DropdownMenuCheckboxItem
+                      key={relay}
+                      checked={selectedRelays.has(relay)}
+                      onCheckedChange={() => toggleRelay(relay)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="truncate text-xs">{relay}</span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </>
+            )}
+
+            {/* Publish button for selected relays */}
+            {selectedRelays.size > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={handleRepublishToSelected}
+                    disabled={isPublishing}
+                  >
+                    {isPublishing ? (
+                      <Loader2 className="size-3 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="size-3 mr-2" />
+                    )}
+                    Publish to {selectedRelays.size} selected
+                  </Button>
+                </div>
+              </>
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (
