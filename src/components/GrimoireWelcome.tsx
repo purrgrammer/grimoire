@@ -10,7 +10,7 @@ interface GrimoireWelcomeProps {
 const EXAMPLE_COMMANDS = [
   { command: "nip 29", description: "View relay-based groups spec" },
   {
-    command: "profile verbiricha@habla.news",
+    command: "profile fiatjaf.com",
     description: "Explore a Nostr profile",
   },
   { command: "req -k 1 -l 20", description: "Query recent notes" },
