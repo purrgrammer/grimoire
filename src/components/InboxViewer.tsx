@@ -19,6 +19,7 @@ import {
   Mail,
   AlertCircle,
   PanelLeft,
+  Bookmark,
 } from "lucide-react";
 import accountManager from "@/services/accounts";
 import { ChatViewer } from "./ChatViewer";
@@ -86,6 +87,7 @@ function formatRelayForDisplay(url: string): string {
 interface ConversationInfo {
   id: string;
   partnerPubkey: string;
+  isSavedMessages?: boolean;
   inboxRelays?: string[];
   lastMessage?: {
     content: string;
@@ -93,6 +95,23 @@ interface ConversationInfo {
     isOwn: boolean;
   };
 }
+
+/**
+ * SavedMessagesAvatar - Special avatar for saved messages
+ */
+const SavedMessagesAvatar = memo(function SavedMessagesAvatar({
+  className,
+}: {
+  className?: string;
+}) {
+  return (
+    <Avatar className={className}>
+      <AvatarFallback className="bg-primary/20 text-primary">
+        <Bookmark className="size-4" />
+      </AvatarFallback>
+    </Avatar>
+  );
+});
 
 /**
  * ConversationListItem - Single conversation in the list
@@ -106,6 +125,8 @@ const ConversationListItem = memo(function ConversationListItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const isSaved = conversation.isSavedMessages;
+
   return (
     <div
       className={cn(
@@ -114,28 +135,38 @@ const ConversationListItem = memo(function ConversationListItem({
       )}
       onClick={onClick}
     >
-      <UserAvatar pubkey={conversation.partnerPubkey} className="size-9" />
+      {isSaved ? (
+        <SavedMessagesAvatar className="size-9" />
+      ) : (
+        <UserAvatar pubkey={conversation.partnerPubkey} className="size-9" />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <UserName
-            pubkey={conversation.partnerPubkey}
-            className="text-sm font-medium truncate"
-          />
+          {isSaved ? (
+            <span className="text-sm font-medium truncate">Saved Messages</span>
+          ) : (
+            <UserName
+              pubkey={conversation.partnerPubkey}
+              className="text-sm font-medium truncate"
+            />
+          )}
           {conversation.lastMessage && (
             <span className="text-xs text-muted-foreground flex-shrink-0">
               <Timestamp timestamp={conversation.lastMessage.timestamp} />
             </span>
           )}
         </div>
-        {/* Inbox relays */}
-        {conversation.inboxRelays && conversation.inboxRelays.length > 0 && (
-          <div className="text-[10px] text-muted-foreground/60 truncate">
-            {conversation.inboxRelays.map(formatRelayForDisplay).join(", ")}
-          </div>
-        )}
+        {/* Inbox relays - don't show for saved messages */}
+        {!isSaved &&
+          conversation.inboxRelays &&
+          conversation.inboxRelays.length > 0 && (
+            <div className="text-[10px] text-muted-foreground/60 truncate">
+              {conversation.inboxRelays.map(formatRelayForDisplay).join(", ")}
+            </div>
+          )}
         {conversation.lastMessage && (
           <div className="text-xs text-muted-foreground truncate">
-            {conversation.lastMessage.isOwn && (
+            {conversation.lastMessage.isOwn && !isSaved && (
               <span className="text-muted-foreground/70">You: </span>
             )}
             {conversation.lastMessage.content}
@@ -282,12 +313,22 @@ export function InboxViewer() {
     if (!conversations || !activePubkey) return [];
 
     return conversations.map((conv): ConversationInfo => {
-      const partner = conv.participants.find((p) => p.pubkey !== activePubkey);
-      const partnerPubkey = partner?.pubkey || "";
+      // Check if this is a saved messages conversation
+      const isSavedMessages = conv.metadata?.isSavedMessages === true;
+
+      // For saved messages, partner is self; otherwise find the other participant
+      const partner = isSavedMessages
+        ? { pubkey: activePubkey }
+        : conv.participants.find((p) => p.pubkey !== activePubkey);
+      const partnerPubkey = partner?.pubkey || activePubkey;
+
       return {
         id: conv.id,
         partnerPubkey,
-        inboxRelays: partnerRelays.get(partnerPubkey),
+        isSavedMessages,
+        inboxRelays: isSavedMessages
+          ? undefined
+          : partnerRelays.get(partnerPubkey),
         lastMessage: conv.lastMessage
           ? {
               content: conv.lastMessage.content,

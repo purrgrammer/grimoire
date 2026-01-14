@@ -64,6 +64,7 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+  isSavedMessages?: boolean; // True if this is a self-conversation (DMs to yourself)
 }
 
 /**
@@ -157,6 +158,17 @@ export interface DMIdentifier {
 }
 
 /**
+ * Self DM identifier (saved messages - DMs to yourself)
+ */
+export interface DMSelfIdentifier {
+  type: "dm-self";
+  /** Placeholder value ($me resolved at runtime) */
+  value: string;
+  /** Relay hints (unused for self-DMs) */
+  relays?: string[];
+}
+
+/**
  * NIP-C7 NIP-05 identifier (needs resolution)
  */
 export interface NIP05Identifier {
@@ -202,6 +214,7 @@ export type ProtocolIdentifier =
   | GroupIdentifier
   | LiveActivityIdentifier
   | DMIdentifier
+  | DMSelfIdentifier
   | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier;

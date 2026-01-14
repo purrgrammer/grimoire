@@ -1,10 +1,10 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
+import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
 // Import other adapters as they're implemented
-// import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
 
 /**
@@ -62,11 +62,11 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
-    // new Nip17Adapter(),  // Phase 2
-    // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
-    // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
+    new Nip17Adapter(), // NIP-17 - Private DMs (gift wrapped)
+    // new Nip28Adapter(),  // NIP-28 - Public channels (coming soon)
+    new Nip29Adapter(), // NIP-29 - Relay groups
+    new Nip53Adapter(), // NIP-53 - Live activity chat
+    // new NipC7Adapter(), // NIP-C7 - Simple chat (disabled for now)
   ];
 
   for (const adapter of adapters) {
@@ -84,22 +84,20 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
+  - npub/nprofile/hex pubkey/NIP-05/$me (NIP-17 private DMs)
+    Examples:
+      chat npub1...
+      chat alice@example.com
+      chat $me (saved messages)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
       chat wss://relay.example.com'nostr-dev
   - naddr1... (NIP-29 group metadata, kind 39000)
-    Example:
-      chat naddr1qqxnzdesxqmnxvpexqmny...
   - naddr1... (NIP-53 live activity chat, kind 30311)
-    Example:
-      chat naddr1... (live stream address)
   - naddr1... (Multi-room group list, kind 10009)
-    Example:
-      chat naddr1... (group list address)
 
 More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
   - note/nevent (NIP-28 public channels)`,
   );
 }

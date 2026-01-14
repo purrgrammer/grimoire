@@ -69,9 +69,17 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   private giftWraps$ = new BehaviorSubject<NostrEvent[]>([]);
 
   /**
-   * Parse identifier - accepts npub, nprofile, hex pubkey, or NIP-05
+   * Parse identifier - accepts npub, nprofile, hex pubkey, NIP-05, or $me
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
+    // Handle $me alias for saved messages (DMs to yourself)
+    if (input.toLowerCase() === "$me") {
+      return {
+        type: "dm-self",
+        value: "$me",
+      };
+    }
+
     // Try bech32 decoding (npub/nprofile)
     try {
       const decoded = nip19.decode(input);
@@ -117,10 +125,18 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    if (!activePubkey) {
+      throw new Error("No active account");
+    }
+
     let partnerPubkey: string;
 
-    // Resolve NIP-05 if needed
-    if (identifier.type === "chat-partner-nip05") {
+    // Handle $me (saved messages - DMs to yourself)
+    if (identifier.type === "dm-self") {
+      partnerPubkey = activePubkey;
+    } else if (identifier.type === "chat-partner-nip05") {
+      // Resolve NIP-05
       const resolved = await resolveNip05(identifier.value);
       if (!resolved) {
         throw new Error(`Failed to resolve NIP-05: ${identifier.value}`);
@@ -137,20 +153,17 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       );
     }
 
-    const activePubkey = accountManager.active$.value?.pubkey;
-    if (!activePubkey) {
-      throw new Error("No active account");
-    }
-
-    // Get display name for partner
-    const metadataEvent = await this.getMetadata(partnerPubkey);
-    const metadata = metadataEvent
-      ? getProfileContent(metadataEvent)
-      : undefined;
-    const title = getDisplayName(partnerPubkey, metadata);
+    // Check if this is a self-conversation (saved messages)
+    const isSelf = partnerPubkey === activePubkey;
+    const title = isSelf
+      ? "Saved Messages"
+      : await this.getPartnerTitle(partnerPubkey);
 
     // Create conversation ID from sorted participants (deterministic)
-    const participants = [activePubkey, partnerPubkey].sort();
+    // For self-conversations, it's just one participant listed twice
+    const participants = isSelf
+      ? [activePubkey]
+      : [activePubkey, partnerPubkey].sort();
     const conversationId = `nip-17:${participants.join(",")}`;
 
     return {
@@ -158,16 +171,30 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       type: "dm",
       protocol: "nip-17",
       title,
-      participants: [
-        { pubkey: activePubkey, role: "member" },
-        { pubkey: partnerPubkey, role: "member" },
-      ],
+      participants: isSelf
+        ? [{ pubkey: activePubkey, role: "member" }]
+        : [
+            { pubkey: activePubkey, role: "member" },
+            { pubkey: partnerPubkey, role: "member" },
+          ],
       metadata: {
         encrypted: true,
         giftWrapped: true,
+        isSavedMessages: isSelf,
       },
       unreadCount: 0,
     };
+  }
+
+  /**
+   * Get display name for a partner pubkey
+   */
+  private async getPartnerTitle(pubkey: string): Promise<string> {
+    const metadataEvent = await this.getMetadata(pubkey);
+    const metadata = metadataEvent
+      ? getProfileContent(metadataEvent)
+      : undefined;
+    return getDisplayName(pubkey, metadata);
   }
 
   /**
@@ -183,16 +210,27 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    // Get partner pubkey
-    const partner = conversation.participants.find(
-      (p) => p.pubkey !== activePubkey,
-    );
-    if (!partner) {
+    // Check if this is a self-conversation (saved messages)
+    const isSelfConversation =
+      conversation.metadata?.isSavedMessages ||
+      (conversation.participants.length === 1 &&
+        conversation.participants[0].pubkey === activePubkey);
+
+    // Get partner pubkey (for self-conversation, partner is self)
+    const partnerPubkey = isSelfConversation
+      ? activePubkey
+      : conversation.participants.find((p) => p.pubkey !== activePubkey)
+          ?.pubkey;
+
+    if (!partnerPubkey) {
       throw new Error("No conversation partner found");
     }
 
     // Expected participants for this conversation
-    const expectedParticipants = [activePubkey, partner.pubkey].sort();
+    // For self-conversations, both sender and recipient are the same
+    const expectedParticipants = isSelfConversation
+      ? [activePubkey]
+      : [activePubkey, partnerPubkey].sort();
 
     // Subscribe to gift wraps for this user
     this.subscribeToGiftWraps(activePubkey);
@@ -213,14 +251,27 @@ export class Nip17Adapter extends ChatProtocolAdapter {
             if (rumor.kind !== DM_RUMOR_KIND) continue;
 
             // Get participants from rumor
-            const rumorParticipants = getConversationParticipants(rumor).sort();
+            const rumorParticipants = getConversationParticipants(rumor);
 
-            // Check if participants match this conversation
-            if (
-              rumorParticipants.length !== expectedParticipants.length ||
-              !rumorParticipants.every((p, i) => p === expectedParticipants[i])
-            ) {
-              continue;
+            // For self-conversations, all participants should be the same (sender == recipient)
+            if (isSelfConversation) {
+              // Check if all participants are the same as activePubkey
+              const allSelf = rumorParticipants.every(
+                (p) => p === activePubkey,
+              );
+              if (!allSelf) continue;
+            } else {
+              // Check if participants match this conversation
+              const sortedRumorParticipants = rumorParticipants.sort();
+              if (
+                sortedRumorParticipants.length !==
+                  expectedParticipants.length ||
+                !sortedRumorParticipants.every(
+                  (p, i) => p === expectedParticipants[i],
+                )
+              ) {
+                continue;
+              }
             }
 
             messages.push(this.rumorToMessage(rumor, conversation.id));
@@ -273,22 +324,31 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    const partner = conversation.participants.find(
-      (p) => p.pubkey !== activePubkey,
-    );
-    if (!partner) {
-      throw new Error("No conversation partner found");
+    // Check if this is a self-conversation (saved messages)
+    const isSelfConversation =
+      conversation.metadata?.isSavedMessages ||
+      (conversation.participants.length === 1 &&
+        conversation.participants[0].pubkey === activePubkey);
+
+    // Get recipient pubkey (for self-conversation, it's ourselves)
+    const recipientPubkey = isSelfConversation
+      ? activePubkey
+      : conversation.participants.find((p) => p.pubkey !== activePubkey)
+          ?.pubkey;
+
+    if (!recipientPubkey) {
+      throw new Error("No conversation recipient found");
     }
 
     // Use applesauce's SendWrappedMessage action
     // This handles:
     // - Creating the wrapped message rumor
-    // - Gift wrapping for all participants (partner + self)
+    // - Gift wrapping for all participants (recipient + self)
     // - Publishing to each participant's inbox relays
-    await hub.run(SendWrappedMessage, partner.pubkey, content);
+    await hub.run(SendWrappedMessage, recipientPubkey, content);
 
     console.log(
-      `[NIP-17] Sent wrapped message to ${partner.pubkey.slice(0, 8)}...`,
+      `[NIP-17] Sent wrapped message to ${recipientPubkey.slice(0, 8)}...${isSelfConversation ? " (saved)" : ""}`,
     );
   }
 
@@ -455,29 +515,59 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         const conversations: Conversation[] = [];
 
         for (const [convId, { participants, lastRumor }] of conversationMap) {
-          const partner = participants.find((p) => p !== activePubkey);
-          if (!partner) continue;
+          // Check if this is a self-conversation (all participants are activePubkey)
+          const isSelfConversation = participants.every(
+            (p) => p === activePubkey,
+          );
+
+          // Get partner pubkey (for self-conversation, use self)
+          const partnerPubkey = isSelfConversation
+            ? activePubkey
+            : participants.find((p) => p !== activePubkey);
+
+          // Skip if we can't determine partner (shouldn't happen)
+          if (!partnerPubkey) continue;
+
+          // Create unique participant list for conversation ID
+          const uniqueParticipants = isSelfConversation
+            ? [activePubkey]
+            : participants.sort();
 
           conversations.push({
-            id: `nip-17:${participants.sort().join(",")}`,
+            id: `nip-17:${uniqueParticipants.join(",")}`,
             type: "dm",
             protocol: "nip-17",
-            title: partner.slice(0, 8) + "...", // Will be replaced with display name
-            participants: participants.map((p) => ({
-              pubkey: p,
-              role: "member" as const,
-            })),
-            metadata: { encrypted: true, giftWrapped: true },
+            title: isSelfConversation
+              ? "Saved Messages"
+              : partnerPubkey.slice(0, 8) + "...", // Will be replaced with display name
+            participants: isSelfConversation
+              ? [{ pubkey: activePubkey, role: "member" as const }]
+              : participants.map((p) => ({
+                  pubkey: p,
+                  role: "member" as const,
+                })),
+            metadata: {
+              encrypted: true,
+              giftWrapped: true,
+              isSavedMessages: isSelfConversation,
+            },
             lastMessage: this.rumorToMessage(lastRumor, convId),
             unreadCount: 0,
           });
         }
 
-        // Sort by last message timestamp
-        conversations.sort(
-          (a, b) =>
-            (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0),
-        );
+        // Sort: Saved Messages at top, then by last message timestamp
+        conversations.sort((a, b) => {
+          // Saved Messages always first
+          if (a.metadata?.isSavedMessages && !b.metadata?.isSavedMessages)
+            return -1;
+          if (!a.metadata?.isSavedMessages && b.metadata?.isSavedMessages)
+            return 1;
+          // Then by timestamp
+          return (
+            (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0)
+          );
+        });
 
         return conversations;
       }),
