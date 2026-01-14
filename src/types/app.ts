@@ -14,6 +14,7 @@ export type AppId =
   | "encode"
   | "decode"
   | "relay"
+  | "relay-admin"
   | "debug"
   | "conn"
   | "chat"

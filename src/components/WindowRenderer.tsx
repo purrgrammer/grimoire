@@ -20,6 +20,9 @@ const DecodeViewer = lazy(() => import("./DecodeViewer"));
 const RelayViewer = lazy(() =>
   import("./RelayViewer").then((m) => ({ default: m.RelayViewer })),
 );
+const RelayAdminViewer = lazy(() =>
+  import("./RelayAdminViewer").then((m) => ({ default: m.RelayAdminViewer })),
+);
 const KindRenderer = lazy(() => import("./KindRenderer"));
 const KindsViewer = lazy(() => import("./KindsViewer"));
 const NipsViewer = lazy(() => import("./NipsViewer"));
@@ -171,6 +174,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "relay":
         content = <RelayViewer url={window.props.url} />;
+        break;
+      case "relay-admin":
+        content = <RelayAdminViewer url={window.props.url} />;
         break;
       case "debug":
         content = <DebugViewer />;
