@@ -94,7 +94,7 @@ const GroupListItem = memo(function GroupListItem({
       </div>
       {/* Last message preview - hide images and event embeds */}
       {lastMessageAuthor && lastMessageContent && (
-        <div className="text-xs text-muted-foreground truncate line-clamp-1">
+        <div className="text-xs text-muted-foreground truncate line-clamp-1 pointer-events-none">
           <UserName
             pubkey={lastMessageAuthor}
             className="text-xs font-medium"
