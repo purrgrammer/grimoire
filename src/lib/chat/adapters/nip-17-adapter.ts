@@ -32,6 +32,8 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { hub } from "@/services/hub";
+import { relayListCache } from "@/services/relay-list-cache";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { isNip05, resolveNip05 } from "@/lib/nip05";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
@@ -558,40 +560,69 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     if (existing) {
       const relays = this.extractRelaysFromEvent(existing);
       if (relays.length > 0) {
+        console.log(
+          `[NIP-17] Found inbox relays in store for ${pubkey.slice(0, 8)}:`,
+          relays,
+        );
         return relays;
       }
     }
 
-    // Fetch from default relays if not in store
+    // Get user's outbox relays to search for their kind 10050
+    const outboxRelays = await relayListCache.getOutboxRelays(pubkey);
+    const searchRelays =
+      outboxRelays && outboxRelays.length > 0
+        ? outboxRelays
+        : AGGREGATOR_RELAYS;
+
+    if (searchRelays.length === 0) {
+      console.warn(
+        `[NIP-17] No relays to search for kind 10050 for ${pubkey.slice(0, 8)}`,
+      );
+      return [];
+    }
+
+    console.log(
+      `[NIP-17] Searching ${searchRelays.length} relays for kind 10050:`,
+      searchRelays,
+    );
+
+    // Fetch from user's outbox relays
     const filter: Filter = {
       kinds: [DM_RELAY_LIST_KIND],
       authors: [pubkey],
       limit: 1,
     };
 
-    // Use user's outbox relays or fallback relays to find their inbox list
     const events: NostrEvent[] = [];
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(resolve, 5000);
-      const sub = pool.subscription([], [filter], { eventStore }).subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
+      const sub = pool
+        .subscription(searchRelays, [filter], { eventStore })
+        .subscribe({
+          next: (response) => {
+            if (typeof response === "string") {
+              clearTimeout(timeout);
+              sub.unsubscribe();
+              resolve();
+            } else {
+              events.push(response);
+            }
+          },
+          error: () => {
             clearTimeout(timeout);
-            sub.unsubscribe();
             resolve();
-          } else {
-            events.push(response);
-          }
-        },
-        error: () => {
-          clearTimeout(timeout);
-          resolve();
-        },
-      });
+          },
+        });
     });
 
     if (events.length > 0) {
-      return this.extractRelaysFromEvent(events[0]);
+      const relays = this.extractRelaysFromEvent(events[0]);
+      console.log(
+        `[NIP-17] Found inbox relays from network for ${pubkey.slice(0, 8)}:`,
+        relays,
+      );
+      return relays;
     }
 
     return [];
