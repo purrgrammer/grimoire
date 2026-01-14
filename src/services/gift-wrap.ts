@@ -1,14 +1,12 @@
-import { BehaviorSubject, map, Subscription } from "rxjs";
+import { BehaviorSubject, Subscription, firstValueFrom } from "rxjs";
 import { createTimelineLoader } from "applesauce-loaders/loaders";
-import { onlyEvents, mapEventsToStore } from "applesauce-core";
 import { unlockGiftWrap, getGiftWrapSeal } from "applesauce-common/helpers";
 import { GiftWrapsModel } from "applesauce-common/models";
-import type { Signer } from "applesauce-signers";
+import type { ISigner } from "applesauce-signers";
 import type { NostrEvent } from "@/types/nostr";
 import eventStore from "./event-store";
 import pool from "./relay-pool";
 import db from "./db";
-import { getEventsForFilters } from "nostr-idb";
 
 /**
  * Gift wrap sync state
@@ -66,14 +64,13 @@ class GiftWrapManager {
     );
 
     try {
-      // Create timeline loader with cache fallback
+      // Create timeline loader
       const timeline = createTimelineLoader(
         pool,
         relays,
         { kinds: [1059], "#p": [pubkey], limit: 100 },
         {
           eventStore,
-          cache: (filters) => getEventsForFilters(await db.open(), filters),
         },
       );
 
@@ -125,29 +122,32 @@ class GiftWrapManager {
 
     console.log(`[GiftWrap] Subscribing to new gift wraps for ${pubkey}`);
 
-    // Subscribe to each relay
-    const subs = relays.map((relay) =>
-      pool
-        .relay(relay)
-        .subscription({
-          kinds: [1059],
-          "#p": [pubkey],
-          since: Math.floor(Date.now() / 1000),
-        })
-        .pipe(onlyEvents(), mapEventsToStore(eventStore))
-        .subscribe({
-          next: (event) => {
-            console.log("[GiftWrap] New gift wrap received:", event.id);
-            this.updateCounts(pubkey);
+    // Subscribe via pool.subscription (auto-adds to eventStore)
+    const sub = pool
+      .subscription(
+        relays,
+        [
+          {
+            kinds: [1059],
+            "#p": [pubkey],
+            since: Math.floor(Date.now() / 1000),
           },
-          error: (err) => console.error("[GiftWrap] Subscription error:", err),
-        }),
-    );
+        ],
+        { eventStore },
+      )
+      .subscribe({
+        next: (response) => {
+          if (typeof response !== "string") {
+            // It's an event
+            console.log("[GiftWrap] New gift wrap received:", response.id);
+            this.updateCounts(pubkey);
+          }
+        },
+        error: (err) => console.error("[GiftWrap] Subscription error:", err),
+      });
 
-    // Store combined subscription
-    const combined = new Subscription();
-    subs.forEach((sub) => combined.add(sub));
-    this.subscriptions.set(key, combined);
+    // Store subscription
+    this.subscriptions.set(key, sub);
   }
 
   /**
@@ -163,12 +163,11 @@ class GiftWrapManager {
    */
   async updateCounts(pubkey: string): Promise<void> {
     // Get pending count from applesauce model
-    const pending = await new Promise<number>((resolve) => {
-      eventStore
-        .model(GiftWrapsModel, pubkey, true)
-        .pipe(map((set) => set.size))
-        .subscribe(resolve);
-    });
+    const pendingEvents = await firstValueFrom(
+      eventStore.model(GiftWrapsModel, pubkey, true),
+    );
+    // GiftWrapsModel returns an array of events
+    const pending = Array.isArray(pendingEvents) ? pendingEvents.length : 0;
 
     // Get decrypted count from Dexie
     const decrypted = await db.decryptedGiftWraps.count();
@@ -188,19 +187,17 @@ class GiftWrapManager {
   }
 
   /**
-   * Get observable of pending gift wrap count
+   * Get observable of pending gift wraps
    */
-  getPendingCount(pubkey: string) {
-    return eventStore
-      .model(GiftWrapsModel, pubkey, true)
-      .pipe(map((set) => set.size));
+  getPendingGiftWraps(pubkey: string) {
+    return eventStore.model(GiftWrapsModel, pubkey, true);
   }
 
   /**
    * Decrypt a single gift wrap
    * Returns cached result if already decrypted
    */
-  async decryptOne(giftWrapId: string, signer: Signer): Promise<NostrEvent> {
+  async decryptOne(giftWrapId: string, signer: ISigner): Promise<NostrEvent> {
     // Check cache first
     const cached = await db.decryptedGiftWraps.get(giftWrapId);
     if (cached) {
@@ -216,8 +213,8 @@ class GiftWrapManager {
       );
     }
 
-    // Get gift wrap from EventStore
-    const gift = eventStore.event(giftWrapId);
+    // Get gift wrap from EventStore (returns Observable)
+    const gift = await firstValueFrom(eventStore.event(giftWrapId));
     if (!gift) {
       throw new Error(`Gift wrap not found: ${giftWrapId}`);
     }
@@ -230,14 +227,14 @@ class GiftWrapManager {
       await db.decryptedGiftWraps.add({
         giftWrapId: gift.id,
         rumorId: rumor.id,
-        rumor,
+        rumor: rumor as NostrEvent, // Rumor extends NostrEvent but without sig
         sealPubkey: getGiftWrapSeal(gift)?.pubkey || "",
         decryptedAt: Math.floor(Date.now() / 1000),
         receivedAt: gift.created_at,
       });
 
       console.log("[GiftWrap] Decrypted successfully:", giftWrapId);
-      return rumor;
+      return rumor as NostrEvent;
     } catch (err) {
       const errorMessage = String(err);
       console.error("[GiftWrap] Decryption failed:", giftWrapId, errorMessage);
@@ -259,7 +256,7 @@ class GiftWrapManager {
    */
   async *decryptBatch(
     giftWrapIds: string[],
-    signer: Signer,
+    signer: ISigner,
   ): AsyncGenerator<{
     id: string;
     status: "success" | "error";

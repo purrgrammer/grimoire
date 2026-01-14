@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Trash2,
 } from "lucide-react";
+import { firstValueFrom } from "rxjs";
 import giftWrapManager from "@/services/gift-wrap";
 import accountManager from "@/services/accounts";
+import eventStore from "@/services/event-store";
 import db, { DecryptedGiftWrap } from "@/services/db";
 import { getInboxes } from "applesauce-core/helpers";
 
@@ -37,7 +39,7 @@ export default function InboxViewer({ action }: InboxViewerProps) {
       .limit(50)
       .toArray()
       .then(setDecrypted);
-  }, [pubkey, page, syncState.decryptedCount]);
+  }, [pubkey, page, syncState?.decryptedCount]);
 
   // Initial sync on mount
   useEffect(() => {
@@ -46,10 +48,14 @@ export default function InboxViewer({ action }: InboxViewerProps) {
     const syncGiftWraps = async () => {
       setLoading(true);
       try {
-        // Get inbox relays from user's relay list
-        const inboxRelays = Array.from(
-          await getInboxes(pubkey).then((set) => set || new Set()),
+        // Get inbox relays from user's kind 10002 relay list event
+        const relayListEvent = await firstValueFrom(
+          eventStore.replaceable({ kind: 10002, pubkey }),
         );
+
+        const inboxRelays = relayListEvent
+          ? Array.from(getInboxes(relayListEvent))
+          : [];
 
         // Fallback to default relays if no inbox relays
         const relays =
@@ -100,14 +106,15 @@ export default function InboxViewer({ action }: InboxViewerProps) {
 
     setDecrypting(true);
     try {
-      // Get pending gift wrap IDs
-      const pending = await new Promise<string[]>((resolve) => {
-        giftWrapManager.getPendingCount(pubkey).subscribe((set) => {
-          // Get IDs from EventStore
-          const ids = Array.from(set as any).map((e: any) => e.id);
-          resolve(ids);
-        });
-      });
+      // Get pending gift wrap events (returns array)
+      const pendingEvents = await firstValueFrom(
+        giftWrapManager.getPendingGiftWraps(pubkey),
+      );
+
+      // Extract IDs
+      const pending = Array.isArray(pendingEvents)
+        ? pendingEvents.map((e) => e.id)
+        : [];
 
       if (pending.length === 0) {
         console.log("[InboxViewer] No pending gift wraps to decrypt");
@@ -190,20 +197,22 @@ export default function InboxViewer({ action }: InboxViewerProps) {
         <div className="flex gap-4 flex-wrap">
           <div className="flex items-center gap-2 px-3 py-2 bg-warning/10 text-warning rounded-lg">
             <Package className="w-4 h-4" />
-            <span className="font-medium">{syncState.pendingCount}</span>
+            <span className="font-medium">{syncState?.pendingCount ?? 0}</span>
             <span className="text-sm">Pending</span>
           </div>
 
           <div className="flex items-center gap-2 px-3 py-2 bg-success/10 text-success rounded-lg">
             <CheckCircle2 className="w-4 h-4" />
-            <span className="font-medium">{syncState.decryptedCount}</span>
+            <span className="font-medium">
+              {syncState?.decryptedCount ?? 0}
+            </span>
             <span className="text-sm">Decrypted</span>
           </div>
 
-          {syncState.failedCount > 0 && (
+          {(syncState?.failedCount ?? 0) > 0 && (
             <div className="flex items-center gap-2 px-3 py-2 bg-error/10 text-error rounded-lg">
               <AlertCircle className="w-4 h-4" />
-              <span className="font-medium">{syncState.failedCount}</span>
+              <span className="font-medium">{syncState?.failedCount}</span>
               <span className="text-sm">Failed</span>
             </div>
           )}
@@ -213,7 +222,7 @@ export default function InboxViewer({ action }: InboxViewerProps) {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleDecryptAll}
-            disabled={decrypting || syncState.pendingCount === 0}
+            disabled={decrypting || (syncState?.pendingCount ?? 0) === 0}
             className="btn btn-sm btn-primary"
           >
             {decrypting ? (
@@ -222,11 +231,11 @@ export default function InboxViewer({ action }: InboxViewerProps) {
                 Decrypting...
               </>
             ) : (
-              <>Decrypt All Pending ({syncState.pendingCount})</>
+              <>Decrypt All Pending ({syncState?.pendingCount ?? 0})</>
             )}
           </button>
 
-          {syncState.failedCount > 0 && (
+          {(syncState?.failedCount ?? 0) > 0 && (
             <button
               onClick={() => giftWrapManager.clearErrors()}
               className="btn btn-sm btn-ghost"
@@ -235,7 +244,7 @@ export default function InboxViewer({ action }: InboxViewerProps) {
             </button>
           )}
 
-          {syncState.decryptedCount > 0 && (
+          {(syncState?.decryptedCount ?? 0) > 0 && (
             <button
               onClick={handleClearAll}
               className="btn btn-sm btn-ghost text-error"
@@ -254,13 +263,13 @@ export default function InboxViewer({ action }: InboxViewerProps) {
             <div className="text-center space-y-4">
               <Package className="w-12 h-12 mx-auto opacity-50" />
               <p>No decrypted gift wraps yet.</p>
-              {syncState.pendingCount > 0 && (
+              {(syncState?.pendingCount ?? 0) > 0 && (
                 <button
                   onClick={handleDecryptAll}
                   disabled={decrypting}
                   className="btn btn-primary btn-sm"
                 >
-                  Decrypt {syncState.pendingCount} Pending
+                  Decrypt {syncState?.pendingCount} Pending
                 </button>
               )}
             </div>
@@ -317,9 +326,9 @@ export default function InboxViewer({ action }: InboxViewerProps) {
       </div>
 
       {/* Footer with sync info */}
-      {syncState.lastSyncAt > 0 && (
+      {(syncState?.lastSyncAt ?? 0) > 0 && (
         <div className="p-2 text-xs text-center text-base-content/50 border-t border-base-300">
-          Last synced: {new Date(syncState.lastSyncAt).toLocaleString()}
+          Last synced: {new Date(syncState!.lastSyncAt).toLocaleString()}
         </div>
       )}
     </div>
