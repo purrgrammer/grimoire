@@ -1,5 +1,9 @@
 import { WalletConnect } from "applesauce-wallet-connect";
 import { BehaviorSubject } from "rxjs";
+import pool from "./relay-pool";
+
+// Configure WalletConnect to use Grimoire's relay pool
+WalletConnect.pool = pool;
 
 export type WalletConnectionInfo = {
   id: string; // Unique identifier
