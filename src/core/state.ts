@@ -275,6 +275,15 @@ export const useGrimoire = () => {
     [setState],
   );
 
+  const setActiveAccountBlossomServers = useCallback(
+    (blossomServers: string[]) => {
+      setState((prev) =>
+        Logic.setActiveAccountBlossomServers(prev, blossomServers),
+      );
+    },
+    [setState],
+  );
+
   const updateLayoutConfig = useCallback(
     (layoutConfig: Partial<LayoutConfig>) => {
       setState((prev) => Logic.updateLayoutConfig(prev, layoutConfig));
@@ -351,6 +360,7 @@ export const useGrimoire = () => {
     setActiveWorkspace,
     setActiveAccount,
     setActiveAccountRelays,
+    setActiveAccountBlossomServers,
     updateLayoutConfig,
     applyPresetLayout,
     updateWorkspaceLabel,

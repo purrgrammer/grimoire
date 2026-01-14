@@ -296,6 +296,31 @@ export const setActiveAccountRelays = (
 };
 
 /**
+ * Updates the blossom server list for the active account.
+ */
+export const setActiveAccountBlossomServers = (
+  state: GrimoireState,
+  blossomServers: string[],
+): GrimoireState => {
+  if (!state.activeAccount) {
+    return state;
+  }
+
+  // If blossom servers reference hasn't changed, return state unchanged
+  if (state.activeAccount.blossomServers === blossomServers) {
+    return state;
+  }
+
+  return {
+    ...state,
+    activeAccount: {
+      ...state.activeAccount,
+      blossomServers,
+    },
+  };
+};
+
+/**
  * Deletes a workspace by ID.
  * Cannot delete the last remaining workspace.
  * Does NOT change activeWorkspaceId - caller is responsible for workspace navigation.

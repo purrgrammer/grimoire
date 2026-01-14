@@ -54,6 +54,13 @@ export interface RelayLivenessEntry {
   backoffUntil?: number;
 }
 
+export interface CachedBlossomServerList {
+  pubkey: string;
+  event: NostrEvent;
+  servers: string[];
+  updatedAt: number;
+}
+
 export interface LocalSpell {
   id: string; // UUID for local-only spells, or event ID for published spells
   alias?: string; // Optional local-only quick name (e.g., "btc")
@@ -88,6 +95,7 @@ class GrimoireDb extends Dexie {
   relayAuthPreferences!: Table<RelayAuthPreference>;
   relayLists!: Table<CachedRelayList>;
   relayLiveness!: Table<RelayLivenessEntry>;
+  blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
 
@@ -308,6 +316,20 @@ class GrimoireDb extends Dexie {
       relayAuthPreferences: "&url",
       relayLists: "&pubkey, updatedAt",
       relayLiveness: "&url",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 15: Add blossom server list caching
+    this.version(15).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });

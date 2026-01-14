@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, HardDrive, ExternalLink } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -54,6 +54,7 @@ export default function UserMenu() {
   const account = use$(accounts.active$);
   const { state, addWindow } = useGrimoire();
   const relays = state.activeAccount?.relays;
+  const blossomServers = state.activeAccount?.blossomServers;
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
 
@@ -118,6 +119,36 @@ export default function UserMenu() {
                         read={relay.read}
                         write={relay.write}
                       />
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              {blossomServers && blossomServers.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
+                      <HardDrive className="size-3.5" />
+                      <span>Blossom Servers</span>
+                      <span className="ml-auto">({blossomServers.length})</span>
+                    </DropdownMenuLabel>
+                    {blossomServers.map((server) => (
+                      <DropdownMenuItem
+                        key={server}
+                        className="cursor-pointer"
+                        asChild
+                      >
+                        <a
+                          href={server}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2"
+                        >
+                          <ExternalLink className="size-4 text-muted-foreground" />
+                          <span className="text-sm truncate">{server}</span>
+                        </a>
+                      </DropdownMenuItem>
                     ))}
                   </DropdownMenuGroup>
                 </>

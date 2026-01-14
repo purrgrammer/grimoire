@@ -5,12 +5,17 @@ import { useGrimoire } from "@/core/state";
 import { addressLoader } from "@/services/loaders";
 import type { RelayInfo } from "@/types/app";
 import { normalizeRelayURL } from "@/lib/relay-url";
+import { getServersFromEvent } from "@/services/blossom";
 
 /**
- * Hook that syncs active account with Grimoire state and fetches relay lists
+ * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
  */
 export function useAccountSync() {
-  const { setActiveAccount, setActiveAccountRelays } = useGrimoire();
+  const {
+    setActiveAccount,
+    setActiveAccountRelays,
+    setActiveAccountBlossomServers,
+  } = useGrimoire();
   const eventStore = useEventStore();
 
   // Watch active account from accounts service
@@ -83,4 +88,41 @@ export function useAccountSync() {
       storeSubscription.unsubscribe();
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
+
+  // Fetch and watch blossom server list (kind 10063) when account changes
+  useEffect(() => {
+    if (!activeAccount?.pubkey) {
+      return;
+    }
+
+    const pubkey = activeAccount.pubkey;
+    let lastBlossomEventId: string | undefined;
+
+    // Subscribe to kind 10063 (blossom server list)
+    const subscription = addressLoader({
+      kind: 10063,
+      pubkey,
+      identifier: "",
+    }).subscribe();
+
+    // Watch for blossom server list event in store
+    const storeSubscription = eventStore
+      .replaceable(10063, pubkey, "")
+      .subscribe((blossomListEvent) => {
+        if (!blossomListEvent) return;
+
+        // Only process if this is a new event
+        if (blossomListEvent.id === lastBlossomEventId) return;
+        lastBlossomEventId = blossomListEvent.id;
+
+        // Parse servers from event
+        const servers = getServersFromEvent(blossomListEvent);
+        setActiveAccountBlossomServers(servers);
+      });
+
+    return () => {
+      subscription.unsubscribe();
+      storeSubscription.unsubscribe();
+    };
+  }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
 }

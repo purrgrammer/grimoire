@@ -87,6 +87,7 @@ export interface GrimoireState {
   activeAccount?: {
     pubkey: string;
     relays?: RelayInfo[];
+    blossomServers?: string[];
   };
   compactModeKinds?: number[];
   locale?: {
