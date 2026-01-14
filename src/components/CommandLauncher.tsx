@@ -12,8 +12,11 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import "./command-launcher.css";
 
-/** Check if current path is a NIP-19 preview route (no window system) */
-function isNip19PreviewRoute(pathname: string): boolean {
+/** Check if current path doesn't have the window system (should navigate to / when launching commands) */
+function isNonDashboardRoute(pathname: string): boolean {
+  // /run route - pop-out command page
+  if (pathname.startsWith("/run")) return true;
+
   // NIP-19 preview routes are single-segment paths starting with npub1, note1, nevent1, naddr1
   const segment = pathname.slice(1); // Remove leading /
   if (segment.includes("/")) return false; // Multi-segment paths are not NIP-19 previews
@@ -123,9 +126,9 @@ export default function CommandLauncher({
       });
       setEditMode(null); // Clear edit mode
     } else {
-      // If on a NIP-19 preview route (no window system), navigate to dashboard first
+      // If on a non-dashboard route (no window system), navigate to dashboard first
       // The window will appear after navigation since state persists
-      if (isNip19PreviewRoute(location.pathname)) {
+      if (isNonDashboardRoute(location.pathname)) {
         navigate("/");
       }
 

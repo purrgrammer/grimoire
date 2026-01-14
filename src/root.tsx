@@ -16,7 +16,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/run",
-    element: <RunCommandPage />,
+    element: (
+      <AppShell hideBottomBar>
+        <RunCommandPage />
+      </AppShell>
+    ),
   },
   {
     path: "/preview/:actor/:identifier",
