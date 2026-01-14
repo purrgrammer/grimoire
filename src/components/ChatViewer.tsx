@@ -836,6 +836,7 @@ export function ChatViewer({
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput="smooth"
+            alignToBottom
             components={{
               Header: () =>
                 hasMore && conversationResult.status === "success" ? (
@@ -857,6 +858,7 @@ export function ChatViewer({
                     </Button>
                   </div>
                 ) : null,
+              Footer: () => <div className="h-1" />,
             }}
             itemContent={(_index, item) => {
               if (item.type === "day-marker") {
@@ -894,7 +896,7 @@ export function ChatViewer({
 
       {/* Message composer - only show if user has active account */}
       {hasActiveAccount ? (
-        <div className="border-t px-2 py-1 pb-0">
+        <div className="border-t px-2 py-1">
           {replyTo && (
             <ComposerReplyPreview
               replyToId={replyTo}
