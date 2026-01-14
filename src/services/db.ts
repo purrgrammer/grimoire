@@ -90,25 +90,17 @@ export interface CachedEvent {
 }
 
 /**
- * Decrypted rumor from gift wrap (NIP-59)
- * Stored separately so we don't have to re-decrypt
+ * Encrypted content cache for gift wraps and seals (NIP-59)
+ * Stores decrypted content strings so we don't have to re-decrypt.
+ * This matches applesauce's persistEncryptedContent expectations.
  */
-export interface DecryptedRumor {
-  /** Gift wrap event ID */
-  giftWrapId: string;
-  /** The decrypted rumor (unsigned event) */
-  rumor: {
-    id: string;
-    pubkey: string;
-    created_at: number;
-    kind: number;
-    tags: string[][];
-    content: string;
-  };
-  /** Pubkey that decrypted this (for multi-account support) */
-  decryptedBy: string;
-  /** When it was decrypted */
-  decryptedAt: number;
+export interface EncryptedContentEntry {
+  /** Event ID (gift wrap or seal) */
+  id: string;
+  /** The decrypted content string */
+  content: string;
+  /** When it was cached */
+  cachedAt: number;
 }
 
 class GrimoireDb extends Dexie {
@@ -122,7 +114,7 @@ class GrimoireDb extends Dexie {
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
   events!: Table<CachedEvent>;
-  decryptedRumors!: Table<DecryptedRumor>;
+  encryptedContent!: Table<EncryptedContentEntry>;
 
   constructor(name: string) {
     super(name);
@@ -345,7 +337,7 @@ class GrimoireDb extends Dexie {
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
 
-    // Version 15: Add event cache and decrypted rumor storage for NIP-59 gift wraps
+    // Version 15: Add event cache and encrypted content storage for NIP-59 gift wraps
     this.version(15).stores({
       profiles: "&pubkey",
       nip05: "&nip05",
@@ -357,7 +349,7 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
       events: "&id, cachedAt",
-      decryptedRumors: "&giftWrapId, decryptedBy",
+      encryptedContent: "&id",
     });
   }
 }

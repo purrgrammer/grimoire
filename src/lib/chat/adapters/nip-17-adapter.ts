@@ -13,10 +13,10 @@
  *
  * Caching:
  * - Gift wraps are cached to Dexie events table
- * - Decrypted rumors are cached to avoid re-decryption
+ * - Decrypted content persisted via applesauce's persistEncryptedContent
  */
 import { Observable, firstValueFrom, BehaviorSubject } from "rxjs";
-import { map, first } from "rxjs/operators";
+import { map, first, distinctUntilChanged } from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import type { Filter } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
@@ -31,28 +31,26 @@ import type { NostrEvent } from "@/types/nostr";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
+import { hub } from "@/services/hub";
 import { isNip05, resolveNip05 } from "@/lib/nip05";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
 import { getProfileContent } from "applesauce-core/helpers";
 import {
   unlockGiftWrap,
+  isGiftWrapUnlocked,
+  getGiftWrapRumor,
   getConversationParticipants,
   getConversationIdentifierFromMessage,
   type Rumor,
 } from "applesauce-common/helpers";
-import {
-  getDecryptedRumors,
-  isGiftWrapDecrypted,
-  storeDecryptedRumor,
-} from "@/services/rumor-storage";
+import { SendWrappedMessage } from "applesauce-actions/actions";
 
 /**
  * Kind constants
  */
 const GIFT_WRAP_KIND = 1059;
 const DM_RUMOR_KIND = 14;
-const DM_RELAY_LIST_KIND = 10050;
 
 /**
  * NIP-17 Adapter - Gift Wrapped Private DMs
@@ -61,11 +59,11 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   readonly protocol = "nip-17" as const;
   readonly type = "dm" as const;
 
-  /** Observable of all decrypted rumors for the current user */
-  private rumors$ = new BehaviorSubject<Rumor[]>([]);
-
   /** Track pending (undecrypted) gift wrap IDs */
-  private pendingGiftWraps$ = new BehaviorSubject<string[]>([]);
+  private pendingGiftWraps$ = new BehaviorSubject<Set<string>>(new Set());
+
+  /** Observable of gift wrap events from event store */
+  private giftWraps$ = new BehaviorSubject<NostrEvent[]>([]);
 
   /**
    * Parse identifier - accepts npub, nprofile, hex pubkey, or NIP-05
@@ -193,35 +191,50 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     // Expected participants for this conversation
     const expectedParticipants = [activePubkey, partner.pubkey].sort();
 
-    // Load initial rumors from cache
-    this.loadCachedRumors(activePubkey);
-
     // Subscribe to gift wraps for this user
     this.subscribeToGiftWraps(activePubkey);
 
-    // Filter rumors to this conversation and convert to messages
-    return this.rumors$.pipe(
-      map((rumors) => {
-        // Filter rumors that belong to this conversation
-        const conversationRumors = rumors.filter((rumor) => {
-          // Only kind 14 DM rumors
-          if (rumor.kind !== DM_RUMOR_KIND) return false;
+    // Get rumors from unlocked gift wraps and filter to this conversation
+    return this.giftWraps$.pipe(
+      map((giftWraps) => {
+        const messages: Message[] = [];
 
-          // Get participants from rumor
-          const rumorParticipants = getConversationParticipants(rumor).sort();
+        for (const gift of giftWraps) {
+          // Skip locked gift wraps
+          if (!isGiftWrapUnlocked(gift)) continue;
 
-          // Check if participants match
-          return (
-            rumorParticipants.length === expectedParticipants.length &&
-            rumorParticipants.every((p, i) => p === expectedParticipants[i])
-          );
-        });
+          try {
+            const rumor = getGiftWrapRumor(gift);
 
-        // Convert to messages and sort by timestamp
-        return conversationRumors
-          .map((rumor) => this.rumorToMessage(rumor, conversation.id))
-          .sort((a, b) => a.timestamp - b.timestamp);
+            // Only kind 14 DM rumors
+            if (rumor.kind !== DM_RUMOR_KIND) continue;
+
+            // Get participants from rumor
+            const rumorParticipants = getConversationParticipants(rumor).sort();
+
+            // Check if participants match this conversation
+            if (
+              rumorParticipants.length !== expectedParticipants.length ||
+              !rumorParticipants.every((p, i) => p === expectedParticipants[i])
+            ) {
+              continue;
+            }
+
+            messages.push(this.rumorToMessage(rumor, conversation.id));
+          } catch (error) {
+            console.warn(
+              `[NIP-17] Failed to get rumor from gift wrap ${gift.id}:`,
+              error,
+            );
+          }
+        }
+
+        // Sort by timestamp
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
       }),
+      distinctUntilChanged(
+        (a, b) => a.length === b.length && a.every((m, i) => m.id === b[i].id),
+      ),
     );
   }
 
@@ -232,18 +245,23 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     _conversation: Conversation,
     _before: number,
   ): Promise<Message[]> {
-    // For now, return empty - pagination to be implemented
     // Gift wraps don't paginate well since we need to decrypt all
     return [];
   }
 
   /**
    * Send a gift-wrapped DM
+   *
+   * Uses applesauce's SendWrappedMessage action which:
+   * 1. Creates kind 14 rumor with message content
+   * 2. Wraps in seal (kind 13) encrypted to each participant
+   * 3. Wraps seal in gift wrap (kind 1059) with ephemeral key
+   * 4. Publishes to each participant's private inbox relays (kind 10050)
    */
   async sendMessage(
     conversation: Conversation,
     content: string,
-    options?: SendMessageOptions,
+    _options?: SendMessageOptions,
   ): Promise<void> {
     const activePubkey = accountManager.active$.value?.pubkey;
     const activeSigner = accountManager.active$.value?.signer;
@@ -259,31 +277,15 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No conversation partner found");
     }
 
-    // Build rumor tags
-    const tags: string[][] = [["p", partner.pubkey]];
-    if (options?.replyTo) {
-      tags.push(["e", options.replyTo, "", "reply"]);
-    }
+    // Use applesauce's SendWrappedMessage action
+    // This handles:
+    // - Creating the wrapped message rumor
+    // - Gift wrapping for all participants (partner + self)
+    // - Publishing to each participant's inbox relays
+    await hub.run(SendWrappedMessage, partner.pubkey, content);
 
-    // Get recipient's private inbox relays
-    const inboxRelays = await this.getPrivateInboxRelays(partner.pubkey);
-    if (inboxRelays.length === 0) {
-      throw new Error(
-        "Recipient has no private inbox relays configured (kind 10050)",
-      );
-    }
-
-    // TODO: Implement gift wrap creation and sending
-    // 1. Create the DM rumor (kind 14, unsigned) with: activePubkey, tags, content
-    // 2. Use SendWrappedMessage action from applesauce-actions to create and send gift wraps
-    // 3. Publish to each recipient's private inbox relays
-    void inboxRelays; // Will be used when implemented
-    void tags;
-    void content;
-    void activePubkey;
-
-    throw new Error(
-      "Send not yet implemented - use applesauce SendWrappedMessage action",
+    console.log(
+      `[NIP-17] Sent wrapped message to ${partner.pubkey.slice(0, 8)}...`,
     );
   }
 
@@ -309,16 +311,24 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     _conversation: Conversation,
     eventId: string,
   ): Promise<NostrEvent | null> {
-    // Check if we have a cached rumor with this ID
-    const rumors = this.rumors$.value;
-    const rumor = rumors.find((r) => r.id === eventId);
+    // Check if we have an unlocked gift wrap with a rumor matching this ID
+    const giftWraps = this.giftWraps$.value;
 
-    if (rumor) {
-      // Convert rumor to a pseudo-event for display
-      return {
-        ...rumor,
-        sig: "", // Rumors are unsigned
-      } as NostrEvent;
+    for (const gift of giftWraps) {
+      if (!isGiftWrapUnlocked(gift)) continue;
+
+      try {
+        const rumor = getGiftWrapRumor(gift);
+        if (rumor.id === eventId) {
+          // Return as pseudo-event
+          return {
+            ...rumor,
+            sig: "",
+          } as NostrEvent;
+        }
+      } catch {
+        // Skip
+      }
     }
 
     return null;
@@ -328,14 +338,14 @@ export class Nip17Adapter extends ChatProtocolAdapter {
    * Get count of pending (undecrypted) gift wraps
    */
   getPendingCount(): number {
-    return this.pendingGiftWraps$.value.length;
+    return this.pendingGiftWraps$.value.size;
   }
 
   /**
    * Get observable of pending gift wrap count
    */
   getPendingCount$(): Observable<number> {
-    return this.pendingGiftWraps$.pipe(map((ids) => ids.length));
+    return this.pendingGiftWraps$.pipe(map((set) => set.size));
   }
 
   /**
@@ -349,7 +359,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    const pendingIds = this.pendingGiftWraps$.value;
+    const pendingIds = Array.from(this.pendingGiftWraps$.value);
     let success = 0;
     let failed = 0;
 
@@ -365,23 +375,28 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           continue;
         }
 
-        // Decrypt using signer
-        const rumor = await unlockGiftWrap(giftWrap, signer);
-
-        if (rumor) {
-          // Store decrypted rumor
-          await storeDecryptedRumor(giftWrapId, rumor, pubkey);
-
-          // Add to rumors list
-          const currentRumors = this.rumors$.value;
-          if (!currentRumors.find((r) => r.id === rumor.id)) {
-            this.rumors$.next([...currentRumors, rumor]);
-          }
-
+        // Already unlocked?
+        if (isGiftWrapUnlocked(giftWrap)) {
+          // Remove from pending
+          const pending = new Set(this.pendingGiftWraps$.value);
+          pending.delete(giftWrapId);
+          this.pendingGiftWraps$.next(pending);
           success++;
-        } else {
-          failed++;
+          continue;
         }
+
+        // Decrypt using signer - applesauce handles caching automatically
+        await unlockGiftWrap(giftWrap, signer);
+
+        // Remove from pending
+        const pending = new Set(this.pendingGiftWraps$.value);
+        pending.delete(giftWrapId);
+        this.pendingGiftWraps$.next(pending);
+
+        // Refresh gift wraps list
+        this.giftWraps$.next([...this.giftWraps$.value]);
+
+        success++;
       } catch (error) {
         console.error(
           `[NIP-17] Failed to decrypt gift wrap ${giftWrapId}:`,
@@ -390,12 +405,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         failed++;
       }
     }
-
-    // Clear pending list for successfully decrypted
-    const remainingPending = this.pendingGiftWraps$.value.filter(
-      (id) => !pendingIds.includes(id) || failed > 0,
-    );
-    this.pendingGiftWraps$.next(remainingPending);
 
     return { success, failed };
   }
@@ -409,23 +418,30 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       return new BehaviorSubject([]);
     }
 
-    return this.rumors$.pipe(
-      map((rumors) => {
+    return this.giftWraps$.pipe(
+      map((giftWraps) => {
         // Group rumors by conversation
         const conversationMap = new Map<
           string,
           { participants: string[]; lastRumor: Rumor }
         >();
 
-        for (const rumor of rumors) {
-          if (rumor.kind !== DM_RUMOR_KIND) continue;
+        for (const gift of giftWraps) {
+          if (!isGiftWrapUnlocked(gift)) continue;
 
-          const convId = getConversationIdentifierFromMessage(rumor);
-          const participants = getConversationParticipants(rumor);
+          try {
+            const rumor = getGiftWrapRumor(gift);
+            if (rumor.kind !== DM_RUMOR_KIND) continue;
 
-          const existing = conversationMap.get(convId);
-          if (!existing || rumor.created_at > existing.lastRumor.created_at) {
-            conversationMap.set(convId, { participants, lastRumor: rumor });
+            const convId = getConversationIdentifierFromMessage(rumor);
+            const participants = getConversationParticipants(rumor);
+
+            const existing = conversationMap.get(convId);
+            if (!existing || rumor.created_at > existing.lastRumor.created_at) {
+              conversationMap.set(convId, { participants, lastRumor: rumor });
+            }
+          } catch {
+            // Skip invalid gift wraps
           }
         }
 
@@ -465,14 +481,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   // ==================== Private Methods ====================
 
   /**
-   * Load cached rumors from Dexie
-   */
-  private async loadCachedRumors(pubkey: string): Promise<void> {
-    const rumors = await getDecryptedRumors(pubkey);
-    this.rumors$.next(rumors);
-  }
-
-  /**
    * Subscribe to gift wraps for the user
    */
   private subscribeToGiftWraps(pubkey: string): void {
@@ -490,7 +498,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     const subscription = pool
       .subscription([], [filter], { eventStore })
       .subscribe({
-        next: async (response) => {
+        next: (response) => {
           if (typeof response === "string") {
             // EOSE
             console.log("[NIP-17] EOSE received for gift wraps");
@@ -500,76 +508,23 @@ export class Nip17Adapter extends ChatProtocolAdapter {
               `[NIP-17] Received gift wrap: ${response.id.slice(0, 8)}...`,
             );
 
-            // Check if already decrypted
-            const isDecrypted = await isGiftWrapDecrypted(response.id, pubkey);
+            // Add to gift wraps list
+            const current = this.giftWraps$.value;
+            if (!current.find((g) => g.id === response.id)) {
+              this.giftWraps$.next([...current, response]);
+            }
 
-            if (!isDecrypted) {
-              // Add to pending list
-              const pending = this.pendingGiftWraps$.value;
-              if (!pending.includes(response.id)) {
-                this.pendingGiftWraps$.next([...pending, response.id]);
-              }
+            // Check if unlocked (cached) or pending
+            if (!isGiftWrapUnlocked(response)) {
+              const pending = new Set(this.pendingGiftWraps$.value);
+              pending.add(response.id);
+              this.pendingGiftWraps$.next(pending);
             }
           }
         },
       });
 
     this.subscriptions.set(conversationId, subscription);
-  }
-
-  /**
-   * Get private inbox relays for a user (kind 10050)
-   */
-  private async getPrivateInboxRelays(pubkey: string): Promise<string[]> {
-    // Try to fetch from EventStore first
-    const existing = await firstValueFrom(
-      eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey, ""),
-      { defaultValue: undefined },
-    );
-
-    if (existing) {
-      return this.extractRelaysFromEvent(existing);
-    }
-
-    // Fetch from relays
-    const filter: Filter = {
-      kinds: [DM_RELAY_LIST_KIND],
-      authors: [pubkey],
-      limit: 1,
-    };
-
-    const events: NostrEvent[] = [];
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 5000);
-      const sub = pool.subscription([], [filter], { eventStore }).subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            events.push(response);
-          }
-        },
-        error: () => {
-          clearTimeout(timeout);
-          resolve();
-        },
-      });
-    });
-
-    if (events.length > 0) {
-      return this.extractRelaysFromEvent(events[0]);
-    }
-
-    return [];
-  }
-
-  /**
-   * Extract relay URLs from kind 10050 event
-   */
-  private extractRelaysFromEvent(event: NostrEvent): string[] {
-    return event.tags.filter((t) => t[0] === "relay" && t[1]).map((t) => t[1]);
   }
 
   /**
