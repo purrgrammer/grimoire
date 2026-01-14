@@ -14,19 +14,19 @@ interface UserNameProps {
  * Component that displays a user's name from their Nostr profile
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
+ * Uses gradient styling for grimoire.rocks premium users (highest priority)
  * Uses orange-400 color for the logged-in user
- * Uses gradient styling for grimoire.app premium users
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
   const displayName = getDisplayName(pubkey, profile);
 
+  // Check if this is a grimoire.rocks premium user (highest priority)
+  const isPremium = isGrimoirePremium(pubkey);
+
   // Check if this is the logged-in user
   const isActiveAccount = state.activeAccount?.pubkey === pubkey;
-
-  // Check if this is a grimoire.app premium user
-  const isPremium = isGrimoirePremium(pubkey);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,10 +38,10 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       dir="auto"
       className={cn(
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
-        isActiveAccount
-          ? "text-orange-400"
-          : isPremium
-            ? "text-grimoire-gradient"
+        isPremium
+          ? "text-grimoire-gradient"
+          : isActiveAccount
+            ? "text-orange-400"
             : "text-accent",
         className,
       )}

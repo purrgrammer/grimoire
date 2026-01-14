@@ -16,7 +16,7 @@ export function QueryNip05({
   // Only show if verified
   if (nip05pubkey !== pubkey) return null;
 
-  // Check if this is a grimoire.app premium user (by pubkey or NIP-05)
+  // Check if this is a grimoire.rocks premium user (by pubkey or NIP-05)
   const isPremium = isGrimoirePremium(pubkey) || isGrimoireNip05(nip05);
   const displayNip05 = nip05.replace(/^_@/, "");
 
