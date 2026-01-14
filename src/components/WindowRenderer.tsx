@@ -42,6 +42,9 @@ const SpellbooksViewer = lazy(() =>
 const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
+const ThemeEditor = lazy(() =>
+  import("./ThemeEditor").then((m) => ({ default: m.ThemeEditor })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -209,6 +212,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sha256={window.props.sha256}
           />
         );
+        break;
+      case "theme-editor":
+        content = <ThemeEditor />;
         break;
       default:
         content = (

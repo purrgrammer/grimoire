@@ -575,4 +575,16 @@ export const manPages: Record<string, ManPageEntry> = {
     },
     defaultProps: { subcommand: "servers" },
   },
+  "theme-editor": {
+    name: "theme-editor",
+    section: "1",
+    synopsis: "theme-editor",
+    description:
+      "Open the theme editor to create and customize color themes. Features live preview, modern color pickers for all theme colors, and the ability to save, export, and import custom themes. Start from any built-in theme as a base.",
+    examples: ["theme-editor    Open the theme editor with current theme"],
+    seeAlso: ["help"],
+    appId: "theme-editor",
+    category: "System",
+    defaultProps: {},
+  },
 };

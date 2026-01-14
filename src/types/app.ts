@@ -20,7 +20,8 @@ export type AppId =
   | "spells"
   | "spellbooks"
   | "blossom"
-  | "win";
+  | "win"
+  | "theme-editor";
 
 export interface WindowInstance {
   id: string;
