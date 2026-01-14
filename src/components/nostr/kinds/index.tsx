@@ -54,6 +54,8 @@ import { ApplicationHandlerRenderer } from "./ApplicationHandlerRenderer";
 import { ApplicationHandlerDetailRenderer } from "./ApplicationHandlerDetailRenderer";
 import { HandlerRecommendationRenderer } from "./HandlerRecommendationRenderer";
 import { HandlerRecommendationDetailRenderer } from "./HandlerRecommendationDetailRenderer";
+import { ZapGoalRenderer } from "./ZapGoalRenderer";
+import { ZapGoalDetailRenderer } from "./ZapGoalDetailRenderer";
 import { CalendarDateEventRenderer } from "./CalendarDateEventRenderer";
 import { CalendarDateEventDetailRenderer } from "./CalendarDateEventDetailRenderer";
 import { CalendarTimeEventRenderer } from "./CalendarTimeEventRenderer";
@@ -157,6 +159,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
   1621: IssueRenderer, // Issue (NIP-34)
+  9041: ZapGoalRenderer, // Zap Goal (NIP-75)
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
   777: SpellRenderer, // Spell (Grimoire)
@@ -254,6 +257,7 @@ const detailRenderers: Record<
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
+  9041: ZapGoalDetailRenderer, // Zap Goal Detail (NIP-75)
   9802: Kind9802DetailRenderer, // Highlight Detail
   10000: MuteListDetailRenderer, // Mute List Detail (NIP-51)
   10001: PinListDetailRenderer, // Pin List Detail (NIP-51)
