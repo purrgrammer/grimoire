@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Paperclip,
+  Unlock,
 } from "lucide-react";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
@@ -375,6 +376,42 @@ export function ChatViewer({
   useEffect(() => {
     if (protocol === "nip-17") {
       nip17Adapter.ensureSubscription();
+    }
+  }, [protocol]);
+
+  // NIP-17 decrypt state
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const pendingCount =
+    use$(
+      () =>
+        protocol === "nip-17" ? nip17Adapter.getPendingCount$() : undefined,
+      [protocol],
+    ) ?? 0;
+
+  // Handle decrypt for NIP-17
+  const handleDecrypt = useCallback(async () => {
+    if (protocol !== "nip-17") return;
+    setIsDecrypting(true);
+    try {
+      const result = await nip17Adapter.decryptPending();
+      console.log(
+        `[Chat] Decrypted ${result.success} messages, ${result.failed} failed`,
+      );
+      if (result.success > 0) {
+        toast.success(
+          `Decrypted ${result.success} message${result.success !== 1 ? "s" : ""}`,
+        );
+      }
+      if (result.failed > 0) {
+        toast.warning(
+          `${result.failed} message${result.failed !== 1 ? "s" : ""} failed to decrypt`,
+        );
+      }
+    } catch (error) {
+      console.error("[Chat] Decrypt error:", error);
+      toast.error("Failed to decrypt messages");
+    } finally {
+      setIsDecrypting(false);
     }
   }, [protocol]);
 
@@ -810,6 +847,28 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
+            {/* NIP-17 decrypt button */}
+            {protocol === "nip-17" && pendingCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 gap-1 text-xs px-2"
+                onClick={handleDecrypt}
+                disabled={isDecrypting}
+              >
+                {isDecrypting ? (
+                  <>
+                    <Loader2 className="size-3 animate-spin" />
+                    <span className="hidden sm:inline">Decrypting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="size-3" />
+                    <span>{pendingCount}</span>
+                  </>
+                )}
+              </Button>
+            )}
             {(conversation.type === "group" ||
               conversation.type === "live-chat" ||
               conversation.type === "dm") && (

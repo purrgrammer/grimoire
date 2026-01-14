@@ -34,6 +34,7 @@ import accountManager from "@/services/accounts";
 import { hub } from "@/services/hub";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { getEventsForFilters } from "@/services/event-cache";
 import { isNip05, resolveNip05 } from "@/lib/nip05";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
@@ -660,6 +661,10 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     this.subscriptionActive = true;
 
+    // First, load any cached gift wraps from EventStore (persisted to Dexie)
+    // This is critical for cold start scenarios
+    await this.loadCachedGiftWraps(pubkey);
+
     // Subscribe to eventStore.insert$ to catch gift wraps added locally (e.g., after sending)
     // This is critical for immediate display of sent messages
     const insertSub = eventStore.insert$.subscribe((event) => {
@@ -722,6 +727,37 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       });
 
     this.subscriptions.set(conversationId, relaySub);
+  }
+
+  /**
+   * Load cached gift wraps from Dexie (persistent storage)
+   * This is called on cold start to restore previously received gift wraps
+   * We query Dexie directly because EventStore is in-memory and empty on cold start
+   */
+  private async loadCachedGiftWraps(pubkey: string): Promise<void> {
+    try {
+      // Query Dexie directly for cached gift wraps addressed to this user
+      // EventStore is in-memory only, so on cold start it's empty
+      const cachedGiftWraps = await getEventsForFilters([
+        { kinds: [GIFT_WRAP_KIND], "#p": [pubkey] },
+      ]);
+
+      if (cachedGiftWraps.length > 0) {
+        console.log(
+          `[NIP-17] Loading ${cachedGiftWraps.length} cached gift wrap(s) from Dexie`,
+        );
+        for (const giftWrap of cachedGiftWraps) {
+          // Add to EventStore so other parts of the app can access it
+          eventStore.add(giftWrap);
+          // Handle in adapter state
+          this.handleGiftWrap(giftWrap);
+        }
+      } else {
+        console.log("[NIP-17] No cached gift wraps found in Dexie");
+      }
+    } catch (error) {
+      console.warn("[NIP-17] Failed to load cached gift wraps:", error);
+    }
   }
 
   /**
