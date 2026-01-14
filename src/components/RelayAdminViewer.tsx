@@ -31,6 +31,7 @@ import {
 import {
   Nip86Client,
   Nip86AuthError,
+  Nip86NetworkError,
   categoryHasMethods,
 } from "@/lib/nip86-client";
 import accountManager from "@/services/accounts";
@@ -92,6 +93,13 @@ export function RelayAdminViewer({ url }: RelayAdminViewerProps) {
     } catch (error) {
       if (error instanceof Nip86AuthError) {
         setMethodsError("Unauthorized - you may not have admin access");
+      } else if (error instanceof Nip86NetworkError) {
+        // Network/CORS error - provide helpful messaging
+        setMethodsError(
+          error.isCorsLikely
+            ? "Cannot connect to relay API. The relay may not support NIP-86, or CORS is blocking the request."
+            : error.message,
+        );
       } else {
         setMethodsError(
           error instanceof Error ? error.message : "Failed to fetch methods",

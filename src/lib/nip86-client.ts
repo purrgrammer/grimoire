@@ -52,6 +52,17 @@ export class Nip86AuthError extends Nip86Error {
   }
 }
 
+/** NIP-86 network/CORS error */
+export class Nip86NetworkError extends Nip86Error {
+  constructor(
+    message: string = "Network error",
+    public readonly isCorsLikely: boolean = false,
+  ) {
+    super(message);
+    this.name = "Nip86NetworkError";
+  }
+}
+
 /**
  * NIP-86 Relay Management API Client
  *
@@ -93,14 +104,34 @@ export class Nip86Client {
       this.sign,
     );
 
-    const response = await fetch(this.httpUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": CONTENT_TYPE,
-        Authorization: authHeader,
-      },
-      body,
-    });
+    let response: Response;
+    try {
+      response = await fetch(this.httpUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": CONTENT_TYPE,
+          Authorization: authHeader,
+        },
+        body,
+      });
+    } catch (error) {
+      // Network errors (including CORS) throw TypeError with "Failed to fetch"
+      const message =
+        error instanceof Error ? error.message : "Network request failed";
+
+      // "Failed to fetch" is the typical CORS or network error message
+      const isCorsLikely =
+        message.toLowerCase().includes("failed to fetch") ||
+        message.toLowerCase().includes("network") ||
+        message.toLowerCase().includes("cors");
+
+      throw new Nip86NetworkError(
+        isCorsLikely
+          ? "Network error - relay may not support CORS or NIP-86"
+          : message,
+        isCorsLikely,
+      );
+    }
 
     if (response.status === 401) {
       throw new Nip86AuthError();
