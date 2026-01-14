@@ -53,6 +53,10 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty("--warning", theme.colors.warning);
   root.style.setProperty("--info", theme.colors.info);
 
+  // Nostr-specific colors
+  root.style.setProperty("--zap", theme.colors.zap);
+  root.style.setProperty("--live", theme.colors.live);
+
   // Syntax highlighting
   root.style.setProperty("--syntax-comment", theme.syntax.comment);
   root.style.setProperty("--syntax-punctuation", theme.syntax.punctuation);
@@ -113,6 +117,9 @@ export function getThemeVariables(): string[] {
     "--success",
     "--warning",
     "--info",
+    // Nostr-specific
+    "--zap",
+    "--live",
     // Syntax
     "--syntax-comment",
     "--syntax-punctuation",

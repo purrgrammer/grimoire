@@ -42,6 +42,10 @@ export const lightTheme: Theme = {
     success: "142 70% 30%",
     warning: "38 92% 40%",
     info: "199 80% 40%",
+
+    // Nostr-specific colors (darker for light background)
+    zap: "45 93% 40%", // Darker gold for contrast on light
+    live: "0 72% 45%", // Dark red for live indicator
   },
 
   syntax: {
@@ -70,9 +74,9 @@ export const lightTheme: Theme = {
   },
 
   gradient: {
-    color1: "234 179 8", // yellow-500 (darker for light bg)
-    color2: "249 115 22", // orange-500
-    color3: "147 51 234", // purple-600
-    color4: "6 182 212", // cyan-500
+    color1: "202 138 4", // yellow-600 (darker for light bg)
+    color2: "194 65 12", // orange-700 (much darker)
+    color3: "126 34 206", // purple-700
+    color4: "8 145 178", // cyan-600
   },
 };

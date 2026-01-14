@@ -66,8 +66,8 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
       <div className="flex flex-col gap-2">
         {/* Zap indicator */}
         <div className="flex items-center gap-2">
-          <Zap className="size-5 fill-yellow-500 text-yellow-500" />
-          <span className="text-lg font-light text-yellow-500">
+          <Zap className="size-5 fill-zap text-zap" />
+          <span className="text-lg font-light text-zap">
             {amountInSats.toLocaleString("en", {
               notation: "compact",
             })}

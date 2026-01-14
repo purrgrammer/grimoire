@@ -42,6 +42,10 @@ export const darkTheme: Theme = {
     success: "142 76% 36%",
     warning: "45 93% 47%",
     info: "199 89% 48%",
+
+    // Nostr-specific colors
+    zap: "45 93% 58%", // Gold/yellow for zaps
+    live: "0 72% 51%", // Red for live indicator
   },
 
   syntax: {

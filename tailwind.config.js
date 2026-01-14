@@ -69,6 +69,9 @@ export default {
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
         info: "hsl(var(--info))",
+        // Nostr-specific colors
+        zap: "hsl(var(--zap))",
+        live: "hsl(var(--live))",
       },
     },
   },

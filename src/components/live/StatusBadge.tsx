@@ -16,7 +16,7 @@ export function StatusBadge({
   const config = {
     live: {
       label: "LIVE",
-      className: "bg-red-600 text-white",
+      className: "bg-live text-white",
       icon: Circle,
     },
     planned: {
