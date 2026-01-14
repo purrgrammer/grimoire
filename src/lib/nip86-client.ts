@@ -95,9 +95,10 @@ export class Nip86Client {
   async call<T>(method: string, params: unknown[] = []): Promise<T> {
     const body = JSON.stringify({ method, params });
 
+    // NIP-86: "The `u` tag is the relay URL" - use WebSocket URL, not HTTP
     const authHeader = await createAuthHeader(
       {
-        url: this.httpUrl,
+        url: this.relayUrl,
         method: "POST",
         payload: body,
       },
