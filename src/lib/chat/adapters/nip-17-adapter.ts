@@ -419,6 +419,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       return new BehaviorSubject([]);
     }
 
+    // Start fetching gift wraps from inbox relays
+    this.subscribeToGiftWraps(activePubkey);
+
     return this.giftWraps$.pipe(
       map((giftWraps) => {
         // Group rumors by conversation
