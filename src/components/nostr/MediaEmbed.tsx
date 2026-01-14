@@ -43,7 +43,7 @@ const PRESETS = {
     roundedClass: "rounded-md",
   },
   grid: {
-    maxHeightClass: "",
+    maxHeightClass: "max-h-[400px]",
     maxWidthClass: "w-full",
     roundedClass: "rounded-md",
     objectFit: "cover" as const,
