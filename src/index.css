@@ -62,6 +62,9 @@
     --zap: 45 93% 40%;
     --live: 0 72% 45%;
 
+    /* UI highlight (active user, self-references) */
+    --highlight: 25 90% 35%;
+
     /* Syntax highlighting */
     --syntax-comment: 215.4 16.3% 46.9%;
     --syntax-punctuation: 222.2 84% 30%;
@@ -122,6 +125,9 @@
     /* Nostr-specific colors */
     --zap: 45 93% 58%;
     --live: 0 72% 51%;
+
+    /* UI highlight (active user, self-references) */
+    --highlight: 38 92% 55%;
 
     /* Syntax highlighting */
     --syntax-comment: 215 20.2% 70%;

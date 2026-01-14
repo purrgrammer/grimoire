@@ -72,6 +72,8 @@ export default {
         // Nostr-specific colors
         zap: "hsl(var(--zap))",
         live: "hsl(var(--live))",
+        // UI highlight (active user, self-references)
+        highlight: "hsl(var(--highlight))",
       },
     },
   },

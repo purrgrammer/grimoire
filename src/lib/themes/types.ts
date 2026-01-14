@@ -63,6 +63,9 @@ export interface ThemeColors {
   // Nostr-specific colors
   zap: HSLValue; // Lightning zaps (typically yellow/gold)
   live: HSLValue; // Live streaming indicator (typically red)
+
+  // UI highlight color (for active user, self-references, etc.)
+  highlight: HSLValue;
 }
 
 /** Syntax highlighting colors for code blocks */

@@ -46,6 +46,9 @@ export const darkTheme: Theme = {
     // Nostr-specific colors
     zap: "45 93% 58%", // Gold/yellow for zaps
     live: "0 72% 51%", // Red for live indicator
+
+    // UI highlight (active user, self-references)
+    highlight: "38 92% 55%", // Warm amber
   },
 
   syntax: {

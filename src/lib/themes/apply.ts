@@ -57,6 +57,9 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty("--zap", theme.colors.zap);
   root.style.setProperty("--live", theme.colors.live);
 
+  // UI highlight color
+  root.style.setProperty("--highlight", theme.colors.highlight);
+
   // Syntax highlighting
   root.style.setProperty("--syntax-comment", theme.syntax.comment);
   root.style.setProperty("--syntax-punctuation", theme.syntax.punctuation);
@@ -120,6 +123,8 @@ export function getThemeVariables(): string[] {
     // Nostr-specific
     "--zap",
     "--live",
+    // UI highlight
+    "--highlight",
     // Syntax
     "--syntax-comment",
     "--syntax-punctuation",

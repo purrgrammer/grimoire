@@ -60,6 +60,9 @@ export const plan9Theme: Theme = {
     // Nostr-specific colors (dark for contrast on pale yellow)
     zap: "35 90% 35%", // Dark amber/gold for zaps
     live: "0 70% 40%", // Dark red for live indicator
+
+    // UI highlight (dark for contrast on pale yellow)
+    highlight: "25 85% 30%", // Dark brown/amber
   },
 
   syntax: {

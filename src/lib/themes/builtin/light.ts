@@ -46,6 +46,9 @@ export const lightTheme: Theme = {
     // Nostr-specific colors (darker for light background)
     zap: "45 93% 40%", // Darker gold for contrast on light
     live: "0 72% 45%", // Dark red for live indicator
+
+    // UI highlight (darker for light background)
+    highlight: "25 90% 35%", // Dark amber/brown
   },
 
   syntax: {
