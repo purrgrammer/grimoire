@@ -11,7 +11,7 @@ export function Emoji({ node }: EmojiNodeProps) {
       src={node.url}
       alt={`:${node.code}:`}
       title={`:${node.code}:`}
-      className="inline-block size-5"
+      className="inline-block size-5 cursor-help transition-transform hover:scale-125"
     />
   );
 }

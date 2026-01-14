@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 import {
   EmojiSearchService,
   type EmojiSearchResult,
 } from "@/services/emoji-search";
-import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
+import { UNICODE_EMOJIS, type EmojiCategory } from "@/lib/unicode-emojis";
+import { getEmojiUsageService } from "@/services/emoji-usage";
 import eventStore from "@/services/event-store";
 import accounts from "@/services/accounts";
 import type { NostrEvent } from "@/types/nostr";
@@ -15,7 +16,9 @@ import type { NostrEvent } from "@/types/nostr";
  */
 export function useEmojiSearch(contextEvent?: NostrEvent) {
   const serviceRef = useRef<EmojiSearchService | null>(null);
+  const usageServiceRef = useRef(getEmojiUsageService());
   const activeAccount = use$(accounts.active$);
+  const [frequentlyUsed, setFrequentlyUsed] = useState<string[]>([]);
 
   // Create service instance (singleton per component mount)
   if (!serviceRef.current) {
@@ -101,6 +104,12 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
     };
   }, [activeAccount?.pubkey, service]);
 
+  // Load frequently used emojis
+  useEffect(() => {
+    const usageService = usageServiceRef.current;
+    setFrequentlyUsed(usageService.getFrequentlyUsed(24));
+  }, []);
+
   // Memoize search function
   const searchEmojis = useMemo(
     () =>
@@ -110,8 +119,30 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
     [service],
   );
 
+  // Memoize getByCategory function
+  const getByCategory = useMemo(
+    () =>
+      (category: EmojiCategory): EmojiSearchResult[] => {
+        return service.getByCategory(category);
+      },
+    [service],
+  );
+
+  // Function to record emoji usage
+  const recordUsage = useMemo(
+    () => (shortcode: string) => {
+      usageServiceRef.current.recordUsage(shortcode);
+      // Update frequently used list
+      setFrequentlyUsed(usageServiceRef.current.getFrequentlyUsed(24));
+    },
+    [],
+  );
+
   return {
     searchEmojis,
+    getByCategory,
+    frequentlyUsed,
+    recordUsage,
     service,
   };
 }

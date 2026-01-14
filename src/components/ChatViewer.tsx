@@ -358,7 +358,12 @@ export function ChatViewer({
   const { searchProfiles } = useProfileSearch();
 
   // Emoji search for custom emoji autocomplete
-  const { searchEmojis } = useEmojiSearch();
+  const {
+    searchEmojis,
+    getByCategory,
+    frequentlyUsed,
+    recordUsage: recordEmojiUsage,
+  } = useEmojiSearch();
 
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -934,6 +939,9 @@ export function ChatViewer({
                 }
               }}
               className="flex-1 min-w-0"
+              frequentlyUsedEmojis={frequentlyUsed}
+              getEmojisByCategory={getByCategory}
+              onEmojiUsed={recordEmojiUsage}
             />
             <Button
               type="button"

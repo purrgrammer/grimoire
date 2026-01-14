@@ -81,6 +81,14 @@ export interface MentionEditorProps {
   onCommandExecute?: (action: ChatAction) => Promise<void>;
   autoFocus?: boolean;
   className?: string;
+  /** Frequently used emoji shortcodes */
+  frequentlyUsedEmojis?: string[];
+  /** Callback to get emojis by category */
+  getEmojisByCategory?: (
+    category: import("@/lib/unicode-emojis").EmojiCategory,
+  ) => EmojiSearchResult[];
+  /** Callback to record emoji usage */
+  onEmojiUsed?: (shortcode: string) => void;
 }
 
 export interface MentionEditorHandle {
@@ -290,6 +298,9 @@ export const MentionEditor = forwardRef<
       onCommandExecute,
       autoFocus = false,
       className = "",
+      frequentlyUsedEmojis = [],
+      getEmojisByCategory,
+      onEmojiUsed,
     },
     ref,
   ) => {
@@ -390,16 +401,21 @@ export const MentionEditor = forwardRef<
               char: ":",
               allowSpaces: false,
               items: async ({ query }) => {
-                return await searchEmojis(query);
+                const results = await searchEmojis(query);
+                // Pass query to component via props (hack: attach to results)
+                (results as any)._query = query || "";
+                return results;
               },
               render: () => {
                 let component: ReactRenderer<EmojiSuggestionListHandle>;
                 let popup: TippyInstance[];
                 let editorRef: any;
+                let currentQuery = "";
 
                 return {
                   onStart: (props) => {
                     editorRef = props.editor;
+                    currentQuery = (props.items as any)._query || "";
                     component = new ReactRenderer(EmojiSuggestionList, {
                       props: {
                         items: props.items,
@@ -407,6 +423,9 @@ export const MentionEditor = forwardRef<
                         onClose: () => {
                           popup[0]?.hide();
                         },
+                        frequentlyUsed: frequentlyUsedEmojis,
+                        getByCategory: getEmojisByCategory,
+                        query: currentQuery,
                       },
                       editor: props.editor,
                     });
@@ -427,9 +446,11 @@ export const MentionEditor = forwardRef<
                   },
 
                   onUpdate(props) {
+                    currentQuery = (props.items as any)._query || "";
                     component.updateProps({
                       items: props.items,
                       command: props.command,
+                      query: currentQuery,
                     });
 
                     if (!props.clientRect) {
@@ -749,6 +770,11 @@ export const MentionEditor = forwardRef<
               ...emojiSuggestion,
               command: ({ editor, range, props }: any) => {
                 // props is the EmojiSearchResult
+                // Record usage for frequently used tracking
+                if (onEmojiUsed) {
+                  onEmojiUsed(props.shortcode);
+                }
+
                 editor
                   .chain()
                   .focus()

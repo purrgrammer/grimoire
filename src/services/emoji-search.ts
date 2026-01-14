@@ -1,12 +1,17 @@
 import { Index } from "flexsearch";
 import type { NostrEvent } from "nostr-tools";
 import { getEmojiTags } from "@/lib/emoji-helpers";
+import type { EmojiCategory } from "@/lib/unicode-emojis";
 
 export interface EmojiSearchResult {
   shortcode: string;
   url: string;
   /** Source of the emoji: "unicode", "user", "set:<identifier>", or "context" */
   source: string;
+  /** Category of the emoji (for unicode emojis) */
+  category?: EmojiCategory;
+  /** Keywords for searching */
+  keywords?: string[];
 }
 
 export class EmojiSearchService {
@@ -29,6 +34,8 @@ export class EmojiSearchService {
     shortcode: string,
     url: string,
     source: string = "custom",
+    category?: EmojiCategory,
+    keywords?: string[],
   ): Promise<void> {
     // Normalize shortcode (lowercase, no colons)
     const normalized = shortcode.toLowerCase().replace(/^:|:$/g, "");
@@ -43,10 +50,15 @@ export class EmojiSearchService {
       shortcode: normalized,
       url,
       source,
+      category,
+      keywords,
     };
 
     this.emojis.set(normalized, emoji);
-    await this.index.addAsync(normalized, normalized);
+
+    // Index both shortcode and keywords for search
+    const searchText = [normalized, ...(keywords || [])].join(" ");
+    await this.index.addAsync(normalized, searchText);
   }
 
   /**
@@ -92,21 +104,51 @@ export class EmojiSearchService {
    * Add multiple Unicode emojis
    */
   async addUnicodeEmojis(
-    emojis: Array<{ shortcode: string; emoji: string }>,
+    emojis: Array<{
+      shortcode: string;
+      emoji: string;
+      category?: EmojiCategory;
+      keywords?: string[];
+    }>,
   ): Promise<void> {
-    for (const { shortcode, emoji } of emojis) {
+    for (const { shortcode, emoji, category, keywords } of emojis) {
       // For Unicode emoji, the "url" is actually the emoji character
       // We'll handle this specially in the UI
-      await this.addEmoji(shortcode, emoji, "unicode");
+      await this.addEmoji(shortcode, emoji, "unicode", category, keywords);
     }
   }
 
   /**
-   * Search emojis by shortcode
+   * Get emojis by category
+   */
+  getByCategory(category: EmojiCategory): EmojiSearchResult[] {
+    return Array.from(this.emojis.values()).filter(
+      (e) => e.category === category,
+    );
+  }
+
+  /**
+   * Get all available categories with emoji counts
+   */
+  getCategories(): Array<{ category: EmojiCategory; count: number }> {
+    const counts = new Map<EmojiCategory, number>();
+    for (const emoji of this.emojis.values()) {
+      if (emoji.category) {
+        counts.set(emoji.category, (counts.get(emoji.category) || 0) + 1);
+      }
+    }
+    return Array.from(counts.entries()).map(([category, count]) => ({
+      category,
+      count,
+    }));
+  }
+
+  /**
+   * Search emojis by shortcode and keywords
    */
   async search(
     query: string,
-    options: { limit?: number } = {},
+    options: { limit?: number; category?: EmojiCategory } = {},
   ): Promise<EmojiSearchResult[]> {
     const { limit = 24 } = options;
 
@@ -133,15 +175,19 @@ export class EmojiSearchService {
 
     // Search index
     const ids = (await this.index.searchAsync(normalizedQuery, {
-      limit,
+      limit: limit * 2, // Get more results to filter by category
     })) as string[];
 
-    // Map IDs to emojis
-    const items = ids
+    // Map IDs to emojis and filter by category if specified
+    let items = ids
       .map((id) => this.emojis.get(id))
       .filter(Boolean) as EmojiSearchResult[];
 
-    return items;
+    if (options.category) {
+      items = items.filter((e) => e.category === options.category);
+    }
+
+    return items.slice(0, limit);
   }
 
   /**
