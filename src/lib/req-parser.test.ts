@@ -1440,6 +1440,123 @@ describe("parseReqCommand", () => {
     });
   });
 
+  describe("$hashtags alias", () => {
+    describe("$hashtags alias in hashtags (-t)", () => {
+      it("should detect $hashtags in hashtags", () => {
+        const result = parseReqCommand(["-t", "$hashtags"]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should handle $hashtags with other hashtags", () => {
+        const result = parseReqCommand(["-t", "$hashtags,nostr,bitcoin"]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.filter["#t"]).toContain("nostr");
+        expect(result.filter["#t"]).toContain("bitcoin");
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should deduplicate $hashtags", () => {
+        const result = parseReqCommand(["-t", "$hashtags,$hashtags"]);
+        expect(result.filter["#t"]).toEqual(["$hashtags"]);
+      });
+    });
+
+    describe("case-insensitive $hashtags alias", () => {
+      it("should normalize $HASHTAGS to $hashtags", () => {
+        const result = parseReqCommand(["-t", "$HASHTAGS"]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should normalize $Hashtags to $hashtags", () => {
+        const result = parseReqCommand(["-t", "$Hashtags"]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should handle mixed case aliases with other hashtags", () => {
+        const result = parseReqCommand(["-t", "$HASHTAGS,nostr,$hashtags"]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.filter["#t"]).toContain("nostr");
+        // Should deduplicate case variations
+        expect(
+          result.filter["#t"]?.filter((t) => t === "$hashtags").length,
+        ).toBe(1);
+        expect(result.needsInterestList).toBe(true);
+      });
+    });
+
+    describe("needsInterestList flag", () => {
+      it("should set needsInterestList if $hashtags in filter", () => {
+        const result = parseReqCommand(["-t", "$hashtags", "-k", "1"]);
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should not set needsInterestList without $hashtags", () => {
+        const result = parseReqCommand(["-t", "nostr,bitcoin", "-k", "1"]);
+        expect(result.needsInterestList).toBe(false);
+      });
+
+      it("should not affect needsAccount", () => {
+        const result = parseReqCommand(["-t", "$hashtags"]);
+        expect(result.needsInterestList).toBe(true);
+        expect(result.needsAccount).toBe(false);
+      });
+    });
+
+    describe("complex scenarios with $hashtags", () => {
+      it("should handle $hashtags with other filter types", () => {
+        const result = parseReqCommand([
+          "-k",
+          "1",
+          "-t",
+          "$hashtags",
+          "--since",
+          "24h",
+          "-l",
+          "50",
+        ]);
+        expect(result.filter.kinds).toEqual([1]);
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.filter.since).toBeDefined();
+        expect(result.filter.limit).toBe(50);
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should handle $hashtags combined with $me and $contacts", () => {
+        const result = parseReqCommand([
+          "-a",
+          "$contacts",
+          "-p",
+          "$me",
+          "-t",
+          "$hashtags",
+        ]);
+        expect(result.filter.authors).toContain("$contacts");
+        expect(result.filter["#p"]).toContain("$me");
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.needsAccount).toBe(true);
+        expect(result.needsInterestList).toBe(true);
+      });
+
+      it("should work with multiple -t flags", () => {
+        const result = parseReqCommand([
+          "-t",
+          "nostr",
+          "-t",
+          "$hashtags",
+          "-t",
+          "bitcoin",
+        ]);
+        expect(result.filter["#t"]).toContain("nostr");
+        expect(result.filter["#t"]).toContain("$hashtags");
+        expect(result.filter["#t"]).toContain("bitcoin");
+        expect(result.needsInterestList).toBe(true);
+      });
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty args", () => {
       const result = parseReqCommand([]);

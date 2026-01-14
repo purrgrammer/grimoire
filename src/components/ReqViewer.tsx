@@ -78,7 +78,11 @@ import {
   getStatusColor,
   shouldAnimate,
 } from "@/lib/req-state-machine";
-import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
+import {
+  resolveFilterAliases,
+  getTagValues,
+  getAllTagValues,
+} from "@/lib/nostr-utils";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
 import type { ViewMode } from "@/lib/req-parser";
@@ -97,6 +101,7 @@ interface ReqViewerProps {
   nip05Authors?: string[];
   nip05PTags?: string[];
   needsAccount?: boolean;
+  needsInterestList?: boolean;
   title?: string;
 }
 
@@ -650,6 +655,7 @@ export default function ReqViewer({
   nip05Authors,
   nip05PTags,
   needsAccount = false,
+  needsInterestList = false,
   title = "nostr-events",
 }: ReqViewerProps) {
   const { state, addWindow } = useGrimoire();
@@ -680,13 +686,48 @@ export default function ReqViewer({
     [contactListEvent],
   );
 
-  // Resolve $me and $contacts aliases (memoized to prevent unnecessary object creation)
+  // Memoize interest list pointer to prevent unnecessary re-subscriptions
+  const interestListPointer = useMemo(
+    () =>
+      needsInterestList && accountPubkey
+        ? { kind: 10015, pubkey: accountPubkey, identifier: "" }
+        : undefined,
+    [needsInterestList, accountPubkey],
+  );
+
+  // Fetch interest list (kind 10015) if needed for $hashtags resolution
+  const interestListEvent = useNostrEvent(interestListPointer);
+
+  // Extract hashtags from kind 10015 event (includes hidden/encrypted tags after decryption)
+  const hashtags = useMemo(
+    () => (interestListEvent ? getAllTagValues(interestListEvent, "t") : []),
+    [interestListEvent],
+  );
+
+  // Compute interest list status for UI feedback
+  const interestListStatus = useMemo(() => {
+    if (!needsInterestList) return null;
+    if (!accountPubkey) return null; // Account required error handles this
+    if (interestListEvent === undefined) return "loading";
+    if (interestListEvent === null) return "not-found";
+    if (hashtags.length === 0) return "empty";
+    return "ok";
+  }, [needsInterestList, accountPubkey, interestListEvent, hashtags.length]);
+
+  // Resolve $me, $contacts, and $hashtags aliases (memoized to prevent unnecessary object creation)
   const resolvedFilter = useMemo(
     () =>
-      needsAccount
-        ? resolveFilterAliases(filter, accountPubkey, contacts)
+      needsAccount || needsInterestList
+        ? resolveFilterAliases(filter, accountPubkey, contacts, { hashtags })
         : filter,
-    [needsAccount, filter, accountPubkey, contacts],
+    [
+      needsAccount,
+      needsInterestList,
+      filter,
+      accountPubkey,
+      contacts,
+      hashtags,
+    ],
   );
 
   // NIP-05 resolution already happened in argParser before window creation
@@ -1254,24 +1295,55 @@ export default function ReqViewer({
         </div>
       )}
 
+      {/* Interest List Warning Banner */}
+      {interestListStatus === "not-found" && (
+        <div className="border-b border-border px-4 py-2 bg-warning/10 flex items-center gap-2">
+          <Hash className="size-4 text-warning" />
+          <span className="text-xs text-warning">
+            No interest list found (kind 10015).{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">$hashtags</code>{" "}
+            ignored.
+          </span>
+        </div>
+      )}
+      {interestListStatus === "empty" && (
+        <div className="border-b border-border px-4 py-2 bg-warning/10 flex items-center gap-2">
+          <Hash className="size-4 text-warning" />
+          <span className="text-xs text-warning">
+            Interest list has no hashtags.{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">$hashtags</code>{" "}
+            ignored.
+          </span>
+        </div>
+      )}
+
       {/* Account Required Error */}
-      {needsAccount && !accountPubkey && (
+      {(needsAccount || needsInterestList) && !accountPubkey && (
         <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
           <div className="text-muted-foreground">
             <User className="size-12 mx-auto mb-3" />
             <h3 className="text-lg font-semibold mb-2">Account Required</h3>
             <p className="text-sm max-w-md">
               This query uses{" "}
-              <code className="bg-muted px-1.5 py-0.5">$me</code> or{" "}
-              <code className="bg-muted px-1.5 py-0.5">$contacts</code> aliases
-              and requires an active account.
+              {needsAccount && (
+                <>
+                  <code className="bg-muted px-1.5 py-0.5">$me</code> or{" "}
+                  <code className="bg-muted px-1.5 py-0.5">$contacts</code>
+                </>
+              )}
+              {needsAccount && needsInterestList && " or "}
+              {needsInterestList && (
+                <code className="bg-muted px-1.5 py-0.5">$hashtags</code>
+              )}{" "}
+              alias{needsAccount && needsInterestList ? "es" : ""} and requires
+              an active account.
             </p>
           </div>
         </div>
       )}
 
       {/* Results */}
-      {(!needsAccount || accountPubkey) && (
+      {((!needsAccount && !needsInterestList) || accountPubkey) && (
         <div className="flex-1 overflow-y-auto relative">
           {/* Floating "New Events" Button */}
           {isFrozen && newEventCount > 0 && (

@@ -417,4 +417,148 @@ describe("resolveFilterAliases", () => {
       expect(result["#P"]).toContain(contacts[1]);
     });
   });
+
+  describe("$hashtags alias resolution", () => {
+    it("should replace $hashtags with hashtag list in #t", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags"] };
+      const hashtags = ["nostr", "bitcoin", "lightning"];
+      const result = resolveFilterAliases(filter, undefined, [], { hashtags });
+
+      expect(result["#t"]).toEqual(hashtags);
+      expect(result["#t"]).not.toContain("$hashtags");
+    });
+
+    it("should remove #t from filter when $hashtags resolves to empty", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags"] };
+      const result = resolveFilterAliases(filter, undefined, [], {
+        hashtags: [],
+      });
+
+      // Empty #t should be removed from filter entirely
+      expect(result["#t"]).toBeUndefined();
+    });
+
+    it("should preserve other hashtags when $hashtags resolves to empty", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags", "nostr", "bitcoin"] };
+      const result = resolveFilterAliases(filter, undefined, [], {
+        hashtags: [],
+      });
+
+      // Other hashtags should be preserved
+      expect(result["#t"]).toEqual(["nostr", "bitcoin"]);
+    });
+
+    it("should preserve other hashtags when resolving $hashtags", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags", "zaps", "dev"] };
+      const hashtags = ["nostr", "bitcoin"];
+      const result = resolveFilterAliases(filter, undefined, [], { hashtags });
+
+      expect(result["#t"]).toContain("nostr");
+      expect(result["#t"]).toContain("bitcoin");
+      expect(result["#t"]).toContain("zaps");
+      expect(result["#t"]).toContain("dev");
+      expect(result["#t"]).not.toContain("$hashtags");
+    });
+
+    it("should deduplicate hashtags", () => {
+      const filter: NostrFilter = { "#t": ["$hashtags", "nostr"] };
+      const hashtags = ["nostr", "bitcoin", "nostr"]; // nostr appears in both
+      const result = resolveFilterAliases(filter, undefined, [], { hashtags });
+
+      const nostrCount = result["#t"]?.filter((t) => t === "nostr").length;
+      expect(nostrCount).toBe(1);
+    });
+
+    it("should handle case-insensitive $HASHTAGS alias", () => {
+      const filter: NostrFilter = { "#t": ["$HASHTAGS"] };
+      const hashtags = ["nostr", "bitcoin"];
+      const result = resolveFilterAliases(filter, undefined, [], { hashtags });
+
+      expect(result["#t"]).toEqual(hashtags);
+      expect(result["#t"]).not.toContain("$HASHTAGS");
+    });
+
+    it("should handle mixed case $Hashtags alias", () => {
+      const filter: NostrFilter = { "#t": ["$Hashtags"] };
+      const hashtags = ["nostr", "bitcoin"];
+      const result = resolveFilterAliases(filter, undefined, [], { hashtags });
+
+      expect(result["#t"]).toEqual(hashtags);
+      expect(result["#t"]).not.toContain("$Hashtags");
+    });
+  });
+
+  describe("combined $me, $contacts, and $hashtags", () => {
+    it("should resolve all aliases in same filter", () => {
+      const filter: NostrFilter = {
+        authors: ["$me", "$contacts"],
+        "#t": ["$hashtags"],
+      };
+      const accountPubkey = "a".repeat(64);
+      const contacts = ["b".repeat(64), "c".repeat(64)];
+      const hashtags = ["nostr", "bitcoin"];
+      const result = resolveFilterAliases(filter, accountPubkey, contacts, {
+        hashtags,
+      });
+
+      expect(result.authors).toContain(accountPubkey);
+      expect(result.authors).toContain(contacts[0]);
+      expect(result.authors).toContain(contacts[1]);
+      expect(result["#t"]).toEqual(hashtags);
+    });
+
+    it("should work with new options-based signature", () => {
+      const filter: NostrFilter = {
+        authors: ["$me"],
+        "#t": ["$hashtags"],
+      };
+      const result = resolveFilterAliases(filter, {
+        accountPubkey: "a".repeat(64),
+        contacts: ["b".repeat(64)],
+        hashtags: ["nostr", "bitcoin"],
+      });
+
+      expect(result.authors).toEqual(["a".repeat(64)]);
+      expect(result["#t"]).toEqual(["nostr", "bitcoin"]);
+    });
+
+    it("should handle missing hashtags option gracefully", () => {
+      const filter: NostrFilter = {
+        authors: ["$me"],
+        "#t": ["$hashtags"],
+      };
+      const accountPubkey = "a".repeat(64);
+      const result = resolveFilterAliases(filter, accountPubkey, []);
+
+      expect(result.authors).toEqual([accountPubkey]);
+      // Empty #t should be removed from filter entirely
+      expect(result["#t"]).toBeUndefined();
+    });
+  });
+
+  describe("options-based signature", () => {
+    it("should work with options object as second parameter", () => {
+      const filter: NostrFilter = {
+        authors: ["$me"],
+        "#p": ["$contacts"],
+        "#t": ["$hashtags"],
+      };
+      const result = resolveFilterAliases(filter, {
+        accountPubkey: "a".repeat(64),
+        contacts: ["b".repeat(64), "c".repeat(64)],
+        hashtags: ["nostr", "bitcoin"],
+      });
+
+      expect(result.authors).toEqual(["a".repeat(64)]);
+      expect(result["#p"]).toEqual(["b".repeat(64), "c".repeat(64)]);
+      expect(result["#t"]).toEqual(["nostr", "bitcoin"]);
+    });
+
+    it("should handle undefined values in options", () => {
+      const filter: NostrFilter = { authors: ["$me"] };
+      const result = resolveFilterAliases(filter, {});
+
+      expect(result.authors).toEqual([]);
+    });
+  });
 });

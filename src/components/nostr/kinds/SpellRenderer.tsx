@@ -9,13 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { KindBadge } from "@/components/KindBadge";
 import { SpellEvent } from "@/types/spell";
 import { CopyableJsonViewer } from "@/components/JsonViewer";
-import { User, Users } from "lucide-react";
+import { User, Users, Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserName } from "../UserName";
 import { useGrimoire } from "@/core/state";
 import { useProfile } from "@/hooks/useProfile";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { getDisplayName } from "@/lib/nostr-utils";
+import { getDisplayName, getAllTagValues } from "@/lib/nostr-utils";
 
 /**
  * Visual placeholder for $me
@@ -110,6 +110,61 @@ export function ContactsPlaceholder({
 }
 
 /**
+ * Visual placeholder for $hashtags
+ */
+export function HashtagsPlaceholder({
+  size = "sm",
+  className,
+  pubkey,
+}: {
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  pubkey?: string;
+}) {
+  const { addWindow } = useGrimoire();
+  const interestList = useNostrEvent(
+    pubkey
+      ? {
+          kind: 10015,
+          pubkey,
+          identifier: "",
+        }
+      : undefined,
+  );
+
+  const hashtags = interestList ? getAllTagValues(interestList, "t") : [];
+  const count = hashtags.length;
+  const label = count > 0 ? `${count} interests` : "$hashtags";
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!pubkey) return;
+    e.stopPropagation();
+    addWindow("open", {
+      pointer: {
+        kind: 10015,
+        pubkey,
+        identifier: "",
+      },
+    });
+  };
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 font-bold text-emerald-400 select-none",
+        pubkey && "cursor-crosshair hover:underline decoration-dotted",
+        size === "sm" ? "text-xs" : size === "md" ? "text-sm" : "text-lg",
+        className,
+      )}
+      onClick={handleClick}
+    >
+      <Hash className={cn(size === "sm" ? "size-3" : "size-4")} />
+      {label}
+    </span>
+  );
+}
+
+/**
  * Renderer for a list of identifiers (pubkeys or placeholders)
  */
 function IdentifierList({
@@ -129,6 +184,10 @@ function IdentifierList({
         if (val === "$contacts")
           return (
             <ContactsPlaceholder key={val} size={size} pubkey={activePubkey} />
+          );
+        if (val === "$hashtags")
+          return (
+            <HashtagsPlaceholder key={val} size={size} pubkey={activePubkey} />
           );
         return (
           <UserName

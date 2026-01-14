@@ -157,7 +157,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "req [options] [relay...]",
     description:
-      "Query Nostr relays using filters. Constructs and executes Nostr REQ messages to fetch events matching specified criteria. Supports filtering by kind, author, tags, time ranges, and content search. Use $me and $contacts aliases for queries based on your active account.",
+      "Query Nostr relays using filters. Constructs and executes Nostr REQ messages to fetch events matching specified criteria. Supports filtering by kind, author, tags, time ranges, and content search. Use $me and $contacts aliases for queries based on your active account, and $hashtags to filter by your interest list (kind 10015).",
     options: [
       {
         flag: "-k, --kind <number>",
@@ -189,9 +189,9 @@ export const manPages: Record<string, ManPageEntry> = {
           "Filter by zap sender (#P tag, supports npub, hex, NIP-05, bare domain, $me, or $contacts). Supports comma-separated values: -P npub1...,npub2...,$me. Useful for finding zaps sent by specific users.",
       },
       {
-        flag: "-t <hashtag>",
+        flag: "-t <hashtag|$hashtags>",
         description:
-          "Filter by hashtag (#t tag). Supports comma-separated values: -t nostr,bitcoin,lightning",
+          "Filter by hashtag (#t tag). Supports comma-separated values: -t nostr,bitcoin,lightning. Use $hashtags to filter by your interest list (kind 10015).",
       },
       {
         flag: "-d <identifier>",
@@ -255,6 +255,8 @@ export const manPages: Record<string, ManPageEntry> = {
       "req -k 1 --since 7d --until now                                                              Get notes from last week up to now",
       "req -k 1 --close-on-eose                                                                     Get recent notes and close after EOSE",
       "req -t nostr,grimoire,bitcoin -l 50                                                          Get 50 events tagged #nostr, #grimoire, or #bitcoin",
+      "req -t $hashtags --since 24h                                                                   Get events matching your interests (from kind 10015)",
+      "req -t $hashtags,zaps -k 1                                                                     Get notes matching your interests or tagged #zaps",
       "req --tag a 30023:7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194:grimoire  Get events referencing addressable event (#a tag)",
       "req -T r grimoire.rocks              							    Get events referencing URL (#r tag)",
       "req -k 30023 --tag d badges,grimoire 							    Get specific replaceable events by d-tag",

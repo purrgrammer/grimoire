@@ -19,6 +19,7 @@ export interface ParsedReqCommand {
   nip05PTags?: string[]; // NIP-05 identifiers for #p tags that need async resolution
   nip05PTagsUppercase?: string[]; // NIP-05 identifiers for #P tags that need async resolution
   needsAccount?: boolean; // True if filter contains $me or $contacts aliases
+  needsInterestList?: boolean; // True if filter contains $hashtags alias
 }
 
 /**
@@ -279,13 +280,22 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-t": {
-          // Support comma-separated hashtags: -t nostr,bitcoin,lightning
+          // Support comma-separated hashtags: -t nostr,bitcoin,lightning,$hashtags
           if (nextArg) {
-            const addedAny = parseCommaSeparated(
-              nextArg,
-              (v) => v, // hashtags are already strings
-              tTags,
-            );
+            let addedAny = false;
+            const values = nextArg.split(",").map((t) => t.trim());
+            for (const tag of values) {
+              if (!tag) continue;
+              // Check for $hashtags alias (case-insensitive)
+              const normalized = tag.toLowerCase();
+              if (normalized === "$hashtags") {
+                tTags.add(normalized);
+                addedAny = true;
+              } else {
+                tTags.add(tag);
+                addedAny = true;
+              }
+            }
             i += addedAny ? 2 : 1;
           } else {
             i++;
@@ -428,6 +438,10 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     filter["#P"]?.some((p) => p === "$me" || p === "$contacts") ||
     false;
 
+  // Check if filter contains $hashtags alias
+  const needsInterestList =
+    filter["#t"]?.some((t) => t === "$hashtags") || false;
+
   return {
     filter,
     relays: relays.length > 0 ? relays : undefined,
@@ -440,6 +454,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         ? Array.from(nip05PTagsUppercase)
         : undefined,
     needsAccount,
+    needsInterestList,
   };
 }
 
