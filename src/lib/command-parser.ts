@@ -57,10 +57,27 @@ export function parseCommandInput(input: string): ParsedCommand {
   }
 
   // Parse command from remaining tokens
-  const commandName = remainingTokens[0]?.toLowerCase() || "";
-  const args = remainingTokens.slice(1);
+  // Check for multi-word commands first (e.g., "relay admin")
+  let commandName = "";
+  let args: string[] = [];
+  let command: (typeof manPages)[string] | undefined;
 
-  const command = commandName && manPages[commandName];
+  // Try two-word command first
+  if (remainingTokens.length >= 2) {
+    const twoWordCommand = `${remainingTokens[0]?.toLowerCase()} ${remainingTokens[1]?.toLowerCase()}`;
+    if (manPages[twoWordCommand]) {
+      commandName = twoWordCommand;
+      args = remainingTokens.slice(2);
+      command = manPages[twoWordCommand];
+    }
+  }
+
+  // Fall back to single-word command
+  if (!command && remainingTokens.length >= 1) {
+    commandName = remainingTokens[0]?.toLowerCase() || "";
+    args = remainingTokens.slice(1);
+    command = commandName ? manPages[commandName] : undefined;
+  }
 
   if (!commandName) {
     return {

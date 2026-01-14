@@ -29,6 +29,29 @@ describe("parseCommandInput - regression tests", () => {
     });
   });
 
+  describe("multi-word commands", () => {
+    it("should parse two-word command 'relay admin'", () => {
+      const result = parseCommandInput("relay admin wss://relay.example.com");
+      expect(result.commandName).toBe("relay admin");
+      expect(result.args).toEqual(["wss://relay.example.com"]);
+      expect(result.command).toBeDefined();
+      expect(result.command?.appId).toBe("relay-admin");
+    });
+
+    it("should fall back to single-word command if two-word doesn't exist", () => {
+      const result = parseCommandInput("relay wss://relay.example.com");
+      expect(result.commandName).toBe("relay");
+      expect(result.args).toEqual(["wss://relay.example.com"]);
+      expect(result.command?.appId).toBe("relay");
+    });
+
+    it("should handle multi-word command with no args", () => {
+      const result = parseCommandInput("relay admin");
+      expect(result.commandName).toBe("relay admin");
+      expect(result.args).toEqual([]);
+    });
+  });
+
   describe("commands with flags", () => {
     it("should preserve req command with flags", () => {
       const result = parseCommandInput("req -k 1 -a alice");
