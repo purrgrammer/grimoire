@@ -781,4 +781,21 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       defaultValue: undefined,
     });
   }
+
+  /**
+   * Add a gift wrap event directly to local state
+   * Used for optimistic updates after sending
+   */
+  addGiftWrapLocally(giftWrap: NostrEvent): void {
+    const current = this.giftWraps$.value;
+    if (!current.find((g) => g.id === giftWrap.id)) {
+      this.giftWraps$.next([...current, giftWrap]);
+    }
+  }
 }
+
+/**
+ * Singleton instance for shared state across the app
+ * All components should use this to ensure gift wraps are shared
+ */
+export const nip17Adapter = new Nip17Adapter();

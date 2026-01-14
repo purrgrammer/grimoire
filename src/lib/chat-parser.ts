@@ -1,6 +1,6 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
-import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
+import { nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
@@ -61,8 +61,9 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   }
 
   // Try each adapter in priority order
+  // NIP-17 uses singleton to share gift wrap state across app
   const adapters = [
-    new Nip17Adapter(), // NIP-17 - Private DMs (gift wrapped)
+    nip17Adapter, // NIP-17 - Private DMs (gift wrapped) - singleton
     // new Nip28Adapter(),  // NIP-28 - Public channels (coming soon)
     new Nip29Adapter(), // NIP-29 - Relay groups
     new Nip53Adapter(), // NIP-53 - Live activity chat

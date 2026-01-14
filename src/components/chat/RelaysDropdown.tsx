@@ -11,7 +11,7 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import type { Conversation } from "@/types/chat";
-import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
+import { nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 
 interface RelaysDropdownProps {
   conversation: Conversation;
@@ -38,7 +38,6 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
   useEffect(() => {
     if (conversation.protocol !== "nip-17") return;
 
-    const adapter = new Nip17Adapter();
     const participants = conversation.participants;
 
     // Initialize with loading state
@@ -55,7 +54,7 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
       const results = await Promise.all(
         participants.map(async (p) => {
           try {
-            const relays = await adapter.getInboxRelays(p.pubkey);
+            const relays = await nip17Adapter.getInboxRelays(p.pubkey);
             return { pubkey: p.pubkey, relays, loading: false };
           } catch {
             return { pubkey: p.pubkey, relays: [], loading: false };

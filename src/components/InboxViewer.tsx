@@ -31,7 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
+import { nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
 
@@ -258,8 +258,8 @@ export function InboxViewer() {
   const [isResizing, setIsResizing] = useState(false);
   const [isDecrypting, setIsDecrypting] = useState(false);
 
-  // NIP-17 adapter instance
-  const adapter = useMemo(() => new Nip17Adapter(), []);
+  // NIP-17 adapter singleton instance
+  const adapter = nip17Adapter;
 
   // Get pending count
   const pendingCount = use$(() => adapter.getPendingCount$(), [adapter]) ?? 0;
