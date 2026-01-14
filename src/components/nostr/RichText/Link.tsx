@@ -19,6 +19,22 @@ interface LinkNodeProps {
   };
 }
 
+/**
+ * Get media preset based on mediaSize option for inline links
+ */
+function getMediaPreset(
+  mediaSize: "compact" | "normal" | "large",
+): "thumbnail" | "inline" | "preview" {
+  switch (mediaSize) {
+    case "compact":
+      return "thumbnail";
+    case "large":
+      return "preview";
+    default:
+      return "inline";
+  }
+}
+
 export function Link({ node }: LinkNodeProps) {
   const options = useRichTextOptions();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,6 +47,9 @@ export function Link({ node }: LinkNodeProps) {
   // Check if media should be shown
   const shouldShowMedia = options.showMedia;
 
+  // Determine media preset based on size option
+  const mediaPreset = getMediaPreset(options.mediaSize);
+
   // Render appropriate link type
   if (isImageURL(href)) {
     if (shouldShowMedia && options.showImages) {
@@ -38,8 +57,10 @@ export function Link({ node }: LinkNodeProps) {
         <MediaEmbed
           url={href}
           type="image"
-          preset="inline"
-          enableZoom
+          preset={mediaPreset}
+          enableZoom={options.enableZoom}
+          fadeIn={options.enableTransitions}
+          aspectRatio={options.preserveAspectRatio ? "auto" : undefined}
           className="my-2 inline-block"
         />
       );
@@ -53,7 +74,9 @@ export function Link({ node }: LinkNodeProps) {
         <MediaEmbed
           url={href}
           type="video"
-          preset="inline"
+          preset={mediaPreset}
+          fadeIn={options.enableTransitions}
+          aspectRatio={options.preserveAspectRatio ? "auto" : undefined}
           className="my-2 inline-block"
         />
       );

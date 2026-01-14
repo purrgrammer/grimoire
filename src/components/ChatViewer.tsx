@@ -30,6 +30,7 @@ import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
+import { CHAT_PRESET } from "@/lib/media-presets";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
@@ -174,7 +175,11 @@ const ComposerReplyPreview = memo(function ComposerReplyPreview({
       <div className="flex-1 min-w-0 line-clamp-1 overflow-hidden text-muted-foreground">
         <RichText
           event={replyEvent}
-          options={{ showMedia: false, showEventEmbeds: false }}
+          options={{
+            showMedia: false,
+            showEventEmbeds: false,
+            enableTransitions: false,
+          }}
         />
       </div>
       <button
@@ -270,7 +275,11 @@ const MessageItem = memo(function MessageItem({
               <RichText
                 event={zapRequest || message.event}
                 className="text-sm leading-tight break-words"
-                options={{ showMedia: false, showEventEmbeds: false }}
+                options={{
+                  showMedia: false,
+                  showEventEmbeds: false,
+                  enableTransitions: false,
+                }}
               />
             )}
           </div>
@@ -300,7 +309,11 @@ const MessageItem = memo(function MessageItem({
         </div>
         <div className="break-words overflow-hidden">
           {message.event ? (
-            <RichText className="text-sm leading-tight" event={message.event}>
+            <RichText
+              className="text-sm leading-tight"
+              event={message.event}
+              options={CHAT_PRESET}
+            >
               {message.replyTo && (
                 <ReplyPreview
                   replyToId={message.replyTo}

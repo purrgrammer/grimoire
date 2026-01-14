@@ -35,6 +35,7 @@ export function useDepth() {
  * Configuration options for RichText rendering behavior
  */
 export interface RichTextOptions {
+  // === Visibility Controls ===
   /** Show images inline (default: true) */
   showImages?: boolean;
   /** Show videos inline (default: true) */
@@ -45,6 +46,24 @@ export interface RichTextOptions {
   showMedia?: boolean;
   /** Show event embeds for note/nevent/naddr mentions (default: true) */
   showEventEmbeds?: boolean;
+
+  // === Display Preferences ===
+  /** Media size preset: "compact" | "normal" | "large" (default: "normal") */
+  mediaSize?: "compact" | "normal" | "large";
+  /** Gallery columns: "auto" (adaptive) or fixed 1-4 (default: "auto") */
+  galleryColumns?: "auto" | 1 | 2 | 3 | 4;
+
+  // === Visual Polish ===
+  /** Preserve original aspect ratios instead of forcing crops (default: true) */
+  preserveAspectRatio?: boolean;
+  /** Enable smooth fade-in animations (default: true) */
+  enableTransitions?: boolean;
+  /** Border radius: "none" | "sm" | "md" | "lg" (default: "md") */
+  roundedCorners?: "none" | "sm" | "md" | "lg";
+
+  // === Interaction ===
+  /** Enable image zoom on click (default: true) */
+  enableZoom?: boolean;
 }
 
 // Default options
@@ -54,6 +73,12 @@ const defaultOptions: Required<RichTextOptions> = {
   showAudio: true,
   showMedia: true,
   showEventEmbeds: true,
+  mediaSize: "normal",
+  galleryColumns: "auto",
+  preserveAspectRatio: true,
+  enableTransitions: true,
+  roundedCorners: "md",
+  enableZoom: true,
 };
 
 // Context for passing options through RichText rendering
