@@ -18,7 +18,6 @@
 import { BehaviorSubject, Observable } from "rxjs";
 import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
-import { createTimelineLoader } from "applesauce-loaders/loaders";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
@@ -164,7 +163,7 @@ class GiftWrapLoader {
         relays: inboxRelays,
       });
 
-      // Subscribe to kind 1059 events for this user using timeline loader
+      // Subscribe to kind 1059 events for this user
       const filter = {
         kinds: [1059 as number],
         "#p": [state.recipientPubkey],
@@ -172,15 +171,53 @@ class GiftWrapLoader {
         // since: state.lastSync ? Math.floor(state.lastSync / 1000) : undefined,
       };
 
-      // Create timeline loader for gift wraps
-      const loader = createTimelineLoader(pool, inboxRelays, [filter], {
-        eventStore,
-      });
+      console.log(
+        `[GiftWrapLoader] Subscribing to kind 1059 events on ${inboxRelays.length} relays`,
+      );
 
-      // Subscribe to timeline
-      this.subscription = loader().subscribe({
+      // Use pool.subscription to connect to relays and fetch events
+      const obs = pool.subscription(inboxRelays, [filter], { eventStore });
+
+      let eventCount = 0;
+      let eoseCount = 0;
+
+      this.subscription = obs.subscribe({
+        next: (response) => {
+          if (typeof response === "string") {
+            // EOSE received from a relay
+            eoseCount++;
+            console.log(
+              `[GiftWrapLoader] EOSE ${eoseCount}/${inboxRelays.length} from relay`,
+            );
+
+            // When we've received EOSE from all relays, we're done loading
+            if (eoseCount >= inboxRelays.length) {
+              console.log(
+                `[GiftWrapLoader] All relays sent EOSE, received ${eventCount} gift wraps`,
+              );
+              this.state$.next({
+                ...this.state$.value,
+                loading: false,
+                lastSync: Date.now(),
+              });
+
+              // Process pending gift wraps if auto-decrypt is enabled
+              void this.processPendingGiftWraps();
+            }
+          } else {
+            // Event received from relay
+            const event = response as NostrEvent;
+            eventCount++;
+            console.log(
+              `[GiftWrapLoader] Received gift wrap ${event.id.slice(0, 8)} (${eventCount} total)`,
+            );
+
+            // Process the gift wrap immediately
+            void this.handleGiftWrap(event);
+          }
+        },
         error: (error: Error) => {
-          console.error("[GiftWrapLoader] Timeline error:", error);
+          console.error("[GiftWrapLoader] Subscription error:", error);
           this.state$.next({
             ...this.state$.value,
             loading: false,
@@ -188,7 +225,7 @@ class GiftWrapLoader {
           });
         },
         complete: () => {
-          console.log("[GiftWrapLoader] Timeline complete");
+          console.log("[GiftWrapLoader] Subscription completed");
           this.state$.next({
             ...this.state$.value,
             loading: false,
@@ -196,26 +233,6 @@ class GiftWrapLoader {
           });
         },
       });
-
-      // Handle events from timeline via eventStore subscription
-      // Timeline loader automatically adds events to eventStore
-      const eventSub = eventStore.timeline([filter]).subscribe((events) => {
-        events.forEach((event) => {
-          void this.handleGiftWrap(event);
-        });
-      });
-
-      // Store both subscriptions for cleanup
-      const originalUnsub = this.subscription.unsubscribe.bind(
-        this.subscription,
-      );
-      this.subscription.unsubscribe = () => {
-        originalUnsub();
-        eventSub.unsubscribe();
-      };
-
-      // Process any pending gift wraps from database
-      await this.processPendingGiftWraps();
     } catch (error) {
       console.error("[GiftWrapLoader] Sync error:", error);
       this.state$.next({
