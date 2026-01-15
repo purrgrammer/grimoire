@@ -526,3 +526,29 @@ export const clearActiveSpellbook = (state: GrimoireState): GrimoireState => {
     activeSpellbook: undefined,
   };
 };
+
+/**
+ * Enables or disables NIP-59 private messages (gift wraps).
+ */
+export const setPrivateMessagesEnabled = (
+  state: GrimoireState,
+  enabled: boolean,
+): GrimoireState => {
+  return {
+    ...state,
+    privateMessagesEnabled: enabled,
+  };
+};
+
+/**
+ * Enables or disables auto-decrypt for gift wraps.
+ */
+export const setAutoDecryptGiftWraps = (
+  state: GrimoireState,
+  enabled: boolean,
+): GrimoireState => {
+  return {
+    ...state,
+    autoDecryptGiftWraps: enabled,
+  };
+};

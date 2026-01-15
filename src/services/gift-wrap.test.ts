@@ -2,13 +2,13 @@
  * Tests for NIP-59 Gift Wrap Service
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { unwrapAndUnseal, GiftWrapError } from "./gift-wrap";
 import type { NostrEvent } from "@/types/nostr";
-import type { Signer } from "applesauce-signers";
+import type { ISigner } from "applesauce-signers";
 
 // Mock signer for testing
-function createMockSigner(decryptResponses: Map<string, string>): Signer & {
+function createMockSigner(decryptResponses: Map<string, string>): ISigner & {
   nip44Decrypt: (pubkey: string, ciphertext: string) => Promise<string>;
 } {
   return {
@@ -195,13 +195,13 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(decryptResponses);
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow("Expected seal kind 13");
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        "Expected seal kind 13",
+      );
     });
 
     it("should reject seal with empty content", async () => {
@@ -231,13 +231,13 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(decryptResponses);
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow("Seal content is empty");
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        "Seal content is empty",
+      );
     });
 
     it("should reject invalid rumor structure", async () => {
@@ -275,13 +275,13 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(decryptResponses);
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow("Rumor missing content");
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        "Rumor missing content",
+      );
     });
 
     it("should handle decryption failures", async () => {
@@ -298,13 +298,13 @@ describe("unwrapAndUnseal", () => {
       // No responses configured - decryption will fail
       const signer = createMockSigner(new Map());
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(giftWrap, "recipient-pubkey", signer),
-      ).rejects.toThrow("Failed to decrypt");
+      await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
+        "Failed to decrypt",
+      );
     });
   });
 });

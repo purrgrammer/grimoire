@@ -13,7 +13,7 @@
  */
 
 import type { NostrEvent } from "@/types/nostr";
-import type { Signer } from "applesauce-signers";
+import type { ISigner } from "applesauce-signers";
 import db, {
   GiftWrapEnvelope,
   DecryptedRumor,
@@ -117,7 +117,7 @@ function validateRumor(event: any): NostrEvent {
  */
 async function unwrapGiftWrap(
   giftWrap: NostrEvent,
-  signer: Signer,
+  signer: ISigner,
 ): Promise<NostrEvent> {
   validateGiftWrap(giftWrap);
 
@@ -161,7 +161,7 @@ async function unwrapGiftWrap(
  */
 async function unsealSeal(
   seal: NostrEvent,
-  signer: Signer,
+  signer: ISigner,
 ): Promise<NostrEvent> {
   validateSeal(seal);
 
@@ -208,7 +208,7 @@ async function unsealSeal(
  */
 export async function unwrapAndUnseal(
   giftWrap: NostrEvent,
-  signer: Signer,
+  signer: ISigner,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
   // Step 1: Unwrap gift wrap to get seal
   const seal = await unwrapGiftWrap(giftWrap, signer);
@@ -230,7 +230,7 @@ export async function unwrapAndUnseal(
 export async function processGiftWrap(
   giftWrap: NostrEvent,
   recipientPubkey: string,
-  signer: Signer,
+  signer: ISigner,
 ): Promise<DecryptedRumor | null> {
   // Check if already processed
   const existing = await db.giftWraps.get(giftWrap.id);

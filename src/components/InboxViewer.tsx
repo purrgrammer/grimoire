@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Mail,
@@ -14,15 +14,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
-import { Badge } from "./ui/badge";
 import giftWrapLoader from "@/services/gift-wrap-loader";
-import db from "@/services/db";
 import { toast } from "sonner";
 import { use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 
 export function InboxViewer() {
-  const { state, setState } = useGrimoire();
+  const { state, setPrivateMessagesEnabled, setAutoDecryptGiftWraps } =
+    useGrimoire();
   const activeAccount = use$(accounts.active$);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptResult, setDecryptResult] = useState<{
@@ -54,10 +53,7 @@ export function InboxViewer() {
   }, [activeAccount?.pubkey]);
 
   const handleTogglePrivateMessages = (enabled: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      privateMessagesEnabled: enabled,
-    }));
+    setPrivateMessagesEnabled(enabled);
 
     if (enabled) {
       toast.success("Private messages enabled");
@@ -67,10 +63,7 @@ export function InboxViewer() {
   };
 
   const handleToggleAutoDecrypt = (enabled: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      autoDecryptGiftWraps: enabled,
-    }));
+    setAutoDecryptGiftWraps(enabled);
 
     if (enabled) {
       toast.success("Auto-decrypt enabled");

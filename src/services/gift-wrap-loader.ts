@@ -17,7 +17,8 @@
 
 import { BehaviorSubject, Observable } from "rxjs";
 import type { NostrEvent } from "@/types/nostr";
-import type { Signer } from "applesauce-signers";
+import type { ISigner } from "applesauce-signers";
+import { createTimelineLoader } from "applesauce-loaders/loaders";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
@@ -49,7 +50,7 @@ class GiftWrapLoader {
   });
 
   private subscription?: { unsubscribe: () => void };
-  private currentSigner?: Signer;
+  private currentSigner?: ISigner;
 
   /**
    * Observable state of the loader
@@ -74,7 +75,7 @@ class GiftWrapLoader {
    */
   async enable(
     recipientPubkey: string,
-    signer: Signer,
+    signer: ISigner,
     autoDecrypt = false,
   ): Promise<void> {
     // Stop any existing subscription
@@ -153,32 +154,40 @@ class GiftWrapLoader {
         `[GiftWrapLoader] Syncing from ${inboxRelays.length} inbox relays`,
       );
 
-      // Subscribe to kind 1059 events for this user
+      // Subscribe to kind 1059 events for this user using timeline loader
       const filter = {
-        kinds: [1059],
+        kinds: [1059 as number],
         "#p": [state.recipientPubkey],
         // Optionally add since: to only get new messages
         // since: state.lastSync ? Math.floor(state.lastSync / 1000) : undefined,
       };
 
-      // Store subscription for cleanup
-      this.subscription = pool.subscribe(inboxRelays, [filter], {
-        onevent: async (event: NostrEvent) => {
-          await this.handleGiftWrap(event);
+      // Create timeline loader for gift wraps
+      const timeline = createTimelineLoader(pool, {
+        eventStore,
+        relays: inboxRelays,
+        filters: [filter],
+      });
+
+      // Subscribe to timeline
+      this.subscription = timeline.subscribe({
+        next: (event: NostrEvent) => {
+          void this.handleGiftWrap(event);
         },
-        oneose: () => {
-          console.log("[GiftWrapLoader] EOSE received");
+        error: (error: Error) => {
+          console.error("[GiftWrapLoader] Timeline error:", error);
+          this.state$.next({
+            ...this.state$.value,
+            loading: false,
+            errorCount: this.state$.value.errorCount + 1,
+          });
+        },
+        complete: () => {
+          console.log("[GiftWrapLoader] Timeline complete");
           this.state$.next({
             ...this.state$.value,
             loading: false,
             lastSync: Date.now(),
-          });
-        },
-        onclose: (reason: string) => {
-          console.log(`[GiftWrapLoader] Subscription closed: ${reason}`);
-          this.state$.next({
-            ...this.state$.value,
-            loading: false,
           });
         },
       });

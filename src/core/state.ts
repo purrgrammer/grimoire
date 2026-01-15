@@ -319,6 +319,20 @@ export const useGrimoire = () => {
     [setState],
   );
 
+  const setPrivateMessagesEnabled = useCallback(
+    (enabled: boolean) => {
+      setState((prev) => Logic.setPrivateMessagesEnabled(prev, enabled));
+    },
+    [setState],
+  );
+
+  const setAutoDecryptGiftWraps = useCallback(
+    (enabled: boolean) => {
+      setState((prev) => Logic.setAutoDecryptGiftWraps(prev, enabled));
+    },
+    [setState],
+  );
+
   const loadSpellbook = useCallback(
     (spellbook: ParsedSpellbook) => {
       setState((prev) => SpellbookManager.loadSpellbook(prev, spellbook));
@@ -366,6 +380,8 @@ export const useGrimoire = () => {
     updateWorkspaceLabel,
     reorderWorkspaces,
     setCompactModeKinds,
+    setPrivateMessagesEnabled,
+    setAutoDecryptGiftWraps,
     loadSpellbook,
     clearActiveSpellbook,
     switchToTemporary,
