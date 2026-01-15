@@ -147,6 +147,7 @@ function PlatformItem({ platform }: { platform: Platform }) {
 export function ZapstoreAppDetailRenderer({
   event,
 }: ZapstoreAppDetailRendererProps) {
+  const { addWindow } = useGrimoire();
   const appName = getAppName(event);
   const summary = getAppSummary(event);
   const iconUrl = getAppIcon(event);
@@ -186,6 +187,19 @@ export function ZapstoreAppDetailRenderer({
     });
   }, [releases]);
 
+  // Get the latest release for the header download button
+  const latestRelease = sortedReleases[0] || null;
+  const latestFileEventId = latestRelease
+    ? getReleaseFileEventId(latestRelease)
+    : null;
+  const latestVersion = latestRelease ? getReleaseVersion(latestRelease) : null;
+
+  const handleDownloadLatest = () => {
+    if (latestFileEventId) {
+      addWindow("open", { pointer: { id: latestFileEventId } });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
       {/* Header Section */}
@@ -206,7 +220,18 @@ export function ZapstoreAppDetailRenderer({
 
         {/* App Title & Summary */}
         <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <h1 className="text-3xl font-bold">{appName}</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-bold">{appName}</h1>
+            {latestFileEventId && (
+              <button
+                onClick={handleDownloadLatest}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0"
+              >
+                <FileDown className="size-4" />
+                {latestVersion ? `Download v${latestVersion}` : "Download"}
+              </button>
+            )}
+          </div>
           {summary && (
             <p className="text-muted-foreground text-base">{summary}</p>
           )}
