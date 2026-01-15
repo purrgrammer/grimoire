@@ -42,6 +42,9 @@ const SpellbooksViewer = lazy(() =>
 const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
+const WalletViewer = lazy(() =>
+  import("./WalletViewer").then((m) => ({ default: m.WalletViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -209,6 +212,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sha256={window.props.sha256}
           />
         );
+        break;
+      case "wallet":
+        content = <WalletViewer pubkey={window.props.pubkey} />;
         break;
       default:
         content = (

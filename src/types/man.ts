@@ -575,4 +575,45 @@ export const manPages: Record<string, ManPageEntry> = {
     },
     defaultProps: { subcommand: "servers" },
   },
+  wallet: {
+    name: "wallet",
+    section: "1",
+    synopsis: "wallet [identifier]",
+    description:
+      "View and manage your NIP-60 Cashu wallet. Displays wallet balance, transaction history, and token details. The wallet is stored encrypted on Nostr relays (kind 17375 for config, kind 7375 for tokens, kind 7376 for history). Use $me or omit identifier to view your own wallet.",
+    options: [
+      {
+        flag: "[identifier]",
+        description:
+          "Wallet owner identifier (npub, hex pubkey, NIP-05, or $me). Defaults to your active account",
+      },
+    ],
+    examples: [
+      "wallet                        View your wallet",
+      "wallet $me                    View your wallet (explicit)",
+      "wallet fiatjaf.com            View another user's wallet (if public)",
+      "wallet npub1...               View wallet by npub",
+    ],
+    seeAlso: ["profile", "req"],
+    appId: "wallet",
+    category: "Nostr",
+    argParser: async (args: string[]) => {
+      // If no args, use active account
+      if (args.length === 0) {
+        return { pubkey: "$me" };
+      }
+
+      // Parse identifier similar to profile command
+      const identifier = args[0];
+
+      // Handle $me alias
+      if (identifier === "$me") {
+        return { pubkey: "$me" };
+      }
+
+      // For now, simple pass-through - could add NIP-05 resolution here
+      return { pubkey: identifier };
+    },
+    defaultProps: { pubkey: "$me" },
+  },
 };
