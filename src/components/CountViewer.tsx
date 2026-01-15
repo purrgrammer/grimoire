@@ -18,6 +18,8 @@ import pool from "@/services/relay-pool";
 import { getRelayInfo } from "@/lib/nip11";
 import { RelayLink } from "./nostr/RelayLink";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
+import { KindBadge } from "./KindBadge";
+import { UserName } from "./nostr/UserName";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -325,26 +327,106 @@ export default function CountViewer({
     (r) => r.status === "success",
   ).length;
 
+  // Extract filter parts for human-readable summary
+  const authorPubkeys = filter.authors || [];
+  const pTagPubkeys = filter["#p"] || [];
+  const tTags = filter["#t"] || [];
+
   return (
     <div className="h-full flex flex-col">
-      {/* Compact Header - matches ReqViewer style */}
-      <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
-        {/* Left: Status */}
-        <div className="flex items-center gap-2">
-          {loading ? (
-            <Loader2 className="size-3 animate-spin text-muted-foreground" />
-          ) : (
-            <CheckCircle2 className="size-3 text-green-500" />
+      {/* Compact Header */}
+      <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between gap-2">
+        {/* Left: Human-readable filter summary */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+          {/* Kinds */}
+          {filter.kinds && filter.kinds.length > 0 && (
+            <div className="flex items-center gap-1">
+              {filter.kinds.slice(0, 3).map((kind) => (
+                <KindBadge
+                  key={kind}
+                  kind={kind}
+                  iconClassname="size-3"
+                  className="text-xs"
+                />
+              ))}
+              {filter.kinds.length > 3 && (
+                <span className="text-muted-foreground">
+                  +{filter.kinds.length - 3}
+                </span>
+              )}
+            </div>
           )}
-          <span className="text-muted-foreground">
-            {loading
-              ? "Counting..."
-              : `${successCount}/${relays.length} relays`}
-          </span>
+
+          {/* Authors */}
+          {authorPubkeys.length > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">by</span>
+              {authorPubkeys.slice(0, 2).map((pubkey) => (
+                <UserName key={pubkey} pubkey={pubkey} className="text-xs" />
+              ))}
+              {authorPubkeys.length > 2 && (
+                <span className="text-muted-foreground">
+                  +{authorPubkeys.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Mentions */}
+          {pTagPubkeys.length > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">@</span>
+              {pTagPubkeys.slice(0, 2).map((pubkey) => (
+                <UserName
+                  key={pubkey}
+                  pubkey={pubkey}
+                  isMention
+                  className="text-xs"
+                />
+              ))}
+              {pTagPubkeys.length > 2 && (
+                <span className="text-muted-foreground">
+                  +{pTagPubkeys.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Hashtags */}
+          {tTags.length > 0 && (
+            <div className="flex items-center gap-1">
+              {tTags.slice(0, 2).map((tag) => (
+                <span key={tag} className="text-xs text-primary">
+                  #{tag}
+                </span>
+              ))}
+              {tTags.length > 2 && (
+                <span className="text-muted-foreground">
+                  +{tTags.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Search */}
+          {filter.search && (
+            <code className="text-xs bg-muted px-1 py-0.5 rounded truncate max-w-32">
+              "{filter.search}"
+            </code>
+          )}
+
+          {/* Fallback if no filter criteria */}
+          {!filter.kinds?.length &&
+            !authorPubkeys.length &&
+            !pTagPubkeys.length &&
+            !tTags.length &&
+            !filter.search && (
+              <span className="text-muted-foreground">all events</span>
+            )}
         </div>
 
         {/* Right: Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Filter Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -382,22 +464,80 @@ export default function CountViewer({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Relay Dropdown */}
+          {/* Relay Dropdown with status */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                <Wifi className="size-3" />
-                <span>{relays.length}</span>
+                {loading ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Wifi className="size-3" />
+                )}
+                <span>
+                  {successCount}/{relays.length}
+                </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-3">
-              <div className="text-xs font-semibold text-muted-foreground mb-2">
-                Relays ({relays.length})
+            <DropdownMenuContent align="end" className="w-80 p-0">
+              <div className="p-2 border-b border-border">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  {loading
+                    ? "Counting..."
+                    : `${successCount}/${relays.length} relays responded`}
+                </div>
               </div>
-              <div className="space-y-1">
-                {relays.map((url) => (
-                  <RelayLink key={url} url={url} className="text-xs block" />
-                ))}
+              <div className="max-h-64 overflow-y-auto">
+                {relays.map((url) => {
+                  const result = results.get(url) || {
+                    url,
+                    status: "pending" as const,
+                  };
+                  return (
+                    <div
+                      key={url}
+                      className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {result.status === "loading" && (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground shrink-0" />
+                        )}
+                        {result.status === "success" && (
+                          <CheckCircle2 className="size-3 text-green-500 shrink-0" />
+                        )}
+                        {result.status === "unsupported" && (
+                          <Ban className="size-3 text-yellow-500 shrink-0" />
+                        )}
+                        {result.status === "error" && (
+                          <AlertCircle className="size-3 text-destructive shrink-0" />
+                        )}
+                        {result.status === "pending" && (
+                          <div className="size-3 shrink-0" />
+                        )}
+                        <RelayLink url={url} className="text-xs truncate" />
+                      </div>
+                      <div className="shrink-0 ml-2">
+                        {result.status === "success" && (
+                          <span className="font-mono font-semibold">
+                            {result.count?.toLocaleString()}
+                          </span>
+                        )}
+                        {result.status === "unsupported" && (
+                          <span className="text-yellow-600 dark:text-yellow-400">
+                            N/A
+                          </span>
+                        )}
+                        {result.status === "error" && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <span className="text-destructive">error</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{result.error}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
