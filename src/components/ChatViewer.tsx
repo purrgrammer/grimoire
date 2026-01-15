@@ -37,6 +37,7 @@ import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
+import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
@@ -285,7 +286,7 @@ const MessageItem = memo(function MessageItem({
       (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
     return (
-      <div className="pl-2 my-1">
+      <div className="pl-2 my-1 relative">
         <div
           className="p-[1px] rounded"
           style={{
@@ -332,13 +333,18 @@ const MessageItem = memo(function MessageItem({
             )}
           </div>
         </div>
+        {/* Reactions display - lazy loaded per message */}
+        <MessageReactions
+          messageId={message.id}
+          relayUrl={conversation.metadata?.relayUrl}
+        />
       </div>
     );
   }
 
   // Regular user messages - wrap in context menu if event exists
   const messageContent = (
-    <div className="group flex items-start hover:bg-muted/50 px-3">
+    <div className="group relative flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <UserName pubkey={message.author} className="font-semibold text-sm" />
@@ -373,6 +379,11 @@ const MessageItem = memo(function MessageItem({
             </span>
           )}
         </div>
+        {/* Reactions display - lazy loaded per message */}
+        <MessageReactions
+          messageId={message.id}
+          relayUrl={conversation.metadata?.relayUrl}
+        />
       </div>
     </div>
   );
