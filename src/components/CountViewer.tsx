@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { RelayLink } from "./nostr/RelayLink";
 import { UserName } from "./nostr/UserName";
 import { KindBadge } from "./KindBadge";
@@ -25,7 +26,7 @@ import {
 } from "./ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { NostrFilter } from "@/types/nostr";
-import { resolveFilterAliases } from "@/lib/nostr-utils";
+import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
 import {
   formatTimeRange,
   formatHashtags,
@@ -506,16 +507,37 @@ export default function CountViewer({
   needsAccount,
 }: CountViewerProps) {
   const { state } = useGrimoire();
+  const accountPubkey = state.activeAccount?.pubkey;
+
+  // Create pointer for contact list (kind 3) if we need to resolve $contacts
+  const contactPointer = useMemo(
+    () =>
+      needsAccount && accountPubkey
+        ? { kind: 3, pubkey: accountPubkey, identifier: "" }
+        : undefined,
+    [needsAccount, accountPubkey],
+  );
+
+  // Fetch contact list (kind 3) if needed for $contacts resolution
+  const contactListEvent = useNostrEvent(contactPointer);
+
+  // Extract contacts from kind 3 event
+  const contacts = useMemo(
+    () =>
+      contactListEvent
+        ? getTagValues(contactListEvent, "p").filter((pk) => pk.length === 64)
+        : [],
+    [contactListEvent],
+  );
 
   // Resolve $me and $contacts aliases
-  const filter = useMemo(() => {
-    if (!needsAccount) return rawFilter;
-
-    const pubkey = state.activeAccount?.pubkey;
-    // For COUNT, we don't have contacts loaded, so just resolve $me
-    // $contacts would need to be resolved at parse time
-    return resolveFilterAliases(rawFilter, pubkey, []);
-  }, [rawFilter, needsAccount, state.activeAccount?.pubkey]);
+  const filter = useMemo(
+    () =>
+      needsAccount
+        ? resolveFilterAliases(rawFilter, accountPubkey, contacts)
+        : rawFilter,
+    [needsAccount, rawFilter, accountPubkey, contacts],
+  );
 
   const { results, loading, refresh } = useCount(filter, relays);
 
@@ -552,22 +574,40 @@ export default function CountViewer({
         <FilterSummary filter={filter} />
       </div>
 
-      {/* Results */}
-      <div className="flex-1 overflow-auto">
-        {isSingleRelay && singleResult ? (
-          <SingleRelayResult result={singleResult} />
-        ) : (
-          <div className="divide-y divide-border">
-            {relays.map((url) => {
-              const result = results.get(url) || {
-                url,
-                status: "pending" as const,
-              };
-              return <RelayResultRow key={url} result={result} />;
-            })}
+      {/* Account Required Message */}
+      {needsAccount && !accountPubkey && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-muted-foreground text-center">
+            <User className="size-12 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold mb-2">Account Required</h3>
+            <p className="text-sm max-w-md">
+              This query uses{" "}
+              <code className="bg-muted px-1.5 py-0.5">$me</code> or{" "}
+              <code className="bg-muted px-1.5 py-0.5">$contacts</code> aliases
+              and requires an active account.
+            </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {(!needsAccount || accountPubkey) && (
+        <div className="flex-1 overflow-auto">
+          {isSingleRelay && singleResult ? (
+            <SingleRelayResult result={singleResult} />
+          ) : (
+            <div className="divide-y divide-border">
+              {relays.map((url) => {
+                const result = results.get(url) || {
+                  url,
+                  status: "pending" as const,
+                };
+                return <RelayResultRow key={url} result={result} />;
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
