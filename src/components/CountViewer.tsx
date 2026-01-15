@@ -375,7 +375,6 @@ export default function CountViewer({
           {/* Mentions */}
           {pTagPubkeys.length > 0 && (
             <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">@</span>
               {pTagPubkeys.slice(0, 2).map((pubkey) => (
                 <UserName
                   key={pubkey}
@@ -425,44 +424,23 @@ export default function CountViewer({
             )}
         </div>
 
-        {/* Right: Controls */}
+        {/* Right: Controls - refresh, relays, filter */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* Filter Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                <FilterIcon className="size-3" />
+          {/* Refresh Button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={refresh}
+                disabled={loading}
+                className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`size-3 ${loading ? "animate-spin" : ""}`}
+                />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-0">
-              <div className="p-3 space-y-3">
-                <FilterSummaryBadges filter={filter} />
-                <Collapsible>
-                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
-                    <Code className="size-3" />
-                    Raw Query JSON
-                    <ChevronDown className="size-3 ml-auto" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="relative mt-2">
-                      <SyntaxHighlight
-                        code={JSON.stringify(filter, null, 2)}
-                        language="json"
-                        className="bg-muted/50 p-3 pr-10 overflow-x-auto border border-border/40 rounded text-[11px]"
-                      />
-                      <CodeCopyButton
-                        onCopy={() =>
-                          handleCopy(JSON.stringify(filter, null, 2))
-                        }
-                        copied={copied}
-                        label="Copy query JSON"
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </TooltipTrigger>
+            <TooltipContent>Refresh counts</TooltipContent>
+          </Tooltip>
 
           {/* Relay Dropdown with status */}
           <DropdownMenu>
@@ -542,21 +520,42 @@ export default function CountViewer({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Refresh Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={refresh}
-                disabled={loading}
-                className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-              >
-                <RefreshCw
-                  className={`size-3 ${loading ? "animate-spin" : ""}`}
-                />
+          {/* Filter Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <FilterIcon className="size-3" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent>Refresh counts</TooltipContent>
-          </Tooltip>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0">
+              <div className="p-3 space-y-3">
+                <FilterSummaryBadges filter={filter} />
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+                    <Code className="size-3" />
+                    Raw Query JSON
+                    <ChevronDown className="size-3 ml-auto" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="relative mt-2">
+                      <SyntaxHighlight
+                        code={JSON.stringify(filter, null, 2)}
+                        language="json"
+                        className="bg-muted/50 p-3 pr-10 overflow-x-auto border border-border/40 rounded text-[11px]"
+                      />
+                      <CodeCopyButton
+                        onCopy={() =>
+                          handleCopy(JSON.stringify(filter, null, 2))
+                        }
+                        copied={copied}
+                        label="Copy query JSON"
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
