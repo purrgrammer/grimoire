@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { use$ } from "applesauce-react/hooks";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,8 @@ import { EmojiSearchService } from "@/services/emoji-search";
 import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { EmojiTag } from "@/lib/emoji-helpers";
+import eventStore from "@/services/event-store";
+import accountManager from "@/services/accounts";
 
 interface EmojiPickerDialogProps {
   open: boolean;
@@ -66,16 +69,33 @@ export function EmojiPickerDialog({
   const [searchResults, setSearchResults] = useState<EmojiSearchResult[]>([]);
   const [emojiService] = useState(() => new EmojiSearchService());
 
-  // Initialize emoji service with unicode emojis
+  // Get active account
+  const activeAccount = use$(accountManager.active$);
+
+  // Load user's emoji list (kind 10030)
+  const userEmojiList = use$(
+    () =>
+      activeAccount?.pubkey
+        ? eventStore.replaceable(10030, activeAccount.pubkey, "")
+        : undefined,
+    [activeAccount?.pubkey],
+  );
+
+  // Initialize emoji service with unicode and custom emojis
   useEffect(() => {
     // Load unicode emojis
     emojiService.addUnicodeEmojis(UNICODE_EMOJIS);
+
+    // Load user's custom emoji list (kind 10030)
+    if (userEmojiList) {
+      emojiService.addUserEmojiList(userEmojiList);
+    }
 
     // Load context emojis (from conversation messages)
     for (const emoji of contextEmojis) {
       emojiService.addEmoji(emoji.shortcode, emoji.url, "context");
     }
-  }, [emojiService, contextEmojis]);
+  }, [emojiService, contextEmojis, userEmojiList]);
 
   // Search emojis when query changes
   useEffect(() => {
