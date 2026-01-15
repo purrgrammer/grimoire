@@ -42,75 +42,11 @@ export class GiftWrapError extends Error {
 }
 
 /**
- * Validates that an event has all required NostrEvent properties
- */
-function validateNostrEvent(event: any): void {
-  if (!event || typeof event !== "object") {
-    throw new GiftWrapError("Event is not an object", "INVALID_EVENT");
-  }
-
-  // Required string fields
-  if (typeof event.id !== "string" || !/^[0-9a-f]{64}$/i.test(event.id)) {
-    throw new GiftWrapError(
-      `Invalid event.id: ${typeof event.id === "string" ? event.id.slice(0, 16) : typeof event.id}`,
-      "INVALID_EVENT",
-    );
-  }
-
-  if (
-    typeof event.pubkey !== "string" ||
-    !/^[0-9a-f]{64}$/i.test(event.pubkey)
-  ) {
-    throw new GiftWrapError(
-      `Invalid event.pubkey: ${typeof event.pubkey === "string" ? event.pubkey.slice(0, 16) : typeof event.pubkey}`,
-      "INVALID_EVENT",
-    );
-  }
-
-  if (typeof event.sig !== "string" || !/^[0-9a-f]{128}$/i.test(event.sig)) {
-    throw new GiftWrapError(
-      `Invalid event.sig: ${typeof event.sig === "string" ? event.sig.slice(0, 16) : typeof event.sig}`,
-      "INVALID_EVENT",
-    );
-  }
-
-  // Required number fields
-  if (typeof event.created_at !== "number" || event.created_at < 0) {
-    throw new GiftWrapError(
-      `Invalid event.created_at: ${event.created_at}`,
-      "INVALID_EVENT",
-    );
-  }
-
-  if (typeof event.kind !== "number") {
-    throw new GiftWrapError(
-      `Invalid event.kind: ${event.kind}`,
-      "INVALID_EVENT",
-    );
-  }
-
-  // Gift wrap specific validation
-  if (event.kind !== 1059) {
-    throw new GiftWrapError(
-      `Expected kind 1059, got ${event.kind}`,
-      "INVALID_KIND",
-    );
-  }
-
-  // Required array field
-  if (!Array.isArray(event.tags)) {
-    throw new GiftWrapError("Event.tags is not an array", "INVALID_EVENT");
-  }
-
-  // Required string content (non-empty for gift wraps)
-  if (typeof event.content !== "string" || event.content.trim() === "") {
-    throw new GiftWrapError("Event.content is empty", "MISSING_CONTENT");
-  }
-}
-
-/**
  * Unwraps a gift wrap and unseals to extract the rumor (full process)
  * Uses applesauce-common unlockGiftWrap helper
+ *
+ * Note: Rumors are unsigned events (no sig field) - this is by design in NIP-59.
+ * Applesauce handles all validation internally.
  *
  * @param giftWrap - Kind 1059 gift wrap event
  * @param signer - Signer for recipient (to decrypt)
@@ -120,10 +56,8 @@ export async function unwrapAndUnseal(
   giftWrap: NostrEvent,
   signer: ISigner,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
-  // Validate event structure before attempting to decrypt
-  validateNostrEvent(giftWrap);
-
   // Use applesauce helper to unlock the gift wrap
+  // This handles all validation internally
   const rumor = await unlockGiftWrap(giftWrap, signer);
 
   // Get the seal from the unlocked gift wrap
