@@ -79,6 +79,7 @@ import {
   shouldAnimate,
 } from "@/lib/req-state-machine";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
+import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
 import type { ViewMode } from "@/lib/req-parser";
@@ -141,8 +142,6 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
     (dTags?.length || 0) +
     genericTags.reduce((sum, tag) => sum + tag.values.length, 0);
 
-  const mentionCount = pTagPubkeys.length;
-
   // Determine if we should use accordion for complex queries
   const isComplexQuery =
     (filter.kinds?.length || 0) +
@@ -154,45 +153,7 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
   return (
     <div className="border-b border-border px-4 py-3 bg-muted/30 space-y-3">
       {/* Summary Header */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-        {filter.kinds && filter.kinds.length > 0 && (
-          <span className="flex items-center gap-1.5">
-            <FileText className="size-3.5" />
-            {filter.kinds.length} kind{filter.kinds.length !== 1 ? "s" : ""}
-          </span>
-        )}
-        {authorPubkeys.length > 0 && (
-          <span className="flex items-center gap-1.5">
-            <User className="size-3.5" />
-            {authorPubkeys.length} author
-            {authorPubkeys.length !== 1 ? "s" : ""}
-          </span>
-        )}
-        {mentionCount > 0 && (
-          <span className="flex items-center gap-1.5">
-            <User className="size-3.5" />
-            {mentionCount} mention{mentionCount !== 1 ? "s" : ""}
-          </span>
-        )}
-        {(filter.since || filter.until) && (
-          <span className="flex items-center gap-1.5">
-            <Clock className="size-3.5" />
-            time range
-          </span>
-        )}
-        {filter.search && (
-          <span className="flex items-center gap-1.5">
-            <Search className="size-3.5" />
-            search
-          </span>
-        )}
-        {tagCount > 0 && (
-          <span className="flex items-center gap-1.5">
-            <Hash className="size-3.5" />
-            {tagCount} tag{tagCount !== 1 ? "s" : ""}
-          </span>
-        )}
-      </div>
+      <FilterSummaryBadges filter={filter} />
 
       {isComplexQuery ? (
         /* Accordion for complex queries */
