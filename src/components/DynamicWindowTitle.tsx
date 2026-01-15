@@ -430,6 +430,22 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const reqHashtags =
     appId === "req" && props.filter?.["#t"] ? props.filter["#t"] : [];
 
+  // Fetch profiles for COUNT authors and tagged users (up to 2 each)
+  const countAuthors =
+    appId === "count" && props.filter?.authors ? props.filter.authors : [];
+  const [countAuthor1Pubkey, countAuthor2Pubkey] = countAuthors;
+  const countAuthor1Profile = useProfile(countAuthor1Pubkey);
+  const countAuthor2Profile = useProfile(countAuthor2Pubkey);
+
+  const countTagged =
+    appId === "count" && props.filter?.["#p"] ? props.filter["#p"] : [];
+  const [countTagged1Pubkey, countTagged2Pubkey] = countTagged;
+  const countTagged1Profile = useProfile(countTagged1Pubkey);
+  const countTagged2Profile = useProfile(countTagged2Pubkey);
+
+  const countHashtags =
+    appId === "count" && props.filter?.["#t"] ? props.filter["#t"] : [];
+
   // REQ titles
   const reqTitle = useMemo(() => {
     if (appId !== "req") return null;
@@ -544,6 +560,77 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     tagged2Profile,
     taggedUpper1Profile,
     taggedUpper2Profile,
+    accountProfile,
+    contactsCount,
+  ]);
+
+  // COUNT titles
+  const countTitle = useMemo(() => {
+    if (appId !== "count") return null;
+    const { filter } = props;
+    if (!filter) return "COUNT";
+
+    // Generate a descriptive title from the filter
+    const parts: string[] = [];
+
+    // 1. Kinds
+    if (filter.kinds && filter.kinds.length > 0) {
+      const kindNames = filter.kinds.map((k: number) => getKindName(k));
+      if (kindNames.length <= 3) {
+        parts.push(kindNames.join(", "));
+      } else {
+        parts.push(
+          `${kindNames.slice(0, 3).join(", ")}, +${kindNames.length - 3}`,
+        );
+      }
+    }
+
+    // 2. Hashtags (#t)
+    if (filter["#t"] && filter["#t"].length > 0) {
+      const hashtagText = formatHashtags("#", countHashtags);
+      if (hashtagText) parts.push(hashtagText);
+    }
+
+    // 3. Mentions (#p)
+    if (filter["#p"] && filter["#p"].length > 0) {
+      const taggedText = formatProfileNames(
+        "@",
+        countTagged,
+        [countTagged1Profile, countTagged2Profile],
+        accountProfile,
+        contactsCount,
+      );
+      if (taggedText) parts.push(taggedText);
+    }
+
+    // 4. Authors
+    if (filter.authors && filter.authors.length > 0) {
+      const authorsText = formatProfileNames(
+        "by ",
+        countAuthors,
+        [countAuthor1Profile, countAuthor2Profile],
+        accountProfile,
+        contactsCount,
+      );
+      if (authorsText) parts.push(authorsText);
+    }
+
+    // 5. Search
+    if (filter.search) {
+      parts.push(`"${filter.search}"`);
+    }
+
+    return parts.length > 0 ? parts.join(" • ") : "COUNT";
+  }, [
+    appId,
+    props,
+    countAuthors,
+    countTagged,
+    countHashtags,
+    countAuthor1Profile,
+    countAuthor2Profile,
+    countTagged1Profile,
+    countTagged2Profile,
     accountProfile,
     contactsCount,
   ]);
@@ -694,6 +781,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = reqTitle;
       icon = getCommandIcon("req");
       tooltip = rawCommand;
+    } else if (countTitle) {
+      title = countTitle;
+      icon = getCommandIcon("count");
+      tooltip = rawCommand;
     } else if (encodeTitle) {
       title = encodeTitle;
       icon = getCommandIcon("encode");
@@ -743,6 +834,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     kindTitle,
     relayTitle,
     reqTitle,
+    countTitle,
     encodeTitle,
     decodeTitle,
     nipTitle,
