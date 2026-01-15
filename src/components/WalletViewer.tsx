@@ -23,6 +23,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMemo, useState, useCallback } from "react";
 import accountManager from "@/services/accounts";
+import pool from "@/services/relay-pool";
+import type { NostrEvent } from "nostr-tools";
 import {
   decryptWalletConfig,
   decryptUnspentTokens,
@@ -110,6 +112,66 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
   // Get active account from accountManager
   const activeAccount = use$(accountManager.active$);
 
+  // Fetch token events from specific relays
+  const fetchTokensFromRelays = useCallback(
+    async (relays: string[], pubkey: string) => {
+      console.log(
+        `[WalletViewer] Fetching tokens from ${relays.length} relay(s)...`,
+      );
+
+      return new Promise<NostrEvent[]>((resolve) => {
+        const events: NostrEvent[] = [];
+        const timeout = setTimeout(() => {
+          console.log(
+            `[WalletViewer] Fetch timeout, got ${events.length} events`,
+          );
+          resolve(events);
+        }, 10000); // 10 second timeout
+
+        const observable = pool.subscription(
+          relays,
+          [
+            {
+              kinds: [7375],
+              authors: [pubkey],
+            },
+          ],
+          {
+            eventStore: eventStore,
+          },
+        );
+
+        const subscription = observable.subscribe({
+          next: (event: NostrEvent | string) => {
+            if (typeof event === "string") {
+              // EOSE marker
+              if (event === "EOSE") {
+                console.log(
+                  `[WalletViewer] EOSE received, got ${events.length} total events`,
+                );
+                clearTimeout(timeout);
+                subscription.unsubscribe();
+                resolve(events);
+              }
+            } else {
+              console.log(
+                "[WalletViewer] Got token event from relay:",
+                event.id,
+              );
+              events.push(event);
+            }
+          },
+          error: (error) => {
+            console.error("[WalletViewer] Subscription error:", error);
+            clearTimeout(timeout);
+            resolve(events);
+          },
+        });
+      });
+    },
+    [eventStore],
+  );
+
   // Manual decrypt function
   const decryptWalletData = useCallback(async () => {
     if (!activeAccount?.nip44) {
@@ -130,48 +192,88 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
 
     try {
       // Decrypt wallet config
+      let config: WalletConfig | null = null;
       if (walletConfigEvent) {
         console.log("[WalletViewer] Decrypting wallet config...");
-        const config = await decryptWalletConfig(
-          walletConfigEvent,
-          activeAccount,
-        );
+        config = await decryptWalletConfig(walletConfigEvent, activeAccount);
         if (config) {
           console.log(
             "[WalletViewer] Wallet config decrypted successfully:",
             config,
           );
           setWalletConfig(config);
+
+          // If wallet has specific relays configured, fetch token events from those relays
+          if (config.relays && config.relays.length > 0 && resolvedPubkey) {
+            console.log(
+              `[WalletViewer] Fetching token events from ${config.relays.length} wallet relay(s)...`,
+            );
+            const fetchedEvents = await fetchTokensFromRelays(
+              config.relays,
+              resolvedPubkey,
+            );
+            console.log(
+              `[WalletViewer] Fetched ${fetchedEvents.length} token event(s) from wallet relays`,
+            );
+
+            // Decrypt the fetched events
+            if (fetchedEvents.length > 0) {
+              const decryptedTokens: UnspentTokens[] = [];
+              for (const event of fetchedEvents) {
+                const tokens = await decryptUnspentTokens(event, activeAccount);
+                if (tokens) {
+                  console.log("[WalletViewer] Token event decrypted:", tokens);
+                  decryptedTokens.push(tokens);
+                } else {
+                  console.warn(
+                    "[WalletViewer] Token event decryption returned null:",
+                    event.id,
+                  );
+                }
+              }
+              setUnspentTokens(decryptedTokens);
+              console.log(
+                `[WalletViewer] Total ${decryptedTokens.length} token event(s) decrypted from wallet relays`,
+              );
+            }
+          }
         } else {
           console.warn("[WalletViewer] Wallet config decryption returned null");
         }
       }
 
-      // Decrypt token events
-      if (tokenEvents && tokenEvents.length > 0) {
+      // Fall back to decrypting token events from default timeline if no wallet relays
+      if (!config || !config.relays || config.relays.length === 0) {
         console.log(
-          `[WalletViewer] Decrypting ${tokenEvents.length} token event(s)...`,
+          "[WalletViewer] No wallet relays, using default token events",
         );
-        const decryptedTokens: UnspentTokens[] = [];
-        for (const event of tokenEvents) {
-          const tokens = await decryptUnspentTokens(event, activeAccount);
-          if (tokens) {
-            console.log("[WalletViewer] Token event decrypted:", tokens);
-            decryptedTokens.push(tokens);
-          } else {
-            console.warn(
-              "[WalletViewer] Token event decryption returned null:",
-              event.id,
-            );
+
+        // Decrypt token events from default timeline
+        if (tokenEvents && tokenEvents.length > 0) {
+          console.log(
+            `[WalletViewer] Decrypting ${tokenEvents.length} token event(s)...`,
+          );
+          const decryptedTokens: UnspentTokens[] = [];
+          for (const event of tokenEvents) {
+            const tokens = await decryptUnspentTokens(event, activeAccount);
+            if (tokens) {
+              console.log("[WalletViewer] Token event decrypted:", tokens);
+              decryptedTokens.push(tokens);
+            } else {
+              console.warn(
+                "[WalletViewer] Token event decryption returned null:",
+                event.id,
+              );
+            }
           }
+          setUnspentTokens(decryptedTokens);
+          console.log(
+            `[WalletViewer] Total ${decryptedTokens.length} token event(s) decrypted`,
+          );
+        } else {
+          console.log("[WalletViewer] No token events to decrypt");
+          setUnspentTokens([]);
         }
-        setUnspentTokens(decryptedTokens);
-        console.log(
-          `[WalletViewer] Total ${decryptedTokens.length} token event(s) decrypted`,
-        );
-      } else {
-        console.log("[WalletViewer] No token events to decrypt");
-        setUnspentTokens([]);
       }
 
       // Decrypt history events
