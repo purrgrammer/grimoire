@@ -3,7 +3,6 @@ import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
-import type { NostrEvent } from "@/types/nostr";
 
 interface MessageReactionsProps {
   messageId: string;
