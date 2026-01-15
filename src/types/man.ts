@@ -325,14 +325,14 @@ export const manPages: Record<string, ManPageEntry> = {
   count: {
     name: "count",
     section: "1",
-    synopsis: "count <relay...> [options]",
+    synopsis: "count [options] <relay...>",
     description:
       "Count events on Nostr relays using the NIP-45 COUNT verb. Returns event counts matching specified filter criteria. At least one relay is required. If querying multiple relays, shows per-relay breakdown.",
     options: [
       {
         flag: "<relay...>",
         description:
-          "Relay URLs to query (required, at least one). Supports wss://relay.com or shorthand: relay.com",
+          "Relay URLs to query (required, at least one). Can appear anywhere in the command. Supports wss://relay.com or shorthand: relay.com",
       },
       {
         flag: "-k, --kind <number>",
