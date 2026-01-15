@@ -83,9 +83,9 @@ export function WindowToolbar({
   const handleTurnIntoSpell = () => {
     if (!window) return;
 
-    // Only available for REQ windows
-    if (window.appId !== "req") {
-      toast.error("Only REQ windows can be turned into spells");
+    // Only available for REQ and COUNT windows
+    if (window.appId !== "req" && window.appId !== "count") {
+      toast.error("Only REQ and COUNT windows can be turned into spells");
       return;
     }
 
@@ -123,12 +123,14 @@ export function WindowToolbar({
     toast.success("NIP markdown copied to clipboard");
   };
 
-  // Check if this is a REQ window for spell creation
+  // Check if this is a REQ or COUNT window for spell creation
   const isReqWindow = window?.appId === "req";
+  const isCountWindow = window?.appId === "count";
+  const isSpellableWindow = isReqWindow || isCountWindow;
 
-  // Get REQ command for spell dialog
-  const reqCommand =
-    isReqWindow && window
+  // Get command for spell dialog
+  const spellCommand =
+    isSpellableWindow && window
       ? window.commandString ||
         reconstructReqCommand(
           window.props?.filter || {},
@@ -136,6 +138,7 @@ export function WindowToolbar({
           undefined,
           undefined,
           window.props?.closeOnEose,
+          isCountWindow ? "COUNT" : "REQ",
         )
       : "";
 
@@ -216,8 +219,8 @@ export function WindowToolbar({
                 </>
               )}
 
-              {/* REQ-specific actions */}
-              {isReqWindow && (
+              {/* REQ/COUNT-specific actions */}
+              {isSpellableWindow && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleTurnIntoSpell}>
@@ -230,12 +233,12 @@ export function WindowToolbar({
           </DropdownMenu>
 
           {/* Spell Dialog */}
-          {isReqWindow && (
+          {isSpellableWindow && (
             <SpellDialog
               open={showSpellDialog}
               onOpenChange={setShowSpellDialog}
               mode="create"
-              initialCommand={reqCommand}
+              initialCommand={spellCommand}
               onSuccess={() => {
                 toast.success("Spell published successfully!");
               }}

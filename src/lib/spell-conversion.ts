@@ -49,7 +49,19 @@ function tokenizeCommand(command: string): string[] {
 }
 
 /**
- * Encode a REQ command as spell event tags
+ * Detect command type from a command string
+ * Returns "REQ" or "COUNT" based on the command prefix
+ */
+export function detectCommandType(command: string): "REQ" | "COUNT" {
+  const trimmed = command.trim().toLowerCase();
+  if (trimmed.startsWith("count ") || trimmed === "count") {
+    return "COUNT";
+  }
+  return "REQ";
+}
+
+/**
+ * Encode a REQ or COUNT command as spell event tags
  *
  * Parses the command and extracts filter parameters into Nostr tags.
  * Preserves relative timestamps (7d, now) for dynamic spell behavior.
@@ -66,10 +78,15 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
     throw new Error("Spell command is required");
   }
 
+  // Detect command type (REQ or COUNT)
+  const cmdType = detectCommandType(command);
+
   // Parse the command to extract filter components
-  // Remove "req" prefix if present and tokenize
-  const commandWithoutReq = command.replace(/^\s*req\s+/, "");
-  const tokens = tokenizeCommand(commandWithoutReq);
+  // Remove "req" or "count" prefix if present and tokenize
+  const commandWithoutPrefix = command
+    .replace(/^\s*(req|count)\s+/i, "")
+    .trim();
+  const tokens = tokenizeCommand(commandWithoutPrefix);
 
   // Validate we have tokens to parse
   if (tokens.length === 0) {
@@ -98,7 +115,7 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
 
   // Start with required tags
   const tags: [string, string, ...string[]][] = [
-    ["cmd", "REQ"],
+    ["cmd", cmdType],
     ["client", "grimoire"],
   ];
 
@@ -109,8 +126,8 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
 
   // Add alt tag for NIP-31 compatibility
   const altText = description
-    ? `Grimoire REQ spell: ${description.substring(0, 100)}`
-    : "Grimoire REQ spell";
+    ? `Grimoire ${cmdType} spell: ${description.substring(0, 100)}`
+    : `Grimoire ${cmdType} spell`;
   tags.push(["alt", altText]);
 
   // Add provenance if forked
@@ -246,7 +263,7 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
 
   // Validate cmd tag
   const cmd = tagMap.get("cmd")?.[0];
-  if (cmd !== "REQ") {
+  if (cmd !== "REQ" && cmd !== "COUNT") {
     throw new Error(`Invalid spell command type: ${cmd}`);
   }
 
@@ -326,8 +343,15 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
   const relays = tagMap.get("relays");
   const closeOnEose = tagMap.has("close-on-eose");
 
-  // Reconstruct command string
-  const command = reconstructCommand(filter, relays, since, until, closeOnEose);
+  // Reconstruct command string with appropriate command type
+  const command = reconstructCommand(
+    filter,
+    relays,
+    since,
+    until,
+    closeOnEose,
+    cmd as "REQ" | "COUNT",
+  );
 
   return {
     name,
@@ -343,7 +367,7 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
 }
 
 /**
- * Reconstruct a canonical REQ command string from filter components
+ * Reconstruct a canonical command string from filter components
  */
 export function reconstructCommand(
   filter: NostrFilter,
@@ -351,8 +375,9 @@ export function reconstructCommand(
   since?: string,
   until?: string,
   closeOnEose?: boolean,
+  cmdType: "REQ" | "COUNT" = "REQ",
 ): string {
-  const parts: string[] = ["req"];
+  const parts: string[] = [cmdType.toLowerCase()];
 
   // Kinds
   if (filter.kinds && filter.kinds.length > 0) {

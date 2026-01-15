@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 import { parseReqCommand } from "@/lib/req-parser";
-import { reconstructCommand } from "@/lib/spell-conversion";
+import { reconstructCommand, detectCommandType } from "@/lib/spell-conversion";
 import type { ParsedSpell, SpellEvent } from "@/types/spell";
 import { Loader2 } from "lucide-react";
 import { saveSpell } from "@/services/spell-storage";
@@ -29,9 +29,12 @@ function filterSpellCommand(command: string): string {
   if (!command) return "";
 
   try {
-    // Parse the command
-    const commandWithoutReq = command.replace(/^\s*req\s+/, "");
-    const tokens = commandWithoutReq.split(/\s+/);
+    // Detect command type (REQ or COUNT)
+    const cmdType = detectCommandType(command);
+
+    // Parse the command - remove prefix first
+    const commandWithoutPrefix = command.replace(/^\s*(req|count)\s+/i, "");
+    const tokens = commandWithoutPrefix.split(/\s+/);
 
     // Parse to get filter and relays
     const parsed = parseReqCommand(tokens);
@@ -43,6 +46,7 @@ function filterSpellCommand(command: string): string {
       undefined,
       undefined,
       parsed.closeOnEose,
+      cmdType,
     );
   } catch {
     // If parsing fails, return original
@@ -245,7 +249,7 @@ export function SpellDialog({
           setErrorMessage("Signing was rejected. Please try again.");
         } else if (error.message.includes("No command provided")) {
           setErrorMessage(
-            "No command to save. Please try again from a REQ window.",
+            "No command to save. Please try again from a REQ or COUNT window.",
           );
         } else {
           setErrorMessage(error.message);
@@ -274,7 +278,7 @@ export function SpellDialog({
           </DialogTitle>
           <DialogDescription>
             {mode === "create"
-              ? "Save this REQ command as a spell. You can save it locally or publish it to Nostr relays."
+              ? "Save this command as a spell. You can save it locally or publish it to Nostr relays."
               : "Edit your spell and republish it to relays."}
           </DialogDescription>
         </DialogHeader>
