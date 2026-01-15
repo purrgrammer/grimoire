@@ -180,10 +180,12 @@ function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
         <img
           src={reaction.customEmoji.url}
           alt={`:${reaction.customEmoji.shortcode}:`}
-          className="size-3.5 inline-block object-contain"
+          className="size-3.5 flex-shrink-0 object-contain"
         />
       ) : (
-        <span className="text-xs leading-none">{reaction.emoji}</span>
+        <span className="text-xs leading-none flex-shrink-0">
+          {reaction.emoji}
+        </span>
       )}
       <span
         className={cn(
