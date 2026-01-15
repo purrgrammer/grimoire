@@ -176,12 +176,12 @@ export function EmojiPickerDialog({
                 title={`:${result.shortcode}:`}
               >
                 {result.source === "unicode" ? (
-                  <span className="text-2xl leading-none">{result.url}</span>
+                  <span className="text-xl leading-none">{result.url}</span>
                 ) : (
                   <img
                     src={result.url}
                     alt={`:${result.shortcode}:`}
-                    className="w-6 h-6 object-contain"
+                    className="size-5 object-contain"
                   />
                 )}
               </button>
