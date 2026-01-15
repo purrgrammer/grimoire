@@ -44,12 +44,19 @@ function ReleaseItem({ release }: { release: NostrEvent }) {
   const version = getReleaseVersion(release);
   const fileEventId = getReleaseFileEventId(release);
 
+  // Get relay hints from the release event
+  const releaseSeenRelays = getSeenRelays(release);
+  const relayHints = releaseSeenRelays
+    ? Array.from(releaseSeenRelays).slice(0, 3)
+    : [];
+
   const handleClick = () => {
     addWindow("open", {
       pointer: {
         kind: release.kind,
         pubkey: release.pubkey,
         identifier: release.tags.find((t) => t[0] === "d")?.[1] || "",
+        relays: relayHints,
       },
     });
   };
@@ -57,7 +64,9 @@ function ReleaseItem({ release }: { release: NostrEvent }) {
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (fileEventId) {
-      addWindow("open", { pointer: { id: fileEventId } });
+      addWindow("open", {
+        pointer: { id: fileEventId, relays: relayHints },
+      });
     }
   };
 
@@ -231,8 +240,16 @@ export function ZapstoreAppDetailRenderer({
   const latestVersion = latestRelease ? getReleaseVersion(latestRelease) : null;
 
   const handleDownloadLatest = () => {
-    if (latestFileEventId) {
-      addWindow("open", { pointer: { id: latestFileEventId } });
+    if (latestFileEventId && latestRelease) {
+      // Get relay hints from the release event (where we found it)
+      const releaseSeenRelays = getSeenRelays(latestRelease);
+      const relayHints = releaseSeenRelays
+        ? Array.from(releaseSeenRelays).slice(0, 3)
+        : relays.slice(0, 3);
+
+      addWindow("open", {
+        pointer: { id: latestFileEventId, relays: relayHints },
+      });
     }
   };
 

@@ -101,8 +101,16 @@ export function ZapstoreAppRenderer({ event }: BaseEventProps) {
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (latestFileEventId) {
-      addWindow("open", { pointer: { id: latestFileEventId } });
+    if (latestFileEventId && latestRelease) {
+      // Get relay hints from the release event (where we found it)
+      const releaseSeenRelays = getSeenRelays(latestRelease);
+      const relayHints = releaseSeenRelays
+        ? Array.from(releaseSeenRelays).slice(0, 3)
+        : relays.slice(0, 3);
+
+      addWindow("open", {
+        pointer: { id: latestFileEventId, relays: relayHints },
+      });
     }
   };
 
