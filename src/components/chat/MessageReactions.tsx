@@ -1,7 +1,9 @@
 import { useMemo, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
+import { cn } from "@/lib/utils";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import accountManager from "@/services/accounts";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 
 interface MessageReactionsProps {
@@ -149,9 +151,13 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
  * Single reaction badge with tooltip showing who reacted
  */
 function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
+  // Get active user to check if they reacted
+  const activeAccount = use$(accountManager.active$);
+  const hasUserReacted = activeAccount?.pubkey
+    ? reaction.pubkeys.includes(activeAccount.pubkey)
+    : false;
+
   // Build tooltip with emoji and truncated pubkeys
-  // Note: Could be enhanced to load profiles, but for simplicity and performance
-  // we show truncated pubkeys. Profiles are already loaded in the chat UI context.
   const tooltip = useMemo(() => {
     // Truncate pubkeys to first 8 chars for readability
     const pubkeyList = reaction.pubkeys
@@ -179,7 +185,15 @@ function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
       ) : (
         <span className="text-xs">{reaction.emoji}</span>
       )}
-      <span className="text-muted-foreground">{reaction.count}</span>
+      <span
+        className={cn(
+          hasUserReacted
+            ? "text-highlight font-semibold"
+            : "text-muted-foreground",
+        )}
+      >
+        {reaction.count}
+      </span>
     </span>
   );
 }

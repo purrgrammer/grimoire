@@ -1,11 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { use$ } from "applesauce-react/hooks";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { EmojiSearchService } from "@/services/emoji-search";
@@ -83,28 +78,36 @@ export function EmojiPickerDialog({
 
   // Initialize emoji service with unicode and custom emojis
   useEffect(() => {
-    // Load unicode emojis
-    emojiService.addUnicodeEmojis(UNICODE_EMOJIS);
+    const loadEmojis = async () => {
+      // Clear and rebuild index on every change to ensure fresh state
+      emojiService.clearCustom(); // Clear custom emoji but keep unicode
 
-    // Load user's custom emoji list (kind 10030)
-    if (userEmojiList) {
-      emojiService.addUserEmojiList(userEmojiList);
-    }
+      // Load unicode emojis (clearCustom keeps these, but add in case of first load)
+      await emojiService.addUnicodeEmojis(UNICODE_EMOJIS);
 
-    // Load context emojis (from conversation messages)
-    for (const emoji of contextEmojis) {
-      emojiService.addEmoji(emoji.shortcode, emoji.url, "context");
-    }
-  }, [emojiService, contextEmojis, userEmojiList]);
+      // Load user's custom emoji list (kind 10030)
+      if (userEmojiList) {
+        console.log(
+          "[EmojiPickerDialog] Loading user emoji list",
+          userEmojiList,
+        );
+        await emojiService.addUserEmojiList(userEmojiList);
+      }
 
-  // Search emojis when query changes
-  useEffect(() => {
-    const search = async () => {
+      // Load context emojis (from conversation messages)
+      for (const emoji of contextEmojis) {
+        await emojiService.addEmoji(emoji.shortcode, emoji.url, "context");
+      }
+
+      console.log("[EmojiPickerDialog] Emoji service size:", emojiService.size);
+
+      // Trigger initial search
       const results = await emojiService.search(searchQuery, { limit: 48 });
       setSearchResults(results);
     };
-    search();
-  }, [searchQuery, emojiService]);
+
+    loadEmojis();
+  }, [emojiService, contextEmojis, userEmojiList, searchQuery]);
 
   // Get frequently used emojis from history
   const frequentlyUsed = useMemo(() => {
@@ -143,10 +146,6 @@ export function EmojiPickerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>React with emoji</DialogTitle>
-        </DialogHeader>
-
         {/* Quick reaction bar */}
         <div className="flex gap-2 pb-3 border-b">
           {QUICK_REACTIONS.map((emoji) => (
@@ -154,7 +153,7 @@ export function EmojiPickerDialog({
               key={emoji}
               onClick={() => handleQuickReaction(emoji)}
               className="text-2xl hover:scale-125 transition-transform active:scale-110"
-              title={`React with ${emoji}`}
+              title={emoji}
             >
               {emoji}
             </button>
@@ -178,7 +177,7 @@ export function EmojiPickerDialog({
         {frequentlyUsed.length > 0 && (
           <div>
             <div className="text-xs text-muted-foreground mb-2 font-medium">
-              Frequently used
+              Recently used
             </div>
             <div className="grid grid-cols-8 gap-2">
               {frequentlyUsed.map((emoji) => (
