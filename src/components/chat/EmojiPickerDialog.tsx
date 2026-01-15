@@ -1,14 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { use$ } from "applesauce-react/hooks";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { EmojiSearchService } from "@/services/emoji-search";
-import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { EmojiTag } from "@/lib/emoji-helpers";
-import eventStore from "@/services/event-store";
-import accountManager from "@/services/accounts";
+import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 
 interface EmojiPickerDialogProps {
   open: boolean;
@@ -62,52 +58,28 @@ export function EmojiPickerDialog({
 }: EmojiPickerDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<EmojiSearchResult[]>([]);
-  const [emojiService] = useState(() => new EmojiSearchService());
 
-  // Get active account
-  const activeAccount = use$(accountManager.active$);
+  // Use the same emoji search hook as chat autocomplete
+  const { service } = useEmojiSearch();
 
-  // Load user's emoji list (kind 10030)
-  const userEmojiList = use$(
-    () =>
-      activeAccount?.pubkey
-        ? eventStore.replaceable(10030, activeAccount.pubkey, "")
-        : undefined,
-    [activeAccount?.pubkey],
-  );
-
-  // Initialize emoji service with unicode and custom emojis
+  // Add context emojis when they change
   useEffect(() => {
-    const loadEmojis = async () => {
-      // Clear and rebuild index on every change to ensure fresh state
-      emojiService.clearCustom(); // Clear custom emoji but keep unicode
-
-      // Load unicode emojis (clearCustom keeps these, but add in case of first load)
-      await emojiService.addUnicodeEmojis(UNICODE_EMOJIS);
-
-      // Load user's custom emoji list (kind 10030)
-      if (userEmojiList) {
-        console.log(
-          "[EmojiPickerDialog] Loading user emoji list",
-          userEmojiList,
-        );
-        await emojiService.addUserEmojiList(userEmojiList);
-      }
-
-      // Load context emojis (from conversation messages)
+    if (contextEmojis.length > 0) {
       for (const emoji of contextEmojis) {
-        await emojiService.addEmoji(emoji.shortcode, emoji.url, "context");
+        service.addEmoji(emoji.shortcode, emoji.url, "context");
       }
+    }
+  }, [contextEmojis, service]);
 
-      console.log("[EmojiPickerDialog] Emoji service size:", emojiService.size);
-
-      // Trigger initial search
-      const results = await emojiService.search(searchQuery, { limit: 48 });
+  // Perform search when query changes
+  useEffect(() => {
+    const performSearch = async () => {
+      // Use higher limit for dialog vs autocomplete (48 vs 24)
+      const results = await service.search(searchQuery, { limit: 48 });
       setSearchResults(results);
     };
-
-    loadEmojis();
-  }, [emojiService, contextEmojis, userEmojiList, searchQuery]);
+    performSearch();
+  }, [searchQuery, service]);
 
   // Get frequently used emojis from history
   const frequentlyUsed = useMemo(() => {
