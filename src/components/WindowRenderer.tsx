@@ -42,6 +42,9 @@ const SpellbooksViewer = lazy(() =>
 const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
+const InboxViewer = lazy(() =>
+  import("./InboxViewer").then((m) => ({ default: m.InboxViewer })),
+);
 const CountViewer = lazy(() => import("./CountViewer"));
 
 // Loading fallback component
@@ -219,6 +222,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sha256={window.props.sha256}
           />
         );
+        break;
+      case "inbox":
+        content = <InboxViewer />;
         break;
       default:
         content = (

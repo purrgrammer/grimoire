@@ -21,6 +21,7 @@ export type AppId =
   | "spells"
   | "spellbooks"
   | "blossom"
+  | "inbox"
   | "win";
 
 export interface WindowInstance {
@@ -112,7 +113,12 @@ export interface GrimoireState {
   };
   /**
    * Feature flag: Enable NIP-59 private messages (gift wraps)
-   * When enabled, gift wraps will be fetched from inbox relays and decrypted
+   * When enabled, gift wraps will be fetched from DM relays (kind 10050)
    */
   privateMessagesEnabled?: boolean;
+  /**
+   * Auto-decrypt gift wraps as they arrive
+   * When false, gift wraps are queued for manual decryption
+   */
+  autoDecryptGiftWraps?: boolean;
 }

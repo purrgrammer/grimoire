@@ -1,16 +1,18 @@
 /**
  * NIP-59 Gift Wrap Loader Service
  *
- * Loads gift wraps (kind 1059) from user's inbox relays and processes them.
+ * Loads gift wraps (kind 1059) from user's DM relays and processes them.
  * Gift wraps are private messages wrapped in multiple layers of encryption.
  *
  * Architecture:
- * - Fetches from inbox relays (NIP-65 read relays)
+ * - Fetches from DM relays (NIP-17: kind 10050)
  * - Requires NIP-42 AUTH for relay access
  * - Caches decryption results to avoid re-processing
+ * - Supports auto-decrypt or manual decrypt modes
  * - Updates conversation metadata for UI
  *
  * See: https://github.com/nostr-protocol/nips/blob/master/59.md
+ * See: https://github.com/nostr-protocol/nips/blob/master/17.md
  */
 
 import { BehaviorSubject, Observable } from "rxjs";
@@ -27,6 +29,7 @@ import db from "./db";
  */
 interface GiftWrapLoaderState {
   enabled: boolean;
+  autoDecrypt: boolean; // Auto-decrypt gift wraps as they arrive
   loading: boolean;
   recipientPubkey?: string;
   lastSync?: number;
@@ -40,6 +43,7 @@ interface GiftWrapLoaderState {
 class GiftWrapLoader {
   private state$ = new BehaviorSubject<GiftWrapLoaderState>({
     enabled: false,
+    autoDecrypt: false,
     loading: false,
     errorCount: 0,
   });
@@ -66,8 +70,13 @@ class GiftWrapLoader {
    *
    * @param recipientPubkey - The user's public key
    * @param signer - The user's signer (for decryption)
+   * @param autoDecrypt - Whether to auto-decrypt gift wraps as they arrive
    */
-  async enable(recipientPubkey: string, signer: Signer): Promise<void> {
+  async enable(
+    recipientPubkey: string,
+    signer: Signer,
+    autoDecrypt = false,
+  ): Promise<void> {
     // Stop any existing subscription
     this.disable();
 
@@ -76,10 +85,13 @@ class GiftWrapLoader {
     this.state$.next({
       ...this.state$.value,
       enabled: true,
+      autoDecrypt,
       recipientPubkey,
     });
 
-    console.log(`[GiftWrapLoader] Enabled for ${recipientPubkey.slice(0, 8)}`);
+    console.log(
+      `[GiftWrapLoader] Enabled for ${recipientPubkey.slice(0, 8)} (autoDecrypt: ${autoDecrypt})`,
+    );
 
     // Start loading
     await this.sync();
@@ -99,6 +111,7 @@ class GiftWrapLoader {
     this.state$.next({
       ...this.state$.value,
       enabled: false,
+      autoDecrypt: false,
       loading: false,
       recipientPubkey: undefined,
     });
@@ -196,12 +209,25 @@ class GiftWrapLoader {
       // Add to event store for tracking
       eventStore.add(event);
 
-      // Process (unwrap, unseal, cache)
-      await processGiftWrap(event, state.recipientPubkey, this.currentSigner);
-
-      console.log(
-        `[GiftWrapLoader] Processed gift wrap ${event.id.slice(0, 8)}`,
-      );
+      // If auto-decrypt is enabled, process immediately
+      if (state.autoDecrypt) {
+        await processGiftWrap(event, state.recipientPubkey, this.currentSigner);
+        console.log(
+          `[GiftWrapLoader] Auto-decrypted gift wrap ${event.id.slice(0, 8)}`,
+        );
+      } else {
+        // Otherwise, just store the envelope as pending
+        await db.giftWraps.put({
+          id: event.id,
+          recipientPubkey: state.recipientPubkey,
+          event,
+          status: "pending",
+          receivedAt: Date.now(),
+        });
+        console.log(
+          `[GiftWrapLoader] Stored gift wrap ${event.id.slice(0, 8)} for manual decryption`,
+        );
+      }
     } catch (error) {
       console.error(
         `[GiftWrapLoader] Failed to handle gift wrap ${event.id.slice(0, 8)}:`,
@@ -213,11 +239,13 @@ class GiftWrapLoader {
   /**
    * Processes pending gift wraps from database
    * (Gift wraps that were received but not yet decrypted)
+   * Only runs when autoDecrypt is enabled
    */
   private async processPendingGiftWraps(): Promise<void> {
     const state = this.state$.value;
 
-    if (!state.recipientPubkey || !this.currentSigner) {
+    // Only auto-process if autoDecrypt is enabled
+    if (!state.autoDecrypt || !state.recipientPubkey || !this.currentSigner) {
       return;
     }
 
@@ -228,7 +256,7 @@ class GiftWrapLoader {
     }
 
     console.log(
-      `[GiftWrapLoader] Processing ${pending.length} pending gift wraps`,
+      `[GiftWrapLoader] Auto-processing ${pending.length} pending gift wraps`,
     );
 
     for (const envelope of pending) {
@@ -248,18 +276,90 @@ class GiftWrapLoader {
   }
 
   /**
-   * Gets inbox relays for a user
+   * Manually decrypts all pending gift wraps
+   * Used when auto-decrypt is disabled
+   */
+  async decryptPending(): Promise<{
+    success: number;
+    failed: number;
+    total: number;
+  }> {
+    const state = this.state$.value;
+
+    if (!state.recipientPubkey || !this.currentSigner) {
+      console.warn("[GiftWrapLoader] Cannot decrypt: not enabled or no signer");
+      return { success: 0, failed: 0, total: 0 };
+    }
+
+    const pending = await getPendingGiftWraps(state.recipientPubkey);
+
+    if (pending.length === 0) {
+      return { success: 0, failed: 0, total: 0 };
+    }
+
+    console.log(
+      `[GiftWrapLoader] Manually decrypting ${pending.length} pending gift wraps`,
+    );
+
+    let success = 0;
+    let failed = 0;
+
+    for (const envelope of pending) {
+      try {
+        await processGiftWrap(
+          envelope.event,
+          state.recipientPubkey,
+          this.currentSigner,
+        );
+        success++;
+      } catch (error) {
+        console.error(
+          `[GiftWrapLoader] Failed to decrypt gift wrap ${envelope.id.slice(0, 8)}:`,
+          error,
+        );
+        failed++;
+      }
+    }
+
+    return { success, failed, total: pending.length };
+  }
+
+  /**
+   * Gets count of pending (undecrypted) gift wraps
+   */
+  async getPendingCount(recipientPubkey: string): Promise<number> {
+    return db.giftWraps
+      .where("[recipientPubkey+status]")
+      .equals([recipientPubkey, "pending"])
+      .count();
+  }
+
+  /**
+   * Gets DM relays for a user (kind 10050 per NIP-17)
    */
   private async getInboxRelays(pubkey: string): Promise<string[]> {
-    // Try cache first
+    // Try to get from event store - kind 10050 DM relay list
+    const event = eventStore.getReplaceable(10050, pubkey, "");
+    if (event) {
+      // Parse relay URLs from tags
+      const relays = event.tags
+        .filter((t) => t[0] === "relay" && t[1])
+        .map((t) => t[1]);
+
+      if (relays.length > 0) {
+        return relays;
+      }
+    }
+
+    // Fallback: try inbox relays from kind 10002
     let relays = await relayListCache.getInboxRelays(pubkey);
 
     if (!relays || relays.length === 0) {
       // Try to get from event store
-      const event = eventStore.getReplaceable(10002, pubkey, "");
-      if (event) {
+      const fallbackEvent = eventStore.getReplaceable(10002, pubkey, "");
+      if (fallbackEvent) {
         // Cache it
-        relayListCache.set(event);
+        relayListCache.set(fallbackEvent);
         relays = await relayListCache.getInboxRelays(pubkey);
       }
     }

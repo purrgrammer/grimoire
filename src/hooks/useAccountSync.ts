@@ -131,6 +131,7 @@ export function useAccountSync() {
   // Enable/disable gift wrap loader based on feature flag and active account
   useEffect(() => {
     const privateMessagesEnabled = state.privateMessagesEnabled ?? false;
+    const autoDecrypt = state.autoDecryptGiftWraps ?? false;
 
     if (
       privateMessagesEnabled &&
@@ -141,7 +142,11 @@ export function useAccountSync() {
       console.log(
         `[AccountSync] Enabling private messages for ${activeAccount.pubkey.slice(0, 8)}`,
       );
-      giftWrapLoader.enable(activeAccount.pubkey, activeAccount.signer);
+      giftWrapLoader.enable(
+        activeAccount.pubkey,
+        activeAccount.signer,
+        autoDecrypt,
+      );
     } else {
       // Disable gift wrap loading
       giftWrapLoader.disable();
@@ -153,6 +158,7 @@ export function useAccountSync() {
     };
   }, [
     state.privateMessagesEnabled,
+    state.autoDecryptGiftWraps,
     activeAccount?.pubkey,
     activeAccount?.signer,
   ]);

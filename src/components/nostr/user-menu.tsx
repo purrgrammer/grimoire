@@ -1,10 +1,12 @@
-import { User, HardDrive, Palette } from "lucide-react";
+import { User, HardDrive, Palette, Mail } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
+import { useLiveQuery } from "dexie-react-hooks";
+import giftWrapLoader from "@/services/gift-wrap-loader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +64,18 @@ export default function UserMenu() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
+
+  // Get pending gift wrap count
+  const pendingCount = useLiveQuery(async () => {
+    if (!account?.pubkey || !state.privateMessagesEnabled) return 0;
+    // Only show count if auto-decrypt is disabled
+    if (state.autoDecryptGiftWraps) return 0;
+    return giftWrapLoader.getPendingCount(account.pubkey);
+  }, [
+    account?.pubkey,
+    state.privateMessagesEnabled,
+    state.autoDecryptGiftWraps,
+  ]);
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -157,6 +171,23 @@ export default function UserMenu() {
                 </>
               )}
 
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  className="cursor-crosshair"
+                  onClick={() => {
+                    addWindow("inbox", {}, "Inbox");
+                  }}
+                >
+                  <Mail className="size-4 mr-2" />
+                  <span className="text-sm flex-1">Private Messages</span>
+                  {pendingCount != null && pendingCount > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-primary text-primary-foreground font-medium">
+                      {pendingCount}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">

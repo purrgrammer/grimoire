@@ -8,9 +8,7 @@ import type { NostrEvent } from "@/types/nostr";
 import type { Signer } from "applesauce-signers";
 
 // Mock signer for testing
-function createMockSigner(
-  decryptResponses: Map<string, string>,
-): Signer & {
+function createMockSigner(decryptResponses: Map<string, string>): Signer & {
   nip44Decrypt: (pubkey: string, ciphertext: string) => Promise<string>;
 } {
   return {
@@ -50,13 +48,13 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(new Map());
 
-      await expect(
-        unwrapAndUnseal(invalidGiftWrap, "recipient", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(invalidGiftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(invalidGiftWrap, "recipient", signer),
-      ).rejects.toThrow("Expected kind 1059");
+      await expect(unwrapAndUnseal(invalidGiftWrap, signer)).rejects.toThrow(
+        "Expected kind 1059",
+      );
     });
 
     it("should reject gift wrap with empty content", async () => {
@@ -72,13 +70,13 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(new Map());
 
-      await expect(
-        unwrapAndUnseal(emptyGiftWrap, "recipient", signer),
-      ).rejects.toThrow(GiftWrapError);
+      await expect(unwrapAndUnseal(emptyGiftWrap, signer)).rejects.toThrow(
+        GiftWrapError,
+      );
 
-      await expect(
-        unwrapAndUnseal(emptyGiftWrap, "recipient", signer),
-      ).rejects.toThrow("content is empty");
+      await expect(unwrapAndUnseal(emptyGiftWrap, signer)).rejects.toThrow(
+        "content is empty",
+      );
     });
   });
 
@@ -119,11 +117,7 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(decryptResponses);
 
-      const result = await unwrapAndUnseal(
-        giftWrap,
-        "recipient-pubkey",
-        signer,
-      );
+      const result = await unwrapAndUnseal(giftWrap, signer);
 
       expect(result.seal).toEqual(seal);
       expect(result.rumor.kind).toBe(1);
@@ -168,11 +162,7 @@ describe("unwrapAndUnseal", () => {
 
       const signer = createMockSigner(decryptResponses);
 
-      const result = await unwrapAndUnseal(
-        giftWrap,
-        "recipient-pubkey",
-        signer,
-      );
+      const result = await unwrapAndUnseal(giftWrap, signer);
 
       // Pubkey should be attached from seal
       expect(result.rumor.pubkey).toBe("sender-real-key");

@@ -700,4 +700,15 @@ export const manPages: Record<string, ManPageEntry> = {
     },
     defaultProps: { subcommand: "servers" },
   },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox",
+    description:
+      "Manage NIP-59 private messages (gift wraps). View encrypted conversations, configure privacy settings, and decrypt pending messages. Gift wraps provide metadata-obscured messaging using multiple layers of NIP-44 encryption. Messages are fetched from your DM relays (NIP-17: kind 10050).",
+    examples: ["inbox          View inbox and manage private message settings"],
+    seeAlso: ["chat", "profile"],
+    appId: "inbox",
+    category: "Nostr",
+  },
 };

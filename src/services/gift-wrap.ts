@@ -203,13 +203,11 @@ async function unsealSeal(
  * Unwraps a gift wrap and unseals to extract the rumor (full process)
  *
  * @param giftWrap - Kind 1059 gift wrap event
- * @param recipientPubkey - The recipient's public key
  * @param signer - Signer for recipient (to decrypt)
  * @returns Object with seal and rumor
  */
 export async function unwrapAndUnseal(
   giftWrap: NostrEvent,
-  recipientPubkey: string,
   signer: Signer,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
   // Step 1: Unwrap gift wrap to get seal
@@ -259,11 +257,7 @@ export async function processGiftWrap(
 
   try {
     // Unwrap and unseal
-    const { seal, rumor } = await unwrapAndUnseal(
-      giftWrap,
-      recipientPubkey,
-      signer,
-    );
+    const { seal, rumor } = await unwrapAndUnseal(giftWrap, signer);
 
     // Store decrypted rumor
     const decryptedRumor: DecryptedRumor = {
@@ -277,12 +271,12 @@ export async function processGiftWrap(
       decryptedAt: Date.now(),
     };
 
-    // Update envelope and store rumor in transaction
-    await db.transaction("rw", [db.giftWraps, db.decryptedRumors], async () => {
-      envelope.status = "decrypted";
-      await db.giftWraps.put(envelope);
-      await db.decryptedRumors.put(decryptedRumor);
-    });
+    // Update envelope status
+    envelope.status = "decrypted";
+    await db.giftWraps.put(envelope);
+
+    // Store decrypted rumor
+    await db.decryptedRumors.put(decryptedRumor);
 
     // Update conversation metadata
     await updateConversationMetadata(decryptedRumor);
