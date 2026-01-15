@@ -335,10 +335,7 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
     }
   }
 
-  // Validate: at least one relay is required
-  if (relays.length === 0) {
-    throw new Error("At least one relay is required for COUNT");
-  }
+  // Relays are optional - will use outbox model if not specified
 
   // Convert accumulated sets to filter arrays
   if (kinds.size > 0) filter.kinds = Array.from(kinds);

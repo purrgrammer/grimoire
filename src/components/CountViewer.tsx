@@ -14,8 +14,11 @@ import {
 import { firstValueFrom, timeout, catchError, of } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { useOutboxRelays } from "@/hooks/useOutboxRelays";
 import pool from "@/services/relay-pool";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { getRelayInfo } from "@/lib/nip11";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import { RelayLink } from "./nostr/RelayLink";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
 import { KindBadge } from "./KindBadge";
@@ -40,7 +43,7 @@ import type { Filter } from "nostr-tools";
 
 interface CountViewerProps {
   filter: NostrFilter;
-  relays: string[];
+  relays?: string[]; // Optional - uses outbox model if not specified
   needsAccount?: boolean;
 }
 
@@ -280,12 +283,16 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
 
 export default function CountViewer({
   filter: rawFilter,
-  relays,
+  relays: explicitRelays,
   needsAccount,
 }: CountViewerProps) {
   const { state } = useGrimoire();
   const accountPubkey = state.activeAccount?.pubkey;
   const { copy: handleCopy, copied } = useCopy();
+  const [nip45FilteredRelays, setNip45FilteredRelays] = useState<string[]>([]);
+  const [nip45FilterPhase, setNip45FilterPhase] = useState<
+    "idle" | "filtering" | "ready"
+  >("idle");
 
   // Create pointer for contact list (kind 3) if we need to resolve $contacts
   const contactPointer = useMemo(
@@ -317,7 +324,84 @@ export default function CountViewer({
     [needsAccount, rawFilter, accountPubkey, contacts],
   );
 
-  const { results, loading, refresh } = useCount(filter, relays);
+  // Fallback relays for outbox selection (user's read relays or aggregators)
+  const fallbackRelays = useMemo(
+    () =>
+      state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) ||
+      AGGREGATOR_RELAYS,
+    [state.activeAccount?.relays],
+  );
+
+  // Outbox options for relay selection
+  const outboxOptions = useMemo(
+    () => ({
+      fallbackRelays,
+      timeout: 1000,
+      maxRelays: 20, // Fewer relays for COUNT since it's one-shot
+    }),
+    [fallbackRelays],
+  );
+
+  // Use outbox model for relay selection when no explicit relays
+  const { relays: selectedRelays, phase: relaySelectionPhase } =
+    useOutboxRelays(explicitRelays ? {} : filter, outboxOptions);
+
+  // Filter relays by NIP-45 support
+  useEffect(() => {
+    // Skip if explicit relays provided or selection not ready
+    if (explicitRelays) {
+      setNip45FilteredRelays(explicitRelays);
+      setNip45FilterPhase("ready");
+      return;
+    }
+
+    if (relaySelectionPhase !== "ready" || selectedRelays.length === 0) {
+      setNip45FilterPhase("idle");
+      return;
+    }
+
+    // Filter by NIP-45 support
+    setNip45FilterPhase("filtering");
+
+    const filterByNip45 = async () => {
+      const results = await Promise.all(
+        selectedRelays.map(async (url) => {
+          const supported = await checkNip45Support(url);
+          // Include if supported or unknown (will error at request time)
+          return { url, include: supported !== false };
+        }),
+      );
+
+      const filtered = results
+        .filter((r) => r.include)
+        .map((r) => {
+          try {
+            return normalizeRelayURL(r.url);
+          } catch {
+            return r.url;
+          }
+        });
+
+      // Use fallback aggregators if no NIP-45 relays found
+      setNip45FilteredRelays(
+        filtered.length > 0 ? filtered : AGGREGATOR_RELAYS.slice(0, 3),
+      );
+      setNip45FilterPhase("ready");
+    };
+
+    filterByNip45();
+  }, [explicitRelays, selectedRelays, relaySelectionPhase]);
+
+  // Final relays to use
+  const relays = nip45FilteredRelays;
+  const isSelectingRelays =
+    !explicitRelays &&
+    (relaySelectionPhase !== "ready" || nip45FilterPhase !== "ready");
+
+  const { results, loading, refresh } = useCount(
+    filter,
+    isSelectingRelays ? [] : relays,
+  );
 
   const isSingleRelay = relays.length === 1;
   const singleResult = isSingleRelay ? results.get(relays[0]) : null;
@@ -575,8 +659,22 @@ export default function CountViewer({
         </div>
       )}
 
+      {/* Selecting Relays */}
+      {(!needsAccount || accountPubkey) && isSelectingRelays && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-muted-foreground text-center">
+            <Loader2 className="size-8 mx-auto mb-3 animate-spin" />
+            <p className="text-sm">
+              {nip45FilterPhase === "filtering"
+                ? "Filtering relays by NIP-45 support..."
+                : "Selecting relays..."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Results */}
-      {(!needsAccount || accountPubkey) && (
+      {(!needsAccount || accountPubkey) && !isSelectingRelays && (
         <div className="flex-1 overflow-auto">
           {isSingleRelay && singleResult ? (
             <SingleRelayResult result={singleResult} />
