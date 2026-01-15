@@ -9,11 +9,13 @@ import {
   Filter as FilterIcon,
   Code,
   ChevronDown,
+  Ban,
 } from "lucide-react";
 import { firstValueFrom, timeout, catchError, of } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import pool from "@/services/relay-pool";
+import { getRelayInfo } from "@/lib/nip11";
 import { RelayLink } from "./nostr/RelayLink";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
 import {
@@ -52,13 +54,42 @@ interface RelayCountResult {
 const COUNT_TIMEOUT = 10000; // 10 second timeout per relay
 
 /**
+ * Check if relay supports NIP-45 via NIP-11 relay info
+ * Returns: true = supported, false = not supported, null = unknown (couldn't fetch info)
+ */
+async function checkNip45Support(url: string): Promise<boolean | null> {
+  try {
+    const info = await getRelayInfo(url);
+    if (!info) return null; // Couldn't fetch relay info
+    if (!info.supported_nips) return null; // No NIP support info available
+    return info.supported_nips.includes(45);
+  } catch {
+    return null; // Error fetching info
+  }
+}
+
+/**
  * Perform a COUNT request to a single relay with timeout
+ * First checks NIP-45 support via NIP-11, then makes the request
  */
 async function countFromRelay(
   url: string,
   filter: NostrFilter,
 ): Promise<RelayCountResult> {
   try {
+    // Check NIP-45 support first (uses cached relay info when available)
+    const nip45Supported = await checkNip45Support(url);
+
+    // If we know for sure the relay doesn't support NIP-45, return early
+    if (nip45Supported === false) {
+      return {
+        url,
+        status: "unsupported",
+        error: "NIP-45 not supported (per relay info)",
+      };
+    }
+
+    // Try the COUNT request
     const relay = pool.relay(url);
     const result = await firstValueFrom(
       relay.count(filter as Filter).pipe(
@@ -66,7 +97,12 @@ async function countFromRelay(
         catchError((err) => {
           // Timeout or connection error
           if (err.name === "TimeoutError") {
-            return of({ count: -1, _error: "Timeout - relay did not respond" });
+            // If we couldn't check NIP-11, the timeout might mean no NIP-45 support
+            const errorMsg =
+              nip45Supported === null
+                ? "Timeout - relay may not support NIP-45"
+                : "Timeout - relay did not respond";
+            return of({ count: -1, _error: errorMsg });
           }
           return of({
             count: -1,
@@ -158,8 +194,9 @@ function RelayResultRow({ result }: { result: RelayCountResult }) {
         );
       case "success":
         return <CheckCircle2 className="size-4 text-green-500" />;
-      case "error":
       case "unsupported":
+        return <Ban className="size-4 text-yellow-500" />;
+      case "error":
         return <AlertCircle className="size-4 text-destructive" />;
       default:
         return null;
@@ -179,7 +216,12 @@ function RelayResultRow({ result }: { result: RelayCountResult }) {
             {result.count?.toLocaleString()}
           </span>
         )}
-        {(result.status === "error" || result.status === "unsupported") && (
+        {result.status === "unsupported" && (
+          <span className="text-sm text-yellow-600 dark:text-yellow-400">
+            {result.error}
+          </span>
+        )}
+        {result.status === "error" && (
           <Tooltip>
             <TooltipTrigger>
               <span className="text-sm text-destructive truncate max-w-48">
@@ -207,7 +249,16 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
     );
   }
 
-  if (result.status === "error" || result.status === "unsupported") {
+  if (result.status === "unsupported") {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <Ban className="size-8 text-yellow-500" />
+        <p className="text-yellow-600 dark:text-yellow-400">{result.error}</p>
+      </div>
+    );
+  }
+
+  if (result.status === "error") {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
         <AlertCircle className="size-8 text-destructive" />
