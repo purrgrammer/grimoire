@@ -16,7 +16,6 @@ interface EmojiPickerDialogProps {
 
 // Frequently used emojis stored in localStorage
 const STORAGE_KEY = "grimoire:reaction-history";
-const QUICK_REACTIONS = ["❤️", "👍", "🔥", "😂", "🎉", "👀", "🤔", "💯"];
 
 function getReactionHistory(): Record<string, number> {
   try {
@@ -109,29 +108,47 @@ export function EmojiPickerDialog({
     setSearchQuery(""); // Reset search on close
   };
 
-  const handleQuickReaction = (emoji: string) => {
-    onEmojiSelect(emoji);
-    updateReactionHistory(emoji);
+  // Helper to render a frequently used emoji (handles both unicode and custom)
+  const renderFrequentEmoji = (emojiStr: string) => {
+    // Check if it's a custom emoji shortcode (e.g., ":yesno:")
+    if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
+      const shortcode = emojiStr.slice(1, -1);
+      // Look up the emoji in the service
+      const customEmoji = service.getByShortcode(shortcode);
+      if (customEmoji && customEmoji.url) {
+        return <img src={customEmoji.url} alt={emojiStr} className="size-6" />;
+      }
+      // Fallback to text if not found
+      return <span className="text-xs">{emojiStr}</span>;
+    }
+    // Unicode emoji - render as text
+    return <span className="text-2xl">{emojiStr}</span>;
+  };
+
+  const handleFrequentEmojiClick = (emojiStr: string) => {
+    // Check if it's a custom emoji shortcode
+    if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
+      const shortcode = emojiStr.slice(1, -1);
+      const customEmoji = service.getByShortcode(shortcode);
+      if (customEmoji && customEmoji.url) {
+        onEmojiSelect(emojiStr, {
+          shortcode: shortcode,
+          url: customEmoji.url,
+        });
+      } else {
+        // Fallback to treating as unicode
+        onEmojiSelect(emojiStr);
+      }
+    } else {
+      // Unicode emoji
+      onEmojiSelect(emojiStr);
+    }
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        {/* Quick reaction bar */}
-        <div className="flex gap-2 pb-3 border-b">
-          {QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => handleQuickReaction(emoji)}
-              className="text-2xl hover:scale-125 transition-transform active:scale-110"
-              title={emoji}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-
         {/* Search input */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 size-4 text-muted-foreground" />
@@ -151,15 +168,15 @@ export function EmojiPickerDialog({
             <div className="text-xs text-muted-foreground mb-2 font-medium">
               Recently used
             </div>
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-8 gap-3">
               {frequentlyUsed.map((emoji) => (
                 <button
                   key={emoji}
-                  onClick={() => handleQuickReaction(emoji)}
-                  className="text-2xl hover:bg-muted rounded p-2 transition-colors"
+                  onClick={() => handleFrequentEmojiClick(emoji)}
+                  className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center"
                   title={emoji}
                 >
-                  {emoji}
+                  {renderFrequentEmoji(emoji)}
                 </button>
               ))}
             </div>
@@ -169,7 +186,7 @@ export function EmojiPickerDialog({
         {/* Emoji grid */}
         <div className="max-h-[300px] overflow-y-auto">
           {searchResults.length > 0 ? (
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-8 gap-3">
               {searchResults.map((result) => (
                 <button
                   key={`${result.source}:${result.shortcode}`}
