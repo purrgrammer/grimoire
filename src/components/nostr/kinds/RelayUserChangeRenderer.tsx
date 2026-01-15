@@ -14,13 +14,13 @@ import type { NostrEvent } from "@/types/nostr";
  * NIP-43 event published when a member is added to a relay
  */
 export function AddUserRenderer({ event }: BaseEventProps) {
-  const addedPubkey = getTagValue(event, "p");
+  const pubkey = getTagValue(event, "p");
 
-  if (!addedPubkey) {
+  if (!pubkey) {
     return (
       <BaseEventContainer event={event}>
         <div className="text-xs text-muted-foreground italic">
-          Invalid add user event (missing pubkey)
+          Invalid event (missing pubkey)
         </div>
       </BaseEventContainer>
     );
@@ -38,7 +38,7 @@ export function AddUserRenderer({ event }: BaseEventProps) {
         </ClickableEventTitle>
 
         <div className="text-xs">
-          <UserName pubkey={addedPubkey} className="text-xs" />
+          <UserName pubkey={pubkey} className="text-xs" />
           <span className="text-muted-foreground"> added to relay</span>
         </div>
       </div>
@@ -47,10 +47,10 @@ export function AddUserRenderer({ event }: BaseEventProps) {
 }
 
 /**
- * Kind 8000 Detail View - Full add user details
+ * Kind 8000 Detail View
  */
 export function AddUserDetailRenderer({ event }: { event: NostrEvent }) {
-  const addedPubkey = getTagValue(event, "p");
+  const pubkey = getTagValue(event, "p");
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -59,12 +59,8 @@ export function AddUserDetailRenderer({ event }: { event: NostrEvent }) {
         <span className="text-lg font-semibold">User Added</span>
       </div>
 
-      {addedPubkey ? (
-        <PubkeyListFull
-          pubkeys={[addedPubkey]}
-          label="Added Member"
-          icon={<UserPlus className="size-5" />}
-        />
+      {pubkey ? (
+        <PubkeyListFull pubkeys={[pubkey]} label="Added Member" />
       ) : (
         <div className="text-sm text-muted-foreground italic">
           Invalid event (missing pubkey)
@@ -79,13 +75,13 @@ export function AddUserDetailRenderer({ event }: { event: NostrEvent }) {
  * NIP-43 event published when a member is removed from a relay
  */
 export function RemoveUserRenderer({ event }: BaseEventProps) {
-  const removedPubkey = getTagValue(event, "p");
+  const pubkey = getTagValue(event, "p");
 
-  if (!removedPubkey) {
+  if (!pubkey) {
     return (
       <BaseEventContainer event={event}>
         <div className="text-xs text-muted-foreground italic">
-          Invalid remove user event (missing pubkey)
+          Invalid event (missing pubkey)
         </div>
       </BaseEventContainer>
     );
@@ -103,7 +99,7 @@ export function RemoveUserRenderer({ event }: BaseEventProps) {
         </ClickableEventTitle>
 
         <div className="text-xs">
-          <UserName pubkey={removedPubkey} className="text-xs" />
+          <UserName pubkey={pubkey} className="text-xs" />
           <span className="text-muted-foreground"> removed from relay</span>
         </div>
       </div>
@@ -112,10 +108,10 @@ export function RemoveUserRenderer({ event }: BaseEventProps) {
 }
 
 /**
- * Kind 8001 Detail View - Full remove user details
+ * Kind 8001 Detail View
  */
 export function RemoveUserDetailRenderer({ event }: { event: NostrEvent }) {
-  const removedPubkey = getTagValue(event, "p");
+  const pubkey = getTagValue(event, "p");
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -124,12 +120,8 @@ export function RemoveUserDetailRenderer({ event }: { event: NostrEvent }) {
         <span className="text-lg font-semibold">User Removed</span>
       </div>
 
-      {removedPubkey ? (
-        <PubkeyListFull
-          pubkeys={[removedPubkey]}
-          label="Removed Member"
-          icon={<UserMinus className="size-5" />}
-        />
+      {pubkey ? (
+        <PubkeyListFull pubkeys={[pubkey]} label="Removed Member" />
       ) : (
         <div className="text-sm text-muted-foreground italic">
           Invalid event (missing pubkey)

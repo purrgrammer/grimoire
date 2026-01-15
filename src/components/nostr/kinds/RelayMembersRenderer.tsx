@@ -5,28 +5,15 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { PubkeyListFull } from "../lists";
+import { PubkeyListPreview, PubkeyListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
  * Kind 13534 Renderer - Relay Members (Feed View)
- * NIP-43 relay membership list
- *
- * Uses "member" tags instead of standard "p" tags:
- * ["member", "<hex-pubkey>"]
+ * NIP-43 relay membership list using "member" tags
  */
 export function RelayMembersRenderer({ event }: BaseEventProps) {
   const members = getTagValues(event, "member");
-
-  if (members.length === 0) {
-    return (
-      <BaseEventContainer event={event}>
-        <div className="text-xs text-muted-foreground italic">
-          Empty membership list
-        </div>
-      </BaseEventContainer>
-    );
-  }
 
   return (
     <BaseEventContainer event={event}>
@@ -39,14 +26,17 @@ export function RelayMembersRenderer({ event }: BaseEventProps) {
           <span>Relay Members</span>
         </ClickableEventTitle>
 
-        <div className="flex flex-col gap-1.5 text-xs">
-          <div className="flex items-center gap-1.5">
-            <Users className="size-3.5 text-muted-foreground" />
-            <span>
-              {members.length} {members.length === 1 ? "member" : "members"}
-            </span>
+        {members.length === 0 ? (
+          <div className="text-xs text-muted-foreground italic">
+            Empty membership list
           </div>
-        </div>
+        ) : (
+          <PubkeyListPreview
+            pubkeys={members}
+            previewLimit={3}
+            label="members"
+          />
+        )}
       </div>
     </BaseEventContainer>
   );
@@ -66,11 +56,7 @@ export function RelayMembersDetailRenderer({ event }: { event: NostrEvent }) {
       </div>
 
       {members.length > 0 ? (
-        <PubkeyListFull
-          pubkeys={members}
-          label="Members"
-          icon={<Users className="size-5" />}
-        />
+        <PubkeyListFull pubkeys={members} label="Members" />
       ) : (
         <div className="text-sm text-muted-foreground italic">
           Empty membership list
