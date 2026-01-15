@@ -6,6 +6,7 @@ import {
   ClickableEventTitle,
 } from "./BaseEventRenderer";
 import { PubkeyListFull } from "../lists";
+import { UserName } from "../UserName";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -36,8 +37,9 @@ export function AddUserRenderer({ event }: BaseEventProps) {
           <span>User Added</span>
         </ClickableEventTitle>
 
-        <div className="text-xs text-muted-foreground">
-          Member added to relay
+        <div className="text-xs">
+          <UserName pubkey={addedPubkey} className="text-xs" />
+          <span className="text-muted-foreground"> added to relay</span>
         </div>
       </div>
     </BaseEventContainer>
@@ -100,8 +102,9 @@ export function RemoveUserRenderer({ event }: BaseEventProps) {
           <span>User Removed</span>
         </ClickableEventTitle>
 
-        <div className="text-xs text-muted-foreground">
-          Member removed from relay
+        <div className="text-xs">
+          <UserName pubkey={removedPubkey} className="text-xs" />
+          <span className="text-muted-foreground"> removed from relay</span>
         </div>
       </div>
     </BaseEventContainer>
