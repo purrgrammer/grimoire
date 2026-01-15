@@ -1,6 +1,17 @@
 import type { NostrEvent } from "./nostr";
 
 /**
+ * Event kinds that are considered chat messages across all protocols
+ * Used for filtering and validating chat-related events
+ */
+export const CHAT_KINDS = [
+  9, // NIP-29: Group chat messages
+  9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
+  1311, // NIP-53: Live chat messages
+  9735, // NIP-57: Zap receipts (part of chat context)
+] as const;
+
+/**
  * Chat protocol identifier
  */
 export type ChatProtocol = "nip-c7" | "nip-17" | "nip-28" | "nip-29" | "nip-53";

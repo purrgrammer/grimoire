@@ -23,6 +23,7 @@ import type {
   Conversation,
   LiveActivityMetadata,
 } from "@/types/chat";
+import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
@@ -277,10 +278,11 @@ const MessageItem = memo(function MessageItem({
 
     // Only show reply preview if:
     // 1. The event exists in our store
-    // 2. The event is a chat kind (9, 9321, 1311)
-    const chatKinds = [9, 9321, 1311];
+    // 2. The event is a chat kind (includes messages, nutzaps, live chat, and zap receipts)
     const shouldShowReplyPreview =
-      zapReplyTo && replyEvent && chatKinds.includes(replyEvent.kind);
+      zapReplyTo &&
+      replyEvent &&
+      (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
     return (
       <div className="pl-2 my-1">
