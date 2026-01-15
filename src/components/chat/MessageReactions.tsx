@@ -3,7 +3,6 @@ import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
-import { getDisplayName } from "@/lib/nostr-utils";
 
 interface MessageReactionsProps {
   messageId: string;
@@ -150,25 +149,21 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
  * Single reaction badge with tooltip showing who reacted
  */
 function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
-  // Load profiles for all reactors to get display names
-  const profiles = use$(
-    () => eventStore.profiles(reaction.pubkeys),
-    [reaction.pubkeys],
-  );
-
-  // Build tooltip with emoji and list of names
+  // Build tooltip with emoji and truncated pubkeys
+  // Note: Could be enhanced to load profiles, but for simplicity and performance
+  // we show truncated pubkeys. Profiles are already loaded in the chat UI context.
   const tooltip = useMemo(() => {
-    const names = reaction.pubkeys.map((pubkey) => {
-      const profile = profiles?.get(pubkey);
-      return getDisplayName(pubkey, profile);
-    });
+    // Truncate pubkeys to first 8 chars for readability
+    const pubkeyList = reaction.pubkeys
+      .map((pk) => pk.slice(0, 8) + "...")
+      .join(", ");
 
-    // Format: "❤️ 3\nAlice, Bob, Carol" or "❤️ 1\nAlice"
+    // Format: "❤️ 3\nabcd1234..., efgh5678..."
     const emojiDisplay = reaction.customEmoji
       ? `:${reaction.customEmoji.shortcode}:`
       : reaction.emoji;
-    return `${emojiDisplay} ${reaction.count}\n${names.join(", ")}`;
-  }, [reaction, profiles]);
+    return `${emojiDisplay} ${reaction.count}\n${pubkeyList}`;
+  }, [reaction]);
 
   return (
     <span
