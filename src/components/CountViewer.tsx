@@ -53,7 +53,7 @@ interface RelayCountResult {
   error?: string;
 }
 
-const COUNT_TIMEOUT = 10000; // 10 second timeout per relay
+const COUNT_TIMEOUT = 30000; // 30 second timeout per relay
 
 /**
  * Check if relay supports NIP-45 via NIP-11 relay info

@@ -239,24 +239,61 @@ function generateRawCommand(appId: string, props: any): string {
       return "req";
 
     case "count":
-      // COUNT command - similar to REQ but for counting
+      // COUNT command - human-readable summary
       if (props.filter) {
-        const parts: string[] = ["count"];
+        const parts: string[] = [];
+
+        // Kinds - use human-readable names
         if (props.filter.kinds?.length) {
-          parts.push(`-k ${props.filter.kinds.join(",")}`);
+          if (props.filter.kinds.length === 1) {
+            parts.push(getKindName(props.filter.kinds[0]));
+          } else if (props.filter.kinds.length <= 3) {
+            parts.push(props.filter.kinds.map(getKindName).join(", "));
+          } else {
+            parts.push(`${props.filter.kinds.length} kinds`);
+          }
         }
-        if (props.filter["#t"]?.length) {
-          parts.push(`-t ${props.filter["#t"].slice(0, 2).join(",")}`);
-        }
+
+        // Authors
         if (props.filter.authors?.length) {
-          const authorDisplay = props.filter.authors.slice(0, 2).join(",");
-          parts.push(`-a ${authorDisplay}`);
+          const count = props.filter.authors.length;
+          if (count === 1) {
+            const pk = props.filter.authors[0];
+            parts.push(`by ${pk.slice(0, 8)}...`);
+          } else {
+            parts.push(`by ${count} authors`);
+          }
         }
+
+        // Mentions (#p tags)
         if (props.filter["#p"]?.length) {
-          const pTagDisplay = props.filter["#p"].slice(0, 2).join(",");
-          parts.push(`-p ${pTagDisplay}`);
+          const count = props.filter["#p"].length;
+          if (count === 1) {
+            const pk = props.filter["#p"][0];
+            parts.push(`@${pk.slice(0, 8)}...`);
+          } else {
+            parts.push(`@${count} users`);
+          }
         }
-        return parts.join(" ");
+
+        // Hashtags
+        if (props.filter["#t"]?.length) {
+          const tags = props.filter["#t"];
+          if (tags.length <= 2) {
+            parts.push(tags.map((t: string) => `#${t}`).join(" "));
+          } else {
+            parts.push(`#${tags[0]} +${tags.length - 1}`);
+          }
+        }
+
+        // Search
+        if (props.filter.search) {
+          parts.push(`"${props.filter.search}"`);
+        }
+
+        if (parts.length > 0) {
+          return `count: ${parts.join(" ")}`;
+        }
       }
       return "count";
 
