@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
+import pool from "@/services/relay-pool";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 import type { NostrEvent } from "@/types/nostr";
 
 interface MessageReactionsProps {
   messageId: string;
-  /** Relay URL for fetching reactions (NIP-29 group relay) */
-  relayUrl?: string;
+  /** Relay URLs for fetching reactions - protocol-specific */
+  relays: string[];
 }
 
 interface ReactionSummary {
@@ -26,14 +27,51 @@ interface ReactionSummary {
  * Loads kind 7 (reaction) events that reference the messageId via e-tag.
  * Aggregates by emoji and displays as tiny inline badges in bottom-right corner.
  *
- * Uses EventStore timeline for reactive updates - new reactions appear automatically.
+ * Fetches reactions from protocol-specific relays and uses EventStore timeline
+ * for reactive updates - new reactions appear automatically.
  */
-export function MessageReactions({
-  messageId,
-  relayUrl,
-}: MessageReactionsProps) {
+export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
+  // Start relay subscription to fetch reactions for this message
+  useEffect(() => {
+    if (relays.length === 0) return;
+
+    const filter = {
+      kinds: [7],
+      "#e": [messageId],
+      limit: 100, // Reasonable limit for reactions
+    };
+
+    // Subscribe to relays to fetch reactions
+    const subscription = pool
+      .subscription(relays, [filter], {
+        eventStore, // Automatically add reactions to EventStore
+      })
+      .subscribe({
+        next: (response) => {
+          if (typeof response !== "string") {
+            // Event received - it's automatically added to EventStore
+            console.log(
+              `[MessageReactions] Reaction received for ${messageId.slice(0, 8)}...`,
+            );
+          }
+        },
+        error: (err) => {
+          console.error(
+            `[MessageReactions] Subscription error for ${messageId.slice(0, 8)}...`,
+            err,
+          );
+        },
+      });
+
+    // Cleanup subscription when component unmounts or messageId changes
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [messageId, relays]);
+
   // Load reactions for this message from EventStore
   // Filter: kind 7, e-tag pointing to messageId
+  // This observable will update automatically as reactions arrive from the subscription above
   const reactions = use$(
     () =>
       eventStore.timeline({

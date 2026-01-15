@@ -136,6 +136,24 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
 }
 
 /**
+ * Get relay URLs for a conversation based on protocol
+ * Used for fetching protocol-specific data like reactions
+ */
+function getConversationRelays(conversation: Conversation): string[] {
+  // NIP-53 live chats: Use full relay list from liveActivity metadata
+  if (conversation.protocol === "nip-53") {
+    const liveActivity = conversation.metadata?.liveActivity;
+    if (isLiveActivityMetadata(liveActivity) && liveActivity.relays) {
+      return liveActivity.relays;
+    }
+  }
+
+  // NIP-29 groups and fallback: Use single relay URL
+  const relayUrl = conversation.metadata?.relayUrl;
+  return relayUrl ? [relayUrl] : [];
+}
+
+/**
  * Get the chat command identifier for a conversation
  * Returns a string that can be passed to the `chat` command to open this conversation
  *
@@ -249,6 +267,12 @@ const MessageItem = memo(function MessageItem({
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
 }) {
+  // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
+  const relays = useMemo(
+    () => getConversationRelays(conversation),
+    [conversation],
+  );
+
   // System messages (join/leave) have special styling
   if (message.type === "system") {
     return (
@@ -334,10 +358,7 @@ const MessageItem = memo(function MessageItem({
           </div>
         </div>
         {/* Reactions display - lazy loaded per message */}
-        <MessageReactions
-          messageId={message.id}
-          relayUrl={conversation.metadata?.relayUrl}
-        />
+        <MessageReactions messageId={message.id} relays={relays} />
       </div>
     );
   }
@@ -380,10 +401,7 @@ const MessageItem = memo(function MessageItem({
           )}
         </div>
         {/* Reactions display - lazy loaded per message */}
-        <MessageReactions
-          messageId={message.id}
-          relayUrl={conversation.metadata?.relayUrl}
-        />
+        <MessageReactions messageId={message.id} relays={relays} />
       </div>
     </div>
   );
