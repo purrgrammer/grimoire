@@ -41,37 +41,42 @@ export function InboxViewer() {
   const privateMessagesEnabled = state.privateMessagesEnabled ?? false;
   const autoDecrypt = state.autoDecryptGiftWraps ?? false;
 
-  // Get pending count
+  // Get pending count (gift wraps not yet decrypted)
   const pendingCount = useLiveQuery(async () => {
     if (!activeAccount?.pubkey) return 0;
-    return giftWrapLoader.getPendingCount(activeAccount.pubkey);
+    return db.giftWraps
+      .where("[recipientPubkey+status]")
+      .equals([activeAccount.pubkey, "pending"])
+      .count();
   }, [activeAccount?.pubkey]);
 
-  // Get conversation count
-  const conversationCount = useLiveQuery(async () => {
-    if (!activeAccount?.pubkey) return 0;
-    return giftWrapLoader.getConversationCount(activeAccount.pubkey);
-  }, [activeAccount?.pubkey]);
-
-  // Get unread count
-  const unreadCount = useLiveQuery(async () => {
-    if (!activeAccount?.pubkey) return 0;
-    return giftWrapLoader.getUnreadCount(activeAccount.pubkey);
-  }, [activeAccount?.pubkey]);
-
-  // Get conversations
-  const conversations = useLiveQuery(async () => {
-    if (!activeAccount?.pubkey) return [];
-    return getConversations(activeAccount.pubkey);
-  }, [activeAccount?.pubkey]);
-
-  // Get decrypted messages count
+  // Get decrypted count (successfully decrypted)
   const decryptedCount = useLiveQuery(async () => {
     if (!activeAccount?.pubkey) return 0;
-    return db.decryptedRumors
-      .where("recipientPubkey")
-      .equals(activeAccount.pubkey)
+    return db.giftWraps
+      .where("[recipientPubkey+status]")
+      .equals([activeAccount.pubkey, "decrypted"])
       .count();
+  }, [activeAccount?.pubkey]);
+
+  // Get failed count (decryption failed)
+  const failedCount = useLiveQuery(async () => {
+    if (!activeAccount?.pubkey) return 0;
+    return db.giftWraps
+      .where("[recipientPubkey+status]")
+      .equals([activeAccount.pubkey, "failed"])
+      .count();
+  }, [activeAccount?.pubkey]);
+
+  // Get conversations (from decrypted rumors)
+  const conversations = useLiveQuery(async () => {
+    if (!activeAccount?.pubkey) return [];
+    const convos = await getConversations(activeAccount.pubkey);
+    console.log(
+      `[InboxViewer] Found ${convos.length} conversations for ${activeAccount.pubkey.slice(0, 8)}`,
+      convos,
+    );
+    return convos;
   }, [activeAccount?.pubkey]);
 
   // Get loader state for relay info
@@ -156,18 +161,7 @@ export function InboxViewer() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="p-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Conversations
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{conversationCount ?? 0}</div>
-            </CardContent>
-          </Card>
-
+        <div className="grid grid-cols-3 gap-4">
           <Card>
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -175,18 +169,22 @@ export function InboxViewer() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{decryptedCount ?? 0}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {decryptedCount ?? 0}
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Unread
+                Failed
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{unreadCount ?? 0}</div>
+              <div className="text-2xl font-bold text-red-600">
+                {failedCount ?? 0}
+              </div>
             </CardContent>
           </Card>
 
@@ -197,7 +195,9 @@ export function InboxViewer() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{pendingCount ?? 0}</div>
+              <div className="text-2xl font-bold text-yellow-600">
+                {pendingCount ?? 0}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -416,25 +416,32 @@ export function InboxViewer() {
         )}
 
         {/* Conversations List */}
-        {privateMessagesEnabled &&
-          conversations &&
-          conversations.length > 0 && (
-            <Card>
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  <CardTitle className="text-base">Conversations</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
+        {privateMessagesEnabled && (
+          <Card>
+            <CardHeader className="p-4">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                <CardTitle className="text-base">
+                  Conversations ({conversations?.length ?? 0})
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              {conversations && conversations.length > 0 ? (
                 <div className="space-y-2">
                   {conversations.map((conv) => (
                     <ConversationItem key={conv.id} conversation={conv} />
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No conversations yet. Decrypt pending messages to see
+                  conversations.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Help Text */}
         {!privateMessagesEnabled && (

@@ -1,10 +1,10 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
+import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
 // Import other adapters as they're implemented
-// import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
 
 /**
@@ -62,11 +62,11 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
-    // new Nip17Adapter(),  // Phase 2
-    // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
-    // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
+    new Nip17Adapter(), // Encrypted DMs (NIP-17 via NIP-59 gift wraps)
+    // new Nip28Adapter(),  // Public channels (coming soon)
+    new Nip29Adapter(), // Relay groups
+    new Nip53Adapter(), // Live activity chat
+    // new NipC7Adapter(), // Simple chat (disabled for now)
   ];
 
   for (const adapter of adapters) {
@@ -84,6 +84,11 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
+  - npub/nprofile/hex pubkey (NIP-17 encrypted DMs, requires private messages enabled)
+    Examples:
+      chat npub1...
+      chat nprofile1...
+      chat 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
@@ -99,7 +104,6 @@ Currently supported formats:
       chat naddr1... (group list address)
 
 More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
   - note/nevent (NIP-28 public channels)`,
   );
 }
