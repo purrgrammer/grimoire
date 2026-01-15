@@ -16,8 +16,6 @@ import { UserName } from "../UserName";
 import { ExternalLink } from "@/components/ExternalLink";
 import { MediaEmbed } from "../MediaEmbed";
 import { Badge } from "@/components/ui/badge";
-import { use$ } from "applesauce-react/hooks";
-import eventStore from "@/services/event-store";
 import { useMemo } from "react";
 import { useGrimoire } from "@/core/state";
 import {
@@ -29,6 +27,10 @@ import {
   Laptop,
   FileDown,
 } from "lucide-react";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { relayListCache } from "@/services/relay-list-cache";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 
 interface ZapstoreAppDetailRendererProps {
   event: NostrEvent;
@@ -157,6 +159,37 @@ export function ZapstoreAppDetailRenderer({
   const license = getAppLicense(event);
   const identifier = getAppIdentifier(event);
 
+  // Build relay list for fetching releases:
+  // 1. Seen relays (where we received this app event)
+  // 2. Publisher's outbox relays (NIP-65)
+  // 3. Aggregator relays (fallback)
+  const relays = useMemo(() => {
+    const relaySet = new Set<string>();
+
+    // Add seen relays from the app event
+    const seenRelays = getSeenRelays(event);
+    if (seenRelays) {
+      for (const relay of seenRelays) {
+        relaySet.add(relay);
+      }
+    }
+
+    // Add publisher's outbox relays
+    const outboxRelays = relayListCache.getOutboxRelaysSync(event.pubkey);
+    if (outboxRelays) {
+      for (const relay of outboxRelays.slice(0, 3)) {
+        relaySet.add(relay);
+      }
+    }
+
+    // Add aggregator relays
+    for (const relay of AGGREGATOR_RELAYS) {
+      relaySet.add(relay);
+    }
+
+    return Array.from(relaySet);
+  }, [event]);
+
   // Query for releases that reference this app
   const releasesFilter = useMemo(() => {
     if (!identifier) {
@@ -169,9 +202,12 @@ export function ZapstoreAppDetailRenderer({
     };
   }, [event.pubkey, identifier]);
 
-  const releases = use$(
-    () => eventStore.timeline(releasesFilter),
-    [releasesFilter],
+  // Use useLiveTimeline to fetch releases from relays with proper hints
+  const { events: releases } = useLiveTimeline(
+    `zapstore-releases-detail-${event.id}`,
+    releasesFilter,
+    relays,
+    { limit: 50 },
   );
 
   // Sort releases by version (newest first) or created_at
