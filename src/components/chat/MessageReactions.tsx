@@ -134,14 +134,14 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
   if (aggregated.length === 0) return null;
 
   return (
-    <>
+    <div className="inline-flex gap-1 max-w-full overflow-x-auto hide-scrollbar">
       {aggregated.map((reaction) => (
         <ReactionBadge
           key={reaction.customEmoji?.shortcode || reaction.emoji}
           reaction={reaction}
         />
       ))}
-    </>
+    </div>
   );
 }
 
