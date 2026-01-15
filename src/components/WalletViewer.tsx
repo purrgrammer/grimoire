@@ -10,7 +10,9 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Zap,
+  RefreshCw,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -19,7 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useCallback } from "react";
 import accountManager from "@/services/accounts";
 import {
   decryptWalletConfig,
@@ -108,73 +110,111 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
   // Get active account from accountManager
   const activeAccount = use$(accountManager.active$);
 
-  // Decrypt wallet data when events are available (only for own wallet)
-  useEffect(() => {
-    if (!isOwnWallet || !activeAccount?.nip44) return;
-    if (!walletConfigEvent) return;
+  // Manual decrypt function
+  const decryptWalletData = useCallback(async () => {
+    if (!activeAccount?.nip44) {
+      setDecryptionError("No NIP-44 encryption support in active account");
+      return;
+    }
 
-    const decryptWalletData = async () => {
-      setIsDecrypting(true);
-      setDecryptionError(null);
+    setIsDecrypting(true);
+    setDecryptionError(null);
 
-      try {
-        // Decrypt wallet config
-        if (walletConfigEvent) {
-          const config = await decryptWalletConfig(
-            walletConfigEvent,
-            activeAccount,
-          );
-          if (config) {
-            setWalletConfig(config);
-          }
-        }
+    console.log("[WalletViewer] Starting decryption...");
+    console.log(
+      "[WalletViewer] Wallet config event:",
+      walletConfigEvent ? "found" : "not found",
+    );
+    console.log("[WalletViewer] Token events:", tokenEvents?.length || 0);
+    console.log("[WalletViewer] History events:", historyEvents?.length || 0);
 
-        // Decrypt token events
-        if (tokenEvents && tokenEvents.length > 0) {
-          const decryptedTokens: UnspentTokens[] = [];
-          for (const event of tokenEvents) {
-            const tokens = await decryptUnspentTokens(event, activeAccount);
-            if (tokens) {
-              decryptedTokens.push(tokens);
-            }
-          }
-          setUnspentTokens(decryptedTokens);
-        }
-
-        // Decrypt history events
-        if (historyEvents && historyEvents.length > 0) {
-          const allTransactions: Transaction[] = [];
-          for (const event of historyEvents) {
-            const history = await decryptTransactionHistory(
-              event,
-              activeAccount,
-            );
-            if (history && history.transactions) {
-              allTransactions.push(...history.transactions);
-            }
-          }
-          setTransactions(sortTransactions(allTransactions));
-        }
-      } catch (error) {
-        console.error("Decryption error:", error);
-        setDecryptionError(
-          error instanceof Error
-            ? error.message
-            : "Failed to decrypt wallet data",
+    try {
+      // Decrypt wallet config
+      if (walletConfigEvent) {
+        console.log("[WalletViewer] Decrypting wallet config...");
+        const config = await decryptWalletConfig(
+          walletConfigEvent,
+          activeAccount,
         );
-      } finally {
-        setIsDecrypting(false);
+        if (config) {
+          console.log(
+            "[WalletViewer] Wallet config decrypted successfully:",
+            config,
+          );
+          setWalletConfig(config);
+        } else {
+          console.warn("[WalletViewer] Wallet config decryption returned null");
+        }
       }
-    };
 
-    decryptWalletData();
-  }, [
-    isOwnWallet,
-    activeAccount,
-    walletConfigEvent,
-    tokenEvents,
-    historyEvents,
-  ]);
+      // Decrypt token events
+      if (tokenEvents && tokenEvents.length > 0) {
+        console.log(
+          `[WalletViewer] Decrypting ${tokenEvents.length} token event(s)...`,
+        );
+        const decryptedTokens: UnspentTokens[] = [];
+        for (const event of tokenEvents) {
+          const tokens = await decryptUnspentTokens(event, activeAccount);
+          if (tokens) {
+            console.log("[WalletViewer] Token event decrypted:", tokens);
+            decryptedTokens.push(tokens);
+          } else {
+            console.warn(
+              "[WalletViewer] Token event decryption returned null:",
+              event.id,
+            );
+          }
+        }
+        setUnspentTokens(decryptedTokens);
+        console.log(
+          `[WalletViewer] Total ${decryptedTokens.length} token event(s) decrypted`,
+        );
+      } else {
+        console.log("[WalletViewer] No token events to decrypt");
+        setUnspentTokens([]);
+      }
+
+      // Decrypt history events
+      if (historyEvents && historyEvents.length > 0) {
+        console.log(
+          `[WalletViewer] Decrypting ${historyEvents.length} history event(s)...`,
+        );
+        const allTransactions: Transaction[] = [];
+        for (const event of historyEvents) {
+          const history = await decryptTransactionHistory(event, activeAccount);
+          if (history && history.transactions) {
+            console.log(
+              `[WalletViewer] History event decrypted: ${history.transactions.length} transaction(s)`,
+            );
+            allTransactions.push(...history.transactions);
+          } else {
+            console.warn(
+              "[WalletViewer] History event decryption returned null:",
+              event.id,
+            );
+          }
+        }
+        setTransactions(sortTransactions(allTransactions));
+        console.log(
+          `[WalletViewer] Total ${allTransactions.length} transaction(s) decrypted`,
+        );
+      } else {
+        console.log("[WalletViewer] No history events to decrypt");
+        setTransactions([]);
+      }
+
+      console.log("[WalletViewer] Decryption completed successfully");
+    } catch (error) {
+      console.error("[WalletViewer] Decryption error:", error);
+      setDecryptionError(
+        error instanceof Error
+          ? error.message
+          : "Failed to decrypt wallet data",
+      );
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [activeAccount, walletConfigEvent, tokenEvents, historyEvents]);
 
   // Calculate balance
   const balanceByMint = useMemo(() => {
@@ -292,9 +332,19 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
               )}
               Wallet Status
             </CardTitle>
+            {isOwnWallet &&
+              !walletConfig &&
+              !isDecrypting &&
+              activeAccount?.nip44 && (
+                <Button size="sm" onClick={decryptWalletData}>
+                  <Unlock className="h-4 w-4 mr-2" />
+                  Unlock Wallet
+                </Button>
+              )}
             {isOwnWallet && walletConfig && (
-              <div className="text-xs text-green-500 font-medium">
-                ✓ Unlocked
+              <div className="text-xs text-green-500 font-medium flex items-center gap-1">
+                <Unlock className="h-3 w-3" />
+                Unlocked
               </div>
             )}
           </div>
@@ -303,6 +353,19 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {decryptionError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{decryptionError}</span>
+                <Button size="sm" variant="outline" onClick={decryptWalletData}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {isOwnWallet && walletConfig && (
             <Alert>
               <Unlock className="h-4 w-4" />
@@ -314,13 +377,28 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
             </Alert>
           )}
 
-          {isOwnWallet && !walletConfig && !isDecrypting && (
+          {isOwnWallet &&
+            !walletConfig &&
+            !isDecrypting &&
+            !decryptionError && (
+              <Alert>
+                <Lock className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Wallet Locked:</strong> Your wallet data is encrypted
+                  with NIP-44.{" "}
+                  {activeAccount?.nip44
+                    ? "Click 'Unlock Wallet' to decrypt."
+                    : "Sign in to decrypt."}
+                </AlertDescription>
+              </Alert>
+            )}
+
+          {isDecrypting && (
             <Alert>
-              <Lock className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4 animate-spin" />
               <AlertDescription>
-                <strong>Wallet Locked:</strong> Your wallet data is encrypted
-                with NIP-44.{" "}
-                {activeAccount?.nip44 ? "Decrypting..." : "Sign in to decrypt."}
+                <strong>Decrypting...</strong> Please wait while your wallet
+                data is being decrypted.
               </AlertDescription>
             </Alert>
           )}
@@ -335,6 +413,98 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
             </Alert>
           )}
 
+          {/* Wallet Metadata (shown when unlocked) */}
+          {isOwnWallet && walletConfig && (
+            <div className="space-y-4 p-4 bg-muted rounded-lg">
+              <div className="text-sm font-semibold text-foreground">
+                Wallet Configuration
+              </div>
+
+              {/* Wallet Name */}
+              {walletConfig.name && (
+                <div>
+                  <div className="text-xs text-muted-foreground">Name</div>
+                  <div className="font-mono text-sm">{walletConfig.name}</div>
+                </div>
+              )}
+
+              {/* Unit */}
+              <div>
+                <div className="text-xs text-muted-foreground">Unit</div>
+                <div className="font-mono text-sm">
+                  {walletConfig.unit || "sat"}
+                </div>
+              </div>
+
+              {/* Mints */}
+              {walletConfig.mints && walletConfig.mints.length > 0 && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Configured Mints ({walletConfig.mints.length})
+                  </div>
+                  <div className="space-y-1">
+                    {walletConfig.mints.map((mint) => (
+                      <div
+                        key={mint}
+                        className="font-mono text-xs p-2 bg-background rounded"
+                      >
+                        {mint}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Relays */}
+              {walletConfig.relays && walletConfig.relays.length > 0 && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Relays ({walletConfig.relays.length})
+                  </div>
+                  <div className="space-y-1">
+                    {walletConfig.relays.map((relay) => (
+                      <div
+                        key={relay}
+                        className="font-mono text-xs p-2 bg-background rounded"
+                      >
+                        {relay}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Private Key (show first 8 and last 8 chars) */}
+              {walletConfig.privkey && (
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    Wallet Private Key (for signing Cashu operations)
+                  </div>
+                  <div className="font-mono text-xs p-2 bg-background rounded break-all">
+                    {walletConfig.privkey.substring(0, 8)}...
+                    {walletConfig.privkey.substring(
+                      walletConfig.privkey.length - 8,
+                    )}
+                  </div>
+                  <div className="text-xs text-yellow-600 dark:text-yellow-500 mt-1">
+                    ⚠️ Keep this key private - it controls your Cashu wallet
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {walletConfig.description && (
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    Description
+                  </div>
+                  <div className="text-sm">{walletConfig.description}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Event Status Grid */}
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <div className="text-muted-foreground">Config Event</div>
@@ -368,16 +538,6 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
                   : "Unknown"}
               </div>
             </div>
-            {walletConfig && walletConfig.mints && (
-              <div className="col-span-2">
-                <div className="text-muted-foreground">Configured Mints</div>
-                <div className="font-mono text-xs space-y-1 mt-1">
-                  {walletConfig.mints.map((mint) => (
-                    <div key={mint}>✓ {getMintDisplayName(mint)}</div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
