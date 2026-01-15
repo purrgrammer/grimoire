@@ -291,7 +291,7 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-2">
+    <div className="flex flex-col items-center justify-center py-16">
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-5xl font-bold tabular-nums">
           {result.count?.toLocaleString()}
@@ -305,7 +305,6 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
           </Tooltip>
         )}
       </div>
-      <p className="text-sm text-muted-foreground">events</p>
     </div>
   );
 }
