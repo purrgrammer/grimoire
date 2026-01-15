@@ -173,17 +173,17 @@ function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
 
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] leading-tight"
+      className="inline-flex items-center gap-1.5 text-[10px] leading-tight"
       title={tooltip}
     >
       {reaction.customEmoji ? (
         <img
           src={reaction.customEmoji.url}
           alt={`:${reaction.customEmoji.shortcode}:`}
-          className="size-3 inline-block"
+          className="size-3.5 inline-block object-contain"
         />
       ) : (
-        <span className="text-xs">{reaction.emoji}</span>
+        <span className="text-xs leading-none">{reaction.emoji}</span>
       )}
       <span
         className={cn(
