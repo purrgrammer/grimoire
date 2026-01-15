@@ -73,8 +73,8 @@ export function EmojiPickerDialog({
   // Perform search when query changes
   useEffect(() => {
     const performSearch = async () => {
-      // Always fetch 16 emoji (2 rows of 8) for consistent height
-      const results = await service.search(searchQuery, { limit: 16 });
+      // Always fetch 8 emoji (1 row of 8) for consistent height
+      const results = await service.search(searchQuery, { limit: 8 });
       setSearchResults(results);
     };
     performSearch();
@@ -85,7 +85,7 @@ export function EmojiPickerDialog({
     const history = getReactionHistory();
     return Object.entries(history)
       .sort((a, b) => b[1] - a[1]) // Sort by count descending
-      .slice(0, 16) // Max 2 rows
+      .slice(0, 8) // Max 1 row
       .map(([emoji]) => emoji);
   }, []);
 
@@ -101,13 +101,13 @@ export function EmojiPickerDialog({
     // No search query: prioritize recently used, then fill with other emoji
     if (frequentlyUsed.length > 0) {
       const recentSet = new Set(frequentlyUsed);
-      // Get additional emoji to fill to 16, excluding recently used
+      // Get additional emoji to fill to 8, excluding recently used
       const additional = searchResults
         .filter((r) => {
           const key = r.source === "unicode" ? r.url : `:${r.shortcode}:`;
           return !recentSet.has(key);
         })
-        .slice(0, 16 - frequentlyUsed.length);
+        .slice(0, 8 - frequentlyUsed.length);
 
       // Combine: recently used get priority, but displayed as regular emoji
       const recentResults: EmojiSearchResult[] = [];
@@ -125,10 +125,10 @@ export function EmojiPickerDialog({
         }
       }
 
-      return [...recentResults, ...additional].slice(0, 16);
+      return [...recentResults, ...additional].slice(0, 8);
     }
 
-    // No history: just show top 16 emoji
+    // No history: just show top 8 emoji
     return searchResults;
   }, [searchQuery, searchResults, frequentlyUsed, service]);
 
@@ -165,26 +165,32 @@ export function EmojiPickerDialog({
           />
         </div>
 
-        {/* Fixed 2-row emoji grid (16 emoji) */}
-        <div className="grid grid-cols-8 gap-3">
-          {displayEmojis.map((result) => (
-            <button
-              key={`${result.source}:${result.shortcode}`}
-              onClick={() => handleEmojiClick(result)}
-              className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center aspect-square"
-              title={`:${result.shortcode}:`}
-            >
-              {result.source === "unicode" ? (
-                <span className="text-2xl">{result.url}</span>
-              ) : (
-                <img
-                  src={result.url}
-                  alt={`:${result.shortcode}:`}
-                  className="size-6 object-contain"
-                />
-              )}
-            </button>
-          ))}
+        {/* Fixed 1-row emoji grid (8 emoji) with consistent height */}
+        <div className="grid grid-cols-8 gap-3 min-h-[3.5rem]">
+          {displayEmojis.length > 0 ? (
+            displayEmojis.map((result) => (
+              <button
+                key={`${result.source}:${result.shortcode}`}
+                onClick={() => handleEmojiClick(result)}
+                className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center aspect-square"
+                title={`:${result.shortcode}:`}
+              >
+                {result.source === "unicode" ? (
+                  <span className="text-2xl leading-none">{result.url}</span>
+                ) : (
+                  <img
+                    src={result.url}
+                    alt={`:${result.shortcode}:`}
+                    className="w-6 h-6 object-contain"
+                  />
+                )}
+              </button>
+            ))
+          ) : (
+            <div className="col-span-8 flex items-center justify-center text-xs text-muted-foreground">
+              No emojis found
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
