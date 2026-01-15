@@ -136,7 +136,7 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
   if (aggregated.length === 0) return null;
 
   return (
-    <div className="inline-flex gap-1 max-w-full overflow-x-auto hide-scrollbar">
+    <div className="inline-flex gap-2 max-w-full overflow-x-auto hide-scrollbar">
       {aggregated.map((reaction) => (
         <ReactionBadge
           key={reaction.customEmoji?.shortcode || reaction.emoji}
@@ -187,9 +187,7 @@ function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
       )}
       <span
         className={cn(
-          hasUserReacted
-            ? "text-highlight font-semibold"
-            : "text-muted-foreground",
+          hasUserReacted ? "text-highlight" : "text-muted-foreground",
         )}
       >
         {reaction.count}
