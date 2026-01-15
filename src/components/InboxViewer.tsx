@@ -68,15 +68,20 @@ export function InboxViewer() {
       .count();
   }, [activeAccount?.pubkey]);
 
+  // Get failed gift wraps with error messages
+  const failedGiftWraps = useLiveQuery(async () => {
+    if (!activeAccount?.pubkey) return [];
+    return db.giftWraps
+      .where("[recipientPubkey+status]")
+      .equals([activeAccount.pubkey, "failed"])
+      .limit(10)
+      .toArray();
+  }, [activeAccount?.pubkey]);
+
   // Get conversations (from decrypted rumors)
   const conversations = useLiveQuery(async () => {
     if (!activeAccount?.pubkey) return [];
-    const convos = await getConversations(activeAccount.pubkey);
-    console.log(
-      `[InboxViewer] Found ${convos.length} conversations for ${activeAccount.pubkey.slice(0, 8)}`,
-      convos,
-    );
-    return convos;
+    return await getConversations(activeAccount.pubkey);
   }, [activeAccount?.pubkey]);
 
   // Get loader state for relay info
@@ -442,6 +447,44 @@ export function InboxViewer() {
             </CardContent>
           </Card>
         )}
+
+        {/* Decryption Errors */}
+        {privateMessagesEnabled &&
+          failedGiftWraps &&
+          failedGiftWraps.length > 0 && (
+            <Card>
+              <CardHeader className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <CardTitle className="text-base text-red-600">
+                    Decryption Errors ({failedCount ?? 0})
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="space-y-2">
+                  {failedGiftWraps.map((gw) => (
+                    <div
+                      key={gw.id}
+                      className="p-2 rounded bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900"
+                    >
+                      <div className="text-xs font-mono text-red-900 dark:text-red-300 mb-1">
+                        {gw.id.slice(0, 16)}...
+                      </div>
+                      <div className="text-sm text-red-700 dark:text-red-400">
+                        {gw.failureReason || "Unknown error"}
+                      </div>
+                    </div>
+                  ))}
+                  {(failedCount ?? 0) > 10 && (
+                    <div className="text-xs text-muted-foreground">
+                      Showing first 10 of {failedCount} errors
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Help Text */}
         {!privateMessagesEnabled && (

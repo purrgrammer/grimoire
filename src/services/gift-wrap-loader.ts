@@ -92,16 +92,6 @@ class GiftWrapLoader {
       recipientPubkey,
     });
 
-    console.log(
-      `[GiftWrapLoader] Enabled for ${recipientPubkey.slice(0, 8)} (autoDecrypt: ${autoDecrypt})`,
-    );
-    console.log(
-      `[GiftWrapLoader] Signer type: ${signer.constructor?.name || "unknown"}`,
-    );
-    console.log(
-      `[GiftWrapLoader] Signer has nip44: ${!!signer.nip44}, has decrypt: ${!!signer.nip44?.decrypt}`,
-    );
-
     // Start loading
     await this.sync();
   }
@@ -124,8 +114,6 @@ class GiftWrapLoader {
       loading: false,
       recipientPubkey: undefined,
     });
-
-    console.log("[GiftWrapLoader] Disabled");
   }
 
   /**
@@ -135,12 +123,10 @@ class GiftWrapLoader {
     const state = this.state$.value;
 
     if (!state.enabled || !state.recipientPubkey || !this.currentSigner) {
-      console.warn("[GiftWrapLoader] Cannot sync: not enabled or no signer");
       return;
     }
 
     if (state.loading) {
-      console.log("[GiftWrapLoader] Already syncing, skipping");
       return;
     }
 
@@ -158,11 +144,6 @@ class GiftWrapLoader {
         // so this might not work well
       }
 
-      console.log(
-        `[GiftWrapLoader] Syncing from ${inboxRelays.length} inbox relays:`,
-        inboxRelays,
-      );
-
       // Update state with relays being used
       this.state$.next({
         ...this.state$.value,
@@ -177,10 +158,6 @@ class GiftWrapLoader {
         // since: state.lastSync ? Math.floor(state.lastSync / 1000) : undefined,
       };
 
-      console.log(
-        `[GiftWrapLoader] Subscribing to kind 1059 events on ${inboxRelays.length} relays`,
-      );
-
       // Use pool.subscription to connect to relays and fetch events
       const obs = pool.subscription(inboxRelays, [filter], { eventStore });
 
@@ -192,15 +169,9 @@ class GiftWrapLoader {
           if (typeof response === "string") {
             // EOSE received from a relay
             eoseCount++;
-            console.log(
-              `[GiftWrapLoader] EOSE ${eoseCount}/${inboxRelays.length} from relay`,
-            );
 
             // When we've received EOSE from all relays, we're done loading
             if (eoseCount >= inboxRelays.length) {
-              console.log(
-                `[GiftWrapLoader] All relays sent EOSE, received ${eventCount} gift wraps`,
-              );
               this.state$.next({
                 ...this.state$.value,
                 loading: false,
@@ -214,9 +185,6 @@ class GiftWrapLoader {
             // Event received from relay
             const event = response as NostrEvent;
             eventCount++;
-            console.log(
-              `[GiftWrapLoader] Received gift wrap ${event.id.slice(0, 8)} (${eventCount} total)`,
-            );
 
             // Process the gift wrap immediately
             void this.handleGiftWrap(event);
@@ -231,7 +199,6 @@ class GiftWrapLoader {
           });
         },
         complete: () => {
-          console.log("[GiftWrapLoader] Subscription completed");
           this.state$.next({
             ...this.state$.value,
             loading: false,
@@ -266,9 +233,6 @@ class GiftWrapLoader {
       // If auto-decrypt is enabled, process immediately
       if (state.autoDecrypt) {
         await processGiftWrap(event, state.recipientPubkey, this.currentSigner);
-        console.log(
-          `[GiftWrapLoader] Auto-decrypted gift wrap ${event.id.slice(0, 8)}`,
-        );
       } else {
         // Otherwise, just store the envelope as pending
         await db.giftWraps.put({
@@ -278,9 +242,6 @@ class GiftWrapLoader {
           status: "pending",
           receivedAt: Date.now(),
         });
-        console.log(
-          `[GiftWrapLoader] Stored gift wrap ${event.id.slice(0, 8)} for manual decryption`,
-        );
       }
     } catch (error) {
       console.error(
@@ -308,10 +269,6 @@ class GiftWrapLoader {
     if (pending.length === 0) {
       return;
     }
-
-    console.log(
-      `[GiftWrapLoader] Auto-processing ${pending.length} pending gift wraps`,
-    );
 
     for (const envelope of pending) {
       try {
@@ -341,7 +298,6 @@ class GiftWrapLoader {
     const state = this.state$.value;
 
     if (!state.recipientPubkey || !this.currentSigner) {
-      console.warn("[GiftWrapLoader] Cannot decrypt: not enabled or no signer");
       return { success: 0, failed: 0, total: 0 };
     }
 
@@ -350,10 +306,6 @@ class GiftWrapLoader {
     if (pending.length === 0) {
       return { success: 0, failed: 0, total: 0 };
     }
-
-    console.log(
-      `[GiftWrapLoader] Manually decrypting ${pending.length} pending gift wraps`,
-    );
 
     let success = 0;
     let failed = 0;
@@ -397,9 +349,6 @@ class GiftWrapLoader {
     const dmRelays = await dmRelayListCache.get(pubkey);
 
     if (dmRelays && dmRelays.length > 0) {
-      console.log(
-        `[GiftWrapLoader] Using ${dmRelays.length} DM relays from kind 10050`,
-      );
       return dmRelays;
     }
 
@@ -407,9 +356,6 @@ class GiftWrapLoader {
     const inboxRelays = await relayListCache.getInboxRelays(pubkey);
 
     if (inboxRelays && inboxRelays.length > 0) {
-      console.log(
-        `[GiftWrapLoader] Fallback to ${inboxRelays.length} inbox relays from kind 10002`,
-      );
       return inboxRelays;
     }
 

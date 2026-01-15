@@ -52,10 +52,6 @@ export async function unwrapAndUnseal(
   giftWrap: NostrEvent,
   signer: ISigner,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
-  console.log(
-    `[GiftWrap] Using applesauce unlockGiftWrap for ${giftWrap.id.slice(0, 8)}`,
-  );
-
   // Use applesauce helper to unlock the gift wrap
   const rumor = await unlockGiftWrap(giftWrap, signer);
 
@@ -68,10 +64,6 @@ export async function unwrapAndUnseal(
       "INVALID_SEAL",
     );
   }
-
-  console.log(
-    `[GiftWrap] Successfully unlocked - sender: ${seal.pubkey.slice(0, 8)}, rumor kind: ${rumor.kind}`,
-  );
 
   // Convert rumor to NostrEvent (rumor has id but no sig)
   const rumorEvent = rumor as NostrEvent;
@@ -92,28 +84,15 @@ export async function processGiftWrap(
   recipientPubkey: string,
   signer: ISigner,
 ): Promise<DecryptedRumor | null> {
-  console.log(
-    `[GiftWrap] Processing gift wrap ${giftWrap.id.slice(0, 8)} for recipient ${recipientPubkey.slice(0, 8)}`,
-  );
-  console.log(
-    `[GiftWrap] Signer has nip44: ${!!signer.nip44}, has decrypt: ${!!signer.nip44?.decrypt}`,
-  );
-
   // Check if already processed
   const existing = await db.giftWraps.get(giftWrap.id);
   if (existing) {
     // Already processed
     if (existing.status === "decrypted") {
-      console.log(
-        `[GiftWrap] Already decrypted ${giftWrap.id.slice(0, 8)}, skipping`,
-      );
       return (await db.decryptedRumors.get(giftWrap.id)) || null;
     }
     if (existing.status === "failed") {
       // Already tried and failed, don't retry
-      console.log(
-        `[GiftWrap] Previously failed ${giftWrap.id.slice(0, 8)}, skipping`,
-      );
       return null;
     }
   }
@@ -162,7 +141,6 @@ export async function processGiftWrap(
       error instanceof Error ? error.message : String(error);
     await db.giftWraps.put(envelope);
 
-    console.error(`[GiftWrap] Failed to process ${giftWrap.id}:`, error);
     return null;
   }
 }
@@ -195,10 +173,6 @@ async function updateConversationMetadata(
       updatedAt: Date.now(),
     };
     await db.conversations.put(conversation);
-    console.log(
-      `[GiftWrap] Created new conversation ${conversationId}`,
-      conversation,
-    );
   } else {
     // Update existing conversation if this is newer
     if (rumor.rumorCreatedAt > existing.lastMessageCreatedAt) {
