@@ -248,6 +248,50 @@ export class NipC7Adapter extends ChatProtocolAdapter {
   }
 
   /**
+   * Send a reaction (kind 7) to a message
+   */
+  async sendReaction(
+    conversation: Conversation,
+    messageId: string,
+    emoji: string,
+    customEmoji?: { shortcode: string; url: string },
+  ): Promise<void> {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activePubkey || !activeSigner) {
+      throw new Error("No active account or signer");
+    }
+
+    const partner = conversation.participants.find(
+      (p) => p.pubkey !== activePubkey,
+    );
+    if (!partner) {
+      throw new Error("No conversation partner found");
+    }
+
+    // Create event factory and sign event
+    const factory = new EventFactory();
+    factory.setSigner(activeSigner);
+
+    const tags: string[][] = [
+      ["e", messageId], // Event being reacted to
+      ["p", partner.pubkey], // Tag the partner (NIP-C7 context)
+      ["k", "9"], // Kind of event being reacted to
+    ];
+
+    // Add NIP-30 custom emoji tag if provided
+    if (customEmoji) {
+      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
+    }
+
+    // Use kind 7 for reactions
+    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    const event = await factory.sign(draft);
+    await publishEvent(event);
+  }
+
+  /**
    * Get protocol capabilities
    */
   getCapabilities(): ChatCapabilities {

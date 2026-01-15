@@ -470,6 +470,71 @@ export class Nip53Adapter extends ChatProtocolAdapter {
   }
 
   /**
+   * Send a reaction (kind 7) to a message in the live activity chat
+   */
+  async sendReaction(
+    conversation: Conversation,
+    messageId: string,
+    emoji: string,
+    customEmoji?: { shortcode: string; url: string },
+  ): Promise<void> {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activePubkey || !activeSigner) {
+      throw new Error("No active account or signer");
+    }
+
+    const activityAddress = conversation.metadata?.activityAddress;
+    const liveActivity = conversation.metadata?.liveActivity as
+      | {
+          relays?: string[];
+        }
+      | undefined;
+
+    if (!activityAddress) {
+      throw new Error("Activity address required");
+    }
+
+    const { pubkey, identifier } = activityAddress;
+    const aTagValue = `30311:${pubkey}:${identifier}`;
+
+    // Get relays - use immutable pattern to avoid mutating metadata
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for sending reaction");
+    }
+
+    // Create event factory and sign event
+    const factory = new EventFactory();
+    factory.setSigner(activeSigner);
+
+    const tags: string[][] = [
+      ["e", messageId], // Event being reacted to
+      ["a", aTagValue, relays[0] || ""], // Activity context (NIP-53 specific)
+      ["k", "1311"], // Kind of event being reacted to (live chat message)
+    ];
+
+    // Add NIP-30 custom emoji tag if provided
+    if (customEmoji) {
+      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
+    }
+
+    // Use kind 7 for reactions
+    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    const event = await factory.sign(draft);
+
+    // Publish to all activity relays
+    await publishEventToRelays(event, relays);
+  }
+
+  /**
    * Get protocol capabilities
    */
   getCapabilities(): ChatCapabilities {

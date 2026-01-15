@@ -412,6 +412,8 @@ const MessageItem = memo(function MessageItem({
       <ChatMessageContextMenu
         event={message.event}
         onReply={canReply && onReply ? () => onReply(message.id) : undefined}
+        conversation={conversation}
+        adapter={adapter}
       >
         {messageContent}
       </ChatMessageContextMenu>

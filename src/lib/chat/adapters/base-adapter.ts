@@ -127,6 +127,20 @@ export abstract class ChatProtocolAdapter {
   ): Promise<void>;
 
   /**
+   * Send a reaction (kind 7) to a message
+   * @param conversation - The conversation context
+   * @param messageId - The event ID being reacted to
+   * @param emoji - The reaction emoji (unicode or :shortcode:)
+   * @param customEmoji - Optional NIP-30 custom emoji metadata
+   */
+  abstract sendReaction(
+    conversation: Conversation,
+    messageId: string,
+    emoji: string,
+    customEmoji?: { shortcode: string; url: string },
+  ): Promise<void>;
+
+  /**
    * Get the capabilities of this protocol
    * Used to determine which UI features to show
    */

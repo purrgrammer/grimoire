@@ -489,6 +489,52 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
+   * Send a reaction (kind 7) to a message in the group
+   */
+  async sendReaction(
+    conversation: Conversation,
+    messageId: string,
+    emoji: string,
+    customEmoji?: { shortcode: string; url: string },
+  ): Promise<void> {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activePubkey || !activeSigner) {
+      throw new Error("No active account or signer");
+    }
+
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+
+    if (!groupId || !relayUrl) {
+      throw new Error("Group ID and relay URL required");
+    }
+
+    // Create event factory and sign event
+    const factory = new EventFactory();
+    factory.setSigner(activeSigner);
+
+    const tags: string[][] = [
+      ["e", messageId], // Event being reacted to
+      ["h", groupId], // Group context (NIP-29 specific)
+      ["k", "9"], // Kind of event being reacted to (group chat message)
+    ];
+
+    // Add NIP-30 custom emoji tag if provided
+    if (customEmoji) {
+      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
+    }
+
+    // Use kind 7 for reactions
+    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    const event = await factory.sign(draft);
+
+    // Publish only to the group relay
+    await publishEventToRelays(event, [relayUrl]);
+  }
+
+  /**
    * Get protocol capabilities
    */
   getCapabilities(): ChatCapabilities {
