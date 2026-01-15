@@ -54,6 +54,15 @@ Detailed guide on implementation pitfalls:
 - UX considerations
 - Testing strategies
 
+#### references/nip-60-cashu-wallet.md
+Complete guide to NIP-60 Cashu Wallets:
+- Protocol specification and event kinds
+- Wallet operations (minting, sending, receiving, melting)
+- applesauce-wallet implementation details
+- Security considerations and best practices
+- Code examples and integration patterns
+- NIP-61 Nutzaps integration
+
 ## When to Use
 
 Use this skill when:
