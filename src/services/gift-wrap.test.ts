@@ -8,19 +8,20 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
 
 // Mock signer for testing
-function createMockSigner(decryptResponses: Map<string, string>): ISigner & {
-  nip44Decrypt: (pubkey: string, ciphertext: string) => Promise<string>;
-} {
+function createMockSigner(decryptResponses: Map<string, string>): ISigner {
   return {
     getPublicKey: vi.fn().mockResolvedValue("mock-pubkey"),
     signEvent: vi.fn(),
-    nip44Decrypt: vi.fn(async (pubkey: string, ciphertext: string) => {
-      const response = decryptResponses.get(`${pubkey}:${ciphertext}`);
-      if (!response) {
-        throw new Error("Mock decryption failed: no response configured");
-      }
-      return response;
-    }),
+    nip44: {
+      encrypt: vi.fn(),
+      decrypt: vi.fn(async (pubkey: string, ciphertext: string) => {
+        const response = decryptResponses.get(`${pubkey}:${ciphertext}`);
+        if (!response) {
+          throw new Error("Mock decryption failed: no response configured");
+        }
+        return response;
+      }),
+    },
   };
 }
 

@@ -12,7 +12,6 @@ import {
 import { useGrimoire } from "@/core/state";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
 import giftWrapLoader from "@/services/gift-wrap-loader";
 import { toast } from "sonner";
@@ -172,9 +171,12 @@ export function InboxViewer() {
             {/* Enable Private Messages */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="enable-private-messages">
+                <label
+                  htmlFor="enable-private-messages"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
                   Enable Private Messages
-                </Label>
+                </label>
                 <p className="text-sm text-muted-foreground">
                   Fetch and store encrypted gift wraps from DM relays
                 </p>
@@ -190,7 +192,12 @@ export function InboxViewer() {
             {privateMessagesEnabled && (
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="auto-decrypt">Auto-Decrypt Messages</Label>
+                  <label
+                    htmlFor="auto-decrypt"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Auto-Decrypt Messages
+                  </label>
                   <p className="text-sm text-muted-foreground">
                     Automatically decrypt gift wraps as they arrive
                   </p>

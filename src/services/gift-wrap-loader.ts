@@ -163,17 +163,12 @@ class GiftWrapLoader {
       };
 
       // Create timeline loader for gift wraps
-      const timeline = createTimelineLoader(pool, {
+      const loader = createTimelineLoader(pool, inboxRelays, [filter], {
         eventStore,
-        relays: inboxRelays,
-        filters: [filter],
       });
 
       // Subscribe to timeline
-      this.subscription = timeline.subscribe({
-        next: (event: NostrEvent) => {
-          void this.handleGiftWrap(event);
-        },
+      this.subscription = loader().subscribe({
         error: (error: Error) => {
           console.error("[GiftWrapLoader] Timeline error:", error);
           this.state$.next({
@@ -191,6 +186,23 @@ class GiftWrapLoader {
           });
         },
       });
+
+      // Handle events from timeline via eventStore subscription
+      // Timeline loader automatically adds events to eventStore
+      const eventSub = eventStore.timeline([filter]).subscribe((events) => {
+        events.forEach((event) => {
+          void this.handleGiftWrap(event);
+        });
+      });
+
+      // Store both subscriptions for cleanup
+      const originalUnsub = this.subscription.unsubscribe.bind(
+        this.subscription,
+      );
+      this.subscription.unsubscribe = () => {
+        originalUnsub();
+        eventSub.unsubscribe();
+      };
 
       // Process any pending gift wraps from database
       await this.processPendingGiftWraps();

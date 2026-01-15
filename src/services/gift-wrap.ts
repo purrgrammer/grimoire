@@ -121,7 +121,7 @@ async function unwrapGiftWrap(
 ): Promise<NostrEvent> {
   validateGiftWrap(giftWrap);
 
-  if (!signer.nip44Decrypt) {
+  if (!signer.nip44?.decrypt) {
     throw new GiftWrapError(
       "Signer does not support NIP-44 decryption",
       "NO_SIGNER",
@@ -130,7 +130,7 @@ async function unwrapGiftWrap(
 
   try {
     // Decrypt using the gift wrap author's pubkey (ephemeral key)
-    const decryptedContent = await signer.nip44Decrypt(
+    const decryptedContent = await signer.nip44.decrypt(
       giftWrap.pubkey,
       giftWrap.content,
     );
@@ -165,7 +165,7 @@ async function unsealSeal(
 ): Promise<NostrEvent> {
   validateSeal(seal);
 
-  if (!signer.nip44Decrypt) {
+  if (!signer.nip44?.decrypt) {
     throw new GiftWrapError(
       "Signer does not support NIP-44 decryption",
       "NO_SIGNER",
@@ -174,7 +174,7 @@ async function unsealSeal(
 
   try {
     // Decrypt using the seal author's pubkey (sender's real key)
-    const decryptedContent = await signer.nip44Decrypt(
+    const decryptedContent = await signer.nip44.decrypt(
       seal.pubkey,
       seal.content,
     );
