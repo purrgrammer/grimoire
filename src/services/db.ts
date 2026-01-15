@@ -45,6 +45,13 @@ export interface CachedRelayList {
   updatedAt: number;
 }
 
+export interface CachedDMRelayList {
+  pubkey: string;
+  event: NostrEvent;
+  relays: string[]; // DM inbox relays from kind 10050
+  updatedAt: number;
+}
+
 export interface RelayLivenessEntry {
   url: string;
   state: "online" | "offline" | "dead";
@@ -140,6 +147,7 @@ class GrimoireDb extends Dexie {
   relayInfo!: Table<RelayInfo>;
   relayAuthPreferences!: Table<RelayAuthPreference>;
   relayLists!: Table<CachedRelayList>;
+  dmRelayLists!: Table<CachedDMRelayList>;
   relayLiveness!: Table<RelayLivenessEntry>;
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
@@ -401,6 +409,26 @@ class GrimoireDb extends Dexie {
       decryptedRumors:
         "&giftWrapId, recipientPubkey, senderPubkey, [senderPubkey+rumorCreatedAt], [recipientPubkey+senderPubkey], rumorCreatedAt",
       // Conversation metadata for fast conversation list queries
+      conversations:
+        "&id, recipientPubkey, [recipientPubkey+lastMessageCreatedAt]",
+    });
+
+    // Version 17: Add DM relay list cache (kind 10050)
+    this.version(17).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      dmRelayLists: "&pubkey, updatedAt", // NIP-17 DM relay lists (kind 10050)
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      giftWraps: "&id, recipientPubkey, [recipientPubkey+status], receivedAt",
+      decryptedRumors:
+        "&giftWrapId, recipientPubkey, senderPubkey, [senderPubkey+rumorCreatedAt], [recipientPubkey+senderPubkey], rumorCreatedAt",
       conversations:
         "&id, recipientPubkey, [recipientPubkey+lastMessageCreatedAt]",
     });

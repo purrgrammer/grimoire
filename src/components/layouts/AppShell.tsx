@@ -2,6 +2,7 @@ import { useState, useEffect, ReactNode } from "react";
 import { Terminal } from "lucide-react";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
+import { useDMRelayListCacheSync } from "@/hooks/useDMRelayListCacheSync";
 import { useBlossomServerCacheSync } from "@/hooks/useBlossomServerCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
 import relayStateManager from "@/services/relay-state-manager";
@@ -25,6 +26,9 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
 
   // Auto-cache kind:10002 relay lists from EventStore to Dexie
   useRelayListCacheSync();
+
+  // Auto-cache kind:10050 DM relay lists from EventStore to Dexie
+  useDMRelayListCacheSync();
 
   // Auto-cache kind:10063 blossom server lists from EventStore to Dexie
   useBlossomServerCacheSync();

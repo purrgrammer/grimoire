@@ -22,6 +22,7 @@ import { createTimelineLoader } from "applesauce-loaders/loaders";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
+import { dmRelayListCache } from "./dm-relay-list-cache";
 import { processGiftWrap, getPendingGiftWraps } from "./gift-wrap";
 import db from "./db";
 
@@ -368,33 +369,31 @@ class GiftWrapLoader {
    * Gets DM relays for a user (kind 10050 per NIP-17)
    */
   private async getInboxRelays(pubkey: string): Promise<string[]> {
-    // Try to get from event store - kind 10050 DM relay list
-    const event = eventStore.getReplaceable(10050, pubkey, "");
-    if (event) {
-      // Parse relay URLs from tags
-      const relays = event.tags
-        .filter((t) => t[0] === "relay" && t[1])
-        .map((t) => t[1]);
+    // Try to get kind 10050 DM relay list (NIP-17)
+    // This will fetch from relays if not in cache
+    const dmRelays = await dmRelayListCache.get(pubkey);
 
-      if (relays.length > 0) {
-        return relays;
-      }
+    if (dmRelays && dmRelays.length > 0) {
+      console.log(
+        `[GiftWrapLoader] Using ${dmRelays.length} DM relays from kind 10050`,
+      );
+      return dmRelays;
     }
 
-    // Fallback: try inbox relays from kind 10002
-    let relays = await relayListCache.getInboxRelays(pubkey);
+    // Fallback: try inbox relays from kind 10002 (NIP-65)
+    const inboxRelays = await relayListCache.getInboxRelays(pubkey);
 
-    if (!relays || relays.length === 0) {
-      // Try to get from event store
-      const fallbackEvent = eventStore.getReplaceable(10002, pubkey, "");
-      if (fallbackEvent) {
-        // Cache it
-        relayListCache.set(fallbackEvent);
-        relays = await relayListCache.getInboxRelays(pubkey);
-      }
+    if (inboxRelays && inboxRelays.length > 0) {
+      console.log(
+        `[GiftWrapLoader] Fallback to ${inboxRelays.length} inbox relays from kind 10002`,
+      );
+      return inboxRelays;
     }
 
-    return relays || [];
+    console.warn(
+      `[GiftWrapLoader] No DM relays or inbox relays found for ${pubkey.slice(0, 8)}`,
+    );
+    return [];
   }
 
   /**

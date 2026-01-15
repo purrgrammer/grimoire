@@ -1,4 +1,4 @@
-import { User, HardDrive, Palette, Mail } from "lucide-react";
+import { User, HardDrive, Palette, Mail, Lock } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -7,6 +7,7 @@ import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
 import { useLiveQuery } from "dexie-react-hooks";
 import giftWrapLoader from "@/services/gift-wrap-loader";
+import { dmRelayListCache } from "@/services/dm-relay-list-cache";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +65,12 @@ export default function UserMenu() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
+  // Get DM relays (kind 10050) for active user
+  const dmRelays = useLiveQuery(async () => {
+    if (!account?.pubkey) return null;
+    const relays = await dmRelayListCache.get(account.pubkey);
+    return relays.length > 0 ? relays : null;
+  }, [account?.pubkey]);
 
   // Get pending gift wrap count
   const pendingCount = useLiveQuery(async () => {
@@ -138,6 +145,26 @@ export default function UserMenu() {
                         read={relay.read}
                         write={relay.write}
                       />
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+
+              {dmRelays && dmRelays.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
+                      <Lock className="size-3.5" />
+                      <span>Private Inbox Relays</span>
+                    </DropdownMenuLabel>
+                    {dmRelays.map((relay) => (
+                      <DropdownMenuItem
+                        key={relay}
+                        className="text-sm truncate"
+                      >
+                        <RelayLink url={relay} />
+                      </DropdownMenuItem>
                     ))}
                   </DropdownMenuGroup>
                 </>
