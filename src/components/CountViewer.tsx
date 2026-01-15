@@ -244,34 +244,36 @@ function RelayResultRow({ result }: { result: RelayCountResult }) {
 function SingleRelayResult({ result }: { result: RelayCountResult }) {
   if (result.status === "loading") {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground">Counting events...</p>
+      <div className="flex flex-col items-center justify-center py-6 gap-2">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Counting events...</p>
       </div>
     );
   }
 
   if (result.status === "unsupported") {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <Ban className="size-8 text-yellow-500" />
-        <p className="text-yellow-600 dark:text-yellow-400">{result.error}</p>
+      <div className="flex flex-col items-center justify-center py-6 gap-2">
+        <Ban className="size-5 text-yellow-500" />
+        <p className="text-sm text-yellow-600 dark:text-yellow-400">
+          {result.error}
+        </p>
       </div>
     );
   }
 
   if (result.status === "error") {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <AlertCircle className="size-8 text-destructive" />
-        <p className="text-destructive">{result.error}</p>
+      <div className="flex flex-col items-center justify-center py-6 gap-2">
+        <AlertCircle className="size-5 text-destructive" />
+        <p className="text-sm text-destructive">{result.error}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-16">
-      <span className="font-mono text-5xl font-bold tabular-nums">
+    <div className="flex flex-col items-center justify-center py-6">
+      <span className="font-mono text-3xl font-bold tabular-nums">
         {result.count?.toLocaleString()}
       </span>
     </div>
