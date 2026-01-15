@@ -5,28 +5,33 @@ import {
   CheckCircle2,
   RefreshCw,
   User,
-  Radio,
-  ChevronDown,
+  Wifi,
   Filter as FilterIcon,
+  Code,
+  ChevronDown,
 } from "lucide-react";
+import { firstValueFrom, timeout, catchError, of } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import pool from "@/services/relay-pool";
 import { RelayLink } from "./nostr/RelayLink";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
-import { KindBadge } from "./KindBadge";
-import { UserName } from "./nostr/UserName";
-import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "./ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { SyntaxHighlight } from "@/components/SyntaxHighlight";
+import { CodeCopyButton } from "@/components/CodeCopyButton";
+import { useCopy } from "@/hooks/useCopy";
 import type { NostrFilter } from "@/types/nostr";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
-import { formatTimeRange } from "@/lib/filter-formatters";
-import type { Subscription } from "rxjs";
 import type { Filter } from "nostr-tools";
 
 interface CountViewerProps {
@@ -41,27 +46,71 @@ interface RelayCountResult {
   url: string;
   status: CountStatus;
   count?: number;
-  approximate?: boolean;
   error?: string;
 }
 
+const COUNT_TIMEOUT = 10000; // 10 second timeout per relay
+
 /**
- * Hook to perform COUNT requests using the relay pool
+ * Perform a COUNT request to a single relay with timeout
+ */
+async function countFromRelay(
+  url: string,
+  filter: NostrFilter,
+): Promise<RelayCountResult> {
+  try {
+    const relay = pool.relay(url);
+    const result = await firstValueFrom(
+      relay.count(filter as Filter).pipe(
+        timeout(COUNT_TIMEOUT),
+        catchError((err) => {
+          // Timeout or connection error
+          if (err.name === "TimeoutError") {
+            return of({ count: -1, _error: "Timeout - relay did not respond" });
+          }
+          return of({
+            count: -1,
+            _error: err?.message || "Connection error",
+          });
+        }),
+      ),
+    );
+
+    // Check if this was an error result
+    if ("_error" in result) {
+      return {
+        url,
+        status: "error",
+        error: (result as { _error: string })._error,
+      };
+    }
+
+    return {
+      url,
+      status: "success",
+      count: result.count,
+    };
+  } catch (err) {
+    return {
+      url,
+      status: "error",
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Hook to perform COUNT requests to multiple relays
  */
 function useCount(filter: NostrFilter, relays: string[]) {
   const [results, setResults] = useState<Map<string, RelayCountResult>>(
     new Map(),
   );
   const [loading, setLoading] = useState(false);
-  const subscriptionRef = useRef<Subscription | null>(null);
+  const abortRef = useRef(false);
 
-  const executeCount = useCallback(() => {
-    // Clean up any previous subscription
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
-      subscriptionRef.current = null;
-    }
-
+  const executeCount = useCallback(async () => {
+    abortRef.current = false;
     setLoading(true);
 
     // Initialize all relays as loading
@@ -71,235 +120,33 @@ function useCount(filter: NostrFilter, relays: string[]) {
     }
     setResults(initialResults);
 
-    // Use pool.count() which returns Observable<Record<string, CountResponse>>
-    // This handles connection management, retries, and timeouts automatically
-    // Cast filter to nostr-tools Filter type for compatibility
-    subscriptionRef.current = pool.count(relays, filter as Filter).subscribe({
-      next: (countResults) => {
-        // countResults is Record<string, { count: number }>
+    // Execute count requests in parallel
+    const promises = relays.map(async (url) => {
+      const result = await countFromRelay(url, filter);
+      if (!abortRef.current) {
         setResults((prev) => {
           const next = new Map(prev);
-          for (const [url, response] of Object.entries(countResults)) {
-            next.set(url, {
-              url,
-              status: "success",
-              count: response.count,
-            });
-          }
+          next.set(url, result);
           return next;
         });
-      },
-      error: (error) => {
-        // Handle error for relays that failed
-        setResults((prev) => {
-          const next = new Map(prev);
-          // Mark all still-loading relays as errored
-          for (const [url, result] of next) {
-            if (result.status === "loading") {
-              next.set(url, {
-                url,
-                status: "error",
-                error: error?.message || "Request failed",
-              });
-            }
-          }
-          return next;
-        });
-        setLoading(false);
-      },
-      complete: () => {
-        // Mark any relays that didn't respond as unsupported/error
-        setResults((prev) => {
-          const next = new Map(prev);
-          for (const [url, result] of next) {
-            if (result.status === "loading") {
-              next.set(url, {
-                url,
-                status: "unsupported",
-                error: "Relay did not respond - may not support NIP-45",
-              });
-            }
-          }
-          return next;
-        });
-        setLoading(false);
-      },
+      }
+      return result;
     });
+
+    await Promise.all(promises);
+    if (!abortRef.current) {
+      setLoading(false);
+    }
   }, [filter, relays]);
 
   useEffect(() => {
     executeCount();
-
     return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
+      abortRef.current = true;
     };
   }, [executeCount]);
 
   return { results, loading, refresh: executeCount };
-}
-
-interface QueryHeaderProps {
-  filter: NostrFilter;
-  relays: string[];
-  loading: boolean;
-  onRefresh: () => void;
-}
-
-function QueryHeader({ filter, relays, loading, onRefresh }: QueryHeaderProps) {
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [relaysOpen, setRelaysOpen] = useState(false);
-
-  const authorPubkeys = filter.authors || [];
-  const pTagPubkeys = filter["#p"] || [];
-  const tTags = filter["#t"] || [];
-
-  return (
-    <div className="border-b border-border px-4 py-3 bg-muted/30 space-y-2">
-      {/* Summary line */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Human-readable kinds */}
-        {filter.kinds && filter.kinds.length > 0 && (
-          <div className="flex items-center gap-1">
-            {filter.kinds.slice(0, 3).map((kind) => (
-              <KindBadge
-                key={kind}
-                kind={kind}
-                iconClassname="size-3"
-                className="text-xs"
-              />
-            ))}
-            {filter.kinds.length > 3 && (
-              <span className="text-xs text-muted-foreground">
-                +{filter.kinds.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Authors */}
-        {authorPubkeys.length > 0 && (
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-muted-foreground">by</span>
-            {authorPubkeys.slice(0, 2).map((pubkey) => (
-              <UserName key={pubkey} pubkey={pubkey} className="text-xs" />
-            ))}
-            {authorPubkeys.length > 2 && (
-              <span className="text-muted-foreground">
-                +{authorPubkeys.length - 2}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Mentions */}
-        {pTagPubkeys.length > 0 && (
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-muted-foreground">mentioning</span>
-            {pTagPubkeys.slice(0, 2).map((pubkey) => (
-              <UserName
-                key={pubkey}
-                pubkey={pubkey}
-                isMention
-                className="text-xs"
-              />
-            ))}
-            {pTagPubkeys.length > 2 && (
-              <span className="text-muted-foreground">
-                +{pTagPubkeys.length - 2}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Hashtags */}
-        {tTags.length > 0 && (
-          <div className="flex items-center gap-1">
-            {tTags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded"
-              >
-                #{tag}
-              </span>
-            ))}
-            {tTags.length > 3 && (
-              <span className="text-xs text-muted-foreground">
-                +{tTags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Time range */}
-        {(filter.since || filter.until) && (
-          <span className="text-xs text-muted-foreground">
-            {formatTimeRange(filter.since, filter.until)}
-          </span>
-        )}
-
-        {/* Search */}
-        {filter.search && (
-          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-            "{filter.search}"
-          </code>
-        )}
-
-        {/* Refresh button */}
-        <div className="ml-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={loading}
-            className="h-7 px-2"
-          >
-            <RefreshCw
-              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-            />
-          </Button>
-        </div>
-      </div>
-
-      {/* Collapsible sections */}
-      <div className="flex gap-4 text-xs">
-        {/* Filter dropdown */}
-        <Collapsible open={filterOpen} onOpenChange={setFilterOpen}>
-          <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-            <FilterIcon className="size-3" />
-            <span>Filter</span>
-            <ChevronDown
-              className={`size-3 transition-transform ${filterOpen ? "rotate-180" : ""}`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <FilterSummaryBadges filter={filter} />
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* Relays dropdown */}
-        <Collapsible open={relaysOpen} onOpenChange={setRelaysOpen}>
-          <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-            <Radio className="size-3" />
-            <span>
-              {relays.length} relay{relays.length !== 1 ? "s" : ""}
-            </span>
-            <ChevronDown
-              className={`size-3 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <div className="flex flex-wrap gap-2">
-              {relays.map((url) => (
-                <RelayLink key={url} url={url} className="text-xs" />
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
-    </div>
-  );
 }
 
 function RelayResultRow({ result }: { result: RelayCountResult }) {
@@ -312,38 +159,27 @@ function RelayResultRow({ result }: { result: RelayCountResult }) {
       case "success":
         return <CheckCircle2 className="size-4 text-green-500" />;
       case "error":
-        return <AlertCircle className="size-4 text-destructive" />;
       case "unsupported":
-        return <AlertCircle className="size-4 text-yellow-500" />;
+        return <AlertCircle className="size-4 text-destructive" />;
       default:
         return null;
     }
   }, [result.status]);
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 hover:bg-muted/30 rounded">
+    <div className="flex items-center justify-between py-2 px-4 hover:bg-muted/30">
       <div className="flex items-center gap-2">
         {statusIcon}
-        <RelayLink url={result.url} />
+        <RelayLink url={result.url} className="text-sm" />
       </div>
 
       <div className="flex items-center gap-2">
         {result.status === "success" && (
-          <>
-            <span className="font-mono text-lg font-semibold tabular-nums">
-              {result.count?.toLocaleString()}
-            </span>
-            {result.approximate && (
-              <Tooltip>
-                <TooltipTrigger>
-                  <span className="text-muted-foreground text-sm">~</span>
-                </TooltipTrigger>
-                <TooltipContent>Approximate count</TooltipContent>
-              </Tooltip>
-            )}
-          </>
+          <span className="font-mono text-lg font-semibold tabular-nums">
+            {result.count?.toLocaleString()}
+          </span>
         )}
-        {result.status === "error" && (
+        {(result.status === "error" || result.status === "unsupported") && (
           <Tooltip>
             <TooltipTrigger>
               <span className="text-sm text-destructive truncate max-w-48">
@@ -352,11 +188,6 @@ function RelayResultRow({ result }: { result: RelayCountResult }) {
             </TooltipTrigger>
             <TooltipContent>{result.error}</TooltipContent>
           </Tooltip>
-        )}
-        {result.status === "unsupported" && (
-          <span className="text-sm text-yellow-600 dark:text-yellow-400">
-            NIP-45 not supported
-          </span>
         )}
         {result.status === "loading" && (
           <span className="text-sm text-muted-foreground">counting...</span>
@@ -376,7 +207,7 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
     );
   }
 
-  if (result.status === "error") {
+  if (result.status === "error" || result.status === "unsupported") {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
         <AlertCircle className="size-8 text-destructive" />
@@ -385,32 +216,11 @@ function SingleRelayResult({ result }: { result: RelayCountResult }) {
     );
   }
 
-  if (result.status === "unsupported") {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <AlertCircle className="size-8 text-yellow-500" />
-        <p className="text-yellow-600 dark:text-yellow-400">
-          This relay does not support COUNT (NIP-45)
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col items-center justify-center py-16">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-5xl font-bold tabular-nums">
-          {result.count?.toLocaleString()}
-        </span>
-        {result.approximate && (
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="text-2xl text-muted-foreground">~</span>
-            </TooltipTrigger>
-            <TooltipContent>Approximate count</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      <span className="font-mono text-5xl font-bold tabular-nums">
+        {result.count?.toLocaleString()}
+      </span>
     </div>
   );
 }
@@ -422,6 +232,7 @@ export default function CountViewer({
 }: CountViewerProps) {
   const { state } = useGrimoire();
   const accountPubkey = state.activeAccount?.pubkey;
+  const { copy: handleCopy, copied } = useCopy();
 
   // Create pointer for contact list (kind 3) if we need to resolve $contacts
   const contactPointer = useMemo(
@@ -458,15 +269,105 @@ export default function CountViewer({
   const isSingleRelay = relays.length === 1;
   const singleResult = isSingleRelay ? results.get(relays[0]) : null;
 
+  // Calculate totals for header
+  const successCount = Array.from(results.values()).filter(
+    (r) => r.status === "success",
+  ).length;
+
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <QueryHeader
-        filter={filter}
-        relays={relays}
-        loading={loading}
-        onRefresh={refresh}
-      />
+      {/* Compact Header - matches ReqViewer style */}
+      <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
+        {/* Left: Status */}
+        <div className="flex items-center gap-2">
+          {loading ? (
+            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          ) : (
+            <CheckCircle2 className="size-3 text-green-500" />
+          )}
+          <span className="text-muted-foreground">
+            {loading
+              ? "Counting..."
+              : `${successCount}/${relays.length} relays`}
+          </span>
+        </div>
+
+        {/* Right: Controls */}
+        <div className="flex items-center gap-3">
+          {/* Filter Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <FilterIcon className="size-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0">
+              <div className="p-3 space-y-3">
+                <FilterSummaryBadges filter={filter} />
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+                    <Code className="size-3" />
+                    Raw Query JSON
+                    <ChevronDown className="size-3 ml-auto" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="relative mt-2">
+                      <SyntaxHighlight
+                        code={JSON.stringify(filter, null, 2)}
+                        language="json"
+                        className="bg-muted/50 p-3 pr-10 overflow-x-auto border border-border/40 rounded text-[11px]"
+                      />
+                      <CodeCopyButton
+                        onCopy={() =>
+                          handleCopy(JSON.stringify(filter, null, 2))
+                        }
+                        copied={copied}
+                        label="Copy query JSON"
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Relay Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <Wifi className="size-3" />
+                <span>{relays.length}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 p-3">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">
+                Relays ({relays.length})
+              </div>
+              <div className="space-y-1">
+                {relays.map((url) => (
+                  <RelayLink key={url} url={url} className="text-xs block" />
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Refresh Button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={refresh}
+                disabled={loading}
+                className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`size-3 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh counts</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
 
       {/* Account Required Message */}
       {needsAccount && !accountPubkey && (
