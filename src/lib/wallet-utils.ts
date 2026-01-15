@@ -87,15 +87,36 @@ export async function decryptWalletConfig(
   event: NostrEvent,
   signer: ISigner,
 ): Promise<WalletConfig | null> {
+  console.log("[decryptWalletConfig] Starting decryption");
+  console.log("[decryptWalletConfig] Event ID:", event.id);
+  console.log("[decryptWalletConfig] Event pubkey:", event.pubkey);
+  console.log(
+    "[decryptWalletConfig] Event content (encrypted):",
+    event.content.substring(0, 50) + "...",
+  );
+
   if (!signer.nip44) {
-    throw new Error("Signer does not support NIP-44 encryption");
+    const error = "Signer does not support NIP-44 encryption";
+    console.error("[decryptWalletConfig]", error);
+    throw new Error(error);
   }
 
   try {
+    console.log("[decryptWalletConfig] Calling signer.nip44.decrypt...");
     const decrypted = await signer.nip44.decrypt(event.pubkey, event.content);
-    return JSON.parse(decrypted) as WalletConfig;
+    console.log("[decryptWalletConfig] Decrypted plaintext:", decrypted);
+
+    const parsed = JSON.parse(decrypted) as WalletConfig;
+    console.log("[decryptWalletConfig] Parsed config:", parsed);
+
+    return parsed;
   } catch (error) {
-    console.error("Failed to decrypt wallet config:", error);
+    console.error("[decryptWalletConfig] Decryption failed:", error);
+    console.error("[decryptWalletConfig] Error details:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return null;
   }
 }
@@ -110,15 +131,40 @@ export async function decryptUnspentTokens(
   event: NostrEvent,
   signer: ISigner,
 ): Promise<UnspentTokens | null> {
+  console.log("[decryptUnspentTokens] Starting decryption");
+  console.log("[decryptUnspentTokens] Event ID:", event.id);
+  console.log("[decryptUnspentTokens] Event pubkey:", event.pubkey);
+  console.log(
+    "[decryptUnspentTokens] Event content (encrypted):",
+    event.content.substring(0, 50) + "...",
+  );
+
   if (!signer.nip44) {
-    throw new Error("Signer does not support NIP-44 encryption");
+    const error = "Signer does not support NIP-44 encryption";
+    console.error("[decryptUnspentTokens]", error);
+    throw new Error(error);
   }
 
   try {
+    console.log("[decryptUnspentTokens] Calling signer.nip44.decrypt...");
     const decrypted = await signer.nip44.decrypt(event.pubkey, event.content);
-    return JSON.parse(decrypted) as UnspentTokens;
+    console.log("[decryptUnspentTokens] Decrypted plaintext:", decrypted);
+
+    const parsed = JSON.parse(decrypted) as UnspentTokens;
+    console.log("[decryptUnspentTokens] Parsed tokens:", parsed);
+    console.log(
+      "[decryptUnspentTokens] Number of proofs:",
+      parsed.proofs?.length || 0,
+    );
+
+    return parsed;
   } catch (error) {
-    console.error("Failed to decrypt unspent tokens:", error);
+    console.error("[decryptUnspentTokens] Decryption failed:", error);
+    console.error("[decryptUnspentTokens] Error details:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return null;
   }
 }
@@ -133,15 +179,40 @@ export async function decryptTransactionHistory(
   event: NostrEvent,
   signer: ISigner,
 ): Promise<TransactionHistory | null> {
+  console.log("[decryptTransactionHistory] Starting decryption");
+  console.log("[decryptTransactionHistory] Event ID:", event.id);
+  console.log("[decryptTransactionHistory] Event pubkey:", event.pubkey);
+  console.log(
+    "[decryptTransactionHistory] Event content (encrypted):",
+    event.content.substring(0, 50) + "...",
+  );
+
   if (!signer.nip44) {
-    throw new Error("Signer does not support NIP-44 encryption");
+    const error = "Signer does not support NIP-44 encryption";
+    console.error("[decryptTransactionHistory]", error);
+    throw new Error(error);
   }
 
   try {
+    console.log("[decryptTransactionHistory] Calling signer.nip44.decrypt...");
     const decrypted = await signer.nip44.decrypt(event.pubkey, event.content);
-    return JSON.parse(decrypted) as TransactionHistory;
+    console.log("[decryptTransactionHistory] Decrypted plaintext:", decrypted);
+
+    const parsed = JSON.parse(decrypted) as TransactionHistory;
+    console.log("[decryptTransactionHistory] Parsed history:", parsed);
+    console.log(
+      "[decryptTransactionHistory] Number of transactions:",
+      parsed.transactions?.length || 0,
+    );
+
+    return parsed;
   } catch (error) {
-    console.error("Failed to decrypt transaction history:", error);
+    console.error("[decryptTransactionHistory] Decryption failed:", error);
+    console.error("[decryptTransactionHistory] Error details:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return null;
   }
 }
