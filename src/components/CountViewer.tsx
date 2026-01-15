@@ -4,34 +4,16 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
-  Filter as FilterIcon,
-  Hash,
   User,
-  Clock,
-  Search,
-  FileText,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { RelayLink } from "./nostr/RelayLink";
-import { UserName } from "./nostr/UserName";
-import { KindBadge } from "./KindBadge";
+import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
 import { Button } from "./ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "./ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { NostrFilter } from "@/types/nostr";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
-import {
-  formatTimeRange,
-  formatHashtags,
-  formatGenericTag,
-} from "@/lib/filter-formatters";
 
 interface CountViewerProps {
   filter: NostrFilter;
@@ -83,11 +65,9 @@ async function sendCountRequest(
     }, 10000);
 
     try {
-      // Convert wss:// to ws:// if needed for WebSocket constructor
       ws = new WebSocket(relayUrl);
 
       ws.onopen = () => {
-        // Send COUNT request
         const countMsg = JSON.stringify(["COUNT", queryId, filter]);
         ws?.send(countMsg);
       };
@@ -113,14 +93,12 @@ async function sendCountRequest(
             resolved = true;
             clearTimeout(timeout);
             cleanup();
-            // payload is the reason string for CLOSED
             resolve({
               url: relayUrl,
               status: "error",
               error: payload || "Request closed by relay",
             });
           } else if (type === "NOTICE") {
-            // Some relays send NOTICE for unsupported commands
             if (
               payload?.toLowerCase().includes("count") ||
               payload?.toLowerCase().includes("unknown") ||
@@ -191,14 +169,12 @@ function useCount(filter: NostrFilter, relays: string[]) {
   const executeCount = useCallback(async () => {
     setLoading(true);
 
-    // Initialize all relays as pending
     const initialResults = new Map<string, RelayCountResult>();
     for (const url of relays) {
       initialResults.set(url, { url, status: "loading" });
     }
     setResults(initialResults);
 
-    // Send COUNT requests in parallel
     const promises = relays.map(async (url) => {
       const result = await sendCountRequest(url, filter);
       setResults((prev) => {
@@ -213,178 +189,11 @@ function useCount(filter: NostrFilter, relays: string[]) {
     setLoading(false);
   }, [filter, relays]);
 
-  // Execute on mount
   useEffect(() => {
     executeCount();
   }, [executeCount]);
 
   return { results, loading, refresh: executeCount };
-}
-
-function FilterSummary({ filter }: { filter: NostrFilter }) {
-  const [isOpen, setIsOpen] = useState(true);
-
-  const authorPubkeys = filter.authors || [];
-  const pTagPubkeys = filter["#p"] || [];
-  const tTags = filter["#t"];
-  const dTags = filter["#d"];
-
-  // Find generic tags
-  const genericTags = Object.entries(filter)
-    .filter(
-      ([key]) =>
-        key.startsWith("#") &&
-        key.length === 2 &&
-        !["#e", "#p", "#t", "#d", "#P"].includes(key),
-    )
-    .map(([key, values]) => ({ letter: key[1], values: values as string[] }));
-
-  const tagCount =
-    (filter["#e"]?.length || 0) +
-    (tTags?.length || 0) +
-    (dTags?.length || 0) +
-    genericTags.reduce((sum, tag) => sum + tag.values.length, 0);
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left py-2 hover:bg-muted/50 rounded px-2 -mx-2">
-        {isOpen ? (
-          <ChevronDown className="size-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-4 text-muted-foreground" />
-        )}
-        <FilterIcon className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Filter</span>
-
-        {/* Summary badges */}
-        <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
-          {filter.kinds && filter.kinds.length > 0 && (
-            <span className="flex items-center gap-1">
-              <FileText className="size-3" />
-              {filter.kinds.length}
-            </span>
-          )}
-          {authorPubkeys.length > 0 && (
-            <span className="flex items-center gap-1">
-              <User className="size-3" />
-              {authorPubkeys.length}
-            </span>
-          )}
-          {pTagPubkeys.length > 0 && (
-            <span className="flex items-center gap-1">
-              <User className="size-3" />@{pTagPubkeys.length}
-            </span>
-          )}
-          {(filter.since || filter.until) && <Clock className="size-3" />}
-          {filter.search && <Search className="size-3" />}
-          {tagCount > 0 && (
-            <span className="flex items-center gap-1">
-              <Hash className="size-3" />
-              {tagCount}
-            </span>
-          )}
-        </div>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent>
-        <div className="pl-6 pr-2 py-2 space-y-2 text-sm">
-          {/* Kinds */}
-          {filter.kinds && filter.kinds.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-16">kinds:</span>
-              <div className="flex flex-wrap gap-1">
-                {filter.kinds.map((kind) => (
-                  <KindBadge key={kind} kind={kind} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Authors */}
-          {authorPubkeys.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-16">authors:</span>
-              <div className="flex flex-wrap gap-1">
-                {authorPubkeys.slice(0, 5).map((pubkey) => (
-                  <span
-                    key={pubkey}
-                    className="bg-muted px-2 py-0.5 rounded text-xs"
-                  >
-                    <UserName pubkey={pubkey} />
-                  </span>
-                ))}
-                {authorPubkeys.length > 5 && (
-                  <span className="text-muted-foreground text-xs">
-                    +{authorPubkeys.length - 5} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* #p tags (mentions) */}
-          {pTagPubkeys.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-16">#p:</span>
-              <div className="flex flex-wrap gap-1">
-                {pTagPubkeys.slice(0, 5).map((pubkey) => (
-                  <span
-                    key={pubkey}
-                    className="bg-muted px-2 py-0.5 rounded text-xs"
-                  >
-                    <UserName pubkey={pubkey} />
-                  </span>
-                ))}
-                {pTagPubkeys.length > 5 && (
-                  <span className="text-muted-foreground text-xs">
-                    +{pTagPubkeys.length - 5} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Time range */}
-          {(filter.since || filter.until) && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-16">time:</span>
-              <span className="text-xs">
-                {formatTimeRange(filter.since, filter.until)}
-              </span>
-            </div>
-          )}
-
-          {/* Search */}
-          {filter.search && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-16">search:</span>
-              <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
-                {filter.search}
-              </span>
-            </div>
-          )}
-
-          {/* Hashtags */}
-          {tTags && tTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-16">#t:</span>
-              <span className="text-xs">{formatHashtags(tTags)}</span>
-            </div>
-          )}
-
-          {/* Generic tags */}
-          {genericTags.map(({ letter, values }) => (
-            <div key={letter} className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground w-16">#{letter}:</span>
-              <span className="text-xs font-mono">
-                {formatGenericTag(letter, values)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
 }
 
 function RelayResultRow({ result }: { result: RelayCountResult }) {
@@ -546,32 +355,30 @@ export default function CountViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border px-4 py-3 bg-muted/30">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {isSingleRelay ? (
-              <RelayLink url={relays[0]} />
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {relays.length} relays
-              </span>
-            )}
-          </div>
+      {/* Compact Header */}
+      <div className="border-b border-border px-3 py-2 bg-muted/30 flex items-center gap-3 flex-wrap">
+        {isSingleRelay ? (
+          <RelayLink url={relays[0]} className="text-sm" />
+        ) : (
+          <span className="text-sm text-muted-foreground">
+            {relays.length} relays
+          </span>
+        )}
+        <span className="text-muted-foreground">·</span>
+        <FilterSummaryBadges filter={filter} />
+        <div className="ml-auto">
           <Button
             variant="ghost"
             size="sm"
             onClick={refresh}
             disabled={loading}
-            className="h-8"
+            className="h-7 px-2"
           >
             <RefreshCw
-              className={`size-4 mr-1 ${loading ? "animate-spin" : ""}`}
+              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
             />
-            Refresh
           </Button>
         </div>
-        <FilterSummary filter={filter} />
       </div>
 
       {/* Account Required Message */}
