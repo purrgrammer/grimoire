@@ -73,8 +73,8 @@ export function EmojiPickerDialog({
   // Perform search when query changes
   useEffect(() => {
     const performSearch = async () => {
-      // Use higher limit for dialog vs autocomplete (48 vs 24)
-      const results = await service.search(searchQuery, { limit: 48 });
+      // Always fetch 16 emoji (2 rows of 8) for consistent height
+      const results = await service.search(searchQuery, { limit: 16 });
       setSearchResults(results);
     };
     performSearch();
@@ -82,14 +82,55 @@ export function EmojiPickerDialog({
 
   // Get frequently used emojis from history
   const frequentlyUsed = useMemo(() => {
-    if (searchQuery.trim()) return []; // Only show when no search query
-
     const history = getReactionHistory();
     return Object.entries(history)
       .sort((a, b) => b[1] - a[1]) // Sort by count descending
-      .slice(0, 8)
+      .slice(0, 16) // Max 2 rows
       .map(([emoji]) => emoji);
-  }, [searchQuery]);
+  }, []);
+
+  // Combine recently used with search results for display
+  // When no search query: show recently used first, then fill with other emoji
+  // When searching: show search results
+  const displayEmojis = useMemo(() => {
+    if (searchQuery.trim()) {
+      // Show search results
+      return searchResults;
+    }
+
+    // No search query: prioritize recently used, then fill with other emoji
+    if (frequentlyUsed.length > 0) {
+      const recentSet = new Set(frequentlyUsed);
+      // Get additional emoji to fill to 16, excluding recently used
+      const additional = searchResults
+        .filter((r) => {
+          const key = r.source === "unicode" ? r.url : `:${r.shortcode}:`;
+          return !recentSet.has(key);
+        })
+        .slice(0, 16 - frequentlyUsed.length);
+
+      // Combine: recently used get priority, but displayed as regular emoji
+      const recentResults: EmojiSearchResult[] = [];
+      for (const emojiStr of frequentlyUsed) {
+        if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
+          const shortcode = emojiStr.slice(1, -1);
+          const customEmoji = service.getByShortcode(shortcode);
+          if (customEmoji) {
+            recentResults.push(customEmoji);
+          }
+        } else {
+          // Unicode emoji - find it in search results
+          const found = searchResults.find((r) => r.url === emojiStr);
+          if (found) recentResults.push(found);
+        }
+      }
+
+      return [...recentResults, ...additional].slice(0, 16);
+    }
+
+    // No history: just show top 16 emoji
+    return searchResults;
+  }, [searchQuery, searchResults, frequentlyUsed, service]);
 
   const handleEmojiClick = (result: EmojiSearchResult) => {
     if (result.source === "unicode") {
@@ -108,44 +149,6 @@ export function EmojiPickerDialog({
     setSearchQuery(""); // Reset search on close
   };
 
-  // Helper to render a frequently used emoji (handles both unicode and custom)
-  const renderFrequentEmoji = (emojiStr: string) => {
-    // Check if it's a custom emoji shortcode (e.g., ":yesno:")
-    if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
-      const shortcode = emojiStr.slice(1, -1);
-      // Look up the emoji in the service
-      const customEmoji = service.getByShortcode(shortcode);
-      if (customEmoji && customEmoji.url) {
-        return <img src={customEmoji.url} alt={emojiStr} className="size-6" />;
-      }
-      // Fallback to text if not found
-      return <span className="text-xs">{emojiStr}</span>;
-    }
-    // Unicode emoji - render as text
-    return <span className="text-2xl">{emojiStr}</span>;
-  };
-
-  const handleFrequentEmojiClick = (emojiStr: string) => {
-    // Check if it's a custom emoji shortcode
-    if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
-      const shortcode = emojiStr.slice(1, -1);
-      const customEmoji = service.getByShortcode(shortcode);
-      if (customEmoji && customEmoji.url) {
-        onEmojiSelect(emojiStr, {
-          shortcode: shortcode,
-          url: customEmoji.url,
-        });
-      } else {
-        // Fallback to treating as unicode
-        onEmojiSelect(emojiStr);
-      }
-    } else {
-      // Unicode emoji
-      onEmojiSelect(emojiStr);
-    }
-    onOpenChange(false);
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -162,55 +165,26 @@ export function EmojiPickerDialog({
           />
         </div>
 
-        {/* Frequently used section */}
-        {frequentlyUsed.length > 0 && (
-          <div>
-            <div className="text-xs text-muted-foreground mb-2 font-medium">
-              Recently used
-            </div>
-            <div className="grid grid-cols-8 gap-3">
-              {frequentlyUsed.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => handleFrequentEmojiClick(emoji)}
-                  className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center"
-                  title={emoji}
-                >
-                  {renderFrequentEmoji(emoji)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Emoji grid */}
-        <div className="max-h-[300px] overflow-y-auto">
-          {searchResults.length > 0 ? (
-            <div className="grid grid-cols-8 gap-3">
-              {searchResults.map((result) => (
-                <button
-                  key={`${result.source}:${result.shortcode}`}
-                  onClick={() => handleEmojiClick(result)}
-                  className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center"
-                  title={`:${result.shortcode}:`}
-                >
-                  {result.source === "unicode" ? (
-                    <span className="text-2xl">{result.url}</span>
-                  ) : (
-                    <img
-                      src={result.url}
-                      alt={`:${result.shortcode}:`}
-                      className="size-6"
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-muted-foreground py-8">
-              No emojis found
-            </div>
-          )}
+        {/* Fixed 2-row emoji grid (16 emoji) */}
+        <div className="grid grid-cols-8 gap-3">
+          {displayEmojis.map((result) => (
+            <button
+              key={`${result.source}:${result.shortcode}`}
+              onClick={() => handleEmojiClick(result)}
+              className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center aspect-square"
+              title={`:${result.shortcode}:`}
+            >
+              {result.source === "unicode" ? (
+                <span className="text-2xl">{result.url}</span>
+              ) : (
+                <img
+                  src={result.url}
+                  alt={`:${result.shortcode}:`}
+                  className="size-6 object-contain"
+                />
+              )}
+            </button>
+          ))}
         </div>
       </DialogContent>
     </Dialog>
