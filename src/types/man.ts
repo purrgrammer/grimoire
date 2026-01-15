@@ -6,6 +6,7 @@ import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
+import { parseLLMCommand } from "@/lib/llm-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -372,6 +373,29 @@ export const manPages: Record<string, ManPageEntry> = {
         protocol: result.protocol,
         identifier: result.identifier,
       };
+    },
+  },
+  llm: {
+    name: "llm",
+    section: "1",
+    synopsis: "llm [conversation-id]",
+    description:
+      "Chat with AI language models (OpenAI GPT, etc.). Start a new conversation or resume an existing one. Configure your API key and model settings via the configuration panel. Messages are streamed in real-time with token usage and cost tracking.",
+    options: [
+      {
+        flag: "[conversation-id]",
+        description: "Optional conversation ID to resume (UUID format)",
+      },
+    ],
+    examples: [
+      "llm                     Start a new conversation",
+      "llm abc123-def456-...   Resume existing conversation",
+    ],
+    seeAlso: ["chat"],
+    appId: "llm-chat",
+    category: "System",
+    argParser: async (args: string[]) => {
+      return parseLLMCommand(args);
     },
   },
   profile: {

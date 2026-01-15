@@ -8,6 +8,7 @@ import type {
   SpellbookContent,
   SpellbookEvent,
 } from "@/types/spell";
+import type { LLMConversation } from "@/types/llm";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -90,6 +91,7 @@ class GrimoireDb extends Dexie {
   relayLiveness!: Table<RelayLivenessEntry>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  llmConversations!: Table<LLMConversation>;
 
   constructor(name: string) {
     super(name);
@@ -310,6 +312,20 @@ class GrimoireDb extends Dexie {
       relayLiveness: "&url",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 15: Add LLM conversation storage
+    this.version(15).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      llmConversations: "&id, createdAt, updatedAt",
     });
   }
 }

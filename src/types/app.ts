@@ -17,6 +17,7 @@ export type AppId =
   | "debug"
   | "conn"
   | "chat"
+  | "llm-chat"
   | "spells"
   | "spellbooks"
   | "win";

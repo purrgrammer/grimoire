@@ -30,6 +30,9 @@ const ConnViewer = lazy(() => import("./ConnViewer"));
 const ChatViewer = lazy(() =>
   import("./ChatViewer").then((m) => ({ default: m.ChatViewer })),
 );
+const LLMChatViewer = lazy(() =>
+  import("./LLMChatViewer").then((m) => ({ default: m.LLMChatViewer })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -177,6 +180,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
           <ChatViewer
             protocol={window.props.protocol}
             identifier={window.props.identifier}
+            customTitle={window.customTitle}
+          />
+        );
+        break;
+      case "llm-chat":
+        content = (
+          <LLMChatViewer
+            conversationId={window.props.conversationId}
             customTitle={window.customTitle}
           />
         );
