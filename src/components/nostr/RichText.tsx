@@ -9,7 +9,9 @@ import { Link } from "./RichText/Link";
 import { Emoji } from "./RichText/Emoji";
 import { Gallery } from "./RichText/Gallery";
 import { Nip } from "./RichText/Nip";
+import { Relay } from "./RichText/Relay";
 import { nipReferences } from "@/lib/nip-transformer";
+import { relayReferences } from "@/lib/relay-transformer";
 import type { NostrEvent } from "@/types/nostr";
 import type { Root } from "applesauce-content/nast";
 
@@ -21,8 +23,12 @@ const { useRenderedContent } = Hooks;
 // Custom cache key for our extended transformers
 const GrimoireContentSymbol = Symbol.for("grimoire-content");
 
-// Default transformers including our custom NIP transformer
-export const defaultTransformers = [...textNoteTransformers, nipReferences];
+// Default transformers including our custom NIP and relay transformers
+export const defaultTransformers = [
+  ...textNoteTransformers,
+  nipReferences,
+  relayReferences,
+];
 
 // Context for passing depth through RichText rendering
 const DepthContext = createContext<number>(1);
@@ -85,7 +91,7 @@ interface RichTextProps {
 }
 
 // Content node component types for rendering
-// Using 'any' for node type since we extend with custom node types (like 'nip')
+// Using 'any' for node type since we extend with custom node types (like 'nip', 'relay')
 const contentComponents: Record<string, React.ComponentType<{ node: any }>> = {
   text: Text,
   hashtag: Hashtag,
@@ -94,11 +100,12 @@ const contentComponents: Record<string, React.ComponentType<{ node: any }>> = {
   emoji: Emoji,
   gallery: Gallery,
   nip: Nip,
+  relay: Relay,
 };
 
 /**
  * RichText component that renders Nostr event content with rich formatting
- * Supports mentions, hashtags, links, emojis, galleries, and NIP references
+ * Supports mentions, hashtags, links, emojis, galleries, NIP references, and relay links
  * Can also render plain text without requiring a full event
  */
 export function RichText({
