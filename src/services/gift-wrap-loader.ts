@@ -95,6 +95,12 @@ class GiftWrapLoader {
     console.log(
       `[GiftWrapLoader] Enabled for ${recipientPubkey.slice(0, 8)} (autoDecrypt: ${autoDecrypt})`,
     );
+    console.log(
+      `[GiftWrapLoader] Signer type: ${signer.constructor?.name || "unknown"}`,
+    );
+    console.log(
+      `[GiftWrapLoader] Signer has nip44: ${!!signer.nip44}, has decrypt: ${!!signer.nip44?.decrypt}`,
+    );
 
     // Start loading
     await this.sync();

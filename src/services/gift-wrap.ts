@@ -2,7 +2,7 @@
  * NIP-59 Gift Wrap Service
  *
  * Handles unwrapping gift wraps (kind 1059) and unsealing seals (kind 13)
- * to extract encrypted rumors.
+ * to extract encrypted rumors using applesauce helpers.
  *
  * Architecture:
  * 1. Gift Wrap (kind 1059) - outer layer with random ephemeral key
@@ -14,6 +14,7 @@
 
 import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
+import { unlockGiftWrap, getGiftWrapSeal } from "applesauce-common/helpers";
 import db, {
   GiftWrapEnvelope,
   DecryptedRumor,
@@ -40,167 +41,8 @@ export class GiftWrapError extends Error {
 }
 
 /**
- * Validates that an event is a gift wrap (kind 1059)
- */
-function validateGiftWrap(event: NostrEvent): void {
-  if (event.kind !== 1059) {
-    throw new GiftWrapError(
-      `Expected kind 1059, got ${event.kind}`,
-      "INVALID_KIND",
-    );
-  }
-
-  if (!event.content || event.content.trim() === "") {
-    throw new GiftWrapError("Gift wrap content is empty", "MISSING_CONTENT");
-  }
-}
-
-/**
- * Validates that an event is a seal (kind 13)
- */
-function validateSeal(event: NostrEvent): void {
-  if (event.kind !== 13) {
-    throw new GiftWrapError(
-      `Expected seal kind 13, got ${event.kind}`,
-      "INVALID_SEAL",
-    );
-  }
-
-  if (!event.content || event.content.trim() === "") {
-    throw new GiftWrapError("Seal content is empty", "INVALID_SEAL");
-  }
-
-  if (!event.pubkey) {
-    throw new GiftWrapError("Seal missing pubkey", "INVALID_SEAL");
-  }
-}
-
-/**
- * Validates that an event is a valid rumor (unsigned event)
- */
-function validateRumor(event: any): NostrEvent {
-  if (!event || typeof event !== "object") {
-    throw new GiftWrapError("Rumor is not an object", "INVALID_RUMOR");
-  }
-
-  if (typeof event.kind !== "number") {
-    throw new GiftWrapError("Rumor missing kind", "INVALID_RUMOR");
-  }
-
-  if (typeof event.content !== "string") {
-    throw new GiftWrapError("Rumor missing content", "INVALID_RUMOR");
-  }
-
-  if (!Array.isArray(event.tags)) {
-    throw new GiftWrapError("Rumor missing tags array", "INVALID_RUMOR");
-  }
-
-  if (typeof event.created_at !== "number") {
-    throw new GiftWrapError("Rumor missing created_at", "INVALID_RUMOR");
-  }
-
-  // Rumor should NOT have id or sig (it's unsigned)
-  // But it SHOULD have pubkey from the seal
-  if (!event.pubkey) {
-    throw new GiftWrapError("Rumor missing pubkey", "INVALID_RUMOR");
-  }
-
-  return event as NostrEvent;
-}
-
-/**
- * Unwraps a gift wrap to extract the seal
- *
- * @param giftWrap - Kind 1059 gift wrap event
- * @param signer - Signer for recipient (to decrypt)
- * @returns The seal event (kind 13)
- */
-async function unwrapGiftWrap(
-  giftWrap: NostrEvent,
-  signer: ISigner,
-): Promise<NostrEvent> {
-  validateGiftWrap(giftWrap);
-
-  if (!signer.nip44?.decrypt) {
-    throw new GiftWrapError(
-      "Signer does not support NIP-44 decryption",
-      "NO_SIGNER",
-    );
-  }
-
-  try {
-    // Decrypt using the gift wrap author's pubkey (ephemeral key)
-    const decryptedContent = await signer.nip44.decrypt(
-      giftWrap.pubkey,
-      giftWrap.content,
-    );
-
-    // Parse the seal event
-    const seal = JSON.parse(decryptedContent);
-    validateSeal(seal);
-
-    return seal;
-  } catch (error) {
-    if (error instanceof GiftWrapError) {
-      throw error;
-    }
-
-    throw new GiftWrapError(
-      `Failed to decrypt gift wrap: ${error instanceof Error ? error.message : String(error)}`,
-      "DECRYPTION_FAILED",
-    );
-  }
-}
-
-/**
- * Unseals a seal to extract the rumor
- *
- * @param seal - Kind 13 seal event
- * @param signer - Signer for recipient (to decrypt)
- * @returns The rumor (unsigned event) with sender's pubkey attached
- */
-async function unsealSeal(
-  seal: NostrEvent,
-  signer: ISigner,
-): Promise<NostrEvent> {
-  validateSeal(seal);
-
-  if (!signer.nip44?.decrypt) {
-    throw new GiftWrapError(
-      "Signer does not support NIP-44 decryption",
-      "NO_SIGNER",
-    );
-  }
-
-  try {
-    // Decrypt using the seal author's pubkey (sender's real key)
-    const decryptedContent = await signer.nip44.decrypt(
-      seal.pubkey,
-      seal.content,
-    );
-
-    // Parse the rumor
-    const rumor = JSON.parse(decryptedContent);
-
-    // Attach sender's pubkey to rumor (from seal)
-    rumor.pubkey = seal.pubkey;
-
-    const validatedRumor = validateRumor(rumor);
-    return validatedRumor;
-  } catch (error) {
-    if (error instanceof GiftWrapError) {
-      throw error;
-    }
-
-    throw new GiftWrapError(
-      `Failed to unseal seal: ${error instanceof Error ? error.message : String(error)}`,
-      "DECRYPTION_FAILED",
-    );
-  }
-}
-
-/**
  * Unwraps a gift wrap and unseals to extract the rumor (full process)
+ * Uses applesauce-common unlockGiftWrap helper
  *
  * @param giftWrap - Kind 1059 gift wrap event
  * @param signer - Signer for recipient (to decrypt)
@@ -210,13 +52,31 @@ export async function unwrapAndUnseal(
   giftWrap: NostrEvent,
   signer: ISigner,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
-  // Step 1: Unwrap gift wrap to get seal
-  const seal = await unwrapGiftWrap(giftWrap, signer);
+  console.log(
+    `[GiftWrap] Using applesauce unlockGiftWrap for ${giftWrap.id.slice(0, 8)}`,
+  );
 
-  // Step 2: Unseal to get rumor
-  const rumor = await unsealSeal(seal, signer);
+  // Use applesauce helper to unlock the gift wrap
+  const rumor = await unlockGiftWrap(giftWrap, signer);
 
-  return { seal, rumor };
+  // Get the seal from the unlocked gift wrap
+  const seal = getGiftWrapSeal(giftWrap);
+
+  if (!seal) {
+    throw new GiftWrapError(
+      "Failed to extract seal from gift wrap",
+      "INVALID_SEAL",
+    );
+  }
+
+  console.log(
+    `[GiftWrap] Successfully unlocked - sender: ${seal.pubkey.slice(0, 8)}, rumor kind: ${rumor.kind}`,
+  );
+
+  // Convert rumor to NostrEvent (rumor has id but no sig)
+  const rumorEvent = rumor as NostrEvent;
+
+  return { seal, rumor: rumorEvent };
 }
 
 /**
@@ -232,15 +92,28 @@ export async function processGiftWrap(
   recipientPubkey: string,
   signer: ISigner,
 ): Promise<DecryptedRumor | null> {
+  console.log(
+    `[GiftWrap] Processing gift wrap ${giftWrap.id.slice(0, 8)} for recipient ${recipientPubkey.slice(0, 8)}`,
+  );
+  console.log(
+    `[GiftWrap] Signer has nip44: ${!!signer.nip44}, has decrypt: ${!!signer.nip44?.decrypt}`,
+  );
+
   // Check if already processed
   const existing = await db.giftWraps.get(giftWrap.id);
   if (existing) {
     // Already processed
     if (existing.status === "decrypted") {
+      console.log(
+        `[GiftWrap] Already decrypted ${giftWrap.id.slice(0, 8)}, skipping`,
+      );
       return (await db.decryptedRumors.get(giftWrap.id)) || null;
     }
     if (existing.status === "failed") {
       // Already tried and failed, don't retry
+      console.log(
+        `[GiftWrap] Previously failed ${giftWrap.id.slice(0, 8)}, skipping`,
+      );
       return null;
     }
   }
