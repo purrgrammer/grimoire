@@ -310,7 +310,7 @@ const MessageItem = memo(function MessageItem({
       (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
     return (
-      <div className="pl-2 my-1 relative">
+      <div className="pl-2 my-1">
         <div
           className="p-[1px] rounded"
           style={{
@@ -339,6 +339,8 @@ const MessageItem = memo(function MessageItem({
               <span className="text-xs text-muted-foreground">
                 <Timestamp timestamp={message.timestamp} />
               </span>
+              {/* Reactions display - inline after timestamp */}
+              <MessageReactions messageId={message.id} relays={relays} />
             </div>
             {shouldShowReplyPreview && (
               <ReplyPreview
@@ -357,21 +359,21 @@ const MessageItem = memo(function MessageItem({
             )}
           </div>
         </div>
-        {/* Reactions display - lazy loaded per message */}
-        <MessageReactions messageId={message.id} relays={relays} />
       </div>
     );
   }
 
   // Regular user messages - wrap in context menu if event exists
   const messageContent = (
-    <div className="group relative flex items-start hover:bg-muted/50 px-3">
+    <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <UserName pubkey={message.author} className="font-semibold text-sm" />
           <span className="text-xs text-muted-foreground">
             <Timestamp timestamp={message.timestamp} />
           </span>
+          {/* Reactions display - inline after timestamp */}
+          <MessageReactions messageId={message.id} relays={relays} />
           {canReply && onReply && (
             <button
               onClick={() => onReply(message.id)}
@@ -400,8 +402,6 @@ const MessageItem = memo(function MessageItem({
             </span>
           )}
         </div>
-        {/* Reactions display - lazy loaded per message */}
-        <MessageReactions messageId={message.id} relays={relays} />
       </div>
     </div>
   );

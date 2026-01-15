@@ -134,11 +134,11 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
   if (aggregated.length === 0) return null;
 
   return (
-    <div className="absolute bottom-0.5 right-1 flex gap-0.5">
+    <>
       {aggregated.map((reaction) => (
         <span
           key={reaction.customEmoji?.shortcode || reaction.emoji}
-          className="inline-flex items-center gap-0.5 px-1 rounded bg-muted/80 text-[10px] leading-tight"
+          className="inline-flex items-center gap-1 text-[10px] leading-tight"
           title={`${reaction.count} reaction${reaction.count > 1 ? "s" : ""}`}
         >
           {reaction.customEmoji ? (
@@ -153,6 +153,6 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
           <span className="text-muted-foreground">{reaction.count}</span>
         </span>
       ))}
-    </div>
+    </>
   );
 }
