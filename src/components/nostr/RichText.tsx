@@ -12,6 +12,7 @@ import { Nip } from "./RichText/Nip";
 import { Relay } from "./RichText/Relay";
 import { nipReferences } from "@/lib/nip-transformer";
 import { relayReferences } from "@/lib/relay-transformer";
+import { nostrMentionReferences } from "@/lib/nostr-mention-transformer";
 import type { NostrEvent } from "@/types/nostr";
 import type { Root } from "applesauce-content/nast";
 
@@ -23,8 +24,11 @@ const { useRenderedContent } = Hooks;
 // Custom cache key for our extended transformers
 const GrimoireContentSymbol = Symbol.for("grimoire-content");
 
-// Default transformers including our custom NIP and relay transformers
+// Default transformers including our custom NIP, relay, and mention transformers
+// IMPORTANT: nostrMentionReferences must come BEFORE textNoteTransformers
+// to handle edge cases where mentions are immediately followed by text without whitespace
 export const defaultTransformers = [
+  nostrMentionReferences,
   ...textNoteTransformers,
   nipReferences,
   relayReferences,
