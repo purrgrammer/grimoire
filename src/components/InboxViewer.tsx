@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Mail,
@@ -8,15 +8,23 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  MessageSquare,
+  Radio,
+  Database,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 import giftWrapLoader from "@/services/gift-wrap-loader";
+import { getConversations } from "@/services/gift-wrap";
+import db from "@/services/db";
 import { toast } from "sonner";
 import { use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
+import { useProfile } from "@/hooks/useProfile";
+import { getDisplayName } from "@/lib/nostr-utils";
+import { formatDistanceToNow } from "date-fns";
 
 export function InboxViewer() {
   const { state, setPrivateMessagesEnabled, setAutoDecryptGiftWraps } =
@@ -50,6 +58,30 @@ export function InboxViewer() {
     if (!activeAccount?.pubkey) return 0;
     return giftWrapLoader.getUnreadCount(activeAccount.pubkey);
   }, [activeAccount?.pubkey]);
+
+  // Get conversations
+  const conversations = useLiveQuery(async () => {
+    if (!activeAccount?.pubkey) return [];
+    return getConversations(activeAccount.pubkey);
+  }, [activeAccount?.pubkey]);
+
+  // Get decrypted messages count
+  const decryptedCount = useLiveQuery(async () => {
+    if (!activeAccount?.pubkey) return 0;
+    return db.decryptedRumors
+      .where("recipientPubkey")
+      .equals(activeAccount.pubkey)
+      .count();
+  }, [activeAccount?.pubkey]);
+
+  // Get loader state for relay info
+  const [loaderState, setLoaderState] = useState<any>(null);
+
+  // Subscribe to loader state
+  useEffect(() => {
+    const subscription = giftWrapLoader.state.subscribe(setLoaderState);
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleTogglePrivateMessages = (enabled: boolean) => {
     setPrivateMessagesEnabled(enabled);
@@ -124,7 +156,7 @@ export function InboxViewer() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <Card>
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -133,6 +165,17 @@ export function InboxViewer() {
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="text-2xl font-bold">{conversationCount ?? 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Decrypted
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="text-2xl font-bold">{decryptedCount ?? 0}</div>
             </CardContent>
           </Card>
 
@@ -295,6 +338,104 @@ export function InboxViewer() {
           </Card>
         )}
 
+        {/* Relay Status */}
+        {privateMessagesEnabled &&
+          loaderState?.relays &&
+          loaderState.relays.length > 0 && (
+            <Card>
+              <CardHeader className="p-4">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-4 w-4" />
+                  <CardTitle className="text-base">DM Relays</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="space-y-1">
+                  {loaderState.relays.map((relay: string) => (
+                    <div
+                      key={relay}
+                      className="text-sm font-mono text-muted-foreground flex items-center gap-2"
+                    >
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      {relay}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+        {/* Debug Info */}
+        {privateMessagesEnabled && (
+          <Card>
+            <CardHeader className="p-4">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4" />
+                <CardTitle className="text-base">Debug Info</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-2">
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Loader Enabled:</span>
+                  <span className="font-mono">
+                    {loaderState?.enabled ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Auto-Decrypt:</span>
+                  <span className="font-mono">
+                    {loaderState?.autoDecrypt ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Loading:</span>
+                  <span className="font-mono">
+                    {loaderState?.loading ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Error Count:</span>
+                  <span className="font-mono">
+                    {loaderState?.errorCount ?? 0}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Last Sync:</span>
+                  <span className="font-mono text-xs">
+                    {loaderState?.lastSync
+                      ? formatDistanceToNow(loaderState.lastSync, {
+                          addSuffix: true,
+                        })
+                      : "Never"}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Conversations List */}
+        {privateMessagesEnabled &&
+          conversations &&
+          conversations.length > 0 && (
+            <Card>
+              <CardHeader className="p-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  <CardTitle className="text-base">Conversations</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="space-y-2">
+                  {conversations.map((conv) => (
+                    <ConversationItem key={conv.id} conversation={conv} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
         {/* Help Text */}
         {!privateMessagesEnabled && (
           <div className="text-sm text-muted-foreground space-y-2">
@@ -312,6 +453,40 @@ export function InboxViewer() {
             </p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ConversationItem({ conversation }: { conversation: any }) {
+  const profile = useProfile(conversation.senderPubkey);
+  const displayName = getDisplayName(conversation.senderPubkey, profile);
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg border hover:bg-accent cursor-pointer">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-medium truncate">{displayName}</div>
+          <div className="text-xs text-muted-foreground">
+            {formatDistanceToNow(conversation.lastMessageCreatedAt * 1000, {
+              addSuffix: true,
+            })}
+          </div>
+        </div>
+        <div className="text-sm text-muted-foreground truncate">
+          {conversation.lastMessagePreview}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs text-muted-foreground">
+            {conversation.messageCount} message
+            {conversation.messageCount === 1 ? "" : "s"}
+          </span>
+          {conversation.unreadCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+              {conversation.unreadCount} new
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

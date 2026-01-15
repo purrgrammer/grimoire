@@ -322,6 +322,10 @@ async function updateConversationMetadata(
       updatedAt: Date.now(),
     };
     await db.conversations.put(conversation);
+    console.log(
+      `[GiftWrap] Created new conversation ${conversationId}`,
+      conversation,
+    );
   } else {
     // Update existing conversation if this is newer
     if (rumor.rumorCreatedAt > existing.lastMessageCreatedAt) {

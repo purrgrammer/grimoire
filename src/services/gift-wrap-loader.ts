@@ -35,6 +35,7 @@ interface GiftWrapLoaderState {
   recipientPubkey?: string;
   lastSync?: number;
   errorCount: number;
+  relays: string[]; // Relays being used for gift wraps
 }
 
 /**
@@ -47,6 +48,7 @@ class GiftWrapLoader {
     autoDecrypt: false,
     loading: false,
     errorCount: 0,
+    relays: [],
   });
 
   private subscription?: { unsubscribe: () => void };
@@ -151,8 +153,15 @@ class GiftWrapLoader {
       }
 
       console.log(
-        `[GiftWrapLoader] Syncing from ${inboxRelays.length} inbox relays`,
+        `[GiftWrapLoader] Syncing from ${inboxRelays.length} inbox relays:`,
+        inboxRelays,
       );
+
+      // Update state with relays being used
+      this.state$.next({
+        ...this.state$.value,
+        relays: inboxRelays,
+      });
 
       // Subscribe to kind 1059 events for this user using timeline loader
       const filter = {
