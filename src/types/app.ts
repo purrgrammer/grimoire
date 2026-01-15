@@ -110,4 +110,9 @@ export interface GrimoireState {
     localId?: string; // Local DB ID if saved to library
     isPublished?: boolean; // Whether it has been published to Nostr
   };
+  /**
+   * Feature flag: Enable NIP-59 private messages (gift wraps)
+   * When enabled, gift wraps will be fetched from inbox relays and decrypted
+   */
+  privateMessagesEnabled?: boolean;
 }

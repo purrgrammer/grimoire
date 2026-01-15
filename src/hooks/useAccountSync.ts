@@ -6,12 +6,14 @@ import { addressLoader } from "@/services/loaders";
 import type { RelayInfo } from "@/types/app";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { getServersFromEvent } from "@/services/blossom";
+import giftWrapLoader from "@/services/gift-wrap-loader";
 
 /**
  * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
  */
 export function useAccountSync() {
   const {
+    state,
     setActiveAccount,
     setActiveAccountRelays,
     setActiveAccountBlossomServers,
@@ -125,4 +127,33 @@ export function useAccountSync() {
       storeSubscription.unsubscribe();
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
+
+  // Enable/disable gift wrap loader based on feature flag and active account
+  useEffect(() => {
+    const privateMessagesEnabled = state.privateMessagesEnabled ?? false;
+
+    if (
+      privateMessagesEnabled &&
+      activeAccount?.pubkey &&
+      activeAccount.signer
+    ) {
+      // Enable gift wrap loading
+      console.log(
+        `[AccountSync] Enabling private messages for ${activeAccount.pubkey.slice(0, 8)}`,
+      );
+      giftWrapLoader.enable(activeAccount.pubkey, activeAccount.signer);
+    } else {
+      // Disable gift wrap loading
+      giftWrapLoader.disable();
+    }
+
+    return () => {
+      // Cleanup on unmount
+      giftWrapLoader.disable();
+    };
+  }, [
+    state.privateMessagesEnabled,
+    activeAccount?.pubkey,
+    activeAccount?.signer,
+  ]);
 }

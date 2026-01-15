@@ -87,6 +87,52 @@ export interface LocalSpellbook {
   deletedAt?: number;
 }
 
+/**
+ * Gift wrap envelope (kind 1059) - tracks outer layer
+ * Records which gift wraps we've seen and their decryption status
+ */
+export interface GiftWrapEnvelope {
+  id: string; // gift wrap event ID (kind 1059)
+  recipientPubkey: string; // who it's addressed to (from p-tag)
+  event: NostrEvent; // full gift wrap event
+  status: "pending" | "decrypted" | "failed"; // decryption state
+  failureReason?: string; // if failed, why?
+  receivedAt: number; // when we first saw it
+  processedAt?: number; // when we attempted decryption
+}
+
+/**
+ * Decrypted rumor - the actual message content after unwrapping
+ * Stores the seal (kind 13) and extracted rumor (unsigned event)
+ */
+export interface DecryptedRumor {
+  giftWrapId: string; // links back to gift wrap (primary key)
+  recipientPubkey: string; // which of our accounts received this
+  senderPubkey: string; // from seal (who sent it)
+  seal: NostrEvent; // kind 13 seal event
+  rumor: NostrEvent; // the unsigned inner event
+  rumorCreatedAt: number; // canonical timestamp from rumor
+  rumorKind: number; // kind of the rumor (for filtering)
+  decryptedAt: number; // when we successfully decrypted it
+}
+
+/**
+ * Conversation metadata - denormalized cache for fast conversation list queries
+ * One entry per (sender, recipient) pair
+ */
+export interface ConversationMetadata {
+  id: string; // `${senderPubkey}:${recipientPubkey}` (primary key)
+  senderPubkey: string; // who sent messages
+  recipientPubkey: string; // which of our accounts
+  lastMessageGiftWrapId: string; // ID of most recent gift wrap
+  lastMessageCreatedAt: number; // rumor created_at of most recent message
+  lastMessagePreview: string; // content preview for UI
+  lastMessageKind: number; // rumor kind of most recent message
+  messageCount: number; // total messages in conversation
+  unreadCount: number; // unread message count
+  updatedAt: number; // when this metadata was last updated
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -98,6 +144,9 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  giftWraps!: Table<GiftWrapEnvelope>;
+  decryptedRumors!: Table<DecryptedRumor>;
+  conversations!: Table<ConversationMetadata>;
 
   constructor(name: string) {
     super(name);
@@ -332,6 +381,28 @@ class GrimoireDb extends Dexie {
       blossomServers: "&pubkey, updatedAt",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 16: Add gift wrap (NIP-59) support
+    this.version(16).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      // Gift wrap envelopes indexed by recipient and status for efficient queries
+      giftWraps: "&id, recipientPubkey, [recipientPubkey+status], receivedAt",
+      // Decrypted rumors indexed by sender and timestamp for conversation queries
+      decryptedRumors:
+        "&giftWrapId, recipientPubkey, senderPubkey, [senderPubkey+rumorCreatedAt], [recipientPubkey+senderPubkey], rumorCreatedAt",
+      // Conversation metadata for fast conversation list queries
+      conversations:
+        "&id, recipientPubkey, [recipientPubkey+lastMessageCreatedAt]",
     });
   }
 }
