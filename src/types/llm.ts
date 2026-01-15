@@ -69,4 +69,5 @@ export interface LLMCommandResult {
   conversationId?: string;
   provider?: LLMProvider;
   model?: string;
+  showList?: boolean; // Show conversation list viewer
 }

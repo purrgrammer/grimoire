@@ -33,6 +33,11 @@ const ChatViewer = lazy(() =>
 const LLMChatViewer = lazy(() =>
   import("./LLMChatViewer").then((m) => ({ default: m.LLMChatViewer })),
 );
+const LLMConversationListViewer = lazy(() =>
+  import("./LLMConversationListViewer").then((m) => ({
+    default: m.LLMConversationListViewer,
+  })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -191,6 +196,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             customTitle={window.customTitle}
           />
         );
+        break;
+      case "llm-list":
+        content = <LLMConversationListViewer />;
         break;
       case "spells":
         content = <SpellsViewer />;

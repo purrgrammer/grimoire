@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { getProvider } from "@/lib/llm/providers/registry";
+import { getProvider, getAllProviders } from "@/lib/llm/providers/registry";
 import type { LLMConfig, ModelInfo } from "@/types/llm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,7 @@ export function ConfigPanel({ config, onChange, onClear }: ConfigPanelProps) {
   }
 
   const currentModel = availableModels.find((m) => m.id === config.model);
+  const availableProviders = getAllProviders();
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
@@ -75,9 +76,34 @@ export function ConfigPanel({ config, onChange, onClear }: ConfigPanelProps) {
         <h3 className="mb-3 font-semibold">Configuration</h3>
       </div>
 
+      {/* Provider Selection */}
+      <div>
+        <Label>Provider</Label>
+        <select
+          value={config.provider.provider}
+          onChange={(e) => {
+            const newProvider = e.target.value as any;
+            onChange({
+              ...config,
+              provider: {
+                ...config.provider,
+                provider: newProvider,
+              },
+            });
+          }}
+          className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {availableProviders.map((p) => (
+            <option key={p.provider} value={p.provider}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* API Key */}
       <div>
-        <Label>OpenAI API Key</Label>
+        <Label>API Key</Label>
         <div className="mt-1 flex gap-2">
           <Input
             type={showApiKey ? "text" : "password"}
@@ -115,6 +141,25 @@ export function ConfigPanel({ config, onChange, onClear }: ConfigPanelProps) {
         )}
         <p className="mt-1 text-xs text-muted-foreground">
           Keys are stored locally with basic encryption
+        </p>
+      </div>
+
+      {/* Base URL (Optional) */}
+      <div>
+        <Label>Base URL (Optional)</Label>
+        <Input
+          value={config.provider.baseUrl || ""}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              provider: { ...config.provider, baseUrl: e.target.value },
+            })
+          }
+          placeholder="https://api.openai.com/v1"
+          className="mt-1 font-mono text-xs"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          For custom endpoints (OpenRouter, local servers, proxies)
         </p>
       </div>
 

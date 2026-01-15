@@ -378,24 +378,39 @@ export const manPages: Record<string, ManPageEntry> = {
   llm: {
     name: "llm",
     section: "1",
-    synopsis: "llm [conversation-id]",
+    synopsis: "llm [list|open <id>|<id>]",
     description:
-      "Chat with AI language models (OpenAI GPT, etc.). Start a new conversation or resume an existing one. Configure your API key and model settings via the configuration panel. Messages are streamed in real-time with token usage and cost tracking.",
+      "Chat with AI language models (OpenAI GPT, etc.). Start a new conversation, browse existing conversations, or resume a specific one. Configure your API key, model, and other settings via the configuration panel. Messages are streamed in real-time with token usage and cost tracking.",
     options: [
       {
-        flag: "[conversation-id]",
-        description: "Optional conversation ID to resume (UUID format)",
+        flag: "list",
+        description: "Browse all conversations with search and sort",
+      },
+      {
+        flag: "open <id>",
+        description: "Open specific conversation by ID",
+      },
+      {
+        flag: "<id>",
+        description: "Open conversation by ID (shorthand for 'open')",
       },
     ],
     examples: [
       "llm                     Start a new conversation",
-      "llm abc123-def456-...   Resume existing conversation",
+      "llm list                Browse all conversations",
+      "llm open abc123-...     Open specific conversation",
+      "llm abc123-def456-...   Open conversation (shorthand)",
     ],
     seeAlso: ["chat"],
-    appId: "llm-chat",
+    appId: "llm-chat", // Default, overridden by argParser
     category: "System",
     argParser: async (args: string[]) => {
-      return parseLLMCommand(args);
+      const result = parseLLMCommand(args);
+      // Override appId if showing list
+      if (result.showList) {
+        return { appId: "llm-list" as const };
+      }
+      return result;
     },
   },
   profile: {
