@@ -9,7 +9,10 @@ import {
   AlertTriangle,
   RefreshCw,
   Paperclip,
+  Copy,
+  Check,
 } from "lucide-react";
+import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
@@ -45,6 +48,7 @@ import {
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { useCopy } from "@/hooks/useCopy";
 import { Label } from "./ui/label";
 import {
   Tooltip,
@@ -127,6 +131,43 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
     Array.isArray(obj.hashtags) &&
     Array.isArray(obj.relays)
   );
+}
+
+/**
+ * Get the chat command identifier for a conversation
+ * Returns a string that can be passed to the `chat` command to open this conversation
+ *
+ * For NIP-29 groups: relay'group-id (without wss:// prefix)
+ * For NIP-53 live activities: naddr1... encoding
+ */
+function getChatIdentifier(conversation: Conversation): string | null {
+  if (conversation.protocol === "nip-29") {
+    const groupId = conversation.metadata?.groupId;
+    const relayUrl = conversation.metadata?.relayUrl;
+    if (!groupId || !relayUrl) return null;
+
+    // Strip wss:// or ws:// prefix for cleaner identifier
+    const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
+    return `${cleanRelay}'${groupId}`;
+  }
+
+  if (conversation.protocol === "nip-53") {
+    const activityAddress = conversation.metadata?.activityAddress;
+    if (!activityAddress) return null;
+
+    // Get relay hints from live activity metadata
+    const liveActivity = conversation.metadata?.liveActivity;
+    const relays = liveActivity?.relays || [];
+
+    return nip19.naddrEncode({
+      kind: activityAddress.kind,
+      pubkey: activityAddress.pubkey,
+      identifier: activityAddress.identifier,
+      relays: relays.slice(0, 3), // Limit relay hints to keep naddr short
+    });
+  }
+
+  return null;
 }
 
 /**
@@ -359,6 +400,9 @@ export function ChatViewer({
 
   // Emoji search for custom emoji autocomplete
   const { searchEmojis } = useEmojiSearch();
+
+  // Copy chat identifier to clipboard
+  const { copy: copyChatId, copied: chatIdCopied } = useCopy();
 
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -811,6 +855,31 @@ export function ChatViewer({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {/* Copy Chat ID button */}
+            {getChatIdentifier(conversation) && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        const chatId = getChatIdentifier(conversation);
+                        if (chatId) copyChatId(chatId);
+                      }}
+                      className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                    >
+                      {chatIdCopied ? (
+                        <Check className="size-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>{chatIdCopied ? "Copied!" : "Copy chat ID"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
