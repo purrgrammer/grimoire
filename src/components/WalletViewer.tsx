@@ -3,12 +3,14 @@ import { useGrimoire } from "@/core/state";
 import {
   Wallet,
   Lock,
-  Download,
+  Unlock,
   AlertCircle,
   Coins,
   History,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Zap,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,8 +19,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useMemo, useState } from "react";
-import type { NostrEvent } from "nostr-tools";
+import { useMemo, useState, useEffect } from "react";
+import accountManager from "@/services/accounts";
+import {
+  decryptWalletConfig,
+  decryptUnspentTokens,
+  decryptTransactionHistory,
+  calculateBalance,
+  getTotalBalance,
+  formatBalance,
+  sortTransactions,
+  getMintDisplayName,
+  type WalletConfig,
+  type UnspentTokens,
+  type Transaction,
+} from "@/lib/wallet-utils";
 
 export interface WalletViewerProps {
   pubkey: string;
@@ -36,7 +51,13 @@ export interface WalletViewerProps {
 export function WalletViewer({ pubkey }: WalletViewerProps) {
   const { state } = useGrimoire();
   const eventStore = useEventStore();
-  const [unlocked, setUnlocked] = useState(false);
+
+  // State for decrypted wallet data
+  const [walletConfig, setWalletConfig] = useState<WalletConfig | null>(null);
+  const [unspentTokens, setUnspentTokens] = useState<UnspentTokens[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [decryptionError, setDecryptionError] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
 
   // Resolve $me alias
   const resolvedPubkey =
@@ -83,6 +104,87 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
 
   // Check if wallet exists
   const walletExists = walletConfigEvent !== undefined;
+
+  // Get active account from accountManager
+  const activeAccount = use$(accountManager.active$);
+
+  // Decrypt wallet data when events are available (only for own wallet)
+  useEffect(() => {
+    if (!isOwnWallet || !activeAccount?.nip44) return;
+    if (!walletConfigEvent) return;
+
+    const decryptWalletData = async () => {
+      setIsDecrypting(true);
+      setDecryptionError(null);
+
+      try {
+        // Decrypt wallet config
+        if (walletConfigEvent) {
+          const config = await decryptWalletConfig(
+            walletConfigEvent,
+            activeAccount,
+          );
+          if (config) {
+            setWalletConfig(config);
+          }
+        }
+
+        // Decrypt token events
+        if (tokenEvents && tokenEvents.length > 0) {
+          const decryptedTokens: UnspentTokens[] = [];
+          for (const event of tokenEvents) {
+            const tokens = await decryptUnspentTokens(event, activeAccount);
+            if (tokens) {
+              decryptedTokens.push(tokens);
+            }
+          }
+          setUnspentTokens(decryptedTokens);
+        }
+
+        // Decrypt history events
+        if (historyEvents && historyEvents.length > 0) {
+          const allTransactions: Transaction[] = [];
+          for (const event of historyEvents) {
+            const history = await decryptTransactionHistory(
+              event,
+              activeAccount,
+            );
+            if (history && history.transactions) {
+              allTransactions.push(...history.transactions);
+            }
+          }
+          setTransactions(sortTransactions(allTransactions));
+        }
+      } catch (error) {
+        console.error("Decryption error:", error);
+        setDecryptionError(
+          error instanceof Error
+            ? error.message
+            : "Failed to decrypt wallet data",
+        );
+      } finally {
+        setIsDecrypting(false);
+      }
+    };
+
+    decryptWalletData();
+  }, [
+    isOwnWallet,
+    activeAccount,
+    walletConfigEvent,
+    tokenEvents,
+    historyEvents,
+  ]);
+
+  // Calculate balance
+  const balanceByMint = useMemo(() => {
+    if (unspentTokens.length === 0) return new Map();
+    return calculateBalance(unspentTokens);
+  }, [unspentTokens]);
+
+  const totalBalance = useMemo(() => {
+    return getTotalBalance(balanceByMint);
+  }, [balanceByMint]);
 
   if (!resolvedPubkey) {
     return (
@@ -183,14 +285,17 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Lock className="h-4 w-4" />
+              {isOwnWallet && walletConfig ? (
+                <Unlock className="h-4 w-4 text-green-500" />
+              ) : (
+                <Lock className="h-4 w-4" />
+              )}
               Wallet Status
             </CardTitle>
-            {isOwnWallet && !unlocked && (
-              <Button size="sm" variant="outline" disabled>
-                <Download className="h-4 w-4 mr-2" />
-                Unlock Wallet
-              </Button>
+            {isOwnWallet && walletConfig && (
+              <div className="text-xs text-green-500 font-medium">
+                ✓ Unlocked
+              </div>
             )}
           </div>
           <CardDescription>
@@ -198,24 +303,37 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Alert>
-            <Lock className="h-4 w-4" />
-            <AlertDescription>
-              {isOwnWallet ? (
-                <>
-                  <strong>Wallet Encrypted:</strong> Your wallet data is
-                  encrypted with NIP-44. Decryption functionality will be added
-                  in a future update.
-                </>
-              ) : (
-                <>
-                  <strong>Privacy Protected:</strong> This wallet's data is
-                  encrypted and cannot be viewed without the owner's private
-                  key.
-                </>
-              )}
-            </AlertDescription>
-          </Alert>
+          {isOwnWallet && walletConfig && (
+            <Alert>
+              <Unlock className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Wallet Unlocked:</strong> Your wallet has been decrypted
+                and is ready to use. Balance and transaction history are now
+                visible.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {isOwnWallet && !walletConfig && !isDecrypting && (
+            <Alert>
+              <Lock className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Wallet Locked:</strong> Your wallet data is encrypted
+                with NIP-44.{" "}
+                {activeAccount?.nip44 ? "Decrypting..." : "Sign in to decrypt."}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isOwnWallet && (
+            <Alert>
+              <Lock className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Privacy Protected:</strong> This wallet's data is
+                encrypted and cannot be viewed without the owner's private key.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -250,11 +368,21 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
                   : "Unknown"}
               </div>
             </div>
+            {walletConfig && walletConfig.mints && (
+              <div className="col-span-2">
+                <div className="text-muted-foreground">Configured Mints</div>
+                <div className="font-mono text-xs space-y-1 mt-1">
+                  {walletConfig.mints.map((mint) => (
+                    <div key={mint}>✓ {getMintDisplayName(mint)}</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Balance Card (Encrypted) */}
+      {/* Balance Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -266,21 +394,78 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg">
-            <div className="text-center space-y-2">
-              <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Balance encrypted</p>
-              <p className="text-xs text-muted-foreground">
-                {tokenEvents && tokenEvents.length > 0
-                  ? `${tokenEvents.length} token event(s) found`
-                  : "No token events"}
-              </p>
+          {!isOwnWallet ? (
+            <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg">
+              <div className="text-center space-y-2">
+                <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Balance encrypted
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Only the owner can view this wallet
+                </p>
+              </div>
             </div>
-          </div>
+          ) : isDecrypting ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="text-center space-y-2">
+                <Unlock className="h-8 w-8 mx-auto text-muted-foreground animate-pulse" />
+                <p className="text-sm text-muted-foreground">
+                  Decrypting wallet...
+                </p>
+              </div>
+            </div>
+          ) : decryptionError ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{decryptionError}</AlertDescription>
+            </Alert>
+          ) : unspentTokens.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Coins className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No funds available</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Total Balance */}
+              <div className="text-center p-6 bg-muted rounded-lg">
+                <div className="text-sm text-muted-foreground mb-2">
+                  Total Balance
+                </div>
+                <div className="text-3xl font-bold">
+                  {formatBalance(totalBalance)}
+                </div>
+              </div>
+
+              {/* Balance by Mint */}
+              {balanceByMint.size > 1 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground">
+                    By Mint
+                  </div>
+                  {Array.from(balanceByMint.entries()).map(
+                    ([mint, balance]) => (
+                      <div
+                        key={mint}
+                        className="flex justify-between items-center p-3 bg-muted rounded"
+                      >
+                        <div className="text-sm font-mono text-muted-foreground">
+                          {getMintDisplayName(mint)}
+                        </div>
+                        <div className="text-sm font-semibold">
+                          {formatBalance(balance)}
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Transaction History (Encrypted) */}
+      {/* Transaction History */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -290,7 +475,7 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
           <CardDescription>Recent wallet activity</CardDescription>
         </CardHeader>
         <CardContent>
-          {historyEvents && historyEvents.length > 0 ? (
+          {!isOwnWallet && historyEvents && historyEvents.length > 0 ? (
             <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg">
               <div className="text-center space-y-2">
                 <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
@@ -298,14 +483,64 @@ export function WalletViewer({ pubkey }: WalletViewerProps) {
                   Transaction history encrypted
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {historyEvents.length} transaction(s) found
+                  Only the owner can view this wallet
                 </p>
               </div>
             </div>
-          ) : (
+          ) : transactions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No transaction history</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {transactions.slice(0, 10).map((tx, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-muted rounded hover:bg-muted/80 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {tx.type === "mint" && (
+                      <Zap className="h-4 w-4 text-green-500" />
+                    )}
+                    {tx.type === "melt" && (
+                      <Zap className="h-4 w-4 text-orange-500" />
+                    )}
+                    {tx.type === "send" && (
+                      <ArrowUpRight className="h-4 w-4 text-red-500" />
+                    )}
+                    {tx.type === "receive" && (
+                      <ArrowDownLeft className="h-4 w-4 text-green-500" />
+                    )}
+                    <div>
+                      <div className="text-sm font-medium capitalize">
+                        {tx.type}
+                      </div>
+                      {tx.memo && (
+                        <div className="text-xs text-muted-foreground">
+                          {tx.memo}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div
+                      className={`text-sm font-semibold ${tx.type === "send" || tx.type === "melt" ? "text-red-500" : "text-green-500"}`}
+                    >
+                      {tx.type === "send" || tx.type === "melt" ? "-" : "+"}
+                      {formatBalance(tx.amount)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(tx.timestamp * 1000).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {transactions.length > 10 && (
+                <div className="text-center text-sm text-muted-foreground pt-2">
+                  Showing 10 of {transactions.length} transactions
+                </div>
+              )}
             </div>
           )}
         </CardContent>
