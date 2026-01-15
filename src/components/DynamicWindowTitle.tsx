@@ -238,6 +238,28 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "req";
 
+    case "count":
+      // COUNT command - similar to REQ but for counting
+      if (props.filter) {
+        const parts: string[] = ["count"];
+        if (props.filter.kinds?.length) {
+          parts.push(`-k ${props.filter.kinds.join(",")}`);
+        }
+        if (props.filter["#t"]?.length) {
+          parts.push(`-t ${props.filter["#t"].slice(0, 2).join(",")}`);
+        }
+        if (props.filter.authors?.length) {
+          const authorDisplay = props.filter.authors.slice(0, 2).join(",");
+          parts.push(`-a ${authorDisplay}`);
+        }
+        if (props.filter["#p"]?.length) {
+          const pTagDisplay = props.filter["#p"].slice(0, 2).join(",");
+          parts.push(`-p ${pTagDisplay}`);
+        }
+        return parts.join(" ");
+      }
+      return "count";
+
     case "man":
       return props.cmd ? `man ${props.cmd}` : "man";
 

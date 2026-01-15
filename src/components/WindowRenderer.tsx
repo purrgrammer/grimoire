@@ -42,6 +42,7 @@ const SpellbooksViewer = lazy(() =>
 const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
+const CountViewer = lazy(() => import("./CountViewer"));
 
 // Loading fallback component
 function ViewerLoading() {
@@ -153,6 +154,15 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             view={window.props.view}
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
+            needsAccount={window.props.needsAccount}
+          />
+        );
+        break;
+      case "count":
+        content = (
+          <CountViewer
+            filter={window.props.filter}
+            relays={window.props.relays}
             needsAccount={window.props.needsAccount}
           />
         );

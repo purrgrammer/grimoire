@@ -1,4 +1,5 @@
 import { parseReqCommand } from "../lib/req-parser";
+import { parseCountCommand } from "../lib/count-parser";
 import type { AppId } from "./app";
 
 import { parseOpenCommand } from "@/lib/open-parser";
@@ -320,6 +321,130 @@ export const manPages: Record<string, ManPageEntry> = {
       return parsed;
     },
     defaultProps: { filter: { kinds: [1], limit: 50 } },
+  },
+  count: {
+    name: "count",
+    section: "1",
+    synopsis: "count <relay...> [options]",
+    description:
+      "Count events on Nostr relays using the NIP-45 COUNT verb. Returns event counts matching specified filter criteria. At least one relay is required. If querying multiple relays, shows per-relay breakdown.",
+    options: [
+      {
+        flag: "<relay...>",
+        description:
+          "Relay URLs to query (required, at least one). Supports wss://relay.com or shorthand: relay.com",
+      },
+      {
+        flag: "-k, --kind <number>",
+        description:
+          "Filter by event kind (e.g., 0=metadata, 1=note, 3=follows). Supports comma-separated values: -k 1,3,7",
+      },
+      {
+        flag: "-a, --author <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by author pubkey. Supports comma-separated values.",
+      },
+      {
+        flag: "-e <note|nevent|naddr|hex>",
+        description:
+          "Filter by event ID or coordinate. Supports comma-separated values.",
+      },
+      {
+        flag: "-p <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by mentioned pubkey (#p tag). Supports comma-separated values.",
+      },
+      {
+        flag: "-P <npub|hex|nip05|$me|$contacts>",
+        description:
+          "Filter by zap sender (#P tag). Supports comma-separated values.",
+      },
+      {
+        flag: "-t <hashtag>",
+        description:
+          "Filter by hashtag (#t tag). Supports comma-separated values: -t nostr,bitcoin",
+      },
+      {
+        flag: "-d <identifier>",
+        description:
+          "Filter by d-tag identifier (replaceable events). Supports comma-separated values.",
+      },
+      {
+        flag: "-T, --tag <letter> <value>",
+        description:
+          "Filter by any single-letter tag. Supports comma-separated values.",
+      },
+      {
+        flag: "--since <time>",
+        description:
+          "Events after timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+      },
+      {
+        flag: "--until <time>",
+        description:
+          "Events before timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+      },
+      {
+        flag: "--search <text>",
+        description: "Search event content for text (relay-dependent)",
+      },
+    ],
+    examples: [
+      "count relay.damus.io -k 3 -p npub1...                  Count followers on one relay",
+      "count nos.lol relay.damus.io -k 1 -a fiatjaf.com       Compare post counts across relays",
+      "count relay.nostr.band -k 1 --search bitcoin           Count search results",
+      "count relay.damus.io -k 9735 -p $me --since 30d        Count zaps received in last month",
+      "count nos.lol -t nostr,bitcoin                         Count events with hashtags",
+    ],
+    seeAlso: ["req", "nip"],
+    appId: "count",
+    category: "Nostr",
+    argParser: async (args: string[]) => {
+      const parsed = parseCountCommand(args);
+
+      // Resolve NIP-05 identifiers if present
+      const allNip05 = [
+        ...(parsed.nip05Authors || []),
+        ...(parsed.nip05PTags || []),
+        ...(parsed.nip05PTagsUppercase || []),
+      ];
+
+      if (allNip05.length > 0) {
+        const resolved = await resolveNip05Batch(allNip05);
+
+        if (parsed.nip05Authors) {
+          for (const nip05 of parsed.nip05Authors) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter.authors) parsed.filter.authors = [];
+              parsed.filter.authors.push(pubkey);
+            }
+          }
+        }
+
+        if (parsed.nip05PTags) {
+          for (const nip05 of parsed.nip05PTags) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter["#p"]) parsed.filter["#p"] = [];
+              parsed.filter["#p"].push(pubkey);
+            }
+          }
+        }
+
+        if (parsed.nip05PTagsUppercase) {
+          for (const nip05 of parsed.nip05PTagsUppercase) {
+            const pubkey = resolved.get(nip05);
+            if (pubkey) {
+              if (!parsed.filter["#P"]) parsed.filter["#P"] = [];
+              parsed.filter["#P"].push(pubkey);
+            }
+          }
+        }
+      }
+
+      return parsed;
+    },
   },
   open: {
     name: "open",
