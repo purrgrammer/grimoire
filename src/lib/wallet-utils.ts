@@ -9,6 +9,7 @@ import type { ISigner } from "applesauce-signers";
 /**
  * NIP-60 Wallet Configuration (kind:17375)
  * Stored as encrypted JSON in event content
+ * Can be either JSON object or tag array format
  */
 export interface WalletConfig {
   /** Wallet private key (for signing Cashu operations) */
@@ -20,6 +21,69 @@ export interface WalletConfig {
   description?: string;
   unit?: string; // e.g., "sat", "usd"
   relays?: string[];
+}
+
+/**
+ * Parses NIP-60 wallet config from tag array format
+ * Format: [['mint', 'url'], ['privkey', 'hex'], ...]
+ * @param tags Array of tag tuples
+ * @returns Parsed wallet config
+ */
+function parseTagArrayConfig(tags: string[][]): WalletConfig {
+  const mints: string[] = [];
+  const privkeys: string[] = [];
+  const relays: string[] = [];
+  let name: string | undefined;
+  let description: string | undefined;
+  let unit: string | undefined;
+
+  for (const tag of tags) {
+    if (tag.length < 2) continue;
+    const [key, value] = tag;
+
+    switch (key) {
+      case "mint":
+        mints.push(value);
+        break;
+      case "privkey":
+        privkeys.push(value);
+        break;
+      case "relay":
+        relays.push(value);
+        break;
+      case "name":
+        name = value;
+        break;
+      case "description":
+        description = value;
+        break;
+      case "unit":
+        unit = value;
+        break;
+    }
+  }
+
+  // Use the first privkey if multiple are present
+  const privkey = privkeys[0] || "";
+
+  console.log("[parseTagArrayConfig] Parsed config:", {
+    privkey: privkey.substring(0, 8) + "...",
+    mints,
+    privkeys: privkeys.length,
+    relays,
+    name,
+    description,
+    unit,
+  });
+
+  return {
+    privkey,
+    mints,
+    name,
+    description,
+    unit,
+    relays: relays.length > 0 ? relays : undefined,
+  };
 }
 
 /**
@@ -106,10 +170,41 @@ export async function decryptWalletConfig(
     const decrypted = await signer.nip44.decrypt(event.pubkey, event.content);
     console.log("[decryptWalletConfig] Decrypted plaintext:", decrypted);
 
-    const parsed = JSON.parse(decrypted) as WalletConfig;
-    console.log("[decryptWalletConfig] Parsed config:", parsed);
+    const parsedRaw = JSON.parse(decrypted);
+    console.log("[decryptWalletConfig] Parsed raw data:", parsedRaw);
+    console.log(
+      "[decryptWalletConfig] Data type:",
+      Array.isArray(parsedRaw) ? "array" : typeof parsedRaw,
+    );
 
-    return parsed;
+    let config: WalletConfig;
+
+    // Check if it's tag array format: [['mint', 'url'], ['privkey', 'hex'], ...]
+    if (
+      Array.isArray(parsedRaw) &&
+      parsedRaw.length > 0 &&
+      Array.isArray(parsedRaw[0])
+    ) {
+      console.log("[decryptWalletConfig] Detected tag array format");
+      config = parseTagArrayConfig(parsedRaw as string[][]);
+    }
+    // Check if it's a standard JSON object
+    else if (typeof parsedRaw === "object" && parsedRaw !== null) {
+      console.log("[decryptWalletConfig] Detected JSON object format");
+      config = parsedRaw as WalletConfig;
+    }
+    // Unknown format
+    else {
+      console.error("[decryptWalletConfig] Unknown data format:", parsedRaw);
+      return null;
+    }
+
+    console.log("[decryptWalletConfig] Final parsed config:", {
+      ...config,
+      privkey: config.privkey ? config.privkey.substring(0, 8) + "..." : "none",
+    });
+
+    return config;
   } catch (error) {
     console.error("[decryptWalletConfig] Decryption failed:", error);
     console.error("[decryptWalletConfig] Error details:", {
