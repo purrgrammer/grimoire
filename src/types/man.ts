@@ -325,14 +325,14 @@ export const manPages: Record<string, ManPageEntry> = {
   count: {
     name: "count",
     section: "1",
-    synopsis: "count [relay...] [options]",
+    synopsis: "count <relay...> [options]",
     description:
-      "Count events on Nostr relays using the NIP-45 COUNT verb. Returns event counts matching specified filter criteria. If no relays specified, automatically selects relays using the outbox model (NIP-65) filtered by NIP-45 support. Checks NIP-11 relay info to detect NIP-45 support before querying. Can be saved as a spell for quick access.",
+      "Count events on Nostr relays using the NIP-45 COUNT verb. Returns event counts matching specified filter criteria. Requires at least one relay. Checks NIP-11 relay info to detect NIP-45 support before querying. Can be saved as a spell for quick access.",
     options: [
       {
-        flag: "[relay...]",
+        flag: "<relay...>",
         description:
-          "Relay URLs to query (optional). If omitted, uses outbox model with NIP-45 filtering. Can appear anywhere in the command. Supports wss://relay.com or shorthand: relay.com",
+          "Relay URLs to query (required). At least one relay must be specified. Can appear anywhere in the command. Supports wss://relay.com or shorthand: relay.com",
       },
       {
         flag: "-k, --kind <number>",
@@ -390,12 +390,11 @@ export const manPages: Record<string, ManPageEntry> = {
       },
     ],
     examples: [
-      "count -k 1 -a fiatjaf.com                              Count posts (auto relay selection)",
-      "count -k 3 -p $me                                      Count followers (auto relay selection)",
-      "count relay.damus.io -k 3 -p npub1...                  Count followers on specific relay",
-      "count nos.lol relay.damus.io -k 1 -a fiatjaf.com       Compare counts across relays",
-      "count -k 9735 -p $me --since 30d                       Count zaps received in last month",
-      "count -t nostr,bitcoin                                 Count events with hashtags",
+      "count relay.damus.io -k 1 -a fiatjaf.com               Count posts from author",
+      "count nos.lol -k 3 -p npub1...                         Count followers on specific relay",
+      "count nos.lol relay.damus.io -k 1 -a npub1...          Compare counts across relays",
+      "count relay.damus.io -k 9735 -p $me --since 30d        Count zaps received in last month",
+      "count nos.lol -t nostr,bitcoin                         Count events with hashtags",
     ],
     seeAlso: ["req", "nip"],
     appId: "count",

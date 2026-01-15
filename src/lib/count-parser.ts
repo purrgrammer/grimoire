@@ -44,7 +44,7 @@ function parseCommaSeparated<T>(
 /**
  * Parse COUNT command arguments into a Nostr filter
  * Similar to REQ but:
- * - Requires at least one relay (no automatic relay selection)
+ * - Requires at least one relay
  * - No --limit flag (COUNT returns total, not a subset)
  * - No --close-on-eose flag (COUNT is inherently one-shot)
  * - No --view flag (COUNT doesn't render events)
@@ -335,7 +335,10 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
     }
   }
 
-  // Relays are optional - will use outbox model if not specified
+  // Validate that at least one relay is specified
+  if (relays.length === 0) {
+    throw new Error("At least one relay is required for COUNT");
+  }
 
   // Convert accumulated sets to filter arrays
   if (kinds.size > 0) filter.kinds = Array.from(kinds);
