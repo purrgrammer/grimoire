@@ -887,13 +887,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "47",
     icon: Wallet,
   },
-  // 13534: {
-  //   kind: 13534,
-  //   name: "Membership Lists",
-  //   description: "Membership Lists",
-  //   nip: "43",
-  //   icon: Users,
-  // },
+  13534: {
+    kind: 13534,
+    name: "Relay Members",
+    description: "Relay membership list",
+    nip: "43",
+    icon: Shield,
+  },
   // 17375: {
   //   kind: 17375,
   //   name: "Cashu Wallet Event",
@@ -950,27 +950,27 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "98",
     icon: Key,
   },
-  // 28934: {
-  //   kind: 28934,
-  //   name: "Join Request",
-  //   description: "Join Request",
-  //   nip: "43",
-  //   icon: UserPlus,
-  // },
-  // 28935: {
-  //   kind: 28935,
-  //   name: "Invite Request",
-  //   description: "Invite Request",
-  //   nip: "43",
-  //   icon: Mail,
-  // },
-  // 28936: {
-  //   kind: 28936,
-  //   name: "Leave Request",
-  //   description: "Leave Request",
-  //   nip: "43",
-  //   icon: UserMinus,
-  // },
+  28934: {
+    kind: 28934,
+    name: "Join Request",
+    description: "Relay join request with invite code",
+    nip: "43",
+    icon: UserPlus,
+  },
+  28935: {
+    kind: 28935,
+    name: "Invite Request",
+    description: "Request invite code from relay",
+    nip: "43",
+    icon: Mail,
+  },
+  28936: {
+    kind: 28936,
+    name: "Leave Request",
+    description: "Request to revoke relay access",
+    nip: "43",
+    icon: UserMinus,
+  },
 
   // Group Control
   9000: {
