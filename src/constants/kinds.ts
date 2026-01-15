@@ -892,7 +892,7 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     name: "Relay Members",
     description: "Relay membership list",
     nip: "43",
-    icon: Shield,
+    icon: Users,
   },
   // 17375: {
   //   kind: 17375,

@@ -1,4 +1,4 @@
-import { Shield, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { getTagValues } from "@/lib/nostr-utils";
 import {
   BaseEventProps,
@@ -35,7 +35,7 @@ export function RelayMembersRenderer({ event }: BaseEventProps) {
           event={event}
           className="flex items-center gap-1.5 text-sm font-medium"
         >
-          <Shield className="size-4 text-muted-foreground" />
+          <Users className="size-4 text-muted-foreground" />
           <span>Relay Members</span>
         </ClickableEventTitle>
 
@@ -61,7 +61,7 @@ export function RelayMembersDetailRenderer({ event }: { event: NostrEvent }) {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
-        <Shield className="size-6 text-muted-foreground" />
+        <Users className="size-6 text-muted-foreground" />
         <span className="text-lg font-semibold">Relay Members</span>
       </div>
 
