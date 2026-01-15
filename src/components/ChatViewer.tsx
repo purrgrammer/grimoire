@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Paperclip,
   Copy,
-  Check,
+  CopyCheck,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
@@ -857,28 +857,20 @@ export function ChatViewer({
             </TooltipProvider>
             {/* Copy Chat ID button */}
             {getChatIdentifier(conversation) && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        const chatId = getChatIdentifier(conversation);
-                        if (chatId) copyChatId(chatId);
-                      }}
-                      className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                    >
-                      {chatIdCopied ? (
-                        <Check className="size-3.5 text-green-500" />
-                      ) : (
-                        <Copy className="size-3.5" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>{chatIdCopied ? "Copied!" : "Copy chat ID"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <button
+                onClick={() => {
+                  const chatId = getChatIdentifier(conversation);
+                  if (chatId) copyChatId(chatId);
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                aria-label="Copy chat ID"
+              >
+                {chatIdCopied ? (
+                  <CopyCheck className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+              </button>
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
