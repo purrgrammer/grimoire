@@ -3,6 +3,7 @@ import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
+import { getDisplayName } from "@/lib/nostr-utils";
 
 interface MessageReactionsProps {
   messageId: string;
@@ -136,23 +137,54 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
   return (
     <>
       {aggregated.map((reaction) => (
-        <span
+        <ReactionBadge
           key={reaction.customEmoji?.shortcode || reaction.emoji}
-          className="inline-flex items-center gap-1 text-[10px] leading-tight"
-          title={`${reaction.count} reaction${reaction.count > 1 ? "s" : ""}`}
-        >
-          {reaction.customEmoji ? (
-            <img
-              src={reaction.customEmoji.url}
-              alt={`:${reaction.customEmoji.shortcode}:`}
-              className="size-3 inline-block"
-            />
-          ) : (
-            <span className="text-xs">{reaction.emoji}</span>
-          )}
-          <span className="text-muted-foreground">{reaction.count}</span>
-        </span>
+          reaction={reaction}
+        />
       ))}
     </>
+  );
+}
+
+/**
+ * Single reaction badge with tooltip showing who reacted
+ */
+function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
+  // Load profiles for all reactors to get display names
+  const profiles = use$(
+    () => eventStore.profiles(reaction.pubkeys),
+    [reaction.pubkeys],
+  );
+
+  // Build tooltip with emoji and list of names
+  const tooltip = useMemo(() => {
+    const names = reaction.pubkeys.map((pubkey) => {
+      const profile = profiles?.get(pubkey);
+      return getDisplayName(pubkey, profile);
+    });
+
+    // Format: "❤️ 3\nAlice, Bob, Carol" or "❤️ 1\nAlice"
+    const emojiDisplay = reaction.customEmoji
+      ? `:${reaction.customEmoji.shortcode}:`
+      : reaction.emoji;
+    return `${emojiDisplay} ${reaction.count}\n${names.join(", ")}`;
+  }, [reaction, profiles]);
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] leading-tight"
+      title={tooltip}
+    >
+      {reaction.customEmoji ? (
+        <img
+          src={reaction.customEmoji.url}
+          alt={`:${reaction.customEmoji.shortcode}:`}
+          className="size-3 inline-block"
+        />
+      ) : (
+        <span className="text-xs">{reaction.emoji}</span>
+      )}
+      <span className="text-muted-foreground">{reaction.count}</span>
+    </span>
   );
 }
