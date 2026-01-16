@@ -81,8 +81,8 @@ function saveSettings(settings: InboxSettings) {
 }
 
 class GiftWrapService {
-  /** Current user's pubkey */
-  private userPubkey: string | null = null;
+  /** Current user pubkey (null if not initialized) */
+  userPubkey: string | null = null;
   /** Current signer for decryption */
   private signer: ISigner | null = null;
 
@@ -192,6 +192,15 @@ class GiftWrapService {
     this.decryptStates$.next(new Map());
     this.pendingCount$.next(0);
 
+    // Only perform expensive operations if inbox sync is enabled
+    // This prevents automatic network requests and heavy I/O on login
+    if (!this.settings$.value.enabled) {
+      dmDebug("GiftWrap", "Inbox sync disabled, skipping initialization");
+      return;
+    }
+
+    dmInfo("GiftWrap", `Initializing inbox sync for ${pubkey.slice(0, 8)}`);
+
     // Load persisted encrypted content IDs to know which gift wraps are already decrypted
     this.persistedIds = await getStoredEncryptedContentIds();
 
@@ -225,11 +234,9 @@ class GiftWrapService {
     });
     this.subscriptions.push(updateSub);
 
-    // If enabled, load stored gift wraps and start syncing
-    if (this.settings$.value.enabled) {
-      await this.loadStoredGiftWraps();
-      this.startSync();
-    }
+    // Load stored gift wraps and start syncing
+    await this.loadStoredGiftWraps();
+    this.startSync();
   }
 
   /** Load stored gift wraps from Dexie into EventStore */

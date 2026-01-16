@@ -51,8 +51,9 @@ function InboxViewer() {
 
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
 
-  // Note: Gift wrap service is now initialized globally in useAccountSync
-  // This ensures DM subscriptions are active even when inbox viewer isn't open
+  // Note: Gift wrap service initializes ON-DEMAND when user enables inbox sync
+  // This prevents automatic network requests and heavy I/O on login
+  // Toggle "Enable Inbox Sync" below to start receiving DMs
 
   // Update signer when it changes (in case user switches signers)
   useEffect(() => {

@@ -124,14 +124,15 @@ Chat Component
 
 ### Receiving Messages (Inbox Flow)
 
-1. **Account Login** → `useAccountSync` calls `giftWrapService.init(pubkey, signer)`
-2. **Fetch Inbox Relays** → Load kind 10050 from user's outbox relays
-3. **Subscribe to Gift Wraps** → Open subscription to inbox relays for `kind 1059` with `#p` = user pubkey
-4. **Gift Wrap Arrival** → EventStore receives event → GiftWrapService detects new gift wrap
-5. **Decrypt** (if auto-decrypt enabled) → Call `unlockGiftWrap(event, signer)`
-6. **Extract Rumor** → Get kind 14 DM from gift wrap inner content
-7. **Group into Conversations** → Compute conversation ID from participants → Update `conversations$` observable
-8. **UI Update** → InboxViewer/ChatViewer re-renders with new messages
+1. **User Enables Inbox Sync** → User toggles "Enable Inbox Sync" in InboxViewer settings
+2. **Service Initialization** → `useAccountSync` detects enabled setting and calls `giftWrapService.init(pubkey, signer)`
+3. **Fetch Inbox Relays** → Load kind 10050 from user's outbox relays
+4. **Subscribe to Gift Wraps** → Open subscription to inbox relays for `kind 1059` with `#p` = user pubkey
+5. **Gift Wrap Arrival** → EventStore receives event → GiftWrapService detects new gift wrap
+6. **Decrypt** (if auto-decrypt enabled) → Call `unlockGiftWrap(event, signer)`
+7. **Extract Rumor** → Get kind 14 DM from gift wrap inner content
+8. **Group into Conversations** → Compute conversation ID from participants → Update `conversations$` observable
+9. **UI Update** → InboxViewer/ChatViewer re-renders with new messages
 
 ### Sending Messages (Outbox Flow)
 
@@ -161,24 +162,27 @@ Chat Component
 
 ### Lifecycle
 
-**Init** (on account login):
+**Init** (when user enables inbox sync):
 ```typescript
 giftWrapService.init(pubkey, signer)
-  1. Load persisted encrypted content IDs from Dexie
-  2. Wait for cache readiness (prevents race condition)
-  3. Subscribe to user's kind 10050 (inbox relays)
-  4. Load stored gift wraps from Dexie into EventStore
-  5. Subscribe to EventStore timeline for real-time updates
-  6. Open persistent relay subscription for new gift wraps
+  1. Check if enabled (early return if disabled for performance)
+  2. Load persisted encrypted content IDs from Dexie
+  3. Wait for cache readiness (prevents race condition)
+  4. Subscribe to user's kind 10050 (inbox relays)
+  5. Load stored gift wraps from Dexie into EventStore
+  6. Subscribe to EventStore timeline for real-time updates
+  7. Open persistent relay subscription for new gift wraps
 ```
 
-**Cleanup** (on account logout):
+**Cleanup** (on account logout or disable):
 ```typescript
 giftWrapService.cleanup()
   1. Unsubscribe from all observables
   2. Close relay subscription
   3. Clear in-memory state
 ```
+
+**Performance Note**: Init is only called when user explicitly enables inbox sync via InboxViewer toggle. This prevents automatic network requests and heavy I/O operations on login.
 
 ## Cache Strategy
 
@@ -231,13 +235,16 @@ giftWrapService.cleanup()
 - Clear UI feedback about why sending is blocked
 - Relay lists can be fetched in background without blocking UI
 
-### Auto-Enable Inbox Sync
+### On-Demand Inbox Sync
 
-**Default**: Inbox sync is **auto-enabled** on first login to ensure users receive DMs.
+**Default**: Inbox sync is **disabled** on login for optimal performance.
 
-**Rationale**: Better UX to auto-enable with opt-out than require manual setup.
+**Rationale**: Prevents automatic network requests and heavy I/O operations on login. Users must explicitly enable inbox sync to receive DMs.
 
-**User Control**: Settings UI allows disabling inbox sync and auto-decrypt.
+**User Control**:
+- Enable/disable inbox sync via toggle in InboxViewer
+- Configure auto-decrypt behavior in settings
+- Service initializes only when explicitly enabled
 
 ### Relay List Privacy
 

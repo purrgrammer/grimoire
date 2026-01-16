@@ -127,12 +127,10 @@ export function useAccountSync() {
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
 
-  // Initialize gift wrap service for NIP-17 DM subscriptions when account changes
+  // Initialize gift wrap service ONLY when user enables inbox sync
+  // This ensures no automatic network requests or heavy operations on login
   useEffect(() => {
     if (!activeAccount?.pubkey) {
-      console.log(
-        "[useAccountSync] No active account, cleaning up gift wrap service",
-      );
       giftWrapService.cleanup();
       return;
     }
@@ -140,28 +138,22 @@ export function useAccountSync() {
     const pubkey = activeAccount.pubkey;
     const signer = activeAccount.signer ?? null;
 
-    console.log(
-      `[useAccountSync] Initializing gift wrap service for user ${pubkey.slice(0, 8)}`,
-    );
-
-    // Initialize the service (loads inbox relays, sets up subscriptions)
-    giftWrapService.init(pubkey, signer);
-
-    // Auto-enable inbox sync if not already set
-    // This ensures users receive DMs without manually enabling inbox
-    const currentSettings = giftWrapService.settings$.value;
-    if (!currentSettings.enabled) {
-      console.log(
-        "[useAccountSync] Auto-enabling inbox sync for NIP-17 DM subscriptions",
-      );
-      giftWrapService.updateSettings({ enabled: true });
-    }
+    // Watch settings changes and init when enabled
+    const settingsSub = giftWrapService.settings$.subscribe((settings) => {
+      if (settings.enabled) {
+        // Only init if not already initialized for this account
+        if (giftWrapService.userPubkey !== pubkey) {
+          console.log(
+            `[useAccountSync] Initializing gift wrap service for user ${pubkey.slice(0, 8)}`,
+          );
+          giftWrapService.init(pubkey, signer);
+        }
+      }
+    });
 
     // Cleanup on account change or logout
     return () => {
-      console.log(
-        `[useAccountSync] Cleaning up gift wrap service for user ${pubkey.slice(0, 8)}`,
-      );
+      settingsSub.unsubscribe();
       giftWrapService.cleanup();
     };
   }, [activeAccount?.pubkey, activeAccount?.signer]);
