@@ -942,7 +942,7 @@ export function ChatViewer({
             ref={virtuosoRef}
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput="smooth"
+            followOutput="auto"
             alignToBottom
             components={{
               Header: () =>
