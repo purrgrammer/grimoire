@@ -1305,7 +1305,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     return {
       id: `nip-cc:${pubkey}`,
       type: "group",
-      protocol: "nip-29", // Still uses NIP-29 message format
+      protocol: "communikeys", // NIP-CC protocol (uses kind 9 format)
       title,
       participants,
       metadata: {

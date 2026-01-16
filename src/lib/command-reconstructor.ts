@@ -116,6 +116,23 @@ export function reconstructCommand(window: WindowInstance): string {
           }
         }
 
+        // NIP-CC communikeys: chat npub1... or chat relay'npub1...
+        if (protocol === "communikeys" && identifier.type === "group") {
+          const relayUrl = identifier.relays?.[0] || "";
+          const groupId = identifier.value; // This is a pubkey
+
+          if (relayUrl && groupId) {
+            // Strip wss:// prefix for cleaner command
+            const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
+            return `chat ${cleanRelay}'${groupId}`;
+          }
+
+          // If no relay hint, just return the pubkey
+          if (groupId) {
+            return `chat ${groupId}`;
+          }
+        }
+
         // NIP-53 live activities: chat naddr1...
         if (protocol === "nip-53" && identifier.type === "live-activity") {
           const { pubkey, identifier: dTag } = identifier.value || {};

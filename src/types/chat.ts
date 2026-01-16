@@ -14,7 +14,13 @@ export const CHAT_KINDS = [
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol = "nip-c7" | "nip-17" | "nip-28" | "nip-29" | "nip-53";
+export type ChatProtocol =
+  | "nip-c7"
+  | "nip-17"
+  | "nip-28"
+  | "nip-29"
+  | "nip-53"
+  | "communikeys"; // NIP-CC
 
 /**
  * Conversation type

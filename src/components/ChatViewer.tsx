@@ -139,6 +139,7 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
  * Returns a string that can be passed to the `chat` command to open this conversation
  *
  * For NIP-29 groups: relay'group-id (without wss:// prefix)
+ * For communikeys (NIP-CC): relay'pubkey or just pubkey
  * For NIP-53 live activities: naddr1... encoding
  */
 function getChatIdentifier(conversation: Conversation): string | null {
@@ -150,6 +151,21 @@ function getChatIdentifier(conversation: Conversation): string | null {
     // Strip wss:// or ws:// prefix for cleaner identifier
     const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
     return `${cleanRelay}'${groupId}`;
+  }
+
+  if (conversation.protocol === "communikeys") {
+    const pubkey = conversation.metadata?.groupId; // For communikeys, groupId is the pubkey
+    const relayUrl = conversation.metadata?.relayUrl;
+    if (!pubkey) return null;
+
+    // If there's a relay hint, include it
+    if (relayUrl) {
+      const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
+      return `${cleanRelay}'${pubkey}`;
+    }
+
+    // Otherwise just return the pubkey
+    return pubkey;
   }
 
   if (conversation.protocol === "nip-53") {
@@ -704,6 +720,11 @@ export function ChatViewer({
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
+    } else if (conversation?.protocol === "communikeys") {
+      // Open NIP-CC specification (communikeys)
+      addWindow("event", {
+        id: "naddr1qvzqqqrcvypzp22rfmsktmgpk2rtan7zwu00zuzax5maq5dnsu5g3xxvqr2u3pd7qydhwumn8ghj7argv4nx7un9wd6zumn0wd68yvfwvdhk6tcpz4mhxue69uhhyetvv9ujuerpd46hxtnfduhsqrrrdakk6atwdykkketewvsrwsq9",
+      });
     }
   }, [conversation?.protocol, addWindow]);
 
@@ -1039,7 +1060,7 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
+ * Currently NIP-29 (relay-based groups), communikeys (NIP-CC), and NIP-53 (live activity chat) are supported
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
@@ -1047,6 +1068,7 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
     case "nip-29":
+    case "communikeys": // NIP-CC (uses same adapter as NIP-29)
       return new Nip29Adapter();
     // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
     //   return new Nip17Adapter();

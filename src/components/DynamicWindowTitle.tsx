@@ -708,12 +708,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     const identifier = props.identifier as ProtocolIdentifier;
 
     // Get adapter and resolve conversation
-    // Currently only NIP-29 is supported
+    // Currently only NIP-29 and communikeys are supported
     const getAdapter = () => {
       switch (protocol) {
         // case "nip-c7":  // Coming soon
         //   return new NipC7Adapter();
         case "nip-29":
+        case "communikeys": // NIP-CC (uses same adapter as NIP-29)
           return new Nip29Adapter();
         default:
           return null;
