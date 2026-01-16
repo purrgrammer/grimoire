@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { useEmojiFrequency } from "@/hooks/useEmojiFrequency";
 import { CustomEmoji } from "../nostr/CustomEmoji";
 
 interface EmojiPickerDialogProps {
@@ -15,31 +16,6 @@ interface EmojiPickerDialogProps {
   contextEmojis?: EmojiTag[];
 }
 
-// Frequently used emojis stored in localStorage
-const STORAGE_KEY = "grimoire:reaction-history";
-
-function getReactionHistory(): Record<string, number> {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-}
-
-function updateReactionHistory(emoji: string): void {
-  try {
-    const history = getReactionHistory();
-    history[emoji] = (history[emoji] || 0) + 1;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-  } catch (err) {
-    console.error(
-      "[EmojiPickerDialog] Failed to update reaction history:",
-      err,
-    );
-  }
-}
-
 /**
  * EmojiPickerDialog - Searchable emoji picker for reactions
  *
@@ -48,7 +24,7 @@ function updateReactionHistory(emoji: string): void {
  * - Frequently used emoji at top when no search query
  * - Quick reaction bar for common emojis
  * - Supports both unicode and NIP-30 custom emoji
- * - Tracks usage in localStorage
+ * - Tracks usage in IndexedDB via EmojiFrequencyService
  */
 export function EmojiPickerDialog({
   open,
@@ -61,6 +37,10 @@ export function EmojiPickerDialog({
 
   // Use the same emoji search hook as chat autocomplete
   const { service } = useEmojiSearch();
+
+  // Use emoji frequency tracking
+  const { topEmojis, recordUnicodeUsage, recordCustomUsage } =
+    useEmojiFrequency(8);
 
   // Add context emojis when they change
   useEffect(() => {
@@ -81,14 +61,40 @@ export function EmojiPickerDialog({
     performSearch();
   }, [searchQuery, service]);
 
-  // Get frequently used emojis from history
-  const frequentlyUsed = useMemo(() => {
-    const history = getReactionHistory();
-    return Object.entries(history)
-      .sort((a, b) => b[1] - a[1]) // Sort by count descending
-      .slice(0, 8) // Max 1 row
-      .map(([emoji]) => emoji);
-  }, []);
+  // Convert topEmojis from frequency service to EmojiSearchResult format
+  const frequentlyUsedResults = useMemo(() => {
+    const results: EmojiSearchResult[] = [];
+    for (const freq of topEmojis) {
+      if (freq.source === "custom") {
+        // Custom emoji - try to get from search service for full data
+        const fromService = service.getByShortcode(freq.shortcode);
+        if (fromService) {
+          results.push(fromService);
+        } else if (freq.url) {
+          // Fallback to stored data
+          results.push({
+            shortcode: freq.shortcode,
+            url: freq.url,
+            source: "custom",
+          });
+        }
+      } else {
+        // Unicode emoji - search in service or use stored data
+        const fromService = service.getByShortcode(freq.shortcode);
+        if (fromService) {
+          results.push(fromService);
+        } else {
+          // Fallback: key is the emoji char for unicode
+          results.push({
+            shortcode: freq.shortcode,
+            url: freq.key,
+            source: "unicode",
+          });
+        }
+      }
+    }
+    return results;
+  }, [topEmojis, service]);
 
   // Combine recently used with search results for display
   // When no search query: show recently used first, then fill with other emoji
@@ -100,51 +106,40 @@ export function EmojiPickerDialog({
     }
 
     // No search query: prioritize recently used, then fill with other emoji
-    if (frequentlyUsed.length > 0) {
-      const recentSet = new Set(frequentlyUsed);
+    if (frequentlyUsedResults.length > 0) {
+      const recentSet = new Set(
+        frequentlyUsedResults.map((r) =>
+          r.source === "unicode" ? r.url : `:${r.shortcode}:`,
+        ),
+      );
+
       // Get additional emoji to fill to 8, excluding recently used
       const additional = searchResults
         .filter((r) => {
           const key = r.source === "unicode" ? r.url : `:${r.shortcode}:`;
           return !recentSet.has(key);
         })
-        .slice(0, 8 - frequentlyUsed.length);
+        .slice(0, 8 - frequentlyUsedResults.length);
 
-      // Combine: recently used get priority, but displayed as regular emoji
-      const recentResults: EmojiSearchResult[] = [];
-      for (const emojiStr of frequentlyUsed) {
-        if (emojiStr.startsWith(":") && emojiStr.endsWith(":")) {
-          const shortcode = emojiStr.slice(1, -1);
-          const customEmoji = service.getByShortcode(shortcode);
-          if (customEmoji) {
-            recentResults.push(customEmoji);
-          }
-        } else {
-          // Unicode emoji - find it in search results
-          const found = searchResults.find((r) => r.url === emojiStr);
-          if (found) recentResults.push(found);
-        }
-      }
-
-      return [...recentResults, ...additional].slice(0, 8);
+      return [...frequentlyUsedResults, ...additional].slice(0, 8);
     }
 
-    // No history: just show top 8 emoji
+    // No history: just show top 8 emoji (which will be defaults on cold start)
     return searchResults;
-  }, [searchQuery, searchResults, frequentlyUsed, service]);
+  }, [searchQuery, searchResults, frequentlyUsedResults]);
 
   const handleEmojiClick = (result: EmojiSearchResult) => {
     if (result.source === "unicode") {
       // For unicode emoji, the "url" field contains the emoji character
       onEmojiSelect(result.url);
-      updateReactionHistory(result.url);
+      recordUnicodeUsage(result.url, result.shortcode);
     } else {
       // For custom emoji, pass the shortcode as content and emoji tag info
       onEmojiSelect(`:${result.shortcode}:`, {
         shortcode: result.shortcode,
         url: result.url,
       });
-      updateReactionHistory(`:${result.shortcode}:`);
+      recordCustomUsage(result.shortcode, result.url);
     }
     onOpenChange(false);
     setSearchQuery(""); // Reset search on close

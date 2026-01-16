@@ -30,6 +30,8 @@ import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { isAddressableKind } from "@/lib/nostr-kinds";
 import { getEmojiTags } from "@/lib/emoji-helpers";
 import type { EmojiTag } from "@/lib/emoji-helpers";
+import emojiFrequencyService from "@/services/emoji-frequency";
+import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
 
 interface ChatMessageContextMenuProps {
   event: NostrEvent;
@@ -133,6 +135,22 @@ export function ChatMessageContextMenu({
 
     try {
       await adapter.sendReaction(conversation, event.id, emoji, customEmoji);
+
+      // Track emoji usage for frequency-based suggestions
+      if (customEmoji) {
+        // Custom emoji
+        await emojiFrequencyService.recordUsage(
+          `:${customEmoji.shortcode}:`,
+          "custom",
+          customEmoji.shortcode,
+          customEmoji.url,
+        );
+      } else {
+        // Unicode emoji - find shortcode via reverse lookup
+        const unicodeEntry = UNICODE_EMOJIS.find((e) => e.emoji === emoji);
+        const shortcode = unicodeEntry?.shortcode || emoji;
+        await emojiFrequencyService.recordUsage(emoji, "unicode", shortcode);
+      }
     } catch (err) {
       console.error("[ChatMessageContextMenu] Failed to send reaction:", err);
     }

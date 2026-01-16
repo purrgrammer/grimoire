@@ -87,6 +87,21 @@ export interface LocalSpellbook {
   deletedAt?: number;
 }
 
+export interface EmojiFrequency {
+  /** Unique identifier: emoji character for unicode, `:shortcode:` for custom */
+  key: string;
+  /** Usage count */
+  count: number;
+  /** Last used timestamp (unix seconds) */
+  lastUsed: number;
+  /** Source type: "unicode" | "custom" */
+  source: "unicode" | "custom";
+  /** For custom emoji: the URL (may change, but useful for display) */
+  url?: string;
+  /** Shortcode for both types (for sorting/display) */
+  shortcode: string;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -98,6 +113,7 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  emojiFrequency!: Table<EmojiFrequency>;
 
   constructor(name: string) {
     super(name);
@@ -333,6 +349,76 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
+
+    // Version 16: Add emoji frequency tracking
+    this.version(16)
+      .stores({
+        profiles: "&pubkey",
+        nip05: "&nip05",
+        nips: "&id",
+        relayInfo: "&url",
+        relayAuthPreferences: "&url",
+        relayLists: "&pubkey, updatedAt",
+        relayLiveness: "&url",
+        blossomServers: "&pubkey, updatedAt",
+        spells: "&id, alias, createdAt, isPublished, deletedAt",
+        spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+        emojiFrequency: "&key, count, lastUsed",
+      })
+      .upgrade(async (tx) => {
+        console.log(
+          "[DB Migration v16] Migrating emoji reaction history from localStorage...",
+        );
+
+        // Migrate from localStorage if exists
+        const STORAGE_KEY = "grimoire:reaction-history";
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const history: Record<string, number> = JSON.parse(stored);
+            const entries: EmojiFrequency[] = [];
+            const now = Math.floor(Date.now() / 1000);
+
+            for (const [key, count] of Object.entries(history)) {
+              // Determine if unicode or custom emoji
+              const isCustom = key.startsWith(":") && key.endsWith(":");
+              const shortcode = isCustom ? key.slice(1, -1) : key;
+
+              entries.push({
+                key,
+                count,
+                lastUsed: now,
+                source: isCustom ? "custom" : "unicode",
+                shortcode,
+              });
+            }
+
+            if (entries.length > 0) {
+              await tx.table("emojiFrequency").bulkAdd(entries);
+              console.log(
+                `[DB Migration v16] Migrated ${entries.length} emoji frequency entries`,
+              );
+            }
+
+            // Clear old localStorage after successful migration
+            localStorage.removeItem(STORAGE_KEY);
+            console.log(
+              "[DB Migration v16] Cleared old localStorage reaction history",
+            );
+          } else {
+            console.log(
+              "[DB Migration v16] No localStorage reaction history to migrate",
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[DB Migration v16] Failed to migrate localStorage data:",
+            error,
+          );
+        }
+
+        console.log("[DB Migration v16] Complete!");
+      });
   }
 }
 

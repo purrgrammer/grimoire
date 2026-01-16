@@ -29,6 +29,7 @@ import {
 } from "./SlashCommandSuggestionList";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import emojiFrequencyService from "@/services/emoji-frequency";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
 
@@ -765,6 +766,22 @@ export const MentionEditor = forwardRef<
                     { type: "text", text: " " },
                   ])
                   .run();
+
+                // Track emoji usage for frequency-based suggestions
+                if (props.source === "unicode") {
+                  emojiFrequencyService.recordUsage(
+                    props.url, // emoji char
+                    "unicode",
+                    props.shortcode,
+                  );
+                } else {
+                  emojiFrequencyService.recordUsage(
+                    `:${props.shortcode}:`,
+                    "custom",
+                    props.shortcode,
+                    props.url,
+                  );
+                }
               },
             },
             // Note: renderLabel is not used when nodeView is defined
