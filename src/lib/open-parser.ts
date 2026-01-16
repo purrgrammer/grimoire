@@ -175,6 +175,6 @@ export function parseOpenCommand(args: string[]): ParsedOpenCommand {
   }
 
   throw new Error(
-    "Invalid event identifier. Supported formats: note1..., nevent1..., naddr1..., hex ID, or kind:pubkey:d-tag",
+    "Invalid event identifier. Supported formats: note1..., nevent1..., naddr1..., hex ID, kind:pubkey:d-tag, or --json <event-json>",
   );
 }
