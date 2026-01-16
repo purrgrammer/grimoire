@@ -80,6 +80,40 @@ function saveSettings(settings: InboxSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+/**
+ * Run promises with limited concurrency
+ * @param tasks Array of functions that return promises
+ * @param limit Maximum concurrent promises
+ */
+async function limitConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (const task of tasks) {
+    const promise = task().then((result) => {
+      results.push(result);
+      // Remove from executing array when done
+      const index = executing.indexOf(promise);
+      if (index !== -1) {
+        executing.splice(index, 1);
+      }
+    });
+    executing.push(promise);
+
+    // Wait if we've reached the concurrency limit
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  // Wait for all remaining promises to complete
+  await Promise.all(executing);
+  return results;
+}
+
 class GiftWrapService {
   /** Current user pubkey (null if not initialized) */
   userPubkey: string | null = null;
@@ -245,24 +279,44 @@ class GiftWrapService {
 
     try {
       const storedEvents = await loadStoredGiftWraps(this.userPubkey);
-      if (storedEvents.length > 0) {
-        dmInfo(
-          "GiftWrap",
-          `Loading ${storedEvents.length} stored gift wraps from cache`,
-        );
-        // Add stored events to EventStore - this triggers the timeline subscription
-        for (const event of storedEvents) {
+      if (storedEvents.length === 0) return;
+
+      dmInfo(
+        "GiftWrap",
+        `Loading ${storedEvents.length} stored gift wraps from cache`,
+      );
+
+      // Performance optimization: Load events in chunks with RAF to keep UI responsive
+      // This prevents UI lag when loading 50+ stored events on cold start
+      const CHUNK_SIZE = 20;
+      const startTime = performance.now();
+
+      for (let i = 0; i < storedEvents.length; i += CHUNK_SIZE) {
+        const chunk = storedEvents.slice(i, i + CHUNK_SIZE);
+
+        // Add chunk to EventStore
+        for (const event of chunk) {
           eventStore.add(event);
         }
 
-        // Update conversations from loaded gift wraps (they're already decrypted from cache)
-        // Without this, conversations don't appear until sync fetches from relays
-        this.updateConversations();
-        dmDebug(
-          "GiftWrap",
-          `Rebuilt conversations from ${storedEvents.length} stored gift wraps`,
-        );
+        // Yield to browser for UI updates between chunks
+        if (i + CHUNK_SIZE < storedEvents.length) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
       }
+
+      const elapsed = performance.now() - startTime;
+      dmInfo(
+        "GiftWrap",
+        `Loaded ${storedEvents.length} stored gift wraps in ${elapsed.toFixed(0)}ms`,
+      );
+
+      // Update conversations once after all events loaded
+      this.updateConversations();
+      dmDebug(
+        "GiftWrap",
+        `Rebuilt conversations from ${storedEvents.length} stored gift wraps`,
+      );
     } catch (err) {
       console.warn(`[GiftWrap] Error loading stored gift wraps:`, err);
     }
@@ -630,8 +684,11 @@ class GiftWrapService {
     this.conversations$.next(conversations);
   }
 
-  /** Decrypt a single gift wrap */
-  async decrypt(giftWrapId: string): Promise<Rumor | null> {
+  /**
+   * Internal decrypt without state emission (for batching)
+   * @private
+   */
+  private async decryptInternal(giftWrapId: string): Promise<Rumor | null> {
     if (!this.signer) {
       throw new Error("No signer available");
     }
@@ -646,10 +703,14 @@ class GiftWrapService {
       return getGiftWrapRumor(gw) ?? null;
     }
 
-    // Update state to decrypting
+    // Check if already decrypting (prevent concurrent decrypt of same gift wrap)
+    const currentState = this.decryptStates.get(giftWrapId);
+    if (currentState?.status === "decrypting") {
+      return null; // Already in progress
+    }
+
+    // Update state to decrypting (no emission yet)
     this.decryptStates.set(giftWrapId, { status: "decrypting" });
-    this.decryptStates$.next(new Map(this.decryptStates));
-    this.updatePendingCount();
 
     try {
       const rumor = await unlockGiftWrap(gw, this.signer);
@@ -657,34 +718,27 @@ class GiftWrapService {
       // Add to persisted IDs so it's recognized on next reload
       this.persistedIds.add(giftWrapId);
 
-      // Update state to success
+      // Update state to success (no emission yet)
       this.decryptStates.set(giftWrapId, {
         status: "success",
         decryptedAt: Date.now(),
       });
-      this.decryptStates$.next(new Map(this.decryptStates));
-      this.updatePendingCount();
 
-      // Emit decrypt event
+      // Emit decrypt event (individual notification)
       this.decryptEvent$.next({
         giftWrapId,
         status: "success",
         rumor,
       });
 
-      // Update conversations
-      this.updateConversations();
-
       return rumor;
     } catch (err) {
       const error = err instanceof Error ? err.message : "Unknown error";
 
-      // Update state to error
+      // Update state to error (no emission yet)
       this.decryptStates.set(giftWrapId, { status: "error", error });
-      this.decryptStates$.next(new Map(this.decryptStates));
-      this.updatePendingCount();
 
-      // Emit decrypt event
+      // Emit decrypt event (individual notification)
       this.decryptEvent$.next({
         giftWrapId,
         status: "error",
@@ -695,14 +749,23 @@ class GiftWrapService {
     }
   }
 
-  /** Decrypt all pending gift wraps */
+  /** Decrypt a single gift wrap (public API with immediate emission) */
+  async decrypt(giftWrapId: string): Promise<Rumor | null> {
+    const result = await this.decryptInternal(giftWrapId);
+
+    // Emit state updates immediately for single decrypt
+    this.decryptStates$.next(new Map(this.decryptStates));
+    this.updatePendingCount();
+    this.updateConversations();
+
+    return result;
+  }
+
+  /** Decrypt all pending gift wraps with parallel execution */
   async decryptAll(): Promise<{ success: number; error: number }> {
     if (!this.signer) {
       throw new Error("No signer available");
     }
-
-    let success = 0;
-    let error = 0;
 
     const pending = this.giftWraps.filter(
       (gw) =>
@@ -710,9 +773,26 @@ class GiftWrapService {
         this.decryptStates.get(gw.id)?.status !== "decrypting",
     );
 
-    for (const gw of pending) {
+    if (pending.length === 0) {
+      return { success: 0, error: 0 };
+    }
+
+    // Performance optimization: Parallel decryption with concurrency limit
+    // This speeds up bulk decryption from sequential (N × 100ms) to parallel (100ms with max 5 concurrent)
+    const MAX_CONCURRENT = 5;
+    let success = 0;
+    let error = 0;
+
+    const startTime = performance.now();
+    dmInfo(
+      "GiftWrap",
+      `Decrypting ${pending.length} gift wraps (max ${MAX_CONCURRENT} concurrent)`,
+    );
+
+    // Create task array for parallel execution
+    const tasks = pending.map((gw) => async () => {
       try {
-        const rumor = await this.decrypt(gw.id);
+        const rumor = await this.decryptInternal(gw.id);
         if (rumor) {
           success++;
         } else {
@@ -721,7 +801,21 @@ class GiftWrapService {
       } catch {
         error++;
       }
-    }
+    });
+
+    // Execute with limited concurrency
+    await limitConcurrency(tasks, MAX_CONCURRENT);
+
+    const elapsed = performance.now() - startTime;
+    dmInfo(
+      "GiftWrap",
+      `Decrypted ${success} messages (${error} errors) in ${elapsed.toFixed(0)}ms`,
+    );
+
+    // Single state update at end (instead of after each decrypt)
+    this.decryptStates$.next(new Map(this.decryptStates));
+    this.updatePendingCount();
+    this.updateConversations();
 
     return { success, error };
   }
@@ -746,12 +840,13 @@ class GiftWrapService {
       return state?.status === "pending";
     });
 
-    for (const gw of pending) {
-      try {
-        await this.decrypt(gw.id);
-      } catch {
-        // Errors are already tracked in decryptStates
-      }
+    if (pending.length === 0) return;
+
+    // Use parallel decryption for efficiency
+    try {
+      await this.decryptAll();
+    } catch {
+      // Errors are already tracked in decryptStates
     }
   }
 
