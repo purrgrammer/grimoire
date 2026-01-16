@@ -39,13 +39,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   readonly type = "group" as const;
 
   /**
-   * Parse identifier - accepts group ID format, naddr, or communikey format
+   * Parse identifier - accepts group ID format and naddr
    * Examples:
    *   - wss://relay.example.com'bitcoin-dev (NIP-29)
    *   - relay.example.com'bitcoin-dev (NIP-29, wss:// prefix is optional)
    *   - naddr1... (kind 39000 group metadata address, NIP-29)
    *   - naddr1... (kind 10222 communikey definition, NIP-CC)
-   *   - relay.example.com'npub1xxx (NIP-CC communikey with relay hint)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
     // Try naddr format first
@@ -106,7 +105,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // NIP-29/NIP-CC format: [wss://]relay'group-id-or-pubkey
+    // NIP-29 format: [wss://]relay'group-id
     const match = input.match(/^((?:wss?:\/\/)?[^']+)'([^']+)$/);
     if (match) {
       let [, relayUrl] = match;

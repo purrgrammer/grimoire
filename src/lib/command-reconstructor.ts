@@ -116,18 +116,25 @@ export function reconstructCommand(window: WindowInstance): string {
           }
         }
 
-        // NIP-CC communikeys: chat relay'npub1... (relay hint required)
+        // NIP-CC communikeys: chat naddr1... (kind 10222)
         if (protocol === "communikeys" && identifier.type === "group") {
-          const relayUrl = identifier.relays?.[0];
-          const groupId = identifier.value; // This is a pubkey
+          const pubkey = identifier.value; // This is a pubkey
+          const relays = identifier.relays;
 
-          if (relayUrl && groupId) {
-            // Strip wss:// prefix for cleaner command
-            const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
-            return `chat ${cleanRelay}'${groupId}`;
+          if (pubkey) {
+            try {
+              const naddr = nip19.naddrEncode({
+                kind: 10222,
+                pubkey,
+                identifier: "", // Communikeys use empty identifier
+                relays,
+              });
+              return `chat ${naddr}`;
+            } catch {
+              // Fallback if encoding fails
+            }
           }
 
-          // Fallback: communikeys should always have relay hints
           return "chat";
         }
 
