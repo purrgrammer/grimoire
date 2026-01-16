@@ -11,7 +11,6 @@ import {
   Clock,
   Radio,
   RefreshCw,
-  Users,
   MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,11 +31,13 @@ import accounts from "@/services/accounts";
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "@/hooks/useLocale";
 import type { DecryptStatus } from "@/services/gift-wrap";
+import { useGrimoire } from "@/core/state";
 
 /**
  * InboxViewer - Manage private messages (NIP-17/59 gift wraps)
  */
 function InboxViewer() {
+  const { addWindow } = useGrimoire();
   const account = use$(accounts.active$);
   const settings = use$(giftWrapService.settings$);
   const syncStatus = use$(giftWrapService.syncStatus$);
@@ -293,9 +294,17 @@ function InboxViewer() {
                 conversation={conv}
                 currentUserPubkey={account.pubkey}
                 onClick={() => {
-                  // Open chat window - for now just show a toast
-                  // In future, this would open the conversation in a chat viewer
-                  toast.info("Chat viewer coming soon");
+                  // Build chat identifier from participants
+                  // For self-chat, use $me; for others, use comma-separated npubs
+                  const others = conv.participants.filter(
+                    (p) => p !== account.pubkey,
+                  );
+                  const identifier =
+                    others.length === 0 ? "$me" : others.join(",");
+                  addWindow("chat", {
+                    identifier,
+                    protocol: "nip-17",
+                  });
                 }}
               />
             ))}
@@ -331,8 +340,14 @@ function InboxViewer() {
           giftWraps={giftWraps ?? []}
           onDecrypt={async (id) => {
             try {
-              await giftWrapService.decrypt(id);
-              toast.success("Message decrypted");
+              const result = await giftWrapService.decrypt(id);
+              if (result) {
+                toast.success("Message decrypted");
+              } else {
+                // Decryption failed but didn't throw
+                const state = giftWrapService.decryptStates$.value.get(id);
+                toast.error(state?.error || "Failed to decrypt message");
+              }
             } catch (err) {
               toast.error(
                 err instanceof Error ? err.message : "Decryption failed",
@@ -398,39 +413,39 @@ function ConversationRow({
     (p) => p !== currentUserPubkey,
   );
 
+  // Self-conversation (saved messages)
+  const isSelfConversation = otherParticipants.length === 0;
+
   return (
     <div
-      className="border-b border-border px-4 py-3 hover:bg-muted/30 cursor-crosshair transition-colors"
+      className="border-b border-border px-4 py-2 hover:bg-muted/30 cursor-pointer transition-colors"
       onClick={onClick}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 mt-0.5">
-          {otherParticipants.length === 1 ? (
-            <div className="size-8 rounded-full bg-muted flex items-center justify-center">
-              <Users className="size-4 text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="size-8 rounded-full bg-muted flex items-center justify-center">
-              <Users className="size-4 text-muted-foreground" />
-            </div>
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            {otherParticipants.slice(0, 3).map((pubkey, i) => (
-              <span key={pubkey}>
-                {i > 0 && <span className="text-muted-foreground">, </span>}
-                <UserName pubkey={pubkey} className="text-sm" />
-              </span>
-            ))}
-            {otherParticipants.length > 3 && (
-              <span className="text-xs text-muted-foreground">
-                +{otherParticipants.length - 3} more
-              </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {isSelfConversation ? (
+              <span className="text-sm font-medium">Saved Messages</span>
+            ) : (
+              <>
+                {otherParticipants.slice(0, 3).map((pubkey, i) => (
+                  <span key={pubkey} className="inline-flex items-center">
+                    {i > 0 && (
+                      <span className="text-muted-foreground mr-1">,</span>
+                    )}
+                    <UserName pubkey={pubkey} className="text-sm font-medium" />
+                  </span>
+                ))}
+                {otherParticipants.length > 3 && (
+                  <span className="text-xs text-muted-foreground ml-1">
+                    +{otherParticipants.length - 3}
+                  </span>
+                )}
+              </>
             )}
           </div>
           {conversation.lastMessage && (
-            <p className="text-sm text-muted-foreground truncate mt-0.5">
+            <p className="text-xs text-muted-foreground truncate">
               {conversation.lastMessage.content}
             </p>
           )}

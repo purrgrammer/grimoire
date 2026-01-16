@@ -122,6 +122,40 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
 }
 
 /**
+ * DmTitle - Renders profile names for NIP-17 DM conversations
+ */
+const DmTitle = memo(function DmTitle({
+  participants,
+  activePubkey,
+}: {
+  participants: { pubkey: string }[];
+  activePubkey: string | undefined;
+}) {
+  // Filter out the current user from participants
+  const others = participants.filter((p) => p.pubkey !== activePubkey);
+
+  // Self-conversation (saved messages)
+  if (others.length === 0) {
+    return <span>Saved Messages</span>;
+  }
+
+  // 1-on-1 or group
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      {others.slice(0, 3).map((p, i) => (
+        <span key={p.pubkey} className="inline-flex items-center">
+          {i > 0 && <span className="text-muted-foreground">, </span>}
+          <UserName pubkey={p.pubkey} className="font-semibold" />
+        </span>
+      ))}
+      {others.length > 3 && (
+        <span className="text-muted-foreground">+{others.length - 3}</span>
+      )}
+    </span>
+  );
+});
+
+/**
  * Type guard for LiveActivityMetadata
  */
 function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
@@ -794,7 +828,16 @@ export function ChatViewer({
                     className="text-sm font-semibold truncate cursor-help text-left"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {customTitle ? (
+                      customTitle
+                    ) : conversation.protocol === "nip-17" ? (
+                      <DmTitle
+                        participants={conversation.participants}
+                        activePubkey={activeAccount?.pubkey}
+                      />
+                    ) : (
+                      conversation.title
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -817,7 +860,14 @@ export function ChatViewer({
                         />
                       )}
                       <span className="font-semibold">
-                        {conversation.title}
+                        {conversation.protocol === "nip-17" ? (
+                          <DmTitle
+                            participants={conversation.participants}
+                            activePubkey={activeAccount?.pubkey}
+                          />
+                        ) : (
+                          conversation.title
+                        )}
                       </span>
                     </div>
                     {/* Description */}

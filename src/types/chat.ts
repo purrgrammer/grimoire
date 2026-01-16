@@ -76,6 +76,8 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+  inboxRelays?: string[]; // User's DM inbox relays (kind 10050)
+  participantInboxRelays?: Record<string, string[]>; // Per-participant inbox relays
 }
 
 /**

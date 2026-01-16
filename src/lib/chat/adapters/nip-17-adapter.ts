@@ -14,6 +14,7 @@ import type { NostrEvent } from "@/types/nostr";
 import giftWrapService, { type Rumor } from "@/services/gift-wrap";
 import accountManager from "@/services/accounts";
 import { resolveNip05 } from "@/lib/nip05";
+import eventStore from "@/services/event-store";
 
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
@@ -28,7 +29,7 @@ function computeConversationId(participants: string[]): string {
 
 /**
  * Parse participants from a comma-separated list or single identifier
- * Supports: npub, nprofile, hex pubkey (32 bytes), NIP-05
+ * Supports: npub, nprofile, hex pubkey (32 bytes), NIP-05, $me
  */
 async function parseParticipants(input: string): Promise<string[]> {
   const parts = input
@@ -36,8 +37,17 @@ async function parseParticipants(input: string): Promise<string[]> {
     .map((p) => p.trim())
     .filter(Boolean);
   const pubkeys: string[] = [];
+  const activePubkey = accountManager.active$.value?.pubkey;
 
   for (const part of parts) {
+    // Handle $me alias
+    if (part === "$me") {
+      if (activePubkey && !pubkeys.includes(activePubkey)) {
+        pubkeys.push(activePubkey);
+      }
+      continue;
+    }
+
     const pubkey = await resolveToPubkey(part);
     if (pubkey && !pubkeys.includes(pubkey)) {
       pubkeys.push(pubkey);
@@ -117,11 +127,20 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   readonly type = "dm" as const;
 
   /**
-   * Parse identifier - accepts pubkeys, npubs, nprofiles, NIP-05, or comma-separated list
+   * Parse identifier - accepts pubkeys, npubs, nprofiles, NIP-05, $me, or comma-separated list
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
     // Quick check: must look like a pubkey identifier or NIP-05
     const trimmed = input.trim();
+
+    // Check for $me alias (for saved messages)
+    if (trimmed === "$me") {
+      return {
+        type: "dm-recipient",
+        value: trimmed,
+        relays: [],
+      };
+    }
 
     // Check for npub, nprofile, hex, or NIP-05 patterns
     const looksLikePubkey =
@@ -133,13 +152,14 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         !trimmed.includes("'") &&
         !trimmed.includes("/"));
 
-    // Also check for comma-separated list
+    // Also check for comma-separated list (may include $me)
     const looksLikeList =
       trimmed.includes(",") &&
       trimmed
         .split(",")
         .some(
           (p) =>
+            p.trim() === "$me" ||
             p.trim().startsWith("npub1") ||
             p.trim().startsWith("nprofile1") ||
             /^[0-9a-fA-F]{64}$/.test(p.trim()) ||
@@ -226,6 +246,15 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       role: pubkey === activePubkey ? "member" : undefined,
     }));
 
+    // Get inbox relays for the current user
+    const userInboxRelays = giftWrapService.inboxRelays$.value;
+
+    // Build per-participant inbox relay map (start with current user)
+    const participantInboxRelays: Record<string, string[]> = {};
+    if (userInboxRelays.length > 0) {
+      participantInboxRelays[activePubkey] = userInboxRelays;
+    }
+
     return {
       id: conversationId,
       type: "dm",
@@ -235,6 +264,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       metadata: {
         encrypted: true,
         giftWrapped: true,
+        // Store inbox relays for display in header
+        inboxRelays: userInboxRelays,
+        participantInboxRelays,
       },
       unreadCount: 0,
     };
@@ -297,10 +329,11 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
   /**
    * Convert a rumor to a Message
+   * Creates a synthetic event from the rumor for display purposes
    */
   private rumorToMessage(
     conversationId: string,
-    giftWrap: NostrEvent,
+    _giftWrap: NostrEvent,
     rumor: Rumor,
   ): Message {
     // Find reply-to from e tags
@@ -311,6 +344,21 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         replyTo = tag[1];
       }
     }
+
+    // Create a synthetic event from the rumor for display
+    // This allows RichText to parse content correctly
+    const syntheticEvent: NostrEvent = {
+      id: rumor.id,
+      pubkey: rumor.pubkey,
+      created_at: rumor.created_at,
+      kind: rumor.kind,
+      tags: rumor.tags,
+      content: rumor.content,
+      sig: "", // Empty sig - this is a display-only synthetic event
+    };
+
+    // Add to eventStore so ReplyPreview can find it by rumor ID
+    eventStore.add(syntheticEvent);
 
     return {
       id: rumor.id,
@@ -324,8 +372,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         encrypted: true,
       },
       protocol: "nip-17",
-      // Use gift wrap as the event since rumor is unsigned
-      event: giftWrap,
+      // Use synthetic event with decrypted content
+      event: syntheticEvent,
     };
   }
 
@@ -370,18 +418,35 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Load a replied-to message by ID
+   * Load a replied-to message by ID (rumor ID)
+   * Creates a synthetic event from the rumor if found
    */
   async loadReplyMessage(
     _conversation: Conversation,
     eventId: string,
   ): Promise<NostrEvent | null> {
+    // First check if it's already in eventStore (synthetic event may have been added)
+    const existingEvent = eventStore.database.getEvent(eventId);
+    if (existingEvent) {
+      return existingEvent;
+    }
+
     // Check decrypted rumors for the message
     const rumors = giftWrapService.decryptedRumors$.value;
     const found = rumors.find(({ rumor }) => rumor.id === eventId);
     if (found) {
-      // Return the gift wrap event
-      return found.giftWrap;
+      // Create and add synthetic event from rumor
+      const syntheticEvent: NostrEvent = {
+        id: found.rumor.id,
+        pubkey: found.rumor.pubkey,
+        created_at: found.rumor.created_at,
+        kind: found.rumor.kind,
+        tags: found.rumor.tags,
+        content: found.rumor.content,
+        sig: "",
+      };
+      eventStore.add(syntheticEvent);
+      return syntheticEvent;
     }
     return null;
   }
