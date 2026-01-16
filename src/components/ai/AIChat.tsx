@@ -186,13 +186,23 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
     try {
       setStatus(`Connecting to ${conversation.model}...`);
 
-      await aiService.sendMessage(
+      // Start the message send (don't await yet)
+      const sendPromise = aiService.sendMessage(
         conversation.id,
         content,
         (_chunk, _fullContent) => {
           setStatus("Receiving response...");
         },
       );
+
+      // Small delay to let the user message and streaming assistant message be created
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Load messages to show user message and start polling for streaming updates
+      await loadMessages();
+
+      // Now wait for the stream to complete
+      await sendPromise;
 
       // Reload messages to get final state
       await loadMessages();
