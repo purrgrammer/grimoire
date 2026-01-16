@@ -104,6 +104,29 @@ class RelayListCache {
   async invalidate(pubkey: string): Promise<void> {
     return replaceableEventCache.invalidate(pubkey, RELAY_LIST_KIND);
   }
+
+  /**
+   * Get cached relay list entry for a pubkey
+   * Returns the full cached entry with event and parsed data
+   */
+  async get(
+    pubkey: string,
+  ): Promise<{ event: any; read: string[]; write: string[] } | null> {
+    const event = await replaceableEventCache.getEvent(pubkey, RELAY_LIST_KIND);
+    if (!event) return null;
+
+    const read = this.normalizeRelays(getInboxes(event));
+    const write = this.normalizeRelays(getOutboxes(event));
+
+    return { event, read, write };
+  }
+
+  /**
+   * Clear all cached relay lists (for testing)
+   */
+  async clear(): Promise<void> {
+    return replaceableEventCache.clearKind(RELAY_LIST_KIND);
+  }
 }
 
 // Singleton instance

@@ -390,6 +390,43 @@ class ReplaceableEventCache {
   }
 
   /**
+   * Clear all cached events of a specific kind (for testing)
+   */
+  async clearKind(kind: number): Promise<void> {
+    try {
+      const count = await db.replaceableEvents
+        .where("kind")
+        .equals(kind)
+        .delete();
+
+      // Also remove from memory cache
+      const keysToDelete: string[] = [];
+      for (const key of this.memoryCache.keys()) {
+        if (key.includes(`:${kind}:`)) {
+          keysToDelete.push(key);
+        }
+      }
+
+      for (const key of keysToDelete) {
+        this.memoryCache.delete(key);
+        const index = this.cacheOrder.indexOf(key);
+        if (index > -1) {
+          this.cacheOrder.splice(index, 1);
+        }
+      }
+
+      console.debug(
+        `[ReplaceableEventCache] Cleared ${count} kind:${kind} entries`,
+      );
+    } catch (error) {
+      console.error(
+        `[ReplaceableEventCache] Error clearing kind:${kind}:`,
+        error,
+      );
+    }
+  }
+
+  /**
    * Clear all cached events
    */
   async clear(): Promise<void> {

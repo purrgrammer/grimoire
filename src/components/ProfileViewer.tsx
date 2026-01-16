@@ -150,8 +150,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     if (existingEvent) {
       const servers = getServersFromEvent(existingEvent);
       setBlossomServers(servers);
-      // Also update cache
-      blossomServerCache.set(existingEvent);
+      // Event is auto-cached by ReplaceableEventCache subscription
     }
 
     // Subscribe to EventStore for reactive updates
@@ -161,8 +160,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         if (event) {
           const servers = getServersFromEvent(event);
           setBlossomServers(servers);
-          // Also update cache
-          blossomServerCache.set(event);
+          // Event is auto-cached by ReplaceableEventCache subscription
         } else {
           setBlossomServers([]);
         }
