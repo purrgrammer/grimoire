@@ -1,17 +1,7 @@
 import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { from, catchError, of, map } from "rxjs";
-import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import {
-  Loader2,
-  Reply,
-  Zap,
-  AlertTriangle,
-  RefreshCw,
-  Paperclip,
-  Copy,
-  CopyCheck,
-} from "lucide-react";
+import { Reply, Zap, Copy, CopyCheck } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
@@ -40,17 +30,14 @@ import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
-import { Button } from "./ui/button";
-import {
-  MentionEditor,
-  type MentionEditorHandle,
-  type EmojiTag,
-  type BlobAttachment,
+import type {
+  MentionEditorHandle,
+  EmojiTag,
+  BlobAttachment,
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
-import { Label } from "./ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -58,6 +45,11 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import {
+  ChatWindow,
+  insertDayMarkers,
+  type ChatLoadingState,
+} from "./chat/shared";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -65,59 +57,6 @@ interface ChatViewerProps {
   customTitle?: string;
   /** Optional content to render before the title (e.g., sidebar toggle on mobile) */
   headerPrefix?: React.ReactNode;
-}
-
-/**
- * Helper: Format timestamp as a readable day marker
- */
-function formatDayMarker(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  // Reset time parts for comparison
-  const dateOnly = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  const todayOnly = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  const yesterdayOnly = new Date(
-    yesterday.getFullYear(),
-    yesterday.getMonth(),
-    yesterday.getDate(),
-  );
-
-  if (dateOnly.getTime() === todayOnly.getTime()) {
-    return "Today";
-  } else if (dateOnly.getTime() === yesterdayOnly.getTime()) {
-    return "Yesterday";
-  } else {
-    // Format as "Jan 15" (short month, no year, respects locale)
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-  }
-}
-
-/**
- * Helper: Check if two timestamps are on different days
- */
-function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
-  const date1 = new Date(timestamp1 * 1000);
-  const date2 = new Date(timestamp2 * 1000);
-
-  return (
-    date1.getFullYear() !== date2.getFullYear() ||
-    date1.getMonth() !== date2.getMonth() ||
-    date1.getDate() !== date2.getDate()
-  );
 }
 
 /**
@@ -470,11 +409,22 @@ export function ChatViewer({
     [adapter, identifier, retryCount],
   );
 
-  // Extract conversation from result (null while loading or on error)
+  // Extract conversation and loading state from result
   const conversation =
     conversationResult?.status === "success"
       ? conversationResult.conversation
       : null;
+
+  const loadingState: ChatLoadingState = !conversationResult
+    ? "loading"
+    : conversationResult.status === "error"
+      ? "error"
+      : "success";
+
+  const errorMessage =
+    conversationResult?.status === "error"
+      ? conversationResult.error
+      : undefined;
 
   // Slash command search for action autocomplete
   // Context-aware: only shows relevant actions based on membership status
@@ -507,40 +457,11 @@ export function ChatViewer({
     [adapter, conversation],
   );
 
-  // Process messages to include day markers
-  const messagesWithMarkers = useMemo(() => {
-    if (!messages || messages.length === 0) return [];
-
-    const items: Array<
-      | { type: "message"; data: Message }
-      | { type: "day-marker"; data: string; timestamp: number }
-    > = [];
-
-    messages.forEach((message, index) => {
-      // Add day marker if this is the first message or if day changed
-      if (index === 0) {
-        items.push({
-          type: "day-marker",
-          data: formatDayMarker(message.timestamp),
-          timestamp: message.timestamp,
-        });
-      } else {
-        const prevMessage = messages[index - 1];
-        if (isDifferentDay(prevMessage.timestamp, message.timestamp)) {
-          items.push({
-            type: "day-marker",
-            data: formatDayMarker(message.timestamp),
-            timestamp: message.timestamp,
-          });
-        }
-      }
-
-      // Add the message itself
-      items.push({ type: "message", data: message });
-    });
-
-    return items;
-  }, [messages]);
+  // Process messages to include day markers (using generic utility)
+  const messagesWithMarkers = useMemo(
+    () => insertDayMarkers(messages || []),
+    [messages],
+  );
 
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
@@ -548,9 +469,6 @@ export function ChatViewer({
   // State for loading older messages
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-
-  // Ref to Virtuoso for programmatic scrolling
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
@@ -652,26 +570,6 @@ export function ChatViewer({
     editorRef.current?.focus();
   }, []);
 
-  // Handle scroll to message (when clicking on reply preview)
-  // Must search in messagesWithMarkers since that's what Virtuoso renders
-  const handleScrollToMessage = useCallback(
-    (messageId: string) => {
-      if (!messagesWithMarkers) return;
-      // Find index in the rendered array (which includes day markers)
-      const index = messagesWithMarkers.findIndex(
-        (item) => item.type === "message" && item.data.id === messageId,
-      );
-      if (index !== -1 && virtuosoRef.current) {
-        virtuosoRef.current.scrollToIndex({
-          index,
-          align: "center",
-          behavior: "smooth",
-        });
-      }
-    },
-    [messagesWithMarkers],
-  );
-
   // Handle loading older messages
   const handleLoadOlder = useCallback(async () => {
     if (!conversation || !messages || messages.length === 0 || isLoadingOlder) {
@@ -745,295 +643,184 @@ export function ChatViewer({
     liveActivity?.hostPubkey,
   ]);
 
-  // Handle loading state
-  if (!conversationResult || conversationResult.status === "loading") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" />
-        <span className="text-xs">Loading conversation...</span>
-      </div>
-    );
-  }
+  // Render function for messages (Nostr-specific)
+  const renderMessage = useCallback(
+    (message: Message, onScrollToMessage?: (messageId: string) => void) => (
+      <MessageItem
+        key={message.id}
+        message={message}
+        adapter={adapter}
+        conversation={conversation!}
+        onReply={handleReply}
+        canReply={hasActiveAccount}
+        onScrollToMessage={onScrollToMessage}
+      />
+    ),
+    [adapter, conversation, handleReply, hasActiveAccount],
+  );
 
-  // Handle error state with retry option
-  if (conversationResult.status === "error") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground p-4">
-        <AlertTriangle className="size-8 text-destructive" />
-        <span className="text-center text-sm">{conversationResult.error}</span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setRetryCount((c) => c + 1)}
-          className="gap-2"
+  // Header content (Nostr-specific)
+  const headerContent = conversation && (
+    <>
+      <TooltipProvider>
+        <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
+          <TooltipTrigger asChild>
+            <button
+              className="text-sm font-semibold truncate cursor-help text-left"
+              onClick={() => setTooltipOpen(!tooltipOpen)}
+            >
+              {customTitle || conversation.title}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" className="max-w-md p-3">
+            <div className="flex flex-col gap-2">
+              {/* Icon + Name */}
+              <div className="flex items-center gap-2">
+                {conversation.metadata?.icon && (
+                  <img
+                    src={conversation.metadata.icon}
+                    alt=""
+                    className="size-6 rounded object-cover flex-shrink-0"
+                    onError={(e) => {
+                      // Hide image if it fails to load
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                )}
+                <span className="font-semibold">{conversation.title}</span>
+              </div>
+              {/* Description */}
+              {conversation.metadata?.description && (
+                <p className="text-xs text-primary-foreground/90">
+                  {conversation.metadata.description}
+                </p>
+              )}
+              {/* Protocol Type - Clickable */}
+              <div className="flex items-center gap-1.5 text-xs">
+                {(conversation.type === "group" ||
+                  conversation.type === "live-chat") && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNipClick();
+                    }}
+                    className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                  >
+                    {conversation.protocol.toUpperCase()}
+                  </button>
+                )}
+                {(conversation.type === "group" ||
+                  conversation.type === "live-chat") && (
+                  <span className="text-primary-foreground/60">•</span>
+                )}
+                <span className="capitalize text-primary-foreground/80">
+                  {conversation.type}
+                </span>
+              </div>
+              {/* Live Activity Status */}
+              {liveActivity?.status && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-primary-foreground/80">Status:</span>
+                  <StatusBadge status={liveActivity.status} size="xs" />
+                </div>
+              )}
+              {/* Host Info */}
+              {liveActivity?.hostPubkey && (
+                <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
+                  <span>Host:</span>
+                  <UserName
+                    pubkey={liveActivity.hostPubkey}
+                    className="text-xs text-primary-foreground"
+                  />
+                </div>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {/* Copy Chat ID button */}
+      {getChatIdentifier(conversation) && (
+        <button
+          onClick={() => {
+            const chatId = getChatIdentifier(conversation);
+            if (chatId) copyChatId(chatId);
+          }}
+          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          aria-label="Copy chat ID"
         >
-          <RefreshCw className="size-3" />
-          Retry
-        </Button>
-      </div>
-    );
-  }
+          {chatIdCopied ? (
+            <CopyCheck className="size-3.5" />
+          ) : (
+            <Copy className="size-3.5" />
+          )}
+        </button>
+      )}
+    </>
+  );
 
-  // At this point conversation is guaranteed to exist
-  if (!conversation) {
-    return null; // Should never happen, but satisfies TypeScript
-  }
+  // Header suffix (Nostr-specific controls)
+  const headerSuffix = conversation && (
+    <>
+      <MembersDropdown participants={derivedParticipants} />
+      <RelaysDropdown conversation={conversation} />
+      {(conversation.type === "group" || conversation.type === "live-chat") && (
+        <button
+          onClick={handleNipClick}
+          className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+        >
+          {conversation.protocol.toUpperCase()}
+        </button>
+      )}
+    </>
+  );
+
+  // Reply preview for composer
+  const replyPreview = replyTo ? (
+    <ComposerReplyPreview
+      replyToId={replyTo}
+      onClear={() => setReplyTo(undefined)}
+    />
+  ) : undefined;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header with conversation info and controls */}
-      <div className="pl-2 pr-0 border-b w-full py-0.5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-1 min-w-0 items-center gap-2">
-            {headerPrefix}
-            <TooltipProvider>
-              <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
-                <TooltipTrigger asChild>
-                  <button
-                    className="text-sm font-semibold truncate cursor-help text-left"
-                    onClick={() => setTooltipOpen(!tooltipOpen)}
-                  >
-                    {customTitle || conversation.title}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="bottom"
-                  align="start"
-                  className="max-w-md p-3"
-                >
-                  <div className="flex flex-col gap-2">
-                    {/* Icon + Name */}
-                    <div className="flex items-center gap-2">
-                      {conversation.metadata?.icon && (
-                        <img
-                          src={conversation.metadata.icon}
-                          alt=""
-                          className="size-6 rounded object-cover flex-shrink-0"
-                          onError={(e) => {
-                            // Hide image if it fails to load
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="font-semibold">
-                        {conversation.title}
-                      </span>
-                    </div>
-                    {/* Description */}
-                    {conversation.metadata?.description && (
-                      <p className="text-xs text-primary-foreground/90">
-                        {conversation.metadata.description}
-                      </p>
-                    )}
-                    {/* Protocol Type - Clickable */}
-                    <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNipClick();
-                          }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
-                        >
-                          {conversation.protocol.toUpperCase()}
-                        </button>
-                      )}
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
-                      )}
-                      <span className="capitalize text-primary-foreground/80">
-                        {conversation.type}
-                      </span>
-                    </div>
-                    {/* Live Activity Status */}
-                    {liveActivity?.status && (
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <span className="text-primary-foreground/80">
-                          Status:
-                        </span>
-                        <StatusBadge status={liveActivity.status} size="xs" />
-                      </div>
-                    )}
-                    {/* Host Info */}
-                    {liveActivity?.hostPubkey && (
-                      <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
-                        <span>Host:</span>
-                        <UserName
-                          pubkey={liveActivity.hostPubkey}
-                          className="text-xs text-primary-foreground"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* Copy Chat ID button */}
-            {getChatIdentifier(conversation) && (
-              <button
-                onClick={() => {
-                  const chatId = getChatIdentifier(conversation);
-                  if (chatId) copyChatId(chatId);
-                }}
-                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                aria-label="Copy chat ID"
-              >
-                {chatIdCopied ? (
-                  <CopyCheck className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={derivedParticipants} />
-            <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Message timeline with virtualization */}
-      <div className="flex-1 overflow-hidden">
-        {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={messagesWithMarkers}
-            initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput="smooth"
-            alignToBottom
-            components={{
-              Header: () =>
-                hasMore && conversationResult.status === "success" ? (
-                  <div className="flex justify-center py-2">
-                    <Button
-                      onClick={handleLoadOlder}
-                      disabled={isLoadingOlder}
-                      variant="ghost"
-                      size="sm"
-                    >
-                      {isLoadingOlder ? (
-                        <>
-                          <Loader2 className="size-3 animate-spin" />
-                          <span className="text-xs">Loading...</span>
-                        </>
-                      ) : (
-                        "Load older messages"
-                      )}
-                    </Button>
-                  </div>
-                ) : null,
-              Footer: () => <div className="h-1" />,
-            }}
-            itemContent={(_index, item) => {
-              if (item.type === "day-marker") {
-                return (
-                  <div
-                    className="flex justify-center py-2"
-                    key={`marker-${item.timestamp}`}
-                  >
-                    <Label className="text-[10px] text-muted-foreground">
-                      {item.data}
-                    </Label>
-                  </div>
-                );
-              }
-              return (
-                <MessageItem
-                  key={item.data.id}
-                  message={item.data}
-                  adapter={adapter}
-                  conversation={conversation}
-                  onReply={handleReply}
-                  canReply={hasActiveAccount}
-                  onScrollToMessage={handleScrollToMessage}
-                />
-              );
-            }}
-            style={{ height: "100%" }}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            No messages yet. Start the conversation!
-          </div>
-        )}
-      </div>
-
-      {/* Message composer - only show if user has active account */}
-      {hasActiveAccount ? (
-        <div className="border-t px-2 py-1 pb-0">
-          {replyTo && (
-            <ComposerReplyPreview
-              replyToId={replyTo}
-              onClear={() => setReplyTo(undefined)}
-            />
-          )}
-          <div className="flex gap-1.5 items-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
-                    onClick={openUpload}
-                    disabled={isSending}
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Attach media</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <MentionEditor
-              ref={editorRef}
-              placeholder="Type a message..."
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              searchCommands={searchCommands}
-              onCommandExecute={handleCommandExecute}
-              onSubmit={(content, emojiTags, blobAttachments) => {
-                if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags, blobAttachments);
-                }
-              }}
-              className="flex-1 min-w-0"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="flex-shrink-0 h-7 px-2 text-xs"
-              disabled={isSending}
-              onClick={() => {
-                editorRef.current?.submit();
-              }}
-            >
-              {isSending ? <Loader2 className="size-3 animate-spin" /> : "Send"}
-            </Button>
-          </div>
-          {uploadDialog}
-        </div>
-      ) : (
-        <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">
-          Sign in to send messages
-        </div>
-      )}
-    </div>
+    <ChatWindow
+      loadingState={loadingState}
+      errorMessage={errorMessage}
+      onRetry={() => setRetryCount((c) => c + 1)}
+      header={headerContent}
+      headerPrefix={headerPrefix}
+      headerSuffix={headerSuffix}
+      messages={messagesWithMarkers}
+      renderMessage={renderMessage}
+      emptyState="No messages yet. Start the conversation!"
+      hasMore={hasMore}
+      isLoadingMore={isLoadingOlder}
+      onLoadMore={handleLoadOlder}
+      composer={{
+        placeholder: "Type a message...",
+        isSending,
+        disabled: !hasActiveAccount,
+        disabledMessage: "Sign in to send messages",
+        replyPreview,
+        onSearchProfiles: searchProfiles as (
+          query: string,
+        ) => Promise<unknown[]>,
+        onSearchEmojis: searchEmojis as (query: string) => Promise<unknown[]>,
+        onSearchCommands: searchCommands as (
+          query: string,
+        ) => Promise<unknown[]>,
+        onCommandExecute: handleCommandExecute as (
+          command: unknown,
+        ) => Promise<void>,
+        onSubmit: (content, emojiTags, blobAttachments) => {
+          if (content.trim()) {
+            handleSend(content, replyTo, emojiTags, blobAttachments);
+          }
+        },
+        onAttach: openUpload,
+        attachDialog: uploadDialog,
+      }}
+    />
   );
 }
 
