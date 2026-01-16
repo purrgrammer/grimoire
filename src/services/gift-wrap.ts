@@ -353,8 +353,9 @@ class GiftWrapService {
           ? outboxRelays
           : AGGREGATOR_RELAYS;
 
-      console.log(
-        `[GiftWrap] Fetching inbox relay list from ${relaysToQuery.length} relays`,
+      dmDebug(
+        "GiftWrap",
+        `Fetching inbox relay list from ${relaysToQuery.length} relays`,
       );
 
       // Request the user's DM relay list
@@ -366,11 +367,11 @@ class GiftWrapService {
         )
         .subscribe({
           error: (err) => {
-            console.warn(`[GiftWrap] Error fetching inbox relay list:`, err);
+            dmWarn("GiftWrap", `Error fetching inbox relay list: ${err}`);
           },
         });
     } catch (err) {
-      console.warn(`[GiftWrap] Error in fetchInboxRelayList:`, err);
+      dmWarn("GiftWrap", `Error in fetchInboxRelayList: ${err}`);
     }
   }
 
@@ -386,8 +387,9 @@ class GiftWrapService {
     const relaysToUse =
       inboxRelays.length > 0 ? inboxRelays : AGGREGATOR_RELAYS;
 
-    console.log(
-      `[GiftWrap] Starting sync with ${relaysToUse.length} relays (inbox: ${inboxRelays.length})`,
+    dmInfo(
+      "GiftWrap",
+      `Starting sync with ${relaysToUse.length} relays (inbox: ${inboxRelays.length})`,
     );
 
     this.syncStatus$.next("syncing");
@@ -403,7 +405,7 @@ class GiftWrapService {
     }
   }
 
-  /** Subscribe to gift wraps for current user */
+  /** Subscribe to gift wraps for current user with batched relay connections */
   private subscribeToGiftWraps(relays: string[]) {
     if (!this.userPubkey) return;
 
@@ -414,16 +416,15 @@ class GiftWrapService {
     };
 
     // Use timeline observable for reactive updates
-    console.log(
-      `[GiftWrap] Setting up timeline subscription for user ${this.userPubkey?.slice(0, 8)}`,
+    dmDebug(
+      "GiftWrap",
+      `Setting up timeline subscription for user ${this.userPubkey?.slice(0, 8)}`,
     );
     const sub = eventStore
       .timeline(reqFilter)
       .pipe(map((events) => events.sort((a, b) => b.created_at - a.created_at)))
       .subscribe((giftWraps) => {
-        console.log(
-          `[GiftWrap] 📬 Timeline subscription fired with ${giftWraps.length} gift wraps`,
-        );
+        dmDebug("GiftWrap", `Timeline update: ${giftWraps.length} gift wraps`);
 
         // Find new gift wraps that we haven't seen before
         const newGiftWraps = giftWraps.filter(
@@ -431,10 +432,7 @@ class GiftWrapService {
         );
 
         if (newGiftWraps.length > 0) {
-          console.log(
-            `[GiftWrap] Found ${newGiftWraps.length} new gift wraps:`,
-            newGiftWraps.map((gw) => gw.id.slice(0, 8)),
-          );
+          dmDebug("GiftWrap", `Found ${newGiftWraps.length} new gift wraps`);
         }
 
         this.giftWraps = giftWraps;
@@ -448,10 +446,6 @@ class GiftWrapService {
             const hasSymbol = isGiftWrapUnlocked(gw);
             const hasPersisted = this.persistedIds.has(gw.id);
             const isUnlocked = hasSymbol || hasPersisted;
-
-            console.log(
-              `[GiftWrap] Gift wrap ${gw.id.slice(0, 8)}: symbol=${hasSymbol}, persisted=${hasPersisted}, unlocked=${isUnlocked}`,
-            );
 
             this.decryptStates.set(gw.id, {
               status: isUnlocked ? "success" : "pending",
@@ -482,30 +476,95 @@ class GiftWrapService {
 
     this.relaySubscription = sub;
 
-    // Open a persistent subscription to relays for real-time updates
-    // Use subscription() instead of request() to keep connection open after EOSE
-    console.log(
-      `[GiftWrap] Opening subscription to ${relays.length} relays for real-time gift wraps`,
+    // Progressive relay connection strategy to prevent overwhelming the browser
+    // Connect to relays in batches with delays to allow AUTH to complete
+    const INITIAL_BATCH_SIZE = 3; // Start with top 3 relays
+    const BATCH_SIZE = 2; // Then add 2 at a time
+    const BATCH_DELAY_MS = 1500; // 1.5s between batches (allows AUTH to complete)
+
+    if (relays.length === 0) {
+      dmWarn("GiftWrap", "No relays to connect to");
+      return;
+    }
+
+    dmInfo(
+      "GiftWrap",
+      `Connecting to ${relays.length} inbox relays progressively (batches of ${INITIAL_BATCH_SIZE}, then ${BATCH_SIZE})`,
     );
+
+    // Connect to first batch immediately (most important relays)
+    const firstBatch = relays.slice(0, INITIAL_BATCH_SIZE);
+    dmInfo("GiftWrap", `Batch 1: Connecting to ${firstBatch.length} relays`);
+
     const relaySubscription = pool
-      .subscription(relays, [reqFilter], { eventStore })
+      .subscription(firstBatch, [reqFilter], { eventStore })
       .subscribe({
         next: (response) => {
-          // SubscriptionResponse can be NostrEvent or other types
-          // Events are automatically added to eventStore, just log receipt
           if (typeof response === "object" && response && "id" in response) {
-            console.log(
-              `[GiftWrap] 📨 Received gift wrap ${response.id.slice(0, 8)} from relay`,
+            dmDebug(
+              "GiftWrap",
+              `Received gift wrap ${response.id.slice(0, 8)}`,
             );
           }
         },
         error: (err) => {
-          console.warn(`[GiftWrap] Error in relay subscription:`, err);
+          dmWarn("GiftWrap", `Relay subscription error: ${err}`);
         },
       });
 
     // Store relay subscription for cleanup
     this.subscriptions.push(relaySubscription);
+
+    // Connect to remaining relays progressively in batches
+    const remainingRelays = relays.slice(INITIAL_BATCH_SIZE);
+    if (remainingRelays.length > 0) {
+      dmInfo(
+        "GiftWrap",
+        `Will connect to ${remainingRelays.length} more relays progressively`,
+      );
+
+      // Progressive batching with delays
+      let batchNumber = 2;
+      for (let i = 0; i < remainingRelays.length; i += BATCH_SIZE) {
+        const batch = remainingRelays.slice(i, i + BATCH_SIZE);
+        const delay = batchNumber * BATCH_DELAY_MS;
+
+        // Schedule this batch connection
+        setTimeout(() => {
+          dmInfo(
+            "GiftWrap",
+            `Batch ${batchNumber}: Connecting to ${batch.length} more relays`,
+          );
+
+          const batchSub = pool
+            .subscription(batch, [reqFilter], { eventStore })
+            .subscribe({
+              next: (response) => {
+                if (
+                  typeof response === "object" &&
+                  response &&
+                  "id" in response
+                ) {
+                  dmDebug(
+                    "GiftWrap",
+                    `Received gift wrap ${response.id.slice(0, 8)} from batch ${batchNumber}`,
+                  );
+                }
+              },
+              error: (err) => {
+                dmWarn(
+                  "GiftWrap",
+                  `Batch ${batchNumber} subscription error: ${err}`,
+                );
+              },
+            });
+
+          this.subscriptions.push(batchSub);
+        }, delay);
+
+        batchNumber++;
+      }
+    }
   }
 
   /** Update pending count for UI display */
