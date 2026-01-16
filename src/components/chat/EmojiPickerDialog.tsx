@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { CustomEmoji } from "../nostr/CustomEmoji";
 
 interface EmojiPickerDialogProps {
   open: boolean;
@@ -153,7 +154,7 @@ export function EmojiPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         {/* Search input */}
-        <div className="relative">
+        <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="text"
@@ -166,7 +167,7 @@ export function EmojiPickerDialog({
         </div>
 
         {/* Fixed 1-row emoji grid (8 emoji) with consistent height */}
-        <div className="grid grid-cols-8 gap-3 min-h-[3.5rem]">
+        <div className="grid grid-cols-8 items-center gap-3 h-[1.5rem]">
           {displayEmojis.length > 0 ? (
             displayEmojis.map((result) => (
               <button
@@ -178,16 +179,16 @@ export function EmojiPickerDialog({
                 {result.source === "unicode" ? (
                   <span className="text-xl leading-none">{result.url}</span>
                 ) : (
-                  <img
-                    src={result.url}
-                    alt={`:${result.shortcode}:`}
-                    className="size-5 object-contain"
+                  <CustomEmoji
+                    size="md"
+                    shortcode={result.shortcode}
+                    url={result.url}
                   />
                 )}
               </button>
             ))
           ) : (
-            <div className="col-span-8 flex items-center justify-center text-xs text-muted-foreground">
+            <div className="col-span-8 flex items-center justify-center text-sm text-muted-foreground">
               No emojis found
             </div>
           )}

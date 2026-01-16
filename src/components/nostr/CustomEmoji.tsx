@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export interface CustomEmojiProps {
   /** The shortcode (without colons) */
@@ -46,17 +47,22 @@ export function CustomEmoji({
   }
 
   return (
-    <img
-      src={url}
-      alt={`:${shortcode}:`}
-      title={`:${shortcode}:`}
-      className={cn(
-        "inline-block object-contain",
-        sizeClasses[size],
-        className,
-      )}
-      loading="lazy"
-      onError={() => setError(true)}
-    />
+    <Tooltip>
+      <TooltipTrigger>
+        <img
+          src={url}
+          alt={`:${shortcode}:`}
+          title={`:${shortcode}:`}
+          className={cn(
+            "inline-block object-contain",
+            sizeClasses[size],
+            className,
+          )}
+          loading="lazy"
+          onError={() => setError(true)}
+        />
+      </TooltipTrigger>
+      <TooltipContent>:{shortcode}:</TooltipContent>
+    </Tooltip>
   );
 }
