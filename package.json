@@ -41,7 +41,7 @@
     "@tiptap/suggestion": "^3.15.3",
     "@types/qrcode": "^1.5.6",
     "applesauce-accounts": "^5.0.0",
-    "applesauce-actions": "^5.0.0",
+    "applesauce-actions": "^5.0.2",
     "applesauce-common": "^5.0.0",
     "applesauce-content": "^5.0.0",
     "applesauce-core": "^5.0.0",

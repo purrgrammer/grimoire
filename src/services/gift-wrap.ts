@@ -22,6 +22,7 @@ import {
 } from "./db";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import relayListCache from "./relay-list-cache";
+import { normalizeRelayURL } from "@/lib/relay-url";
 
 /** Kind 10050: DM relay list (NIP-17) */
 const DM_RELAY_LIST_KIND = 10050;
@@ -248,11 +249,23 @@ class GiftWrapService {
         filter((e) => e !== undefined),
         map((event) => {
           if (!event) return [];
-          // Extract relay URLs from tags
+          // Extract relay URLs from tags and normalize them
           return event.tags
             .filter((tag) => tag[0] === "relay")
             .map((tag) => tag[1])
-            .filter(Boolean);
+            .filter(Boolean)
+            .map((url) => {
+              try {
+                return normalizeRelayURL(url);
+              } catch (err) {
+                console.warn(
+                  `[GiftWrap] Failed to normalize inbox relay URL: ${url}`,
+                  err,
+                );
+                return null;
+              }
+            })
+            .filter((url): url is string => url !== null);
         }),
       )
       .subscribe((relays) => {
