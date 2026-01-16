@@ -431,18 +431,32 @@ class GiftWrapService {
 
     this.relaySubscription = sub;
 
-    // Request gift wraps from relays (always have relays - inbox or aggregator fallback)
+    // Open a persistent subscription to relays for real-time updates
+    // Use subscription() instead of request() to keep connection open after EOSE
     console.log(
-      `[GiftWrap] Requesting gift wraps from ${relays.length} relays`,
+      `[GiftWrap] Opening subscription to ${relays.length} relays for real-time gift wraps`,
     );
-    pool.request(relays, [reqFilter], { eventStore }).subscribe({
-      next: () => {
-        // Events are automatically added to eventStore via the options
-      },
-      error: (err) => {
-        console.warn(`[GiftWrap] Error fetching from relays:`, err);
-      },
-    });
+    const relaySubscription = pool
+      .subscription(relays, [reqFilter], { eventStore })
+      .subscribe({
+        next: (response) => {
+          if (response.type === "EVENT") {
+            console.log(
+              `[GiftWrap] 📨 Received gift wrap ${response.event.id.slice(0, 8)} from relay`,
+            );
+          } else if (response.type === "EOSE") {
+            console.log(
+              `[GiftWrap] ✓ EOSE from ${response.relayUrl} (subscription stays open)`,
+            );
+          }
+        },
+        error: (err) => {
+          console.warn(`[GiftWrap] Error in relay subscription:`, err);
+        },
+      });
+
+    // Store relay subscription for cleanup
+    this.subscriptions.push(relaySubscription);
   }
 
   /** Update pending count for UI display */
