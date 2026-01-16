@@ -18,6 +18,7 @@ export type AppId =
   | "debug"
   | "conn"
   | "chat"
+  | "llm"
   | "spells"
   | "spellbooks"
   | "blossom"

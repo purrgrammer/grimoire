@@ -30,6 +30,9 @@ const ConnViewer = lazy(() => import("./ConnViewer"));
 const ChatViewer = lazy(() =>
   import("./ChatViewer").then((m) => ({ default: m.ChatViewer })),
 );
+const LLMChatViewer = lazy(() =>
+  import("./LLMChatViewer").then((m) => ({ default: m.LLMChatViewer })),
+);
 const GroupListViewer = lazy(() =>
   import("./GroupListViewer").then((m) => ({ default: m.GroupListViewer })),
 );
@@ -187,6 +190,11 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "conn":
         content = <ConnViewer />;
+        break;
+      case "llm":
+        content = (
+          <LLMChatViewer conversationId={window.props.conversationId} />
+        );
         break;
       case "chat":
         // Check if this is a group list (kind 10009) - render multi-room interface

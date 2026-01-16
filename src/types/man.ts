@@ -471,6 +471,22 @@ export const manPages: Record<string, ManPageEntry> = {
       return parsed;
     },
   },
+  llm: {
+    name: "llm",
+    section: "1",
+    synopsis: "llm [conversation-id]",
+    description:
+      "Open an AI chat interface for conversing with large language models. Demonstrates how the generic chat components can be used for different chat paradigms beyond Nostr. Features streaming responses, model selection, and token tracking.",
+    examples: ["llm    Start a new AI conversation"],
+    seeAlso: ["chat"],
+    appId: "llm",
+    category: "System",
+    argParser: () => {
+      return {
+        conversationId: undefined,
+      };
+    },
+  },
   chat: {
     name: "chat",
     section: "1",
