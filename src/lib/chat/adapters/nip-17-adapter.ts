@@ -648,88 +648,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     // 5. Execute appropriate action via ActionRunner
     try {
-      // Build the rumor (unsigned kind 14 event) for optimistic UI update
-      const rumorTags =
-        isReply && parentRumor
-          ? [
-              ["e", parentRumor.id, "", "reply"],
-              ...participantPubkeys.map((p) => ["p", p] as [string, string]),
-              ...(actionOpts.emojis?.map((e) => [
-                "emoji",
-                e.shortcode,
-                e.url,
-              ]) || []),
-            ]
-          : [
-              ...participantPubkeys.map((p) => ["p", p] as [string, string]),
-              ...(actionOpts.emojis?.map((e) => [
-                "emoji",
-                e.shortcode,
-                e.url,
-              ]) || []),
-            ];
-
-      const rumorCreatedAt = Math.floor(Date.now() / 1000);
-
-      // Calculate rumor ID
-      const rumorId = await crypto.subtle
-        .digest(
-          "SHA-256",
-          new TextEncoder().encode(
-            JSON.stringify([
-              0,
-              activePubkey,
-              rumorCreatedAt,
-              PRIVATE_DM_KIND,
-              rumorTags,
-              content,
-            ]),
-          ),
-        )
-        .then((buf) =>
-          Array.from(new Uint8Array(buf))
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join(""),
-        );
-
-      const rumor: Rumor = {
-        id: rumorId,
-        kind: PRIVATE_DM_KIND,
-        created_at: rumorCreatedAt,
-        tags: rumorTags,
-        content,
-        pubkey: activePubkey,
-      };
-
-      // Create synthetic gift wrap for optimistic display
-      // (will be replaced by real gift wrap when received from relay)
-      const syntheticGiftWrap: NostrEvent = {
-        id: `synthetic-${rumorId}`,
-        kind: 1059,
-        created_at: rumorCreatedAt,
-        tags: [["p", activePubkey]],
-        content: "",
-        pubkey: activePubkey,
-        sig: "",
-      };
-
-      // Add to decryptedRumors$ for immediate UI update (optimistic)
-      const currentRumors = giftWrapService.decryptedRumors$.value;
-      giftWrapService.decryptedRumors$.next([
-        ...currentRumors,
-        { giftWrap: syntheticGiftWrap, rumor },
-      ]);
-
-      console.log(
-        `[NIP-17] 📝 Added rumor ${rumorId.slice(0, 8)} to decryptedRumors$ (optimistic)`,
-      );
-
-      // Now send the actual gift wrap
       if (isReply && parentRumor) {
         await hub.run(ReplyToWrappedMessage, parentRumor, content, actionOpts);
-        console.log(
-          `[NIP-17] ✅ Reply sent successfully (${participantPubkeys.length} participants including self)`,
-        );
+        console.log(`[NIP-17] ✅ Reply sent successfully`);
       } else {
         // For self-chat, explicitly send to self. For group chats, filter out self
         // (applesauce adds sender automatically for group messages)

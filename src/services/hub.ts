@@ -6,21 +6,35 @@ import { relayListCache } from "./relay-list-cache";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import type { NostrEvent } from "nostr-tools/core";
 import accountManager from "./accounts";
+import { encryptedContentStorage } from "./db";
 
 /**
- * Publishes a Nostr event to relays using the author's outbox relays
- * Falls back to seen relays from the event if no relay list found
+ * Publishes a Nostr event to relays
  *
  * @param event - The signed Nostr event to publish
+ * @param relayHints - Optional relay hints (used for gift wraps)
  */
-export async function publishEvent(event: NostrEvent): Promise<void> {
-  // Try to get author's outbox relays from EventStore (kind 10002)
-  let relays = await relayListCache.getOutboxRelays(event.pubkey);
+export async function publishEvent(
+  event: NostrEvent,
+  relayHints?: string[],
+): Promise<void> {
+  let relays: string[];
 
-  // Fallback to relays from the event itself (where it was seen)
-  if (!relays || relays.length === 0) {
-    const seenRelays = getSeenRelays(event);
-    relays = seenRelays ? Array.from(seenRelays) : [];
+  // If relays explicitly provided (e.g., from gift wrap actions), use them
+  if (relayHints && relayHints.length > 0) {
+    relays = relayHints;
+    console.log(
+      `[Publish] Using provided relay hints (${relays.length} relays) for event ${event.id.slice(0, 8)}`,
+    );
+  } else {
+    // Otherwise use author's outbox relays (existing logic)
+    const outboxRelays = await relayListCache.getOutboxRelays(event.pubkey);
+    relays = outboxRelays || [];
+
+    if (relays.length === 0) {
+      const seenRelays = getSeenRelays(event);
+      relays = seenRelays ? Array.from(seenRelays) : [];
+    }
   }
 
   // If still no relays, throw error
@@ -32,6 +46,23 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
 
   // Publish to relay pool
   await pool.publish(relays, event);
+
+  // If this is a gift wrap with decrypted content symbol, persist it to Dexie
+  // This ensures when we receive it back from relay, it's recognized as unlocked
+  if (event.kind === 1059) {
+    const EncryptedContentSymbol = Symbol.for("encrypted-content");
+    if (Reflect.has(event, EncryptedContentSymbol)) {
+      const plaintext = Reflect.get(event, EncryptedContentSymbol);
+      try {
+        await encryptedContentStorage.setItem(event.id, plaintext);
+        console.log(
+          `[Publish] ✅ Persisted encrypted content for gift wrap ${event.id.slice(0, 8)}`,
+        );
+      } catch (err) {
+        console.warn(`[Publish] ⚠️ Failed to persist encrypted content:`, err);
+      }
+    }
+  }
 
   // Add to EventStore for immediate local availability
   eventStore.add(event);

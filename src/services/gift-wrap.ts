@@ -564,6 +564,17 @@ class GiftWrapService {
     return { success, error };
   }
 
+  /**
+   * Reload persisted encrypted content IDs from Dexie
+   * Useful after sending messages to ensure newly persisted content is recognized
+   */
+  async refreshPersistedIds(): Promise<void> {
+    this.persistedIds = await getStoredEncryptedContentIds();
+    console.log(
+      `[GiftWrap] Refreshed persisted IDs: ${this.persistedIds.size} cached`,
+    );
+  }
+
   /** Auto-decrypt pending gift wraps (called when auto-decrypt is enabled) */
   private async autoDecryptPending() {
     if (!this.signer || !this.settings$.value.autoDecrypt) return;
