@@ -25,6 +25,11 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import relayListCache from "@/services/relay-list-cache";
+import { hub } from "@/services/hub";
+import {
+  SendWrappedMessage,
+  ReplyToWrappedMessage,
+} from "applesauce-actions/actions/wrapped-messages";
 
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
@@ -531,14 +536,98 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Send a message (not implemented yet)
+   * Send a message to a NIP-17 conversation
+   * Uses high-level applesauce actions to build, sign, and publish gift-wrapped messages
    */
   async sendMessage(
-    _conversation: Conversation,
-    _content: string,
-    _options?: SendMessageOptions,
+    conversation: Conversation,
+    content: string,
+    options?: SendMessageOptions,
   ): Promise<void> {
-    throw new Error("Sending NIP-17 messages is not yet implemented.");
+    // 1. Validate active account and signer
+    const activePubkey = accountManager.active$.value?.pubkey;
+    const activeSigner = accountManager.active$.value?.signer;
+
+    if (!activePubkey || !activeSigner) {
+      throw new Error("No active account or signer");
+    }
+
+    // 2. Validate inbox relays (CRITICAL - blocks send if unreachable)
+    const participantInboxRelays =
+      conversation.metadata?.participantInboxRelays || {};
+    const unreachableParticipants =
+      conversation.metadata?.unreachableParticipants || [];
+
+    if (unreachableParticipants.length > 0) {
+      const unreachableList = unreachableParticipants
+        .map((p) => p.slice(0, 8) + "...")
+        .join(", ");
+      throw new Error(
+        `Cannot send message: The following participants have no inbox relays: ${unreachableList}. ` +
+          `They need to publish a kind 10050 event to receive encrypted messages.`,
+      );
+    }
+
+    // Defensive check for empty relay arrays
+    const participantPubkeys = conversation.participants.map((p) => p.pubkey);
+    for (const pubkey of participantPubkeys) {
+      if (pubkey === activePubkey) continue; // Skip self check
+      const relays = participantInboxRelays[pubkey];
+      if (!relays || relays.length === 0) {
+        throw new Error(
+          `Cannot send message: Participant ${pubkey.slice(0, 8)}... has no inbox relays`,
+        );
+      }
+    }
+
+    // 3. Determine if reply and find parent rumor
+    const isReply = !!options?.replyTo;
+    let parentRumor: Rumor | undefined;
+
+    if (isReply) {
+      const rumors = giftWrapService.decryptedRumors$.value;
+      const found = rumors.find(({ rumor }) => rumor.id === options.replyTo);
+
+      if (!found) {
+        throw new Error(
+          `Cannot reply: Parent message ${options.replyTo!.slice(0, 8)}... not found. ` +
+            `It may not have been decrypted yet.`,
+        );
+      }
+
+      parentRumor = found.rumor;
+    }
+
+    // 4. Build action options (emojis, etc.)
+    const actionOpts = {
+      emojis: options?.emojiTags?.map((e) => ({
+        shortcode: e.shortcode,
+        url: e.url,
+      })),
+    };
+
+    // 5. Execute appropriate action via ActionRunner
+    try {
+      if (isReply && parentRumor) {
+        await hub.run(ReplyToWrappedMessage, parentRumor, content, actionOpts);
+        console.log(
+          `[NIP-17] Reply sent successfully to ${participantPubkeys.length} participants`,
+        );
+      } else {
+        // Filter out self from recipients list
+        const recipients = participantPubkeys.filter((p) => p !== activePubkey);
+
+        await hub.run(SendWrappedMessage, recipients, content, actionOpts);
+        console.log(
+          `[NIP-17] Message sent successfully to ${recipients.length} participants`,
+        );
+      }
+    } catch (error) {
+      console.error("[NIP-17] Failed to send message:", error);
+      throw new Error(
+        `Failed to send encrypted message: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
   }
 
   /**
