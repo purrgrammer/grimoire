@@ -69,6 +69,16 @@ interface ChatViewerProps {
 }
 
 /**
+ * Message group for consecutive messages from same author
+ */
+interface MessageGroup {
+  author: string;
+  messages: Message[];
+  firstTimestamp: number;
+  lastTimestamp: number;
+}
+
+/**
  * Helper: Format timestamp as a readable day marker
  */
 function formatDayMarker(timestamp: number): string {
@@ -424,6 +434,143 @@ const MessageItem = memo(function MessageItem({
 });
 
 /**
+ * MessageGroupItem - Renders a group of consecutive messages from the same author
+ * Shows author name and timestamp only on the first message (Slack-style)
+ */
+const MessageGroupItem = memo(
+  function MessageGroupItem({
+    group,
+    adapter,
+    conversation,
+    onReply,
+    canReply,
+    onScrollToMessage,
+  }: {
+    group: MessageGroup;
+    adapter: ChatProtocolAdapter;
+    conversation: Conversation;
+    onReply?: (messageId: string) => void;
+    canReply: boolean;
+    onScrollToMessage?: (messageId: string) => void;
+  }) {
+    const relays = useMemo(
+      () => getConversationRelays(conversation),
+      [conversation],
+    );
+
+    return (
+      <div className="group hover:bg-muted/50 px-3 py-1">
+        {/* First message: Show author name and timestamp */}
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            {/* Header: Author + Timestamp */}
+            <div className="flex items-center gap-2 mb-1">
+              <UserName
+                pubkey={group.author}
+                className="font-semibold text-sm"
+              />
+              <span className="text-xs text-muted-foreground">
+                <Timestamp timestamp={group.firstTimestamp} />
+              </span>
+              {/* Reactions for first message */}
+              <MessageReactions
+                messageId={group.messages[0].id}
+                relays={relays}
+              />
+              {canReply && onReply && (
+                <button
+                  onClick={() => onReply(group.messages[0].id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+                  title="Reply to this message"
+                >
+                  <Reply className="size-3" />
+                </button>
+              )}
+            </div>
+
+            {/* First message content */}
+            <div className="break-words overflow-hidden">
+              {group.messages[0].event ? (
+                <RichText
+                  className="text-sm leading-tight"
+                  event={group.messages[0].event}
+                >
+                  {group.messages[0].replyTo && (
+                    <ReplyPreview
+                      replyToId={group.messages[0].replyTo}
+                      adapter={adapter}
+                      conversation={conversation}
+                      onScrollToMessage={onScrollToMessage}
+                    />
+                  )}
+                </RichText>
+              ) : (
+                <span className="whitespace-pre-wrap break-words text-sm leading-tight">
+                  {group.messages[0].content}
+                </span>
+              )}
+            </div>
+
+            {/* Subsequent messages: No author name, just content */}
+            {group.messages.slice(1).map((message) => (
+              <div key={message.id} className="mt-1 flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    {/* Small timestamp on hover */}
+                    <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Timestamp timestamp={message.timestamp} />
+                    </span>
+                    <MessageReactions messageId={message.id} relays={relays} />
+                    {canReply && onReply && (
+                      <button
+                        onClick={() => onReply(message.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+                        title="Reply to this message"
+                      >
+                        <Reply className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="break-words overflow-hidden">
+                    {message.event ? (
+                      <RichText
+                        className="text-sm leading-tight"
+                        event={message.event}
+                      >
+                        {message.replyTo && (
+                          <ReplyPreview
+                            replyToId={message.replyTo}
+                            adapter={adapter}
+                            conversation={conversation}
+                            onScrollToMessage={onScrollToMessage}
+                          />
+                        )}
+                      </RichText>
+                    ) : (
+                      <span className="whitespace-pre-wrap break-words text-sm leading-tight">
+                        {message.content}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    // Compare group by first message ID and length
+    // If same author and same number of messages, assume same group
+    return (
+      prev.group.messages[0].id === next.group.messages[0].id &&
+      prev.group.messages.length === next.group.messages.length
+    );
+  },
+);
+
+/**
  * ChatViewer - Main chat interface component
  *
  * Provides protocol-agnostic chat UI that works across all Nostr messaging protocols.
@@ -538,14 +685,17 @@ export function ChatViewer({
     [adapter, conversation],
   );
 
-  // Process messages to include day markers
+  // Process messages to include day markers and group consecutive messages
   const messagesWithMarkers = useMemo(() => {
     if (!messages || messages.length === 0) return [];
 
     const items: Array<
-      | { type: "message"; data: Message }
+      | { type: "message-group"; data: MessageGroup }
       | { type: "day-marker"; data: string; timestamp: number }
     > = [];
+
+    const GROUP_TIME_WINDOW = 300; // 5 minutes in seconds
+    let currentGroup: MessageGroup | null = null;
 
     messages.forEach((message, index) => {
       // Add day marker if this is the first message or if day changed
@@ -558,6 +708,12 @@ export function ChatViewer({
       } else {
         const prevMessage = messages[index - 1];
         if (isDifferentDay(prevMessage.timestamp, message.timestamp)) {
+          // Flush current group before day marker
+          if (currentGroup) {
+            items.push({ type: "message-group", data: currentGroup });
+            currentGroup = null;
+          }
+
           items.push({
             type: "day-marker",
             data: formatDayMarker(message.timestamp),
@@ -566,9 +722,37 @@ export function ChatViewer({
         }
       }
 
-      // Add the message itself
-      items.push({ type: "message", data: message });
+      // Determine if this message should be grouped with the previous one
+      const shouldGroup =
+        currentGroup &&
+        currentGroup.author === message.author &&
+        message.type === "user" && // Only group regular user messages
+        message.timestamp - currentGroup.lastTimestamp <= GROUP_TIME_WINDOW;
+
+      if (shouldGroup && currentGroup) {
+        // Add to existing group
+        currentGroup.messages.push(message);
+        currentGroup.lastTimestamp = message.timestamp;
+      } else {
+        // Flush previous group if exists
+        if (currentGroup) {
+          items.push({ type: "message-group", data: currentGroup });
+        }
+
+        // Start new group
+        currentGroup = {
+          author: message.author,
+          messages: [message],
+          firstTimestamp: message.timestamp,
+          lastTimestamp: message.timestamp,
+        };
+      }
     });
+
+    // Flush final group
+    if (currentGroup) {
+      items.push({ type: "message-group", data: currentGroup });
+    }
 
     return items;
   }, [messages]);
@@ -688,9 +872,11 @@ export function ChatViewer({
   const handleScrollToMessage = useCallback(
     (messageId: string) => {
       if (!messagesWithMarkers) return;
-      // Find index in the rendered array (which includes day markers)
+      // Find index in the rendered array (which includes day markers and message groups)
       const index = messagesWithMarkers.findIndex(
-        (item) => item.type === "message" && item.data.id === messageId,
+        (item) =>
+          item.type === "message-group" &&
+          item.data.messages.some((msg) => msg.id === messageId),
       );
       if (index !== -1 && virtuosoRef.current) {
         virtuosoRef.current.scrollToIndex({
@@ -981,9 +1167,9 @@ export function ChatViewer({
                 );
               }
               return (
-                <MessageItem
-                  key={item.data.id}
-                  message={item.data}
+                <MessageGroupItem
+                  key={item.data.messages[0].id}
+                  group={item.data}
                   adapter={adapter}
                   conversation={conversation}
                   onReply={handleReply}
