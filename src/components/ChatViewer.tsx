@@ -583,6 +583,34 @@ export function ChatViewer({
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
+  // Track if we've done initial scroll to bottom for this conversation
+  const hasScrolledToBottomRef = useRef(false);
+
+  // Reset scroll tracking when conversation changes
+  useEffect(() => {
+    hasScrolledToBottomRef.current = false;
+  }, [conversation?.id]);
+
+  // Scroll to bottom when messages first load (handles async loading)
+  useEffect(() => {
+    if (
+      messagesWithMarkers &&
+      messagesWithMarkers.length > 0 &&
+      !hasScrolledToBottomRef.current &&
+      virtuosoRef.current
+    ) {
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: messagesWithMarkers.length - 1,
+          align: "end",
+          behavior: "auto",
+        });
+        hasScrolledToBottomRef.current = true;
+      });
+    }
+  }, [messagesWithMarkers]);
+
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
 
