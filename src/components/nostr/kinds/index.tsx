@@ -140,6 +140,8 @@ import {
 } from "./StarterPackRenderer";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
+import { P2pOrderRenderer } from "./P2pOrderRenderer";
+import { P2pOrderDetailRenderer } from "./P2pOrderDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -215,6 +217,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
   31990: ApplicationHandlerRenderer, // Application Handler (NIP-89)
   32267: ZapstoreAppRenderer, // Zapstore App
+  38383: P2pOrderRenderer, // P2P Orders
   39000: GroupMetadataRenderer, // Group Metadata (NIP-29)
   39089: StarterPackRenderer, // Starter Pack (NIP-51)
   39092: MediaStarterPackRenderer, // Media Starter Pack (NIP-51)
@@ -305,6 +308,7 @@ const detailRenderers: Record<
   31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)
   31990: ApplicationHandlerDetailRenderer, // Application Handler Detail (NIP-89)
   32267: ZapstoreAppDetailRenderer, // Zapstore App Detail
+  38383: P2pOrderDetailRenderer, // P2P Order Detail
   39089: StarterPackDetailRenderer, // Starter Pack Detail (NIP-51)
   39092: MediaStarterPackDetailRenderer, // Media Starter Pack Detail (NIP-51)
 };
