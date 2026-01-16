@@ -89,6 +89,16 @@ export async function unwrapAndUnseal(
     throw new GiftWrapError("Gift wrap content is empty", "MISSING_CONTENT");
   }
 
+  // CRITICAL: Validate signer has NIP-44 support
+  // NIP-59 gift wraps REQUIRE NIP-44 encryption
+  if (!signer.nip44) {
+    throw new GiftWrapError(
+      "Signer does not support NIP-44 encryption (required for NIP-59 gift wraps). " +
+        "Please use a browser extension that supports NIP-44 (e.g., Alby, nos2x-fox, Nostr-Connect).",
+      "NO_SIGNER",
+    );
+  }
+
   // CRITICAL: Add to event store before unlocking
   // Applesauce requires the event to be in the store for caching to work
   // We wrap in try-catch because the event might not be valid for the event store
@@ -146,6 +156,34 @@ export async function unwrapAndUnseal(
     }
 
     const message = error instanceof Error ? error.message : String(error);
+
+    // Provide helpful error messages for common issues
+    if (message.includes("Unexpected token") || message.includes("JSON")) {
+      throw new GiftWrapError(
+        `Decrypted content is not valid JSON. This gift wrap may be malformed or use incompatible encryption. ` +
+          `Event ID: ${giftWrap.id.slice(0, 16)}... (${message})`,
+        "INVALID_SEAL",
+      );
+    }
+
+    if (
+      message.includes("can't serialize") ||
+      message.includes("wrong or missing properties")
+    ) {
+      throw new GiftWrapError(
+        `Decrypted seal is missing required event properties. This gift wrap may be malformed. ` +
+          `Event ID: ${giftWrap.id.slice(0, 16)}... (${message})`,
+        "INVALID_SEAL",
+      );
+    }
+
+    if (message.includes("Seal author does not match rumor author")) {
+      throw new GiftWrapError(
+        `Seal and rumor authors don't match - possible tampering. ` +
+          `Event ID: ${giftWrap.id.slice(0, 16)}...`,
+        "INVALID_SEAL",
+      );
+    }
 
     // Map decryption errors
     if (

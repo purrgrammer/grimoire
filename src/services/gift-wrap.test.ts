@@ -53,6 +53,32 @@ describe("unwrapAndUnseal", () => {
   });
 
   describe("validation", () => {
+    it("should reject signer without NIP-44 support", async () => {
+      const giftWrap: NostrEvent = {
+        id: "test-id",
+        pubkey: "ephemeral-key",
+        created_at: 1234567890,
+        kind: 1059,
+        tags: [],
+        content: "encrypted-content",
+        sig: "signature",
+      };
+
+      // Signer without nip44
+      const signerWithoutNip44: ISigner = {
+        getPublicKey: vi.fn().mockResolvedValue("mock-pubkey"),
+        signEvent: vi.fn(),
+      };
+
+      await expect(
+        unwrapAndUnseal(giftWrap, signerWithoutNip44),
+      ).rejects.toThrow(GiftWrapError);
+
+      await expect(
+        unwrapAndUnseal(giftWrap, signerWithoutNip44),
+      ).rejects.toThrow("does not support NIP-44");
+    });
+
     it("should reject non-1059 events", async () => {
       const invalidGiftWrap: NostrEvent = {
         id: "test-id",
