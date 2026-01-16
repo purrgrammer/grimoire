@@ -960,6 +960,32 @@ export function ChatViewer({
     liveActivity?.hostPubkey,
   ]);
 
+  // Check if we can send messages (NIP-17 only - dynamically check relay availability)
+  const canSendMessage = useMemo(() => {
+    if (conversation?.protocol !== "nip-17") return true; // Other protocols handle this differently
+    if (!activeAccount?.pubkey) return false;
+
+    const participantInboxRelays =
+      conversation.metadata?.participantInboxRelays || {};
+    const participants = conversation.participants.map((p) => p.pubkey);
+
+    // Check if all participants (except self) have inbox relays
+    for (const pubkey of participants) {
+      if (pubkey === activeAccount.pubkey) continue; // Skip self
+      const relays = participantInboxRelays[pubkey];
+      if (!relays || relays.length === 0) {
+        return false; // Missing relay list for this participant
+      }
+    }
+
+    return true;
+  }, [
+    conversation?.protocol,
+    conversation?.metadata?.participantInboxRelays,
+    conversation?.participants,
+    activeAccount?.pubkey,
+  ]);
+
   // Handle loading state
   if (!conversationResult || conversationResult.status === "loading") {
     return (
@@ -1349,7 +1375,7 @@ export function ChatViewer({
               variant="secondary"
               size="sm"
               className="flex-shrink-0 h-7 px-2 text-xs"
-              disabled={isSending}
+              disabled={isSending || !canSendMessage}
               onClick={() => {
                 editorRef.current?.submit();
               }}

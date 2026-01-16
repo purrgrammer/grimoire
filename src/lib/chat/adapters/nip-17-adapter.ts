@@ -25,16 +25,12 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import relayListCache from "@/services/relay-list-cache";
-import { hub, publishEventToRelays } from "@/services/hub";
+import { hub } from "@/services/hub";
 import {
   SendWrappedMessage,
   ReplyToWrappedMessage,
 } from "applesauce-actions/actions/wrapped-messages";
-import {
-  WrappedMessageBlueprint,
-  GiftWrapBlueprint,
-} from "applesauce-common/blueprints";
-import { encryptedContentStorage } from "@/services/db";
+import { dmDebug, dmSuccess, dmWarn } from "@/lib/dm-debug";
 
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
@@ -42,12 +38,9 @@ const PRIVATE_DM_KIND = 14;
 /** Kind 10050: DM relay list (NIP-17) */
 const DM_RELAY_LIST_KIND = 10050;
 
-/**
- * Cache for synthetic events we've created from rumors.
- * This ensures we can find them for reply resolution even if
- * eventStore doesn't persist events with empty signatures.
- */
-const syntheticEventCache = new Map<string, NostrEvent>();
+// Note: We rely entirely on eventStore for synthetic event deduplication.
+// EventStore.database.getEvent() provides fast O(1) lookup by event ID,
+// which is all we need since rumors with the same ID are the same event.
 
 /**
  * Compute a stable conversation ID from sorted participant pubkeys
@@ -73,9 +66,9 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
     );
     if (existing) {
       const relays = parseRelayTags(existing);
-      console.log(
-        `[NIP-17] Found cached inbox relays for ${pubkey.slice(0, 8)}:`,
-        relays.length,
+      dmDebug(
+        "NIP-17",
+        `Found cached inbox relays for ${pubkey.slice(0, 8)}: ${relays.length}`,
       );
       return relays;
     }
@@ -297,13 +290,14 @@ function getRumorParticipants(rumor: Rumor): Set<string> {
 
 /**
  * Create a synthetic event from a rumor for display purposes.
- * Adds it to both our cache and the eventStore.
+ * EventStore handles all deduplication - we just check if it exists first.
  */
 function createSyntheticEvent(rumor: Rumor): NostrEvent {
-  // Check cache first
-  const cached = syntheticEventCache.get(rumor.id);
-  if (cached) return cached;
+  // Check eventStore first (single source of truth with O(1) lookup)
+  const existing = eventStore.database.getEvent(rumor.id);
+  if (existing) return existing;
 
+  // Create new synthetic event
   const event: NostrEvent = {
     id: rumor.id,
     pubkey: rumor.pubkey,
@@ -314,22 +308,17 @@ function createSyntheticEvent(rumor: Rumor): NostrEvent {
     sig: "", // Synthetic - no signature
   };
 
-  // Cache it
-  syntheticEventCache.set(rumor.id, event);
-
-  // Add to eventStore for lookups
+  // Add to eventStore (it handles deduplication internally)
   eventStore.add(event);
 
   return event;
 }
 
 /**
- * Look up an event by ID - checks our synthetic cache first, then eventStore
+ * Look up an event by ID - uses eventStore as single source of truth
  */
 function lookupEvent(eventId: string): NostrEvent | undefined {
-  return (
-    syntheticEventCache.get(eventId) ?? eventStore.database.getEvent(eventId)
-  );
+  return eventStore.database.getEvent(eventId);
 }
 
 /**
@@ -466,25 +455,32 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     const participantInboxRelays: Record<string, string[]> = {};
     let userInboxRelays: string[] = [];
 
-    // For self-chat, actively fetch own inbox relays to ensure they're populated
-    // For other chats, try cached value first (optimization)
-    if (isSelfChat) {
+    // Fetch user's own inbox relays (critical for both sending and receiving)
+    // Try cached value first for performance, but fetch if empty to ensure reliability
+    let cachedUserRelays = giftWrapService.inboxRelays$.value;
+    if (cachedUserRelays.length > 0) {
+      // Use cached value if available
+      participantInboxRelays[activePubkey] = cachedUserRelays;
+      userInboxRelays = cachedUserRelays;
+      dmDebug(
+        "NIP-17",
+        `Using cached inbox relays for ${activePubkey.slice(0, 8)}: ${cachedUserRelays.length} relays`,
+      );
+    } else {
+      // Fetch actively if cache is empty
       const ownRelays = await fetchInboxRelays(activePubkey);
       if (ownRelays.length > 0) {
         participantInboxRelays[activePubkey] = ownRelays;
         userInboxRelays = ownRelays;
-        console.log(
-          `[NIP-17] ✅ Fetched own inbox relays for self-chat: ${ownRelays.length} relays`,
+        dmDebug(
+          "NIP-17",
+          `Fetched own inbox relays: ${ownRelays.length} relays`,
         );
       } else {
-        console.warn(`[NIP-17] ⚠️ Could not find inbox relays for self-chat`);
-      }
-    } else {
-      // For non-self-chat, try cached value first
-      const userRelays = giftWrapService.inboxRelays$.value;
-      if (userRelays.length > 0) {
-        participantInboxRelays[activePubkey] = userRelays;
-        userInboxRelays = userRelays;
+        dmWarn(
+          "NIP-17",
+          `Could not find inbox relays for ${activePubkey.slice(0, 8)}`,
+        );
       }
     }
 
@@ -505,11 +501,25 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // Check if we can reach all participants
+    // Check if we can reach all participants (for sending messages)
+    // Note: We allow conversation creation even without relay lists,
+    // since we may already have received messages in our inbox.
+    // Sending will be blocked until relay lists are available.
     const unreachable = uniqueParticipants.filter(
       (p) =>
         !participantInboxRelays[p] || participantInboxRelays[p].length === 0,
     );
+
+    // Log warning if relay lists are missing, but don't block conversation
+    if (unreachable.length > 0) {
+      const unreachableList = unreachable
+        .map((p) => p.slice(0, 8) + "...")
+        .join(", ");
+      dmDebug(
+        "NIP-17",
+        `Conversation created with missing relay lists (view-only until available): ${unreachableList}`,
+      );
+    }
 
     return {
       id: conversationId,
@@ -522,7 +532,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         giftWrapped: true,
         inboxRelays: userInboxRelays,
         participantInboxRelays,
-        // Flag if some participants have no inbox relays (can't send to them)
+        // Flag unreachable participants so UI can show "cannot send" warning
         unreachableParticipants:
           unreachable.length > 0 ? unreachable : undefined,
       },
@@ -597,30 +607,34 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    // 2. Validate inbox relays (CRITICAL - blocks send if unreachable)
+    // 2. Validate inbox relays (CRITICAL: block sending if missing)
+    // Note: Conversations can be created without relay lists (to view received messages),
+    // but we cannot send until relay lists are available.
     const participantInboxRelays =
       conversation.metadata?.participantInboxRelays || {};
+    const participantPubkeys = conversation.participants.map((p) => p.pubkey);
     const unreachableParticipants =
       conversation.metadata?.unreachableParticipants || [];
 
+    // Check unreachableParticipants flag first (faster)
     if (unreachableParticipants.length > 0) {
       const unreachableList = unreachableParticipants
         .map((p) => p.slice(0, 8) + "...")
         .join(", ");
       throw new Error(
         `Cannot send message: The following participants have no inbox relays: ${unreachableList}. ` +
-          `They need to publish a kind 10050 event to receive encrypted messages.`,
+          `They need to publish a kind 10050 DM relay list event to receive encrypted messages.`,
       );
     }
 
-    // Defensive check for empty relay arrays
-    const participantPubkeys = conversation.participants.map((p) => p.pubkey);
+    // Defensive check: verify all participants have inbox relays
     for (const pubkey of participantPubkeys) {
-      if (pubkey === activePubkey) continue; // Skip self check
+      if (pubkey === activePubkey) continue; // Skip self (we can send to own inbox relays)
       const relays = participantInboxRelays[pubkey];
       if (!relays || relays.length === 0) {
         throw new Error(
-          `Cannot send message: Participant ${pubkey.slice(0, 8)}... has no inbox relays`,
+          `Cannot send message: Participant ${pubkey.slice(0, 8)}... has no inbox relays. ` +
+            `They need to publish a kind 10050 DM relay list event to receive encrypted messages.`,
         );
       }
     }
@@ -655,94 +669,20 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     try {
       if (isReply && parentRumor) {
         await hub.run(ReplyToWrappedMessage, parentRumor, content, actionOpts);
-        console.log(`[NIP-17] ✅ Reply sent successfully`);
+        dmSuccess("NIP-17", "Reply sent successfully");
       } else {
-        // For self-chat, explicitly send to self. For group chats, filter out self
-        // (applesauce adds sender automatically for group messages)
+        // Determine recipients: for self-chat, send to self; for group, filter out self
+        // (applesauce automatically adds self for cross-device sync in group messages)
         const others = participantPubkeys.filter((p) => p !== activePubkey);
         const isSelfChat = others.length === 0;
 
-        if (isSelfChat) {
-          // Custom self-chat implementation that bypasses applesauce-actions
-          // and directly publishes to inbox relays using publishEventToRelays.
-          // This eliminates the dependency on patched node_modules.
+        const recipients = isSelfChat ? [activePubkey] : others;
+        await hub.run(SendWrappedMessage, recipients, content, actionOpts);
 
-          const ownInboxRelays =
-            conversation.metadata?.participantInboxRelays?.[activePubkey] || [];
-          const subscribedRelays = giftWrapService.inboxRelays$.value;
-
-          console.log(
-            `[NIP-17] 🔍 Self-chat relay check:`,
-            `\n  - Own inbox relays (will send to): ${ownInboxRelays.join(", ")}`,
-            `\n  - Subscribed relays (receiving from): ${subscribedRelays.join(", ")}`,
-            `\n  - Match: ${ownInboxRelays.length === subscribedRelays.length && ownInboxRelays.every((r) => subscribedRelays.includes(r))}`,
-          );
-
-          if (ownInboxRelays.length === 0) {
-            throw new Error(
-              "No inbox relays configured. Please publish a kind 10050 event with your DM relays.",
-            );
-          }
-
-          // 1. Create the rumor (unsigned kind 14)
-          const factory = hub["factory"]; // Access private factory
-          const rumor = await factory.create(
-            WrappedMessageBlueprint,
-            [activePubkey],
-            content,
-            actionOpts,
-          );
-
-          console.log(
-            `[NIP-17] Created rumor ${rumor.id.slice(0, 8)} for self-chat`,
-          );
-
-          // 2. Wrap in gift wrap addressed to self
-          const giftWrap = await factory.create(
-            GiftWrapBlueprint,
-            activePubkey,
-            rumor,
-          );
-
-          console.log(
-            `[NIP-17] Created gift wrap ${giftWrap.id.slice(0, 8)} for self`,
-          );
-
-          // 3. Persist encrypted content before publishing
-          const EncryptedContentSymbol = Symbol.for("encrypted-content");
-          if (Reflect.has(giftWrap, EncryptedContentSymbol)) {
-            const plaintext = Reflect.get(giftWrap, EncryptedContentSymbol);
-            try {
-              await encryptedContentStorage.setItem(giftWrap.id, plaintext);
-              console.log(
-                `[NIP-17] ✅ Persisted encrypted content for gift wrap ${giftWrap.id.slice(0, 8)}`,
-              );
-            } catch (err) {
-              console.warn(
-                `[NIP-17] ⚠️ Failed to persist encrypted content:`,
-                err,
-              );
-            }
-          }
-
-          // 4. Publish directly to inbox relays (bypasses action)
-          await publishEventToRelays(giftWrap, ownInboxRelays);
-
-          // 5. Add to EventStore for immediate local availability
-          eventStore.add(giftWrap);
-
-          console.log(
-            `[NIP-17] ✅ Message sent successfully to self (saved messages) via direct publish`,
-          );
-        } else {
-          // Non-self-chat: use the action (still relies on patched applesauce)
-          const recipients = others;
-          await hub.run(SendWrappedMessage, recipients, content, actionOpts);
-
-          console.log(
-            `[NIP-17] ✅ Message sent successfully to ${recipients.length} recipients (+ self for cross-device sync)`,
-          );
-        }
+        dmSuccess(
+          "NIP-17",
+          `Message sent successfully to ${recipients.length} ${isSelfChat ? "recipient (self)" : "recipients"}`,
+        );
       }
     } catch (error) {
       console.error("[NIP-17] Failed to send message:", error);

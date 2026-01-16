@@ -23,6 +23,7 @@ import {
 import { AGGREGATOR_RELAYS } from "./loaders";
 import relayListCache from "./relay-list-cache";
 import { normalizeRelayURL } from "@/lib/relay-url";
+import { dmDebug, dmInfo, dmWarn } from "@/lib/dm-debug";
 
 /** Kind 10050: DM relay list (NIP-17) */
 const DM_RELAY_LIST_KIND = 10050;
@@ -135,6 +136,8 @@ class GiftWrapService {
   private persistenceCleanup: (() => void) | null = null;
   /** IDs of gift wraps that have persisted decrypted content */
   private persistedIds = new Set<string>();
+  /** Whether encrypted content cache is ready for access */
+  private cacheReady = false;
 
   constructor() {
     // Start encrypted content persistence
@@ -142,6 +145,42 @@ class GiftWrapService {
       eventStore,
       encryptedContentStorage,
     );
+  }
+
+  /** Wait for encrypted content cache to be accessible */
+  private async waitForCacheReady(): Promise<void> {
+    // If no persisted IDs, cache is ready (nothing to wait for)
+    if (this.persistedIds.size === 0) {
+      this.cacheReady = true;
+      return;
+    }
+
+    // Try to access cache to confirm it's loaded
+    const testId = Array.from(this.persistedIds)[0];
+    const maxAttempts = 10;
+    const delayMs = 100;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await encryptedContentStorage.getItem(testId);
+        this.cacheReady = true;
+        dmDebug(
+          "GiftWrap",
+          `Encrypted content cache ready after ${attempt} attempts`,
+        );
+        return;
+      } catch {
+        // Cache not ready yet, wait and retry
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    // After max attempts, proceed anyway (cache might be empty)
+    dmWarn(
+      "GiftWrap",
+      `Cache readiness check timed out after ${maxAttempts} attempts, proceeding anyway`,
+    );
+    this.cacheReady = true;
   }
 
   /** Initialize the service with user pubkey and signer */
@@ -155,6 +194,9 @@ class GiftWrapService {
 
     // Load persisted encrypted content IDs to know which gift wraps are already decrypted
     this.persistedIds = await getStoredEncryptedContentIds();
+
+    // Wait for encrypted content cache to be accessible
+    await this.waitForCacheReady();
 
     // Load inbox relays (kind 10050)
     this.loadInboxRelays();
@@ -197,8 +239,9 @@ class GiftWrapService {
     try {
       const storedEvents = await loadStoredGiftWraps(this.userPubkey);
       if (storedEvents.length > 0) {
-        console.log(
-          `[GiftWrap] Loading ${storedEvents.length} stored gift wraps into EventStore`,
+        dmInfo(
+          "GiftWrap",
+          `Loading ${storedEvents.length} stored gift wraps from cache`,
         );
         // Add stored events to EventStore - this triggers the timeline subscription
         for (const event of storedEvents) {
@@ -208,8 +251,9 @@ class GiftWrapService {
         // Update conversations from loaded gift wraps (they're already decrypted from cache)
         // Without this, conversations don't appear until sync fetches from relays
         this.updateConversations();
-        console.log(
-          `[GiftWrap] Rebuilt conversations from ${storedEvents.length} stored gift wraps`,
+        dmDebug(
+          "GiftWrap",
+          `Rebuilt conversations from ${storedEvents.length} stored gift wraps`,
         );
       }
     } catch (err) {
@@ -474,6 +518,14 @@ class GiftWrapService {
    * preserving all fields (id, pubkey, created_at, kind, tags, content).
    */
   private updateConversations() {
+    // Wait for cache to be ready before processing conversations
+    // This prevents the race condition where persistedIds indicates "unlocked"
+    // but getGiftWrapRumor() returns null because cache hasn't loaded yet
+    if (!this.cacheReady) {
+      console.log(`[GiftWrap] Cache not ready, deferring conversation update`);
+      return;
+    }
+
     console.log(
       `[GiftWrap] Updating conversations from ${this.giftWraps.length} gift wraps`,
     );
