@@ -446,40 +446,6 @@ export function ChatViewer({
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
 
-  // Extract communikey blossom servers if available
-  const communikeyServers = useMemo(() => {
-    if (
-      conversationResult.status === "success" &&
-      conversationResult.conversation.protocol === "communikeys"
-    ) {
-      return (
-        conversationResult.conversation.metadata?.communikeyConfig
-          ?.blossomServers || []
-      );
-    }
-    return [];
-  }, [conversationResult]);
-
-  // Blossom upload hook for file attachments
-  const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
-    accept: "image/*,video/*,audio/*",
-    communikeyServers,
-    onSuccess: (results) => {
-      if (results.length > 0 && editorRef.current) {
-        // Insert the first successful upload as a blob attachment with metadata
-        const { blob, server } = results[0];
-        editorRef.current.insertBlob({
-          url: blob.url,
-          sha256: blob.sha256,
-          mimeType: blob.type,
-          size: blob.size,
-          server,
-        });
-        editorRef.current.focus();
-      }
-    },
-  });
-
   // Get the appropriate adapter for this protocol
   const adapter = useMemo(() => getAdapter(protocol), [protocol]);
 
@@ -514,6 +480,34 @@ export function ChatViewer({
     conversationResult?.status === "success"
       ? conversationResult.conversation
       : null;
+
+  // Extract communikey blossom servers if available
+  const communikeyServers = useMemo(() => {
+    if (conversation && conversation.protocol === "communikeys") {
+      return conversation.metadata?.communikeyConfig?.blossomServers || [];
+    }
+    return [];
+  }, [conversation]);
+
+  // Blossom upload hook for file attachments
+  const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
+    accept: "image/*,video/*,audio/*",
+    communikeyServers,
+    onSuccess: (results) => {
+      if (results.length > 0 && editorRef.current) {
+        // Insert the first successful upload as a blob attachment with metadata
+        const { blob, server } = results[0];
+        editorRef.current.insertBlob({
+          url: blob.url,
+          sha256: blob.sha256,
+          mimeType: blob.type,
+          size: blob.size,
+          server,
+        });
+        editorRef.current.focus();
+      }
+    },
+  });
 
   // Slash command search for action autocomplete
   // Context-aware: only shows relevant actions based on membership status
