@@ -730,7 +730,7 @@ export function ChatViewer({
       addWindow("nip", { number: 53 });
     } else if (conversation?.protocol === "communikeys") {
       // Open NIP-CC specification (communikeys)
-      addWindow("event", {
+      addWindow("open", {
         id: "naddr1qvzqqqrcvypzp22rfmsktmgpk2rtan7zwu00zuzax5maq5dnsu5g3xxvqr2u3pd7qydhwumn8ghj7argv4nx7un9wd6zumn0wd68yvfwvdhk6tcpz4mhxue69uhhyetvv9ujuerpd46hxtnfduhsqrrrdakk6atwdykkketewvsrwsq9",
       });
     }
