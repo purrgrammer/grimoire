@@ -39,11 +39,14 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   readonly type = "group" as const;
 
   /**
-   * Parse identifier - accepts group ID format or naddr
+   * Parse identifier - accepts group ID format, naddr, or communikey format
    * Examples:
-   *   - wss://relay.example.com'bitcoin-dev
-   *   - relay.example.com'bitcoin-dev (wss:// prefix is optional)
-   *   - naddr1... (kind 39000 group metadata address)
+   *   - wss://relay.example.com'bitcoin-dev (NIP-29)
+   *   - relay.example.com'bitcoin-dev (NIP-29, wss:// prefix is optional)
+   *   - naddr1... (kind 39000 group metadata address, NIP-29)
+   *   - relay.example.com'npub1xxx (NIP-CC communikey)
+   *   - npub1xxx (NIP-CC communikey, relays from kind 10222)
+   *   - hex-pubkey (NIP-CC communikey, relays from kind 10222)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
     // Try naddr format first (kind 39000 group metadata)
@@ -78,27 +81,41 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // NIP-29 format: [wss://]relay'group-id
+    // NIP-29/NIP-CC format: [wss://]relay'group-id-or-pubkey
     const match = input.match(/^((?:wss?:\/\/)?[^']+)'([^']+)$/);
-    if (!match) return null;
+    if (match) {
+      let [, relayUrl] = match;
+      const groupId = match[2];
 
-    let [, relayUrl] = match;
-    const groupId = match[2];
+      // Add wss:// prefix if not present
+      if (!relayUrl.startsWith("ws://") && !relayUrl.startsWith("wss://")) {
+        relayUrl = `wss://${relayUrl}`;
+      }
 
-    // Add wss:// prefix if not present
-    if (!relayUrl.startsWith("ws://") && !relayUrl.startsWith("wss://")) {
-      relayUrl = `wss://${relayUrl}`;
+      return {
+        type: "group",
+        value: groupId,
+        relays: [relayUrl],
+      };
     }
 
-    return {
-      type: "group",
-      value: groupId,
-      relays: [relayUrl],
-    };
+    // NIP-CC bare communikey format: npub1xxx or hex pubkey
+    // Check if input is a valid pubkey (relays will be fetched from kind 10222)
+    const pubkey = this.extractPubkey(input);
+    if (pubkey) {
+      return {
+        type: "group",
+        value: pubkey,
+        relays: [], // Will be resolved from kind 10222
+      };
+    }
+
+    return null;
   }
 
   /**
    * Resolve conversation from group identifier
+   * Supports both traditional NIP-29 groups and NIP-CC communikeys
    */
   async resolveConversation(
     identifier: ProtocolIdentifier,
@@ -110,8 +127,18 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       );
     }
     const groupId = identifier.value;
-    const relayUrl = identifier.relays?.[0];
 
+    // Check if this is a communikey (NIP-CC) by checking if groupId is a pubkey
+    const pubkey = this.extractPubkey(groupId);
+    if (pubkey) {
+      console.log(
+        `[NIP-29] Detected communikey format: ${pubkey.slice(0, 16)}...`,
+      );
+      return this.resolveCommunikeyConversation(identifier, pubkey);
+    }
+
+    // Traditional NIP-29 group
+    const relayUrl = identifier.relays?.[0];
     if (!relayUrl) {
       throw new Error("NIP-29 groups require a relay URL");
     }
@@ -305,20 +332,36 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Load messages for a group
+   * Load messages for a group (supports both NIP-29 and NIP-CC)
    */
   loadMessages(
     conversation: Conversation,
     options?: LoadMessagesOptions,
   ): Observable<Message[]> {
     const groupId = conversation.metadata?.groupId;
-    const relayUrl = conversation.metadata?.relayUrl;
+    const communikeyConfig = conversation.metadata?.communikeyConfig;
 
-    if (!groupId || !relayUrl) {
-      throw new Error("Group ID and relay URL required");
+    if (!groupId) {
+      throw new Error("Group ID required");
     }
 
-    console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
+    // Determine relays to use:
+    // - NIP-CC: Use main + backup relays from communikey config
+    // - NIP-29: Use single relay from metadata
+    const relays: string[] = communikeyConfig
+      ? [communikeyConfig.mainRelay, ...communikeyConfig.backupRelays]
+      : conversation.metadata?.relayUrl
+        ? [conversation.metadata.relayUrl]
+        : [];
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for group");
+    }
+
+    const protocol = communikeyConfig ? "NIP-CC" : "NIP-29";
+    console.log(
+      `[${protocol}] Loading messages for ${groupId.slice(0, 16)}... from ${relays.length} relay(s)`,
+    );
 
     // Single filter for all group events:
     // kind 9: chat messages
@@ -327,7 +370,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     // kind 9321: nutzaps (NIP-61)
     const filter: Filter = {
       kinds: [9, 9000, 9001, 9321],
-      "#h": [groupId],
+      "#h": [groupId], // Both NIP-29 and NIP-CC use h tag!
       limit: options?.limit || 50,
     };
 
@@ -339,28 +382,27 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Clean up any existing subscription for this conversation
-    const conversationId = `nip-29:${relayUrl}'${groupId}`;
-    this.cleanup(conversationId);
+    this.cleanup(conversation.id);
 
-    // Start a persistent subscription to the group relay
+    // Start a persistent subscription to the group relay(s)
     const subscription = pool
-      .subscription([relayUrl], [filter], {
+      .subscription(relays, [filter], {
         eventStore,
       })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-29] EOSE received");
+            console.log(`[${protocol}] EOSE received`);
           } else {
             console.log(
-              `[NIP-29] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
+              `[${protocol}] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
             );
           }
         },
       });
 
     // Store subscription for cleanup
-    this.subscriptions.set(conversationId, subscription);
+    this.subscriptions.set(conversation.id, subscription);
 
     // Return observable from EventStore which will update automatically
     return eventStore.timeline(filter).pipe(
@@ -384,21 +426,33 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Load more historical messages (pagination)
+   * Load more historical messages (pagination, supports both NIP-29 and NIP-CC)
    */
   async loadMoreMessages(
     conversation: Conversation,
     before: number,
   ): Promise<Message[]> {
     const groupId = conversation.metadata?.groupId;
-    const relayUrl = conversation.metadata?.relayUrl;
+    const communikeyConfig = conversation.metadata?.communikeyConfig;
 
-    if (!groupId || !relayUrl) {
-      throw new Error("Group ID and relay URL required");
+    if (!groupId) {
+      throw new Error("Group ID required");
     }
 
+    // Determine relays to use
+    const relays: string[] = communikeyConfig
+      ? [communikeyConfig.mainRelay, ...communikeyConfig.backupRelays]
+      : conversation.metadata?.relayUrl
+        ? [conversation.metadata.relayUrl]
+        : [];
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for group");
+    }
+
+    const protocol = communikeyConfig ? "NIP-CC" : "NIP-29";
     console.log(
-      `[NIP-29] Loading older messages for ${groupId} before ${before}`,
+      `[${protocol}] Loading older messages for ${groupId.slice(0, 16)}... before ${before}`,
     );
 
     // Same filter as loadMessages but with until for pagination
@@ -411,10 +465,10 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
     );
 
-    console.log(`[NIP-29] Loaded ${events.length} older events`);
+    console.log(`[${protocol}] Loaded ${events.length} older events`);
 
     // Convert events to messages
     const messages = events.map((event) => {
@@ -430,7 +484,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Send a message to the group
+   * Send a message to the group (supports both NIP-29 and NIP-CC)
    */
   async sendMessage(
     conversation: Conversation,
@@ -445,10 +499,21 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     const groupId = conversation.metadata?.groupId;
-    const relayUrl = conversation.metadata?.relayUrl;
+    const communikeyConfig = conversation.metadata?.communikeyConfig;
 
-    if (!groupId || !relayUrl) {
-      throw new Error("Group ID and relay URL required");
+    if (!groupId) {
+      throw new Error("Group ID required");
+    }
+
+    // Determine relays to use
+    const relays: string[] = communikeyConfig
+      ? [communikeyConfig.mainRelay, ...communikeyConfig.backupRelays]
+      : conversation.metadata?.relayUrl
+        ? [conversation.metadata.relayUrl]
+        : [];
+
+    if (relays.length === 0) {
+      throw new Error("No relays available for group");
     }
 
     // Create event factory and sign event
@@ -476,6 +541,16 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
+
+        // NIP-CC: Add blossom server hints from communikey config
+        if (communikeyConfig && communikeyConfig.blossomServers.length > 0) {
+          // Use first blossom server as hint (can be extended to use all)
+          const blossomServer = communikeyConfig.blossomServers[0];
+          if (!blob.server) {
+            imetaParts.push(`server ${blossomServer}`);
+          }
+        }
+
         tags.push(["imeta", ...imetaParts]);
       }
     }
@@ -484,8 +559,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const draft = await factory.build({ kind: 9, content, tags });
     const event = await factory.sign(draft);
 
-    // Publish only to the group relay
-    await publishEventToRelays(event, [relayUrl]);
+    // Publish to group relay(s)
+    await publishEventToRelays(event, relays);
   }
 
   /**
@@ -727,8 +802,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Load a replied-to message
-   * First checks EventStore, then fetches from group relay if needed
+   * Load a replied-to message (supports both NIP-29 and NIP-CC)
+   * First checks EventStore, then fetches from group relay(s) if needed
    */
   async loadReplyMessage(
     conversation: Conversation,
@@ -743,15 +818,24 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       return cachedEvent;
     }
 
-    // Not in store, fetch from group relay
-    const relayUrl = conversation.metadata?.relayUrl;
-    if (!relayUrl) {
-      console.warn("[NIP-29] No relay URL for loading reply message");
+    // Not in store, fetch from group relay(s)
+    const communikeyConfig = conversation.metadata?.communikeyConfig;
+    const relays: string[] = communikeyConfig
+      ? [communikeyConfig.mainRelay, ...communikeyConfig.backupRelays]
+      : conversation.metadata?.relayUrl
+        ? [conversation.metadata.relayUrl]
+        : [];
+
+    if (relays.length === 0) {
+      console.warn(
+        `[${communikeyConfig ? "NIP-CC" : "NIP-29"}] No relays for loading reply message`,
+      );
       return null;
     }
 
+    const protocol = communikeyConfig ? "NIP-CC" : "NIP-29";
     console.log(
-      `[NIP-29] Fetching reply message ${eventId.slice(0, 8)}... from ${relayUrl}`,
+      `[${protocol}] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.length} relay(s)`,
     );
 
     const filter: Filter = {
@@ -760,12 +844,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription([relayUrl], [filter], { eventStore });
+    const obs = pool.subscription(relays, [filter], { eventStore });
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         console.log(
-          `[NIP-29] Reply message fetch timeout for ${eventId.slice(0, 8)}...`,
+          `[${protocol}] Reply message fetch timeout for ${eventId.slice(0, 8)}...`,
         );
         resolve();
       }, 3000);
@@ -784,7 +868,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         },
         error: (err) => {
           clearTimeout(timeout);
-          console.error(`[NIP-29] Reply message fetch error:`, err);
+          console.error(`[${protocol}] Reply message fetch error:`, err);
           sub.unsubscribe();
           resolve();
         },
@@ -1124,4 +1208,341 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       event,
     };
   }
+
+  /**
+   * NIP-CC Communikey Support
+   * -------------------------
+   * Communikeys use pubkeys as community identifiers with metadata from kind 10222
+   */
+
+  /**
+   * Extract pubkey from various formats (npub, hex, or string)
+   * Returns hex pubkey if valid, null otherwise
+   */
+  private extractPubkey(input: string): string | null {
+    // Try npub decode
+    if (input.startsWith("npub1")) {
+      try {
+        const decoded = nip19.decode(input);
+        if (decoded.type === "npub") {
+          return decoded.data;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    // Try hex pubkey (64 chars, valid hex)
+    if (/^[0-9a-f]{64}$/i.test(input)) {
+      return input.toLowerCase();
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve a communikey conversation (NIP-CC)
+   * Fetches kind 10222 for config and kind 0 for display metadata
+   */
+  private async resolveCommunikeyConversation(
+    identifier: ProtocolIdentifier,
+    pubkey: string,
+  ): Promise<Conversation> {
+    const activePubkey = accountManager.active$.value?.pubkey;
+    if (!activePubkey) {
+      throw new Error("No active account");
+    }
+
+    console.log(
+      `[NIP-CC] Fetching communikey metadata for ${pubkey.slice(0, 16)}...`,
+    );
+
+    // Step 1: Fetch kind 10222 communikey definition event
+    const communikeyEvent = await this.fetchCommunikeyEvent(
+      pubkey,
+      identifier.relays,
+    );
+
+    if (!communikeyEvent) {
+      throw new Error(
+        "Communikey event (kind 10222) not found. This pubkey may not be a valid communikey.",
+      );
+    }
+
+    // Step 2: Parse communikey configuration
+    const config = this.parseCommunikeyEvent(communikeyEvent);
+    console.log(`[NIP-CC] Main relay: ${config.mainRelay}`);
+    console.log(`[NIP-CC] Backup relays: ${config.backupRelays.length}`);
+    console.log(`[NIP-CC] Blossom servers: ${config.blossomServers.length}`);
+
+    // Step 3: Fetch profile (kind 0) for display info
+    const profile = await this.fetchProfile(pubkey, [
+      config.mainRelay,
+      ...config.backupRelays,
+    ]);
+
+    // Step 4: Build participants from role tags
+    const participants = this.buildCommunikeyParticipants(config);
+
+    // Step 5: Build conversation
+    const title =
+      profile?.display_name ||
+      profile?.name ||
+      `Communikey ${pubkey.slice(0, 8)}`;
+    const description = config.description || profile?.about || undefined;
+    const icon = profile?.picture || undefined;
+
+    return {
+      id: `nip-cc:${pubkey}`,
+      type: "group",
+      protocol: "nip-29", // Still uses NIP-29 message format
+      title,
+      participants,
+      metadata: {
+        groupId: pubkey, // Use pubkey as group ID
+        relayUrl: config.mainRelay,
+        description,
+        icon,
+        // Store full config for later use
+        communikeyConfig: config,
+      },
+      unreadCount: 0,
+    };
+  }
+
+  /**
+   * Fetch kind 10222 communikey event
+   * Tries hint relays first, then falls back to user's outbox relays
+   */
+  private async fetchCommunikeyEvent(
+    pubkey: string,
+    hintRelays?: string[],
+  ): Promise<NostrEvent | null> {
+    // Build relay list: hint relays + outbox relays
+    const outboxRelays = await this.getOutboxRelays(pubkey);
+    const relays = [...(hintRelays || []), ...outboxRelays].filter(Boolean);
+
+    if (relays.length === 0) {
+      // Fallback to some popular relays if no hints
+      relays.push(
+        "wss://relay.damus.io",
+        "wss://relay.primal.net",
+        "wss://nos.lol",
+      );
+    }
+
+    console.log(`[NIP-CC] Searching ${relays.length} relays for kind 10222`);
+
+    const filter: Filter = {
+      kinds: [10222],
+      authors: [pubkey],
+      limit: 1,
+    };
+
+    const events = await firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    return events[0] || null;
+  }
+
+  /**
+   * Parse kind 10222 communikey event into configuration
+   */
+  private parseCommunikeyEvent(event: NostrEvent): CommunikeyConfig {
+    const config: CommunikeyConfig = {
+      mainRelay: "",
+      backupRelays: [],
+      blossomServers: [],
+      mints: [],
+      roles: {},
+      contentSections: [],
+      description: undefined,
+    };
+
+    let currentSection: ContentSection | null = null;
+
+    for (const tag of event.tags) {
+      switch (tag[0]) {
+        case "r":
+          // First r tag is main relay, rest are backups
+          if (!config.mainRelay) {
+            config.mainRelay = tag[1];
+          } else {
+            config.backupRelays.push(tag[1]);
+          }
+          break;
+
+        case "blossom":
+          if (tag[1]) config.blossomServers.push(tag[1]);
+          break;
+
+        case "mint":
+          if (tag[1]) config.mints.push(tag[1]);
+          break;
+
+        case "content":
+          // Start a new content section
+          if (currentSection) {
+            config.contentSections.push(currentSection);
+          }
+          currentSection = {
+            name: tag[1],
+            kinds: [],
+            roles: [],
+            fee: undefined,
+            exclusive: false,
+          };
+          break;
+
+        case "k":
+          // Add kind to current section
+          if (currentSection && tag[1]) {
+            const kind = parseInt(tag[1], 10);
+            if (!isNaN(kind)) {
+              currentSection.kinds.push(kind);
+            }
+          }
+          break;
+
+        case "role":
+          // Add role restriction to current section
+          if (currentSection) {
+            // Format: ["role", "admin", "team", ...]
+            currentSection.roles.push(...tag.slice(1));
+          } else {
+            // Global role (applies to user)
+            // Format: ["role", "<pubkey>", "<role>"]
+            if (tag[1] && tag[2]) {
+              config.roles[tag[1]] = tag[2] as ParticipantRole;
+            }
+          }
+          break;
+
+        case "fee":
+          // Fee for current section
+          if (currentSection && tag[1] && tag[2]) {
+            currentSection.fee = {
+              amount: parseInt(tag[1], 10),
+              unit: tag[2],
+            };
+          }
+          break;
+
+        case "exclusive":
+          if (currentSection) {
+            currentSection.exclusive = tag[1] === "true";
+          }
+          break;
+
+        case "description":
+          if (tag[1]) config.description = tag[1];
+          break;
+      }
+    }
+
+    // Don't forget the last section
+    if (currentSection) {
+      config.contentSections.push(currentSection);
+    }
+
+    // Validate: must have at least a main relay
+    if (!config.mainRelay) {
+      throw new Error("Communikey event missing main relay (r tag)");
+    }
+
+    return config;
+  }
+
+  /**
+   * Fetch kind 0 profile metadata
+   */
+  private async fetchProfile(
+    pubkey: string,
+    relays: string[],
+  ): Promise<any | null> {
+    const filter: Filter = {
+      kinds: [0],
+      authors: [pubkey],
+      limit: 1,
+    };
+
+    const events = await firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    if (events[0]?.content) {
+      try {
+        return JSON.parse(events[0].content);
+      } catch {
+        console.warn("[NIP-CC] Failed to parse profile JSON");
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get user's outbox relays from kind 10002 (NIP-65)
+   */
+  private async getOutboxRelays(pubkey: string): Promise<string[]> {
+    // Fetch kind 10002 relay list
+    const relayListEvent = await firstValueFrom(
+      eventStore.replaceable(10002, pubkey, ""),
+      { defaultValue: undefined },
+    );
+
+    if (!relayListEvent) {
+      return [];
+    }
+
+    // Extract relays with "write" or no marker (default is read+write)
+    const relays: string[] = [];
+    for (const tag of relayListEvent.tags) {
+      if (tag[0] === "r") {
+        const url = tag[1];
+        const marker = tag[2];
+        // Include if no marker (read+write) or marker is "write"
+        if (!marker || marker === "write") {
+          relays.push(url);
+        }
+      }
+    }
+
+    return relays;
+  }
+
+  /**
+   * Build participants list from communikey roles
+   */
+  private buildCommunikeyParticipants(config: CommunikeyConfig): Participant[] {
+    return Object.entries(config.roles).map(([pubkey, role]) => ({
+      pubkey,
+      role,
+    }));
+  }
+}
+
+/**
+ * Communikey configuration parsed from kind 10222
+ */
+interface CommunikeyConfig {
+  mainRelay: string;
+  backupRelays: string[];
+  blossomServers: string[];
+  mints: string[];
+  roles: Record<string, ParticipantRole>;
+  contentSections: ContentSection[];
+  description?: string;
+}
+
+/**
+ * Content section in communikey (defines allowed kinds and rules)
+ */
+interface ContentSection {
+  name: string;
+  kinds: number[];
+  roles: string[];
+  fee?: { amount: number; unit: string };
+  exclusive: boolean;
 }

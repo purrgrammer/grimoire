@@ -64,6 +64,23 @@ export interface ConversationMetadata {
   description?: string; // Group description
   icon?: string; // Group icon/picture URL
 
+  // NIP-CC communikey
+  communikeyConfig?: {
+    mainRelay: string;
+    backupRelays: string[];
+    blossomServers: string[];
+    mints: string[];
+    roles: Record<string, string>;
+    contentSections: Array<{
+      name: string;
+      kinds: number[];
+      roles: string[];
+      fee?: { amount: number; unit: string };
+      exclusive: boolean;
+    }>;
+    description?: string;
+  };
+
   // NIP-53 live chat
   activityAddress?: {
     kind: number;
