@@ -43,6 +43,26 @@ export class GiftWrapError extends Error {
 }
 
 /**
+ * Creates a plain serializable copy of an event object
+ * Strips Symbols and non-enumerable properties added by applesauce
+ *
+ * CRITICAL: Applesauce attaches Symbol properties to event objects for caching.
+ * These Symbols cannot be serialized by Dexie (IndexedDB). Always use this function
+ * before storing events in the database.
+ */
+export function serializableEvent(event: any): NostrEvent {
+  return {
+    id: event.id,
+    pubkey: event.pubkey,
+    created_at: event.created_at,
+    kind: event.kind,
+    tags: event.tags,
+    content: event.content,
+    sig: event.sig || "", // Rumors don't have sig, use empty string
+  };
+}
+
+/**
  * Unwraps a gift wrap and unseals to extract the rumor (full process)
  * Uses applesauce-common unlockGiftWrap helper
  *
@@ -110,11 +130,11 @@ export async function processGiftWrap(
   // Applesauce caches seal/rumor on the event object via symbols
   eventStore.add(giftWrap);
 
-  // Store gift wrap envelope
+  // Store gift wrap envelope (use plain object to avoid Symbol serialization issues)
   const envelope: GiftWrapEnvelope = {
     id: giftWrap.id,
     recipientPubkey,
-    event: giftWrap,
+    event: serializableEvent(giftWrap),
     status: "pending",
     receivedAt: existing?.receivedAt || Date.now(),
     processedAt: Date.now(),
@@ -124,13 +144,13 @@ export async function processGiftWrap(
     // Unwrap and unseal
     const { seal, rumor } = await unwrapAndUnseal(giftWrap, signer);
 
-    // Store decrypted rumor
+    // Store decrypted rumor (use plain objects to avoid Symbol serialization issues)
     const decryptedRumor: DecryptedRumor = {
       giftWrapId: giftWrap.id,
       recipientPubkey,
       senderPubkey: seal.pubkey,
-      seal,
-      rumor,
+      seal: serializableEvent(seal),
+      rumor: serializableEvent(rumor),
       rumorCreatedAt: rumor.created_at,
       rumorKind: rumor.kind,
       decryptedAt: Date.now(),

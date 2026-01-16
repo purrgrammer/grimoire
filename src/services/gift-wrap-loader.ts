@@ -22,7 +22,11 @@ import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
 import { dmRelayListCache } from "./dm-relay-list-cache";
-import { processGiftWrap, getPendingGiftWraps } from "./gift-wrap";
+import {
+  processGiftWrap,
+  getPendingGiftWraps,
+  serializableEvent,
+} from "./gift-wrap";
 import db from "./db";
 
 /**
@@ -235,10 +239,11 @@ class GiftWrapLoader {
         await processGiftWrap(event, state.recipientPubkey, this.currentSigner);
       } else {
         // Otherwise, just store the envelope as pending
+        // Use serializableEvent to strip Symbol properties before storing
         await db.giftWraps.put({
           id: event.id,
           recipientPubkey: state.recipientPubkey,
-          event,
+          event: serializableEvent(event),
           status: "pending",
           receivedAt: Date.now(),
         });
