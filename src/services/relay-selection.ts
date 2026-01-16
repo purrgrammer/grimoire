@@ -123,8 +123,7 @@ async function getOutboxRelaysForPubkey(
       return [];
     }
 
-    // Cache the event for next time
-    relayListCache.set(event);
+    // Event will be auto-cached by ReplaceableEventCache via EventStore subscription
     console.debug(
       `[RelaySelection] Cache miss for ${pubkey.slice(0, 8)}, loaded from EventStore`,
     );
@@ -221,8 +220,7 @@ async function getInboxRelaysForPubkey(
       return [];
     }
 
-    // Cache the event for next time
-    relayListCache.set(event);
+    // Event will be auto-cached by ReplaceableEventCache via EventStore subscription
     console.debug(
       `[RelaySelection] Cache miss for ${pubkey.slice(0, 8)}, loaded from EventStore`,
     );

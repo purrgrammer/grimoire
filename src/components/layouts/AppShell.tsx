@@ -3,6 +3,7 @@ import { Terminal } from "lucide-react";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
 import { useBlossomServerCacheSync } from "@/hooks/useBlossomServerCacheSync";
+import { useReplaceableEventCacheSync } from "@/hooks/useReplaceableEventCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
 import relayStateManager from "@/services/relay-state-manager";
 import { TabBar } from "../TabBar";
@@ -28,6 +29,9 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
 
   // Auto-cache kind:10063 blossom server lists from EventStore to Dexie
   useBlossomServerCacheSync();
+
+  // Auto-cache generic replaceable events (contacts, relay lists, blossom servers, emoji lists, etc.)
+  useReplaceableEventCacheSync();
 
   // Initialize global relay state manager
   useEffect(() => {
