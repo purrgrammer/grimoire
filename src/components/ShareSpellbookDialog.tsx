@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { nip19 } from "nostr-tools";
 import type { NostrEvent } from "@/types/nostr";
 import type { ParsedSpellbook } from "@/types/spell";
-import { relayListCache } from "@/services/relay-list-cache";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 
 interface ShareSpellbookDialogProps {
   open: boolean;
@@ -43,7 +43,9 @@ export function ShareSpellbookDialog({
       let relays = event.tags.filter((t) => t[0] === "r").map((t) => t[1]);
 
       if (relays.length === 0) {
-        const authorRelays = await relayListCache.getOutboxRelays(event.pubkey);
+        const authorRelays = await replaceableEventCache.getOutboxRelays(
+          event.pubkey,
+        );
         if (authorRelays) {
           relays = authorRelays;
         }

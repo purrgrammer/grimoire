@@ -5,7 +5,7 @@ import { encodeSpell } from "@/lib/spell-conversion";
 import { markSpellPublished } from "@/services/spell-storage";
 import { EventFactory } from "applesauce-core/event-factory";
 import { SpellEvent } from "@/types/spell";
-import { relayListCache } from "@/services/relay-list-cache";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import eventStore from "@/services/event-store";
@@ -57,7 +57,7 @@ export class PublishSpellAction {
 
     if (!relays || relays.length === 0) {
       const authorWriteRelays =
-        (await relayListCache.getOutboxRelays(account.pubkey)) || [];
+        (await replaceableEventCache.getOutboxRelays(account.pubkey)) || [];
 
       relays = mergeRelaySets(
         event.tags.find((t) => t[0] === "relays")?.slice(1) || [],

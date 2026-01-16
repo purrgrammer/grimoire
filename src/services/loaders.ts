@@ -11,7 +11,7 @@ import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { getTagValue } from "applesauce-core/helpers/event";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
-import { relayListCache } from "./relay-list-cache";
+import replaceableEventCache from "./replaceable-event-cache";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -117,12 +117,13 @@ export function eventLoader(
   const existingEvent = eventStore.getEvent(pointer.id);
   if (existingEvent) {
     cachedOutboxRelays =
-      relayListCache.getOutboxRelaysSync(existingEvent.pubkey) || [];
+      replaceableEventCache.getOutboxRelaysSync(existingEvent.pubkey) || [];
   }
 
   // If not in store but we have author hint (from reply "p" tag)
   if (cachedOutboxRelays.length === 0 && authorHint) {
-    cachedOutboxRelays = relayListCache.getOutboxRelaysSync(authorHint) || [];
+    cachedOutboxRelays =
+      replaceableEventCache.getOutboxRelaysSync(authorHint) || [];
   }
 
   // Limit cached relays to top 3 to avoid too many connections

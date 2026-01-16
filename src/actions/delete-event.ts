@@ -1,7 +1,7 @@
 import accountManager from "@/services/accounts";
 import pool from "@/services/relay-pool";
 import { EventFactory } from "applesauce-core/event-factory";
-import { relayListCache } from "@/services/relay-list-cache";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import { grimoireStateAtom } from "@/core/state";
@@ -31,7 +31,7 @@ export class DeleteEventAction {
 
     // Get write relays from cache and state
     const authorWriteRelays =
-      (await relayListCache.getOutboxRelays(account.pubkey)) || [];
+      (await replaceableEventCache.getOutboxRelays(account.pubkey)) || [];
 
     const store = getDefaultStore();
     const state = store.get(grimoireStateAtom);

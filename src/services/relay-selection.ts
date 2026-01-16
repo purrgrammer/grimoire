@@ -20,7 +20,7 @@ import { selectOptimalRelays } from "applesauce-core/helpers";
 import { addressLoader, AGGREGATOR_RELAYS } from "./loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import liveness from "./relay-liveness";
-import relayListCache from "./relay-list-cache";
+import replaceableEventCache from "./replaceable-event-cache";
 import type {
   RelaySelectionResult,
   RelaySelectionReasoning,
@@ -92,7 +92,7 @@ async function getOutboxRelaysForPubkey(
 ): Promise<string[]> {
   try {
     // Check cache first
-    const cachedRelays = await relayListCache.getOutboxRelays(pubkey);
+    const cachedRelays = await replaceableEventCache.getOutboxRelays(pubkey);
     if (cachedRelays) {
       console.debug(
         `[RelaySelection] Using cached outbox relays for ${pubkey.slice(0, 8)} (${cachedRelays.length} relays)`,
@@ -189,7 +189,7 @@ async function getInboxRelaysForPubkey(
 ): Promise<string[]> {
   try {
     // Check cache first
-    const cachedRelays = await relayListCache.getInboxRelays(pubkey);
+    const cachedRelays = await replaceableEventCache.getInboxRelays(pubkey);
     if (cachedRelays) {
       console.debug(
         `[RelaySelection] Using cached inbox relays for ${pubkey.slice(0, 8)} (${cachedRelays.length} relays)`,

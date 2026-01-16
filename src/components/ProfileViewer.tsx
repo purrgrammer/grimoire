@@ -27,12 +27,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
-import { relayListCache } from "@/services/relay-list-cache";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 import { useEffect, useState } from "react";
 import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { USER_SERVER_LIST_KIND, getServersFromEvent } from "@/services/blossom";
-import blossomServerCache from "@/services/blossom-server-cache";
+// blossomServerCache is now part of replaceableEventCache
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -59,15 +59,15 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     let subscription: Subscription | null = null;
     if (!resolvedPubkey) return;
 
-    // Check if we have a valid cached relay list
-    relayListCache.has(resolvedPubkey).then(async (hasCached) => {
+    // Check if we have a valid cached relay list (kind:10002)
+    replaceableEventCache.has(resolvedPubkey, 10002).then(async (hasCached) => {
       if (hasCached) {
         console.debug(
           `[ProfileViewer] Using cached relay list for ${resolvedPubkey.slice(0, 8)}`,
         );
 
         // Load cached event into EventStore so UI can display it
-        const cached = await relayListCache.get(resolvedPubkey);
+        const cached = await replaceableEventCache.get(resolvedPubkey, 10002);
         if (cached?.event) {
           eventStore.add(cached.event);
           console.debug(
@@ -135,7 +135,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     }
 
     // First, check cache for instant display
-    blossomServerCache.getServers(resolvedPubkey).then((cachedServers) => {
+    replaceableEventCache.getBlossomServers(resolvedPubkey).then((cachedServers) => {
       if (cachedServers && cachedServers.length > 0) {
         setBlossomServers(cachedServers);
       }

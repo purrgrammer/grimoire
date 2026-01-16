@@ -16,7 +16,7 @@ vi.mock("./event-store", () => ({
 }));
 
 vi.mock("./relay-list-cache", () => ({
-  relayListCache: {
+  replaceableEventCache: {
     getOutboxRelaysSync: vi.fn(),
   },
 }));
@@ -38,7 +38,7 @@ vi.mock("applesauce-loaders/loaders", () => ({
 }));
 
 import eventStore from "./event-store";
-import { relayListCache } from "./relay-list-cache";
+import replaceableEventCache from "./replaceable-event-cache";
 
 // Test helpers
 function createMockEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -108,7 +108,7 @@ describe("eventLoader", () => {
 
   describe("backward compatibility with string authorHint", () => {
     it("should accept string pubkey as context", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://author-relay.com/",
       ]);
 
@@ -123,7 +123,7 @@ describe("eventLoader", () => {
     });
 
     it("should use cached relays when authorHint provided", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://cached1.com/",
         "wss://cached2.com/",
         "wss://cached3.com/",
@@ -195,7 +195,7 @@ describe("eventLoader", () => {
     });
 
     it("should extract author hint from p tags", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://author-outbox.com/",
       ]);
 
@@ -214,7 +214,7 @@ describe("eventLoader", () => {
     });
 
     it("should combine all relay sources", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://cached.com/",
       ]);
 
@@ -272,7 +272,7 @@ describe("eventLoader", () => {
     });
 
     it("should prioritize seen relays over cached relays", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://cached.com/",
       ]);
 
@@ -292,7 +292,7 @@ describe("eventLoader", () => {
 
   describe("deduplication", () => {
     it("should deduplicate same relay from different sources", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://duplicate.com/",
       ]);
 
@@ -364,7 +364,7 @@ describe("eventLoader", () => {
     it("should use existing event author when event is in store", () => {
       const existingEvent = createMockEvent({ pubkey: "existing-author" });
       vi.mocked(eventStore.getEvent).mockReturnValue(existingEvent);
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://existing-author-relay.com/",
       ]);
 
@@ -381,7 +381,7 @@ describe("eventLoader", () => {
 
     it("should fall back to aggregators when no other relays available", () => {
       vi.mocked(eventStore.getEvent).mockReturnValue(undefined);
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([]);
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([]);
 
       const event = createMockEvent({ tags: [] });
 
@@ -397,7 +397,7 @@ describe("eventLoader", () => {
     });
 
     it("should limit cached relays to 3", () => {
-      vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      vi.mocked(replaceableEventCache.getOutboxRelaysSync).mockReturnValue([
         "wss://cached1.com/",
         "wss://cached2.com/",
         "wss://cached3.com/",

@@ -28,7 +28,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
-import { relayListCache } from "@/services/relay-list-cache";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 
@@ -184,7 +184,9 @@ export function ZapstoreAppDetailRenderer({
     }
 
     // Add publisher's outbox relays
-    const outboxRelays = relayListCache.getOutboxRelaysSync(event.pubkey);
+    const outboxRelays = replaceableEventCache.getOutboxRelaysSync(
+      event.pubkey,
+    );
     if (outboxRelays) {
       for (const relay of outboxRelays.slice(0, 3)) {
         relaySet.add(relay);

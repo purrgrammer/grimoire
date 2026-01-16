@@ -14,6 +14,9 @@
 
 import type { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers/event";
+import { getInboxes, getOutboxes } from "applesauce-core/helpers";
+import { normalizeRelayURL } from "@/lib/relay-url";
+import { getServersFromEvent } from "./blossom";
 import db, { CachedReplaceableEvent } from "./db";
 import type { IEventStore } from "applesauce-core/event-store";
 import type { Subscription } from "rxjs";
@@ -516,6 +519,77 @@ class ReplaceableEventCache {
       console.error("[ReplaceableEventCache] Error cleaning stale:", error);
       return 0;
     }
+  }
+
+  // ===== Convenience Helpers for Common Operations =====
+
+  /**
+   * Get outbox (write) relays for a pubkey from kind:10002 (NIP-65)
+   */
+  async getOutboxRelays(pubkey: string): Promise<string[] | null> {
+    const event = await this.getEvent(pubkey, 10002);
+    if (!event) return null;
+
+    const relays = getOutboxes(event);
+    return this.normalizeRelays(relays);
+  }
+
+  /**
+   * Get outbox relays from memory cache only (synchronous, fast)
+   */
+  getOutboxRelaysSync(pubkey: string): string[] | null {
+    const event = this.getSync(pubkey, 10002);
+    if (!event) return null;
+
+    const relays = getOutboxes(event);
+    return this.normalizeRelays(relays);
+  }
+
+  /**
+   * Get inbox (read) relays for a pubkey from kind:10002 (NIP-65)
+   */
+  async getInboxRelays(pubkey: string): Promise<string[] | null> {
+    const event = await this.getEvent(pubkey, 10002);
+    if (!event) return null;
+
+    const relays = getInboxes(event);
+    return this.normalizeRelays(relays);
+  }
+
+  /**
+   * Get blossom servers for a pubkey from kind:10063 (BUD-03)
+   */
+  async getBlossomServers(pubkey: string): Promise<string[] | null> {
+    const event = await this.getEvent(pubkey, 10063);
+    if (!event) return null;
+
+    return getServersFromEvent(event);
+  }
+
+  /**
+   * Get blossom servers from memory cache only (synchronous, fast)
+   */
+  getBlossomServersSync(pubkey: string): string[] | null {
+    const event = this.getSync(pubkey, 10063);
+    if (!event) return null;
+
+    return getServersFromEvent(event);
+  }
+
+  /**
+   * Normalize relay URLs and filter invalid ones
+   */
+  private normalizeRelays(relays: string[]): string[] {
+    return relays
+      .map((url) => {
+        try {
+          return normalizeRelayURL(url);
+        } catch {
+          console.warn(`[ReplaceableEventCache] Invalid relay URL: ${url}`);
+          return null;
+        }
+      })
+      .filter((url): url is string => url !== null);
   }
 }
 

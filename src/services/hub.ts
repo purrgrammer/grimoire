@@ -2,7 +2,7 @@ import { ActionRunner } from "applesauce-actions";
 import eventStore from "./event-store";
 import { EventFactory } from "applesauce-core/event-factory";
 import pool from "./relay-pool";
-import { relayListCache } from "./relay-list-cache";
+import replaceableEventCache from "./replaceable-event-cache";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import type { NostrEvent } from "nostr-tools/core";
 import accountManager from "./accounts";
@@ -15,7 +15,7 @@ import accountManager from "./accounts";
  */
 export async function publishEvent(event: NostrEvent): Promise<void> {
   // Try to get author's outbox relays from EventStore (kind 10002)
-  let relays = await relayListCache.getOutboxRelays(event.pubkey);
+  let relays = await replaceableEventCache.getOutboxRelays(event.pubkey);
 
   // Fallback to relays from the event itself (where it was seen)
   if (!relays || relays.length === 0) {

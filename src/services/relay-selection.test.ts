@@ -7,7 +7,7 @@ import { selectRelaysForFilter } from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
-import relayListCache from "./relay-list-cache";
+import replaceableEventCache from "./replaceable-event-cache";
 
 // Helper to create valid test events
 function createRelayListEvent(
@@ -40,7 +40,7 @@ describe("selectRelaysForFilter", () => {
   beforeEach(async () => {
     eventStore = new EventStore();
     // Clear the relay list cache to ensure test isolation
-    await relayListCache.clear();
+    await replaceableEventCache.clearKind(10002);
   });
 
   describe("fallback behavior", () => {
