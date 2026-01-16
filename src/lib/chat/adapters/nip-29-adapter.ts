@@ -1281,10 +1281,20 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       ...config.backupRelays,
     ]);
 
-    // Step 4: Build participants from role tags
-    const participants = this.buildCommunikeyParticipants(config);
+    // Step 4: Fetch recent messages to derive participants
+    const recentParticipants = await this.fetchCommunikeyParticipants(pubkey, [
+      config.mainRelay,
+      ...config.backupRelays,
+    ]);
 
-    // Step 5: Build conversation
+    // Step 5: Build participants list (host + actual members)
+    const participants = this.buildCommunikeyParticipants(
+      pubkey,
+      config,
+      recentParticipants,
+    );
+
+    // Step 6: Build conversation
     const title =
       profile?.display_name ||
       profile?.name ||
@@ -1513,13 +1523,82 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Build participants list from communikey roles
+   * Fetch recent chat participants for communikey
+   * Returns unique pubkeys of people who have sent messages
    */
-  private buildCommunikeyParticipants(config: CommunikeyConfig): Participant[] {
-    return Object.entries(config.roles).map(([pubkey, role]) => ({
-      pubkey,
-      role,
-    }));
+  private async fetchCommunikeyParticipants(
+    communikeyPubkey: string,
+    relays: string[],
+  ): Promise<Set<string>> {
+    console.log(
+      `[NIP-CC] Fetching recent participants for ${communikeyPubkey.slice(0, 16)}...`,
+    );
+
+    // Fetch recent kind 9 messages to find active participants
+    const filter: Filter = {
+      kinds: [9],
+      "#h": [communikeyPubkey],
+      limit: 100, // Sample recent messages to find participants
+    };
+
+    const events = await firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    // Extract unique authors (excluding the communikey itself)
+    const participants = new Set<string>();
+    for (const event of events) {
+      if (event.pubkey !== communikeyPubkey) {
+        participants.add(event.pubkey);
+      }
+    }
+
+    console.log(`[NIP-CC] Found ${participants.size} active participants`);
+    return participants;
+  }
+
+  /**
+   * Build participants list for communikey
+   * - Communikey pubkey is always the host
+   * - Recent message senders are members
+   * - Role-based participants from config are added with their roles
+   */
+  private buildCommunikeyParticipants(
+    communikeyPubkey: string,
+    config: CommunikeyConfig,
+    recentParticipants: Set<string>,
+  ): Participant[] {
+    const participants: Participant[] = [];
+
+    // 1. Communikey pubkey is the host
+    participants.push({
+      pubkey: communikeyPubkey,
+      role: "host",
+    });
+
+    // 2. Add role-based participants from config (admins, moderators, etc.)
+    for (const [pubkey, role] of Object.entries(config.roles)) {
+      // Skip if already added as host
+      if (pubkey === communikeyPubkey) continue;
+
+      participants.push({
+        pubkey,
+        role: role as ParticipantRole,
+      });
+    }
+
+    // 3. Add recent chat participants as members (if not already added)
+    const existingPubkeys = new Set(participants.map((p) => p.pubkey));
+    for (const pubkey of recentParticipants) {
+      if (!existingPubkeys.has(pubkey)) {
+        participants.push({
+          pubkey,
+          role: "member",
+        });
+      }
+    }
+
+    return participants;
   }
 }
 
