@@ -1,14 +1,18 @@
 import { useEffect } from "react";
 import { useEventStore, use$ } from "applesauce-react/hooks";
+import type { Subscription } from "rxjs";
 import accounts from "@/services/accounts";
 import { useGrimoire } from "@/core/state";
 import { addressLoader } from "@/services/loaders";
+import { ACTIVE_USER_KINDS } from "@/services/replaceable-event-cache";
 import type { RelayInfo } from "@/types/app";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { getServersFromEvent } from "@/services/blossom";
+import type { NostrEvent } from "@/types/nostr";
 
 /**
- * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
+ * Hook that syncs active account with Grimoire state and fetches configured replaceable events
+ * Automatically fetches and watches all kinds in ACTIVE_USER_KINDS
  */
 export function useAccountSync() {
   const {
@@ -26,103 +30,93 @@ export function useAccountSync() {
     setActiveAccount(activeAccount?.pubkey);
   }, [activeAccount?.pubkey, setActiveAccount]);
 
-  // Fetch and watch relay list (kind 10002) when account changes
+  // Fetch and watch all configured kinds for active user
   useEffect(() => {
     if (!activeAccount?.pubkey) {
       return;
     }
 
     const pubkey = activeAccount.pubkey;
-    let lastRelayEventId: string | undefined;
+    const subscriptions: Subscription[] = [];
+    const lastEventIds = new Map<number, string>();
 
-    // Subscribe to kind 10002 (relay list)
-    const subscription = addressLoader({
-      kind: 10002,
-      pubkey,
-      identifier: "",
-    }).subscribe();
+    // Subscribe to all configured kinds
+    for (const kind of ACTIVE_USER_KINDS) {
+      // Fetch from relays
+      const fetchSub = addressLoader({
+        kind,
+        pubkey,
+        identifier: "",
+      }).subscribe();
 
-    // Watch for relay list event in store
-    const storeSubscription = eventStore
-      .replaceable(10002, pubkey, "")
-      .subscribe((relayListEvent) => {
-        if (!relayListEvent) return;
+      // Watch for updates in EventStore
+      const storeSub = eventStore
+        .replaceable(kind, pubkey, "")
+        .subscribe((event: NostrEvent | undefined) => {
+          if (!event) return;
 
-        // Only process if this is a new event
-        if (relayListEvent.id === lastRelayEventId) return;
-        lastRelayEventId = relayListEvent.id;
+          // Only process if this is a new event
+          if (event.id === lastEventIds.get(kind)) return;
+          lastEventIds.set(kind, event.id);
 
-        // Parse relays from tags (NIP-65 format)
-        // Tag format: ["r", "relay-url", "read|write"]
-        // If no marker, relay is used for both read and write
-        const relays: RelayInfo[] = [];
-        const seenUrls = new Set<string>();
-
-        for (const tag of relayListEvent.tags) {
-          if (tag[0] === "r" && tag[1]) {
-            try {
-              const url = normalizeRelayURL(tag[1]);
-              if (seenUrls.has(url)) continue;
-              seenUrls.add(url);
-
-              const marker = tag[2];
-              relays.push({
-                url,
-                read: !marker || marker === "read",
-                write: !marker || marker === "write",
-              });
-            } catch (error) {
-              console.warn(
-                `Skipping invalid relay URL in Kind 10002 event: ${tag[1]}`,
-                error,
-              );
-            }
+          // Handle specific kinds
+          if (kind === 10002) {
+            // Parse relay list (NIP-65)
+            const relays = parseRelayList(event);
+            setActiveAccountRelays(relays);
+          } else if (kind === 10063) {
+            // Parse blossom server list (BUD-03)
+            const servers = getServersFromEvent(event);
+            setActiveAccountBlossomServers(servers);
           }
-        }
+          // Kind 3 (contacts) is auto-cached but doesn't need UI state updates
+          // Kind 10030 (emoji list) is auto-cached but doesn't need UI state updates
+        });
 
-        setActiveAccountRelays(relays);
-      });
-
-    return () => {
-      subscription.unsubscribe();
-      storeSubscription.unsubscribe();
-    };
-  }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
-
-  // Fetch and watch blossom server list (kind 10063) when account changes
-  useEffect(() => {
-    if (!activeAccount?.pubkey) {
-      return;
+      subscriptions.push(fetchSub, storeSub);
     }
 
-    const pubkey = activeAccount.pubkey;
-    let lastBlossomEventId: string | undefined;
-
-    // Subscribe to kind 10063 (blossom server list)
-    const subscription = addressLoader({
-      kind: 10063,
-      pubkey,
-      identifier: "",
-    }).subscribe();
-
-    // Watch for blossom server list event in store
-    const storeSubscription = eventStore
-      .replaceable(10063, pubkey, "")
-      .subscribe((blossomListEvent) => {
-        if (!blossomListEvent) return;
-
-        // Only process if this is a new event
-        if (blossomListEvent.id === lastBlossomEventId) return;
-        lastBlossomEventId = blossomListEvent.id;
-
-        // Parse servers from event
-        const servers = getServersFromEvent(blossomListEvent);
-        setActiveAccountBlossomServers(servers);
-      });
-
     return () => {
-      subscription.unsubscribe();
-      storeSubscription.unsubscribe();
+      subscriptions.forEach((sub) => sub.unsubscribe());
     };
-  }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
+  }, [
+    activeAccount?.pubkey,
+    eventStore,
+    setActiveAccountRelays,
+    setActiveAccountBlossomServers,
+  ]);
+}
+
+/**
+ * Parse relay list event (NIP-65 format)
+ * Tag format: ["r", "relay-url", "read|write"]
+ * If no marker, relay is used for both read and write
+ */
+function parseRelayList(event: NostrEvent): RelayInfo[] {
+  const relays: RelayInfo[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const tag of event.tags) {
+    if (tag[0] === "r" && tag[1]) {
+      try {
+        const url = normalizeRelayURL(tag[1]);
+        if (seenUrls.has(url)) continue;
+        seenUrls.add(url);
+
+        const marker = tag[2];
+        relays.push({
+          url,
+          read: !marker || marker === "read",
+          write: !marker || marker === "write",
+        });
+      } catch (error) {
+        console.warn(
+          `Skipping invalid relay URL in kind:10002 event: ${tag[1]}`,
+          error,
+        );
+      }
+    }
+  }
+
+  return relays;
 }

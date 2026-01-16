@@ -31,6 +31,20 @@ const MAX_MEMORY_CACHE = 200; // LRU cache size
 export const CACHED_KINDS = [3, 10002, 10063, 10030];
 
 /**
+ * Kinds to always fetch and keep synced for active user
+ * These will be:
+ * - Hydrated from cache on startup
+ * - Auto-fetched from relays when user logs in
+ * - Kept up-to-date via addressLoader subscriptions
+ */
+export const ACTIVE_USER_KINDS = [
+  3, // Contacts - for $contacts alias resolution
+  10002, // Relay list - for outbox relay selection
+  10063, // Blossom servers - for media uploads
+  // 10030,  // Emoji list - optional, uncomment to enable
+];
+
+/**
  * Check if a kind is parameterized replaceable (30000-39999)
  */
 function isParameterizedReplaceable(kind: number): boolean {
@@ -80,6 +94,48 @@ class ReplaceableEventCache {
       this.eventStoreSubscription.unsubscribe();
       this.eventStoreSubscription = null;
       console.log("[ReplaceableEventCache] Unsubscribed from EventStore");
+    }
+  }
+
+  /**
+   * Hydrate EventStore with fresh cached events on startup
+   * Only loads events newer than TTL to avoid stale data
+   * This solves the "orphaned cache" problem where Dexie has data but EventStore doesn't
+   */
+  async hydrateEventStore(eventStore: IEventStore): Promise<void> {
+    try {
+      const cutoff = Date.now() - this.ttl;
+
+      const fresh = await db.replaceableEvents
+        .where("updatedAt")
+        .above(cutoff)
+        .toArray();
+
+      console.log(
+        `[ReplaceableEventCache] Hydrating EventStore with ${fresh.length} cached events`,
+      );
+
+      // Add all fresh events to EventStore
+      for (const entry of fresh) {
+        await eventStore.add(entry.event);
+
+        // Also populate memory cache for fast access
+        const cacheKey = buildCacheKey(entry.pubkey, entry.kind, entry.d);
+        this.memoryCache.set(cacheKey, entry);
+        this.cacheOrder.push(cacheKey);
+      }
+
+      // Clean up excess memory cache entries
+      this.evictOldest();
+
+      console.log(
+        `[ReplaceableEventCache] Hydration complete. Memory cache: ${this.memoryCache.size} entries`,
+      );
+    } catch (error) {
+      console.error(
+        "[ReplaceableEventCache] Error hydrating EventStore:",
+        error,
+      );
     }
   }
 

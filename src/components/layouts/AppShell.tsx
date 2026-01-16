@@ -1,11 +1,11 @@
 import { useState, useEffect, ReactNode } from "react";
 import { Terminal } from "lucide-react";
 import { useAccountSync } from "@/hooks/useAccountSync";
-import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
-import { useBlossomServerCacheSync } from "@/hooks/useBlossomServerCacheSync";
 import { useReplaceableEventCacheSync } from "@/hooks/useReplaceableEventCacheSync";
 import { useRelayState } from "@/hooks/useRelayState";
+import { useEventStore } from "applesauce-react/hooks";
 import relayStateManager from "@/services/relay-state-manager";
+import replaceableEventCache from "@/services/replaceable-event-cache";
 import { TabBar } from "../TabBar";
 import CommandLauncher from "../CommandLauncher";
 import { GlobalAuthPrompt } from "../GlobalAuthPrompt";
@@ -20,18 +20,20 @@ interface AppShellProps {
 
 export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
   const [commandLauncherOpen, setCommandLauncherOpen] = useState(false);
+  const eventStore = useEventStore();
 
-  // Sync active account and fetch relay lists
-  useAccountSync();
-
-  // Auto-cache kind:10002 relay lists from EventStore to Dexie
-  useRelayListCacheSync();
-
-  // Auto-cache kind:10063 blossom server lists from EventStore to Dexie
-  useBlossomServerCacheSync();
+  // Hydrate EventStore from Dexie cache on startup (solves orphaned cache problem)
+  useEffect(() => {
+    replaceableEventCache.hydrateEventStore(eventStore).catch((err) => {
+      console.error("Failed to hydrate EventStore from cache:", err);
+    });
+  }, [eventStore]);
 
   // Auto-cache generic replaceable events (contacts, relay lists, blossom servers, emoji lists, etc.)
   useReplaceableEventCacheSync();
+
+  // Sync active account and fetch configured kinds
+  useAccountSync();
 
   // Initialize global relay state manager
   useEffect(() => {
