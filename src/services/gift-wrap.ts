@@ -15,6 +15,8 @@ import type { ISigner } from "applesauce-signers";
 import eventStore from "./event-store";
 import pool from "./relay-pool";
 import { encryptedContentStorage, getStoredEncryptedContentIds } from "./db";
+import { AGGREGATOR_RELAYS } from "./loaders";
+import relayListCache from "./relay-list-cache";
 
 /** Kind 10050: DM relay list (NIP-17) */
 const DM_RELAY_LIST_KIND = 10050;
@@ -206,6 +208,7 @@ class GiftWrapService {
   private async loadInboxRelays() {
     if (!this.userPubkey) return;
 
+    // Subscribe to reactive updates from EventStore
     const sub = eventStore
       .replaceable(DM_RELAY_LIST_KIND, this.userPubkey)
       .pipe(
@@ -220,10 +223,58 @@ class GiftWrapService {
         }),
       )
       .subscribe((relays) => {
+        const hadRelays = this.inboxRelays$.value.length > 0;
         this.inboxRelays$.next(relays);
+
+        // If we just got inbox relays and sync is enabled, restart sync with new relays
+        if (!hadRelays && relays.length > 0 && this.settings$.value.enabled) {
+          console.log(
+            `[GiftWrap] Discovered ${relays.length} inbox relays, restarting sync`,
+          );
+          this.startSync();
+        }
       });
 
     this.subscriptions.push(sub);
+
+    // Also fetch the inbox relay list from user's outbox relays
+    // This ensures we load it on page reload when EventStore is empty
+    await this.fetchInboxRelayList();
+  }
+
+  /** Fetch the user's inbox relay list (kind 10050) from their outbox relays */
+  private async fetchInboxRelayList() {
+    if (!this.userPubkey) return;
+
+    try {
+      // Get user's outbox relays to query for their inbox relay list
+      const outboxRelays = await relayListCache.getOutboxRelays(
+        this.userPubkey,
+      );
+      const relaysToQuery =
+        outboxRelays && outboxRelays.length > 0
+          ? outboxRelays
+          : AGGREGATOR_RELAYS;
+
+      console.log(
+        `[GiftWrap] Fetching inbox relay list from ${relaysToQuery.length} relays`,
+      );
+
+      // Request the user's DM relay list
+      pool
+        .request(
+          relaysToQuery,
+          [{ kinds: [DM_RELAY_LIST_KIND], authors: [this.userPubkey] }],
+          { eventStore },
+        )
+        .subscribe({
+          error: (err) => {
+            console.warn(`[GiftWrap] Error fetching inbox relay list:`, err);
+          },
+        });
+    } catch (err) {
+      console.warn(`[GiftWrap] Error in fetchInboxRelayList:`, err);
+    }
   }
 
   /** Start syncing gift wraps from inbox relays */
@@ -233,15 +284,17 @@ class GiftWrapService {
       return;
     }
 
-    const relays = this.inboxRelays$.value;
-    if (relays.length === 0) {
-      // Use default relays if no inbox relays set
-      this.syncStatus$.next("syncing");
-      this.subscribeToGiftWraps([]);
-    } else {
-      this.syncStatus$.next("syncing");
-      this.subscribeToGiftWraps(relays);
-    }
+    const inboxRelays = this.inboxRelays$.value;
+    // Use inbox relays if available, otherwise use aggregator relays as fallback
+    const relaysToUse =
+      inboxRelays.length > 0 ? inboxRelays : AGGREGATOR_RELAYS;
+
+    console.log(
+      `[GiftWrap] Starting sync with ${relaysToUse.length} relays (inbox: ${inboxRelays.length})`,
+    );
+
+    this.syncStatus$.next("syncing");
+    this.subscribeToGiftWraps(relaysToUse);
   }
 
   /** Stop syncing */
@@ -300,17 +353,18 @@ class GiftWrapService {
 
     this.relaySubscription = sub;
 
-    // Also request from relays
-    if (relays.length > 0) {
-      pool.request(relays, [reqFilter], { eventStore }).subscribe({
-        next: () => {
-          // Events are automatically added to eventStore via the options
-        },
-        error: (err) => {
-          console.warn(`[GiftWrap] Error fetching from relays:`, err);
-        },
-      });
-    }
+    // Request gift wraps from relays (always have relays - inbox or aggregator fallback)
+    console.log(
+      `[GiftWrap] Requesting gift wraps from ${relays.length} relays`,
+    );
+    pool.request(relays, [reqFilter], { eventStore }).subscribe({
+      next: () => {
+        // Events are automatically added to eventStore via the options
+      },
+      error: (err) => {
+        console.warn(`[GiftWrap] Error fetching from relays:`, err);
+      },
+    });
   }
 
   /** Update pending count for UI display */
