@@ -170,6 +170,22 @@ export function LLMChatViewer({ conversationId }: LLMChatViewerProps) {
 
   const [loadingState] = useState<ChatLoadingState>("success");
   const [isSending, setIsSending] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  // Fetch balance when provider changes
+  useEffect(() => {
+    if (provider && provider.getBalance) {
+      setLoadingBalance(true);
+      provider
+        .getBalance()
+        .then((bal) => setBalance(bal))
+        .catch(() => setBalance(null))
+        .finally(() => setLoadingBalance(false));
+    } else {
+      setBalance(null);
+    }
+  }, [provider]);
 
   // Update conversation model when provider changes
   useEffect(() => {
@@ -274,6 +290,16 @@ export function LLMChatViewer({ conversationId }: LLMChatViewerProps) {
             totalCost: prev.totalCost + (response.cost || 0),
           };
         });
+
+        // Refresh balance after successful message
+        if (provider.getBalance) {
+          provider
+            .getBalance()
+            .then((bal) => setBalance(bal))
+            .catch(() => {
+              /* ignore errors */
+            });
+        }
       } catch (error) {
         console.error("Failed to send message:", error);
         // Add error message
@@ -307,7 +333,30 @@ export function LLMChatViewer({ conversationId }: LLMChatViewerProps) {
     <div className="flex items-center gap-2">
       <Bot className="size-4" />
       <span className="text-sm font-semibold">{conversation.title}</span>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-3">
+        {/* Balance Display */}
+        {balance !== null && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-muted-foreground">Balance:</span>
+                  <span className="font-medium text-green-600 dark:text-green-400">
+                    ${balance.toFixed(2)}
+                  </span>
+                  {loadingBalance && (
+                    <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Account balance (updates after each query)</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {/* Token Counter */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

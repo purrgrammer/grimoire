@@ -305,4 +305,47 @@ export class PPQProviderAdapter implements LLMProviderAdapter {
     // Rough estimate: ~4 characters per token
     return Math.ceil(text.length / 4);
   }
+
+  async getBalance(): Promise<number | null> {
+    try {
+      // PPQ balance endpoint
+      // Documentation: https://ppq.ai/api-topups
+      const response = await fetch(`${this.baseUrl}/credits/balance`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        // Try with empty body first - Bearer auth might be sufficient
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch balance: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      // Handle various possible response formats
+      if (typeof data === "number") {
+        return data;
+      }
+      if (data.balance !== undefined) {
+        return data.balance;
+      }
+      if (data.credits !== undefined) {
+        return data.credits;
+      }
+      if (data.amount !== undefined) {
+        return data.amount;
+      }
+
+      console.warn("Unknown balance response format:", data);
+      return null;
+    } catch (error) {
+      console.error("Failed to get balance:", error);
+      return null;
+    }
+  }
 }

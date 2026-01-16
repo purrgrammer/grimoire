@@ -125,4 +125,9 @@ export interface LLMProviderAdapter {
    * Count tokens in text
    */
   countTokens?(text: string, model: string): Promise<number>;
+
+  /**
+   * Get account balance (if supported)
+   */
+  getBalance?(): Promise<number | null>;
 }
