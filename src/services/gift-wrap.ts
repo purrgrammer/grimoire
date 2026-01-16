@@ -203,6 +203,13 @@ class GiftWrapService {
         for (const event of storedEvents) {
           eventStore.add(event);
         }
+
+        // Update conversations from loaded gift wraps (they're already decrypted from cache)
+        // Without this, conversations don't appear until sync fetches from relays
+        this.updateConversations();
+        console.log(
+          `[GiftWrap] Rebuilt conversations from ${storedEvents.length} stored gift wraps`,
+        );
       }
     } catch (err) {
       console.warn(`[GiftWrap] Error loading stored gift wraps:`, err);
