@@ -14,7 +14,12 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
 import eventStore from "./event-store";
 import pool from "./relay-pool";
-import { encryptedContentStorage, getStoredEncryptedContentIds } from "./db";
+import {
+  encryptedContentStorage,
+  getStoredEncryptedContentIds,
+  saveGiftWraps,
+  loadStoredGiftWraps,
+} from "./db";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import relayListCache from "./relay-list-cache";
 
@@ -25,7 +30,7 @@ const DM_RELAY_LIST_KIND = 10050;
 const PRIVATE_DM_KIND = 14;
 
 /** Rumor is an unsigned event - used for gift wrap contents */
-interface Rumor {
+export interface Rumor {
   id: string;
   pubkey: string;
   created_at: number;
@@ -177,9 +182,30 @@ class GiftWrapService {
     });
     this.subscriptions.push(updateSub);
 
-    // If enabled, start syncing
+    // If enabled, load stored gift wraps and start syncing
     if (this.settings$.value.enabled) {
+      await this.loadStoredGiftWraps();
       this.startSync();
+    }
+  }
+
+  /** Load stored gift wraps from Dexie into EventStore */
+  private async loadStoredGiftWraps() {
+    if (!this.userPubkey) return;
+
+    try {
+      const storedEvents = await loadStoredGiftWraps(this.userPubkey);
+      if (storedEvents.length > 0) {
+        console.log(
+          `[GiftWrap] Loading ${storedEvents.length} stored gift wraps into EventStore`,
+        );
+        // Add stored events to EventStore - this triggers the timeline subscription
+        for (const event of storedEvents) {
+          eventStore.add(event);
+        }
+      }
+    } catch (err) {
+      console.warn(`[GiftWrap] Error loading stored gift wraps:`, err);
     }
   }
 
@@ -321,6 +347,11 @@ class GiftWrapService {
       .timeline(reqFilter)
       .pipe(map((events) => events.sort((a, b) => b.created_at - a.created_at)))
       .subscribe((giftWraps) => {
+        // Find new gift wraps that we haven't seen before
+        const newGiftWraps = giftWraps.filter(
+          (gw) => !this.giftWraps.some((existing) => existing.id === gw.id),
+        );
+
         this.giftWraps = giftWraps;
         this.giftWraps$.next(giftWraps);
 
@@ -339,6 +370,13 @@ class GiftWrapService {
         }
         this.decryptStates$.next(new Map(this.decryptStates));
         this.updatePendingCount();
+
+        // Persist new gift wraps to Dexie for fast loading on next startup
+        if (newGiftWraps.length > 0 && this.userPubkey) {
+          saveGiftWraps(newGiftWraps, this.userPubkey).catch((err) => {
+            console.warn(`[GiftWrap] Error saving gift wraps:`, err);
+          });
+        }
 
         // Update conversations
         this.updateConversations();

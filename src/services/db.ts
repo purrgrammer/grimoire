@@ -67,6 +67,13 @@ export interface EncryptedContentEntry {
   savedAt: number;
 }
 
+export interface StoredGiftWrap {
+  id: string; // Event ID
+  event: NostrEvent; // Full gift wrap event
+  userPubkey: string; // Recipient pubkey (from #p tag)
+  savedAt: number;
+}
+
 /**
  * Get all stored encrypted content IDs
  * Used to check which gift wraps have already been decrypted
@@ -74,6 +81,36 @@ export interface EncryptedContentEntry {
 export async function getStoredEncryptedContentIds(): Promise<Set<string>> {
   const entries = await db.encryptedContent.toArray();
   return new Set(entries.map((e) => e.id));
+}
+
+/**
+ * Save gift wrap events to Dexie for persistence across sessions
+ */
+export async function saveGiftWraps(
+  events: NostrEvent[],
+  userPubkey: string,
+): Promise<void> {
+  const entries: StoredGiftWrap[] = events.map((event) => ({
+    id: event.id,
+    event,
+    userPubkey,
+    savedAt: Date.now(),
+  }));
+
+  await db.giftWraps.bulkPut(entries);
+}
+
+/**
+ * Load stored gift wrap events for a user
+ */
+export async function loadStoredGiftWraps(
+  userPubkey: string,
+): Promise<NostrEvent[]> {
+  const entries = await db.giftWraps
+    .where("userPubkey")
+    .equals(userPubkey)
+    .toArray();
+  return entries.map((e) => e.event);
 }
 
 export interface LocalSpell {
@@ -114,6 +151,7 @@ class GrimoireDb extends Dexie {
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
   encryptedContent!: Table<EncryptedContentEntry>;
+  giftWraps!: Table<StoredGiftWrap>;
 
   constructor(name: string) {
     super(name);
@@ -363,6 +401,22 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
       encryptedContent: "&id, savedAt",
+    });
+
+    // Version 17: Add gift wrap event storage for NIP-17 chat
+    this.version(17).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      encryptedContent: "&id, savedAt",
+      giftWraps: "&id, userPubkey, savedAt",
     });
   }
 }

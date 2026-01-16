@@ -25,6 +25,7 @@ import type {
 } from "@/types/chat";
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -1046,10 +1047,10 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     case "nip-29":
       return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
     case "nip-53":

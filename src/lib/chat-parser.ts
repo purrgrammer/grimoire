@@ -1,10 +1,10 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
+import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
 // Import other adapters as they're implemented
-// import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
 
 /**
@@ -62,10 +62,10 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
-    // new Nip17Adapter(),  // Phase 2
-    // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
+    new Nip17Adapter(), // Private DMs (gift-wrapped)
+    // new Nip28Adapter(),  // Phase 3 - Public channels
+    new Nip29Adapter(), // Relay groups
+    new Nip53Adapter(), // Live activity chat
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
@@ -84,6 +84,12 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
+  - npub1.../nprofile1.../hex pubkey (NIP-17 private DMs)
+    Examples:
+      chat npub1abc...
+      chat nprofile1...
+      chat user@example.com (NIP-05)
+      chat npub1...,npub2...,npub3... (group chat)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
@@ -99,7 +105,6 @@ Currently supported formats:
       chat naddr1... (group list address)
 
 More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
   - note/nevent (NIP-28 public channels)`,
   );
 }
