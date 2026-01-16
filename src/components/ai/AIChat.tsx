@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Loader2, User, Bot, AlertCircle } from "lucide-react";
+import { Loader2, User, Bot, AlertCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { aiService } from "@/services/ai-service";
 import type { AIConversation, AIMessage } from "@/services/db";
@@ -113,6 +113,7 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -180,46 +181,22 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
     setInput("");
     setError(null);
     setIsSending(true);
-
-    // Optimistically add user message
-    const userMessage: AIMessage = {
-      id: crypto.randomUUID(),
-      conversationId: conversation.id,
-      role: "user",
-      content,
-      timestamp: Date.now(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    setStatus("Sending...");
 
     try {
+      setStatus(`Connecting to ${conversation.model}...`);
+
       await aiService.sendMessage(
         conversation.id,
         content,
-        (_chunk, fullContent) => {
-          // Update messages as chunks arrive
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.role === "assistant" && last.isStreaming) {
-              return [...prev.slice(0, -1), { ...last, content: fullContent }];
-            }
-            // Create new assistant message
-            return [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                conversationId: conversation.id,
-                role: "assistant",
-                content: fullContent,
-                timestamp: Date.now(),
-                isStreaming: true,
-              },
-            ];
-          });
+        (_chunk, _fullContent) => {
+          setStatus("Receiving response...");
         },
       );
 
       // Reload messages to get final state
       await loadMessages();
+      setStatus(null);
 
       // Notify parent of update (for title changes)
       const updatedConv = await aiService.getConversation(conversation.id);
@@ -227,13 +204,22 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
         onConversationUpdate(updatedConv);
       }
     } catch (err) {
+      console.error("[AIChat] Send error:", err);
       setError(err instanceof Error ? err.message : "Failed to send message");
+      setStatus(null);
       // Reload messages to get actual state
       await loadMessages();
     } finally {
       setIsSending(false);
     }
-  }, [input, isSending, conversation.id, loadMessages, onConversationUpdate]);
+  }, [
+    input,
+    isSending,
+    conversation.id,
+    conversation.model,
+    loadMessages,
+    onConversationUpdate,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -259,55 +245,71 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Message Timeline */}
-      <div className="flex-1 overflow-hidden">
-        {messagesWithMarkers.length > 0 ? (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={messagesWithMarkers}
-            initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput="smooth"
-            alignToBottom
-            itemContent={(_index, item) => {
-              if (item.type === "day-marker") {
-                return (
-                  <div className="flex justify-center py-2">
-                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                      {item.data}
-                    </span>
-                  </div>
-                );
-              }
-              return <MessageItem message={item.data} />;
-            }}
-            style={{ height: "100%" }}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <p className="text-sm">Start a conversation...</p>
-          </div>
-        )}
+      {/* Message Timeline - takes all available space */}
+      <div className="flex-1 min-h-0">
+        <Virtuoso
+          ref={virtuosoRef}
+          data={messagesWithMarkers}
+          initialTopMostItemIndex={Math.max(0, messagesWithMarkers.length - 1)}
+          followOutput="smooth"
+          alignToBottom
+          itemContent={(_index, item) => {
+            if (item.type === "day-marker") {
+              return (
+                <div className="flex justify-center py-2">
+                  <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    {item.data}
+                  </span>
+                </div>
+              );
+            }
+            return <MessageItem message={item.data} />;
+          }}
+          style={{ height: "100%" }}
+          components={{
+            EmptyPlaceholder: () => (
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <p className="text-sm">Start a conversation...</p>
+              </div>
+            ),
+          }}
+        />
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="mx-4 mb-2 flex items-center gap-2 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <AlertCircle className="size-4" />
-          <span className="flex-1">{error}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2"
-            onClick={() => setError(null)}
-          >
-            Dismiss
-          </Button>
+      {/* Status/Error Message */}
+      {(error || status) && (
+        <div
+          className={`mx-3 mb-2 flex items-center gap-2 rounded px-3 py-1.5 text-xs ${
+            error
+              ? "bg-destructive/10 text-destructive"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {error ? (
+            <>
+              <AlertCircle className="size-3" />
+              <span className="flex-1">{error}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-2 text-xs"
+                onClick={() => setError(null)}
+              >
+                Dismiss
+              </Button>
+            </>
+          ) : (
+            <>
+              <Loader2 className="size-3 animate-spin" />
+              <span>{status}</span>
+            </>
+          )}
         </div>
       )}
 
       {/* Input */}
-      <div className="border-t p-3">
-        <div className="flex gap-2">
+      <div className="border-t p-2">
+        <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
             value={input}
@@ -317,20 +319,21 @@ export function AIChat({ conversation, onConversationUpdate }: AIChatProps) {
             disabled={isSending}
             rows={1}
             className="flex-1 resize-none rounded border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-            style={{ minHeight: "40px", maxHeight: "200px" }}
+            style={{ minHeight: "36px", maxHeight: "200px" }}
           />
           <Button
             onClick={handleSend}
             disabled={!input.trim() || isSending}
-            size="sm"
-            className="self-end"
+            size="icon"
+            className="size-9 shrink-0"
           >
-            {isSending ? <Loader2 className="size-4 animate-spin" /> : "Send"}
+            {isSending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
           </Button>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Press Enter to send, Shift+Enter for new line
-        </p>
       </div>
     </div>
   );
