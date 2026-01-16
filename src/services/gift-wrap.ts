@@ -15,6 +15,7 @@
 import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
 import { unlockGiftWrap, getGiftWrapSeal } from "applesauce-common/helpers";
+import eventStore from "./event-store";
 import db, {
   GiftWrapEnvelope,
   DecryptedRumor,
@@ -46,9 +47,12 @@ export class GiftWrapError extends Error {
  * Uses applesauce-common unlockGiftWrap helper
  *
  * Note: Rumors are unsigned events (no sig field) - this is by design in NIP-59.
- * Applesauce handles all validation internally.
+ * Applesauce caches the rumor on the gift wrap event object using symbols.
  *
- * @param giftWrap - Kind 1059 gift wrap event
+ * IMPORTANT: The gift wrap event MUST be in the event store before calling this,
+ * as applesauce uses the event store to cache and retrieve seals/rumors.
+ *
+ * @param giftWrap - Kind 1059 gift wrap event (must be in event store)
  * @param signer - Signer for recipient (to decrypt)
  * @returns Object with seal and rumor
  */
@@ -57,7 +61,7 @@ export async function unwrapAndUnseal(
   signer: ISigner,
 ): Promise<{ seal: NostrEvent; rumor: NostrEvent }> {
   // Use applesauce helper to unlock the gift wrap
-  // This handles all validation internally
+  // This caches the seal and rumor on the gift wrap event object via symbols
   const rumor = await unlockGiftWrap(giftWrap, signer);
 
   // Get the seal from the unlocked gift wrap
@@ -101,6 +105,10 @@ export async function processGiftWrap(
       return null;
     }
   }
+
+  // CRITICAL: Ensure gift wrap is in event store before unlocking
+  // Applesauce caches seal/rumor on the event object via symbols
+  eventStore.add(giftWrap);
 
   // Store gift wrap envelope
   const envelope: GiftWrapEnvelope = {
