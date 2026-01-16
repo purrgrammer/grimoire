@@ -427,7 +427,7 @@ function CompactConversationRow({
         )}
 
         {/* Text preview (flexible width, truncate) - flows right after name */}
-        <span className="flex-1 min-w-0 truncate line-clamp-1 text-muted-foreground [&_img]:size-3.5 [&_img]:align-text-bottom">
+        <span className="flex-1 min-w-0 truncate line-clamp-1 text-muted-foreground [&_img]:size-3.5 [&_img]:align-text-bottom pointer-events-none">
           <RichText
             event={conversation.lastMessage as NostrEvent}
             className="inline"
