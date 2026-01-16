@@ -37,14 +37,6 @@ export interface RelayAuthPreference {
   updatedAt: number;
 }
 
-export interface CachedRelayList {
-  pubkey: string;
-  event: NostrEvent;
-  read: string[];
-  write: string[];
-  updatedAt: number;
-}
-
 export interface RelayLivenessEntry {
   url: string;
   state: "online" | "offline" | "dead";
@@ -54,6 +46,22 @@ export interface RelayLivenessEntry {
   backoffUntil?: number;
 }
 
+/**
+ * @deprecated Use CachedReplaceableEvent instead
+ * Kept for backward compatibility with old database versions
+ */
+export interface CachedRelayList {
+  pubkey: string;
+  event: NostrEvent;
+  read: string[];
+  write: string[];
+  updatedAt: number;
+}
+
+/**
+ * @deprecated Use CachedReplaceableEvent instead
+ * Kept for backward compatibility with old database versions
+ */
 export interface CachedBlossomServerList {
   pubkey: string;
   event: NostrEvent;
@@ -105,8 +113,10 @@ class GrimoireDb extends Dexie {
   nips!: Table<Nip>;
   relayInfo!: Table<RelayInfo>;
   relayAuthPreferences!: Table<RelayAuthPreference>;
+  /** @deprecated Use replaceableEvents table instead */
   relayLists!: Table<CachedRelayList>;
   relayLiveness!: Table<RelayLivenessEntry>;
+  /** @deprecated Use replaceableEvents table instead */
   blossomServers!: Table<CachedBlossomServerList>;
   replaceableEvents!: Table<CachedReplaceableEvent>;
   spells!: Table<LocalSpell>;
@@ -347,16 +357,16 @@ class GrimoireDb extends Dexie {
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
 
-    // Version 16: Add generic replaceable event cache
+    // Version 16: Add generic replaceable event cache, deprecate old kind-specific tables
     this.version(16).stores({
       profiles: "&pubkey",
       nip05: "&nip05",
       nips: "&id",
       relayInfo: "&url",
       relayAuthPreferences: "&url",
-      relayLists: "&pubkey, updatedAt",
+      relayLists: null, // Deprecated - migrated to replaceableEvents
       relayLiveness: "&url",
-      blossomServers: "&pubkey, updatedAt",
+      blossomServers: null, // Deprecated - migrated to replaceableEvents
       replaceableEvents: "[pubkey+kind+d], [pubkey+kind], kind, updatedAt",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
