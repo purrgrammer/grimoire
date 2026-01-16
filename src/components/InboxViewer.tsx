@@ -294,15 +294,20 @@ function InboxViewer() {
                 conversation={conv}
                 currentUserPubkey={account.pubkey}
                 onClick={() => {
-                  // Build chat identifier from participants
-                  // For self-chat, use $me; for others, use comma-separated npubs
+                  // Build chat identifier from participants as ProtocolIdentifier
+                  // For self-chat, use own pubkey; for others, use comma-separated hex pubkeys
                   const others = conv.participants.filter(
                     (p) => p !== account.pubkey,
                   );
-                  const identifier =
-                    others.length === 0 ? "$me" : others.join(",");
+                  // Always use hex pubkeys, not $me, to ensure consistent conversation IDs
+                  const value =
+                    others.length === 0 ? account.pubkey : others.join(",");
                   addWindow("chat", {
-                    identifier,
+                    identifier: {
+                      type: "dm-recipient" as const,
+                      value,
+                      relays: [],
+                    },
                     protocol: "nip-17",
                   });
                 }}

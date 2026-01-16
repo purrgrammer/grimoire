@@ -1,5 +1,5 @@
-import { Observable, of } from "rxjs";
-import { map } from "rxjs/operators";
+import { Observable, of, firstValueFrom } from "rxjs";
+import { map, filter, take, timeout } from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
@@ -15,9 +15,15 @@ import giftWrapService, { type Rumor } from "@/services/gift-wrap";
 import accountManager from "@/services/accounts";
 import { resolveNip05 } from "@/lib/nip05";
 import eventStore from "@/services/event-store";
+import pool from "@/services/relay-pool";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import relayListCache from "@/services/relay-list-cache";
 
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
+
+/** Kind 10050: DM relay list (NIP-17) */
+const DM_RELAY_LIST_KIND = 10050;
 
 /**
  * Compute a stable conversation ID from sorted participant pubkeys
@@ -25,6 +31,87 @@ const PRIVATE_DM_KIND = 14;
 function computeConversationId(participants: string[]): string {
   const sorted = [...participants].sort();
   return `nip17:${sorted.join(",")}`;
+}
+
+/**
+ * Fetch inbox relays (kind 10050) for a pubkey
+ * Strategy:
+ * 1. Check local eventStore first
+ * 2. Get participant's outbox relays from relay list cache
+ * 3. Fetch from their outbox relays + aggregator relays
+ */
+async function fetchInboxRelays(pubkey: string): Promise<string[]> {
+  // First check if we already have the event in the store
+  try {
+    const existing = await firstValueFrom(
+      eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey).pipe(
+        filter((e): e is NostrEvent => e !== undefined),
+        take(1),
+        timeout(100), // Very short timeout since this is just checking local store
+      ),
+    );
+
+    if (existing) {
+      return existing.tags
+        .filter((tag) => tag[0] === "relay")
+        .map((tag) => tag[1])
+        .filter(Boolean);
+    }
+  } catch {
+    // Not in store, try fetching from relays
+  }
+
+  // Get participant's outbox relays to query (they should publish their inbox list there)
+  let outboxRelays: string[] = [];
+  try {
+    const cached = await relayListCache.get(pubkey);
+    if (cached) {
+      outboxRelays = cached.write.slice(0, 3); // Limit to 3 outbox relays
+    }
+  } catch {
+    // Cache miss, will just use aggregators
+  }
+
+  // Combine outbox relays with aggregator relays (deduped)
+  const relaysToQuery = [
+    ...outboxRelays,
+    ...AGGREGATOR_RELAYS.slice(0, 2),
+  ].filter((url, i, arr) => arr.indexOf(url) === i);
+
+  // Fetch from relays using pool.request
+  try {
+    const { toArray } = await import("rxjs/operators");
+    const events = await firstValueFrom(
+      pool
+        .request(
+          relaysToQuery,
+          [{ kinds: [DM_RELAY_LIST_KIND], authors: [pubkey], limit: 1 }],
+          { eventStore },
+        )
+        .pipe(
+          toArray(),
+          timeout(3000), // 3 second timeout
+        ),
+    );
+
+    if (events.length > 0) {
+      // Get the most recent event
+      const latest = events.reduce((a, b) =>
+        a.created_at > b.created_at ? a : b,
+      );
+      return latest.tags
+        .filter((tag) => tag[0] === "relay")
+        .map((tag) => tag[1])
+        .filter(Boolean);
+    }
+  } catch (err) {
+    console.warn(
+      `[NIP-17] Failed to fetch inbox relays for ${pubkey.slice(0, 8)}:`,
+      err,
+    );
+  }
+
+  return [];
 }
 
 /**
@@ -246,13 +333,32 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       role: pubkey === activePubkey ? "member" : undefined,
     }));
 
-    // Get inbox relays for the current user
-    const userInboxRelays = giftWrapService.inboxRelays$.value;
-
-    // Build per-participant inbox relay map (start with current user)
+    // Fetch inbox relays for all participants in parallel
     const participantInboxRelays: Record<string, string[]> = {};
+
+    // Get current user's relays from service (already loaded)
+    const userInboxRelays = giftWrapService.inboxRelays$.value;
     if (userInboxRelays.length > 0) {
       participantInboxRelays[activePubkey] = userInboxRelays;
+    }
+
+    // Fetch inbox relays for other participants in parallel
+    const otherParticipants = uniqueParticipants.filter(
+      (p) => p !== activePubkey,
+    );
+    if (otherParticipants.length > 0) {
+      const relayResults = await Promise.all(
+        otherParticipants.map(async (pubkey) => ({
+          pubkey,
+          relays: await fetchInboxRelays(pubkey),
+        })),
+      );
+
+      for (const { pubkey, relays } of relayResults) {
+        if (relays.length > 0) {
+          participantInboxRelays[pubkey] = relays;
+        }
+      }
     }
 
     return {
@@ -311,6 +417,54 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   }
 
   /**
+   * Find the reply target from e-tags using NIP-10 conventions
+   *
+   * NIP-10 marker priority:
+   * 1. Tag with "reply" marker - this is the direct parent
+   * 2. If only "root" marker exists and no other e-tags - use root as reply target
+   * 3. Deprecated: last e-tag without markers
+   */
+  private findReplyTarget(tags: string[][]): string | undefined {
+    const eTags = tags.filter((tag) => tag[0] === "e" && tag[1]);
+
+    if (eTags.length === 0) return undefined;
+
+    // Check for explicit "reply" marker
+    const replyTag = eTags.find((tag) => tag[3] === "reply");
+    if (replyTag) {
+      return replyTag[1];
+    }
+
+    // Check for "root" marker (if it's the only e-tag or no other is marked as reply)
+    const rootTag = eTags.find((tag) => tag[3] === "root");
+
+    // Check for unmarked e-tags (deprecated positional style)
+    const unmarkedTags = eTags.filter(
+      (tag) =>
+        !tag[3] ||
+        (tag[3] !== "root" && tag[3] !== "reply" && tag[3] !== "mention"),
+    );
+
+    // If there are unmarked tags, use the last one as reply (deprecated style)
+    if (unmarkedTags.length > 0) {
+      return unmarkedTags[unmarkedTags.length - 1][1];
+    }
+
+    // If only root exists, it's both root and reply target
+    if (rootTag) {
+      return rootTag[1];
+    }
+
+    // Fallback: last e-tag that isn't a mention
+    const nonMentionTags = eTags.filter((tag) => tag[3] !== "mention");
+    if (nonMentionTags.length > 0) {
+      return nonMentionTags[nonMentionTags.length - 1][1];
+    }
+
+    return undefined;
+  }
+
+  /**
    * Get all participants from a rumor (author + all p-tag recipients)
    */
   private getRumorParticipants(rumor: Rumor): Set<string> {
@@ -336,14 +490,10 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     _giftWrap: NostrEvent,
     rumor: Rumor,
   ): Message {
-    // Find reply-to from e tags
-    let replyTo: string | undefined;
-    for (const tag of rumor.tags) {
-      if (tag[0] === "e" && tag[1]) {
-        // NIP-10: last e tag is usually the reply target
-        replyTo = tag[1];
-      }
-    }
+    // Find reply-to from e tags using NIP-10 marker convention
+    // Markers: "reply" = direct parent, "root" = thread root, "mention" = just a mention
+    // Format: ["e", <event-id>, <relay-hint>, <marker>]
+    const replyTo = this.findReplyTarget(rumor.tags);
 
     // Create a synthetic event from the rumor for display
     // This allows RichText to parse content correctly

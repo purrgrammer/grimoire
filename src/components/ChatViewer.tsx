@@ -966,7 +966,10 @@ export function ChatViewer({
             alignToBottom
             components={{
               Header: () =>
-                hasMore && conversationResult.status === "success" ? (
+                // NIP-17 loads all messages at once, no pagination
+                hasMore &&
+                conversationResult.status === "success" &&
+                conversation.protocol !== "nip-17" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -1014,6 +1017,12 @@ export function ChatViewer({
             }}
             style={{ height: "100%" }}
           />
+        ) : messages === undefined && conversation.protocol === "nip-17" ? (
+          // NIP-17: show loading while waiting for decryption
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+            <span className="text-sm">Loading messages...</span>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No messages yet. Start the conversation!
@@ -1031,25 +1040,28 @@ export function ChatViewer({
             />
           )}
           <div className="flex gap-1.5 items-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
-                    onClick={openUpload}
-                    disabled={isSending}
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Attach media</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Hide upload for NIP-17 (encrypted uploads not yet supported) */}
+            {conversation.protocol !== "nip-17" && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
+                      onClick={openUpload}
+                      disabled={isSending}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>Attach media</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
