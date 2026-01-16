@@ -42,6 +42,7 @@ export interface CachedRelayList {
   event: NostrEvent;
   read: string[];
   write: string[];
+  inbox?: string[]; // NIP-17 private inbox relays (kind 10050)
   updatedAt: number;
 }
 

@@ -78,7 +78,22 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
     // Not in store, continue to network fetch
   }
 
-  // 2. Build relay list to query: participant's outbox + ALL aggregators
+  // 2. Check if we already have inbox relays cached
+  try {
+    const cached = await relayListCache.get(pubkey);
+    if (cached?.inbox && cached.inbox.length > 0) {
+      console.log(
+        `[NIP-17] ✅ Using cached inbox relays for ${pubkey.slice(0, 8)}:`,
+        cached.inbox.length,
+        "relays",
+      );
+      return cached.inbox;
+    }
+  } catch {
+    // Cache miss, continue to fetch
+  }
+
+  // 3. Build relay list to query: participant's outbox + ALL aggregators
   const relaysToQuery: string[] = [];
 
   try {
@@ -111,14 +126,14 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
     `[NIP-17] Fetching inbox relays for ${pubkey.slice(0, 8)} from ${uniqueRelays.length} relays (trying harder)`,
   );
 
-  // 3. Fetch from relays with aggressive timeout and retry
+  // 4. Fetch from relays with aggressive timeout and retry
   try {
     const events = await firstValueFrom(
       pool
         .request(
           uniqueRelays,
           [{ kinds: [DM_RELAY_LIST_KIND], authors: [pubkey], limit: 1 }],
-          { eventStore },
+          { eventStore }, // Events auto-added to EventStore → triggers relay-list-cache
         )
         .pipe(
           toArray(),
@@ -131,9 +146,11 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
       const latest = events.reduce((a, b) =>
         a.created_at > b.created_at ? a : b,
       );
+
+      // Event is already in EventStore and will be cached by relay-list-cache subscription
       const relays = parseRelayTags(latest);
       console.log(
-        `[NIP-17] ✅ Fetched inbox relays for ${pubkey.slice(0, 8)}:`,
+        `[NIP-17] ✅ Fetched and cached inbox relays for ${pubkey.slice(0, 8)}:`,
         relays.length,
         "relays",
       );
