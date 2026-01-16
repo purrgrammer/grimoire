@@ -702,7 +702,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
             GiftWrapBlueprint,
             activePubkey,
             rumor,
-            actionOpts,
           );
 
           console.log(

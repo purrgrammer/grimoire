@@ -440,13 +440,11 @@ class GiftWrapService {
       .subscription(relays, [reqFilter], { eventStore })
       .subscribe({
         next: (response) => {
-          if (response.type === "EVENT") {
+          // SubscriptionResponse can be NostrEvent or other types
+          // Events are automatically added to eventStore, just log receipt
+          if (typeof response === "object" && response && "id" in response) {
             console.log(
-              `[GiftWrap] 📨 Received gift wrap ${response.event.id.slice(0, 8)} from relay`,
-            );
-          } else if (response.type === "EOSE") {
-            console.log(
-              `[GiftWrap] ✓ EOSE from ${response.relayUrl} (subscription stays open)`,
+              `[GiftWrap] 📨 Received gift wrap ${response.id.slice(0, 8)} from relay`,
             );
           }
         },
