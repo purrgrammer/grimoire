@@ -22,24 +22,43 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 
 export interface EventDetailViewerProps {
-  pointer: EventPointer | AddressPointer;
+  pointer?: EventPointer | AddressPointer;
+  rawEvent?: unknown; // For unsigned events (e.g., NIP-17 rumors) passed directly
 }
 
 /**
  * EventDetailViewer - Detailed view for a single event
  * Shows compact metadata header and rendered content
  */
-export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
-  const event = useNostrEvent(pointer);
+export function EventDetailViewer({
+  pointer,
+  rawEvent,
+}: EventDetailViewerProps) {
+  // If rawEvent provided, use it directly (for unsigned events like rumors)
+  // Otherwise, fetch event from store/relays using pointer
+  const fetchedEvent = useNostrEvent(pointer);
+  const event = (rawEvent as any) || fetchedEvent;
+
   const [showJson, setShowJson] = useState(false);
   const { copy: copyBech32, copied: copiedBech32 } = useCopy();
   const { relays: relayStates } = useRelayState();
 
-  // Loading state
-  if (!event) {
+  // Loading state (only show if fetching and no rawEvent provided)
+  if (!event && !rawEvent) {
     return (
       <div className="flex flex-col h-full p-8">
         <EventDetailSkeleton />
+      </div>
+    );
+  }
+
+  // If still no event (shouldn't happen with rawEvent), show error
+  if (!event) {
+    return (
+      <div className="flex flex-col h-full p-8">
+        <div className="text-center text-muted-foreground">
+          <p>Event not available</p>
+        </div>
       </div>
     );
   }
@@ -49,19 +68,30 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
   const relays = seenRelaysSet ? Array.from(seenRelaysSet) : undefined;
 
   // Generate nevent/naddr bech32 ID for display (always use nevent, not note)
-  const bech32Id =
-    "id" in pointer
-      ? nip19.neventEncode({
-          id: event.id,
-          relays: relays,
-          author: event.pubkey,
-        })
-      : nip19.naddrEncode({
-          kind: event.kind,
-          pubkey: event.pubkey,
-          identifier: getTagValue(event, "d") || "",
-          relays: relays,
-        });
+  // For unsigned events (rumors), we won't have an ID, so show kind info instead
+  let bech32Id: string;
+  try {
+    if (pointer && "id" in pointer) {
+      bech32Id = nip19.neventEncode({
+        id: event.id,
+        relays: relays,
+        author: event.pubkey,
+      });
+    } else if (pointer) {
+      bech32Id = nip19.naddrEncode({
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: getTagValue(event, "d") || "",
+        relays: relays,
+      });
+    } else {
+      // Raw event without pointer (e.g., unsigned rumor)
+      bech32Id = `kind:${event.kind} (unsigned)`;
+    }
+  } catch {
+    // Fallback for events without proper IDs
+    bech32Id = `kind:${event.kind} event`;
+  }
 
   // Get relay state for each relay
   const relayStatesForEvent = relays
@@ -74,26 +104,33 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
     (r) => r.state?.connectionState === "connected",
   ).length;
 
+  // Check if this is an unsigned event
+  const isUnsigned = !pointer;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Compact Header - Single Line */}
       <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between gap-3">
         {/* Left: Event ID */}
-        <button
-          onClick={() => copyBech32(bech32Id)}
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors truncate min-w-0"
-          title={bech32Id}
-          aria-label="Copy event ID"
-        >
-          {copiedBech32 ? (
-            <CopyCheck className="size-3 flex-shrink-0" />
-          ) : (
-            <Copy className="size-3 flex-shrink-0" />
-          )}
-          <code className="truncate">
-            {bech32Id.slice(0, 16)}...{bech32Id.slice(-8)}
-          </code>
-        </button>
+        {isUnsigned ? (
+          <div className="flex-1" />
+        ) : (
+          <button
+            onClick={() => copyBech32(bech32Id)}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors truncate min-w-0"
+            title={bech32Id}
+            aria-label="Copy event ID"
+          >
+            {copiedBech32 ? (
+              <CopyCheck className="size-3 flex-shrink-0" />
+            ) : (
+              <Copy className="size-3 flex-shrink-0" />
+            )}
+            <code className="truncate">
+              {bech32Id.slice(0, 16)}...{bech32Id.slice(-8)}
+            </code>
+          </button>
+        )}
 
         {/* Right: Relay Count and JSON Toggle */}
         <div className="flex items-center gap-3 flex-shrink-0">

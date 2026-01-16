@@ -7,6 +7,7 @@ import { Kind3DetailView } from "./ContactListRenderer";
 import { RepostRenderer } from "./RepostRenderer";
 import { Kind7Renderer } from "./ReactionRenderer";
 import { Kind9Renderer } from "./ChatMessageRenderer";
+import { DMRumorRenderer } from "./DMRumorRenderer";
 import { LiveChatMessageRenderer } from "./LiveChatMessageRenderer";
 import { Kind20Renderer } from "./PictureRenderer";
 import { Kind21Renderer } from "./VideoRenderer";
@@ -153,6 +154,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   7: Kind7Renderer, // Reaction
   9: Kind9Renderer, // Chat Message (NIP-C7)
   11: Kind1Renderer, // Public Thread Reply (NIP-10)
+  14: DMRumorRenderer, // Private DM Rumor (NIP-17)
   16: RepostRenderer, // Generic Repost
   17: Kind7Renderer, // Reaction (NIP-25)
   20: Kind20Renderer, // Picture (NIP-68)
@@ -350,6 +352,7 @@ export {
 } from "./RepostRenderer";
 export { Kind7Renderer } from "./ReactionRenderer";
 export { Kind9Renderer } from "./ChatMessageRenderer";
+export { DMRumorRenderer } from "./DMRumorRenderer";
 export {
   LiveChatMessageRenderer,
   Kind1311Renderer,

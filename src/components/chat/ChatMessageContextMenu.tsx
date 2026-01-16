@@ -49,7 +49,17 @@ export function ChatMessageContextMenu({
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
 
+  // Check if this is an unsigned event (e.g., NIP-17 rumor)
+  // Unsigned events don't have a signature and may not have a valid ID
+  const isUnsigned = !event.sig || event.sig === "";
+
   const openEventDetail = () => {
+    if (isUnsigned) {
+      // For unsigned events, pass the raw event directly
+      addWindow("open", { rawEvent: event });
+      return;
+    }
+
     let pointer;
     // For replaceable/parameterized replaceable events, use AddressPointer
     if (isAddressableKind(event.kind)) {
@@ -140,14 +150,16 @@ export function ChatMessageContextMenu({
             <ExternalLink className="size-4 mr-2" />
             Open Event
           </ContextMenuItem>
-          <ContextMenuItem onClick={copyEventId}>
-            {copied ? (
-              <Check className="size-4 mr-2 text-green-500" />
-            ) : (
-              <Copy className="size-4 mr-2" />
-            )}
-            {copied ? "Copied!" : "Copy ID"}
-          </ContextMenuItem>
+          {!isUnsigned && (
+            <ContextMenuItem onClick={copyEventId}>
+              {copied ? (
+                <Check className="size-4 mr-2 text-green-500" />
+              ) : (
+                <Copy className="size-4 mr-2" />
+              )}
+              {copied ? "Copied!" : "Copy ID"}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={viewEventJson}>
             <FileJson className="size-4 mr-2" />
             View JSON

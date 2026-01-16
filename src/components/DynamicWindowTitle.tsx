@@ -178,7 +178,11 @@ function generateRawCommand(appId: string, props: any): string {
       return props.url ? `relay ${props.url}` : "relay";
 
     case "open":
-      if (props.pointer) {
+      if (props.rawEvent) {
+        // For raw events (unsigned rumors, etc.)
+        const event = props.rawEvent as any;
+        return `open (kind ${event.kind})`;
+      } else if (props.pointer) {
         try {
           if ("id" in props.pointer) {
             const nevent = nip19.neventEncode({ id: props.pointer.id });

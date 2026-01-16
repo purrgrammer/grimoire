@@ -105,6 +105,9 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
 
+  // Check if this is an unsigned event
+  const isUnsigned = !event.sig || event.sig === "";
+
   const openEventDetail = () => {
     let pointer;
     // For replaceable/parameterized replaceable events, use AddressPointer
@@ -177,19 +180,24 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={openEventDetail}>
-          <ExternalLink className="size-4 mr-2" />
-          Open
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={copyEventId}>
-          {copied ? (
-            <Check className="size-4 mr-2 text-green-500" />
-          ) : (
-            <Copy className="size-4 mr-2" />
-          )}
-          {copied ? "Copied!" : "Copy ID"}
-        </DropdownMenuItem>
+        {!isUnsigned && (
+          <>
+            <DropdownMenuItem onClick={openEventDetail}>
+              <ExternalLink className="size-4 mr-2" />
+              Open
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={copyEventId}>
+              {copied ? (
+                <Check className="size-4 mr-2 text-green-500" />
+              ) : (
+                <Copy className="size-4 mr-2" />
+              )}
+              {copied ? "Copied!" : "Copy ID"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onClick={viewEventJson}>
           <FileJson className="size-4 mr-2" />
           View JSON

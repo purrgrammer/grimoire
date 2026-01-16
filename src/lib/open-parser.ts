@@ -21,7 +21,8 @@ export interface AddressPointer {
 }
 
 export interface ParsedOpenCommand {
-  pointer: EventPointer | AddressPointer;
+  pointer?: EventPointer | AddressPointer;
+  rawEvent?: unknown; // Raw event JSON for unsigned events (e.g., NIP-17 rumors)
 }
 
 /**
@@ -32,8 +33,39 @@ export interface ParsedOpenCommand {
  * - naddr1... (bech32 naddr for addressable events)
  * - abc123... (64-char hex event ID)
  * - kind:pubkey:d-tag (address pointer format)
+ * - --json <raw-event> (raw JSON event object for unsigned events)
  */
 export function parseOpenCommand(args: string[]): ParsedOpenCommand {
+  // Check for --json flag
+  const jsonIndex = args.indexOf("--json");
+  if (jsonIndex !== -1) {
+    const jsonString = args[jsonIndex + 1];
+    if (!jsonString) {
+      throw new Error("--json flag requires a JSON event string");
+    }
+
+    try {
+      const rawEvent = JSON.parse(jsonString);
+      // Basic validation that it looks like a Nostr event
+      if (
+        typeof rawEvent !== "object" ||
+        !rawEvent ||
+        typeof rawEvent.kind !== "number" ||
+        typeof rawEvent.content !== "string"
+      ) {
+        throw new Error(
+          "Invalid event JSON: must be an object with kind and content",
+        );
+      }
+      return { rawEvent };
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(`Invalid JSON: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
   const identifier = args[0];
 
   if (!identifier) {

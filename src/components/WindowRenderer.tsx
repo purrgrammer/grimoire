@@ -169,7 +169,12 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         );
         break;
       case "open":
-        content = <EventDetailViewer pointer={window.props.pointer} />;
+        content = (
+          <EventDetailViewer
+            pointer={window.props.pointer}
+            rawEvent={window.props.rawEvent}
+          />
+        );
         break;
       case "profile":
         content = <ProfileViewer pubkey={window.props.pubkey} />;
