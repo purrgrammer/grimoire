@@ -623,8 +623,12 @@ class GiftWrapService {
 
     for (const gw of pending) {
       try {
-        await this.decrypt(gw.id);
-        success++;
+        const rumor = await this.decrypt(gw.id);
+        if (rumor) {
+          success++;
+        } else {
+          error++;
+        }
       } catch {
         error++;
       }

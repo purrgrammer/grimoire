@@ -12,12 +12,14 @@ import {
   Copy,
   CopyCheck,
   Lock,
+  Unlock,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
+import giftWrapService from "@/services/gift-wrap";
 import type { NostrEvent } from "@/types/nostr";
 import type {
   ChatProtocol,
@@ -721,6 +723,54 @@ export function ChatViewer({
   // State for tooltip open (for mobile tap support)
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
+  // For NIP-17: Get pending gift wrap count for this conversation
+  const decryptStates = use$(giftWrapService.decryptStates$);
+  const giftWraps = use$(giftWrapService.giftWraps$);
+  const [isDecryptingPending, setIsDecryptingPending] = useState(false);
+
+  // Calculate pending gift wraps for this conversation (NIP-17 only)
+  // Only count "pending" status, not "error" status
+  const pendingCount = useMemo(() => {
+    if (conversation?.protocol !== "nip-17" || !decryptStates || !giftWraps) {
+      return 0;
+    }
+
+    // Count gift wraps that are pending (excluding errors)
+    let count = 0;
+    for (const gw of giftWraps) {
+      const state = decryptStates.get(gw.id);
+      if (state?.status === "pending") {
+        // Check if this gift wrap belongs to this conversation
+        // For now, count all pending since we can't easily match to conversation
+        count++;
+      }
+    }
+    return count;
+  }, [conversation?.protocol, decryptStates, giftWraps]);
+
+  // Handle decrypting pending messages for NIP-17
+  const handleDecryptPending = useCallback(async () => {
+    if (conversation?.protocol !== "nip-17" || !activeAccount?.signer) {
+      return;
+    }
+
+    setIsDecryptingPending(true);
+    try {
+      const result = await giftWrapService.decryptAll();
+      if (result.success > 0) {
+        toast.success(`Decrypted ${result.success} messages`);
+      }
+      if (result.error > 0) {
+        toast.error(`Failed to decrypt ${result.error} messages`);
+      }
+    } catch (error) {
+      console.error("[Chat] Failed to decrypt messages:", error);
+      toast.error("Failed to decrypt messages");
+    } finally {
+      setIsDecryptingPending(false);
+    }
+  }, [conversation?.protocol, activeAccount?.signer]);
+
   // Handle sending messages with error handling
   const handleSend = async (
     content: string,
@@ -1130,9 +1180,33 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            {/* Lock icon for encrypted conversations */}
+            {/* Lock button for NIP-17 encrypted conversations */}
             {conversation.protocol === "nip-17" && (
-              <Lock className="size-3.5" />
+              <button
+                onClick={handleDecryptPending}
+                disabled={
+                  pendingCount === 0 ||
+                  isDecryptingPending ||
+                  !activeAccount?.signer
+                }
+                className="hover:text-foreground transition-colors disabled:opacity-50 flex items-center gap-0.5"
+                aria-label={
+                  pendingCount > 0
+                    ? `Decrypt ${pendingCount} pending messages`
+                    : "Encrypted conversation"
+                }
+              >
+                {isDecryptingPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : pendingCount > 0 ? (
+                  <>
+                    <Unlock className="size-3.5" />
+                    <span>{pendingCount}</span>
+                  </>
+                ) : (
+                  <Lock className="size-3.5" />
+                )}
+              </button>
             )}
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />

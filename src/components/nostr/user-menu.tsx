@@ -116,6 +116,25 @@ export default function UserMenu() {
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
 
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-crosshair"
+                onClick={() => {
+                  addWindow("inbox", {}, "Inbox");
+                }}
+              >
+                <Mail className="size-4 mr-2" />
+                <span className="flex-1">Inbox</span>
+                {showPendingBadge && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                  >
+                    {pendingCount}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
+
               {relays && relays.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
@@ -167,23 +186,6 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="cursor-crosshair"
-                onClick={() => {
-                  addWindow("inbox", {}, "Inbox");
-                }}
-              >
-                <Mail className="size-4 mr-2" />
-                <span className="flex-1">Private Messages</span>
-                {showPendingBadge && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-2 bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                  >
-                    {pendingCount}
-                  </Badge>
-                )}
-              </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">
                   <Palette className="size-4 mr-2" />

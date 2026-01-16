@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
+import { nip19, NostrEvent } from "nostr-tools";
 import {
   Mail,
   MailOpen,
@@ -11,18 +12,20 @@ import {
   Clock,
   Radio,
   RefreshCw,
-  MessageSquare,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { RelayLink } from "@/components/nostr/RelayLink";
 import { UserName } from "@/components/nostr/UserName";
 
@@ -30,8 +33,8 @@ import giftWrapService from "@/services/gift-wrap";
 import accounts from "@/services/accounts";
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "@/hooks/useLocale";
-import type { DecryptStatus } from "@/services/gift-wrap";
 import { useGrimoire } from "@/core/state";
+import { RichText } from "./nostr/RichText";
 
 /**
  * InboxViewer - Manage private messages (NIP-17/59 gift wraps)
@@ -137,96 +140,18 @@ function InboxViewer() {
 
   return (
     <div className="h-full w-full flex flex-col bg-background text-foreground">
-      {/* Settings Section */}
-      <div className="border-b border-border p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail className="size-5 text-muted-foreground" />
-            <span className="font-semibold">Private Messages</span>
+      {/* Compact Title Bar (similar to ChatViewer) */}
+      <div className="pl-2 pr-0 border-b w-full py-1">
+        <div className="flex items-center justify-between gap-1">
+          {/* Left side: Icon + Title */}
+          <div className="flex items-center gap-1 min-w-0">
+            <Mail className="size-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-sm font-semibold">Inbox</span>
           </div>
-          <div className="flex items-center gap-2">
-            {syncStatus === "syncing" && (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={!settings?.enabled || syncStatus === "syncing"}
-            >
-              <RefreshCw className="size-4" />
-            </Button>
-          </div>
-        </div>
 
-        {/* Enable/Disable Toggle */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="inbox-enabled"
-            checked={settings?.enabled ?? false}
-            onCheckedChange={handleToggleEnabled}
-          />
-          <label htmlFor="inbox-enabled" className="text-sm cursor-pointer">
-            Enable gift wrap sync
-          </label>
-        </div>
-
-        {/* Auto-decrypt Toggle */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="auto-decrypt"
-            checked={settings?.autoDecrypt ?? false}
-            onCheckedChange={handleToggleAutoDecrypt}
-            disabled={!settings?.enabled}
-          />
-          <label
-            htmlFor="auto-decrypt"
-            className={cn(
-              "text-sm cursor-pointer",
-              !settings?.enabled && "text-muted-foreground",
-            )}
-          >
-            Auto-decrypt messages
-          </label>
-        </div>
-      </div>
-
-      {/* Inbox Relays Section */}
-      {inboxRelays && inboxRelays.length > 0 && (
-        <div className="border-b border-border">
-          <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground flex items-center gap-2">
-            <Radio className="size-3.5" />
-            <span>DM Inbox Relays (kind 10050)</span>
-          </div>
-          <div className="px-4 py-2 space-y-1">
-            {inboxRelays.map((relay) => (
-              <RelayLink
-                key={relay}
-                url={relay}
-                className="text-sm"
-                iconClassname="size-4"
-                urlClassname="text-sm"
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {inboxRelays && inboxRelays.length === 0 && settings?.enabled && (
-        <div className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="size-4 text-yellow-500" />
-            <span>No DM inbox relays configured (kind 10050)</span>
-          </div>
-        </div>
-      )}
-
-      {/* Decrypt Status Section */}
-      {settings?.enabled && counts.total > 0 && (
-        <div className="border-b border-border">
-          <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground flex items-center justify-between">
-            <span>Gift Wraps ({counts.total})</span>
-            <div className="flex items-center gap-2">
+          {/* Center: Decrypt stats badges */}
+          {settings?.enabled && counts.total > 0 && (
+            <div className="flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
               <StatusBadge status="success" count={counts.success} />
               <StatusBadge
                 status="pending"
@@ -234,129 +159,167 @@ function InboxViewer() {
               />
               <StatusBadge status="error" count={counts.error} />
             </div>
-          </div>
+          )}
 
-          {/* Only show manual decrypt options when auto-decrypt is OFF */}
-          {!settings?.autoDecrypt &&
-            (counts.pending > 0 || counts.decrypting > 0) && (
-              <div className="px-4 py-3 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {counts.pending + counts.decrypting} messages waiting to be
-                  decrypted
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
+          {/* Right side: Decrypt + Refresh + Relay Dropdown + Settings Dropdown */}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground p-1">
+            {/* Decrypt action when auto-decrypt is off and there are pending messages */}
+            {settings?.enabled &&
+              !settings?.autoDecrypt &&
+              (counts.pending > 0 || counts.decrypting > 0) && (
+                <button
                   onClick={handleDecryptAll}
                   disabled={isDecryptingAll || !account?.signer}
+                  className="hover:text-foreground transition-colors disabled:opacity-50"
+                  aria-label={`Decrypt ${counts.pending + counts.decrypting} pending messages`}
                 >
                   {isDecryptingAll ? (
-                    <>
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Decrypting...
-                    </>
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <>
-                      <Unlock className="size-4 mr-2" />
-                      Decrypt All
-                    </>
+                    <Unlock className="size-4" />
                   )}
-                </Button>
-              </div>
+                </button>
+              )}
+
+            {/* Sync status indicator */}
+            {syncStatus === "syncing" && (
+              <Loader2 className="size-4 animate-spin" />
             )}
 
-          {/* Show auto-decrypt status when enabled and there are pending messages */}
-          {settings?.autoDecrypt &&
-            (counts.pending > 0 || counts.decrypting > 0) && (
-              <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                <span>Auto-decrypting messages...</span>
-              </div>
-            )}
+            {/* Refresh button */}
+            <button
+              onClick={handleRefresh}
+              disabled={!settings?.enabled || syncStatus === "syncing"}
+              className="hover:text-foreground transition-colors disabled:opacity-50"
+              aria-label="Refresh inbox"
+            >
+              <RefreshCw className="size-4" />
+            </button>
+
+            {/* Relay dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="hover:text-foreground transition-colors disabled:opacity-50 flex items-center gap-0.5">
+                  <Radio className="size-4" />
+                  <span>{inboxRelays?.length ?? 0}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="text-xs">
+                  DM Inbox Relays (kind 10050)
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {inboxRelays && inboxRelays.length > 0 ? (
+                  <div className="px-2 py-1 space-y-1 max-h-48 overflow-y-auto">
+                    {inboxRelays.map((relay) => (
+                      <RelayLink
+                        key={relay}
+                        url={relay}
+                        className="text-xs"
+                        iconClassname="size-3"
+                        urlClassname="text-xs"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <DropdownMenuItem disabled className="text-xs">
+                    <AlertCircle className="size-3 mr-2 text-yellow-500" />
+                    No relays configured
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Settings dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="hover:text-foreground transition-colors">
+                  <Settings className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs">
+                  Inbox Settings
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={settings?.enabled ?? false}
+                  onCheckedChange={handleToggleEnabled}
+                  className="text-xs"
+                >
+                  Enable inbox sync
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={settings?.autoDecrypt ?? false}
+                  onCheckedChange={handleToggleAutoDecrypt}
+                  disabled={!settings?.enabled}
+                  className="text-xs"
+                >
+                  Auto-decrypt messages
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Conversations Section */}
+      {/* Compact Conversations List (mail-like) */}
       <div className="flex-1 overflow-y-auto">
-        {settings?.enabled && conversations && conversations.length > 0 && (
+        {settings?.enabled && conversations && conversations.length > 0 ? (
           <>
-            <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground flex items-center gap-2">
-              <MessageSquare className="size-3.5" />
-              <span>Recent Conversations ({conversations.length})</span>
-            </div>
             {conversations.map((conv) => (
-              <ConversationRow
+              <CompactConversationRow
                 key={conv.id}
                 conversation={conv}
                 currentUserPubkey={account.pubkey}
                 onClick={() => {
-                  // Build chat identifier from participants as ProtocolIdentifier
-                  // For self-chat, use own pubkey; for others, use comma-separated hex pubkeys
                   const others = conv.participants.filter(
                     (p) => p !== account.pubkey,
                   );
-                  // Always use hex pubkeys, not $me, to ensure consistent conversation IDs
                   const value =
                     others.length === 0 ? account.pubkey : others.join(",");
-                  addWindow("chat", {
-                    identifier: {
-                      type: "dm-recipient" as const,
-                      value,
-                      relays: [],
+
+                  // Generate command string for edit functionality
+                  const recipientPubkeys =
+                    others.length === 0 ? [account.pubkey] : others;
+                  const npubs = recipientPubkeys.map((pk) =>
+                    nip19.npubEncode(pk),
+                  );
+                  const commandString = `chat ${npubs.join(",")}`;
+
+                  addWindow(
+                    "chat",
+                    {
+                      identifier: {
+                        type: "dm-recipient" as const,
+                        value,
+                        relays: [],
+                      },
+                      protocol: "nip-17",
                     },
-                    protocol: "nip-17",
-                  });
+                    commandString,
+                  );
                 }}
               />
             ))}
           </>
-        )}
-
-        {settings?.enabled &&
-          (!conversations || conversations.length === 0) &&
-          counts.success === 0 && (
-            <div className="text-center text-muted-foreground font-mono text-sm p-8">
-              <MailOpen className="size-8 mx-auto mb-2 opacity-50" />
-              <p>No conversations yet</p>
-              {counts.pending > 0 && (
-                <p className="text-xs mt-2">
-                  Decrypt pending messages to see conversations
-                </p>
-              )}
-            </div>
-          )}
-
-        {!settings?.enabled && (
+        ) : settings?.enabled && counts.success === 0 ? (
+          <div className="text-center text-muted-foreground font-mono text-sm p-8">
+            <MailOpen className="size-8 mx-auto mb-2 opacity-50" />
+            <p>No conversations yet</p>
+            {counts.pending > 0 && (
+              <p className="text-xs mt-2">
+                Decrypt pending messages to see conversations
+              </p>
+            )}
+          </div>
+        ) : !settings?.enabled ? (
           <div className="text-center text-muted-foreground font-mono text-sm p-8">
             <Mail className="size-8 mx-auto mb-2 opacity-50" />
-            <p>Enable gift wrap sync to receive private messages</p>
+            <p>Enable inbox sync to receive private messages</p>
           </div>
-        )}
+        ) : null}
       </div>
-
-      {/* Pending Gift Wraps List (for manual decrypt) */}
-      {settings?.enabled && !settings.autoDecrypt && counts.pending > 0 && (
-        <PendingGiftWrapsList
-          decryptStates={decryptStates}
-          giftWraps={giftWraps ?? []}
-          onDecrypt={async (id) => {
-            try {
-              const result = await giftWrapService.decrypt(id);
-              if (result) {
-                toast.success("Message decrypted");
-              } else {
-                // Decryption failed but didn't throw
-                const state = giftWrapService.decryptStates$.value.get(id);
-                toast.error(state?.error || "Failed to decrypt message");
-              }
-            } catch (err) {
-              toast.error(
-                err instanceof Error ? err.message : "Decryption failed",
-              );
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -387,7 +350,10 @@ function StatusBadge({ status, count }: StatusBadgeProps) {
   const { icon: Icon, className } = config[status];
 
   return (
-    <Badge variant="outline" className={cn("gap-1", className)}>
+    <Badge
+      variant="outline"
+      className={cn("gap-0.5 h-5 px-1.5 text-xs", className)}
+    >
       <Icon className="size-3" />
       {count}
     </Badge>
@@ -404,7 +370,11 @@ interface ConversationRowProps {
   onClick: () => void;
 }
 
-function ConversationRow({
+/**
+ * CompactConversationRow - Mail-like compact conversation list item
+ * Shows: username text preview timestamp (all inline, minimal spacing)
+ */
+function CompactConversationRow({
   conversation,
   currentUserPubkey,
   onClick,
@@ -417,138 +387,60 @@ function ConversationRow({
   // Self-conversation (saved messages)
   const isSelfConversation = otherParticipants.length === 0;
 
+  // Extract subject from last message if present (look for "subject" tag in NIP-17 messages)
+  // For now, we don't have subject tag support, so this is left for future
+  const subject = undefined;
+
   return (
     <div
-      className="border-b border-border px-4 py-2 hover:bg-muted/30 cursor-pointer transition-colors"
+      className="border-b border-border px-2 py-0.5 hover:bg-muted/50 cursor-pointer transition-colors"
       onClick={onClick}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline flex-wrap">
-            {isSelfConversation ? (
-              <span className="text-sm font-medium">Saved Messages</span>
-            ) : (
-              <>
-                {otherParticipants.slice(0, 3).map((pubkey, i) => (
-                  <span key={pubkey} className="inline-flex items-baseline">
-                    {i > 0 && (
-                      <span className="text-muted-foreground">,&nbsp;</span>
-                    )}
-                    <UserName pubkey={pubkey} className="text-sm font-medium" />
-                  </span>
-                ))}
-                {otherParticipants.length > 3 && (
-                  <span className="text-xs text-muted-foreground">
-                    &nbsp;+{otherParticipants.length - 3}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-          {conversation.lastMessage && (
-            <p className="text-xs text-muted-foreground truncate">
-              {conversation.lastMessage.content}
-            </p>
+      <div className="flex items-baseline gap-1 text-xs">
+        {/* Username (inline with text) */}
+        <span className="font-medium flex-shrink-0">
+          {isSelfConversation ? (
+            "Saved Messages"
+          ) : (
+            <>
+              {otherParticipants.slice(0, 2).map((pubkey, i) => (
+                <span key={pubkey}>
+                  {i > 0 && <span className="text-muted-foreground">, </span>}
+                  <UserName pubkey={pubkey} className="text-xs font-medium" />
+                </span>
+              ))}
+              {otherParticipants.length > 2 && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  +{otherParticipants.length - 2}
+                </span>
+              )}
+            </>
           )}
-        </div>
+        </span>
+
+        {/* Optional subject (future feature) */}
+        {subject && (
+          <span className="flex-shrink-0 text-muted-foreground font-medium">
+            [{subject}]
+          </span>
+        )}
+
+        {/* Text preview (flexible width, truncate) - flows right after name */}
+        <span className="flex-1 min-w-0 truncate line-clamp-1 text-muted-foreground [&_img]:size-3.5 [&_img]:align-text-bottom">
+          <RichText
+            event={conversation.lastMessage as NostrEvent}
+            className="inline"
+          />
+        </span>
+
+        {/* Timestamp (fixed width) */}
         {conversation.lastMessage && (
-          <span className="text-xs text-muted-foreground flex-shrink-0">
+          <span className="w-12 flex-shrink-0 text-right text-muted-foreground text-[10px]">
             {formatTimestamp(conversation.lastMessage.created_at)}
           </span>
         )}
       </div>
-    </div>
-  );
-}
-
-interface PendingGiftWrapsListProps {
-  decryptStates:
-    | Map<string, { status: DecryptStatus; error?: string }>
-    | undefined;
-  giftWraps: { id: string; created_at: number }[];
-  onDecrypt: (id: string) => Promise<void>;
-}
-
-function PendingGiftWrapsList({
-  decryptStates,
-  giftWraps,
-  onDecrypt,
-}: PendingGiftWrapsListProps) {
-  const [decryptingIds, setDecryptingIds] = useState<Set<string>>(new Set());
-
-  const pendingWraps = giftWraps.filter((gw) => {
-    const state = decryptStates?.get(gw.id);
-    return state?.status === "pending" || state?.status === "error";
-  });
-
-  if (pendingWraps.length === 0) return null;
-
-  return (
-    <div className="border-t border-border max-h-48 overflow-y-auto">
-      <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground">
-        Pending Decryption
-      </div>
-      {pendingWraps.slice(0, 10).map((gw) => {
-        const state = decryptStates?.get(gw.id);
-        const isDecrypting = decryptingIds.has(gw.id);
-
-        return (
-          <div
-            key={gw.id}
-            className="border-b border-border px-4 py-2 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              {state?.status === "error" ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{state.error || "Decryption failed"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Lock className="size-4 text-muted-foreground flex-shrink-0" />
-              )}
-              <span className="text-xs text-muted-foreground font-mono truncate">
-                {gw.id.slice(0, 16)}...
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {formatTimestamp(gw.created_at)}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2"
-              disabled={isDecrypting}
-              onClick={async () => {
-                setDecryptingIds((prev) => new Set([...prev, gw.id]));
-                try {
-                  await onDecrypt(gw.id);
-                } finally {
-                  setDecryptingIds((prev) => {
-                    const next = new Set(prev);
-                    next.delete(gw.id);
-                    return next;
-                  });
-                }
-              }}
-            >
-              {isDecrypting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Unlock className="size-4" />
-              )}
-            </Button>
-          </div>
-        );
-      })}
-      {pendingWraps.length > 10 && (
-        <div className="px-4 py-2 text-xs text-muted-foreground text-center">
-          And {pendingWraps.length - 10} more...
-        </div>
-      )}
     </div>
   );
 }
