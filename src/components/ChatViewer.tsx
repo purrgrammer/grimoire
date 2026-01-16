@@ -139,7 +139,7 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
  * Returns a string that can be passed to the `chat` command to open this conversation
  *
  * For NIP-29 groups: relay'group-id (without wss:// prefix)
- * For communikeys (NIP-CC): relay'pubkey or just pubkey
+ * For communikeys (NIP-CC): relay'pubkey (relay hint required)
  * For NIP-53 live activities: naddr1... encoding
  */
 function getChatIdentifier(conversation: Conversation): string | null {
@@ -156,16 +156,12 @@ function getChatIdentifier(conversation: Conversation): string | null {
   if (conversation.protocol === "communikeys") {
     const pubkey = conversation.metadata?.groupId; // For communikeys, groupId is the pubkey
     const relayUrl = conversation.metadata?.relayUrl;
-    if (!pubkey) return null;
 
-    // If there's a relay hint, include it
-    if (relayUrl) {
-      const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
-      return `${cleanRelay}'${pubkey}`;
-    }
+    // Communikeys require relay hints (from naddr or relay'pubkey format)
+    if (!pubkey || !relayUrl) return null;
 
-    // Otherwise just return the pubkey
-    return pubkey;
+    const cleanRelay = relayUrl.replace(/^wss?:\/\//, "");
+    return `${cleanRelay}'${pubkey}`;
   }
 
   if (conversation.protocol === "nip-53") {

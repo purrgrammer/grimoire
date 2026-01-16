@@ -45,9 +45,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    *   - relay.example.com'bitcoin-dev (NIP-29, wss:// prefix is optional)
    *   - naddr1... (kind 39000 group metadata address, NIP-29)
    *   - naddr1... (kind 10222 communikey definition, NIP-CC)
-   *   - relay.example.com'npub1xxx (NIP-CC communikey)
-   *   - npub1xxx (NIP-CC communikey, relays from kind 10222)
-   *   - hex-pubkey (NIP-CC communikey, relays from kind 10222)
+   *   - relay.example.com'npub1xxx (NIP-CC communikey with relay hint)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
     // Try naddr format first
@@ -123,17 +121,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         type: "group",
         value: groupId,
         relays: [relayUrl],
-      };
-    }
-
-    // NIP-CC bare communikey format: npub1xxx or hex pubkey
-    // Check if input is a valid pubkey (relays will be fetched from kind 10222)
-    const pubkey = this.extractPubkey(input);
-    if (pubkey) {
-      return {
-        type: "group",
-        value: pubkey,
-        relays: [], // Will be resolved from kind 10222
       };
     }
 

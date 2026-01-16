@@ -116,9 +116,9 @@ export function reconstructCommand(window: WindowInstance): string {
           }
         }
 
-        // NIP-CC communikeys: chat npub1... or chat relay'npub1...
+        // NIP-CC communikeys: chat relay'npub1... (relay hint required)
         if (protocol === "communikeys" && identifier.type === "group") {
-          const relayUrl = identifier.relays?.[0] || "";
+          const relayUrl = identifier.relays?.[0];
           const groupId = identifier.value; // This is a pubkey
 
           if (relayUrl && groupId) {
@@ -127,10 +127,8 @@ export function reconstructCommand(window: WindowInstance): string {
             return `chat ${cleanRelay}'${groupId}`;
           }
 
-          // If no relay hint, just return the pubkey
-          if (groupId) {
-            return `chat ${groupId}`;
-          }
+          // Fallback: communikeys should always have relay hints
+          return "chat";
         }
 
         // NIP-53 live activities: chat naddr1...
