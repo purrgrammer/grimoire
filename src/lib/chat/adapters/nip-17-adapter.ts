@@ -739,6 +739,19 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         // For self-chat, pass [activePubkey] instead of [] so the message is sent
         const recipients = isSelfChat ? [activePubkey] : others;
 
+        // Debug relay alignment for self-chat
+        if (isSelfChat) {
+          const ownInboxRelays =
+            conversation.metadata?.participantInboxRelays?.[activePubkey] || [];
+          const subscribedRelays = giftWrapService.inboxRelays$.value;
+          console.log(
+            `[NIP-17] 🔍 Self-chat relay check:`,
+            `\n  - Own inbox relays (will send to): ${ownInboxRelays.join(", ")}`,
+            `\n  - Subscribed relays (receiving from): ${subscribedRelays.join(", ")}`,
+            `\n  - Match: ${ownInboxRelays.length === subscribedRelays.length && ownInboxRelays.every((r) => subscribedRelays.includes(r))}`,
+          );
+        }
+
         await hub.run(SendWrappedMessage, recipients, content, actionOpts);
 
         if (isSelfChat) {
