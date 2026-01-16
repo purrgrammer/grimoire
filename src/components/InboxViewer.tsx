@@ -48,14 +48,10 @@ function InboxViewer() {
 
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
 
-  // Initialize service when account changes
-  useEffect(() => {
-    if (account) {
-      giftWrapService.init(account.pubkey, account.signer ?? null);
-    }
-  }, [account]);
+  // Note: Gift wrap service is now initialized globally in useAccountSync
+  // This ensures DM subscriptions are active even when inbox viewer isn't open
 
-  // Update signer when it changes
+  // Update signer when it changes (in case user switches signers)
   useEffect(() => {
     if (account?.signer) {
       giftWrapService.setSigner(account.signer);
