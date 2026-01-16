@@ -140,9 +140,21 @@ export async function unwrapAndUnseal(
       throw new GiftWrapError("Seal content is empty", "MISSING_CONTENT");
     }
 
-    // Validate rumor
+    // Validate rumor structure
+    if (!rumor || typeof rumor !== "object") {
+      throw new GiftWrapError(
+        `Rumor is not an object: ${typeof rumor}`,
+        "INVALID_RUMOR",
+      );
+    }
+
+    // Validate rumor has required fields
     if (!rumor.content || typeof rumor.content !== "string") {
       throw new GiftWrapError("Rumor missing content", "INVALID_RUMOR");
+    }
+
+    if (!rumor.kind || typeof rumor.kind !== "number") {
+      throw new GiftWrapError("Rumor missing kind", "INVALID_RUMOR");
     }
 
     // Convert rumor to NostrEvent (rumor has id but no sig)
@@ -159,9 +171,17 @@ export async function unwrapAndUnseal(
 
     // Provide helpful error messages for common issues
     if (message.includes("Unexpected token") || message.includes("JSON")) {
+      // Extract the content snippet from error message if available
+      const contentMatch = message.match(/"(.{0,50})/);
+      const snippet = contentMatch ? contentMatch[1] : "unknown";
+
       throw new GiftWrapError(
-        `Decrypted content is not valid JSON. This gift wrap may be malformed or use incompatible encryption. ` +
-          `Event ID: ${giftWrap.id.slice(0, 16)}... (${message})`,
+        `Gift wrap decryption produced plaintext instead of JSON seal event. ` +
+          `This gift wrap does NOT follow NIP-59 spec. ` +
+          `Decrypted content starts with: "${snippet}..." ` +
+          `Event ID: ${giftWrap.id.slice(0, 16)}... ` +
+          `This is likely: (1) A malformed gift wrap, (2) Wrong encryption method (NIP-04 vs NIP-44), ` +
+          `or (3) Incompatible NIP-44 implementations.`,
         "INVALID_SEAL",
       );
     }
