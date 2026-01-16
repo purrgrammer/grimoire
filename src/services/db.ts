@@ -95,49 +95,25 @@ export interface LocalSpellbook {
 }
 
 /**
- * Gift wrap envelope (kind 1059) - tracks outer layer
- * Records which gift wraps we've seen and their decryption status
+ * Decrypted gift wrap - cached decryption results
  */
-export interface GiftWrapEnvelope {
-  id: string; // gift wrap event ID (kind 1059)
-  recipientPubkey: string; // who it's addressed to (from p-tag)
-  event: NostrEvent; // full gift wrap event
-  status: "pending" | "decrypted" | "failed"; // decryption state
-  failureReason?: string; // if failed, why?
-  receivedAt: number; // when we first saw it
-  processedAt?: number; // when we attempted decryption
+export interface DecryptedGiftWrap {
+  giftWrapId: string; // kind 1059 event ID (primary key)
+  rumorId: string; // Unwrapped rumor ID
+  rumor: NostrEvent; // Actual unsigned event (JSON)
+  sealPubkey: string; // Who sent it (from seal)
+  decryptedAt: number; // When we decrypted
+  receivedAt: number; // Gift wrap created_at (for sorting)
 }
 
 /**
- * Decrypted rumor - the actual message content after unwrapping
- * Stores the seal (kind 13) and extracted rumor (unsigned event)
+ * Gift wrap decryption errors - tracks failed decrypt attempts
  */
-export interface DecryptedRumor {
-  giftWrapId: string; // links back to gift wrap (primary key)
-  recipientPubkey: string; // which of our accounts received this
-  senderPubkey: string; // from seal (who sent it)
-  seal: NostrEvent; // kind 13 seal event
-  rumor: NostrEvent; // the unsigned inner event
-  rumorCreatedAt: number; // canonical timestamp from rumor
-  rumorKind: number; // kind of the rumor (for filtering)
-  decryptedAt: number; // when we successfully decrypted it
-}
-
-/**
- * Conversation metadata - denormalized cache for fast conversation list queries
- * One entry per (sender, recipient) pair
- */
-export interface ConversationMetadata {
-  id: string; // `${senderPubkey}:${recipientPubkey}` (primary key)
-  senderPubkey: string; // who sent messages
-  recipientPubkey: string; // which of our accounts
-  lastMessageGiftWrapId: string; // ID of most recent gift wrap
-  lastMessageCreatedAt: number; // rumor created_at of most recent message
-  lastMessagePreview: string; // content preview for UI
-  lastMessageKind: number; // rumor kind of most recent message
-  messageCount: number; // total messages in conversation
-  unreadCount: number; // unread message count
-  updatedAt: number; // when this metadata was last updated
+export interface GiftWrapDecryptionError {
+  giftWrapId: string; // kind 1059 event ID (primary key)
+  attemptCount: number; // Number of failed decrypt attempts
+  lastAttempt: number; // Timestamp of last attempt
+  errorMessage: string; // Error message from last attempt
 }
 
 class GrimoireDb extends Dexie {
@@ -152,9 +128,8 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
-  giftWraps!: Table<GiftWrapEnvelope>;
-  decryptedRumors!: Table<DecryptedRumor>;
-  conversations!: Table<ConversationMetadata>;
+  decryptedGiftWraps!: Table<DecryptedGiftWrap>;
+  giftWrapErrors!: Table<GiftWrapDecryptionError>;
 
   constructor(name: string) {
     super(name);
@@ -431,6 +406,28 @@ class GrimoireDb extends Dexie {
         "&giftWrapId, recipientPubkey, senderPubkey, [senderPubkey+rumorCreatedAt], [recipientPubkey+senderPubkey], rumorCreatedAt",
       conversations:
         "&id, recipientPubkey, [recipientPubkey+lastMessageCreatedAt]",
+    });
+
+    // Version 18: Simplify gift wrap storage - use applesauce models + simple cache
+    this.version(18).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      dmRelayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      // Remove old gift wrap tables
+      giftWraps: null,
+      decryptedRumors: null,
+      conversations: null,
+      // Add new simplified tables
+      decryptedGiftWraps: "&giftWrapId, sealPubkey, receivedAt, decryptedAt",
+      giftWrapErrors: "&giftWrapId, lastAttempt",
     });
   }
 }
