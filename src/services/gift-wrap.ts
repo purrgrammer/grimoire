@@ -405,12 +405,12 @@ class GiftWrapService {
     }
   }
 
-  /** Subscribe to gift wraps for current user with batched relay connections */
+  /** Subscribe to gift wraps for current user with progressive loading */
   private subscribeToGiftWraps(relays: string[]) {
     if (!this.userPubkey) return;
 
     // Subscribe to gift wraps addressed to this user
-    const reqFilter = {
+    const baseFilter = {
       kinds: [kinds.GiftWrap],
       "#p": [this.userPubkey],
     };
@@ -421,7 +421,7 @@ class GiftWrapService {
       `Setting up timeline subscription for user ${this.userPubkey?.slice(0, 8)}`,
     );
     const sub = eventStore
-      .timeline(reqFilter)
+      .timeline(baseFilter)
       .pipe(map((events) => events.sort((a, b) => b.created_at - a.created_at)))
       .subscribe((giftWraps) => {
         dmDebug("GiftWrap", `Timeline update: ${giftWraps.length} gift wraps`);
@@ -476,28 +476,29 @@ class GiftWrapService {
 
     this.relaySubscription = sub;
 
-    // Progressive relay connection strategy to prevent overwhelming the browser
-    // Connect to relays in batches with delays to allow AUTH to complete
-    const INITIAL_BATCH_SIZE = 3; // Start with top 3 relays
-    const BATCH_SIZE = 2; // Then add 2 at a time
-    const BATCH_DELAY_MS = 1500; // 1.5s between batches (allows AUTH to complete)
-
     if (relays.length === 0) {
       dmWarn("GiftWrap", "No relays to connect to");
       return;
     }
 
+    // Progressive loading strategy to prevent overwhelming browser:
+    // 1. Initial REQ with LIMIT for recent messages (fast, allows AUTH to complete)
+    // 2. After delay, backfill with unlimited REQ for full history
+    const INITIAL_LIMIT = 20; // Load most recent 20 messages first
+    const BACKFILL_DELAY_MS = 3000; // 3s delay before backfilling history
+
     dmInfo(
       "GiftWrap",
-      `Connecting to ${relays.length} inbox relays progressively (batches of ${INITIAL_BATCH_SIZE}, then ${BATCH_SIZE})`,
+      `Connecting to ${relays.length} inbox relays with progressive loading (initial limit: ${INITIAL_LIMIT})`,
     );
 
-    // Connect to first batch immediately (most important relays)
-    const firstBatch = relays.slice(0, INITIAL_BATCH_SIZE);
-    dmInfo("GiftWrap", `Batch 1: Connecting to ${firstBatch.length} relays`);
+    // Step 1: Request recent messages with LIMIT
+    // This is fast, allows AUTH to complete, shows recent content quickly
+    const initialFilter = { ...baseFilter, limit: INITIAL_LIMIT };
+    dmInfo("GiftWrap", `Requesting ${INITIAL_LIMIT} most recent gift wraps`);
 
     const relaySubscription = pool
-      .subscription(firstBatch, [reqFilter], { eventStore })
+      .subscription(relays, [initialFilter], { eventStore })
       .subscribe({
         next: (response) => {
           if (typeof response === "object" && response && "id" in response) {
@@ -512,59 +513,31 @@ class GiftWrapService {
         },
       });
 
-    // Store relay subscription for cleanup
     this.subscriptions.push(relaySubscription);
 
-    // Connect to remaining relays progressively in batches
-    const remainingRelays = relays.slice(INITIAL_BATCH_SIZE);
-    if (remainingRelays.length > 0) {
-      dmInfo(
-        "GiftWrap",
-        `Will connect to ${remainingRelays.length} more relays progressively`,
-      );
+    // Step 2: After delay, backfill full history
+    // By now AUTH should be complete and initial messages are showing
+    setTimeout(() => {
+      dmInfo("GiftWrap", "Backfilling full gift wrap history");
 
-      // Progressive batching with delays
-      let batchNumber = 2;
-      for (let i = 0; i < remainingRelays.length; i += BATCH_SIZE) {
-        const batch = remainingRelays.slice(i, i + BATCH_SIZE);
-        const delay = batchNumber * BATCH_DELAY_MS;
+      const backfillSub = pool
+        .subscription(relays, [baseFilter], { eventStore })
+        .subscribe({
+          next: (response) => {
+            if (typeof response === "object" && response && "id" in response) {
+              dmDebug(
+                "GiftWrap",
+                `Backfill: Received gift wrap ${response.id.slice(0, 8)}`,
+              );
+            }
+          },
+          error: (err) => {
+            dmWarn("GiftWrap", `Backfill subscription error: ${err}`);
+          },
+        });
 
-        // Schedule this batch connection
-        setTimeout(() => {
-          dmInfo(
-            "GiftWrap",
-            `Batch ${batchNumber}: Connecting to ${batch.length} more relays`,
-          );
-
-          const batchSub = pool
-            .subscription(batch, [reqFilter], { eventStore })
-            .subscribe({
-              next: (response) => {
-                if (
-                  typeof response === "object" &&
-                  response &&
-                  "id" in response
-                ) {
-                  dmDebug(
-                    "GiftWrap",
-                    `Received gift wrap ${response.id.slice(0, 8)} from batch ${batchNumber}`,
-                  );
-                }
-              },
-              error: (err) => {
-                dmWarn(
-                  "GiftWrap",
-                  `Batch ${batchNumber} subscription error: ${err}`,
-                );
-              },
-            });
-
-          this.subscriptions.push(batchSub);
-        }, delay);
-
-        batchNumber++;
-      }
-    }
+      this.subscriptions.push(backfillSub);
+    }, BACKFILL_DELAY_MS);
   }
 
   /** Update pending count for UI display */
