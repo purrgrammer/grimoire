@@ -379,6 +379,24 @@ body.animating-layout
   top: 0;
 }
 
+/* Multi-row editor styles for card variant */
+.editor-card .ProseMirror {
+  min-height: 6rem;
+  max-height: 24rem;
+  overflow-y: auto;
+  line-height: 1.5rem;
+  padding: 0.5rem;
+}
+
+.editor-card .ProseMirror p {
+  line-height: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.editor-card .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
 /* Mention styles */
 .ProseMirror .mention {
   color: hsl(var(--primary));
