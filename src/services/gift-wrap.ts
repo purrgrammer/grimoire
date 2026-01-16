@@ -363,14 +363,28 @@ class GiftWrapService {
     };
 
     // Use timeline observable for reactive updates
+    console.log(
+      `[GiftWrap] Setting up timeline subscription for user ${this.userPubkey?.slice(0, 8)}`,
+    );
     const sub = eventStore
       .timeline(reqFilter)
       .pipe(map((events) => events.sort((a, b) => b.created_at - a.created_at)))
       .subscribe((giftWraps) => {
+        console.log(
+          `[GiftWrap] 📬 Timeline subscription fired with ${giftWraps.length} gift wraps`,
+        );
+
         // Find new gift wraps that we haven't seen before
         const newGiftWraps = giftWraps.filter(
           (gw) => !this.giftWraps.some((existing) => existing.id === gw.id),
         );
+
+        if (newGiftWraps.length > 0) {
+          console.log(
+            `[GiftWrap] Found ${newGiftWraps.length} new gift wraps:`,
+            newGiftWraps.map((gw) => gw.id.slice(0, 8)),
+          );
+        }
 
         this.giftWraps = giftWraps;
         this.giftWraps$.next(giftWraps);
@@ -380,8 +394,14 @@ class GiftWrapService {
           if (!this.decryptStates.has(gw.id)) {
             // Check both in-memory unlock state and persisted IDs
             // Persisted IDs indicate content was decrypted in a previous session
-            const isUnlocked =
-              isGiftWrapUnlocked(gw) || this.persistedIds.has(gw.id);
+            const hasSymbol = isGiftWrapUnlocked(gw);
+            const hasPersisted = this.persistedIds.has(gw.id);
+            const isUnlocked = hasSymbol || hasPersisted;
+
+            console.log(
+              `[GiftWrap] Gift wrap ${gw.id.slice(0, 8)}: symbol=${hasSymbol}, persisted=${hasPersisted}, unlocked=${isUnlocked}`,
+            );
+
             this.decryptStates.set(gw.id, {
               status: isUnlocked ? "success" : "pending",
               decryptedAt: isUnlocked ? Date.now() : undefined,
@@ -442,14 +462,32 @@ class GiftWrapService {
    * preserving all fields (id, pubkey, created_at, kind, tags, content).
    */
   private updateConversations() {
+    console.log(
+      `[GiftWrap] Updating conversations from ${this.giftWraps.length} gift wraps`,
+    );
     const conversationMap = new Map<string, Conversation>();
     const allRumors: Array<{ giftWrap: NostrEvent; rumor: Rumor }> = [];
 
     for (const gw of this.giftWraps) {
-      if (!isGiftWrapUnlocked(gw)) continue;
+      // Check both in-memory unlock state AND persisted IDs
+      // This is critical: gift wraps we just sent have the symbol,
+      // but after reload they only have persisted IDs
+      const isUnlocked = isGiftWrapUnlocked(gw) || this.persistedIds.has(gw.id);
+
+      if (!isUnlocked) {
+        console.log(
+          `[GiftWrap] Skipping locked gift wrap ${gw.id.slice(0, 8)}`,
+        );
+        continue;
+      }
 
       const rumor = getGiftWrapRumor(gw);
-      if (!rumor) continue;
+      if (!rumor) {
+        console.log(
+          `[GiftWrap] Gift wrap ${gw.id.slice(0, 8)} has no rumor (might need to load from cache)`,
+        );
+        continue;
+      }
 
       // Collect all decrypted rumors (any kind) for future use
       allRumors.push({ giftWrap: gw, rumor });
@@ -480,6 +518,10 @@ class GiftWrapService {
     const conversations = Array.from(conversationMap.values()).sort(
       (a, b) =>
         (b.lastMessage?.created_at ?? 0) - (a.lastMessage?.created_at ?? 0),
+    );
+
+    console.log(
+      `[GiftWrap] 💬 Updated conversations: ${conversations.length} conversations, ${allRumors.length} total rumors`,
     );
 
     this.conversations$.next(conversations);
