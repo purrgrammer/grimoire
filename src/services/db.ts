@@ -61,6 +61,35 @@ export interface CachedBlossomServerList {
   updatedAt: number;
 }
 
+// AI Provider and Conversation types
+export interface AIProvider {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  models: string[];
+  defaultModel?: string;
+  createdAt: number;
+}
+
+export interface AIConversation {
+  id: string;
+  providerId: string;
+  model: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AIMessage {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  isStreaming?: boolean;
+}
+
 export interface LocalSpell {
   id: string; // UUID for local-only spells, or event ID for published spells
   alias?: string; // Optional local-only quick name (e.g., "btc")
@@ -98,6 +127,9 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  aiProviders!: Table<AIProvider>;
+  aiConversations!: Table<AIConversation>;
+  aiMessages!: Table<AIMessage>;
 
   constructor(name: string) {
     super(name);
@@ -332,6 +364,23 @@ class GrimoireDb extends Dexie {
       blossomServers: "&pubkey, updatedAt",
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+    });
+
+    // Version 16: Add AI provider and conversation storage
+    this.version(16).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      aiProviders: "&id, createdAt",
+      aiConversations: "&id, providerId, updatedAt",
+      aiMessages: "&id, conversationId, timestamp",
     });
   }
 }

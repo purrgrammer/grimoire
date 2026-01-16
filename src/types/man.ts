@@ -8,6 +8,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parseAICommand } from "@/lib/ai-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -699,5 +700,38 @@ export const manPages: Record<string, ManPageEntry> = {
       return await parseBlossomCommand(args, activeAccountPubkey);
     },
     defaultProps: { subcommand: "servers" },
+  },
+  ai: {
+    name: "ai",
+    section: "1",
+    synopsis: "ai [subcommand]",
+    description:
+      "Chat with AI models using OpenAI-compatible providers like PPQ.ai. Manage conversations, configure providers, and interact with language models.",
+    options: [
+      {
+        flag: "new",
+        description: "Start a new conversation",
+      },
+      {
+        flag: "settings",
+        description: "Configure AI providers (API keys, models, etc.)",
+      },
+      {
+        flag: "<conversation-id>",
+        description: "Open a specific conversation by its UUID",
+      },
+    ],
+    examples: [
+      "ai                    List conversations",
+      "ai new                Start a new chat",
+      "ai settings           Configure AI providers",
+    ],
+    seeAlso: ["chat"],
+    appId: "ai",
+    category: "System",
+    argParser: (args: string[]) => {
+      return parseAICommand(args);
+    },
+    defaultProps: { view: "list" },
   },
 };

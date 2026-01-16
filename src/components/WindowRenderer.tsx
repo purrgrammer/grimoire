@@ -43,6 +43,9 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const AIViewer = lazy(() =>
+  import("./ai/AIViewer").then((m) => ({ default: m.AIViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -217,6 +220,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sourceUrl={window.props.sourceUrl}
             targetServer={window.props.targetServer}
             sha256={window.props.sha256}
+          />
+        );
+        break;
+      case "ai":
+        content = (
+          <AIViewer
+            view={window.props.view}
+            conversationId={window.props.conversationId}
           />
         );
         break;
