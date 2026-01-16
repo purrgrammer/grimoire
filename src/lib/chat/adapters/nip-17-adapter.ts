@@ -25,11 +25,16 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import relayListCache from "@/services/relay-list-cache";
-import { hub } from "@/services/hub";
+import { hub, publishEventToRelays } from "@/services/hub";
 import {
   SendWrappedMessage,
   ReplyToWrappedMessage,
 } from "applesauce-actions/actions/wrapped-messages";
+import {
+  WrappedMessageBlueprint,
+  GiftWrapBlueprint,
+} from "applesauce-common/blueprints";
+import { encryptedContentStorage } from "@/services/db";
 
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
@@ -657,29 +662,84 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         const others = participantPubkeys.filter((p) => p !== activePubkey);
         const isSelfChat = others.length === 0;
 
-        // For self-chat, pass [activePubkey] instead of [] so the message is sent
-        const recipients = isSelfChat ? [activePubkey] : others;
-
-        // Debug relay alignment for self-chat
         if (isSelfChat) {
+          // Custom self-chat implementation that bypasses applesauce-actions
+          // and directly publishes to inbox relays using publishEventToRelays.
+          // This eliminates the dependency on patched node_modules.
+
           const ownInboxRelays =
             conversation.metadata?.participantInboxRelays?.[activePubkey] || [];
           const subscribedRelays = giftWrapService.inboxRelays$.value;
+
           console.log(
             `[NIP-17] 🔍 Self-chat relay check:`,
             `\n  - Own inbox relays (will send to): ${ownInboxRelays.join(", ")}`,
             `\n  - Subscribed relays (receiving from): ${subscribedRelays.join(", ")}`,
             `\n  - Match: ${ownInboxRelays.length === subscribedRelays.length && ownInboxRelays.every((r) => subscribedRelays.includes(r))}`,
           );
-        }
 
-        await hub.run(SendWrappedMessage, recipients, content, actionOpts);
+          if (ownInboxRelays.length === 0) {
+            throw new Error(
+              "No inbox relays configured. Please publish a kind 10050 event with your DM relays.",
+            );
+          }
 
-        if (isSelfChat) {
+          // 1. Create the rumor (unsigned kind 14)
+          const factory = hub["factory"]; // Access private factory
+          const rumor = await factory.create(
+            WrappedMessageBlueprint,
+            [activePubkey],
+            content,
+            actionOpts,
+          );
+
           console.log(
-            `[NIP-17] ✅ Message sent successfully to self (saved messages)`,
+            `[NIP-17] Created rumor ${rumor.id.slice(0, 8)} for self-chat`,
+          );
+
+          // 2. Wrap in gift wrap addressed to self
+          const giftWrap = await factory.create(
+            GiftWrapBlueprint,
+            activePubkey,
+            rumor,
+            actionOpts,
+          );
+
+          console.log(
+            `[NIP-17] Created gift wrap ${giftWrap.id.slice(0, 8)} for self`,
+          );
+
+          // 3. Persist encrypted content before publishing
+          const EncryptedContentSymbol = Symbol.for("encrypted-content");
+          if (Reflect.has(giftWrap, EncryptedContentSymbol)) {
+            const plaintext = Reflect.get(giftWrap, EncryptedContentSymbol);
+            try {
+              await encryptedContentStorage.setItem(giftWrap.id, plaintext);
+              console.log(
+                `[NIP-17] ✅ Persisted encrypted content for gift wrap ${giftWrap.id.slice(0, 8)}`,
+              );
+            } catch (err) {
+              console.warn(
+                `[NIP-17] ⚠️ Failed to persist encrypted content:`,
+                err,
+              );
+            }
+          }
+
+          // 4. Publish directly to inbox relays (bypasses action)
+          await publishEventToRelays(giftWrap, ownInboxRelays);
+
+          // 5. Add to EventStore for immediate local availability
+          eventStore.add(giftWrap);
+
+          console.log(
+            `[NIP-17] ✅ Message sent successfully to self (saved messages) via direct publish`,
           );
         } else {
+          // Non-self-chat: use the action (still relies on patched applesauce)
+          const recipients = others;
+          await hub.run(SendWrappedMessage, recipients, content, actionOpts);
+
           console.log(
             `[NIP-17] ✅ Message sent successfully to ${recipients.length} recipients (+ self for cross-device sync)`,
           );
