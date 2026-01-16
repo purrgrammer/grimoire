@@ -8,6 +8,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parseWikiCommand } from "@/lib/wiki-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -640,6 +641,31 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "spells",
     category: "Nostr",
     defaultProps: {},
+  },
+  wiki: {
+    name: "wiki",
+    section: "1",
+    synopsis: "wiki <subject>",
+    description:
+      "Open a Nostr wiki article by subject (NIP-54). Wiki articles are kind 30818 events identified by their normalized subject (d-tag). Multiple authors can write about the same subject, and clients prioritize articles using web-of-trust, reactions, and trusted author lists (kinds 10101, 10102).",
+    options: [
+      {
+        flag: "<subject>",
+        description:
+          "Wiki article subject (will be normalized: lowercase, spaces→hyphens)",
+      },
+    ],
+    examples: [
+      "wiki bitcoin                Open the 'bitcoin' wiki article",
+      "wiki \"Bitcoin Core\"          Open the 'bitcoin-core' article (normalized)",
+      "wiki Москва                 Open the 'москва' article (UTF-8 preserved)",
+    ],
+    seeAlso: ["open", "req"],
+    appId: "wiki",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      return parseWikiCommand(args);
+    },
   },
   blossom: {
     name: "blossom",

@@ -21,6 +21,7 @@ export type AppId =
   | "spells"
   | "spellbooks"
   | "blossom"
+  | "wiki"
   | "win";
 
 export interface WindowInstance {

@@ -423,3 +423,118 @@ body.animating-layout
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome/Safari/Opera */
 }
+
+/* Asciidoc Wiki Content Styles */
+.asciidoc-content {
+  /* Inherit prose styles from prose-invert */
+}
+
+/* Wiki link styles - match markdown link style */
+.asciidoc-content .wiki-link {
+  color: hsl(var(--accent));
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: crosshair;
+  word-break: break-all;
+}
+
+.asciidoc-content .wiki-link:hover {
+  color: hsl(var(--accent) / 0.8);
+}
+
+/* Nostr mention styles - match markdown mention style */
+.asciidoc-content .nostr-mention {
+  color: hsl(var(--accent));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.asciidoc-content .nostr-mention:hover {
+  color: hsl(var(--accent) / 0.8);
+}
+
+/* Asciidoc-specific element styles to match markdown prose */
+.asciidoc-content h1 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.asciidoc-content h2 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.asciidoc-content h3 {
+  font-size: 1.125rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.asciidoc-content p {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  margin-bottom: 1rem;
+}
+
+.asciidoc-content pre {
+  background-color: hsl(var(--muted));
+  padding: 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.asciidoc-content code {
+  background-color: hsl(var(--muted));
+  padding: 0.125rem 0.125rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.asciidoc-content pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.asciidoc-content blockquote {
+  border-left: 4px solid hsl(var(--muted));
+  padding-left: 1rem;
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+  margin: 1rem 0;
+}
+
+.asciidoc-content ul,
+.asciidoc-content ol {
+  font-size: 0.875rem;
+  list-style-position: inside;
+  margin: 1rem 0;
+  padding-left: 0;
+}
+
+.asciidoc-content ul {
+  list-style-type: disc;
+}
+
+.asciidoc-content ol {
+  list-style-type: decimal;
+}
+
+.asciidoc-content ul li,
+.asciidoc-content ol li {
+  margin-top: 0.5rem;
+}
+
+.asciidoc-content hr {
+  margin: 1rem 0;
+  border-color: hsl(var(--border));
+}

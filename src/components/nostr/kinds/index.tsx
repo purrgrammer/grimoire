@@ -112,6 +112,8 @@ import {
   WikiRelaysRenderer,
   WikiRelaysDetailRenderer,
 } from "./WikiListRenderer";
+import { WikiRenderer } from "./WikiRenderer";
+import { WikiDetailRenderer } from "./WikiDetailRenderer";
 import {
   FollowSetRenderer,
   FollowSetDetailRenderer,
@@ -210,6 +212,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30777: SpellbookRenderer, // Spellbook (Grimoire)
   30817: CommunityNIPRenderer, // Community NIP
+  30818: WikiRenderer, // Wiki Article (NIP-54)
   31922: CalendarDateEventRenderer, // Date-Based Calendar Event (NIP-52)
   31923: CalendarTimeEventRenderer, // Time-Based Calendar Event (NIP-52)
   31989: HandlerRecommendationRenderer, // Handler Recommendation (NIP-89)
@@ -300,6 +303,7 @@ const detailRenderers: Record<
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
   30817: CommunityNIPDetailRenderer, // Community NIP Detail
+  30818: WikiDetailRenderer, // Wiki Article Detail (NIP-54)
   31922: CalendarDateEventDetailRenderer, // Date-Based Calendar Event Detail (NIP-52)
   31923: CalendarTimeEventDetailRenderer, // Time-Based Calendar Event Detail (NIP-52)
   31989: HandlerRecommendationDetailRenderer, // Handler Recommendation Detail (NIP-89)

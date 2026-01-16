@@ -43,6 +43,9 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const WikiViewer = lazy(() =>
+  import("./WikiViewer").then((m) => ({ default: m.WikiViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -219,6 +222,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sha256={window.props.sha256}
           />
         );
+        break;
+      case "wiki":
+        content = <WikiViewer subject={window.props.subject} />;
         break;
       default:
         content = (
