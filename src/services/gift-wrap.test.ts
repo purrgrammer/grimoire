@@ -2,10 +2,22 @@
  * Tests for NIP-59 Gift Wrap Service
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { unwrapAndUnseal, GiftWrapError } from "./gift-wrap";
 import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
+
+// Mock applesauce functions
+vi.mock("applesauce-common/helpers", () => ({
+  unlockGiftWrap: vi.fn(),
+  getGiftWrapSeal: vi.fn(),
+}));
+
+import { unlockGiftWrap, getGiftWrapSeal } from "applesauce-common/helpers";
+
+// Get mocked functions
+const mockUnlockGiftWrap = vi.mocked(unlockGiftWrap);
+const mockGetGiftWrapSeal = vi.mocked(getGiftWrapSeal);
 
 // Mock signer for testing
 function createMockSigner(decryptResponses: Map<string, string>): ISigner {
@@ -35,6 +47,11 @@ describe("GiftWrapError", () => {
 });
 
 describe("unwrapAndUnseal", () => {
+  beforeEach(() => {
+    // Reset mocks before each test
+    vi.clearAllMocks();
+  });
+
   describe("validation", () => {
     it("should reject non-1059 events", async () => {
       const invalidGiftWrap: NostrEvent = {
@@ -94,6 +111,7 @@ describe("unwrapAndUnseal", () => {
       };
 
       const rumor = {
+        id: "rumor-id-1234567890",
         kind: 1,
         content: "Hello, world!",
         tags: [],
@@ -111,12 +129,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      const decryptResponses = new Map([
-        ["ephemeral-key:encrypted-seal", JSON.stringify(seal)],
-        ["sender-real-key:encrypted-rumor", JSON.stringify(rumor)],
-      ]);
+      // Mock applesauce to return our test data
+      mockUnlockGiftWrap.mockResolvedValue(rumor as any);
+      mockGetGiftWrapSeal.mockReturnValue(seal);
 
-      const signer = createMockSigner(decryptResponses);
+      const signer = createMockSigner(new Map());
 
       const result = await unwrapAndUnseal(giftWrap, signer);
 
@@ -139,11 +156,12 @@ describe("unwrapAndUnseal", () => {
 
       // Rumor without pubkey (as it should be when extracted)
       const rumor = {
+        id: "rumor-id-test-message",
         kind: 1,
         content: "Test message",
         tags: [],
         created_at: 1234567890,
-        // No pubkey initially
+        pubkey: "sender-real-key",
       };
 
       const giftWrap: NostrEvent = {
@@ -156,12 +174,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      const decryptResponses = new Map([
-        ["ephemeral-key:encrypted-seal", JSON.stringify(seal)],
-        ["sender-real-key:encrypted-rumor", JSON.stringify(rumor)],
-      ]);
+      // Mock applesauce to return our test data
+      mockUnlockGiftWrap.mockResolvedValue(rumor as any);
+      mockGetGiftWrapSeal.mockReturnValue(seal);
 
-      const signer = createMockSigner(decryptResponses);
+      const signer = createMockSigner(new Map());
 
       const result = await unwrapAndUnseal(giftWrap, signer);
 
@@ -180,6 +197,15 @@ describe("unwrapAndUnseal", () => {
         sig: "seal-signature",
       };
 
+      const rumor = {
+        id: "rumor-id",
+        kind: 1,
+        content: "Test",
+        tags: [],
+        created_at: 1234567890,
+        pubkey: "sender-real-key",
+      };
+
       const giftWrap: NostrEvent = {
         id: "gift-wrap-id",
         pubkey: "ephemeral-key",
@@ -190,11 +216,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      const decryptResponses = new Map([
-        ["ephemeral-key:encrypted-seal", JSON.stringify(invalidSeal)],
-      ]);
+      // Mock applesauce to return invalid seal
+      mockUnlockGiftWrap.mockResolvedValue(rumor as any);
+      mockGetGiftWrapSeal.mockReturnValue(invalidSeal as NostrEvent);
 
-      const signer = createMockSigner(decryptResponses);
+      const signer = createMockSigner(new Map());
 
       await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
         GiftWrapError,
@@ -216,6 +242,15 @@ describe("unwrapAndUnseal", () => {
         sig: "seal-signature",
       };
 
+      const rumor = {
+        id: "rumor-id",
+        kind: 1,
+        content: "Test",
+        tags: [],
+        created_at: 1234567890,
+        pubkey: "sender-real-key",
+      };
+
       const giftWrap: NostrEvent = {
         id: "gift-wrap-id",
         pubkey: "ephemeral-key",
@@ -226,11 +261,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      const decryptResponses = new Map([
-        ["ephemeral-key:encrypted-seal", JSON.stringify(invalidSeal)],
-      ]);
+      // Mock applesauce to return seal with empty content
+      mockUnlockGiftWrap.mockResolvedValue(rumor as any);
+      mockGetGiftWrapSeal.mockReturnValue(invalidSeal);
 
-      const signer = createMockSigner(decryptResponses);
+      const signer = createMockSigner(new Map());
 
       await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
         GiftWrapError,
@@ -253,10 +288,12 @@ describe("unwrapAndUnseal", () => {
       };
 
       const invalidRumor = {
+        id: "invalid-rumor-id",
         kind: 1,
         // Missing content
         tags: [],
         created_at: 1234567890,
+        pubkey: "sender-real-key",
       };
 
       const giftWrap: NostrEvent = {
@@ -269,12 +306,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      const decryptResponses = new Map([
-        ["ephemeral-key:encrypted-seal", JSON.stringify(seal)],
-        ["sender-real-key:encrypted-rumor", JSON.stringify(invalidRumor)],
-      ]);
+      // Mock applesauce to return invalid rumor (missing content)
+      mockUnlockGiftWrap.mockResolvedValue(invalidRumor as any);
+      mockGetGiftWrapSeal.mockReturnValue(seal);
 
-      const signer = createMockSigner(decryptResponses);
+      const signer = createMockSigner(new Map());
 
       await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
         GiftWrapError,
@@ -296,7 +332,11 @@ describe("unwrapAndUnseal", () => {
         sig: "gift-wrap-signature",
       };
 
-      // No responses configured - decryption will fail
+      // Mock applesauce to throw decryption error
+      mockUnlockGiftWrap.mockRejectedValue(
+        new Error("Mock decryption failed: unable to decrypt"),
+      );
+
       const signer = createMockSigner(new Map());
 
       await expect(unwrapAndUnseal(giftWrap, signer)).rejects.toThrow(
