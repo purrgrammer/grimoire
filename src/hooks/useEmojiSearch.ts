@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 import {
   EmojiSearchService,
@@ -7,6 +7,7 @@ import {
 import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
 import eventStore from "@/services/event-store";
 import accounts from "@/services/accounts";
+import emojiFrequencyService from "@/services/emoji-frequency";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -101,17 +102,69 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
     };
   }, [activeAccount?.pubkey, service]);
 
-  // Memoize search function
+  // Load frequency data for prioritizing frequently used emoji
+  const [frequencyMap, setFrequencyMap] = useState<Map<string, number>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    emojiFrequencyService.getAllFrequencies().then(setFrequencyMap);
+  }, []);
+
+  // Memoize search function with frequency-aware results
   const searchEmojis = useMemo(
     () =>
       async (query: string): Promise<EmojiSearchResult[]> => {
-        return await service.search(query, { limit: 24 });
+        const limit = 24;
+        const results = await service.search(query, { limit });
+
+        // When query is empty or very short, prioritize frequently used emoji
+        if (!query.trim()) {
+          // Sort by frequency, then by original order
+          const sorted = [...results].sort((a, b) => {
+            const aKey = a.source === "unicode" ? a.url : `:${a.shortcode}:`;
+            const bKey = b.source === "unicode" ? b.url : `:${b.shortcode}:`;
+            const aFreq = frequencyMap.get(aKey) || 0;
+            const bFreq = frequencyMap.get(bKey) || 0;
+
+            // Higher frequency first
+            if (bFreq !== aFreq) return bFreq - aFreq;
+
+            // Then by source priority (user > context > sets > unicode)
+            const priority: Record<string, number> = {
+              user: 0,
+              context: 1,
+              unicode: 3,
+            };
+            const aPriority = a.source.startsWith("set:")
+              ? 2
+              : (priority[a.source] ?? 2);
+            const bPriority = b.source.startsWith("set:")
+              ? 2
+              : (priority[b.source] ?? 2);
+            return aPriority - bPriority;
+          });
+
+          return sorted.slice(0, limit);
+        }
+
+        return results;
       },
-    [service],
+    [service, frequencyMap],
+  );
+
+  // Refresh frequency data after emoji usage
+  const refreshFrequencies = useMemo(
+    () => async () => {
+      const updated = await emojiFrequencyService.getAllFrequencies();
+      setFrequencyMap(updated);
+    },
+    [],
   );
 
   return {
     searchEmojis,
     service,
+    refreshFrequencies,
   };
 }
