@@ -78,20 +78,25 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
     // Not in store, continue to network fetch
   }
 
-  // 2. Build relay list to query: participant's outbox + aggregators
+  // 2. Build relay list to query: participant's outbox + ALL aggregators
   const relaysToQuery: string[] = [];
 
   try {
     const cached = await relayListCache.get(pubkey);
     if (cached?.write) {
-      relaysToQuery.push(...cached.write.slice(0, 3));
+      // Use ALL write relays, not just 3
+      relaysToQuery.push(...cached.write);
+    }
+    if (cached?.read) {
+      // Also try read relays as fallback
+      relaysToQuery.push(...cached.read);
     }
   } catch {
     // Cache miss
   }
 
-  // Add aggregator relays
-  relaysToQuery.push(...AGGREGATOR_RELAYS.slice(0, 3));
+  // Add ALL aggregator relays for maximum coverage
+  relaysToQuery.push(...AGGREGATOR_RELAYS);
 
   // Dedupe
   const uniqueRelays = [...new Set(relaysToQuery)];
@@ -103,10 +108,10 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
   }
 
   console.log(
-    `[NIP-17] Fetching inbox relays for ${pubkey.slice(0, 8)} from ${uniqueRelays.length} relays`,
+    `[NIP-17] Fetching inbox relays for ${pubkey.slice(0, 8)} from ${uniqueRelays.length} relays (trying harder)`,
   );
 
-  // 3. Fetch from relays with longer timeout
+  // 3. Fetch from relays with aggressive timeout and retry
   try {
     const events = await firstValueFrom(
       pool
@@ -117,7 +122,7 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
         )
         .pipe(
           toArray(),
-          timeout(5000), // Increased from 3s to 5s
+          timeout(10000), // Increased to 10s to give more time
           catchError(() => of([] as NostrEvent[])),
         ),
     );
@@ -128,18 +133,19 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
       );
       const relays = parseRelayTags(latest);
       console.log(
-        `[NIP-17] Fetched inbox relays for ${pubkey.slice(0, 8)}:`,
+        `[NIP-17] ✅ Fetched inbox relays for ${pubkey.slice(0, 8)}:`,
         relays.length,
+        "relays",
       );
       return relays;
     } else {
-      console.log(
-        `[NIP-17] No inbox relay list found for ${pubkey.slice(0, 8)}`,
+      console.warn(
+        `[NIP-17] ❌ No inbox relay list (kind ${DM_RELAY_LIST_KIND}) found for ${pubkey.slice(0, 8)} after querying ${uniqueRelays.length} relays`,
       );
     }
   } catch (err) {
-    console.warn(
-      `[NIP-17] Failed to fetch inbox relays for ${pubkey.slice(0, 8)}:`,
+    console.error(
+      `[NIP-17] ❌ Failed to fetch inbox relays for ${pubkey.slice(0, 8)}:`,
       err,
     );
   }
@@ -608,19 +614,108 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     // 5. Execute appropriate action via ActionRunner
     try {
+      // Build the rumor (unsigned kind 14 event) for optimistic UI update
+      const rumorTags =
+        isReply && parentRumor
+          ? [
+              ["e", parentRumor.id, "", "reply"],
+              ...participantPubkeys.map((p) => ["p", p] as [string, string]),
+              ...(actionOpts.emojis?.map((e) => [
+                "emoji",
+                e.shortcode,
+                e.url,
+              ]) || []),
+            ]
+          : [
+              ...participantPubkeys.map((p) => ["p", p] as [string, string]),
+              ...(actionOpts.emojis?.map((e) => [
+                "emoji",
+                e.shortcode,
+                e.url,
+              ]) || []),
+            ];
+
+      const rumorCreatedAt = Math.floor(Date.now() / 1000);
+
+      // Calculate rumor ID
+      const rumorId = await crypto.subtle
+        .digest(
+          "SHA-256",
+          new TextEncoder().encode(
+            JSON.stringify([
+              0,
+              activePubkey,
+              rumorCreatedAt,
+              PRIVATE_DM_KIND,
+              rumorTags,
+              content,
+            ]),
+          ),
+        )
+        .then((buf) =>
+          Array.from(new Uint8Array(buf))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(""),
+        );
+
+      const rumor: Rumor = {
+        id: rumorId,
+        kind: PRIVATE_DM_KIND,
+        created_at: rumorCreatedAt,
+        tags: rumorTags,
+        content,
+        pubkey: activePubkey,
+      };
+
+      // Create synthetic gift wrap for optimistic display
+      // (will be replaced by real gift wrap when received from relay)
+      const syntheticGiftWrap: NostrEvent = {
+        id: `synthetic-${rumorId}`,
+        kind: 1059,
+        created_at: rumorCreatedAt,
+        tags: [["p", activePubkey]],
+        content: "",
+        pubkey: activePubkey,
+        sig: "",
+      };
+
+      // Add to decryptedRumors$ for immediate UI update (optimistic)
+      const currentRumors = giftWrapService.decryptedRumors$.value;
+      giftWrapService.decryptedRumors$.next([
+        ...currentRumors,
+        { giftWrap: syntheticGiftWrap, rumor },
+      ]);
+
+      console.log(
+        `[NIP-17] 📝 Added rumor ${rumorId.slice(0, 8)} to decryptedRumors$ (optimistic)`,
+      );
+
+      // Now send the actual gift wrap
       if (isReply && parentRumor) {
         await hub.run(ReplyToWrappedMessage, parentRumor, content, actionOpts);
         console.log(
-          `[NIP-17] Reply sent successfully to ${participantPubkeys.length} participants`,
+          `[NIP-17] ✅ Reply sent successfully (${participantPubkeys.length} participants including self)`,
         );
       } else {
-        // Filter out self from recipients list
-        const recipients = participantPubkeys.filter((p) => p !== activePubkey);
+        // For self-chat, explicitly send to self. For group chats, filter out self
+        // (applesauce adds sender automatically for group messages)
+        const others = participantPubkeys.filter((p) => p !== activePubkey);
+        const isSelfChat = others.length === 0;
+
+        // For self-chat, pass [activePubkey] instead of [] so the message is sent
+        const recipients = isSelfChat ? [activePubkey] : others;
 
         await hub.run(SendWrappedMessage, recipients, content, actionOpts);
-        console.log(
-          `[NIP-17] Message sent successfully to ${recipients.length} participants`,
-        );
+
+        if (isSelfChat) {
+          console.log(
+            `[NIP-17] ✅ Message sent successfully to self (saved messages)`,
+          );
+        } else {
+          console.log(
+            `[NIP-17] ✅ Message sent successfully to ${recipients.length} recipients (+ self for cross-device sync)`,
+          );
+        }
       }
     } catch (error) {
       console.error("[NIP-17] Failed to send message:", error);
