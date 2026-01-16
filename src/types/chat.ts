@@ -78,6 +78,7 @@ export interface ConversationMetadata {
   giftWrapped?: boolean;
   inboxRelays?: string[]; // User's DM inbox relays (kind 10050)
   participantInboxRelays?: Record<string, string[]>; // Per-participant inbox relays
+  unreachableParticipants?: string[]; // Participants with no known inbox relays
 }
 
 /**

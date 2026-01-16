@@ -1,5 +1,12 @@
 import { Observable, of, firstValueFrom } from "rxjs";
-import { map, filter, take, timeout } from "rxjs/operators";
+import {
+  map,
+  filter,
+  take,
+  timeout,
+  toArray,
+  catchError,
+} from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
@@ -26,6 +33,13 @@ const PRIVATE_DM_KIND = 14;
 const DM_RELAY_LIST_KIND = 10050;
 
 /**
+ * Cache for synthetic events we've created from rumors.
+ * This ensures we can find them for reply resolution even if
+ * eventStore doesn't persist events with empty signatures.
+ */
+const syntheticEventCache = new Map<string, NostrEvent>();
+
+/**
  * Compute a stable conversation ID from sorted participant pubkeys
  */
 function computeConversationId(participants: string[]): string {
@@ -34,75 +48,66 @@ function computeConversationId(participants: string[]): string {
 }
 
 /**
- * Fetch inbox relays (kind 10050) for a pubkey
- * Strategy:
- * 1. Check local eventStore first
- * 2. Get participant's outbox relays from relay list cache
- * 3. Fetch from their outbox relays + aggregator relays
+ * Fetch inbox relays (kind 10050) for a pubkey.
+ * Returns empty array if not found (caller should handle gracefully).
  */
 async function fetchInboxRelays(pubkey: string): Promise<string[]> {
-  // First check if we already have the event in the store
+  // 1. Check local eventStore first (fast path)
   try {
     const existing = await firstValueFrom(
       eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey).pipe(
         filter((e): e is NostrEvent => e !== undefined),
         take(1),
-        timeout(100), // Very short timeout since this is just checking local store
+        timeout(50),
       ),
     );
-
     if (existing) {
-      return existing.tags
-        .filter((tag) => tag[0] === "relay")
-        .map((tag) => tag[1])
-        .filter(Boolean);
+      return parseRelayTags(existing);
     }
   } catch {
-    // Not in store, try fetching from relays
+    // Not in store
   }
 
-  // Get participant's outbox relays to query (they should publish their inbox list there)
-  let outboxRelays: string[] = [];
+  // 2. Build relay list to query: participant's outbox + aggregators
+  const relaysToQuery: string[] = [];
+
   try {
     const cached = await relayListCache.get(pubkey);
-    if (cached) {
-      outboxRelays = cached.write.slice(0, 3); // Limit to 3 outbox relays
+    if (cached?.write) {
+      relaysToQuery.push(...cached.write.slice(0, 2));
     }
   } catch {
-    // Cache miss, will just use aggregators
+    // Cache miss
   }
 
-  // Combine outbox relays with aggregator relays (deduped)
-  const relaysToQuery = [
-    ...outboxRelays,
-    ...AGGREGATOR_RELAYS.slice(0, 2),
-  ].filter((url, i, arr) => arr.indexOf(url) === i);
+  // Add aggregator relays
+  relaysToQuery.push(...AGGREGATOR_RELAYS.slice(0, 2));
 
-  // Fetch from relays using pool.request
+  // Dedupe
+  const uniqueRelays = [...new Set(relaysToQuery)];
+  if (uniqueRelays.length === 0) return [];
+
+  // 3. Fetch from relays
   try {
-    const { toArray } = await import("rxjs/operators");
     const events = await firstValueFrom(
       pool
         .request(
-          relaysToQuery,
+          uniqueRelays,
           [{ kinds: [DM_RELAY_LIST_KIND], authors: [pubkey], limit: 1 }],
           { eventStore },
         )
         .pipe(
           toArray(),
-          timeout(3000), // 3 second timeout
+          timeout(3000),
+          catchError(() => of([] as NostrEvent[])),
         ),
     );
 
     if (events.length > 0) {
-      // Get the most recent event
       const latest = events.reduce((a, b) =>
         a.created_at > b.created_at ? a : b,
       );
-      return latest.tags
-        .filter((tag) => tag[0] === "relay")
-        .map((tag) => tag[1])
-        .filter(Boolean);
+      return parseRelayTags(latest);
     }
   } catch (err) {
     console.warn(
@@ -115,8 +120,65 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
 }
 
 /**
- * Parse participants from a comma-separated list or single identifier
- * Supports: npub, nprofile, hex pubkey (32 bytes), NIP-05, $me
+ * Parse relay URLs from kind 10050 tags
+ */
+function parseRelayTags(event: NostrEvent): string[] {
+  return event.tags
+    .filter((tag) => tag[0] === "relay" && tag[1])
+    .map((tag) => tag[1]);
+}
+
+/**
+ * Resolve an identifier to a hex pubkey
+ */
+async function resolveToPubkey(input: string): Promise<string | null> {
+  const trimmed = input.trim();
+
+  // $me alias
+  if (trimmed === "$me") {
+    return accountManager.active$.value?.pubkey ?? null;
+  }
+
+  // npub
+  if (trimmed.startsWith("npub1")) {
+    try {
+      const decoded = nip19.decode(trimmed);
+      if (decoded.type === "npub") return decoded.data;
+    } catch {
+      // Invalid
+    }
+  }
+
+  // nprofile
+  if (trimmed.startsWith("nprofile1")) {
+    try {
+      const decoded = nip19.decode(trimmed);
+      if (decoded.type === "nprofile") return decoded.data.pubkey;
+    } catch {
+      // Invalid
+    }
+  }
+
+  // Hex pubkey
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  // NIP-05
+  if (trimmed.includes("@") || trimmed.includes(".")) {
+    try {
+      const pubkey = await resolveNip05(trimmed);
+      if (pubkey) return pubkey;
+    } catch {
+      // Resolution failed
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Parse participants from comma-separated identifiers
  */
 async function parseParticipants(input: string): Promise<string[]> {
   const parts = input
@@ -124,17 +186,8 @@ async function parseParticipants(input: string): Promise<string[]> {
     .map((p) => p.trim())
     .filter(Boolean);
   const pubkeys: string[] = [];
-  const activePubkey = accountManager.active$.value?.pubkey;
 
   for (const part of parts) {
-    // Handle $me alias
-    if (part === "$me") {
-      if (activePubkey && !pubkeys.includes(activePubkey)) {
-        pubkeys.push(activePubkey);
-      }
-      continue;
-    }
-
     const pubkey = await resolveToPubkey(part);
     if (pubkey && !pubkeys.includes(pubkey)) {
       pubkeys.push(pubkey);
@@ -145,92 +198,125 @@ async function parseParticipants(input: string): Promise<string[]> {
 }
 
 /**
- * Resolve an identifier to a hex pubkey
+ * Find reply target from e-tags using NIP-10 conventions
  */
-async function resolveToPubkey(input: string): Promise<string | null> {
-  // Try npub
-  if (input.startsWith("npub1")) {
-    try {
-      const decoded = nip19.decode(input);
-      if (decoded.type === "npub") {
-        return decoded.data;
-      }
-    } catch {
-      // Not a valid npub
+function findReplyTarget(tags: string[][]): string | undefined {
+  const eTags = tags.filter((tag) => tag[0] === "e" && tag[1]);
+  if (eTags.length === 0) return undefined;
+
+  // 1. Explicit "reply" marker
+  const replyTag = eTags.find((tag) => tag[3] === "reply");
+  if (replyTag) return replyTag[1];
+
+  // 2. Deprecated positional style: last unmarked e-tag
+  const unmarkedTags = eTags.filter(
+    (tag) => !tag[3] || !["root", "reply", "mention"].includes(tag[3]),
+  );
+  if (unmarkedTags.length > 0) {
+    return unmarkedTags[unmarkedTags.length - 1][1];
+  }
+
+  // 3. If only "root" exists, use it
+  const rootTag = eTags.find((tag) => tag[3] === "root");
+  if (rootTag) return rootTag[1];
+
+  return undefined;
+}
+
+/**
+ * Get all participants from a rumor (author + p-tag recipients)
+ */
+function getRumorParticipants(rumor: Rumor): Set<string> {
+  const participants = new Set<string>();
+  participants.add(rumor.pubkey);
+
+  for (const tag of rumor.tags) {
+    if (tag[0] === "p" && tag[1]) {
+      participants.add(tag[1]);
     }
   }
 
-  // Try nprofile
-  if (input.startsWith("nprofile1")) {
-    try {
-      const decoded = nip19.decode(input);
-      if (decoded.type === "nprofile") {
-        return decoded.data.pubkey;
-      }
-    } catch {
-      // Not a valid nprofile
-    }
-  }
+  return participants;
+}
 
-  // Try hex pubkey (64 chars)
-  if (/^[0-9a-fA-F]{64}$/.test(input)) {
-    return input.toLowerCase();
-  }
+/**
+ * Create a synthetic event from a rumor for display purposes.
+ * Adds it to both our cache and the eventStore.
+ */
+function createSyntheticEvent(rumor: Rumor): NostrEvent {
+  // Check cache first
+  const cached = syntheticEventCache.get(rumor.id);
+  if (cached) return cached;
 
-  // Try NIP-05 (contains @ or is bare domain)
-  if (input.includes("@") || input.includes(".")) {
-    try {
-      const pubkey = await resolveNip05(input);
-      if (pubkey) {
-        return pubkey;
-      }
-    } catch {
-      // NIP-05 resolution failed
-    }
-  }
+  const event: NostrEvent = {
+    id: rumor.id,
+    pubkey: rumor.pubkey,
+    created_at: rumor.created_at,
+    kind: rumor.kind,
+    tags: rumor.tags,
+    content: rumor.content,
+    sig: "", // Synthetic - no signature
+  };
 
-  return null;
+  // Cache it
+  syntheticEventCache.set(rumor.id, event);
+
+  // Add to eventStore for lookups
+  eventStore.add(event);
+
+  return event;
+}
+
+/**
+ * Look up an event by ID - checks our synthetic cache first, then eventStore
+ */
+function lookupEvent(eventId: string): NostrEvent | undefined {
+  return (
+    syntheticEventCache.get(eventId) ?? eventStore.database.getEvent(eventId)
+  );
+}
+
+/**
+ * Convert a rumor to a Message
+ */
+function rumorToMessage(conversationId: string, rumor: Rumor): Message {
+  const syntheticEvent = createSyntheticEvent(rumor);
+  const replyTo = findReplyTarget(rumor.tags);
+
+  return {
+    id: rumor.id,
+    conversationId,
+    author: rumor.pubkey,
+    content: rumor.content,
+    timestamp: rumor.created_at,
+    type: "user",
+    replyTo,
+    metadata: { encrypted: true },
+    protocol: "nip-17",
+    event: syntheticEvent,
+  };
 }
 
 /**
  * NIP-17 Adapter - Private Direct Messages (Gift Wrapped)
- *
- * Features:
- * - End-to-end encrypted messages via NIP-59 gift wraps
- * - 1-on-1 conversations
- * - Group conversations (multiple recipients)
- * - Self-messages ("saved messages")
- * - Read-only for now (sending messages coming later)
- *
- * Identifier formats:
- * - npub1... (single recipient)
- * - nprofile1... (single recipient with relay hints)
- * - hex pubkey (64 chars)
- * - NIP-05 address (user@domain.com or _@domain.com)
- * - Comma-separated list of any of the above for groups
  */
 export class Nip17Adapter extends ChatProtocolAdapter {
   readonly protocol = "nip-17" as const;
   readonly type = "dm" as const;
 
   /**
-   * Parse identifier - accepts pubkeys, npubs, nprofiles, NIP-05, $me, or comma-separated list
+   * Parse identifier - accepts pubkeys, npubs, nprofiles, NIP-05, $me
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
-    // Quick check: must look like a pubkey identifier or NIP-05
     const trimmed = input.trim();
 
-    // Check for $me alias (for saved messages)
+    // $me alias
     if (trimmed === "$me") {
-      return {
-        type: "dm-recipient",
-        value: trimmed,
-        relays: [],
-      };
+      return { type: "dm-recipient", value: trimmed, relays: [] };
     }
 
-    // Check for npub, nprofile, hex, or NIP-05 patterns
-    const looksLikePubkey =
+    // Check for valid pubkey patterns
+    const isValid =
       trimmed.startsWith("npub1") ||
       trimmed.startsWith("nprofile1") ||
       /^[0-9a-fA-F]{64}$/.test(trimmed) ||
@@ -239,34 +325,27 @@ export class Nip17Adapter extends ChatProtocolAdapter {
         !trimmed.includes("'") &&
         !trimmed.includes("/"));
 
-    // Also check for comma-separated list (may include $me)
-    const looksLikeList =
+    // Or comma-separated list
+    const isValidList =
       trimmed.includes(",") &&
-      trimmed
-        .split(",")
-        .some(
-          (p) =>
-            p.trim() === "$me" ||
-            p.trim().startsWith("npub1") ||
-            p.trim().startsWith("nprofile1") ||
-            /^[0-9a-fA-F]{64}$/.test(p.trim()) ||
-            p.trim().includes("@"),
+      trimmed.split(",").some((p) => {
+        const part = p.trim();
+        return (
+          part === "$me" ||
+          part.startsWith("npub1") ||
+          part.startsWith("nprofile1") ||
+          /^[0-9a-fA-F]{64}$/.test(part) ||
+          part.includes("@")
         );
+      });
 
-    if (!looksLikePubkey && !looksLikeList) {
-      return null;
-    }
+    if (!isValid && !isValidList) return null;
 
-    // Return a placeholder identifier - actual resolution happens in resolveConversation
-    return {
-      type: "dm-recipient",
-      value: trimmed, // Will be resolved later
-      relays: [],
-    };
+    return { type: "dm-recipient", value: trimmed, relays: [] };
   }
 
   /**
-   * Resolve conversation from DM identifier
+   * Resolve conversation from identifier
    */
   async resolveConversation(
     identifier: ProtocolIdentifier,
@@ -285,7 +364,6 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    // Check if private messages are enabled
     const settings = giftWrapService.settings$.value;
     if (!settings.enabled) {
       throw new Error(
@@ -293,7 +371,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       );
     }
 
-    // Parse the identifier to get participant pubkeys
+    // Parse participants
     const inputPubkeys = await parseParticipants(identifier.value);
     if (inputPubkeys.length === 0) {
       throw new Error(
@@ -301,19 +379,15 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       );
     }
 
-    // Build full participant list (always include self)
-    const allParticipants = [
+    // Build participant list (always include self)
+    const uniqueParticipants = [
       activePubkey,
       ...inputPubkeys.filter((p) => p !== activePubkey),
-    ];
-    const uniqueParticipants = [...new Set(allParticipants)];
+    ].filter((p, i, arr) => arr.indexOf(p) === i);
 
-    // Determine conversation type
-    const isSelfChat = uniqueParticipants.length === 1; // Only self
-    const isGroup = uniqueParticipants.length > 2; // More than 2 people
-
-    // Create conversation ID from participants
     const conversationId = computeConversationId(uniqueParticipants);
+    const isSelfChat = uniqueParticipants.length === 1;
+    const isGroup = uniqueParticipants.length > 2;
 
     // Build title
     let title: string;
@@ -322,44 +396,47 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     } else if (isGroup) {
       title = `Group (${uniqueParticipants.length})`;
     } else {
-      // 1-on-1: use the other person's pubkey for title
-      const otherPubkey = uniqueParticipants.find((p) => p !== activePubkey);
-      title = otherPubkey ? `${otherPubkey.slice(0, 8)}...` : "Private Chat";
+      const other = uniqueParticipants.find((p) => p !== activePubkey);
+      title = other ? `${other.slice(0, 8)}...` : "Private Chat";
     }
 
-    // Build participants array
+    // Build participants
     const participants: Participant[] = uniqueParticipants.map((pubkey) => ({
       pubkey,
       role: pubkey === activePubkey ? "member" : undefined,
     }));
 
-    // Fetch inbox relays for all participants in parallel
+    // Fetch inbox relays for all participants
     const participantInboxRelays: Record<string, string[]> = {};
 
-    // Get current user's relays from service (already loaded)
-    const userInboxRelays = giftWrapService.inboxRelays$.value;
-    if (userInboxRelays.length > 0) {
-      participantInboxRelays[activePubkey] = userInboxRelays;
+    // Current user's relays (already loaded)
+    const userRelays = giftWrapService.inboxRelays$.value;
+    if (userRelays.length > 0) {
+      participantInboxRelays[activePubkey] = userRelays;
     }
 
-    // Fetch inbox relays for other participants in parallel
-    const otherParticipants = uniqueParticipants.filter(
-      (p) => p !== activePubkey,
-    );
-    if (otherParticipants.length > 0) {
-      const relayResults = await Promise.all(
-        otherParticipants.map(async (pubkey) => ({
+    // Fetch for other participants in parallel
+    const others = uniqueParticipants.filter((p) => p !== activePubkey);
+    if (others.length > 0) {
+      const results = await Promise.all(
+        others.map(async (pubkey) => ({
           pubkey,
           relays: await fetchInboxRelays(pubkey),
         })),
       );
 
-      for (const { pubkey, relays } of relayResults) {
+      for (const { pubkey, relays } of results) {
         if (relays.length > 0) {
           participantInboxRelays[pubkey] = relays;
         }
       }
     }
+
+    // Check if we can reach all participants
+    const unreachable = uniqueParticipants.filter(
+      (p) =>
+        !participantInboxRelays[p] || participantInboxRelays[p].length === 0,
+    );
 
     return {
       id: conversationId,
@@ -370,17 +447,19 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       metadata: {
         encrypted: true,
         giftWrapped: true,
-        // Store inbox relays for display in header
-        inboxRelays: userInboxRelays,
+        inboxRelays: userRelays,
         participantInboxRelays,
+        // Flag if some participants have no inbox relays (can't send to them)
+        unreachableParticipants:
+          unreachable.length > 0 ? unreachable : undefined,
       },
       unreadCount: 0,
     };
   }
 
   /**
-   * Load messages for a conversation
-   * Filters decrypted rumors to match conversation participants
+   * Load messages for a conversation.
+   * Returns messages sorted chronologically (oldest first).
    */
   loadMessages(
     conversation: Conversation,
@@ -392,164 +471,51 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     return giftWrapService.decryptedRumors$.pipe(
       map((rumors) => {
-        // Filter rumors that belong to this conversation
+        // Filter rumors belonging to this conversation
         const conversationRumors = rumors.filter(({ rumor }) => {
-          // Only include kind 14 (private DMs)
           if (rumor.kind !== PRIVATE_DM_KIND) return false;
 
-          // Get all participants from the rumor
-          const rumorParticipants = this.getRumorParticipants(rumor);
-
-          // Check if participants match (same set of pubkeys)
+          const rumorParticipants = getRumorParticipants(rumor);
           if (rumorParticipants.size !== participantSet.size) return false;
+
           for (const p of rumorParticipants) {
             if (!participantSet.has(p)) return false;
           }
           return true;
         });
 
-        // Convert to Message format
-        return conversationRumors.map(({ giftWrap, rumor }) =>
-          this.rumorToMessage(conversation.id, giftWrap, rumor),
+        // Convert to messages
+        const messages = conversationRumors.map(({ rumor }) =>
+          rumorToMessage(conversation.id, rumor),
         );
+
+        // Sort chronologically (oldest first) for proper chat display
+        messages.sort((a, b) => a.timestamp - b.timestamp);
+
+        return messages;
       }),
     );
   }
 
   /**
-   * Find the reply target from e-tags using NIP-10 conventions
-   *
-   * NIP-10 marker priority:
-   * 1. Tag with "reply" marker - this is the direct parent
-   * 2. If only "root" marker exists and no other e-tags - use root as reply target
-   * 3. Deprecated: last e-tag without markers
-   */
-  private findReplyTarget(tags: string[][]): string | undefined {
-    const eTags = tags.filter((tag) => tag[0] === "e" && tag[1]);
-
-    if (eTags.length === 0) return undefined;
-
-    // Check for explicit "reply" marker
-    const replyTag = eTags.find((tag) => tag[3] === "reply");
-    if (replyTag) {
-      return replyTag[1];
-    }
-
-    // Check for "root" marker (if it's the only e-tag or no other is marked as reply)
-    const rootTag = eTags.find((tag) => tag[3] === "root");
-
-    // Check for unmarked e-tags (deprecated positional style)
-    const unmarkedTags = eTags.filter(
-      (tag) =>
-        !tag[3] ||
-        (tag[3] !== "root" && tag[3] !== "reply" && tag[3] !== "mention"),
-    );
-
-    // If there are unmarked tags, use the last one as reply (deprecated style)
-    if (unmarkedTags.length > 0) {
-      return unmarkedTags[unmarkedTags.length - 1][1];
-    }
-
-    // If only root exists, it's both root and reply target
-    if (rootTag) {
-      return rootTag[1];
-    }
-
-    // Fallback: last e-tag that isn't a mention
-    const nonMentionTags = eTags.filter((tag) => tag[3] !== "mention");
-    if (nonMentionTags.length > 0) {
-      return nonMentionTags[nonMentionTags.length - 1][1];
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Get all participants from a rumor (author + all p-tag recipients)
-   */
-  private getRumorParticipants(rumor: Rumor): Set<string> {
-    const participants = new Set<string>();
-    participants.add(rumor.pubkey); // Author
-
-    // Add all p-tag recipients
-    for (const tag of rumor.tags) {
-      if (tag[0] === "p" && tag[1]) {
-        participants.add(tag[1]);
-      }
-    }
-
-    return participants;
-  }
-
-  /**
-   * Convert a rumor to a Message
-   * Creates a synthetic event from the rumor for display purposes
-   */
-  private rumorToMessage(
-    conversationId: string,
-    _giftWrap: NostrEvent,
-    rumor: Rumor,
-  ): Message {
-    // Find reply-to from e tags using NIP-10 marker convention
-    // Markers: "reply" = direct parent, "root" = thread root, "mention" = just a mention
-    // Format: ["e", <event-id>, <relay-hint>, <marker>]
-    const replyTo = this.findReplyTarget(rumor.tags);
-
-    // Create a synthetic event from the rumor for display
-    // This allows RichText to parse content correctly
-    const syntheticEvent: NostrEvent = {
-      id: rumor.id,
-      pubkey: rumor.pubkey,
-      created_at: rumor.created_at,
-      kind: rumor.kind,
-      tags: rumor.tags,
-      content: rumor.content,
-      sig: "", // Empty sig - this is a display-only synthetic event
-    };
-
-    // Add to eventStore so ReplyPreview can find it by rumor ID
-    eventStore.add(syntheticEvent);
-
-    return {
-      id: rumor.id,
-      conversationId,
-      author: rumor.pubkey,
-      content: rumor.content,
-      timestamp: rumor.created_at,
-      type: "user",
-      replyTo,
-      metadata: {
-        encrypted: true,
-      },
-      protocol: "nip-17",
-      // Use synthetic event with decrypted content
-      event: syntheticEvent,
-    };
-  }
-
-  /**
-   * Load more historical messages (pagination)
+   * Load more historical messages (not implemented - loads all at once)
    */
   async loadMoreMessages(
     _conversation: Conversation,
     _before: number,
   ): Promise<Message[]> {
-    // For now, all messages are loaded at once from the gift wrap service
-    // Pagination would require fetching more gift wraps from relays
     return [];
   }
 
   /**
-   * Send a message (not implemented yet - read-only for now)
+   * Send a message (not implemented yet)
    */
   async sendMessage(
     _conversation: Conversation,
     _content: string,
     _options?: SendMessageOptions,
   ): Promise<void> {
-    throw new Error(
-      "Sending messages is not yet implemented for NIP-17. Coming soon!",
-    );
+    throw new Error("Sending NIP-17 messages is not yet implemented.");
   }
 
   /**
@@ -558,46 +524,33 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   getCapabilities(): ChatCapabilities {
     return {
       supportsEncryption: true,
-      supportsThreading: true, // via e tags
+      supportsThreading: true,
       supportsModeration: false,
       supportsRoles: false,
       supportsGroupManagement: false,
-      canCreateConversations: false, // read-only for now
-      requiresRelay: false, // uses inbox relays from profile
+      canCreateConversations: false,
+      requiresRelay: false,
     };
   }
 
   /**
-   * Load a replied-to message by ID (rumor ID)
-   * Creates a synthetic event from the rumor if found
+   * Load a replied-to message by ID
    */
   async loadReplyMessage(
     _conversation: Conversation,
     eventId: string,
   ): Promise<NostrEvent | null> {
-    // First check if it's already in eventStore (synthetic event may have been added)
-    const existingEvent = eventStore.database.getEvent(eventId);
-    if (existingEvent) {
-      return existingEvent;
-    }
+    // Check our caches first
+    const existing = lookupEvent(eventId);
+    if (existing) return existing;
 
-    // Check decrypted rumors for the message
+    // Check decrypted rumors
     const rumors = giftWrapService.decryptedRumors$.value;
     const found = rumors.find(({ rumor }) => rumor.id === eventId);
     if (found) {
-      // Create and add synthetic event from rumor
-      const syntheticEvent: NostrEvent = {
-        id: found.rumor.id,
-        pubkey: found.rumor.pubkey,
-        created_at: found.rumor.created_at,
-        kind: found.rumor.kind,
-        tags: found.rumor.tags,
-        content: found.rumor.content,
-        sig: "",
-      };
-      eventStore.add(syntheticEvent);
-      return syntheticEvent;
+      return createSyntheticEvent(found.rumor);
     }
+
     return null;
   }
 
@@ -606,9 +559,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
    */
   loadConversationList(): Observable<Conversation[]> {
     const activePubkey = accountManager.active$.value?.pubkey;
-    if (!activePubkey) {
-      return of([]);
-    }
+    if (!activePubkey) return of([]);
 
     return giftWrapService.conversations$.pipe(
       map((conversations) =>
@@ -618,12 +569,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           protocol: "nip-17" as const,
           title: this.getConversationTitle(conv.participants, activePubkey),
           participants: conv.participants.map((pubkey) => ({ pubkey })),
-          metadata: {
-            encrypted: true,
-            giftWrapped: true,
-          },
+          metadata: { encrypted: true, giftWrapped: true },
           lastMessage: conv.lastMessage
-            ? this.rumorToMessage(conv.id, conv.lastGiftWrap!, conv.lastMessage)
+            ? rumorToMessage(conv.id, conv.lastMessage)
             : undefined,
           unreadCount: 0,
         })),
@@ -640,12 +588,8 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   ): string {
     const others = participants.filter((p) => p !== activePubkey);
 
-    if (others.length === 0) {
-      return "Saved Messages";
-    } else if (others.length === 1) {
-      return `${others[0].slice(0, 8)}...`;
-    } else {
-      return `Group (${participants.length})`;
-    }
+    if (others.length === 0) return "Saved Messages";
+    if (others.length === 1) return `${others[0].slice(0, 8)}...`;
+    return `Group (${participants.length})`;
   }
 }
