@@ -14,7 +14,7 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
 import eventStore from "./event-store";
 import pool from "./relay-pool";
-import { encryptedContentStorage } from "./db";
+import { encryptedContentStorage, getStoredEncryptedContentIds } from "./db";
 
 /** Kind 10050: DM relay list (NIP-17) */
 const DM_RELAY_LIST_KIND = 10050;
@@ -88,8 +88,17 @@ class GiftWrapService {
   private giftWraps: NostrEvent[] = [];
   readonly giftWraps$ = new BehaviorSubject<NostrEvent[]>([]);
 
-  /** Conversations grouped by participants */
+  /** Conversations grouped by participants (NIP-17 kind 14 messages only) */
   readonly conversations$ = new BehaviorSubject<Conversation[]>([]);
+
+  /**
+   * All decrypted rumors (any kind, not just DMs)
+   * The full rumor event is preserved including: id, pubkey, created_at, kind, tags, content
+   * This allows future support for any kind sent via gift wrap (messages, files, etc.)
+   */
+  readonly decryptedRumors$ = new BehaviorSubject<
+    Array<{ giftWrap: NostrEvent; rumor: Rumor }>
+  >([]);
 
   /** Inbox relays (kind 10050) */
   readonly inboxRelays$ = new BehaviorSubject<string[]>([]);
@@ -110,9 +119,14 @@ class GiftWrapService {
     error?: string;
   }>();
 
+  /** Pending count observable for UI display */
+  readonly pendingCount$ = new BehaviorSubject<number>(0);
+
   private subscriptions: Subscription[] = [];
   private relaySubscription: Subscription | null = null;
   private persistenceCleanup: (() => void) | null = null;
+  /** IDs of gift wraps that have persisted decrypted content */
+  private persistedIds = new Set<string>();
 
   constructor() {
     // Start encrypted content persistence
@@ -123,15 +137,43 @@ class GiftWrapService {
   }
 
   /** Initialize the service with user pubkey and signer */
-  init(pubkey: string, signer: ISigner | null) {
+  async init(pubkey: string, signer: ISigner | null) {
     this.cleanup();
     this.userPubkey = pubkey;
     this.signer = signer;
     this.decryptStates.clear();
     this.decryptStates$.next(new Map());
+    this.pendingCount$.next(0);
+
+    // Load persisted encrypted content IDs to know which gift wraps are already decrypted
+    this.persistedIds = await getStoredEncryptedContentIds();
 
     // Load inbox relays (kind 10050)
     this.loadInboxRelays();
+
+    // Subscribe to event updates to detect when cache restoration completes
+    const updateSub = eventStore.update$.subscribe((event) => {
+      if (
+        event.kind === kinds.GiftWrap &&
+        this.giftWraps.some((g) => g.id === event.id)
+      ) {
+        // A gift wrap was updated (possibly restored from cache)
+        // Check if it's now unlocked and update state accordingly
+        if (isGiftWrapUnlocked(event)) {
+          const currentState = this.decryptStates.get(event.id);
+          if (currentState?.status === "pending") {
+            this.decryptStates.set(event.id, {
+              status: "success",
+              decryptedAt: Date.now(),
+            });
+            this.decryptStates$.next(new Map(this.decryptStates));
+            this.updatePendingCount();
+            this.updateConversations();
+          }
+        }
+      }
+    });
+    this.subscriptions.push(updateSub);
 
     // If enabled, start syncing
     if (this.settings$.value.enabled) {
@@ -232,7 +274,10 @@ class GiftWrapService {
         // Update decrypt states for new gift wraps
         for (const gw of giftWraps) {
           if (!this.decryptStates.has(gw.id)) {
-            const isUnlocked = isGiftWrapUnlocked(gw);
+            // Check both in-memory unlock state and persisted IDs
+            // Persisted IDs indicate content was decrypted in a previous session
+            const isUnlocked =
+              isGiftWrapUnlocked(gw) || this.persistedIds.has(gw.id);
             this.decryptStates.set(gw.id, {
               status: isUnlocked ? "success" : "pending",
               decryptedAt: isUnlocked ? Date.now() : undefined,
@@ -240,6 +285,7 @@ class GiftWrapService {
           }
         }
         this.decryptStates$.next(new Map(this.decryptStates));
+        this.updatePendingCount();
 
         // Update conversations
         this.updateConversations();
@@ -267,15 +313,37 @@ class GiftWrapService {
     }
   }
 
-  /** Update conversations from decrypted gift wraps */
+  /** Update pending count for UI display */
+  private updatePendingCount() {
+    let count = 0;
+    for (const state of this.decryptStates.values()) {
+      if (state.status === "pending" || state.status === "decrypting") {
+        count++;
+      }
+    }
+    this.pendingCount$.next(count);
+  }
+
+  /**
+   * Update conversations and decrypted rumors from gift wraps.
+   * Applesauce persistence stores the full JSON representation of rumors,
+   * preserving all fields (id, pubkey, created_at, kind, tags, content).
+   */
   private updateConversations() {
     const conversationMap = new Map<string, Conversation>();
+    const allRumors: Array<{ giftWrap: NostrEvent; rumor: Rumor }> = [];
 
     for (const gw of this.giftWraps) {
       if (!isGiftWrapUnlocked(gw)) continue;
 
       const rumor = getGiftWrapRumor(gw);
-      if (!rumor || rumor.kind !== PRIVATE_DM_KIND) continue;
+      if (!rumor) continue;
+
+      // Collect all decrypted rumors (any kind) for future use
+      allRumors.push({ giftWrap: gw, rumor });
+
+      // Only group NIP-17 DMs (kind 14) into conversations
+      if (rumor.kind !== PRIVATE_DM_KIND) continue;
 
       const convId = getConversationIdentifierFromMessage(rumor);
       const existing = conversationMap.get(convId);
@@ -292,6 +360,10 @@ class GiftWrapService {
         });
       }
     }
+
+    // Sort rumors by created_at descending
+    allRumors.sort((a, b) => b.rumor.created_at - a.rumor.created_at);
+    this.decryptedRumors$.next(allRumors);
 
     const conversations = Array.from(conversationMap.values()).sort(
       (a, b) =>
@@ -320,9 +392,13 @@ class GiftWrapService {
     // Update state to decrypting
     this.decryptStates.set(giftWrapId, { status: "decrypting" });
     this.decryptStates$.next(new Map(this.decryptStates));
+    this.updatePendingCount();
 
     try {
       const rumor = await unlockGiftWrap(gw, this.signer);
+
+      // Add to persisted IDs so it's recognized on next reload
+      this.persistedIds.add(giftWrapId);
 
       // Update state to success
       this.decryptStates.set(giftWrapId, {
@@ -330,6 +406,7 @@ class GiftWrapService {
         decryptedAt: Date.now(),
       });
       this.decryptStates$.next(new Map(this.decryptStates));
+      this.updatePendingCount();
 
       // Emit decrypt event
       this.decryptEvent$.next({
@@ -348,6 +425,7 @@ class GiftWrapService {
       // Update state to error
       this.decryptStates.set(giftWrapId, { status: "error", error });
       this.decryptStates$.next(new Map(this.decryptStates));
+      this.updatePendingCount();
 
       // Emit decrypt event
       this.decryptEvent$.next({

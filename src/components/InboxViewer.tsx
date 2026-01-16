@@ -239,32 +239,43 @@ function InboxViewer() {
             </div>
           </div>
 
-          {(counts.pending > 0 || counts.decrypting > 0) && (
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {counts.pending + counts.decrypting} messages waiting to be
-                decrypted
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleDecryptAll}
-                disabled={isDecryptingAll || !account?.signer}
-              >
-                {isDecryptingAll ? (
-                  <>
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                    Decrypting...
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="size-4 mr-2" />
-                    Decrypt All
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+          {/* Only show manual decrypt options when auto-decrypt is OFF */}
+          {!settings?.autoDecrypt &&
+            (counts.pending > 0 || counts.decrypting > 0) && (
+              <div className="px-4 py-3 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  {counts.pending + counts.decrypting} messages waiting to be
+                  decrypted
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleDecryptAll}
+                  disabled={isDecryptingAll || !account?.signer}
+                >
+                  {isDecryptingAll ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      Decrypting...
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="size-4 mr-2" />
+                      Decrypt All
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+          {/* Show auto-decrypt status when enabled and there are pending messages */}
+          {settings?.autoDecrypt &&
+            (counts.pending > 0 || counts.decrypting > 0) && (
+              <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Auto-decrypting messages...</span>
+              </div>
+            )}
         </div>
       )}
 

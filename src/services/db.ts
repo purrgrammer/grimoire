@@ -63,8 +63,17 @@ export interface CachedBlossomServerList {
 
 export interface EncryptedContentEntry {
   id: string; // Event ID (gift wrap or seal)
-  plaintext: string; // Decrypted content
+  plaintext: string; // Decrypted content (JSON string for rumor/seal)
   savedAt: number;
+}
+
+/**
+ * Get all stored encrypted content IDs
+ * Used to check which gift wraps have already been decrypted
+ */
+export async function getStoredEncryptedContentIds(): Promise<Set<string>> {
+  const entries = await db.encryptedContent.toArray();
+  return new Set(entries.map((e) => e.id));
 }
 
 export interface LocalSpell {

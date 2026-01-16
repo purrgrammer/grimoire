@@ -1,10 +1,12 @@
 import { User, HardDrive, Palette, Mail } from "lucide-react";
 import accounts from "@/services/accounts";
+import giftWrapService from "@/services/gift-wrap";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +64,13 @@ export default function UserMenu() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
+
+  // Gift wrap service state for pending message count
+  const inboxSettings = use$(giftWrapService.settings$);
+  const pendingCount = use$(giftWrapService.pendingCount$);
+  // Show badge when enabled, not auto-decrypt, and has pending messages
+  const showPendingBadge =
+    inboxSettings?.enabled && !inboxSettings?.autoDecrypt && pendingCount > 0;
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -165,7 +174,15 @@ export default function UserMenu() {
                 }}
               >
                 <Mail className="size-4 mr-2" />
-                Private Messages
+                <span className="flex-1">Private Messages</span>
+                {showPendingBadge && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                  >
+                    {pendingCount}
+                  </Badge>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">
