@@ -42,9 +42,7 @@ const SpellbooksViewer = lazy(() =>
 const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
-const InboxViewer = lazy(() =>
-  import("./InboxViewer").then((m) => ({ default: m.InboxViewer })),
-);
+const InboxViewer = lazy(() => import("./InboxViewer"));
 const CountViewer = lazy(() => import("./CountViewer"));
 
 // Loading fallback component

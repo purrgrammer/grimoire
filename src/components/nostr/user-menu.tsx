@@ -6,7 +6,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
 import { useLiveQuery } from "dexie-react-hooks";
-import giftWrapLoader from "@/services/gift-wrap-loader";
+import giftWrapManager from "@/services/gift-wrap";
 import { dmRelayListCache } from "@/services/dm-relay-list-cache";
 import {
   DropdownMenu,
@@ -73,16 +73,13 @@ export default function UserMenu() {
   }, [account?.pubkey]);
 
   // Get pending gift wrap count
-  const pendingCount = useLiveQuery(async () => {
-    if (!account?.pubkey || !state.privateMessagesEnabled) return 0;
-    // Only show count if auto-decrypt is disabled
-    if (state.autoDecryptGiftWraps) return 0;
-    return giftWrapLoader.getPendingCount(account.pubkey);
-  }, [
-    account?.pubkey,
-    state.privateMessagesEnabled,
-    state.autoDecryptGiftWraps,
-  ]);
+  const syncState = use$(giftWrapManager.state);
+  const pendingCount =
+    account?.pubkey &&
+    state.privateMessagesEnabled &&
+    !state.autoDecryptGiftWraps
+      ? (syncState?.pendingCount ?? 0)
+      : 0;
 
   function openProfile() {
     if (!account?.pubkey) return;

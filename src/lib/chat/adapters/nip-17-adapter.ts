@@ -4,14 +4,15 @@
  * This adapter provides read-only access to NIP-17 encrypted DMs
  * that have been received and decrypted via gift wraps (NIP-59).
  *
- * Messages are loaded from the local decryptedRumors database table,
- * which is populated by the gift-wrap-loader service.
+ * Messages are loaded from applesauce WrappedMessagesModel which
+ * returns decrypted kind 14 rumors.
  *
  * Protocol: https://github.com/nostr-protocol/nips/blob/master/17.md
  */
 
-import { Observable } from "rxjs";
+import { Observable, map } from "rxjs";
 import { nip19 } from "nostr-tools";
+import { WrappedMessagesModel } from "applesauce-common/models";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
@@ -22,8 +23,8 @@ import type {
   Participant,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import db from "@/services/db";
 import eventStore from "@/services/event-store";
+import accountManager from "@/services/accounts";
 
 export class Nip17Adapter extends ChatProtocolAdapter {
   readonly protocol = "nip-17" as const;
@@ -73,24 +74,21 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
     if (identifier.type !== "dm-recipient") {
-      throw new Error("Invalid identifier type for NIP-17");
+      throw new Error(
+        `NIP-17 adapter cannot handle identifier type: ${identifier.type}`,
+      );
     }
 
-    const peerPubkey = identifier.value;
+    const recipientPubkey = identifier.value;
+    const activePubkey = accountManager.active$.value?.pubkey;
 
-    // Get active account pubkey
-    const activePubkey = await this.getActivePubkey();
-
-    // Try to get conversation metadata from database
-    const conversationId = `${peerPubkey}:${activePubkey}`;
-    const conversation = await db.conversations.get(conversationId);
-
-    // Get profile from eventStore
-    const profile = eventStore.getReplaceable(0, peerPubkey, "");
+    if (!activePubkey) {
+      throw new Error("No active account");
+    }
 
     // Get peer participant
     const peerParticipant: Participant = {
-      pubkey: peerPubkey,
+      pubkey: recipientPubkey,
     };
 
     // Get self participant
@@ -98,162 +96,176 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       pubkey: activePubkey,
     };
 
+    // Create conversation ID (use sorted pubkeys for consistent ID)
+    const conversationId = [activePubkey, recipientPubkey].sort().join(":");
+
     return {
       id: conversationId,
-      type: "dm",
-      protocol: "nip-17",
-      title: profile?.content
-        ? JSON.parse(profile.content).name || peerPubkey.slice(0, 8)
-        : peerPubkey.slice(0, 8),
+      protocol: this.protocol,
+      type: this.type,
+      title: `DM with ${recipientPubkey.slice(0, 8)}...`,
       participants: [peerParticipant, selfParticipant],
-      unreadCount: conversation?.unreadCount ?? 0,
-      metadata: {
-        encrypted: true,
-        giftWrapped: true,
-      },
+      unreadCount: 0,
+      metadata: {},
     };
   }
 
   /**
-   * Load messages from decryptedRumors table
-   * Returns an Observable with all messages for this conversation
+   * Load messages for a conversation
+   * Uses WrappedMessagesModel to get decrypted kind 14 messages
    */
   loadMessages(
     conversation: Conversation,
-    options?: LoadMessagesOptions,
+    _options?: LoadMessagesOptions,
   ): Observable<Message[]> {
-    // Parse peer pubkey from conversation ID
-    const [peerPubkey] = conversation.id.split(":");
+    const activePubkey = accountManager.active$.value?.pubkey;
+    if (!activePubkey) {
+      throw new Error("No active account");
+    }
 
-    // Get messages from database (async)
-    const messagesPromise = this.loadMessagesFromDb(
-      peerPubkey,
-      conversation.id,
-      options?.limit ?? 100,
+    const recipientPubkey = conversation.participants.find(
+      (p) => p.pubkey !== activePubkey,
+    )?.pubkey;
+
+    if (!recipientPubkey) {
+      throw new Error("Recipient pubkey not found in conversation");
+    }
+
+    console.log(
+      `[NIP-17] Loading messages with ${recipientPubkey} for ${activePubkey}`,
     );
 
-    // Convert promise to observable
-    return new Observable((subscriber) => {
-      messagesPromise
-        .then((messages) => {
-          subscriber.next(messages);
-          subscriber.complete();
-        })
-        .catch((err) => subscriber.error(err));
-    });
+    // WrappedMessagesModel returns ALL decrypted rumors for the user
+    // We need to filter for this specific conversation
+    return eventStore.model(WrappedMessagesModel, activePubkey).pipe(
+      map((rumors) => {
+        // rumors is an array of decrypted kind 14 events
+        if (!Array.isArray(rumors)) {
+          console.warn("[NIP-17] WrappedMessagesModel returned non-array");
+          return [];
+        }
+
+        // Filter for messages with the specific conversation partner
+        const conversationRumors = rumors.filter((rumor) => {
+          // Message is in this conversation if:
+          // 1. We sent it to the recipient (rumor.pubkey === activePubkey, p-tag === recipientPubkey)
+          // 2. Recipient sent it to us (rumor.pubkey === recipientPubkey)
+          const pTags = rumor.tags.filter((t) => t[0] === "p");
+          const hasRecipient = pTags.some((t) => t[1] === recipientPubkey);
+
+          return (
+            (rumor.pubkey === activePubkey && hasRecipient) ||
+            rumor.pubkey === recipientPubkey
+          );
+        });
+
+        console.log(
+          `[NIP-17] Got ${conversationRumors.length} messages for conversation (out of ${rumors.length} total)`,
+        );
+
+        const messages = conversationRumors.map((rumor) =>
+          this.rumorToMessage(rumor, conversation.id),
+        );
+
+        // Sort by timestamp (oldest first)
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
+      }),
+    );
   }
 
   /**
-   * Load more historical messages (pagination)
+   * Convert a rumor (kind 14) to a Message
+   */
+  private rumorToMessage(rumor: any, conversationId: string): Message {
+    // Extract reply info if present (e-tag referencing previous message)
+    const eTags = rumor.tags.filter((t: string[]) => t[0] === "e");
+    const replyTo = eTags.length > 0 ? eTags[0][1] : undefined;
+
+    // Create a NostrEvent from rumor (add sig field)
+    const event: NostrEvent = {
+      ...rumor,
+      sig: rumor.sig || "", // Rumors don't have sig
+    };
+
+    return {
+      id: rumor.id,
+      conversationId,
+      author: rumor.pubkey,
+      content: rumor.content,
+      timestamp: rumor.created_at,
+      protocol: this.protocol,
+      event,
+      replyTo,
+    };
+  }
+
+  /**
+   * Load more messages (not applicable for NIP-17)
    */
   async loadMoreMessages(
-    conversation: Conversation,
-    before: number,
+    _conversation: Conversation,
+    _before: number,
   ): Promise<Message[]> {
-    const [peerPubkey] = conversation.id.split(":");
-    return this.loadMessagesFromDb(peerPubkey, conversation.id, 50, before);
+    // NIP-17 loads all messages at once, no pagination
+    return [];
   }
 
   /**
-   * Load messages from database
+   * Load a specific reply message (not implemented for NIP-17)
    */
-  private async loadMessagesFromDb(
-    peerPubkey: string,
-    conversationId: string,
-    limit: number,
-    before?: number,
-  ): Promise<Message[]> {
-    const activePubkey = await this.getActivePubkey();
-
-    // Query decryptedRumors table for messages with this peer
-    let receivedQuery = db.decryptedRumors
-      .where("[recipientPubkey+senderPubkey]")
-      .equals([activePubkey, peerPubkey]);
-
-    if (before) {
-      receivedQuery = receivedQuery.filter((r) => r.rumorCreatedAt < before);
-    }
-
-    const rumors = await receivedQuery.reverse().limit(limit).toArray();
-
-    // Also get messages I sent to them (if any)
-    let sentQuery = db.decryptedRumors
-      .where("[recipientPubkey+senderPubkey]")
-      .equals([peerPubkey, activePubkey]);
-
-    if (before) {
-      sentQuery = sentQuery.filter((r) => r.rumorCreatedAt < before);
-    }
-
-    const sentRumors = await sentQuery.reverse().limit(limit).toArray();
-
-    // Combine and sort by timestamp
-    const allRumors = [...rumors, ...sentRumors].sort(
-      (a, b) => a.rumorCreatedAt - b.rumorCreatedAt,
-    );
-
-    // Convert to Message format
-    return allRumors
-      .filter((r) => r.rumorKind === 14) // Only chat messages (kind 14)
-      .map((r) => ({
-        id: r.giftWrapId,
-        conversationId,
-        author: r.senderPubkey,
-        content: r.rumor.content,
-        timestamp: r.rumorCreatedAt,
-        protocol: "nip-17" as const,
-        event: r.rumor,
-      }));
+  async loadReplyMessage(
+    _conversation: Conversation,
+    _eventId: string,
+  ): Promise<NostrEvent | null> {
+    // Would need to search through decrypted rumors
+    return null;
   }
 
   /**
-   * Send message - NOT IMPLEMENTED (read-only for now)
+   * Send a message (not yet implemented for NIP-17)
    */
   async sendMessage(
     _conversation: Conversation,
     _content: string,
     _options?: SendMessageOptions,
   ): Promise<void> {
-    throw new Error(
-      "Sending NIP-17 messages is not yet implemented. This adapter is read-only.",
-    );
+    throw new Error("Sending NIP-17 messages is not yet implemented");
   }
 
   /**
-   * Get capabilities - read-only for now
+   * React to a message (not supported for NIP-17)
+   */
+  async reactToMessage(_message: Message, _emoji: string): Promise<NostrEvent> {
+    throw new Error("Reactions are not supported for NIP-17");
+  }
+
+  /**
+   * Delete a message (not supported for NIP-17)
+   */
+  async deleteMessage(_message: Message): Promise<void> {
+    throw new Error("Message deletion is not supported for NIP-17");
+  }
+
+  /**
+   * List conversations (not yet implemented for NIP-17)
+   * This would require scanning all decrypted rumors to find unique conversation partners
+   */
+  listConversations(): Observable<Conversation[]> {
+    throw new Error("Listing NIP-17 conversations is not yet implemented");
+  }
+
+  /**
+   * Get capabilities - NIP-17 is read-only for now
    */
   getCapabilities(): ChatCapabilities {
     return {
-      supportsEncryption: true, // NIP-17 is encrypted
-      supportsThreading: false, // DMs don't have threading
-      supportsModeration: false, // No moderation in DMs
-      supportsRoles: false, // No roles in 1-on-1 DMs
-      supportsGroupManagement: false, // Not a group
-      canCreateConversations: false, // Read-only for now
-      requiresRelay: false, // Uses DM relay lists, not specific relay
+      supportsEncryption: true,
+      supportsThreading: false,
+      supportsModeration: false,
+      supportsRoles: false,
+      supportsGroupManagement: false,
+      canCreateConversations: false,
+      requiresRelay: false,
     };
-  }
-
-  /**
-   * Load reply message - not implemented for NIP-17
-   */
-  async loadReplyMessage(
-    _conversation: Conversation,
-    _eventId: string,
-  ): Promise<NostrEvent | null> {
-    return null;
-  }
-
-  /**
-   * Get active pubkey from account manager
-   */
-  private async getActivePubkey(): Promise<string> {
-    // Import dynamically to avoid circular dependency
-    const { default: accountManager } = await import("@/services/accounts");
-    const account = accountManager.active;
-    if (!account) {
-      throw new Error("No active account");
-    }
-    return account.pubkey;
   }
 }
