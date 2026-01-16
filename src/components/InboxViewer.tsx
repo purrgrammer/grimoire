@@ -428,22 +428,22 @@ function ConversationRow({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex items-baseline flex-wrap">
             {isSelfConversation ? (
               <span className="text-sm font-medium">Saved Messages</span>
             ) : (
               <>
                 {otherParticipants.slice(0, 3).map((pubkey, i) => (
-                  <span key={pubkey} className="inline-flex items-center">
+                  <span key={pubkey} className="inline-flex items-baseline">
                     {i > 0 && (
-                      <span className="text-muted-foreground mr-1">,</span>
+                      <span className="text-muted-foreground">,&nbsp;</span>
                     )}
                     <UserName pubkey={pubkey} className="text-sm font-medium" />
                   </span>
                 ))}
                 {otherParticipants.length > 3 && (
-                  <span className="text-xs text-muted-foreground ml-1">
-                    +{otherParticipants.length - 3}
+                  <span className="text-xs text-muted-foreground">
+                    &nbsp;+{otherParticipants.length - 3}
                   </span>
                 )}
               </>

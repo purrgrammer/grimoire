@@ -11,12 +11,14 @@ import {
   Paperclip,
   Copy,
   CopyCheck,
+  Lock,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
+import type { NostrEvent } from "@/types/nostr";
 import type {
   ChatProtocol,
   ProtocolIdentifier,
@@ -35,6 +37,7 @@ import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
+import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
@@ -50,7 +53,9 @@ import {
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { useProfile } from "@/hooks/useProfile";
 import { useCopy } from "@/hooks/useCopy";
+import { getDisplayName } from "@/lib/nostr-utils";
 import { Label } from "./ui/label";
 import {
   Tooltip,
@@ -122,7 +127,58 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
 }
 
 /**
+ * ParticipantAvatar - Renders a single participant avatar
+ */
+const ParticipantAvatar = memo(function ParticipantAvatar({
+  pubkey,
+  className,
+}: {
+  pubkey: string;
+  className?: string;
+}) {
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={profile?.picture} alt={displayName} />
+      <AvatarFallback>
+        <span className="text-[10px]">{displayName.slice(0, 2)}</span>
+      </AvatarFallback>
+    </Avatar>
+  );
+});
+
+/**
+ * ParticipantName - Renders a single participant name without accent color
+ * (for use in DM titles where we want regular text color)
+ */
+const ParticipantName = memo(function ParticipantName({
+  pubkey,
+}: {
+  pubkey: string;
+}) {
+  const { addWindow } = useGrimoire();
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  return (
+    <span
+      dir="auto"
+      className="font-semibold cursor-crosshair hover:underline hover:decoration-dotted text-foreground"
+      onClick={(e) => {
+        e.stopPropagation();
+        addWindow("profile", { pubkey });
+      }}
+    >
+      {displayName}
+    </span>
+  );
+});
+
+/**
  * DmTitle - Renders profile names for NIP-17 DM conversations
+ * Uses regular text color (not accent) without lock icon (lock shown in header controls)
  */
 const DmTitle = memo(function DmTitle({
   participants,
@@ -141,15 +197,17 @@ const DmTitle = memo(function DmTitle({
 
   // 1-on-1 or group
   return (
-    <span className="inline-flex items-center gap-1 flex-wrap">
+    <span className="inline-flex items-baseline flex-wrap">
       {others.slice(0, 3).map((p, i) => (
-        <span key={p.pubkey} className="inline-flex items-center">
-          {i > 0 && <span className="text-muted-foreground">, </span>}
-          <UserName pubkey={p.pubkey} className="font-semibold" />
+        <span key={p.pubkey} className="inline-flex items-baseline">
+          {i > 0 && <span className="text-muted-foreground">,&nbsp;</span>}
+          <ParticipantName pubkey={p.pubkey} />
         </span>
       ))}
       {others.length > 3 && (
-        <span className="text-muted-foreground">+{others.length - 3}</span>
+        <span className="text-muted-foreground">
+          &nbsp;+{others.length - 3}
+        </span>
       )}
     </span>
   );
@@ -173,10 +231,50 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
  * Get the chat command identifier for a conversation
  * Returns a string that can be passed to the `chat` command to open this conversation
  *
+ * For NIP-17 DMs: nprofile1.../npub1... (chat partner's identifier)
  * For NIP-29 groups: relay'group-id (without wss:// prefix)
  * For NIP-53 live activities: naddr1... encoding
  */
-function getChatIdentifier(conversation: Conversation): string | null {
+function getChatIdentifier(
+  conversation: Conversation,
+  activePubkey?: string,
+): string | null {
+  if (conversation.protocol === "nip-17") {
+    // For DMs, get the other participant(s)
+    const others = conversation.participants
+      .map((p) => p.pubkey)
+      .filter((p) => p !== activePubkey);
+
+    // Self-chat or no participants
+    if (others.length === 0) {
+      // Return own npub
+      if (activePubkey) {
+        return nip19.npubEncode(activePubkey);
+      }
+      return null;
+    }
+
+    // 1-on-1 chat: return nprofile with inbox relays if available
+    if (others.length === 1) {
+      const pubkey = others[0];
+      const participantInboxRelays =
+        conversation.metadata?.participantInboxRelays;
+      const relays = participantInboxRelays?.[pubkey];
+
+      if (relays && relays.length > 0) {
+        return nip19.nprofileEncode({
+          pubkey,
+          relays: relays.slice(0, 3), // Limit to 3 relays
+        });
+      } else {
+        return nip19.npubEncode(pubkey);
+      }
+    }
+
+    // Group chat: return comma-separated npubs
+    return others.map((p) => nip19.npubEncode(p)).join(",");
+  }
+
   if (conversation.protocol === "nip-29") {
     const groupId = conversation.metadata?.groupId;
     const relayUrl = conversation.metadata?.relayUrl;
@@ -220,11 +318,41 @@ type ConversationResult =
 const ComposerReplyPreview = memo(function ComposerReplyPreview({
   replyToId,
   onClear,
+  adapter,
+  conversation,
 }: {
   replyToId: string;
   onClear: () => void;
+  adapter: ChatProtocolAdapter;
+  conversation: Conversation;
 }) {
-  const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+  // State for manually loaded events (NIP-17 synthetic events)
+  const [manualEvent, setManualEvent] = useState<NostrEvent | null>(null);
+
+  // Load the event being replied to (reactive - updates when event arrives)
+  const storeEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+
+  // Use store event if available, otherwise fall back to manually loaded event
+  const replyEvent = storeEvent ?? manualEvent;
+
+  // Fetch event from adapter if not in store (for NIP-17 synthetic events)
+  useEffect(() => {
+    if (!replyEvent) {
+      adapter
+        .loadReplyMessage(conversation, replyToId)
+        .then((event) => {
+          if (event) {
+            setManualEvent(event);
+          }
+        })
+        .catch((err) => {
+          console.error(
+            `[ComposerReplyPreview] Failed to load reply ${replyToId.slice(0, 8)}:`,
+            err,
+          );
+        });
+    }
+  }, [replyEvent, adapter, conversation, replyToId]);
 
   if (!replyEvent) {
     return (
@@ -735,7 +863,9 @@ export function ChatViewer({
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
-    if (conversation?.protocol === "nip-29") {
+    if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
+    } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
@@ -846,29 +976,34 @@ export function ChatViewer({
                   className="max-w-md p-3"
                 >
                   <div className="flex flex-col gap-2">
-                    {/* Icon + Name */}
+                    {/* Icon/Avatar + Name */}
                     <div className="flex items-center gap-2">
-                      {conversation.metadata?.icon && (
-                        <img
-                          src={conversation.metadata.icon}
-                          alt=""
-                          className="size-6 rounded object-cover flex-shrink-0"
-                          onError={(e) => {
-                            // Hide image if it fails to load
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="font-semibold">
-                        {conversation.protocol === "nip-17" ? (
+                      {/* For NIP-17 DMs, just show title without big avatars */}
+                      {conversation.protocol === "nip-17" ? (
+                        <span className="font-semibold">
                           <DmTitle
                             participants={conversation.participants}
                             activePubkey={activeAccount?.pubkey}
                           />
-                        ) : (
-                          conversation.title
-                        )}
-                      </span>
+                        </span>
+                      ) : (
+                        <>
+                          {conversation.metadata?.icon && (
+                            <img
+                              src={conversation.metadata.icon}
+                              alt=""
+                              className="size-6 rounded object-cover flex-shrink-0"
+                              onError={(e) => {
+                                // Hide image if it fails to load
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          )}
+                          <span className="font-semibold">
+                            {conversation.title}
+                          </span>
+                        </>
+                      )}
                     </div>
                     {/* Description */}
                     {conversation.metadata?.description && (
@@ -878,26 +1013,78 @@ export function ChatViewer({
                     )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNipClick();
-                          }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
-                        >
-                          {conversation.protocol.toUpperCase()}
-                        </button>
-                      )}
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNipClick();
+                        }}
+                        className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                      >
+                        {conversation.protocol.toUpperCase()}
+                      </button>
+                      <span className="text-primary-foreground/60">•</span>
                       <span className="capitalize text-primary-foreground/80">
                         {conversation.type}
                       </span>
                     </div>
+                    {/* Participants (NIP-17) */}
+                    {conversation.protocol === "nip-17" &&
+                      (() => {
+                        const others = conversation.participants.filter(
+                          (p) => p.pubkey !== activeAccount?.pubkey,
+                        );
+
+                        // Self-chat
+                        if (others.length === 0) {
+                          return (
+                            <div className="text-xs text-primary-foreground/80">
+                              Saved Messages
+                            </div>
+                          );
+                        }
+
+                        // 1-on-1 chat
+                        if (others.length === 1) {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <ParticipantAvatar
+                                pubkey={others[0].pubkey}
+                                className="size-4 flex-shrink-0"
+                              />
+                              <UserName
+                                pubkey={others[0].pubkey}
+                                className="text-xs text-primary-foreground"
+                              />
+                            </div>
+                          );
+                        }
+
+                        // Group chat (2+ others)
+                        return (
+                          <div className="space-y-1">
+                            <div className="text-xs text-primary-foreground/60">
+                              Participants:
+                            </div>
+                            <div className="space-y-0.5">
+                              {others.map((p) => (
+                                <div
+                                  key={p.pubkey}
+                                  className="text-xs text-primary-foreground/80 flex items-center gap-2"
+                                >
+                                  <ParticipantAvatar
+                                    pubkey={p.pubkey}
+                                    className="size-4 flex-shrink-0"
+                                  />
+                                  <UserName
+                                    pubkey={p.pubkey}
+                                    className="text-xs text-primary-foreground"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     {/* Live Activity Status */}
                     {liveActivity?.status && (
                       <div className="flex items-center gap-1.5 text-xs">
@@ -922,10 +1109,13 @@ export function ChatViewer({
               </Tooltip>
             </TooltipProvider>
             {/* Copy Chat ID button */}
-            {getChatIdentifier(conversation) && (
+            {getChatIdentifier(conversation, activeAccount?.pubkey) && (
               <button
                 onClick={() => {
-                  const chatId = getChatIdentifier(conversation);
+                  const chatId = getChatIdentifier(
+                    conversation,
+                    activeAccount?.pubkey,
+                  );
                   if (chatId) copyChatId(chatId);
                 }}
                 className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
@@ -940,17 +1130,19 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
+            {/* Lock icon for encrypted conversations */}
+            {conversation.protocol === "nip-17" && (
+              <Lock className="size-3.5" />
+            )}
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
-            )}
+            {/* NIP badge - clickable for all protocols */}
+            <button
+              onClick={handleNipClick}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+            >
+              {conversation.protocol.toUpperCase()}
+            </button>
           </div>
         </div>
       </div>
@@ -1037,6 +1229,8 @@ export function ChatViewer({
             <ComposerReplyPreview
               replyToId={replyTo}
               onClear={() => setReplyTo(undefined)}
+              adapter={adapter}
+              conversation={conversation}
             />
           )}
           <div className="flex gap-1.5 items-center">

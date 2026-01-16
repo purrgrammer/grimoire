@@ -58,14 +58,19 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
       eventStore.replaceable(DM_RELAY_LIST_KIND, pubkey).pipe(
         filter((e): e is NostrEvent => e !== undefined),
         take(1),
-        timeout(50),
+        timeout(100),
       ),
     );
     if (existing) {
-      return parseRelayTags(existing);
+      const relays = parseRelayTags(existing);
+      console.log(
+        `[NIP-17] Found cached inbox relays for ${pubkey.slice(0, 8)}:`,
+        relays.length,
+      );
+      return relays;
     }
   } catch {
-    // Not in store
+    // Not in store, continue to network fetch
   }
 
   // 2. Build relay list to query: participant's outbox + aggregators
@@ -74,20 +79,29 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
   try {
     const cached = await relayListCache.get(pubkey);
     if (cached?.write) {
-      relaysToQuery.push(...cached.write.slice(0, 2));
+      relaysToQuery.push(...cached.write.slice(0, 3));
     }
   } catch {
     // Cache miss
   }
 
   // Add aggregator relays
-  relaysToQuery.push(...AGGREGATOR_RELAYS.slice(0, 2));
+  relaysToQuery.push(...AGGREGATOR_RELAYS.slice(0, 3));
 
   // Dedupe
   const uniqueRelays = [...new Set(relaysToQuery)];
-  if (uniqueRelays.length === 0) return [];
+  if (uniqueRelays.length === 0) {
+    console.warn(
+      `[NIP-17] No relays to query for inbox relays of ${pubkey.slice(0, 8)}`,
+    );
+    return [];
+  }
 
-  // 3. Fetch from relays
+  console.log(
+    `[NIP-17] Fetching inbox relays for ${pubkey.slice(0, 8)} from ${uniqueRelays.length} relays`,
+  );
+
+  // 3. Fetch from relays with longer timeout
   try {
     const events = await firstValueFrom(
       pool
@@ -98,7 +112,7 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
         )
         .pipe(
           toArray(),
-          timeout(3000),
+          timeout(5000), // Increased from 3s to 5s
           catchError(() => of([] as NostrEvent[])),
         ),
     );
@@ -107,7 +121,16 @@ async function fetchInboxRelays(pubkey: string): Promise<string[]> {
       const latest = events.reduce((a, b) =>
         a.created_at > b.created_at ? a : b,
       );
-      return parseRelayTags(latest);
+      const relays = parseRelayTags(latest);
+      console.log(
+        `[NIP-17] Fetched inbox relays for ${pubkey.slice(0, 8)}:`,
+        relays.length,
+      );
+      return relays;
+    } else {
+      console.log(
+        `[NIP-17] No inbox relay list found for ${pubkey.slice(0, 8)}`,
+      );
     }
   } catch (err) {
     console.warn(
