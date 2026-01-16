@@ -459,11 +459,28 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     // Fetch inbox relays for all participants
     const participantInboxRelays: Record<string, string[]> = {};
+    let userInboxRelays: string[] = [];
 
-    // Current user's relays (already loaded)
-    const userRelays = giftWrapService.inboxRelays$.value;
-    if (userRelays.length > 0) {
-      participantInboxRelays[activePubkey] = userRelays;
+    // For self-chat, actively fetch own inbox relays to ensure they're populated
+    // For other chats, try cached value first (optimization)
+    if (isSelfChat) {
+      const ownRelays = await fetchInboxRelays(activePubkey);
+      if (ownRelays.length > 0) {
+        participantInboxRelays[activePubkey] = ownRelays;
+        userInboxRelays = ownRelays;
+        console.log(
+          `[NIP-17] ✅ Fetched own inbox relays for self-chat: ${ownRelays.length} relays`,
+        );
+      } else {
+        console.warn(`[NIP-17] ⚠️ Could not find inbox relays for self-chat`);
+      }
+    } else {
+      // For non-self-chat, try cached value first
+      const userRelays = giftWrapService.inboxRelays$.value;
+      if (userRelays.length > 0) {
+        participantInboxRelays[activePubkey] = userRelays;
+        userInboxRelays = userRelays;
+      }
     }
 
     // Fetch for other participants in parallel
@@ -498,7 +515,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       metadata: {
         encrypted: true,
         giftWrapped: true,
-        inboxRelays: userRelays,
+        inboxRelays: userInboxRelays,
         participantInboxRelays,
         // Flag if some participants have no inbox relays (can't send to them)
         unreachableParticipants:
