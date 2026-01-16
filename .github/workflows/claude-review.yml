@@ -1,0 +1,229 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+# Prevent concurrent reviews on the same PR
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Automatic review on PR open/update
+  auto-review:
+    name: Auto Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | head -50)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Get diff
+        id: diff
+        run: |
+          # Get diff for code files, limited to avoid token limits
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.css' | head -2000)
+          # Escape for JSON
+          DIFF_ESCAPED=$(echo "$DIFF" | jq -Rs .)
+          echo "diff=$DIFF_ESCAPED" >> $GITHUB_OUTPUT
+
+      - name: Review with Claude
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          CHANGED_FILES="${{ steps.changed.outputs.files }}"
+
+          PROMPT="You are a code reviewer for Grimoire, a Nostr protocol explorer built with React 19 + TypeScript + Vite + TailwindCSS + Jotai + Applesauce.
+
+          ## Project Context
+          - Nostr events use singleton EventStore from applesauce-core
+          - UI state managed with Jotai atoms + pure functions in src/core/logic.ts
+          - Applesauce helpers cache internally - don't wrap in useMemo
+          - Window system uses react-mosaic-component with binary split layout
+          - Path alias: @/ = ./src/
+
+          ## Review Criteria
+          1. **Nostr Best Practices**: Correct use of EventStore, proper event handling, NIP compliance
+          2. **Applesauce Patterns**: Don't create new EventStore/RelayPool instances, use helpers correctly
+          3. **React 19**: Proper hook usage, avoid unnecessary memoization of applesauce helpers
+          4. **Security**: No injection vulnerabilities, proper input validation at boundaries
+          5. **Code Quality**: Clear naming, minimal complexity, no over-engineering
+
+          ## Changed Files
+          $CHANGED_FILES
+
+          ## Diff
+          \`\`\`diff
+          $(git diff origin/${{ github.base_ref }}...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.css' | head -2000)
+          \`\`\`
+
+          Provide a concise review with:
+          1. **Summary**: One sentence overview
+          2. **Issues**: List any problems (prefix with file:line if possible)
+          3. **Suggestions**: Optional improvements (not required changes)
+          4. **Verdict**: APPROVE, REQUEST_CHANGES, or COMMENT
+
+          Be concise. Only mention real issues, not style preferences."
+
+          # Call Claude API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 4096,
+                messages: [{role: "user", content: $prompt}]
+              }')")
+
+          # Extract the text response
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // .error.message // "Failed to get response"')
+
+          # Save to file to avoid escaping issues
+          echo "$REVIEW" > review.txt
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('review.txt', 'utf8');
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              body: `## Claude Code Review\n\n${review}`,
+              event: 'COMMENT'
+            });
+
+  # On-demand review via @claude mention
+  mention-review:
+    name: "@claude Review"
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number
+            });
+            core.setOutput('head_sha', pr.data.head.sha);
+            core.setOutput('base_ref', pr.data.base.ref);
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ steps.pr.outputs.base_ref }}
+
+      - name: React to comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes'
+            });
+
+      - name: Extract question and review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          BASE_REF: ${{ steps.pr.outputs.base_ref }}
+        run: |
+          # Extract user's question (remove @claude mention)
+          QUESTION=$(echo "$COMMENT_BODY" | sed 's/@claude//gi' | xargs)
+          if [ -z "$QUESTION" ]; then
+            QUESTION="Please review this PR"
+          fi
+
+          PROMPT="You are a code reviewer for Grimoire, a Nostr protocol explorer.
+
+          ## User Request
+          $QUESTION
+
+          ## Project Context
+          - React 19 + TypeScript + Vite + TailwindCSS + Jotai + Applesauce
+          - Nostr events use singleton EventStore from applesauce-core
+          - Applesauce helpers cache internally - don't wrap in useMemo
+          - Path alias: @/ = ./src/
+
+          ## Diff
+          \`\`\`diff
+          $(git diff origin/$BASE_REF...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.css' | head -2000)
+          \`\`\`
+
+          Respond to the user's request concisely. If it's a general review request, provide:
+          1. Summary
+          2. Issues found (if any)
+          3. Suggestions (optional)"
+
+          # Call Claude API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 4096,
+                messages: [{role: "user", content: $prompt}]
+              }')")
+
+          # Extract the text response
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // .error.message // "Failed to get response"')
+
+          # Save to file
+          echo "$REVIEW" > review.txt
+
+      - name: Post response
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const response = fs.readFileSync('review.txt', 'utf8');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `## Claude Response\n\n${response}`
+            });
