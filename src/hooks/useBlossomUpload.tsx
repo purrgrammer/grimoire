@@ -11,6 +11,8 @@ export interface UseBlossomUploadOptions {
   onError?: (error: Error) => void;
   /** File types to accept (e.g., "image/*,video/*,audio/*") */
   accept?: string;
+  /** Additional blossom servers from communikey (NIP-CC) */
+  communikeyServers?: string[];
 }
 
 export interface UseBlossomUploadReturn {
@@ -84,9 +86,17 @@ export function useBlossomUpload(
         onCancel={handleCancel}
         onError={handleError}
         accept={options.accept}
+        communikeyServers={options.communikeyServers}
       />
     ),
-    [isOpen, handleSuccess, handleCancel, handleError, options.accept],
+    [
+      isOpen,
+      handleSuccess,
+      handleCancel,
+      handleError,
+      options.accept,
+      options.communikeyServers,
+    ],
   );
 
   return { open, close, isOpen, dialog };

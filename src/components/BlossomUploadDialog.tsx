@@ -57,6 +57,8 @@ interface BlossomUploadDialogProps {
   onError?: (error: Error) => void;
   /** File types to accept (e.g., "image/*,video/*,audio/*") */
   accept?: string;
+  /** Additional blossom servers from communikey (NIP-CC) */
+  communikeyServers?: string[];
 }
 
 /**
@@ -75,6 +77,7 @@ export function BlossomUploadDialog({
   onCancel,
   onError,
   accept = "image/*,video/*,audio/*",
+  communikeyServers = [],
 }: BlossomUploadDialogProps) {
   const eventStore = useEventStore();
   const activeAccount = use$(accountManager.active$);
@@ -134,16 +137,32 @@ export function BlossomUploadDialog({
     let subscription: Subscription | null = null;
     let foundUserServers = false;
 
+    // Helper to merge user servers with communikey servers
+    const mergeServers = (userServers: string[]) => {
+      // Combine user servers + communikey servers, removing duplicates
+      const allServers = [...new Set([...userServers, ...communikeyServers])];
+      return allServers;
+    };
+
     // Check existing event first
     const event = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
     if (event) {
-      const s = getServersFromEvent(event);
-      if (s.length > 0) {
-        setServers(s);
-        setSelectedServers(new Set(s)); // Select all by default
+      const userServers = getServersFromEvent(event);
+      if (userServers.length > 0) {
+        const allServers = mergeServers(userServers);
+        setServers(allServers);
+        setSelectedServers(new Set(allServers)); // Select all by default
         setLoadingServers(false);
         foundUserServers = true;
       }
+    }
+
+    // If we have communikey servers but no user servers yet, use them
+    if (!foundUserServers && communikeyServers.length > 0) {
+      setServers(communikeyServers);
+      setSelectedServers(new Set(communikeyServers));
+      setLoadingServers(false);
+      setUsingFallback(false);
     }
 
     // Also fetch from network
@@ -155,10 +174,13 @@ export function BlossomUploadDialog({
       next: () => {
         const e = eventStore.getReplaceable(USER_SERVER_LIST_KIND, pubkey, "");
         if (e) {
-          const s = getServersFromEvent(e);
-          if (s.length > 0) {
-            setServers(s);
-            setSelectedServers((prev) => (prev.size === 0 ? new Set(s) : prev));
+          const userServers = getServersFromEvent(e);
+          if (userServers.length > 0) {
+            const allServers = mergeServers(userServers);
+            setServers(allServers);
+            setSelectedServers((prev) =>
+              prev.size === 0 ? new Set(allServers) : prev,
+            );
             setUsingFallback(false);
             foundUserServers = true;
           }
@@ -171,7 +193,7 @@ export function BlossomUploadDialog({
     // After timeout, use fallbacks if no user servers found
     const timeout = setTimeout(() => {
       setLoadingServers(false);
-      if (!foundUserServers) {
+      if (!foundUserServers && communikeyServers.length === 0) {
         applyFallbackServers();
       }
     }, 3000);
@@ -180,7 +202,7 @@ export function BlossomUploadDialog({
       subscription?.unsubscribe();
       clearTimeout(timeout);
     };
-  }, [open, pubkey, eventStore, applyFallbackServers]);
+  }, [open, pubkey, eventStore, applyFallbackServers, communikeyServers]);
 
   // Create preview URL for selected file
   useEffect(() => {

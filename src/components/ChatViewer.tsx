@@ -446,9 +446,24 @@ export function ChatViewer({
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
 
+  // Extract communikey blossom servers if available
+  const communikeyServers = useMemo(() => {
+    if (
+      conversationResult.status === "success" &&
+      conversationResult.conversation.protocol === "communikeys"
+    ) {
+      return (
+        conversationResult.conversation.metadata?.communikeyConfig
+          ?.blossomServers || []
+      );
+    }
+    return [];
+  }, [conversationResult]);
+
   // Blossom upload hook for file attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
     accept: "image/*,video/*,audio/*",
+    communikeyServers,
     onSuccess: (results) => {
       if (results.length > 0 && editorRef.current) {
         // Insert the first successful upload as a blob attachment with metadata
