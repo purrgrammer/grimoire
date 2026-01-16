@@ -242,7 +242,12 @@ export const aiService = {
     messages: { role: string; content: string }[],
     model: string,
   ): AsyncGenerator<string, void, unknown> {
-    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+    const url = `${provider.baseUrl}/v1/chat/completions`;
+    console.log("[AI] Streaming chat request to:", url);
+    console.log("[AI] Model:", model);
+    console.log("[AI] Messages:", messages.length);
+
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -257,12 +262,15 @@ export const aiService = {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Chat completion failed: ${error}`);
+      console.error("[AI] Chat completion failed:", response.status, error);
+      throw new Error(`Chat completion failed (${response.status}): ${error}`);
     }
 
     if (!response.body) {
       throw new Error("No response body");
     }
+
+    console.log("[AI] Response received, starting stream...");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -282,7 +290,10 @@ export const aiService = {
           if (!trimmed || !trimmed.startsWith("data: ")) continue;
 
           const data = trimmed.slice(6);
-          if (data === "[DONE]") return;
+          if (data === "[DONE]") {
+            console.log("[AI] Stream complete");
+            return;
+          }
 
           try {
             const parsed = JSON.parse(data);
@@ -290,8 +301,8 @@ export const aiService = {
             if (content) {
               yield content;
             }
-          } catch {
-            // Skip invalid JSON lines
+          } catch (e) {
+            console.warn("[AI] Failed to parse SSE data:", data, e);
           }
         }
       }
@@ -309,6 +320,8 @@ export const aiService = {
     content: string,
     onChunk?: (chunk: string, fullContent: string) => void,
   ): Promise<AIMessage> {
+    console.log("[AI] sendMessage called for conversation:", conversationId);
+
     // Get conversation and provider
     const conversation = await this.getConversation(conversationId);
     if (!conversation) {
@@ -320,8 +333,12 @@ export const aiService = {
       throw new Error("Provider not found");
     }
 
+    console.log("[AI] Provider:", provider.name, provider.baseUrl);
+    console.log("[AI] Model:", conversation.model);
+
     // Add user message
     await this.addMessage(conversationId, "user", content);
+    console.log("[AI] User message added");
 
     // Get all messages for context
     const messages = await this.getMessages(conversationId);
@@ -340,18 +357,28 @@ export const aiService = {
 
     // Stream the response
     let fullContent = "";
+    let chunkCount = 0;
     try {
+      console.log("[AI] Starting to stream response...");
       for await (const chunk of this.streamChat(
         provider,
         chatMessages,
         conversation.model,
       )) {
+        chunkCount++;
         fullContent += chunk;
         await this.updateMessage(assistantMessage.id, {
           content: fullContent,
         });
         onChunk?.(chunk, fullContent);
       }
+
+      console.log(
+        "[AI] Stream finished. Total chunks:",
+        chunkCount,
+        "Total chars:",
+        fullContent.length,
+      );
 
       // Mark as complete
       await this.updateMessage(assistantMessage.id, {
