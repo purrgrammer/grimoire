@@ -44,37 +44,64 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    *   - wss://relay.example.com'bitcoin-dev (NIP-29)
    *   - relay.example.com'bitcoin-dev (NIP-29, wss:// prefix is optional)
    *   - naddr1... (kind 39000 group metadata address, NIP-29)
+   *   - naddr1... (kind 10222 communikey definition, NIP-CC)
    *   - relay.example.com'npub1xxx (NIP-CC communikey)
    *   - npub1xxx (NIP-CC communikey, relays from kind 10222)
    *   - hex-pubkey (NIP-CC communikey, relays from kind 10222)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
-    // Try naddr format first (kind 39000 group metadata)
+    // Try naddr format first
     if (input.startsWith("naddr1")) {
       try {
         const decoded = nip19.decode(input);
-        if (decoded.type === "naddr" && decoded.data.kind === 39000) {
-          const { identifier, relays } = decoded.data;
-          const relayUrl = relays?.[0];
+        if (decoded.type === "naddr") {
+          // NIP-29 group metadata (kind 39000)
+          if (decoded.data.kind === 39000) {
+            const { identifier, relays } = decoded.data;
+            const relayUrl = relays?.[0];
 
-          if (!identifier || !relayUrl) {
-            return null;
+            if (!identifier || !relayUrl) {
+              return null;
+            }
+
+            // Ensure relay URL has wss:// prefix
+            let normalizedRelay = relayUrl;
+            if (
+              !normalizedRelay.startsWith("ws://") &&
+              !normalizedRelay.startsWith("wss://")
+            ) {
+              normalizedRelay = `wss://${normalizedRelay}`;
+            }
+
+            return {
+              type: "group",
+              value: identifier,
+              relays: [normalizedRelay],
+            };
           }
 
-          // Ensure relay URL has wss:// prefix
-          let normalizedRelay = relayUrl;
-          if (
-            !normalizedRelay.startsWith("ws://") &&
-            !normalizedRelay.startsWith("wss://")
-          ) {
-            normalizedRelay = `wss://${normalizedRelay}`;
-          }
+          // NIP-CC communikey definition (kind 10222)
+          if (decoded.data.kind === 10222) {
+            const { pubkey, relays } = decoded.data;
 
-          return {
-            type: "group",
-            value: identifier,
-            relays: [normalizedRelay],
-          };
+            if (!pubkey) {
+              return null;
+            }
+
+            // Normalize relay URLs
+            const normalizedRelays = (relays || []).map((url) => {
+              if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+                return `wss://${url}`;
+              }
+              return url;
+            });
+
+            return {
+              type: "group",
+              value: pubkey, // Use pubkey as the group ID
+              relays: normalizedRelays,
+            };
+          }
         }
       } catch {
         // Not a valid naddr, fall through to try other formats
