@@ -457,7 +457,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     // Fetch user's own inbox relays (critical for both sending and receiving)
     // Try cached value first for performance, but fetch if empty to ensure reliability
-    let cachedUserRelays = giftWrapService.inboxRelays$.value;
+    const cachedUserRelays = giftWrapService.inboxRelays$.value;
     if (cachedUserRelays.length > 0) {
       // Use cached value if available
       participantInboxRelays[activePubkey] = cachedUserRelays;
