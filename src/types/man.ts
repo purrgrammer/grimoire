@@ -5,6 +5,7 @@ import type { AppId } from "./app";
 import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
+import { parseRelayAdminCommand } from "@/lib/relay-admin-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
@@ -609,11 +610,37 @@ export const manPages: Record<string, ManPageEntry> = {
       "relay wss://relay.damus.io           View relay information",
       "relay nos.lol                        View relay capabilities",
     ],
-    seeAlso: ["req", "profile"],
+    seeAlso: ["req", "profile", "relay admin"],
     appId: "relay",
     category: "Nostr",
     argParser: (args: string[]) => {
       const parsed = parseRelayCommand(args);
+      return parsed;
+    },
+  },
+  "relay admin": {
+    name: "relay admin",
+    section: "1",
+    synopsis: "relay admin <url>",
+    description:
+      "Manage a Nostr relay using the NIP-86 Relay Management API. Allows administrators to configure relay metadata, moderate pubkeys and events, manage kind filtering, and block IPs. Requires an active account for admin features (NIP-98 auth). Non-authenticated users can still view relay metadata.",
+    options: [
+      {
+        flag: "<url>",
+        description:
+          "Relay WebSocket URL (wss:// or ws://) or domain (auto-adds wss://)",
+      },
+    ],
+    examples: [
+      "relay admin wss://relay.damus.io     Open relay admin panel",
+      "relay admin nos.lol                  Manage relay settings",
+      "relay admin my-relay.com             Administer your own relay",
+    ],
+    seeAlso: ["relay", "conn"],
+    appId: "relay-admin",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      const parsed = parseRelayAdminCommand(args);
       return parsed;
     },
   },
