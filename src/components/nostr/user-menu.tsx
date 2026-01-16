@@ -1,4 +1,4 @@
-import { User, HardDrive, Palette } from "lucide-react";
+import { User, HardDrive, Palette, Mail } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -158,6 +158,15 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-crosshair"
+                onClick={() => {
+                  addWindow("inbox", {}, "Inbox");
+                }}
+              >
+                <Mail className="size-4 mr-2" />
+                Private Messages
+              </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">
                   <Palette className="size-4 mr-2" />

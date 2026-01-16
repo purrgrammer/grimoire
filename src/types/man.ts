@@ -641,6 +641,18 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     defaultProps: {},
   },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox",
+    description:
+      "Manage private messages using NIP-17/NIP-59 gift wraps. View and configure your DM inbox relays (kind 10050), enable/disable gift wrap sync, track decryption status, and browse recent conversations. Supports auto-decrypt mode for hands-free message decryption.",
+    examples: ["inbox    Open the private message inbox manager"],
+    seeAlso: ["chat", "profile", "conn"],
+    appId: "inbox",
+    category: "Nostr",
+    defaultProps: {},
+  },
   blossom: {
     name: "blossom",
     section: "1",
