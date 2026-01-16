@@ -41,6 +41,11 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
           ? [conversation.metadata.relayUrl]
           : [];
 
+  // For NIP-17, compute all unique relays across all participants
+  const allUniqueRelays = hasParticipantRelays
+    ? [...new Set(Object.values(participantInboxRelays).flat())]
+    : relays;
+
   // Get label for the relays section
   const relayLabel =
     conversation.protocol === "nip-17" ? "Inbox Relays" : "Relays";
@@ -62,13 +67,14 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
     };
   };
 
-  // Pre-compute relay data for all relays
-  const relayData = relays.map(getRelayInfo);
+  // Pre-compute relay data for all unique relays (for count display)
+  const allRelayData = allUniqueRelays.map(getRelayInfo);
 
-  // Count connected relays
-  const connectedCount = relayData.filter((r) => r.isConnected).length;
+  // Count connected relays from the unique set
+  const connectedCount = allRelayData.filter((r) => r.isConnected).length;
+  const totalCount = allUniqueRelays.length;
 
-  if (relays.length === 0 && !hasParticipantRelays) {
+  if (totalCount === 0) {
     return null; // Don't show if no relays
   }
 
@@ -78,7 +84,7 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
         <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           <Wifi className="size-3" />
           <span>
-            {connectedCount}/{relays.length}
+            {connectedCount}/{totalCount}
           </span>
         </button>
       </DropdownMenuTrigger>
@@ -125,10 +131,10 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
         ) : (
           <>
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {relayLabel} ({relays.length})
+              {relayLabel} ({totalCount})
             </div>
             <div className="space-y-1 p-1">
-              {relayData.map(({ url, state }) => {
+              {allRelayData.map(({ url, state }) => {
                 const connIcon = getConnectionIcon(state);
                 const authIcon = getAuthIcon(state);
 
