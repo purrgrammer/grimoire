@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
@@ -9,7 +9,8 @@ import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
 import { getTagValues } from "@/lib/nostr-utils";
 import { UserName } from "./nostr/UserName";
-import { Wifi, MessageSquare } from "lucide-react";
+import { Wifi, MessageSquare, Reply } from "lucide-react";
+import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,9 @@ import { TimelineSkeleton } from "@/components/ui/skeleton";
 import eventStore from "@/services/event-store";
 import type { NostrEvent } from "@/types/nostr";
 import { ThreadConversation } from "./ThreadConversation";
+import { ThreadComposer } from "./ThreadComposer";
+import { selectRelaysForThreadReply } from "@/services/relay-selection";
+import accountManager from "@/services/accounts";
 
 export interface ThreadViewerProps {
   pointer: EventPointer | AddressPointer;
@@ -98,12 +102,16 @@ function getThreadRoot(
 export function ThreadViewer({ pointer }: ThreadViewerProps) {
   const event = useNostrEvent(pointer);
   const { relays: relayStates } = useRelayState();
+  const activeAccount = use$(accountManager.active$);
+
+  // Track reply state (managed here and passed down to ThreadConversation)
+  const [replyToId, setReplyToId] = useState<string | undefined>();
 
   // Store the original event ID (the one that was clicked)
   const originalEventId = useMemo(() => {
     if (!event) return undefined;
     return event.id;
-  }, [event?.id]);
+  }, [event]);
 
   // Get thread root
   const rootPointer = useMemo(() => {
@@ -180,6 +188,29 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
     ).length;
   }, [relayStatesForEvent]);
 
+  // Find the event being replied to (root or a reply)
+  const replyToEvent = useMemo(() => {
+    if (!replyToId || !rootEvent) return undefined;
+    if (replyToId === rootEvent.id) return rootEvent;
+    return replies?.find((r) => r.id === replyToId);
+  }, [replyToId, rootEvent, replies]);
+
+  // Compute relay selection for thread replies
+  const [replyRelays, setReplyRelays] = useState<string[]>([]);
+  useEffect(() => {
+    if (!activeAccount || !rootEvent || participants.length === 0) {
+      setReplyRelays([]);
+      return;
+    }
+
+    selectRelaysForThreadReply(
+      eventStore,
+      activeAccount.pubkey,
+      participants,
+      rootEvent,
+    ).then(setReplyRelays);
+  }, [activeAccount, rootEvent, participants]);
+
   // Loading state
   if (!event || !rootEvent) {
     return (
@@ -234,10 +265,10 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
               align="end"
               className="w-96 max-h-96 overflow-y-auto"
             >
-              {/* Relay List */}
+              {/* Root Event Relays */}
               <div className="px-3 py-2 border-b border-border">
                 <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                  Relays ({rootRelays.length})
+                  Root Event Relays ({rootRelays.length})
                 </div>
               </div>
 
@@ -338,6 +369,79 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
                   </>
                 );
               })()}
+
+              {/* Reply Relay Selection */}
+              {activeAccount && replyRelays.length > 0 && (
+                <>
+                  <div className="px-3 py-2 border-t-2 border-border">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                      Reply Relay Selection ({replyRelays.length})
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      Relays where your replies will be published
+                    </div>
+                  </div>
+                  <div className="py-2">
+                    {replyRelays.map((url) => {
+                      const globalState = relayStates[url];
+                      const connIcon = getConnectionIcon(globalState);
+                      const authIcon = getAuthIcon(globalState);
+
+                      return (
+                        <Tooltip key={url}>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2 text-xs py-1 px-3 hover:bg-accent/5 cursor-default">
+                              <RelayLink
+                                url={url}
+                                showInboxOutbox={false}
+                                className="flex-1 min-w-0 truncate font-mono text-foreground/80"
+                              />
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <div>{authIcon.icon}</div>
+                                <div>{connIcon.icon}</div>
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="left"
+                            className="max-w-xs bg-popover text-popover-foreground border border-border shadow-md"
+                          >
+                            <div className="space-y-2 text-xs p-1">
+                              <div className="font-mono font-bold border-b border-border pb-2 break-all text-primary">
+                                {url}
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                <div className="space-y-0.5">
+                                  <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                    Connection
+                                  </div>
+                                  <div className="flex items-center gap-1.5 font-medium">
+                                    <span className="shrink-0">
+                                      {connIcon.icon}
+                                    </span>
+                                    <span>{connIcon.label}</span>
+                                  </div>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">
+                                    Authentication
+                                  </div>
+                                  <div className="flex items-center gap-1.5 font-medium">
+                                    <span className="shrink-0">
+                                      {authIcon.icon}
+                                    </span>
+                                    <span>{authIcon.label}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -352,6 +456,30 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
           </EventErrorBoundary>
         </div>
 
+        {/* Reply to root button */}
+        <div className="px-3 py-2 border-b border-border/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setReplyToId(rootEvent.id)}
+          >
+            <Reply className="size-3" />
+            Reply to post
+          </Button>
+        </div>
+
+        {/* Composer for replying to root */}
+        {replyToId === rootEvent.id && replyToEvent && (
+          <ThreadComposer
+            rootEvent={rootEvent}
+            replyToEvent={replyToEvent}
+            participants={participants}
+            onCancel={() => setReplyToId(undefined)}
+            onSuccess={() => setReplyToId(undefined)}
+          />
+        )}
+
         {/* Replies Section */}
         <div className="px-3 py-2">
           {replies && replies.length > 0 ? (
@@ -363,6 +491,8 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
               focusedEventId={
                 originalEventId !== rootEvent.id ? originalEventId : undefined
               }
+              replyToId={replyToId}
+              setReplyToId={setReplyToId}
             />
           ) : (
             <div className="text-sm text-muted-foreground italic p-2">

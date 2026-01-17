@@ -13,6 +13,8 @@ export interface ThreadConversationProps {
   replies: NostrEvent[];
   participants: string[];
   focusedEventId?: string; // Event to highlight and scroll to (if not root)
+  replyToId?: string; // ID of event being replied to (managed by parent)
+  setReplyToId: (id: string | undefined) => void; // Callback to set reply state
 }
 
 interface ThreadNode {
@@ -126,6 +128,8 @@ export function ThreadConversation({
   replies,
   participants,
   focusedEventId,
+  replyToId,
+  setReplyToId,
 }: ThreadConversationProps) {
   // Build tree structure
   const initialTree = useMemo(
@@ -136,13 +140,11 @@ export function ThreadConversation({
   // Track collapse state per event ID
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
-  // Track reply state
-  const [replyToId, setReplyToId] = useState<string | undefined>();
-
   // Find the event being replied to
   const replyToEvent = useMemo(() => {
     if (!replyToId) return undefined;
-    return replies.find((r) => r.id === replyToId) || rootEvent;
+    if (replyToId === rootEvent.id) return rootEvent;
+    return replies.find((r) => r.id === replyToId);
   }, [replyToId, replies, rootEvent]);
 
   // Ref for the focused event element
@@ -179,58 +181,67 @@ export function ThreadConversation({
   }
 
   return (
-    <>
-      <div className="space-y-0">
-        {initialTree.map((node) => {
-          const isCollapsed = collapsedIds.has(node.event.id);
-          const hasChildren = node.children.length > 0;
+    <div className="space-y-0">
+      {initialTree.map((node) => {
+        const isCollapsed = collapsedIds.has(node.event.id);
+        const hasChildren = node.children.length > 0;
 
-          const isFocused = focusedEventId === node.event.id;
+        const isFocused = focusedEventId === node.event.id;
+        const isReplyingToThis = replyToId === node.event.id;
 
-          return (
-            <div key={node.event.id}>
-              {/* First-level reply */}
-              <div
-                ref={isFocused ? focusedRef : undefined}
-                className="relative"
-              >
-                {/* Collapse toggle button (only if has children) */}
-                {hasChildren && (
-                  <button
-                    onClick={() => toggleCollapse(node.event.id)}
-                    className="absolute -left-6 top-2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={
-                      isCollapsed ? "Expand replies" : "Collapse replies"
-                    }
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="size-4" />
-                    ) : (
-                      <ChevronDown className="size-4" />
-                    )}
-                  </button>
-                )}
-
-                <div
-                  className={isFocused ? "ring-2 ring-primary/50 rounded" : ""}
+        return (
+          <div key={node.event.id}>
+            {/* First-level reply */}
+            <div ref={isFocused ? focusedRef : undefined} className="relative">
+              {/* Collapse toggle button (only if has children) */}
+              {hasChildren && (
+                <button
+                  onClick={() => toggleCollapse(node.event.id)}
+                  className="absolute -left-6 top-2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={
+                    isCollapsed ? "Expand replies" : "Collapse replies"
+                  }
                 >
-                  <EventErrorBoundary event={node.event}>
-                    <ThreadCommentRenderer
-                      event={node.event}
-                      onReply={setReplyToId}
-                    />
-                  </EventErrorBoundary>
-                </div>
-              </div>
+                  {isCollapsed ? (
+                    <ChevronRight className="size-4" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                </button>
+              )}
 
-              {/* Second-level replies (nested, indented) */}
-              {hasChildren && !isCollapsed && (
-                <div className="ml-6 mt-1 space-y-0 border-l-2 border-border pl-3">
-                  {node.children.map((child) => {
-                    const isChildFocused = focusedEventId === child.id;
-                    return (
+              <div
+                className={isFocused ? "ring-2 ring-primary/50 rounded" : ""}
+              >
+                <EventErrorBoundary event={node.event}>
+                  <ThreadCommentRenderer
+                    event={node.event}
+                    onReply={setReplyToId}
+                  />
+                </EventErrorBoundary>
+              </div>
+            </div>
+
+            {/* Inline composer for replying to this first-level comment */}
+            {isReplyingToThis && replyToEvent && (
+              <ThreadComposer
+                rootEvent={rootEvent}
+                replyToEvent={replyToEvent}
+                participants={participants}
+                onCancel={() => setReplyToId(undefined)}
+                onSuccess={() => setReplyToId(undefined)}
+              />
+            )}
+
+            {/* Second-level replies (nested, indented) */}
+            {hasChildren && !isCollapsed && (
+              <div className="ml-6 mt-1 space-y-0 border-l-2 border-border pl-3">
+                {node.children.map((child) => {
+                  const isChildFocused = focusedEventId === child.id;
+                  const isReplyingToChild = replyToId === child.id;
+                  return (
+                    <div key={child.id}>
                       <div
-                        key={child.id}
                         ref={isChildFocused ? focusedRef : undefined}
                         className={
                           isChildFocused ? "ring-2 ring-primary/50 rounded" : ""
@@ -243,25 +254,25 @@ export function ThreadConversation({
                           />
                         </EventErrorBoundary>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Reply Composer */}
-      {replyToId && replyToEvent && (
-        <ThreadComposer
-          rootEvent={rootEvent}
-          replyToEvent={replyToEvent}
-          participants={participants}
-          onCancel={() => setReplyToId(undefined)}
-          onSuccess={() => setReplyToId(undefined)}
-        />
-      )}
-    </>
+                      {/* Inline composer for replying to this second-level comment */}
+                      {isReplyingToChild && replyToEvent && (
+                        <ThreadComposer
+                          rootEvent={rootEvent}
+                          replyToEvent={replyToEvent}
+                          participants={participants}
+                          onCancel={() => setReplyToId(undefined)}
+                          onSuccess={() => setReplyToId(undefined)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

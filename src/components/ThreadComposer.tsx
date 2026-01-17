@@ -1,10 +1,11 @@
 import { useState, useRef, useMemo } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { Button } from "./ui/button";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, Paperclip } from "lucide-react";
 import {
   MentionEditor,
   type MentionEditorHandle,
+  type BlobAttachment,
 } from "./editor/MentionEditor";
 import type { NostrEvent } from "@/types/nostr";
 import { publishEventToRelays } from "@/services/hub";
@@ -16,6 +17,8 @@ import type { ProfileSearchResult } from "@/services/profile-search";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { selectRelaysForThreadReply } from "@/services/relay-selection";
 import eventStore from "@/services/event-store";
+import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface ThreadComposerProps {
   rootEvent: NostrEvent;
@@ -42,6 +45,24 @@ export function ThreadComposer({
   const editorRef = useRef<MentionEditorHandle>(null);
   const activeAccount = use$(accountManager.active$);
 
+  // Blossom upload hook for file attachments
+  const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
+    accept: "image/*,video/*,audio/*",
+    onSuccess: (results) => {
+      if (results.length > 0 && editorRef.current) {
+        // Insert the first successful upload as a blob attachment with metadata
+        const { blob, server } = results[0];
+        editorRef.current.insertBlob({
+          url: blob.url,
+          sha256: blob.sha256,
+          mimeType: blob.type,
+          size: blob.size,
+          server,
+        });
+      }
+    },
+  });
+
   // Search profiles for autocomplete (thread participants only)
   const searchProfiles = useMemo(() => {
     return async (query: string): Promise<ProfileSearchResult[]> => {
@@ -66,7 +87,11 @@ export function ThreadComposer({
     };
   }, [participants]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (
+    content: string,
+    emojiTags: import("./editor/MentionEditor").EmojiTag[] = [],
+    blobAttachments: BlobAttachment[] = [],
+  ) => {
     if (!activeAccount || isSending || !content.trim()) return;
 
     setIsSending(true);
@@ -92,6 +117,23 @@ export function ThreadComposer({
       const allMentionedPubkeys = [rootEvent.pubkey, replyToEvent.pubkey];
       const uniquePubkeys = Array.from(new Set(allMentionedPubkeys));
 
+      // Add NIP-92 imeta tags for blob attachments
+      const imetaTags: string[][] = [];
+      for (const blob of blobAttachments) {
+        const imetaParts = [`url ${blob.url}`];
+        if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
+        if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
+        if (blob.size) imetaParts.push(`size ${blob.size}`);
+        imetaTags.push(["imeta", ...imetaParts]);
+      }
+
+      // Add emoji tags for custom emoji autocomplete
+      const customEmojiTags: string[][] = emojiTags.map((emoji) => [
+        "emoji",
+        emoji.shortcode,
+        emoji.url,
+      ]);
+
       // Create event factory and sign event
       const factory = new EventFactory();
       factory.setSigner(activeAccount.signer);
@@ -103,6 +145,8 @@ export function ThreadComposer({
           ...rootTags,
           ...parentTags,
           ...uniquePubkeys.map((pk) => ["p", pk]),
+          ...imetaTags,
+          ...customEmojiTags,
         ],
       });
 
@@ -158,13 +202,30 @@ export function ThreadComposer({
           ref={editorRef}
           placeholder="Write a reply..."
           searchProfiles={searchProfiles}
-          onSubmit={(content: string) => {
+          onSubmit={(content: string, emojiTags, blobAttachments) => {
             if (content.trim()) {
-              handleSend(content);
+              handleSend(content, emojiTags, blobAttachments);
             }
           }}
           className="flex-1 min-w-0"
         />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="flex-shrink-0 h-7 w-7 p-0"
+              onClick={openUpload}
+              disabled={isSending}
+            >
+              <Paperclip className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Attach media</p>
+          </TooltipContent>
+        </Tooltip>
         <Button
           type="button"
           variant="secondary"
@@ -178,6 +239,7 @@ export function ThreadComposer({
           {isSending ? <Loader2 className="size-3 animate-spin" /> : "Reply"}
         </Button>
       </div>
+      {uploadDialog}
     </div>
   );
 }
