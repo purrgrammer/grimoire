@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { KindRenderer } from "./nostr/kinds";
+import { DetailKindRenderer } from "./nostr/kinds";
 import { EventErrorBoundary } from "./EventErrorBoundary";
 import { EventDetailSkeleton } from "@/components/ui/skeleton";
 import type { NostrEvent } from "@/types/nostr";
@@ -16,8 +16,9 @@ import {
 import { ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
-import { BaseEventContainer } from "./nostr/kinds/BaseEventRenderer";
 import { formatDistanceToNow } from "date-fns";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { getOutboxes } from "applesauce-core/helpers";
 
 export interface ThreadViewerProps {
   pointer: EventPointer | AddressPointer;
@@ -209,6 +210,39 @@ function CommentReply({
 export function ThreadViewer({ pointer, focusEventId }: ThreadViewerProps) {
   const rootEvent = useNostrEvent(pointer);
 
+  // Derive relay hints from root event and author for better comment discovery
+  // Prefixed with _ as it's currently unused but kept for future relay targeting enhancement
+  // @ts-expect-error - Kept for future use with explicit relay targeting
+  const _relayHints = useMemo(() => {
+    if (!rootEvent) return [];
+
+    const hints = new Set<string>();
+
+    // 1. Get relays where root event was seen
+    const seenRelaysSet = getSeenRelays(rootEvent);
+    if (seenRelaysSet) {
+      seenRelaysSet.forEach((r) => hints.add(r));
+    }
+
+    // 2. Get author's outbox relays (where they publish)
+    const authorRelayList = eventStore.getReplaceable(
+      10002,
+      rootEvent.pubkey,
+      "",
+    );
+    if (authorRelayList) {
+      const outboxes = getOutboxes(authorRelayList);
+      outboxes.forEach((r) => hints.add(r));
+    }
+
+    // 3. Add relay hints from pointer if available
+    if ("relays" in pointer && pointer.relays) {
+      pointer.relays.forEach((r) => hints.add(r));
+    }
+
+    return Array.from(hints);
+  }, [rootEvent, pointer]);
+
   // Build filter for comments on this event
   const commentsFilter = useMemo(() => {
     if (!rootEvent) return null;
@@ -235,6 +269,9 @@ export function ThreadViewer({ pointer, focusEventId }: ThreadViewerProps) {
   }, [rootEvent, pointer]);
 
   // Fetch comments timeline and subscribe to events
+  // Note: relayHints are derived above for potential future use with explicit relay targeting
+  // Currently timeline() uses the global relay pool, but we could enhance this to use
+  // createTimelineLoader with relay hints for better comment discovery
   const comments = use$(() => {
     if (!commentsFilter) return undefined;
     return eventStore.timeline(commentsFilter);
@@ -257,12 +294,10 @@ export function ThreadViewer({ pointer, focusEventId }: ThreadViewerProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Root Event */}
+      {/* Root Event - Display with detail renderer */}
       <div className="border-b border-border">
         <EventErrorBoundary event={rootEvent}>
-          <BaseEventContainer event={rootEvent}>
-            <KindRenderer event={rootEvent} depth={0} />
-          </BaseEventContainer>
+          <DetailKindRenderer event={rootEvent} />
         </EventErrorBoundary>
       </div>
 
