@@ -8,12 +8,15 @@ export interface CustomEmojiProps {
   /** The image URL */
   url: string;
   /** Size variant */
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   /** Additional class names */
   className?: string;
+  /** Whether to show tooltip on hover (default: true) */
+  showTooltip?: boolean;
 }
 
 const sizeClasses = {
+  xs: "size-3.5",
   sm: "size-4",
   md: "size-6",
   lg: "size-12",
@@ -28,6 +31,7 @@ export function CustomEmoji({
   url,
   size = "md",
   className,
+  showTooltip = true,
 }: CustomEmojiProps) {
   const [error, setError] = useState(false);
 
@@ -46,22 +50,28 @@ export function CustomEmoji({
     );
   }
 
+  const img = (
+    <img
+      src={url}
+      alt={`:${shortcode}:`}
+      title={`:${shortcode}:`}
+      className={cn(
+        "inline-block object-contain",
+        sizeClasses[size],
+        className,
+      )}
+      loading="lazy"
+      onError={() => setError(true)}
+    />
+  );
+
+  if (!showTooltip) {
+    return img;
+  }
+
   return (
     <Tooltip>
-      <TooltipTrigger>
-        <img
-          src={url}
-          alt={`:${shortcode}:`}
-          title={`:${shortcode}:`}
-          className={cn(
-            "inline-block object-contain",
-            sizeClasses[size],
-            className,
-          )}
-          loading="lazy"
-          onError={() => setError(true)}
-        />
-      </TooltipTrigger>
+      <TooltipTrigger asChild>{img}</TooltipTrigger>
       <TooltipContent>:{shortcode}:</TooltipContent>
     </Tooltip>
   );

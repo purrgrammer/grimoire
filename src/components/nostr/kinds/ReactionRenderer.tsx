@@ -7,6 +7,8 @@ import { KindRenderer } from "./index";
 import { EventCardSkeleton } from "@/components/ui/skeleton";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
+import { CustomEmoji } from "../CustomEmoji";
+import { UnicodeEmoji } from "../UnicodeEmoji";
 
 /**
  * Renderer for Kind 7 - Reactions
@@ -100,7 +102,7 @@ export function Kind7Renderer({ event }: BaseEventProps) {
       case "😊":
         return <Smile className="size-4 fill-yellow-500 text-yellow-500" />;
       default:
-        return <span className="text-xl">{content}</span>;
+        return <UnicodeEmoji emoji={content} size="md" showTooltip={false} />;
     }
   };
 
@@ -110,11 +112,10 @@ export function Kind7Renderer({ event }: BaseEventProps) {
         {/* Reaction indicator */}
         <div className="flex items-center gap-2">
           {parsedReaction.type === "custom" ? (
-            <img
-              src={parsedReaction.url}
-              alt={`:${parsedReaction.shortcode}:`}
-              title={`:${parsedReaction.shortcode}:`}
-              className="size-6 inline-block"
+            <CustomEmoji
+              shortcode={parsedReaction.shortcode}
+              url={parsedReaction.url}
+              size="md"
             />
           ) : (
             getReactionIcon(parsedReaction.emoji)

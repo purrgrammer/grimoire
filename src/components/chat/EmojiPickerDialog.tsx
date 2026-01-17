@@ -7,6 +7,7 @@ import type { EmojiTag } from "@/lib/emoji-helpers";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useEmojiFrequency } from "@/hooks/useEmojiFrequency";
 import { CustomEmoji } from "../nostr/CustomEmoji";
+import { UnicodeEmoji } from "../nostr/UnicodeEmoji";
 
 interface EmojiPickerDialogProps {
   open: boolean;
@@ -173,7 +174,12 @@ export function EmojiPickerDialog({
                 title={`:${result.shortcode}:`}
               >
                 {result.source === "unicode" ? (
-                  <span className="text-xl leading-none">{result.url}</span>
+                  <UnicodeEmoji
+                    emoji={result.url}
+                    shortcode={result.shortcode}
+                    size="md"
+                    showTooltip={false}
+                  />
                 ) : (
                   <CustomEmoji
                     size="md"

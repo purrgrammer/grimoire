@@ -7,6 +7,8 @@ import {
 } from "react";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import { cn } from "@/lib/utils";
+import { CustomEmoji } from "@/components/nostr/CustomEmoji";
+import { UnicodeEmoji } from "@/components/nostr/UnicodeEmoji";
 
 export interface EmojiSuggestionListProps {
   items: EmojiSearchResult[];
@@ -121,19 +123,20 @@ export const EmojiSuggestionList = forwardRef<
             title={`:${item.shortcode}:`}
           >
             {item.source === "unicode" ? (
-              // Unicode emoji - render as text
-              <span className="text-lg leading-none">{item.url}</span>
+              // Unicode emoji - render with UnicodeEmoji component
+              <UnicodeEmoji
+                emoji={item.url}
+                shortcode={item.shortcode}
+                size="md"
+                showTooltip={false}
+              />
             ) : (
-              // Custom emoji - render as image
-              <img
-                src={item.url}
-                alt={`:${item.shortcode}:`}
-                className="size-6 object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  // Replace with fallback on error
-                  e.currentTarget.style.display = "none";
-                }}
+              // Custom emoji - render using CustomEmoji component
+              <CustomEmoji
+                shortcode={item.shortcode}
+                url={item.url}
+                size="md"
+                showTooltip={false}
               />
             )}
           </button>

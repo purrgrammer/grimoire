@@ -1,3 +1,5 @@
+import { CustomEmoji } from "../CustomEmoji";
+
 interface EmojiNodeProps {
   node: {
     url: string;
@@ -7,11 +9,11 @@ interface EmojiNodeProps {
 
 export function Emoji({ node }: EmojiNodeProps) {
   return (
-    <img
-      src={node.url}
-      alt={`:${node.code}:`}
-      title={`:${node.code}:`}
-      className="inline-block size-5"
+    <CustomEmoji
+      shortcode={node.code}
+      url={node.url}
+      size="sm"
+      showTooltip={false}
     />
   );
 }
