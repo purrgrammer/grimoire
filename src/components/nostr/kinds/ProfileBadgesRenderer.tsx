@@ -92,20 +92,22 @@ export function ProfileBadgesRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <ClickableEventTitle
-        event={event}
-        className="flex items-center gap-2 flex-wrap hover:opacity-80 transition-opacity"
-      >
-        {/* All Badge Thumbnails */}
-        {badgePairs.map((pair, idx) => (
-          <BadgeItem key={idx} badgeAddress={pair.badgeAddress} />
-        ))}
-
-        {/* Badge Count */}
-        <span className="text-sm text-muted-foreground ml-1">
+      <div className="flex flex-col gap-2">
+        {/* Badge Count - Clickable Title */}
+        <ClickableEventTitle
+          event={event}
+          className="text-sm font-semibold text-foreground hover:text-foreground/80"
+        >
           {badgePairs.length} {badgePairs.length === 1 ? "badge" : "badges"}
-        </span>
-      </ClickableEventTitle>
+        </ClickableEventTitle>
+
+        {/* All Badge Thumbnails */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {badgePairs.map((pair, idx) => (
+            <BadgeItem key={idx} badgeAddress={pair.badgeAddress} />
+          ))}
+        </div>
+      </div>
     </BaseEventContainer>
   );
 }

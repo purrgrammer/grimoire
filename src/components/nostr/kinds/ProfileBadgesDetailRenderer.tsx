@@ -76,22 +76,23 @@ function BadgeRow({
         <img
           src={badgeImageUrl}
           alt={displayTitle}
-          className="size-16 rounded-lg object-cover flex-shrink-0"
+          className="size-24 rounded-lg object-cover flex-shrink-0"
           loading="lazy"
         />
       ) : (
-        <div className="size-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-          <Award className="size-8 text-muted-foreground" />
+        <div className="size-24 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+          <Award className="size-12 text-muted-foreground" />
         </div>
       )}
 
       {/* Badge Info */}
       <div className="flex flex-col gap-2 flex-1 min-w-0">
-        {/* Awarded by */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Awarded by</span>
-          {awardEvent && <UserName pubkey={awardEvent.pubkey} />}
-        </div>
+        {/* Issuer */}
+        {awardEvent && (
+          <div className="text-xs">
+            <UserName pubkey={awardEvent.pubkey} />
+          </div>
+        )}
 
         {/* Badge Name */}
         {badgeEvent ? (
