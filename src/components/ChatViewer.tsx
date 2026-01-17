@@ -15,7 +15,6 @@ import {
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
-import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
 import type {
   ChatProtocol,
@@ -51,6 +50,7 @@ import {
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
+import { useAccount } from "@/hooks/useAccount";
 import { Label } from "./ui/label";
 import {
   Tooltip,
@@ -437,9 +437,8 @@ export function ChatViewer({
 }: ChatViewerProps) {
   const { addWindow } = useGrimoire();
 
-  // Get active account
-  const activeAccount = use$(accountManager.active$);
-  const hasActiveAccount = !!activeAccount;
+  // Get active account with signing capability
+  const { pubkey, canSign, signer } = useAccount();
 
   // Profile search for mentions
   const { searchProfiles } = useProfileSearch();
@@ -513,14 +512,14 @@ export function ChatViewer({
     async (query: string) => {
       const availableActions = adapter.getActions({
         conversation: conversation || undefined,
-        activePubkey: activeAccount?.pubkey,
+        activePubkey: pubkey,
       });
       const lowerQuery = query.toLowerCase();
       return availableActions.filter((action) =>
         action.name.toLowerCase().includes(lowerQuery),
       );
     },
-    [adapter, conversation, activeAccount],
+    [adapter, conversation, pubkey],
   );
 
   // Cleanup subscriptions when conversation changes or component unmounts
@@ -596,7 +595,7 @@ export function ChatViewer({
     emojiTags?: EmojiTag[],
     blobAttachments?: BlobAttachment[],
   ) => {
-    if (!conversation || !hasActiveAccount || isSending) return;
+    if (!conversation || !canSign || isSending) return;
 
     // Check if this is a slash command
     const slashCmd = parseSlashCommand(content);
@@ -605,8 +604,8 @@ export function ChatViewer({
       setIsSending(true);
       try {
         const result = await adapter.executeAction(slashCmd.command, {
-          activePubkey: activeAccount.pubkey,
-          activeSigner: activeAccount.signer,
+          activePubkey: pubkey!,
+          activeSigner: signer!,
           conversation,
         });
 
@@ -649,13 +648,13 @@ export function ChatViewer({
   // Handle command execution from autocomplete
   const handleCommandExecute = useCallback(
     async (action: ChatAction) => {
-      if (!conversation || !hasActiveAccount || isSending) return;
+      if (!conversation || !canSign || isSending) return;
 
       setIsSending(true);
       try {
         const result = await adapter.executeAction(action.name, {
-          activePubkey: activeAccount.pubkey,
-          activeSigner: activeAccount.signer,
+          activePubkey: pubkey!,
+          activeSigner: signer!,
           conversation,
         });
 
@@ -673,7 +672,7 @@ export function ChatViewer({
         setIsSending(false);
       }
     },
-    [conversation, hasActiveAccount, isSending, adapter, activeAccount],
+    [conversation, canSign, isSending, adapter, pubkey, signer],
   );
 
   // Handle reply button click
@@ -987,7 +986,7 @@ export function ChatViewer({
                   adapter={adapter}
                   conversation={conversation}
                   onReply={handleReply}
-                  canReply={hasActiveAccount}
+                  canReply={canSign}
                   onScrollToMessage={handleScrollToMessage}
                 />
               );
@@ -1001,8 +1000,8 @@ export function ChatViewer({
         )}
       </div>
 
-      {/* Message composer - only show if user has active account */}
-      {hasActiveAccount ? (
+      {/* Message composer - only show if user can sign */}
+      {canSign ? (
         <div className="border-t px-2 py-1 pb-0">
           {replyTo && (
             <ComposerReplyPreview
