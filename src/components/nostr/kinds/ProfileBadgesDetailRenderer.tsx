@@ -35,9 +35,9 @@ function parseAddress(aTagValue: string): AddressPointer | null {
 }
 
 /**
- * Single badge card component with image, name, and description
+ * Single badge row component with author, image, name, and description
  */
-function BadgeCard({
+function BadgeRow({
   badgeAddress,
   awardEventId,
 }: {
@@ -70,63 +70,55 @@ function BadgeCard({
   const displayTitle = badgeName || badgeIdentifier || "Badge";
 
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors">
+    <div className="flex gap-4 items-start p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors">
       {/* Badge Image */}
-      <div className="flex items-center justify-center">
-        {badgeImageUrl ? (
-          <img
-            src={badgeImageUrl}
-            alt={displayTitle}
-            className="size-20 rounded-lg object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="size-20 rounded-lg bg-muted flex items-center justify-center">
-            <Award className="size-10 text-muted-foreground" />
-          </div>
-        )}
-      </div>
+      {badgeImageUrl ? (
+        <img
+          src={badgeImageUrl}
+          alt={displayTitle}
+          className="size-16 rounded-lg object-cover flex-shrink-0"
+          loading="lazy"
+        />
+      ) : (
+        <div className="size-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+          <Award className="size-8 text-muted-foreground" />
+        </div>
+      )}
 
       {/* Badge Info */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
+        {/* Awarded by */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Awarded by</span>
+          {awardEvent && <UserName pubkey={awardEvent.pubkey} />}
+        </div>
+
+        {/* Badge Name */}
         {badgeEvent ? (
           <ClickableEventTitle
             event={badgeEvent}
-            className="font-semibold text-foreground text-center line-clamp-2"
+            className="text-lg font-semibold text-foreground"
           >
             {displayTitle}
           </ClickableEventTitle>
         ) : (
-          <h3 className="font-semibold text-foreground text-center line-clamp-2">
+          <h3 className="text-lg font-semibold text-foreground">
             {displayTitle}
           </h3>
         )}
 
+        {/* Badge Description */}
         {badgeDescription && (
-          <p className="text-xs text-muted-foreground text-center line-clamp-2">
-            {badgeDescription}
-          </p>
+          <p className="text-sm text-muted-foreground">{badgeDescription}</p>
         )}
       </div>
-
-      {/* Award Info */}
-      {awardEvent && (
-        <div className="flex flex-col gap-1 pt-2 border-t border-border">
-          <p className="text-xs text-muted-foreground text-center">
-            Awarded by
-          </p>
-          <div className="flex justify-center">
-            <UserName pubkey={awardEvent.pubkey} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 /**
  * Detail renderer for Kind 30008 - Profile Badges (NIP-58)
- * Shows all badges in a grid layout
+ * Shows all badges in a vertical list
  */
 export function ProfileBadgesDetailRenderer({
   event,
@@ -134,7 +126,7 @@ export function ProfileBadgesDetailRenderer({
   const badgePairs = getProfileBadgePairs(event);
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl mx-auto">
+    <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold">Profile Badges</h1>
@@ -147,11 +139,11 @@ export function ProfileBadgesDetailRenderer({
         </div>
       </div>
 
-      {/* Badges Grid */}
+      {/* Badges List */}
       {badgePairs.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex flex-col gap-3">
           {badgePairs.map((pair, idx) => (
-            <BadgeCard
+            <BadgeRow
               key={idx}
               badgeAddress={pair.badgeAddress}
               awardEventId={pair.awardEventId}

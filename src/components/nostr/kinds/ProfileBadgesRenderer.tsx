@@ -74,13 +74,10 @@ function BadgeItem({ badgeAddress }: { badgeAddress: string }) {
 
 /**
  * Renderer for Kind 30008 - Profile Badges (NIP-58)
- * Shows a few badges with "and N others" pattern
+ * Shows all badge thumbnails, clickable to open detail view
  */
 export function ProfileBadgesRenderer({ event }: BaseEventProps) {
   const badgePairs = getProfileBadgePairs(event);
-  const MAX_VISIBLE = 4;
-  const visibleBadges = badgePairs.slice(0, MAX_VISIBLE);
-  const remainingCount = Math.max(0, badgePairs.length - MAX_VISIBLE);
 
   if (badgePairs.length === 0) {
     return (
@@ -95,23 +92,20 @@ export function ProfileBadgesRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Badge Icons */}
-        <div className="flex items-center gap-2">
-          {visibleBadges.map((pair, idx) => (
-            <BadgeItem key={idx} badgeAddress={pair.badgeAddress} />
-          ))}
-        </div>
+      <ClickableEventTitle
+        event={event}
+        className="flex items-center gap-2 flex-wrap hover:opacity-80 transition-opacity"
+      >
+        {/* All Badge Thumbnails */}
+        {badgePairs.map((pair, idx) => (
+          <BadgeItem key={idx} badgeAddress={pair.badgeAddress} />
+        ))}
 
         {/* Badge Count */}
-        <ClickableEventTitle
-          event={event}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+        <span className="text-sm text-muted-foreground ml-1">
           {badgePairs.length} {badgePairs.length === 1 ? "badge" : "badges"}
-          {remainingCount > 0 && ` (${remainingCount} more)`}
-        </ClickableEventTitle>
-      </div>
+        </span>
+      </ClickableEventTitle>
     </BaseEventContainer>
   );
 }
