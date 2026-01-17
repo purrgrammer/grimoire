@@ -35,12 +35,6 @@ import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
-import { Award } from "lucide-react";
-import {
-  getBadgeName,
-  getBadgeIdentifier,
-  getBadgeImageUrl,
-} from "@/lib/nip58-helpers";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
@@ -205,106 +199,6 @@ type ConversationResult =
   | { status: "error"; error: string };
 
 /**
- * Parse badge address to extract pubkey and identifier
- */
-function parseBadgeAddress(address: string): {
-  kind: number;
-  pubkey: string;
-  identifier: string;
-} | null {
-  const parts = address.split(":");
-  if (parts.length !== 3) return null;
-
-  const kind = parseInt(parts[0], 10);
-  const pubkey = parts[1];
-  const identifier = parts[2];
-
-  if (isNaN(kind) || !pubkey || identifier === undefined) return null;
-
-  return { kind, pubkey, identifier };
-}
-
-/**
- * BadgeAwardSystemMessage - Renders badge award as system message
- * Format: "🏆 username awarded 🏅 badge-name to username(s)"
- */
-const BadgeAwardSystemMessage = memo(function BadgeAwardSystemMessage({
-  message,
-  badgeAddress,
-  awardedPubkeys,
-}: {
-  message: Message;
-  badgeAddress: string;
-  awardedPubkeys: string[];
-}) {
-  const coordinate = parseBadgeAddress(badgeAddress);
-
-  // Fetch the badge definition event
-  const badgeEvent = use$(
-    () =>
-      coordinate
-        ? eventStore.replaceable(
-            coordinate.kind,
-            coordinate.pubkey,
-            coordinate.identifier,
-          )
-        : undefined,
-    [coordinate?.kind, coordinate?.pubkey, coordinate?.identifier],
-  );
-
-  const badgeName = badgeEvent ? getBadgeName(badgeEvent) : null;
-  const badgeIdentifier = badgeEvent ? getBadgeIdentifier(badgeEvent) : null;
-  const badgeImageUrl = badgeEvent ? getBadgeImageUrl(badgeEvent) : null;
-
-  const displayBadgeName = badgeName || badgeIdentifier || "a badge";
-
-  return (
-    <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap">
-      <span className="text-xs text-muted-foreground">*</span>
-
-      {/* Issuer */}
-      <UserName
-        pubkey={message.author}
-        className="text-xs text-muted-foreground"
-      />
-
-      <span className="text-xs text-muted-foreground">awarded</span>
-
-      {/* Badge Icon */}
-      {badgeImageUrl ? (
-        <img
-          src={badgeImageUrl}
-          alt={displayBadgeName}
-          className="size-4 rounded object-cover flex-shrink-0"
-          loading="lazy"
-        />
-      ) : (
-        <Award className="size-4 text-muted-foreground flex-shrink-0" />
-      )}
-
-      {/* Badge Name */}
-      <span className="text-xs font-semibold text-muted-foreground">
-        {displayBadgeName}
-      </span>
-
-      <span className="text-xs text-muted-foreground">to</span>
-
-      {/* Recipients */}
-      {awardedPubkeys.length === 1 ? (
-        <UserName
-          pubkey={awardedPubkeys[0]}
-          className="text-xs text-muted-foreground"
-        />
-      ) : (
-        <span className="text-xs text-muted-foreground">
-          {awardedPubkeys.length} people
-        </span>
-      )}
-    </div>
-  );
-});
-
-/**
  * ComposerReplyPreview - Shows who is being replied to in the composer
  */
 const ComposerReplyPreview = memo(function ComposerReplyPreview({
@@ -379,20 +273,8 @@ const MessageItem = memo(function MessageItem({
     [conversation],
   );
 
-  // System messages (join/leave/badge-award) have special styling
+  // System messages (join/leave) have special styling
   if (message.type === "system") {
-    // Badge awards get special rendering
-    if (message.content === "badge-award" && message.metadata?.badgeAddress) {
-      return (
-        <BadgeAwardSystemMessage
-          message={message}
-          badgeAddress={message.metadata.badgeAddress}
-          awardedPubkeys={message.metadata.awardedPubkeys || []}
-        />
-      );
-    }
-
-    // Default system message rendering (join/leave)
     return (
       <div className="flex items-center px-3 py-1">
         <span className="text-xs text-muted-foreground">

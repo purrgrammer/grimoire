@@ -21,7 +21,6 @@ import accountManager from "@/services/accounts";
 import { getTagValues } from "@/lib/nostr-utils";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
-import { getAwardedPubkeys } from "@/lib/nip58-helpers";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -322,13 +321,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
 
     // Single filter for all group events:
-    // kind 8: badge awards (NIP-58)
     // kind 9: chat messages
     // kind 9000: put-user (admin adds user)
     // kind 9001: remove-user (admin removes user)
     // kind 9321: nutzaps (NIP-61)
     const filter: Filter = {
-      kinds: [8, 9, 9000, 9001, 9321],
+      kinds: [9, 9000, 9001, 9321],
       "#h": [groupId],
       limit: options?.limit || 50,
     };
@@ -405,7 +403,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // Same filter as loadMessages but with until for pagination
     const filter: Filter = {
-      kinds: [8, 9, 9000, 9001, 9321],
+      kinds: [9, 9000, 9001, 9321],
       "#h": [groupId],
       until: before,
       limit: 50,
@@ -1058,30 +1056,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    * Helper: Convert Nostr event to Message
    */
   private eventToMessage(event: NostrEvent, conversationId: string): Message {
-    // Handle badge awards (kind 8) as system messages
-    if (event.kind === 8) {
-      const awardedPubkeys = getAwardedPubkeys(event);
-      const badgeAddress = getTagValues(event, "a")[0]; // Badge definition address
-
-      // Content will be set to "badge-award" to trigger special rendering
-      return {
-        id: event.id,
-        conversationId,
-        author: event.pubkey, // Issuer
-        content: "badge-award",
-        timestamp: event.created_at,
-        type: "system",
-        protocol: "nip-29",
-        metadata: {
-          encrypted: false,
-          // Store badge info for rendering
-          badgeAddress,
-          awardedPubkeys,
-        },
-        event,
-      };
-    }
-
     // Handle admin events (join/leave) as system messages
     if (event.kind === 9000 || event.kind === 9001) {
       // Extract the affected user's pubkey from p-tag
