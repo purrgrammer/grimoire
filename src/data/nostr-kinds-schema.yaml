@@ -1402,7 +1402,7 @@ kinds:
       - *etag
 
   30009:
-    description: Badge Definition
+    description: Badge
     in_use: true
     content:
       type: free

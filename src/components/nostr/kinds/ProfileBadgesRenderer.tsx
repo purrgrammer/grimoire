@@ -74,10 +74,13 @@ function BadgeItem({ badgeAddress }: { badgeAddress: string }) {
 
 /**
  * Renderer for Kind 30008 - Profile Badges (NIP-58)
- * Shows all badge thumbnails, clickable to open detail view
+ * Shows limited badge thumbnails with "& n more" pattern, clickable to open detail view
  */
 export function ProfileBadgesRenderer({ event }: BaseEventProps) {
   const badgePairs = getProfileBadgePairs(event);
+  const MAX_VISIBLE_BADGES = 5;
+  const visibleBadges = badgePairs.slice(0, MAX_VISIBLE_BADGES);
+  const remainingCount = Math.max(0, badgePairs.length - MAX_VISIBLE_BADGES);
 
   if (badgePairs.length === 0) {
     return (
@@ -101,11 +104,16 @@ export function ProfileBadgesRenderer({ event }: BaseEventProps) {
           {badgePairs.length} {badgePairs.length === 1 ? "badge" : "badges"}
         </ClickableEventTitle>
 
-        {/* All Badge Thumbnails */}
+        {/* Limited Badge Thumbnails */}
         <div className="flex items-center gap-2 flex-wrap">
-          {badgePairs.map((pair, idx) => (
+          {visibleBadges.map((pair, idx) => (
             <BadgeItem key={idx} badgeAddress={pair.badgeAddress} />
           ))}
+          {remainingCount > 0 && (
+            <span className="text-sm text-muted-foreground">
+              & {remainingCount} more
+            </span>
+          )}
         </div>
       </div>
     </BaseEventContainer>
