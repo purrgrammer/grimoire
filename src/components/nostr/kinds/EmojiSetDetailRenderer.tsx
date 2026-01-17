@@ -23,12 +23,12 @@ export function EmojiSetDetailRenderer({ event }: { event: NostrEvent }) {
         </div>
       ) : (
         <>
-          {/* Emoji list - horizontal flow with wrapping */}
-          <div className="flex flex-wrap gap-2">
+          {/* Emoji list - one per row */}
+          <div className="flex flex-col gap-1">
             {emojis.map((emoji) => (
               <div
                 key={emoji.shortcode}
-                className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-muted/30"
+                className="inline-flex items-center gap-2 px-2 py-1 rounded bg-muted/30 w-fit"
               >
                 <Emoji
                   source="custom"
