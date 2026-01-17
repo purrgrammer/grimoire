@@ -14,6 +14,8 @@ import { EventFactory } from "applesauce-core";
 import accountManager from "@/services/accounts";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import { getDisplayName } from "@/lib/nostr-utils";
+import { selectRelaysForThreadReply } from "@/services/relay-selection";
+import eventStore from "@/services/event-store";
 
 interface ThreadComposerProps {
   rootEvent: NostrEvent;
@@ -106,8 +108,16 @@ export function ThreadComposer({
 
       const event = await factory.sign(draft);
 
-      // Publish to relays (using default relay set)
-      await publishEventToRelays(event, []);
+      // Select optimal relays for thread reply
+      const relays = await selectRelaysForThreadReply(
+        eventStore,
+        activeAccount.pubkey,
+        participants,
+        rootEvent,
+      );
+
+      // Publish to selected relays
+      await publishEventToRelays(event, relays);
 
       toast.success("Reply posted!");
       onSuccess();

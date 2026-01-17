@@ -3,11 +3,15 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { selectRelaysForFilter } from "./relay-selection";
+import {
+  selectRelaysForFilter,
+  selectRelaysForThreadReply,
+} from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import relayListCache from "./relay-list-cache";
+import { SeenRelaysSymbol } from "applesauce-core/helpers/relays";
 
 // Helper to create valid test events
 function createRelayListEvent(
@@ -345,5 +349,280 @@ describe("selectRelaysForFilter", () => {
       expect(result.relays).toContain("wss://valid-relay.com/");
       expect(result.relays).not.toContain("not-a-valid-url");
     });
+  });
+});
+
+describe("selectRelaysForThreadReply", () => {
+  let eventStore: EventStore;
+
+  beforeEach(async () => {
+    eventStore = new EventStore();
+    await relayListCache.clear();
+  });
+
+  it("should include author's outbox relays", async () => {
+    const authorPubkey = testPubkeys[0];
+
+    // Create relay list for author with outbox relays
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write.com"],
+      ["r", "wss://author-write2.com"],
+      ["r", "wss://author-read.com", "read"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    // Create a simple root event
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [],
+      rootEvent,
+    );
+
+    // Should include author's write relays
+    expect(relays.length).toBeGreaterThan(0);
+    expect(
+      relays.includes("wss://author-write.com/") ||
+        relays.includes("wss://author-write2.com/"),
+    ).toBe(true);
+  });
+
+  it("should include participants' inbox relays", async () => {
+    const authorPubkey = testPubkeys[0];
+    const participant1 = testPubkeys[1];
+    const participant2 = testPubkeys[2];
+
+    // Author relay list
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write.com"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    // Participant 1 relay list (with inbox)
+    const participant1RelayList = createRelayListEvent(testSecretKeys[1], [
+      ["r", "wss://participant1-read.com", "read"],
+      ["r", "wss://participant1-write.com"],
+    ]);
+    eventStore.add(participant1RelayList);
+
+    // Participant 2 relay list (with inbox)
+    const participant2RelayList = createRelayListEvent(testSecretKeys[2], [
+      ["r", "wss://participant2-read.com", "read"],
+    ]);
+    eventStore.add(participant2RelayList);
+
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [participant1, participant2],
+      rootEvent,
+    );
+
+    // Should include at least one inbox relay from participants
+    expect(
+      relays.includes("wss://participant1-read.com/") ||
+        relays.includes("wss://participant2-read.com/"),
+    ).toBe(true);
+  });
+
+  it("should include relays from root event seen-at", async () => {
+    const authorPubkey = testPubkeys[0];
+
+    // Author relay list
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write.com"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    // Create root event with seen-at relays
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    // Add seen relays using symbol
+    (rootEvent as NostrEvent & { [SeenRelaysSymbol]?: Set<string> })[
+      SeenRelaysSymbol
+    ] = new Set(["wss://thread-active.com", "wss://thread-relay.com"]);
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [],
+      rootEvent,
+    );
+
+    // Should include at least one relay from seen-at
+    expect(
+      relays.includes("wss://thread-active.com/") ||
+        relays.includes("wss://thread-relay.com/"),
+    ).toBe(true);
+  });
+
+  it("should limit participants processed", async () => {
+    const authorPubkey = testPubkeys[0];
+    const manyParticipants = testPubkeys.slice(1, 12); // 11 participants
+
+    // Author relay list
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write.com"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[13],
+    );
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      manyParticipants,
+      rootEvent,
+      { maxParticipantRelays: 3 }, // Limit to 3 participants
+    );
+
+    // Should succeed and return some relays
+    expect(relays.length).toBeGreaterThan(0);
+  });
+
+  it("should respect maxRelays limit", async () => {
+    const authorPubkey = testPubkeys[0];
+
+    // Author with many relays
+    const authorRelayList = createRelayListEvent(
+      testSecretKeys[0],
+      Array.from({ length: 10 }, (_, i) => ["r", `wss://author-relay${i}.com`]),
+    );
+    eventStore.add(authorRelayList);
+
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [],
+      rootEvent,
+      { maxRelays: 5 },
+    );
+
+    // Should not exceed maxRelays
+    expect(relays.length).toBeLessThanOrEqual(5);
+  });
+
+  it("should prioritize author relays when limiting", async () => {
+    const authorPubkey = testPubkeys[0];
+    const participant = testPubkeys[1];
+
+    // Author relay list
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write1.com"],
+      ["r", "wss://author-write2.com"],
+      ["r", "wss://author-write3.com"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    // Participant relay list
+    const participantRelayList = createRelayListEvent(testSecretKeys[1], [
+      ["r", "wss://participant-read1.com", "read"],
+      ["r", "wss://participant-read2.com", "read"],
+      ["r", "wss://participant-read3.com", "read"],
+    ]);
+    eventStore.add(participantRelayList);
+
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [participant],
+      rootEvent,
+      { maxRelays: 4 },
+    );
+
+    // Should include author relays (priority)
+    const hasAuthorRelay = relays.some((r) =>
+      r.startsWith("wss://author-write"),
+    );
+    expect(hasAuthorRelay).toBe(true);
+    expect(relays.length).toBeLessThanOrEqual(4);
+  });
+
+  it("should skip author in participants list", async () => {
+    const authorPubkey = testPubkeys[0];
+
+    // Author relay list
+    const authorRelayList = createRelayListEvent(testSecretKeys[0], [
+      ["r", "wss://author-write.com"],
+      ["r", "wss://author-read.com", "read"],
+    ]);
+    eventStore.add(authorRelayList);
+
+    const rootEvent = finalizeEvent(
+      {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "Root post",
+      },
+      testSecretKeys[5],
+    );
+
+    // Include author in participants (should be skipped when processing inboxes)
+    const relays = await selectRelaysForThreadReply(
+      eventStore,
+      authorPubkey,
+      [authorPubkey], // Author as participant
+      rootEvent,
+    );
+
+    // Should still get relays (author's outbox)
+    expect(relays.length).toBeGreaterThan(0);
   });
 });

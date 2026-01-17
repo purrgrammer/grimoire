@@ -17,6 +17,7 @@ import { catchError } from "rxjs/operators";
 import type { IEventStore } from "applesauce-core/event-store";
 import { getInboxes, getOutboxes } from "applesauce-core/helpers";
 import { selectOptimalRelays } from "applesauce-core/helpers";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { addressLoader, AGGREGATOR_RELAYS } from "./loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import liveness from "./relay-liveness";
@@ -548,4 +549,156 @@ export async function selectRelaysForFilter(
     reasoning,
     isOptimized: true,
   };
+}
+
+/**
+ * Selects optimal relays for publishing a thread reply
+ *
+ * Strategy:
+ * 1. User's write/outbox relays (so their followers see the reply)
+ * 2. Participants' read/inbox relays (so they see they were replied to)
+ * 3. Relays where the root event was seen (where the thread is active)
+ * 4. Deduplicate, filter for health, and limit to reasonable number
+ *
+ * @param eventStore - EventStore instance
+ * @param authorPubkey - Hex pubkey of the reply author (active user)
+ * @param participantPubkeys - Array of hex pubkeys participating in the thread
+ * @param rootEvent - The root event of the thread
+ * @param options - Optional configuration
+ * @returns Array of relay URLs to publish to
+ */
+export async function selectRelaysForThreadReply(
+  eventStore: IEventStore,
+  authorPubkey: string,
+  participantPubkeys: string[],
+  rootEvent: NostrEvent,
+  options?: {
+    maxRelays?: number;
+    maxParticipantRelays?: number;
+  },
+): Promise<string[]> {
+  const maxRelays = options?.maxRelays ?? 8;
+  const maxParticipantRelays = options?.maxParticipantRelays ?? 5;
+
+  const relaySet = new Set<string>();
+
+  console.debug(
+    `[ThreadReplyRelaySelection] Selecting relays for reply by ${authorPubkey.slice(0, 8)} to thread with ${participantPubkeys.length} participants`,
+  );
+
+  // 1. Get author's write/outbox relays (highest priority)
+  try {
+    const authorOutbox = await getOutboxRelaysForPubkey(
+      eventStore,
+      authorPubkey,
+    );
+    authorOutbox.forEach((url) => relaySet.add(url));
+    console.debug(
+      `[ThreadReplyRelaySelection] Added ${authorOutbox.length} outbox relays from author`,
+    );
+  } catch (err) {
+    console.warn(
+      `[ThreadReplyRelaySelection] Failed to get author outbox relays:`,
+      err,
+    );
+  }
+
+  // 2. Get participants' read/inbox relays (so they see replies)
+  // Limit participants to avoid excessive relay connections
+  const limitedParticipants = participantPubkeys.slice(0, maxParticipantRelays);
+  for (const pubkey of limitedParticipants) {
+    if (pubkey === authorPubkey) continue; // Skip author (already have their outbox)
+
+    try {
+      const inbox = await getInboxRelaysForPubkey(eventStore, pubkey);
+      inbox.forEach((url) => relaySet.add(url));
+    } catch (err) {
+      console.debug(
+        `[ThreadReplyRelaySelection] Failed to get inbox for ${pubkey.slice(0, 8)}:`,
+        err,
+      );
+    }
+  }
+  console.debug(
+    `[ThreadReplyRelaySelection] Processed ${limitedParticipants.length} participants for inbox relays`,
+  );
+
+  // 3. Get relays where root event was seen (where thread is active)
+  try {
+    const seenRelaysSet = getSeenRelays(rootEvent);
+    if (seenRelaysSet && seenRelaysSet.size > 0) {
+      const seenRelays = Array.from(seenRelaysSet);
+      const normalized = seenRelays
+        .map((url) => {
+          try {
+            return normalizeRelayURL(url);
+          } catch {
+            return null;
+          }
+        })
+        .filter((url): url is string => url !== null);
+
+      const sanitized = sanitizeRelays(normalized);
+      sanitized.forEach((url) => relaySet.add(url));
+      console.debug(
+        `[ThreadReplyRelaySelection] Added ${sanitized.length} relays from root event seen-at`,
+      );
+    }
+  } catch (err) {
+    console.debug(
+      `[ThreadReplyRelaySelection] Failed to get seen relays:`,
+      err,
+    );
+  }
+
+  // Convert to array and apply health filtering
+  let relays = Array.from(relaySet);
+
+  try {
+    const healthy = liveness.filter(relays);
+    if (healthy.length > 0) {
+      relays = healthy;
+      console.debug(
+        `[ThreadReplyRelaySelection] Filtered to ${healthy.length} healthy relays (from ${relaySet.size} total)`,
+      );
+    } else {
+      console.debug(
+        `[ThreadReplyRelaySelection] All relays unhealthy, keeping all ${relays.length} relays`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[ThreadReplyRelaySelection] Liveness filtering failed:`, err);
+  }
+
+  // Limit to maxRelays
+  if (relays.length > maxRelays) {
+    // Prioritize: keep author outbox first, then others
+    const authorOutbox = await getOutboxRelaysForPubkey(
+      eventStore,
+      authorPubkey,
+    );
+    const authorRelays = relays.filter((url) => authorOutbox.includes(url));
+    const otherRelays = relays.filter((url) => !authorOutbox.includes(url));
+
+    // If author relays exceed maxRelays, limit them too
+    if (authorRelays.length >= maxRelays) {
+      relays = authorRelays.slice(0, maxRelays);
+      console.debug(
+        `[ThreadReplyRelaySelection] Limited to ${maxRelays} relays (all author)`,
+      );
+    } else {
+      // Keep all author relays + fill remaining slots with others
+      const remaining = maxRelays - authorRelays.length;
+      relays = [...authorRelays, ...otherRelays.slice(0, remaining)];
+      console.debug(
+        `[ThreadReplyRelaySelection] Limited to ${maxRelays} relays (${authorRelays.length} author, ${relays.length - authorRelays.length} other)`,
+      );
+    }
+  }
+
+  console.debug(
+    `[ThreadReplyRelaySelection] Final: ${relays.length} relays selected`,
+  );
+
+  return relays;
 }
