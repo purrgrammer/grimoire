@@ -16,6 +16,7 @@ import {
   Wifi,
   MessageSquare,
   Hash,
+  PenSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -79,6 +80,11 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   chat: {
     icon: MessageSquare,
     description: "Join and participate in NIP-29 relay-based group chats",
+  },
+  post: {
+    icon: PenSquare,
+    description:
+      "Create and publish Nostr posts (kind 1 notes or kind 11 threads)",
   },
 
   // Utility commands

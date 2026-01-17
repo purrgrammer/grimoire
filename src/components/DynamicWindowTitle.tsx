@@ -737,6 +737,21 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       });
   }, [appId, props]);
 
+  // Post window title - based on type and reply context
+  const postTitle = useMemo(() => {
+    if (appId !== "post") return null;
+    const type = props.type as "note" | "thread" | undefined;
+    const replyTo = props.replyTo as string | undefined;
+
+    if (type === "thread") {
+      return "Create Thread";
+    } else if (replyTo) {
+      return "Reply";
+    } else {
+      return "Create Note";
+    }
+  }, [appId, props]);
+
   // Generate final title data with icon and tooltip
   return useMemo(() => {
     let title: ReactElement | string;
@@ -818,6 +833,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = chatTitle;
       icon = getCommandIcon("chat");
       tooltip = rawCommand;
+    } else if (postTitle && appId === "post") {
+      title = postTitle;
+      icon = getCommandIcon("post");
+      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
@@ -843,6 +862,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     debugTitle,
     connTitle,
     chatTitle,
+    postTitle,
     staticTitle,
   ]);
 }

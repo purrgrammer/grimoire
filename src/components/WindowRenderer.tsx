@@ -43,6 +43,9 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const PostWindow = lazy(() =>
+  import("./PostWindow").then((m) => ({ default: m.PostWindow })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -217,6 +220,15 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sourceUrl={window.props.sourceUrl}
             targetServer={window.props.targetServer}
             sha256={window.props.sha256}
+          />
+        );
+        break;
+      case "post":
+        content = (
+          <PostWindow
+            type={window.props.type}
+            replyTo={window.props.replyTo}
+            customTitle={window.customTitle}
           />
         );
         break;

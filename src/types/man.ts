@@ -8,6 +8,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parsePostCommand } from "@/lib/post-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -499,6 +500,37 @@ export const manPages: Record<string, ManPageEntry> = {
         protocol: result.protocol,
         identifier: result.identifier,
       };
+    },
+  },
+  post: {
+    name: "post",
+    section: "1",
+    synopsis: "post [--thread] [--reply <event-id>]",
+    description:
+      "Create and publish Nostr posts. Supports kind 1 notes (short text posts) and kind 11 threads (posts with title). Use --reply to respond to existing events with proper NIP-10 threading. The composer includes @ mention autocomplete, : emoji support, and media attachments via Blossom.",
+    options: [
+      {
+        flag: "--thread, -t",
+        description:
+          "Create a kind 11 thread with title (default: kind 1 note)",
+      },
+      {
+        flag: "--reply <id>, -r <id>",
+        description:
+          "Reply to an event (supports note1..., nevent1..., or hex ID)",
+      },
+    ],
+    examples: [
+      "post                           Create a kind 1 note",
+      "post --thread                  Create a kind 11 thread with title",
+      "post --reply note1...          Reply to a specific event",
+      "post -r nevent1...             Reply using short flag",
+    ],
+    seeAlso: ["open", "req", "chat"],
+    appId: "post",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      return parsePostCommand(args);
     },
   },
   profile: {
