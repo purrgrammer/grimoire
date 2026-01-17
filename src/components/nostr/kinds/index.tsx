@@ -142,6 +142,8 @@ import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { P2pOrderRenderer } from "./P2pOrderRenderer";
 import { P2pOrderDetailRenderer } from "./P2pOrderDetailRenderer";
+import { BadgeDefinitionRenderer } from "./BadgeDefinitionRenderer";
+import { BadgeDefinitionDetailRenderer } from "./BadgeDefinitionDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -200,6 +202,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30005: VideoCurationSetRenderer, // Video Curation Sets (NIP-51)
   30006: PictureCurationSetRenderer, // Picture Curation Sets (NIP-51)
   30007: KindMuteSetRenderer, // Kind Mute Sets (NIP-51)
+  30009: BadgeDefinitionRenderer, // Badge Definition (NIP-58)
   30015: InterestSetRenderer, // Interest Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
   30030: EmojiSetRenderer, // Emoji Sets (NIP-30)
@@ -293,6 +296,7 @@ const detailRenderers: Record<
   30005: VideoCurationSetDetailRenderer, // Video Curation Sets Detail (NIP-51)
   30006: PictureCurationSetDetailRenderer, // Picture Curation Sets Detail (NIP-51)
   30007: KindMuteSetDetailRenderer, // Kind Mute Sets Detail (NIP-51)
+  30009: BadgeDefinitionDetailRenderer, // Badge Definition Detail (NIP-58)
   30015: InterestSetDetailRenderer, // Interest Sets Detail (NIP-51)
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30030: EmojiSetDetailRenderer, // Emoji Sets Detail (NIP-30)
