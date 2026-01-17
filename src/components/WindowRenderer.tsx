@@ -12,6 +12,9 @@ const ReqViewer = lazy(() => import("./ReqViewer"));
 const EventDetailViewer = lazy(() =>
   import("./EventDetailViewer").then((m) => ({ default: m.EventDetailViewer })),
 );
+const ThreadViewer = lazy(() =>
+  import("./ThreadViewer").then((m) => ({ default: m.ThreadViewer })),
+);
 const ProfileViewer = lazy(() =>
   import("./ProfileViewer").then((m) => ({ default: m.ProfileViewer })),
 );
@@ -169,6 +172,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "open":
         content = <EventDetailViewer pointer={window.props.pointer} />;
+        break;
+      case "thread":
+        content = (
+          <ThreadViewer
+            pointer={window.props.pointer}
+            focusEventId={window.props.focusEventId}
+          />
+        );
         break;
       case "profile":
         content = <ProfileViewer pubkey={window.props.pubkey} />;

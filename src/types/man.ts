@@ -463,8 +463,34 @@ export const manPages: Record<string, ManPageEntry> = {
       "open naddr1qvzqqqrkvupzpn6956apxcad0mfp8grcuugdysg44eepex68h50t73zcathmfs49qy88wumn8ghj7mn0wvhxcmmv9uq3wamnwvaz7tmjv4kxz7fwdehhxarj9e3xzmny9uq3wamnwvaz7tmjv4kxz7fwwpexjmtpdshxuet59uq3qamnwvaz7tmwdaehgu3wd4hk6tcpz9mhxue69uhkummnw3ezuamfdejj7qghwaehxw309a3xjarrda5kuetj9eek7cmfv9kz7qg4waehxw309aex2mrp0yhxgctdw4eju6t09uq3samnwvaz7tmxd9k8getj9ehx7um5wgh8w6twv5hszymhwden5te0danxvcmgv95kutnsw43z7qgawaehxw309ahx7um5wghxy6t5vdhkjmn9wgh8xmmrd9skctcpr9mhxue69uhhyetvv9ujuumwdae8gtnnda3kjctv9uqsuamnwvaz7tmev9382tndv5hsz9nhwden5te0wfjkccte9e3k76twdaeju6t09uq3vamnwvaz7tmjv4kxz7fwxvuns6np9eu8j730qqjr2vehvyenvdtr94nrzetr956rgctr94skvvfs95eryep3x3snwve389nxy97cjwx  Open addressable event",
       "open 30023:7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194:grimoire  Open by address pointer (kind:pubkey:d-tag)",
     ],
-    seeAlso: ["req", "kind"],
+    seeAlso: ["req", "kind", "thread"],
     appId: "open",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      const parsed = parseOpenCommand(args);
+      return parsed;
+    },
+  },
+  thread: {
+    name: "thread",
+    section: "1",
+    synopsis: "thread <identifier>",
+    description:
+      "Display a NIP-22 comment thread for a Nostr event. Shows the root event at the top followed by an expandable tree of all NIP-22 comments (kind 1111). Threads use two-level expandable replies for easy navigation. If opened with a specific reply, that comment will be focused in the tree.",
+    options: [
+      {
+        flag: "<identifier>",
+        description:
+          "Event identifier in any supported format (note, nevent, naddr, hex ID, or kind:pubkey:d-tag)",
+      },
+    ],
+    examples: [
+      "thread nevent1...  View thread for an event with relay hints",
+      "thread naddr1...  View thread for an addressable event",
+      "thread abc123...  View thread for event by hex ID",
+    ],
+    seeAlso: ["open", "req"],
+    appId: "thread",
     category: "Nostr",
     argParser: (args: string[]) => {
       const parsed = parseOpenCommand(args);
