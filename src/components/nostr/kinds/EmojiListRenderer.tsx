@@ -1,7 +1,7 @@
 import { Smile } from "lucide-react";
 import { getAddressPointerFromATag } from "applesauce-core/helpers";
 import { getEmojiTags } from "@/lib/emoji-helpers";
-import { CustomEmoji } from "@/components/nostr/CustomEmoji";
+import { Emoji } from "@/components/nostr/Emoji";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -64,10 +64,11 @@ export function EmojiListRenderer({ event }: BaseEventProps) {
         {emojis.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center">
             {previewEmojis.map((emoji) => (
-              <CustomEmoji
+              <Emoji
                 key={emoji.shortcode}
+                source="custom"
+                value={emoji.url}
                 shortcode={emoji.shortcode}
-                url={emoji.url}
                 size="md"
               />
             ))}
@@ -116,9 +117,10 @@ export function EmojiListDetailRenderer({ event }: { event: NostrEvent }) {
                 key={emoji.shortcode}
                 className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded"
               >
-                <CustomEmoji
+                <Emoji
+                  source="custom"
+                  value={emoji.url}
                   shortcode={emoji.shortcode}
-                  url={emoji.url}
                   size="md"
                 />
                 <span className="text-xs text-muted-foreground">

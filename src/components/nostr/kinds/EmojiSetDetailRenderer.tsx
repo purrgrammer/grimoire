@@ -1,6 +1,6 @@
 import { getTagValue } from "applesauce-core/helpers";
 import { getEmojiTags } from "@/lib/emoji-helpers";
-import { CustomEmoji } from "@/components/nostr/CustomEmoji";
+import { Emoji } from "@/components/nostr/Emoji";
 import { NostrEvent } from "@/types/nostr";
 
 /**
@@ -31,9 +31,10 @@ export function EmojiSetDetailRenderer({ event }: { event: NostrEvent }) {
                 className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/30"
                 title={`:${emoji.shortcode}:`}
               >
-                <CustomEmoji
+                <Emoji
+                  source="custom"
+                  value={emoji.url}
                   shortcode={emoji.shortcode}
-                  url={emoji.url}
                   size="lg"
                 />
                 <div className="text-xs text-muted-foreground font-mono truncate max-w-full px-1">

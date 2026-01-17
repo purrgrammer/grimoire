@@ -1,4 +1,4 @@
-import { CustomEmoji } from "../CustomEmoji";
+import { Emoji as EmojiComponent } from "../Emoji";
 
 interface EmojiNodeProps {
   node: {
@@ -7,11 +7,16 @@ interface EmojiNodeProps {
   };
 }
 
+/**
+ * RichText emoji node renderer - renders custom emoji in parsed content
+ * Note: Named export "Emoji" for RichText compatibility, uses EmojiComponent internally
+ */
 export function Emoji({ node }: EmojiNodeProps) {
   return (
-    <CustomEmoji
+    <EmojiComponent
+      source="custom"
+      value={node.url}
       shortcode={node.code}
-      url={node.url}
       size="sm"
       showTooltip={false}
     />

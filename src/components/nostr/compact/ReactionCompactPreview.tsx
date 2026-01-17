@@ -5,8 +5,7 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
 import { RichText } from "../RichText";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
-import { CustomEmoji } from "../CustomEmoji";
-import { UnicodeEmoji } from "../UnicodeEmoji";
+import { Emoji } from "../Emoji";
 
 /**
  * Compact preview for Kind 7 (Reaction)
@@ -102,16 +101,25 @@ export function ReactionCompactPreview({ event }: { event: NostrEvent }) {
       case "😊":
         return <Smile className="size-4 fill-yellow-500 text-yellow-500" />;
       default:
-        return <UnicodeEmoji emoji={content} size="xs" showTooltip={false} />;
+        return (
+          <Emoji
+            source="unicode"
+            value={content}
+            shortcode={content}
+            size="xs"
+            showTooltip={false}
+          />
+        );
     }
   };
 
   return (
     <span className="flex items-center gap-1 text-sm truncate">
       {parsedReaction.type === "custom" ? (
-        <CustomEmoji
+        <Emoji
+          source="custom"
+          value={parsedReaction.url}
           shortcode={parsedReaction.shortcode}
-          url={parsedReaction.url}
           size="xs"
           className="shrink-0"
         />

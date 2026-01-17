@@ -1,6 +1,6 @@
 import { getTagValue } from "applesauce-core/helpers";
 import { getEmojiTags } from "@/lib/emoji-helpers";
-import { CustomEmoji } from "@/components/nostr/CustomEmoji";
+import { Emoji } from "@/components/nostr/Emoji";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -36,10 +36,11 @@ export function EmojiSetRenderer({ event }: BaseEventProps) {
         ) : (
           <div className="flex flex-wrap gap-1.5 items-center">
             {previewEmojis.map((emoji) => (
-              <CustomEmoji
+              <Emoji
                 key={emoji.shortcode}
+                source="custom"
+                value={emoji.url}
                 shortcode={emoji.shortcode}
-                url={emoji.url}
                 size="md"
               />
             ))}

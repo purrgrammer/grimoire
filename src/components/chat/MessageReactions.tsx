@@ -5,8 +5,7 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
-import { CustomEmoji } from "../nostr/CustomEmoji";
-import { UnicodeEmoji } from "../nostr/UnicodeEmoji";
+import { Emoji } from "../nostr/Emoji";
 
 interface MessageReactionsProps {
   messageId: string;
@@ -178,22 +177,14 @@ function ReactionBadge({ reaction }: { reaction: ReactionSummary }) {
       className="inline-flex items-center gap-1.5 text-[10px] leading-tight"
       title={tooltip}
     >
-      {reaction.customEmoji ? (
-        <CustomEmoji
-          shortcode={reaction.customEmoji.shortcode}
-          url={reaction.customEmoji.url}
-          size="xs"
-          showTooltip={false}
-          className="flex-shrink-0"
-        />
-      ) : (
-        <UnicodeEmoji
-          emoji={reaction.emoji}
-          size="xs"
-          showTooltip={false}
-          className="flex-shrink-0"
-        />
-      )}
+      <Emoji
+        source={reaction.customEmoji ? "custom" : "unicode"}
+        value={reaction.customEmoji ? reaction.customEmoji.url : reaction.emoji}
+        shortcode={reaction.customEmoji?.shortcode || reaction.emoji}
+        size="xs"
+        showTooltip={false}
+        className="flex-shrink-0"
+      />
       <span
         className={cn(
           hasUserReacted ? "text-highlight" : "text-muted-foreground",

@@ -6,8 +6,7 @@ import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useEmojiFrequency } from "@/hooks/useEmojiFrequency";
-import { CustomEmoji } from "../nostr/CustomEmoji";
-import { UnicodeEmoji } from "../nostr/UnicodeEmoji";
+import { Emoji } from "../nostr/Emoji";
 
 interface EmojiPickerDialogProps {
   open: boolean;
@@ -173,20 +172,13 @@ export function EmojiPickerDialog({
                 className="hover:bg-muted rounded p-2 transition-colors flex items-center justify-center aspect-square"
                 title={`:${result.shortcode}:`}
               >
-                {result.source === "unicode" ? (
-                  <UnicodeEmoji
-                    emoji={result.url}
-                    shortcode={result.shortcode}
-                    size="md"
-                    showTooltip={false}
-                  />
-                ) : (
-                  <CustomEmoji
-                    size="md"
-                    shortcode={result.shortcode}
-                    url={result.url}
-                  />
-                )}
+                <Emoji
+                  source={result.source === "unicode" ? "unicode" : "custom"}
+                  value={result.url}
+                  shortcode={result.shortcode}
+                  size="md"
+                  showTooltip={false}
+                />
               </button>
             ))
           ) : (
