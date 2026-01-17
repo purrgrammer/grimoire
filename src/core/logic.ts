@@ -5,6 +5,7 @@ import {
   WindowInstance,
   RelayInfo,
   LayoutConfig,
+  NWCConnection,
 } from "@/types/app";
 import { insertWindow } from "@/lib/layout-utils";
 import { applyPresetToLayout, type LayoutPreset } from "@/lib/layout-presets";
@@ -524,5 +525,71 @@ export const clearActiveSpellbook = (state: GrimoireState): GrimoireState => {
   return {
     ...state,
     activeSpellbook: undefined,
+  };
+};
+
+/**
+ * Sets or updates the NWC (Nostr Wallet Connect) connection.
+ */
+export const setNWCConnection = (
+  state: GrimoireState,
+  connection: NWCConnection,
+): GrimoireState => {
+  return {
+    ...state,
+    nwcConnection: {
+      ...connection,
+      lastConnected: Date.now(),
+    },
+  };
+};
+
+/**
+ * Updates the balance of the current NWC connection.
+ */
+export const updateNWCBalance = (
+  state: GrimoireState,
+  balance: number,
+): GrimoireState => {
+  if (!state.nwcConnection) {
+    return state;
+  }
+
+  return {
+    ...state,
+    nwcConnection: {
+      ...state.nwcConnection,
+      balance,
+    },
+  };
+};
+
+/**
+ * Updates the info of the current NWC connection.
+ */
+export const updateNWCInfo = (
+  state: GrimoireState,
+  info: NWCConnection["info"],
+): GrimoireState => {
+  if (!state.nwcConnection) {
+    return state;
+  }
+
+  return {
+    ...state,
+    nwcConnection: {
+      ...state.nwcConnection,
+      info,
+    },
+  };
+};
+
+/**
+ * Disconnects and clears the current NWC connection.
+ */
+export const disconnectNWC = (state: GrimoireState): GrimoireState => {
+  return {
+    ...state,
+    nwcConnection: undefined,
   };
 };

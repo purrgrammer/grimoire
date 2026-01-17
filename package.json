@@ -49,6 +49,7 @@
     "applesauce-react": "^5.0.1",
     "applesauce-relay": "^5.0.0",
     "applesauce-signers": "^5.0.0",
+    "applesauce-wallet": "^5.0.0",
     "blossom-client-sdk": "^4.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
