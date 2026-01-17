@@ -33,7 +33,7 @@ function parseAddress(aTagValue: string): AddressPointer | null {
 
 /**
  * Renderer for Kind 8 - Badge Award (NIP-58)
- * Shows badge thumbnail, name, and number of recipients
+ * Shows inline badge thumbnail, name, and linked recipient count
  */
 export function BadgeAwardRenderer({ event }: BaseEventProps) {
   const badgeAddress = getAwardBadgeAddress(event);
@@ -65,41 +65,41 @@ export function BadgeAwardRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex gap-3 items-start">
-        {/* Badge Thumbnail */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Badge Thumbnail - small inline */}
         {badgeImageUrl ? (
           <img
             src={badgeImageUrl}
             alt={displayTitle}
-            className="size-12 rounded-lg object-cover flex-shrink-0"
+            className="size-6 rounded object-cover flex-shrink-0"
             loading="lazy"
           />
         ) : (
-          <div className="size-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-            <Award className="size-6 text-muted-foreground" />
-          </div>
+          <Award className="size-6 text-muted-foreground flex-shrink-0" />
         )}
 
-        {/* Badge Info */}
-        <div className="flex flex-col gap-1 flex-1 min-w-0">
-          {badgeEvent ? (
-            <ClickableEventTitle
-              event={badgeEvent}
-              className="text-sm font-semibold text-foreground"
-            >
-              {displayTitle}
-            </ClickableEventTitle>
-          ) : (
-            <span className="text-sm font-semibold text-foreground">
-              {displayTitle}
-            </span>
-          )}
+        {/* Badge Name - linked to badge event */}
+        {badgeEvent ? (
+          <ClickableEventTitle
+            event={badgeEvent}
+            className="text-sm font-semibold text-foreground"
+          >
+            {displayTitle}
+          </ClickableEventTitle>
+        ) : (
+          <span className="text-sm font-semibold text-foreground">
+            {displayTitle}
+          </span>
+        )}
 
-          <p className="text-xs text-muted-foreground">
-            Awarded to {recipientCount}{" "}
-            {recipientCount === 1 ? "person" : "people"}
-          </p>
-        </div>
+        {/* Awarded count - linked to this award event */}
+        <ClickableEventTitle
+          event={event}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          awarded to {recipientCount}{" "}
+          {recipientCount === 1 ? "person" : "people"}
+        </ClickableEventTitle>
       </div>
     </BaseEventContainer>
   );
