@@ -13,6 +13,7 @@ import {
   getBadgeImageUrl,
 } from "@/lib/nip58-helpers";
 import { Award } from "lucide-react";
+import { UserName } from "../UserName";
 
 /**
  * Parse an address pointer from an a tag value
@@ -92,13 +93,17 @@ export function BadgeAwardRenderer({ event }: BaseEventProps) {
           </span>
         )}
 
-        {/* Awarded count - linked to this award event */}
+        {/* Awarded count/name - linked to this award event */}
         <ClickableEventTitle
           event={event}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
-          awarded to {recipientCount}{" "}
-          {recipientCount === 1 ? "person" : "people"}
+          <span>awarded to</span>
+          {recipientCount === 1 ? (
+            <UserName pubkey={awardedPubkeys[0]} />
+          ) : (
+            <span>{recipientCount} people</span>
+          )}
         </ClickableEventTitle>
       </div>
     </BaseEventContainer>
