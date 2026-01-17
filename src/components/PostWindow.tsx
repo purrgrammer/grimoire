@@ -34,7 +34,7 @@ export interface PostWindowProps {
  * post -k 30023  # Create a different kind (if supported)
  * ```
  */
-export function PostWindow({ kind = 1, customTitle }: PostWindowProps) {
+export function PostWindow({ kind = 1 }: PostWindowProps) {
   const activeAccount = use$(accountManager.active$);
   const { searchProfiles } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
@@ -144,31 +144,20 @@ export function PostWindow({ kind = 1, customTitle }: PostWindowProps) {
 
   return (
     <div className="flex h-full flex-col p-4">
-      {/* Header */}
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">
-          {customTitle || `Create Kind ${kind} Note`}
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Publish to selected relays with mention tagging
-        </p>
-      </div>
-
-      {/* Composer */}
-      <div className="flex-1 min-h-0 overflow-auto">
-        <PostComposer
-          ref={composerRef}
-          variant="card"
-          onSubmit={handleSubmit}
-          searchProfiles={searchProfiles}
-          searchEmojis={searchEmojis}
-          showSubmitButton
-          submitLabel="Publish"
-          isLoading={isPublishing}
-          placeholder="What's on your mind?"
-          autoFocus
-        />
-      </div>
+      {/* Composer - full height */}
+      <PostComposer
+        ref={composerRef}
+        variant="card"
+        onSubmit={handleSubmit}
+        searchProfiles={searchProfiles}
+        searchEmojis={searchEmojis}
+        showSubmitButton
+        submitLabel="Publish"
+        isLoading={isPublishing}
+        placeholder="What's on your mind?"
+        autoFocus
+        className="h-full"
+      />
     </div>
   );
 }

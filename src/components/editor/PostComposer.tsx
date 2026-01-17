@@ -6,7 +6,7 @@ import {
   useMemo,
   useEffect,
 } from "react";
-import { Loader2, Paperclip, ChevronDown } from "lucide-react";
+import { Loader2, Paperclip, Hash, AtSign } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { nip19 } from "nostr-tools";
 import {
@@ -20,18 +20,13 @@ import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { Button } from "../ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
 import { Checkbox } from "../ui/checkbox";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "../ui/collapsible";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 /**
  * Result when submitting a post
@@ -134,17 +129,6 @@ function extractHashtags(content: string): string[] {
  * - Blob attachments
  * - Relay selection
  * - Mention p-tag selection
- *
- * @example
- * ```tsx
- * <PostComposer
- *   variant="card"
- *   onSubmit={handlePublish}
- *   searchProfiles={searchProfiles}
- *   searchEmojis={searchEmojis}
- *   showSubmitButton
- * />
- * ```
  */
 export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
   (
@@ -188,6 +172,9 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
     const [extractedMentions, setExtractedMentions] = useState<string[]>([]);
     const [selectedMentions, setSelectedMentions] = useState<string[]>([]);
 
+    // Track extracted hashtags
+    const [extractedHashtags, setExtractedHashtags] = useState<string[]>([]);
+
     // Blossom upload hook
     const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
       accept: "image/*,video/*,audio/*",
@@ -211,7 +198,11 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
       const serialized = editorRef.current?.getSerializedContent();
       if (serialized) {
         const mentions = extractMentions(serialized.text);
+        const hashtags = extractHashtags(serialized.text);
+
         setExtractedMentions(mentions);
+        setExtractedHashtags(hashtags);
+
         // Auto-select new mentions
         setSelectedMentions((prev) => {
           const newMentions = mentions.filter((m) => !prev.includes(m));
@@ -228,20 +219,19 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
     ) => {
       if (!content.trim()) return;
 
-      const hashtags = extractHashtags(content);
-
       await onSubmit({
         content,
         emojiTags,
         blobAttachments,
         relays: selectedRelays,
         mentionedPubkeys: selectedMentions,
-        hashtags,
+        hashtags: extractedHashtags,
       });
 
       // Clear selections after successful submit
       setExtractedMentions([]);
       setSelectedMentions([]);
+      setExtractedHashtags([]);
     };
 
     // Expose methods via ref
@@ -253,110 +243,123 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
           editorRef.current?.clear();
           setExtractedMentions([]);
           setSelectedMentions([]);
+          setExtractedHashtags([]);
+          setSelectedRelays(userRelays);
         },
         isEmpty: () => editorRef.current?.isEmpty() ?? true,
         submit: () => {
           editorRef.current?.submit();
         },
       }),
-      [],
+      [userRelays],
     );
 
-    const isInline = variant === "inline";
     const isCard = variant === "card";
 
-    // Relays section open state
-    const [relaysOpen, setRelaysOpen] = useState(false);
-    const [mentionsOpen, setMentionsOpen] = useState(false);
-
     return (
-      <div
-        className={`flex flex-col gap-3 ${isCard ? "p-3 border rounded-lg bg-card" : ""} ${className}`}
-      >
-        {/* Editor row */}
-        <div className="flex gap-1.5 items-center">
-          {/* Attach button */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={`flex-shrink-0 text-muted-foreground hover:text-foreground ${isInline ? "size-7" : "size-9"}`}
-                  onClick={openUpload}
-                  disabled={isLoading}
-                >
-                  <Paperclip className={isInline ? "size-4" : "size-5"} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>Attach media</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {/* Editor */}
-          <div className={`flex-1 min-w-0 ${isCard ? "editor-card" : ""}`}>
-            <MentionEditor
-              ref={editorRef}
-              placeholder={placeholder}
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              searchCommands={searchCommands}
-              onCommandExecute={onCommandExecute}
-              onSubmit={handleSubmit}
-              autoFocus={autoFocus}
-              className="w-full"
-              onChange={handleContentChange}
-            />
-          </div>
-
-          {/* Submit button (optional) */}
-          {showSubmitButton && (
-            <Button
-              type="button"
-              variant="secondary"
-              size={isInline ? "sm" : "default"}
-              className={`flex-shrink-0 ${isInline ? "h-7 px-2 text-xs" : ""}`}
-              disabled={isLoading}
-              onClick={() => {
-                editorRef.current?.submit();
-              }}
-            >
-              {isLoading ? (
-                <Loader2
-                  className={`animate-spin ${isInline ? "size-3" : "size-4"}`}
-                />
-              ) : (
-                submitLabel
-              )}
-            </Button>
-          )}
+      <div className={`flex flex-col gap-3 ${className}`}>
+        {/* Editor - full width, no border, takes up available space */}
+        <div className={`${isCard ? "editor-card flex-1 min-h-0" : ""}`}>
+          <MentionEditor
+            ref={editorRef}
+            placeholder={placeholder}
+            searchProfiles={searchProfiles}
+            searchEmojis={searchEmojis}
+            searchCommands={searchCommands}
+            onCommandExecute={onCommandExecute}
+            onSubmit={handleSubmit}
+            autoFocus={autoFocus}
+            className="w-full h-full"
+            onChange={handleContentChange}
+          />
         </div>
 
-        {/* Relays section (collapsible) */}
+        {/* Actions row: Upload, Mentions dropdown, Hashtags dropdown */}
+        {isCard && (
+          <div className="flex items-center gap-2">
+            {/* Upload button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openUpload}
+              disabled={isLoading}
+              className="h-8"
+            >
+              <Paperclip className="size-4 mr-1.5" />
+              Upload
+            </Button>
+
+            {/* Mentions dropdown */}
+            {extractedMentions.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    <AtSign className="size-4 mr-1.5" />
+                    Mentions ({selectedMentions.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {extractedMentions.map((pubkey) => (
+                    <DropdownMenuCheckboxItem
+                      key={pubkey}
+                      checked={selectedMentions.includes(pubkey)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedMentions([...selectedMentions, pubkey]);
+                        } else {
+                          setSelectedMentions(
+                            selectedMentions.filter((p) => p !== pubkey),
+                          );
+                        }
+                      }}
+                    >
+                      <span className="font-mono text-xs">
+                        {pubkey.slice(0, 8)}...{pubkey.slice(-8)}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Hashtags dropdown (read-only, just shows what will be tagged) */}
+            {extractedHashtags.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    <Hash className="size-4 mr-1.5" />
+                    Hashtags ({extractedHashtags.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  {extractedHashtags.map((tag) => (
+                    <div
+                      key={tag}
+                      className="px-2 py-1.5 text-sm text-muted-foreground"
+                    >
+                      #{tag}
+                    </div>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        )}
+
+        {/* Relay selector */}
         {isCard && userRelays.length > 0 && (
-          <Collapsible open={relaysOpen} onOpenChange={setRelaysOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between text-xs h-6"
-              >
-                <span className="text-muted-foreground">
-                  Relays ({selectedRelays.length}/{userRelays.length})
-                </span>
-                <ChevronDown
-                  className={`size-3 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
+          <div className="flex flex-col gap-1.5">
+            <div className="text-xs font-medium text-muted-foreground">
+              Publish to relays:
+            </div>
+            <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
               {userRelays.map((relay) => (
-                <div key={relay} className="flex items-center gap-2">
+                <label
+                  key={relay}
+                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded"
+                >
                   <Checkbox
-                    id={`relay-${relay}`}
                     checked={selectedRelays.includes(relay)}
                     onCheckedChange={(checked) => {
                       if (checked) {
@@ -368,62 +371,35 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
                       }
                     }}
                   />
-                  <label
-                    htmlFor={`relay-${relay}`}
-                    className="text-xs font-mono cursor-pointer text-foreground"
-                  >
+                  <span className="font-mono text-xs flex-1">
                     {relay.replace(/^wss?:\/\//, "")}
-                  </label>
-                </div>
+                  </span>
+                </label>
               ))}
-            </CollapsibleContent>
-          </Collapsible>
+            </div>
+          </div>
         )}
 
-        {/* Mentions section (collapsible) */}
-        {isCard && extractedMentions.length > 0 && (
-          <Collapsible open={mentionsOpen} onOpenChange={setMentionsOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between text-xs h-6"
-              >
-                <span className="text-muted-foreground">
-                  Mentions ({selectedMentions.length}/{extractedMentions.length}
-                  )
-                </span>
-                <ChevronDown
-                  className={`size-3 transition-transform ${mentionsOpen ? "rotate-180" : ""}`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
-              {extractedMentions.map((pubkey) => (
-                <div key={pubkey} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`mention-${pubkey}`}
-                    checked={selectedMentions.includes(pubkey)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedMentions([...selectedMentions, pubkey]);
-                      } else {
-                        setSelectedMentions(
-                          selectedMentions.filter((p) => p !== pubkey),
-                        );
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor={`mention-${pubkey}`}
-                    className="text-xs font-mono cursor-pointer text-foreground"
-                  >
-                    {pubkey.slice(0, 8)}...{pubkey.slice(-8)}
-                  </label>
-                </div>
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
+        {/* Big publish button */}
+        {showSubmitButton && (
+          <Button
+            type="button"
+            size="lg"
+            disabled={isLoading || selectedRelays.length === 0}
+            onClick={() => {
+              editorRef.current?.submit();
+            }}
+            className="w-full h-12 text-base font-semibold"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="size-5 mr-2 animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              submitLabel
+            )}
+          </Button>
         )}
 
         {uploadDialog}
