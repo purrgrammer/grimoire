@@ -344,12 +344,7 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
         </div>
 
         {/* Replies Section */}
-        <div className="p-4">
-          <div className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-            <MessageSquare className="size-4" />
-            {replies?.length || 0} {replies?.length === 1 ? "reply" : "replies"}
-          </div>
-
+        <div className="px-3 py-2">
           {replies && replies.length > 0 ? (
             <ThreadConversation
               rootEventId={rootEvent.id}
@@ -357,7 +352,7 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
               threadKind={rootEvent.kind === 1 ? "nip10" : "nip22"}
             />
           ) : (
-            <div className="text-sm text-muted-foreground italic">
+            <div className="text-sm text-muted-foreground italic p-2">
               No replies yet
             </div>
           )}

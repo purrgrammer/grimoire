@@ -2,8 +2,8 @@ import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
-import { KindRenderer } from "./nostr/kinds";
 import { EventErrorBoundary } from "./EventErrorBoundary";
+import { ThreadCommentRenderer } from "./ThreadCommentRenderer";
 import type { NostrEvent } from "@/types/nostr";
 
 export interface ThreadConversationProps {
@@ -140,7 +140,7 @@ export function ThreadConversation({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-0">
       {initialTree.map((node) => {
         const isCollapsed = collapsedIds.has(node.event.id);
         const hasChildren = node.children.length > 0;
@@ -167,24 +167,16 @@ export function ThreadConversation({
               )}
 
               <EventErrorBoundary event={node.event}>
-                <KindRenderer event={node.event} />
+                <ThreadCommentRenderer event={node.event} />
               </EventErrorBoundary>
-
-              {/* Reply count badge (when collapsed) */}
-              {hasChildren && isCollapsed && (
-                <div className="mt-2 ml-4 text-xs text-muted-foreground italic">
-                  {node.children.length}{" "}
-                  {node.children.length === 1 ? "reply" : "replies"}
-                </div>
-              )}
             </div>
 
             {/* Second-level replies (nested, indented) */}
             {hasChildren && !isCollapsed && (
-              <div className="ml-8 mt-3 space-y-3 border-l-2 border-border pl-4">
+              <div className="ml-8 mt-2 space-y-0 border-l-2 border-border pl-4">
                 {node.children.map((child) => (
                   <EventErrorBoundary key={child.id} event={child}>
-                    <KindRenderer event={child} />
+                    <ThreadCommentRenderer event={child} />
                   </EventErrorBoundary>
                 ))}
               </div>
