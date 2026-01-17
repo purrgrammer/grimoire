@@ -453,10 +453,22 @@ export const relayLivenessStorage = {
 export const encryptedContentStorage = {
   async getItem(id: string): Promise<string | null> {
     const entry = await db.encryptedContent.get(id);
-    return entry?.plaintext ?? null;
+    const plaintext = entry?.plaintext ?? null;
+
+    if (plaintext) {
+      console.log(
+        `[EncryptedContentStorage] getItem(${id.slice(0, 8)}): ${plaintext.slice(0, 100)}...`,
+      );
+    }
+
+    return plaintext;
   },
 
   async setItem(id: string, plaintext: string): Promise<void> {
+    console.log(
+      `[EncryptedContentStorage] setItem(${id.slice(0, 8)}): ${plaintext.slice(0, 100)}...`,
+    );
+
     await db.encryptedContent.put({
       id,
       plaintext,

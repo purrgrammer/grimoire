@@ -799,11 +799,17 @@ class GiftWrapService {
     // Update decrypt states for new gift wraps
     let newUnlocked = 0;
     let newPending = 0;
+    let hasSymbolCount = 0;
+    let hasPersistedCount = 0;
+
     for (const gw of giftWraps) {
       if (!this.decryptStates.has(gw.id)) {
         const hasSymbol = isGiftWrapUnlocked(gw);
         const hasPersisted = this.persistedIds.has(gw.id);
         const isUnlocked = hasSymbol || hasPersisted;
+
+        if (hasSymbol) hasSymbolCount++;
+        if (hasPersisted) hasPersistedCount++;
 
         if (isUnlocked) {
           newUnlocked++;
@@ -840,7 +846,7 @@ class GiftWrapService {
 
     dmInfo(
       "GiftWrap",
-      `Decrypt states: ${newUnlocked} unlocked, ${newPending} pending (total: ${this.decryptStates.size})`,
+      `Decrypt states: ${newUnlocked} unlocked (${hasSymbolCount} symbols, ${hasPersistedCount} cached), ${newPending} pending (total: ${this.decryptStates.size})`,
     );
 
     this.decryptStates$.next(new Map(this.decryptStates));
