@@ -8,10 +8,6 @@ import {
 } from "@/lib/nip58-helpers";
 import { UserName } from "../UserName";
 import { Award } from "lucide-react";
-import { useMemo } from "react";
-import { useLiveTimeline } from "@/hooks/useLiveTimeline";
-import { getSeenRelays } from "applesauce-core/helpers/relays";
-import { relayListCache } from "@/services/relay-list-cache";
 
 interface BadgeDefinitionDetailRendererProps {
   event: NostrEvent;
@@ -50,8 +46,8 @@ function ImageVariant({
 }
 
 /**
- * Detail renderer for Kind 30009 - Badge Definition (NIP-58)
- * Shows comprehensive badge information including all image variants
+ * Detail renderer for Kind 30009 - Badge (NIP-58)
+ * Shows badge information including all image variants
  */
 export function BadgeDefinitionDetailRenderer({
   event,
@@ -64,61 +60,6 @@ export function BadgeDefinitionDetailRenderer({
 
   // Use name if available, fallback to identifier
   const displayTitle = name || identifier || "Badge";
-
-  // Build relay list for fetching badge awards (kind 8)
-  const relays = useMemo(() => {
-    const relaySet = new Set<string>();
-
-    // Add seen relays from the badge definition event
-    const seenRelays = getSeenRelays(event);
-    if (seenRelays) {
-      for (const relay of seenRelays) {
-        relaySet.add(relay);
-      }
-    }
-
-    // Add issuer's outbox relays
-    const outboxRelays = relayListCache.getOutboxRelaysSync(event.pubkey);
-    if (outboxRelays) {
-      for (const relay of outboxRelays.slice(0, 3)) {
-        relaySet.add(relay);
-      }
-    }
-
-    return Array.from(relaySet);
-  }, [event]);
-
-  // Query for awards (kind 8) that reference this badge definition
-  const awardsFilter = useMemo(() => {
-    if (!identifier) {
-      return { kinds: [8], ids: [] }; // No match if no identifier
-    }
-    return {
-      kinds: [8],
-      "#a": [`30009:${event.pubkey}:${identifier}`],
-    };
-  }, [event.pubkey, identifier]);
-
-  // Fetch awards from relays
-  const { events: awards } = useLiveTimeline(
-    `badge-awards-${event.id}`,
-    awardsFilter,
-    relays,
-    { limit: 100 },
-  );
-
-  // Count unique recipients
-  const uniqueRecipients = useMemo(() => {
-    if (!awards || awards.length === 0) return 0;
-    const recipients = new Set<string>();
-    for (const award of awards) {
-      const pTags = award.tags.filter((tag) => tag[0] === "p" && tag[1]);
-      for (const pTag of pTags) {
-        recipients.add(pTag[1]);
-      }
-    }
-    return recipients.size;
-  }, [awards]);
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
@@ -164,26 +105,6 @@ export function BadgeDefinitionDetailRenderer({
             </code>
           </div>
         )}
-
-        {/* Awards Count */}
-        {awards && awards.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <h3 className="text-muted-foreground">Times Awarded</h3>
-            <span className="text-sm">
-              {awards.length} award{awards.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
-
-        {/* Recipients Count */}
-        {uniqueRecipients > 0 && (
-          <div className="flex flex-col gap-1">
-            <h3 className="text-muted-foreground">Recipients</h3>
-            <span className="text-sm">
-              {uniqueRecipients} user{uniqueRecipients !== 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Image Variants Section */}
@@ -207,18 +128,6 @@ export function BadgeDefinitionDetailRenderer({
               />
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Award Address for Reference */}
-      {identifier && (
-        <div className="flex flex-col gap-2 p-4 bg-muted/30 rounded-lg">
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Badge Address (for awarding)
-          </h3>
-          <code className="text-xs font-mono break-all">
-            30009:{event.pubkey}:{identifier}
-          </code>
         </div>
       )}
     </div>
