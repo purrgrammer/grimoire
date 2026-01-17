@@ -6,7 +6,15 @@ import {
   useMemo,
   useEffect,
 } from "react";
-import { Loader2, Paperclip, Hash, AtSign } from "lucide-react";
+import {
+  Loader2,
+  Paperclip,
+  Hash,
+  AtSign,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+} from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { nip19 } from "nostr-tools";
 import {
@@ -27,6 +35,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { UserName } from "../nostr/UserName";
 
 /**
  * Result when submitting a post
@@ -68,6 +77,14 @@ export interface PostComposerProps {
   autoFocus?: boolean;
   /** Custom CSS class */
   className?: string;
+  /** Relay publish statuses (optional) */
+  relayStatuses?: Array<{
+    url: string;
+    state: "idle" | "publishing" | "success" | "error";
+    error?: string;
+  }>;
+  /** Callback to retry failed relays (optional) */
+  onRetryFailedRelays?: () => void;
 }
 
 export interface PostComposerHandle {
@@ -145,6 +162,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
       isLoading = false,
       autoFocus = false,
       className = "",
+      relayStatuses = [],
+      onRetryFailedRelays,
     },
     ref,
   ) => {
@@ -174,6 +193,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
 
     // Track extracted hashtags
     const [extractedHashtags, setExtractedHashtags] = useState<string[]>([]);
+    const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
 
     // Blossom upload hook
     const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -193,7 +213,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
       },
     });
 
-    // Update extracted mentions when content changes
+    // Update extracted mentions and hashtags when content changes
     const handleContentChange = () => {
       const serialized = editorRef.current?.getSerializedContent();
       if (serialized) {
@@ -207,6 +227,12 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
         setSelectedMentions((prev) => {
           const newMentions = mentions.filter((m) => !prev.includes(m));
           return [...prev, ...newMentions];
+        });
+
+        // Auto-select new hashtags
+        setSelectedHashtags((prev) => {
+          const newHashtags = hashtags.filter((h) => !prev.includes(h));
+          return [...prev, ...newHashtags];
         });
       }
     };
@@ -225,13 +251,14 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
         blobAttachments,
         relays: selectedRelays,
         mentionedPubkeys: selectedMentions,
-        hashtags: extractedHashtags,
+        hashtags: selectedHashtags,
       });
 
       // Clear selections after successful submit
       setExtractedMentions([]);
       setSelectedMentions([]);
       setExtractedHashtags([]);
+      setSelectedHashtags([]);
     };
 
     // Expose methods via ref
@@ -244,6 +271,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
           setExtractedMentions([]);
           setSelectedMentions([]);
           setExtractedHashtags([]);
+          setSelectedHashtags([]);
           setSelectedRelays(userRelays);
         },
         isEmpty: () => editorRef.current?.isEmpty() ?? true,
@@ -299,7 +327,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
                     Mentions ({selectedMentions.length})
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuContent align="start" className="w-72">
                   {extractedMentions.map((pubkey) => (
                     <DropdownMenuCheckboxItem
                       key={pubkey}
@@ -314,32 +342,44 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
                         }
                       }}
                     >
-                      <span className="font-mono text-xs">
-                        {pubkey.slice(0, 8)}...{pubkey.slice(-8)}
-                      </span>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <UserName pubkey={pubkey} className="text-sm" />
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {pubkey.slice(0, 8)}...{pubkey.slice(-8)}
+                        </span>
+                      </div>
                     </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
-            {/* Hashtags dropdown (read-only, just shows what will be tagged) */}
+            {/* Hashtags dropdown */}
             {extractedHashtags.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8">
                     <Hash className="size-4 mr-1.5" />
-                    Hashtags ({extractedHashtags.length})
+                    Hashtags ({selectedHashtags.length})
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
                   {extractedHashtags.map((tag) => (
-                    <div
+                    <DropdownMenuCheckboxItem
                       key={tag}
-                      className="px-2 py-1.5 text-sm text-muted-foreground"
+                      checked={selectedHashtags.includes(tag)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedHashtags([...selectedHashtags, tag]);
+                        } else {
+                          setSelectedHashtags(
+                            selectedHashtags.filter((t) => t !== tag),
+                          );
+                        }
+                      }}
                     >
-                      #{tag}
-                    </div>
+                      <span className="text-sm">#{tag}</span>
+                    </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -347,35 +387,71 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
           </div>
         )}
 
-        {/* Relay selector */}
+        {/* Relay selector with status */}
         {isCard && userRelays.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <div className="text-xs font-medium text-muted-foreground">
-              Publish to relays:
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-muted-foreground">
+                Publish to relays:
+              </div>
+              {relayStatuses.filter((s) => s.state === "error").length > 0 &&
+                onRetryFailedRelays && (
+                  <button
+                    onClick={onRetryFailedRelays}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <RotateCcw className="size-3" />
+                    Retry failed
+                  </button>
+                )}
             </div>
             <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
-              {userRelays.map((relay) => (
-                <label
-                  key={relay}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded"
-                >
-                  <Checkbox
-                    checked={selectedRelays.includes(relay)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedRelays([...selectedRelays, relay]);
-                      } else {
-                        setSelectedRelays(
-                          selectedRelays.filter((r) => r !== relay),
-                        );
-                      }
-                    }}
-                  />
-                  <span className="font-mono text-xs flex-1">
-                    {relay.replace(/^wss?:\/\//, "")}
-                  </span>
-                </label>
-              ))}
+              {userRelays.map((relay) => {
+                const status = relayStatuses.find((s) => s.url === relay);
+                return (
+                  <label
+                    key={relay}
+                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded"
+                  >
+                    <Checkbox
+                      checked={selectedRelays.includes(relay)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedRelays([...selectedRelays, relay]);
+                        } else {
+                          setSelectedRelays(
+                            selectedRelays.filter((r) => r !== relay),
+                          );
+                        }
+                      }}
+                    />
+                    <a
+                      href={relay}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs flex-1 text-primary hover:underline"
+                    >
+                      {relay.replace(/^wss?:\/\//, "")}
+                    </a>
+                    {status && (
+                      <div className="flex items-center gap-1">
+                        {status.state === "publishing" && (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                        )}
+                        {status.state === "success" && (
+                          <CheckCircle2 className="size-3 text-green-600" />
+                        )}
+                        {status.state === "error" && (
+                          <div title={status.error}>
+                            <XCircle className="size-3 text-red-600" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </label>
+                );
+              })}
             </div>
           </div>
         )}

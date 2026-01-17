@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useMemo } from "react";
 import { use$ } from "applesauce-react/hooks";
 import accountManager from "@/services/accounts";
 import { toast } from "sonner";
@@ -14,6 +14,17 @@ import { hub } from "@/services/hub";
 import type { ActionContext } from "applesauce-actions";
 import { lastValueFrom } from "rxjs";
 import { AlertCircle } from "lucide-react";
+import eventStore from "@/services/event-store";
+import { getTagValues } from "@/lib/nostr-utils";
+import type { ProfileSearchResult } from "@/services/profile-search";
+
+type RelayPublishState = "idle" | "publishing" | "success" | "error";
+
+interface RelayStatus {
+  url: string;
+  state: RelayPublishState;
+  error?: string;
+}
 
 export interface PostWindowProps {
   /** Event kind to publish (default: 1) */
@@ -40,6 +51,36 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
   const { searchEmojis } = useEmojiSearch();
   const composerRef = useRef<PostComposerHandle>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [relayStatuses, setRelayStatuses] = useState<RelayStatus[]>([]);
+
+  // Get user's contacts (kind 3 contact list)
+  const contactList = use$(
+    () =>
+      activeAccount
+        ? eventStore.replaceable(3, activeAccount.pubkey)
+        : undefined,
+    [activeAccount?.pubkey],
+  );
+
+  const contactPubkeys = useMemo(() => {
+    if (!contactList) return new Set<string>();
+    const pubkeys = getTagValues(contactList, "p").filter(
+      (pk) => pk.length === 64,
+    );
+    return new Set(pubkeys);
+  }, [contactList]);
+
+  // Filter profile search to only contacts
+  const searchContactProfiles = useCallback(
+    async (query: string): Promise<ProfileSearchResult[]> => {
+      const allResults = await searchProfiles(query);
+      // If no contacts, return all results
+      if (contactPubkeys.size === 0) return allResults;
+      // Filter to only contacts
+      return allResults.filter((result) => contactPubkeys.has(result.pubkey));
+    },
+    [searchProfiles, contactPubkeys],
+  );
 
   const handleSubmit = useCallback(
     async (data: PostSubmitData) => {
@@ -54,6 +95,14 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
       }
 
       setIsPublishing(true);
+
+      // Initialize relay statuses
+      const initialStatuses: RelayStatus[] = data.relays.map((url) => ({
+        url,
+        state: "publishing" as const,
+      }));
+      setRelayStatuses(initialStatuses);
+
       try {
         const postMetadata: PostMetadata = {
           content: data.content,
@@ -105,23 +154,98 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
           }
         }
 
-        // Publish using action runner (to selected relays)
+        // Sign event first
+        let signedEvent: any;
         await lastValueFrom(
-          hub.exec(() => async ({ sign, publish }: ActionContext) => {
-            const signedEvent = await sign(unsignedEvent);
-            // Publish to each selected relay
-            for (const relay of data.relays) {
-              await publish(signedEvent, [relay]);
+          hub.exec(() => async ({ sign }: ActionContext) => {
+            signedEvent = await sign(unsignedEvent);
+          }),
+        );
+
+        // Publish to each relay individually and track status
+        const publishResults = await Promise.allSettled(
+          data.relays.map(async (relay) => {
+            try {
+              await lastValueFrom(
+                hub.exec(() => async ({ publish }: ActionContext) => {
+                  await publish(signedEvent, [relay]);
+                }),
+              );
+
+              // Update relay status to success
+              setRelayStatuses((prev) =>
+                prev.map((status) =>
+                  status.url === relay
+                    ? { ...status, state: "success" as const }
+                    : status,
+                ),
+              );
+
+              return { relay, success: true };
+            } catch (error) {
+              // Update relay status to error
+              setRelayStatuses((prev) =>
+                prev.map((status) =>
+                  status.url === relay
+                    ? {
+                        ...status,
+                        state: "error" as const,
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to publish",
+                      }
+                    : status,
+                ),
+              );
+
+              return {
+                relay,
+                success: false,
+                error:
+                  error instanceof Error ? error.message : "Failed to publish",
+              };
             }
           }),
         );
 
-        toast.success(`Kind ${kind} event published!`);
-        composerRef.current?.clear();
+        // Count successes and failures
+        const successes = publishResults.filter(
+          (r) => r.status === "fulfilled" && r.value.success,
+        ).length;
+        const failures = publishResults.length - successes;
+
+        // Show toast with results
+        if (failures === 0) {
+          toast.success(
+            `Published to ${successes} relay${successes !== 1 ? "s" : ""}!`,
+          );
+          composerRef.current?.clear();
+          // Reset relay statuses after a delay
+          setTimeout(() => setRelayStatuses([]), 3000);
+        } else if (successes === 0) {
+          toast.error(
+            `Failed to publish to all ${failures} relay${failures !== 1 ? "s" : ""}`,
+          );
+        } else {
+          toast.warning(
+            `Published to ${successes} relay${successes !== 1 ? "s" : ""}, ${failures} failed`,
+          );
+          composerRef.current?.clear();
+          // Keep error statuses visible for retry
+        }
       } catch (error) {
         console.error("Failed to publish:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to publish",
+        );
+        // Reset all to error state
+        setRelayStatuses((prev) =>
+          prev.map((status) => ({
+            ...status,
+            state: "error" as const,
+            error: error instanceof Error ? error.message : "Failed to publish",
+          })),
         );
       } finally {
         setIsPublishing(false);
@@ -129,6 +253,20 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
     },
     [activeAccount, kind],
   );
+
+  // Retry publishing to failed relays
+  const handleRetryFailedRelays = useCallback(async () => {
+    const failedRelays = relayStatuses
+      .filter((status) => status.state === "error")
+      .map((status) => status.url);
+
+    if (failedRelays.length === 0) return;
+
+    // TODO: Implement full retry logic - for now just show notification
+    toast.info(
+      `Retry functionality coming soon for ${failedRelays.length} failed relay${failedRelays.length !== 1 ? "s" : ""}`,
+    );
+  }, [relayStatuses]);
 
   // Show loading state while checking authentication
   if (!activeAccount) {
@@ -149,7 +287,7 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
         ref={composerRef}
         variant="card"
         onSubmit={handleSubmit}
-        searchProfiles={searchProfiles}
+        searchProfiles={searchContactProfiles}
         searchEmojis={searchEmojis}
         showSubmitButton
         submitLabel="Publish"
@@ -157,6 +295,8 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
         placeholder="What's on your mind?"
         autoFocus
         className="h-full"
+        relayStatuses={relayStatuses}
+        onRetryFailedRelays={handleRetryFailedRelays}
       />
     </div>
   );
