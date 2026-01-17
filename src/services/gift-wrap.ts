@@ -49,16 +49,7 @@ const DM_RELAY_LIST_KIND = 10050;
 /** Kind 14: Private direct message (NIP-17) */
 const PRIVATE_DM_KIND = 14;
 
-/** Time windows for progressive loading */
-const TIME_WINDOWS = {
-  // Recent: Last 7 days - loaded immediately
-  RECENT_DAYS: 7,
-  // Historical: 7-30 days - loaded on demand
-  HISTORICAL_DAYS: 30,
-  // Archive: >30 days - explicit user action
-  ARCHIVE_THRESHOLD_DAYS: 30,
-};
-
+/** One day in seconds (for time-based filtering) */
 const DAY_IN_SECONDS = 86400;
 
 /** Rumor is an unsigned event - used for gift wrap contents */
@@ -649,30 +640,27 @@ class GiftWrapService {
     if (!this.userPubkey) return;
 
     const now = Math.floor(Date.now() / 1000);
-    const recentWindowStart = now - TIME_WINDOWS.RECENT_DAYS * DAY_IN_SECONDS;
 
-    // PERFORMANCE OPTIMIZATION: Load only recent window (7 days) initially
-    const recentFilter = {
+    // FIX: Load ALL gift wraps, not just recent window
+    // Users need to see all their messages, not just last 7 days
+    const baseFilter = {
       kinds: [kinds.GiftWrap],
       "#p": [this.userPubkey],
-      since: recentWindowStart,
+      // No 'since' - load everything
     };
 
-    // Real-time filter for new messages (no time bound)
+    // Real-time filter for new messages
     const realtimeFilter = {
       kinds: [kinds.GiftWrap],
       "#p": [this.userPubkey],
       since: now,
     };
 
-    dmInfo(
-      "GiftWrap",
-      `Loading recent gift wraps (last ${TIME_WINDOWS.RECENT_DAYS} days) from ${relays.length} relays`,
-    );
+    dmInfo("GiftWrap", `Loading all gift wraps from ${relays.length} relays`);
 
-    // Timeline subscription for reactive updates
+    // Timeline subscription for reactive updates (ALL messages)
     const sub = eventStore
-      .timeline(recentFilter)
+      .timeline(baseFilter)
       .pipe(map((events) => events.sort((a, b) => b.created_at - a.created_at)))
       .subscribe((giftWraps) => {
         this.handleGiftWrapsUpdate(giftWraps);
@@ -680,18 +668,38 @@ class GiftWrapService {
 
     this.relaySubscription = sub;
 
-    // Subscribe to relays for initial recent load
+    // Subscribe to relays with progressive loading strategy:
+    // 1. Initial batch with LIMIT for fast first response
+    // 2. Then backfill without limit
+    const initialFilter = { ...baseFilter, limit: 50 };
+
+    dmInfo("GiftWrap", "Requesting initial batch (limit: 50)");
     const initialSub = pool
-      .subscription(relays, [recentFilter], { eventStore })
+      .subscription(relays, [initialFilter], { eventStore })
       .subscribe({
         error: (err) => {
-          dmWarn("GiftWrap", `Relay subscription error: ${err}`);
+          dmWarn("GiftWrap", `Initial subscription error: ${err}`);
         },
       });
 
     this.subscriptions.push(initialSub);
 
-    // After delay, start real-time subscription for new messages
+    // After 3s, backfill full history without limit
+    setTimeout(() => {
+      dmInfo("GiftWrap", "Backfilling full gift wrap history");
+
+      const backfillSub = pool
+        .subscription(relays, [baseFilter], { eventStore })
+        .subscribe({
+          error: (err) => {
+            dmWarn("GiftWrap", `Backfill subscription error: ${err}`);
+          },
+        });
+
+      this.subscriptions.push(backfillSub);
+    }, 3000);
+
+    // After 5s, start real-time subscription for new messages
     setTimeout(() => {
       dmInfo("GiftWrap", "Starting real-time subscription for new messages");
 
@@ -704,7 +712,7 @@ class GiftWrapService {
         });
 
       this.subscriptions.push(realtimeSub);
-    }, 2000); // 2s delay before real-time subscription
+    }, 5000);
   }
 
   /** Handle gift wraps update from timeline */
@@ -764,13 +772,34 @@ class GiftWrapService {
 
   /** Update pending count for UI display */
   private updatePendingCount() {
-    let count = 0;
+    let pending = 0;
+    let decrypting = 0;
+    let success = 0;
+    let error = 0;
+
     for (const state of this.decryptStates.values()) {
-      if (state.status === "pending" || state.status === "decrypting") {
-        count++;
+      switch (state.status) {
+        case "pending":
+          pending++;
+          break;
+        case "decrypting":
+          decrypting++;
+          break;
+        case "success":
+          success++;
+          break;
+        case "error":
+          error++;
+          break;
       }
     }
-    this.pendingCount$.next(count);
+
+    const total = pending + decrypting;
+    dmDebug(
+      "GiftWrap",
+      `Pending count: ${total} (${pending} pending, ${decrypting} decrypting, ${success} success, ${error} error)`,
+    );
+    this.pendingCount$.next(total);
   }
 
   /**
@@ -816,24 +845,51 @@ class GiftWrapService {
 
   /** Internal decrypt without state emission (for batching) */
   private async decryptInternal(giftWrapId: string): Promise<Rumor | null> {
+    // FIX: Don't throw errors, return null and update state
+    // This prevents one failure from cascading to other decrypts
     if (!this.signer) {
-      throw new Error("No signer available");
+      dmWarn("GiftWrap", `Cannot decrypt ${giftWrapId.slice(0, 8)}: No signer`);
+      this.decryptStates.set(giftWrapId, {
+        status: "error",
+        error: "No signer available",
+      });
+      return null;
     }
 
     const gw = this.giftWraps.find((g) => g.id === giftWrapId);
     if (!gw) {
-      throw new Error("Gift wrap not found");
+      dmWarn("GiftWrap", `Cannot decrypt ${giftWrapId.slice(0, 8)}: Not found`);
+      this.decryptStates.set(giftWrapId, {
+        status: "error",
+        error: "Gift wrap not found",
+      });
+      return null;
     }
 
+    // Check if already unlocked
     if (isGiftWrapUnlocked(gw)) {
-      return getGiftWrapRumor(gw) ?? null;
+      const rumor = getGiftWrapRumor(gw);
+      if (rumor) {
+        // Mark as success if not already
+        const currentState = this.decryptStates.get(giftWrapId);
+        if (currentState?.status !== "success") {
+          this.decryptStates.set(giftWrapId, {
+            status: "success",
+            decryptedAt: Date.now(),
+          });
+        }
+        return rumor;
+      }
     }
 
+    // Check if already decrypting
     const currentState = this.decryptStates.get(giftWrapId);
     if (currentState?.status === "decrypting") {
-      return null; // Already in progress
+      dmDebug("GiftWrap", `Already decrypting ${giftWrapId.slice(0, 8)}`);
+      return null;
     }
 
+    // Mark as decrypting
     this.decryptStates.set(giftWrapId, { status: "decrypting" });
 
     try {
@@ -844,9 +900,16 @@ class GiftWrapService {
         decryptedAt: Date.now(),
       });
       this.decryptEvent$.next({ giftWrapId, status: "success", rumor });
+      dmDebug("GiftWrap", `✅ Decrypted ${giftWrapId.slice(0, 8)}`);
       return rumor;
     } catch (err) {
       const error = err instanceof Error ? err.message : "Unknown error";
+      dmWarn(
+        "GiftWrap",
+        `❌ Decrypt failed for ${giftWrapId.slice(0, 8)}: ${error}`,
+      );
+
+      // FIX: Set error state but DON'T throw - allows other decrypts to continue
       this.decryptStates.set(giftWrapId, { status: "error", error });
       this.decryptEvent$.next({ giftWrapId, status: "error", error });
       return null;
