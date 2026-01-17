@@ -357,7 +357,9 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
           {replies && replies.length > 0 ? (
             <ThreadConversation
               rootEventId={rootEvent.id}
+              rootEvent={rootEvent}
               replies={replies}
+              participants={participants}
               focusedEventId={
                 originalEventId !== rootEvent.id ? originalEventId : undefined
               }

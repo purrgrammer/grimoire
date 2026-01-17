@@ -1,18 +1,25 @@
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "./nostr/UserName";
-import { EventMenu } from "./nostr/kinds/BaseEventRenderer";
 import { RichText } from "./nostr/RichText";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
+import { Reply } from "lucide-react";
 
 /**
  * Compact renderer for comments in thread view
  * - No reply preview
  * - No footer
  * - Minimal padding
+ * - Reply button instead of menu
  * - Used for both kind 1 and kind 1111 in thread context
  */
-export function ThreadCommentRenderer({ event }: { event: NostrEvent }) {
+export function ThreadCommentRenderer({
+  event,
+  onReply,
+}: {
+  event: NostrEvent;
+  onReply?: (eventId: string) => void;
+}) {
   const { locale } = useGrimoire();
 
   // Format relative time for display
@@ -41,7 +48,15 @@ export function ThreadCommentRenderer({ event }: { event: NostrEvent }) {
             {relativeTime}
           </span>
         </div>
-        <EventMenu event={event} />
+        {onReply && (
+          <button
+            onClick={() => onReply(event.id)}
+            className="hover:text-foreground text-muted-foreground transition-colors"
+            aria-label="Reply"
+          >
+            <Reply className="size-3" />
+          </button>
+        )}
       </div>
       <RichText event={event} className="text-sm" />
     </div>
