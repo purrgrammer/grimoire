@@ -10,7 +10,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Menu,
+  Copy,
+  Check,
+  FileJson,
+  ExternalLink,
+  MessageSquare,
+} from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -98,6 +113,73 @@ function ReplyPreview({
 */
 
 /**
+ * Shared menu items for both dropdown and context menus
+ */
+interface EventMenuItemsProps {
+  event: NostrEvent;
+  openEventDetail: () => void;
+  openThread: () => void;
+  copyEventId: () => void;
+  viewEventJson: () => void;
+  copied: boolean;
+  ItemComponent: typeof DropdownMenuItem | typeof ContextMenuItem;
+  LabelComponent: typeof DropdownMenuLabel | typeof ContextMenuLabel;
+  SeparatorComponent:
+    | typeof DropdownMenuSeparator
+    | typeof ContextMenuSeparator;
+}
+
+function EventMenuItems({
+  event,
+  openEventDetail,
+  openThread,
+  copyEventId,
+  viewEventJson,
+  copied,
+  ItemComponent,
+  LabelComponent,
+  SeparatorComponent,
+}: EventMenuItemsProps) {
+  return (
+    <>
+      <LabelComponent>
+        <div className="flex flex-row items-center gap-4">
+          <KindBadge kind={event.kind} variant="compact" />
+          <KindBadge
+            kind={event.kind}
+            showName
+            showKindNumber
+            showIcon={false}
+          />
+        </div>
+      </LabelComponent>
+      <SeparatorComponent />
+      <ItemComponent onClick={openEventDetail}>
+        <ExternalLink className="size-4 mr-2" />
+        Open
+      </ItemComponent>
+      <ItemComponent onClick={openThread}>
+        <MessageSquare className="size-4 mr-2" />
+        Thread
+      </ItemComponent>
+      <SeparatorComponent />
+      <ItemComponent onClick={copyEventId}>
+        {copied ? (
+          <Check className="size-4 mr-2 text-green-500" />
+        ) : (
+          <Copy className="size-4 mr-2" />
+        )}
+        {copied ? "Copied!" : "Copy ID"}
+      </ItemComponent>
+      <ItemComponent onClick={viewEventJson}>
+        <FileJson className="size-4 mr-2" />
+        View JSON
+      </ItemComponent>
+    </>
+  );
+}
+
+/**
  * Event menu - universal actions for any event
  */
 export function EventMenu({ event }: { event: NostrEvent }) {
@@ -124,6 +206,27 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     }
 
     addWindow("open", { pointer });
+  };
+
+  const openThread = () => {
+    let pointer;
+    // For replaceable/parameterized replaceable events, use AddressPointer
+    if (isAddressableKind(event.kind)) {
+      // Find d-tag for identifier
+      const dTag = getTagValue(event, "d") || "";
+      pointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      // For regular events, use EventPointer
+      pointer = {
+        id: event.id,
+      };
+    }
+
+    addWindow("thread", { pointer });
   };
 
   const copyEventId = () => {
@@ -158,50 +261,34 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="hover:text-foreground text-muted-foreground transition-colors">
-          <Menu className="size-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-row items-center gap-4">
-            <KindBadge kind={event.kind} variant="compact" />
-            <KindBadge
-              kind={event.kind}
-              showName
-              showKindNumber
-              showIcon={false}
-            />
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={openEventDetail}>
-          <ExternalLink className="size-4 mr-2" />
-          Open
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={copyEventId}>
-          {copied ? (
-            <Check className="size-4 mr-2 text-green-500" />
-          ) : (
-            <Copy className="size-4 mr-2" />
-          )}
-          {copied ? "Copied!" : "Copy ID"}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={viewEventJson}>
-          <FileJson className="size-4 mr-2" />
-          View JSON
-        </DropdownMenuItem>
-      </DropdownMenuContent>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="hover:text-foreground text-muted-foreground transition-colors">
+            <Menu className="size-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <EventMenuItems
+            event={event}
+            openEventDetail={openEventDetail}
+            openThread={openThread}
+            copyEventId={copyEventId}
+            viewEventJson={viewEventJson}
+            copied={copied}
+            ItemComponent={DropdownMenuItem}
+            LabelComponent={DropdownMenuLabel}
+            SeparatorComponent={DropdownMenuSeparator}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
       <JsonViewer
         data={event}
         open={jsonDialogOpen}
         onOpenChange={setJsonDialogOpen}
         title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
       />
-    </DropdownMenu>
+    </>
   );
 }
 
@@ -281,7 +368,9 @@ export function BaseEventContainer({
     label?: string;
   };
 }) {
-  const { locale } = useGrimoire();
+  const { locale, addWindow } = useGrimoire();
+  const { copy, copied } = useCopy();
+  const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
 
   // Format relative time for display
   const relativeTime = formatTimestamp(
@@ -300,22 +389,109 @@ export function BaseEventContainer({
   // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
+  // Context menu actions (same as EventMenu)
+  const openEventDetail = () => {
+    let pointer;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      pointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      pointer = {
+        id: event.id,
+      };
+    }
+    addWindow("open", { pointer });
+  };
+
+  const openThread = () => {
+    let pointer;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      pointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      pointer = {
+        id: event.id,
+      };
+    }
+    addWindow("thread", { pointer });
+  };
+
+  const copyEventId = () => {
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      const naddr = nip19.naddrEncode({
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+        relays: relays,
+      });
+      copy(naddr);
+    } else {
+      const nevent = nip19.neventEncode({
+        id: event.id,
+        author: event.pubkey,
+        relays: relays,
+      });
+      copy(nevent);
+    }
+  };
+
+  const viewEventJson = () => {
+    setJsonDialogOpen(true);
+  };
+
   return (
-    <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
-      <div className="flex flex-row justify-between items-center">
-        <div className="flex flex-row gap-2 items-baseline">
-          <EventAuthor pubkey={displayPubkey} />
-          <span
-            className="text-xs text-muted-foreground cursor-help"
-            title={absoluteTime}
-          >
-            {relativeTime}
-          </span>
-        </div>
-        <EventMenu event={event} />
-      </div>
-      {children}
-      <EventFooter event={event} />
-    </div>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
+            <div className="flex flex-row justify-between items-center">
+              <div className="flex flex-row gap-2 items-baseline">
+                <EventAuthor pubkey={displayPubkey} />
+                <span
+                  className="text-xs text-muted-foreground cursor-help"
+                  title={absoluteTime}
+                >
+                  {relativeTime}
+                </span>
+              </div>
+              <EventMenu event={event} />
+            </div>
+            {children}
+            <EventFooter event={event} />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          <EventMenuItems
+            event={event}
+            openEventDetail={openEventDetail}
+            openThread={openThread}
+            copyEventId={copyEventId}
+            viewEventJson={viewEventJson}
+            copied={copied}
+            ItemComponent={ContextMenuItem}
+            LabelComponent={ContextMenuLabel}
+            SeparatorComponent={ContextMenuSeparator}
+          />
+        </ContextMenuContent>
+      </ContextMenu>
+      <JsonViewer
+        data={event}
+        open={jsonDialogOpen}
+        onOpenChange={setJsonDialogOpen}
+        title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
+      />
+    </>
   );
 }

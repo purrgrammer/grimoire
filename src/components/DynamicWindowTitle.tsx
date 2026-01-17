@@ -197,6 +197,26 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "open";
 
+    case "thread":
+      if (props.pointer) {
+        try {
+          if ("id" in props.pointer) {
+            const nevent = nip19.neventEncode({ id: props.pointer.id });
+            return `thread ${nevent}`;
+          } else if ("kind" in props.pointer && "pubkey" in props.pointer) {
+            const naddr = nip19.naddrEncode({
+              kind: props.pointer.kind,
+              pubkey: props.pointer.pubkey,
+              identifier: props.pointer.identifier || "",
+            });
+            return `thread ${naddr}`;
+          }
+        } catch {
+          // Fallback to shortened ID
+        }
+      }
+      return "thread";
+
     case "encode":
       if (props.args && props.args[0]) {
         return `encode ${props.args[0]}`;

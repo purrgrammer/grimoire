@@ -11,6 +11,7 @@ export type AppId =
   | "count"
   //| "event"
   | "open"
+  | "thread"
   | "profile"
   | "encode"
   | "decode"

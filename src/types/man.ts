@@ -3,6 +3,7 @@ import { parseCountCommand } from "../lib/count-parser";
 import type { AppId } from "./app";
 
 import { parseOpenCommand } from "@/lib/open-parser";
+import { parseThreadCommand } from "@/lib/thread-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
@@ -468,6 +469,33 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: (args: string[]) => {
       const parsed = parseOpenCommand(args);
+      return parsed;
+    },
+  },
+  thread: {
+    name: "thread",
+    section: "1",
+    synopsis: "thread <identifier>",
+    description:
+      "View a threaded conversation around a Nostr event. Automatically resolves the root event and displays all replies in a 2-level tree structure. Supports both NIP-10 (kind 1 replies) and NIP-22 (kind 1111 comments). Shows thread participants, relay sources, and chronologically sorted replies with expand/collapse functionality.",
+    options: [
+      {
+        flag: "<identifier>",
+        description:
+          "Event identifier (note1, nevent1, naddr1, hex ID, or kind:pubkey:d-tag)",
+      },
+    ],
+    examples: [
+      "thread nevent1qqst...     View thread for an event with relay hints",
+      "thread note1p...         View thread starting from this note",
+      "thread naddr1...         View thread for an addressable event (e.g., article with comments)",
+      "thread abc123def456...   View thread by hex event ID",
+    ],
+    seeAlso: ["open", "req"],
+    appId: "thread",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      const parsed = parseThreadCommand(args);
       return parsed;
     },
   },
