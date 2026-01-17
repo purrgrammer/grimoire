@@ -1,27 +1,107 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="purpleOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="leftPage" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="rightPage" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#fb923c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
   <!-- Background -->
-  <rect width="512" height="512" fill="#1a1a1a"/>
+  <rect width="512" height="512" fill="#0a0a0a"/>
 
-  <!-- Book cover -->
-  <rect x="128" y="96" width="256" height="320" rx="8" fill="#8b5cf6"/>
+  <!-- Open book - left page (purple) -->
+  <path d="M 96 160 L 96 360 Q 96 380 116 380 L 240 380 L 240 140 L 116 140 Q 96 140 96 160 Z"
+        fill="url(#leftPage)" stroke="#6d28d9" stroke-width="4"/>
 
-  <!-- Book spine highlight -->
-  <rect x="128" y="96" width="32" height="320" rx="8" fill="#a78bfa"/>
+  <!-- Open book - right page (orange) -->
+  <path d="M 272 140 L 396 140 Q 416 140 416 160 L 416 360 Q 416 380 396 380 L 272 380 Z"
+        fill="url(#rightPage)" stroke="#ea580c" stroke-width="4"/>
 
-  <!-- Book pages -->
-  <rect x="384" y="104" width="8" height="304" fill="#f3f4f6"/>
-  <rect x="380" y="108" width="8" height="296" fill="#e5e7eb"/>
-  <rect x="376" y="112" width="8" height="288" fill="#d1d5db"/>
+  <!-- Book spine/binding (center) -->
+  <rect x="240" y="140" width="32" height="240" fill="#1a1a1a"/>
+  <rect x="244" y="140" width="4" height="240" fill="#fbbf24"/>
+  <rect x="264" y="140" width="4" height="240" fill="#fbbf24"/>
 
-  <!-- Magical rune/symbol in center -->
-  <circle cx="256" cy="256" r="64" fill="none" stroke="#fbbf24" stroke-width="4"/>
-  <path d="M 256 192 L 256 320" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
-  <path d="M 192 256 L 320 256" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="256" cy="256" r="12" fill="#fbbf24"/>
+  <!-- Pixel art "req" text on left page -->
+  <!-- Letter 'r' -->
+  <rect x="130" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="130" y="232" width="12" height="12" fill="#fbbf24"/>
+  <rect x="130" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="130" y="256" width="12" height="12" fill="#fbbf24"/>
+  <rect x="142" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="154" y="232" width="12" height="12" fill="#fbbf24"/>
 
-  <!-- Decorative corners -->
-  <path d="M 148 116 L 168 116 L 168 136" stroke="#fbbf24" stroke-width="2" fill="none"/>
-  <path d="M 364 116 L 344 116 L 344 136" stroke="#fbbf24" stroke-width="2" fill="none"/>
-  <path d="M 148 396 L 168 396 L 168 376" stroke="#fbbf24" stroke-width="2" fill="none"/>
-  <path d="M 364 396 L 344 396 L 344 376" stroke="#fbbf24" stroke-width="2" fill="none"/>
+  <!-- Letter 'e' -->
+  <rect x="180" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="192" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="204" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="180" y="232" width="12" height="12" fill="#fbbf24"/>
+  <rect x="180" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="192" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="204" y="232" width="12" height="12" fill="#fbbf24"/>
+  <rect x="180" y="256" width="12" height="12" fill="#fbbf24"/>
+  <rect x="192" y="256" width="12" height="12" fill="#fbbf24"/>
+  <rect x="204" y="256" width="12" height="12" fill="#fbbf24"/>
+
+  <!-- Letter 'q' on right page -->
+  <rect x="296" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="308" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="320" y="220" width="12" height="12" fill="#fbbf24"/>
+  <rect x="296" y="232" width="12" height="12" fill="#fbbf24"/>
+  <rect x="320" y="232" width="12" height="12" fill="#fbbf24"/>
+  <rect x="296" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="308" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="320" y="244" width="12" height="12" fill="#fbbf24"/>
+  <rect x="320" y="256" width="12" height="12" fill="#fbbf24"/>
+  <rect x="320" y="268" width="12" height="12" fill="#fbbf24"/>
+
+  <!-- Magical sparkles - pixel style stars -->
+  <!-- Top left sparkle (purple) -->
+  <rect x="60" y="100" width="8" height="8" fill="#a78bfa"/>
+  <rect x="52" y="108" width="8" height="8" fill="#a78bfa"/>
+  <rect x="60" y="108" width="8" height="8" fill="#c4b5fd"/>
+  <rect x="68" y="108" width="8" height="8" fill="#a78bfa"/>
+  <rect x="60" y="116" width="8" height="8" fill="#a78bfa"/>
+
+  <!-- Top right sparkle (orange) -->
+  <rect x="444" y="120" width="8" height="8" fill="#fb923c"/>
+  <rect x="436" y="128" width="8" height="8" fill="#fb923c"/>
+  <rect x="444" y="128" width="8" height="8" fill="#fdba74"/>
+  <rect x="452" y="128" width="8" height="8" fill="#fb923c"/>
+  <rect x="444" y="136" width="8" height="8" fill="#fb923c"/>
+
+  <!-- Bottom left sparkle (orange) -->
+  <rect x="80" y="380" width="8" height="8" fill="#f97316"/>
+  <rect x="72" y="388" width="8" height="8" fill="#f97316"/>
+  <rect x="80" y="388" width="8" height="8" fill="#fb923c"/>
+  <rect x="88" y="388" width="8" height="8" fill="#f97316"/>
+  <rect x="80" y="396" width="8" height="8" fill="#f97316"/>
+
+  <!-- Bottom right sparkle (purple) -->
+  <rect x="432" y="360" width="8" height="8" fill="#8b5cf6"/>
+  <rect x="424" y="368" width="8" height="8" fill="#8b5cf6"/>
+  <rect x="432" y="368" width="8" height="8" fill="#a78bfa"/>
+  <rect x="440" y="368" width="8" height="8" fill="#8b5cf6"/>
+  <rect x="432" y="376" width="8" height="8" fill="#8b5cf6"/>
+
+  <!-- Small floating sparkles -->
+  <rect x="100" y="200" width="6" height="6" fill="#fbbf24"/>
+  <rect x="400" y="280" width="6" height="6" fill="#fbbf24"/>
+  <rect x="140" y="340" width="6" height="6" fill="#fb923c"/>
+  <rect x="360" y="180" width="6" height="6" fill="#a78bfa"/>
+
+  <!-- Tiny accent sparkles -->
+  <rect x="120" y="160" width="4" height="4" fill="#c4b5fd"/>
+  <rect x="380" y="320" width="4" height="4" fill="#fdba74"/>
+  <rect x="160" y="380" width="4" height="4" fill="#fbbf24"/>
+  <rect x="340" y="140" width="4" height="4" fill="#fbbf24"/>
 </svg>
