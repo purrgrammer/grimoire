@@ -146,6 +146,8 @@ import { BadgeDefinitionRenderer } from "./BadgeDefinitionRenderer";
 import { BadgeDefinitionDetailRenderer } from "./BadgeDefinitionDetailRenderer";
 import { BadgeAwardRenderer } from "./BadgeAwardRenderer";
 import { BadgeAwardDetailRenderer } from "./BadgeAwardDetailRenderer";
+import { ProfileBadgesRenderer } from "./ProfileBadgesRenderer";
+import { ProfileBadgesDetailRenderer } from "./ProfileBadgesDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -205,6 +207,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30005: VideoCurationSetRenderer, // Video Curation Sets (NIP-51)
   30006: PictureCurationSetRenderer, // Picture Curation Sets (NIP-51)
   30007: KindMuteSetRenderer, // Kind Mute Sets (NIP-51)
+  30008: ProfileBadgesRenderer, // Profile Badges (NIP-58)
   30009: BadgeDefinitionRenderer, // Badge (NIP-58)
   30015: InterestSetRenderer, // Interest Sets (NIP-51)
   30023: Kind30023Renderer, // Long-form Article
@@ -300,6 +303,7 @@ const detailRenderers: Record<
   30005: VideoCurationSetDetailRenderer, // Video Curation Sets Detail (NIP-51)
   30006: PictureCurationSetDetailRenderer, // Picture Curation Sets Detail (NIP-51)
   30007: KindMuteSetDetailRenderer, // Kind Mute Sets Detail (NIP-51)
+  30008: ProfileBadgesDetailRenderer, // Profile Badges Detail (NIP-58)
   30009: BadgeDefinitionDetailRenderer, // Badge Detail (NIP-58)
   30015: InterestSetDetailRenderer, // Interest Sets Detail (NIP-51)
   30023: Kind30023DetailRenderer, // Long-form Article Detail

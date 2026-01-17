@@ -93,3 +93,33 @@ export function getAwardBadgeAddress(
 ): string | undefined {
   return getTagValue(awardEvent, "a");
 }
+
+/**
+ * Badge pair from Profile Badges event (kind 30008)
+ * Contains references to both the badge definition and the award event
+ */
+export interface BadgePair {
+  badgeAddress: string; // a tag - references badge definition (30009:pubkey:identifier)
+  awardEventId: string; // e tag - references award event (kind 8)
+}
+
+/**
+ * Extract ordered badge pairs from Profile Badges event (kind 30008)
+ * Returns pairs of (badge definition address, award event id)
+ */
+export function getProfileBadgePairs(event: NostrEvent): BadgePair[] {
+  const pairs: BadgePair[] = [];
+  const aTags = event.tags.filter((tag) => tag[0] === "a" && tag[1]);
+  const eTags = event.tags.filter((tag) => tag[0] === "e" && tag[1]);
+
+  // Pair them up in order - each a tag should have a corresponding e tag
+  const minLength = Math.min(aTags.length, eTags.length);
+  for (let i = 0; i < minLength; i++) {
+    pairs.push({
+      badgeAddress: aTags[i][1],
+      awardEventId: eTags[i][1],
+    });
+  }
+
+  return pairs;
+}

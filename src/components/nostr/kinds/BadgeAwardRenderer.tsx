@@ -72,11 +72,11 @@ export function BadgeAwardRenderer({ event }: BaseEventProps) {
           <img
             src={badgeImageUrl}
             alt={displayTitle}
-            className="size-6 rounded object-cover flex-shrink-0"
+            className="size-5 rounded object-cover flex-shrink-0"
             loading="lazy"
           />
         ) : (
-          <Award className="size-6 text-muted-foreground flex-shrink-0" />
+          <Award className="size-5 text-muted-foreground flex-shrink-0" />
         )}
 
         {/* Badge Name - linked to badge event */}
@@ -96,7 +96,7 @@ export function BadgeAwardRenderer({ event }: BaseEventProps) {
         {/* Awarded count/name - linked to this award event */}
         <ClickableEventTitle
           event={event}
-          className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
         >
           <span>awarded to</span>
           {recipientCount === 1 ? (
