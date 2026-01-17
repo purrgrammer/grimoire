@@ -5,6 +5,7 @@ import type { NostrEvent } from "./nostr";
  * Used for filtering and validating chat-related events
  */
 export const CHAT_KINDS = [
+  8, // NIP-58: Badge awards (system messages)
   9, // NIP-29: Group chat messages
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
   1311, // NIP-53: Live chat messages
@@ -106,6 +107,9 @@ export interface MessageMetadata {
   zapRecipient?: string; // Pubkey of zap recipient
   // NIP-61 nutzap-specific metadata
   nutzapUnit?: string; // Unit for nutzap amount (sat, usd, eur, etc.)
+  // Badge award metadata (for type: "system" with content: "badge-award")
+  badgeAddress?: string; // Badge definition address (30009:pubkey:identifier)
+  awardedPubkeys?: string[]; // Pubkeys of recipients
 }
 
 /**
