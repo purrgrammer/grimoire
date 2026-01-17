@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#1a1a1a"/>
+
+  <!-- Book cover -->
+  <rect x="128" y="96" width="256" height="320" rx="8" fill="#8b5cf6"/>
+
+  <!-- Book spine highlight -->
+  <rect x="128" y="96" width="32" height="320" rx="8" fill="#a78bfa"/>
+
+  <!-- Book pages -->
+  <rect x="384" y="104" width="8" height="304" fill="#f3f4f6"/>
+  <rect x="380" y="108" width="8" height="296" fill="#e5e7eb"/>
+  <rect x="376" y="112" width="8" height="288" fill="#d1d5db"/>
+
+  <!-- Magical rune/symbol in center -->
+  <circle cx="256" cy="256" r="64" fill="none" stroke="#fbbf24" stroke-width="4"/>
+  <path d="M 256 192 L 256 320" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 192 256 L 320 256" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="12" fill="#fbbf24"/>
+
+  <!-- Decorative corners -->
+  <path d="M 148 116 L 168 116 L 168 136" stroke="#fbbf24" stroke-width="2" fill="none"/>
+  <path d="M 364 116 L 344 116 L 344 136" stroke="#fbbf24" stroke-width="2" fill="none"/>
+  <path d="M 148 396 L 168 396 L 168 376" stroke="#fbbf24" stroke-width="2" fill="none"/>
+  <path d="M 364 396 L 344 396 L 344 376" stroke="#fbbf24" stroke-width="2" fill="none"/>
+</svg>
