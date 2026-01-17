@@ -2,13 +2,14 @@ import { RichText } from "../RichText";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import {
   getCommentReplyPointer,
+  getCommentRootPointer,
   isCommentAddressPointer,
   isCommentEventPointer,
   type CommentPointer,
 } from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { Reply } from "lucide-react";
+import { Reply, Hash } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
@@ -42,6 +43,30 @@ function convertCommentPointer(
     };
   }
   return undefined;
+}
+
+/**
+ * Check if two comment pointers reference the same event
+ */
+function arePointersEqual(
+  a: CommentPointer | null,
+  b: CommentPointer | null,
+): boolean {
+  if (!a || !b) return false;
+
+  if (isCommentEventPointer(a) && isCommentEventPointer(b)) {
+    return a.id === b.id;
+  }
+
+  if (isCommentAddressPointer(a) && isCommentAddressPointer(b)) {
+    return (
+      a.kind === b.kind &&
+      a.pubkey === b.pubkey &&
+      a.identifier === b.identifier
+    );
+  }
+
+  return false;
 }
 
 /**
@@ -92,20 +117,31 @@ function ParentEventCard({
 }
 
 /**
- * Renderer for Kind 1111 - Post (NIP-22)
- * Shows immediate parent (reply) only for cleaner display
+ * Renderer for Kind 1111 - Comment (NIP-22)
+ * Shows root context (what the thread is about) and parent reply if different
  */
 export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
   const { addWindow } = useGrimoire();
 
-  // Use NIP-22 specific helpers to get reply pointer
+  // Use NIP-22 specific helpers to get root and reply pointers
+  const rootPointerRaw = getCommentRootPointer(event);
   const replyPointerRaw = getCommentReplyPointer(event);
 
   // Convert to useNostrEvent format
+  const rootPointer = convertCommentPointer(rootPointerRaw);
   const replyPointer = convertCommentPointer(replyPointerRaw);
 
-  // Fetch reply event
+  // Check if root and reply are the same (top-level comment)
+  const isTopLevel = arePointersEqual(rootPointerRaw, replyPointerRaw);
+
+  // Fetch events
+  const rootEvent = useNostrEvent(rootPointer, event);
   const replyEvent = useNostrEvent(replyPointer, event);
+
+  const handleRootClick = () => {
+    if (!rootEvent || !rootPointer) return;
+    addWindow("open", { pointer: rootPointer });
+  };
 
   const handleReplyClick = () => {
     if (!replyEvent || !replyPointer) return;
@@ -115,12 +151,26 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <TooltipProvider>
-        {/* Show reply event (immediate parent) */}
-        {replyPointer && !replyEvent && (
+        {/* Show root context (what the comment thread is about) */}
+        {rootPointer && !rootEvent && (
+          <InlineReplySkeleton icon={<Hash className="size-3" />} />
+        )}
+
+        {rootPointer && rootEvent && (
+          <ParentEventCard
+            parentEvent={rootEvent}
+            icon={Hash}
+            tooltipText="Comment on"
+            onClickHandler={handleRootClick}
+          />
+        )}
+
+        {/* Show reply event (immediate parent) if different from root */}
+        {!isTopLevel && replyPointer && !replyEvent && (
           <InlineReplySkeleton icon={<Reply className="size-3" />} />
         )}
 
-        {replyPointer && replyEvent && (
+        {!isTopLevel && replyPointer && replyEvent && (
           <ParentEventCard
             parentEvent={replyEvent}
             icon={Reply}
