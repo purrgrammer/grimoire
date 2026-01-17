@@ -204,7 +204,7 @@ export function ThreadConversation({
 
             {/* Second-level replies (nested, indented) */}
             {hasChildren && !isCollapsed && (
-              <div className="ml-8 mt-2 space-y-0 border-l-2 border-border pl-4">
+              <div className="ml-6 mt-1 space-y-0 border-l-2 border-border pl-3">
                 {node.children.map((child) => {
                   const isChildFocused = focusedEventId === child.id;
                   return (
