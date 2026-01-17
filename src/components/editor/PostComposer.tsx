@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { UserName } from "../nostr/UserName";
+import { RelayLink } from "../nostr/RelayLink";
 
 /**
  * Result when submitting a post
@@ -327,8 +328,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8">
-                    <AtSign className="size-4 mr-1.5" />
-                    Mentions ({selectedMentions.length})
+                    <AtSign className="size-4 mr-1" />
+                    {selectedMentions.length}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-72">
@@ -363,8 +364,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8">
-                    <Hash className="size-4 mr-1.5" />
-                    Hashtags ({selectedHashtags.length})
+                    <Hash className="size-4 mr-1" />
+                    {selectedHashtags.length}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
@@ -413,9 +414,9 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
               {userRelays.map((relay) => {
                 const status = relayStatuses.find((s) => s.url === relay);
                 return (
-                  <label
+                  <div
                     key={relay}
-                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded"
+                    className="flex items-center gap-2 text-sm hover:bg-muted/50 p-1.5 rounded"
                   >
                     <Checkbox
                       checked={selectedRelays.includes(relay)}
@@ -429,15 +430,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
                         }
                       }}
                     />
-                    <a
-                      href={relay}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-mono text-xs flex-1 text-primary hover:underline"
-                    >
-                      {relay.replace(/^wss?:\/\//, "")}
-                    </a>
+                    <div className="flex-1 min-w-0">
+                      <RelayLink
+                        url={relay}
+                        showInboxOutbox={false}
+                        className="text-xs"
+                      />
+                    </div>
                     {status && (
                       <div className="flex items-center gap-1">
                         {status.state === "publishing" && (
@@ -453,7 +452,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
                         )}
                       </div>
                     )}
-                  </label>
+                  </div>
                 );
               })}
             </div>
