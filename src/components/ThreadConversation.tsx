@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
@@ -9,7 +9,7 @@ import type { NostrEvent } from "@/types/nostr";
 export interface ThreadConversationProps {
   rootEventId: string;
   replies: NostrEvent[];
-  threadKind: "nip10" | "nip22"; // NIP-10 (kind 1) or NIP-22 (kind 1111)
+  focusedEventId?: string; // Event to highlight and scroll to (if not root)
 }
 
 interface ThreadNode {
@@ -60,7 +60,7 @@ function getParentId(
 function buildThreadTree(
   rootId: string,
   replies: NostrEvent[],
-  threadKind: "nip10" | "nip22",
+  focusedEventId?: string,
 ): ThreadNode[] {
   // Sort all replies chronologically (oldest first)
   const sortedReplies = [...replies].sort(
@@ -75,7 +75,9 @@ function buildThreadTree(
   const firstLevel: NostrEvent[] = [];
   const childrenByParent = new Map<string, NostrEvent[]>();
 
+  // Determine thread kind dynamically per event
   sortedReplies.forEach((event) => {
+    const threadKind = event.kind === 1111 ? "nip22" : "nip10";
     const parentId = getParentId(event, threadKind);
 
     if (parentId === rootId) {
@@ -94,11 +96,18 @@ function buildThreadTree(
   });
 
   // Build thread nodes
-  return firstLevel.map((event) => ({
-    event,
-    children: childrenByParent.get(event.id) || [],
-    isCollapsed: false, // Start expanded
-  }));
+  // Auto-expand parent if focusedEventId is in its children
+  return firstLevel.map((event) => {
+    const children = childrenByParent.get(event.id) || [];
+    const hasFocusedChild =
+      focusedEventId && children.some((c) => c.id === focusedEventId);
+
+    return {
+      event,
+      children,
+      isCollapsed: hasFocusedChild ? false : false, // Start expanded (could make collapsible later)
+    };
+  });
 }
 
 /**
@@ -111,16 +120,19 @@ function buildThreadTree(
 export function ThreadConversation({
   rootEventId,
   replies,
-  threadKind,
+  focusedEventId,
 }: ThreadConversationProps) {
   // Build tree structure
   const initialTree = useMemo(
-    () => buildThreadTree(rootEventId, replies, threadKind),
-    [rootEventId, replies, threadKind],
+    () => buildThreadTree(rootEventId, replies, focusedEventId),
+    [rootEventId, replies, focusedEventId],
   );
 
   // Track collapse state per event ID
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  // Ref for the focused event element
+  const focusedRef = useRef<HTMLDivElement>(null);
 
   // Toggle collapse for a specific event
   const toggleCollapse = (eventId: string) => {
@@ -135,6 +147,19 @@ export function ThreadConversation({
     });
   };
 
+  // Scroll to focused event on mount
+  useEffect(() => {
+    if (focusedEventId && focusedRef.current) {
+      // Small delay to ensure rendering is complete
+      setTimeout(() => {
+        focusedRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
+    }
+  }, [focusedEventId]);
+
   if (initialTree.length === 0) {
     return null;
   }
@@ -145,10 +170,12 @@ export function ThreadConversation({
         const isCollapsed = collapsedIds.has(node.event.id);
         const hasChildren = node.children.length > 0;
 
+        const isFocused = focusedEventId === node.event.id;
+
         return (
           <div key={node.event.id}>
             {/* First-level reply */}
-            <div className="relative">
+            <div ref={isFocused ? focusedRef : undefined} className="relative">
               {/* Collapse toggle button (only if has children) */}
               {hasChildren && (
                 <button
@@ -166,19 +193,34 @@ export function ThreadConversation({
                 </button>
               )}
 
-              <EventErrorBoundary event={node.event}>
-                <ThreadCommentRenderer event={node.event} />
-              </EventErrorBoundary>
+              <div
+                className={isFocused ? "ring-2 ring-primary/50 rounded" : ""}
+              >
+                <EventErrorBoundary event={node.event}>
+                  <ThreadCommentRenderer event={node.event} />
+                </EventErrorBoundary>
+              </div>
             </div>
 
             {/* Second-level replies (nested, indented) */}
             {hasChildren && !isCollapsed && (
               <div className="ml-8 mt-2 space-y-0 border-l-2 border-border pl-4">
-                {node.children.map((child) => (
-                  <EventErrorBoundary key={child.id} event={child}>
-                    <ThreadCommentRenderer event={child} />
-                  </EventErrorBoundary>
-                ))}
+                {node.children.map((child) => {
+                  const isChildFocused = focusedEventId === child.id;
+                  return (
+                    <div
+                      key={child.id}
+                      ref={isChildFocused ? focusedRef : undefined}
+                      className={
+                        isChildFocused ? "ring-2 ring-primary/50 rounded" : ""
+                      }
+                    >
+                      <EventErrorBoundary event={child}>
+                        <ThreadCommentRenderer event={child} />
+                      </EventErrorBoundary>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

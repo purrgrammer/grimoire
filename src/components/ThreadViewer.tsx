@@ -99,6 +99,12 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
   const event = useNostrEvent(pointer);
   const { relays: relayStates } = useRelayState();
 
+  // Store the original event ID (the one that was clicked)
+  const originalEventId = useMemo(() => {
+    if (!event) return undefined;
+    return event.id;
+  }, [event?.id]);
+
   // Get thread root
   const rootPointer = useMemo(() => {
     if (!event) return undefined;
@@ -116,23 +122,26 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
   }, [rootEvent]);
 
   // Load all replies to the root
-  const replyFilter = useMemo(() => {
-    if (!rootEvent) return null;
+  // Fetch BOTH kind 1 (NIP-10) and kind 1111 (NIP-22) replies for all roots
+  const replyFilters = useMemo(() => {
+    if (!rootEvent) return [];
 
-    // For kind 1: load kind 1 replies with "e" tag pointing to root
-    if (rootEvent.kind === 1) {
-      return { kinds: [1], "#e": [rootEvent.id] };
-    }
+    const filters = [];
 
-    // For other kinds: load kind 1111 comments with "E" tag pointing to root
-    return { kinds: [1111], "#E": [rootEvent.id] };
+    // Always fetch kind 1 replies with "e" tag (NIP-10)
+    filters.push({ kinds: [1], "#e": [rootEvent.id] });
+
+    // Always fetch kind 1111 comments with "E" tag (NIP-22)
+    filters.push({ kinds: [1111], "#E": [rootEvent.id] });
+
+    return filters;
   }, [rootEvent]);
 
   // Subscribe to replies timeline
   const replies = use$(() => {
-    if (!replyFilter) return eventStore.timeline([]);
-    return eventStore.timeline([replyFilter]);
-  }, [replyFilter]);
+    if (replyFilters.length === 0) return eventStore.timeline([]);
+    return eventStore.timeline(replyFilters);
+  }, [replyFilters]);
 
   // Extract all participants (unique pubkeys from root + all replies)
   const participants = useMemo(() => {
@@ -349,7 +358,9 @@ export function ThreadViewer({ pointer }: ThreadViewerProps) {
             <ThreadConversation
               rootEventId={rootEvent.id}
               replies={replies}
-              threadKind={rootEvent.kind === 1 ? "nip10" : "nip22"}
+              focusedEventId={
+                originalEventId !== rootEvent.id ? originalEventId : undefined
+              }
             />
           ) : (
             <div className="text-sm text-muted-foreground italic p-2">
