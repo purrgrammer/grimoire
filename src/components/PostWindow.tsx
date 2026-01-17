@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useMemo } from "react";
+import { useCallback, useRef, useState, useMemo, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import accountManager from "@/services/accounts";
 import { toast } from "sonner";
@@ -69,6 +69,22 @@ export function PostWindow({ kind = 1 }: PostWindowProps) {
     );
     return new Set(pubkeys);
   }, [contactList]);
+
+  // Preload contact profiles for @ autocomplete
+  useEffect(() => {
+    if (contactPubkeys.size === 0) return;
+
+    // Load profiles for all contacts (trigger fetching if not in store)
+    const pubkeysArray = Array.from(contactPubkeys);
+    for (const pubkey of pubkeysArray) {
+      // Subscribe to profile - this triggers loading if not in store
+      const sub = eventStore.replaceable(0, pubkey).subscribe(() => {
+        // Profile loaded or updated
+      });
+      // Clean up subscription after initial load
+      setTimeout(() => sub.unsubscribe(), 1000);
+    }
+  }, [contactPubkeys]);
 
   // Filter profile search to only contacts
   const searchContactProfiles = useCallback(

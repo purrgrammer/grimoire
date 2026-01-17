@@ -223,16 +223,20 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
         setExtractedMentions(mentions);
         setExtractedHashtags(hashtags);
 
-        // Auto-select new mentions
+        // Sync selected mentions with extracted mentions
+        // Remove mentions that are no longer in content
         setSelectedMentions((prev) => {
+          const stillPresent = prev.filter((m) => mentions.includes(m));
           const newMentions = mentions.filter((m) => !prev.includes(m));
-          return [...prev, ...newMentions];
+          return [...stillPresent, ...newMentions];
         });
 
-        // Auto-select new hashtags
+        // Sync selected hashtags with extracted hashtags
+        // Remove hashtags that are no longer in content
         setSelectedHashtags((prev) => {
+          const stillPresent = prev.filter((h) => hashtags.includes(h));
           const newHashtags = hashtags.filter((h) => !prev.includes(h));
-          return [...prev, ...newHashtags];
+          return [...stillPresent, ...newHashtags];
         });
       }
     };
