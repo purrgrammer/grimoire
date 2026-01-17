@@ -75,6 +75,7 @@ export interface MentionEditorProps {
     emojiTags: EmojiTag[],
     blobAttachments: BlobAttachment[],
   ) => void;
+  onChange?: () => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
@@ -284,6 +285,7 @@ export const MentionEditor = forwardRef<
     {
       placeholder = "Type a message...",
       onSubmit,
+      onChange,
       searchProfiles,
       searchEmojis,
       searchCommands,
@@ -824,6 +826,9 @@ export const MentionEditor = forwardRef<
         },
       },
       autofocus: autoFocus,
+      onUpdate: () => {
+        onChange?.();
+      },
     });
 
     // Expose editor methods

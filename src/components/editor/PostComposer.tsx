@@ -1,6 +1,14 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Loader2, Paperclip, X } from "lucide-react";
-import type { NostrEvent } from "nostr-tools";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+} from "react";
+import { Loader2, Paperclip, ChevronDown } from "lucide-react";
+import { useGrimoire } from "@/core/state";
+import { nip19 } from "nostr-tools";
 import {
   MentionEditor,
   type MentionEditorHandle,
@@ -12,15 +20,18 @@ import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { UserName } from "../nostr/UserName";
-import { RichText } from "../nostr/RichText";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { Checkbox } from "../ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../ui/collapsible";
 
 /**
  * Result when submitting a post
@@ -29,7 +40,9 @@ export interface PostSubmitData {
   content: string;
   emojiTags: EmojiTag[];
   blobAttachments: BlobAttachment[];
-  title?: string; // For kind 11 threads
+  relays: string[];
+  mentionedPubkeys: string[];
+  hashtags: string[];
 }
 
 /**
@@ -46,18 +59,10 @@ export interface PostComposerProps {
   searchCommands?: (query: string) => Promise<ChatAction[]>;
   /** Command execution handler (optional) */
   onCommandExecute?: (action: ChatAction) => Promise<void>;
-  /** Event being replied to (full event object, not just ID) */
-  replyTo?: NostrEvent;
-  /** Clear reply context */
-  onClearReply?: () => void;
   /** Variant style */
   variant?: "inline" | "card";
-  /** Show title input (for kind 11 threads) */
-  showTitleInput?: boolean;
   /** Placeholder for editor */
   placeholder?: string;
-  /** Placeholder for title input */
-  titlePlaceholder?: string;
   /** Show submit button */
   showSubmitButton?: boolean;
   /** Submit button label */
@@ -73,7 +78,7 @@ export interface PostComposerProps {
 export interface PostComposerHandle {
   /** Focus the editor */
   focus: () => void;
-  /** Clear the editor and title */
+  /** Clear the editor and selections */
   clear: () => void;
   /** Check if editor is empty */
   isEmpty: () => boolean;
@@ -82,77 +87,62 @@ export interface PostComposerHandle {
 }
 
 /**
- * ComposerReplyPreview - Shows who is being replied to in the composer
+ * Extract mentioned pubkeys from nostr: URIs in content
  */
-function ComposerReplyPreview({
-  replyTo,
-  onClear,
-}: {
-  replyTo: NostrEvent;
-  onClear?: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded bg-muted px-2 py-1 text-xs mb-1.5 overflow-hidden">
-      <span className="flex-shrink-0">↳</span>
-      <UserName pubkey={replyTo.pubkey} className="font-medium flex-shrink-0" />
-      <div className="flex-1 min-w-0 line-clamp-1 overflow-hidden text-muted-foreground">
-        <RichText
-          event={replyTo}
-          options={{ showMedia: false, showEventEmbeds: false }}
-        />
-      </div>
-      {onClear && (
-        <button
-          onClick={onClear}
-          className="ml-auto text-muted-foreground hover:text-foreground flex-shrink-0"
-        >
-          <X className="size-3" />
-        </button>
-      )}
-    </div>
-  );
+function extractMentions(content: string): string[] {
+  const mentions: string[] = [];
+  const nostrUriRegex = /nostr:(npub1[a-z0-9]+|nprofile1[a-z0-9]+)/g;
+
+  let match;
+  while ((match = nostrUriRegex.exec(content)) !== null) {
+    try {
+      const decoded = nip19.decode(match[1]);
+      if (decoded.type === "npub") {
+        mentions.push(decoded.data);
+      } else if (decoded.type === "nprofile") {
+        mentions.push(decoded.data.pubkey);
+      }
+    } catch {
+      // Ignore invalid URIs
+    }
+  }
+
+  return [...new Set(mentions)]; // Deduplicate
+}
+
+/**
+ * Extract hashtags from content (#word)
+ */
+function extractHashtags(content: string): string[] {
+  const hashtags: string[] = [];
+  const hashtagRegex = /#(\w+)/g;
+
+  let match;
+  while ((match = hashtagRegex.exec(content)) !== null) {
+    hashtags.push(match[1]);
+  }
+
+  return [...new Set(hashtags)]; // Deduplicate
 }
 
 /**
  * PostComposer - Generalized post composer for Nostr events
  *
- * Supports two variants:
- * - inline: Compact single-row (for chat messages, quick replies)
- * - card: Multi-row with larger previews (for timeline posts, threads)
- *
  * Features:
- * - @ mention autocomplete (NIP-19 npub encoding)
- * - : emoji autocomplete (unicode + custom emoji with NIP-30 tags)
- * - / slash commands (optional)
- * - Blob attachments (NIP-92 imeta tags)
- * - Reply context preview
- * - Title input (for kind 11 threads)
+ * - @ mention autocomplete
+ * - : emoji autocomplete
+ * - Blob attachments
+ * - Relay selection
+ * - Mention p-tag selection
  *
  * @example
  * ```tsx
- * // Inline composer (chat style)
- * <PostComposer
- *   variant="inline"
- *   onSubmit={handleSend}
- *   searchProfiles={searchProfiles}
- *   searchEmojis={searchEmojis}
- * />
- *
- * // Card composer (timeline post)
  * <PostComposer
  *   variant="card"
  *   onSubmit={handlePublish}
  *   searchProfiles={searchProfiles}
+ *   searchEmojis={searchEmojis}
  *   showSubmitButton
- *   submitLabel="Publish"
- * />
- *
- * // Thread composer (kind 11)
- * <PostComposer
- *   variant="card"
- *   showTitleInput
- *   onSubmit={handlePublishThread}
- *   searchProfiles={searchProfiles}
  * />
  * ```
  */
@@ -164,12 +154,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
       searchEmojis,
       searchCommands,
       onCommandExecute,
-      replyTo,
-      onClearReply,
       variant = "inline",
-      showTitleInput = false,
       placeholder = "Type a message...",
-      titlePlaceholder = "Thread title...",
       showSubmitButton = false,
       submitLabel = "Send",
       isLoading = false,
@@ -179,7 +165,28 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
     ref,
   ) => {
     const editorRef = useRef<MentionEditorHandle>(null);
-    const [title, setTitle] = useState("");
+    const { state } = useGrimoire();
+    const activeAccount = state.activeAccount;
+
+    // Get user's write relays
+    const userRelays = useMemo(() => {
+      if (!activeAccount?.relays) return [];
+      return activeAccount.relays.filter((r) => r.write).map((r) => r.url);
+    }, [activeAccount]);
+
+    // Selected relays (default to all user write relays)
+    const [selectedRelays, setSelectedRelays] = useState<string[]>([]);
+
+    // Initialize selected relays when user relays change
+    useEffect(() => {
+      if (userRelays.length > 0 && selectedRelays.length === 0) {
+        setSelectedRelays(userRelays);
+      }
+    }, [userRelays, selectedRelays.length]);
+
+    // Track extracted mentions from content
+    const [extractedMentions, setExtractedMentions] = useState<string[]>([]);
+    const [selectedMentions, setSelectedMentions] = useState<string[]>([]);
 
     // Blossom upload hook
     const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -199,26 +206,42 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
       },
     });
 
+    // Update extracted mentions when content changes
+    const handleContentChange = () => {
+      const serialized = editorRef.current?.getSerializedContent();
+      if (serialized) {
+        const mentions = extractMentions(serialized.text);
+        setExtractedMentions(mentions);
+        // Auto-select new mentions
+        setSelectedMentions((prev) => {
+          const newMentions = mentions.filter((m) => !prev.includes(m));
+          return [...prev, ...newMentions];
+        });
+      }
+    };
+
     // Handle submit
     const handleSubmit = async (
       content: string,
       emojiTags: EmojiTag[],
       blobAttachments: BlobAttachment[],
     ) => {
-      if (!content.trim() && (!showTitleInput || !title.trim())) return;
+      if (!content.trim()) return;
+
+      const hashtags = extractHashtags(content);
 
       await onSubmit({
         content,
         emojiTags,
         blobAttachments,
-        title: showTitleInput ? title : undefined,
+        relays: selectedRelays,
+        mentionedPubkeys: selectedMentions,
+        hashtags,
       });
 
-      // Clear editor and title after successful submit
-      editorRef.current?.clear();
-      if (showTitleInput) {
-        setTitle("");
-      }
+      // Clear selections after successful submit
+      setExtractedMentions([]);
+      setSelectedMentions([]);
     };
 
     // Expose methods via ref
@@ -228,44 +251,28 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
         focus: () => editorRef.current?.focus(),
         clear: () => {
           editorRef.current?.clear();
-          setTitle("");
+          setExtractedMentions([]);
+          setSelectedMentions([]);
         },
-        isEmpty: () => {
-          const editorEmpty = editorRef.current?.isEmpty() ?? true;
-          const titleEmpty = showTitleInput ? !title.trim() : true;
-          return editorEmpty && titleEmpty;
-        },
+        isEmpty: () => editorRef.current?.isEmpty() ?? true,
         submit: () => {
           editorRef.current?.submit();
         },
       }),
-      [showTitleInput, title],
+      [],
     );
 
     const isInline = variant === "inline";
     const isCard = variant === "card";
 
+    // Relays section open state
+    const [relaysOpen, setRelaysOpen] = useState(false);
+    const [mentionsOpen, setMentionsOpen] = useState(false);
+
     return (
       <div
-        className={`flex flex-col gap-1.5 ${isCard ? "p-3 border rounded-lg bg-card" : ""} ${className}`}
+        className={`flex flex-col gap-3 ${isCard ? "p-3 border rounded-lg bg-card" : ""} ${className}`}
       >
-        {/* Title input for threads (kind 11) */}
-        {showTitleInput && (
-          <Input
-            type="text"
-            placeholder={titlePlaceholder}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={isLoading}
-            className="font-semibold"
-          />
-        )}
-
-        {/* Reply preview */}
-        {replyTo && (
-          <ComposerReplyPreview replyTo={replyTo} onClear={onClearReply} />
-        )}
-
         {/* Editor row */}
         <div className="flex gap-1.5 items-center">
           {/* Attach button */}
@@ -301,6 +308,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
               onSubmit={handleSubmit}
               autoFocus={autoFocus}
               className="w-full"
+              onChange={handleContentChange}
             />
           </div>
 
@@ -326,6 +334,97 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(
             </Button>
           )}
         </div>
+
+        {/* Relays section (collapsible) */}
+        {isCard && userRelays.length > 0 && (
+          <Collapsible open={relaysOpen} onOpenChange={setRelaysOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between text-xs h-6"
+              >
+                <span className="text-muted-foreground">
+                  Relays ({selectedRelays.length}/{userRelays.length})
+                </span>
+                <ChevronDown
+                  className={`size-3 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 pt-2">
+              {userRelays.map((relay) => (
+                <div key={relay} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`relay-${relay}`}
+                    checked={selectedRelays.includes(relay)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedRelays([...selectedRelays, relay]);
+                      } else {
+                        setSelectedRelays(
+                          selectedRelays.filter((r) => r !== relay),
+                        );
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`relay-${relay}`}
+                    className="text-xs font-mono cursor-pointer text-foreground"
+                  >
+                    {relay.replace(/^wss?:\/\//, "")}
+                  </label>
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Mentions section (collapsible) */}
+        {isCard && extractedMentions.length > 0 && (
+          <Collapsible open={mentionsOpen} onOpenChange={setMentionsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between text-xs h-6"
+              >
+                <span className="text-muted-foreground">
+                  Mentions ({selectedMentions.length}/{extractedMentions.length}
+                  )
+                </span>
+                <ChevronDown
+                  className={`size-3 transition-transform ${mentionsOpen ? "rotate-180" : ""}`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 pt-2">
+              {extractedMentions.map((pubkey) => (
+                <div key={pubkey} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`mention-${pubkey}`}
+                    checked={selectedMentions.includes(pubkey)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedMentions([...selectedMentions, pubkey]);
+                      } else {
+                        setSelectedMentions(
+                          selectedMentions.filter((p) => p !== pubkey),
+                        );
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`mention-${pubkey}`}
+                    className="text-xs font-mono cursor-pointer text-foreground"
+                  >
+                    {pubkey.slice(0, 8)}...{pubkey.slice(-8)}
+                  </label>
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         {uploadDialog}
       </div>

@@ -1,7 +1,6 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 import accountManager from "@/services/accounts";
-import eventStore from "@/services/event-store";
 import { toast } from "sonner";
 import {
   PostComposer,
@@ -10,21 +9,15 @@ import {
 } from "./editor/PostComposer";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
-import {
-  buildKind1Event,
-  buildKind11Event,
-  type PostMetadata,
-} from "@/lib/event-builders";
+import type { PostMetadata } from "@/lib/event-builders";
 import { hub } from "@/services/hub";
 import type { ActionContext } from "applesauce-actions";
 import { lastValueFrom } from "rxjs";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export interface PostWindowProps {
-  /** Post type: "note" (kind 1) or "thread" (kind 11) */
-  type?: "note" | "thread";
-  /** Event ID or naddr to reply to (for kind 1) */
-  replyTo?: string;
+  /** Event kind to publish (default: 1) */
+  kind?: number;
   /** Custom title for the window */
   customTitle?: string;
 }
@@ -32,57 +25,31 @@ export interface PostWindowProps {
 /**
  * PostWindow - Window component for creating Nostr posts
  *
- * Supports:
- * - Kind 1 notes (short text posts)
- * - Kind 11 threads (posts with title)
- * - Replying to events (NIP-10 threading)
+ * Simplified post composer focused on kind 1 notes.
+ * Supports relay selection and mention tagging.
  *
  * @example
  * ```bash
- * post                  # Create a kind 1 note
- * post --thread         # Create a kind 11 thread
- * post --reply <id>     # Reply to an event
+ * post           # Create a kind 1 note
+ * post -k 30023  # Create a different kind (if supported)
  * ```
  */
-export function PostWindow({
-  type = "note",
-  replyTo: replyToId,
-  customTitle,
-}: PostWindowProps) {
+export function PostWindow({ kind = 1, customTitle }: PostWindowProps) {
   const activeAccount = use$(accountManager.active$);
   const { searchProfiles } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const composerRef = useRef<PostComposerHandle>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // Load reply-to event if provided
-  const replyToEvent = use$(
-    () => (replyToId ? eventStore.event(replyToId) : undefined),
-    [replyToId],
-  );
-
-  // Track loading state for reply event
-  const [isLoadingReply, setIsLoadingReply] = useState(!!replyToId);
-
-  useEffect(() => {
-    if (!replyToId) {
-      setIsLoadingReply(false);
-      return;
-    }
-
-    // Check if event is loaded
-    if (replyToEvent) {
-      setIsLoadingReply(false);
-    } else {
-      // Event not loaded yet, keep loading state
-      setIsLoadingReply(true);
-    }
-  }, [replyToId, replyToEvent]);
-
   const handleSubmit = useCallback(
     async (data: PostSubmitData) => {
       if (!activeAccount) {
         toast.error("Please sign in to post");
+        return;
+      }
+
+      if (!data.relays || data.relays.length === 0) {
+        toast.error("Please select at least one relay");
         return;
       }
 
@@ -92,50 +59,64 @@ export function PostWindow({
           content: data.content,
           emojiTags: data.emojiTags,
           blobAttachments: data.blobAttachments,
-          // TODO: Extract mentions and hashtags from content
-          // mentionedPubkeys: extractMentions(data.content),
-          // hashtags: extractHashtags(data.content),
+          mentionedPubkeys: data.mentionedPubkeys,
+          hashtags: data.hashtags,
         };
 
-        let eventTemplate;
+        // Build unsigned event
+        const unsignedEvent = {
+          kind,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [] as string[][],
+          content: postMetadata.content,
+          pubkey: activeAccount.pubkey,
+        };
 
-        if (type === "thread") {
-          if (!data.title || !data.title.trim()) {
-            toast.error("Thread title is required");
-            setIsPublishing(false);
-            return;
+        // Add p-tags for mentioned pubkeys
+        if (postMetadata.mentionedPubkeys) {
+          for (const pubkey of postMetadata.mentionedPubkeys) {
+            unsignedEvent.tags.push(["p", pubkey]);
           }
-
-          eventTemplate = buildKind11Event({
-            title: data.title,
-            post: postMetadata,
-            pubkey: activeAccount.pubkey,
-          });
-        } else {
-          // Kind 1 note (with optional reply)
-          eventTemplate = buildKind1Event({
-            post: postMetadata,
-            replyTo: replyToEvent,
-            pubkey: activeAccount.pubkey,
-          });
         }
 
-        // Publish using action runner
+        // Add hashtags (t-tags)
+        if (postMetadata.hashtags) {
+          for (const hashtag of postMetadata.hashtags) {
+            unsignedEvent.tags.push(["t", hashtag.toLowerCase()]);
+          }
+        }
+
+        // Add emoji tags (NIP-30)
+        if (postMetadata.emojiTags) {
+          for (const emoji of postMetadata.emojiTags) {
+            unsignedEvent.tags.push(["emoji", emoji.shortcode, emoji.url]);
+          }
+        }
+
+        // Add imeta tags for blob attachments (NIP-92)
+        if (postMetadata.blobAttachments) {
+          for (const blob of postMetadata.blobAttachments) {
+            const imetaTag = ["imeta", `url ${blob.url}`];
+            if (blob.mimeType) imetaTag.push(`m ${blob.mimeType}`);
+            if (blob.sha256) imetaTag.push(`x ${blob.sha256}`);
+            if (blob.size !== undefined) imetaTag.push(`size ${blob.size}`);
+            if (blob.server) imetaTag.push(`ox ${blob.server}`);
+            unsignedEvent.tags.push(imetaTag);
+          }
+        }
+
+        // Publish using action runner (to selected relays)
         await lastValueFrom(
           hub.exec(() => async ({ sign, publish }: ActionContext) => {
-            const signedEvent = await sign(eventTemplate);
-            await publish(signedEvent);
+            const signedEvent = await sign(unsignedEvent);
+            // Publish to each selected relay
+            for (const relay of data.relays) {
+              await publish(signedEvent, [relay]);
+            }
           }),
         );
 
-        const successMessage =
-          type === "thread"
-            ? "Thread created!"
-            : replyToEvent
-              ? "Reply published!"
-              : "Note published!";
-
-        toast.success(successMessage);
+        toast.success(`Kind ${kind} event published!`);
         composerRef.current?.clear();
       } catch (error) {
         console.error("Failed to publish:", error);
@@ -146,7 +127,7 @@ export function PostWindow({
         setIsPublishing(false);
       }
     },
-    [activeAccount, type, replyToEvent],
+    [activeAccount, kind],
   );
 
   // Show loading state while checking authentication
@@ -161,82 +142,30 @@ export function PostWindow({
     );
   }
 
-  // Show loading state while fetching reply event
-  if (isLoadingReply) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" />
-        <span className="text-xs">Loading event...</span>
-      </div>
-    );
-  }
-
-  // Show error if reply event not found
-  if (replyToId && !replyToEvent) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground p-4">
-        <AlertCircle className="size-8 text-destructive" />
-        <span className="text-sm text-center">
-          Could not load event to reply to
-        </span>
-        <span className="text-xs text-muted-foreground/70 font-mono">
-          {replyToId.slice(0, 16)}...
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full flex-col p-4">
       {/* Header */}
       <div className="mb-4">
         <h2 className="text-lg font-semibold">
-          {customTitle ||
-            (type === "thread"
-              ? "Create Thread"
-              : replyToEvent
-                ? "Reply to Note"
-                : "Create Note")}
+          {customTitle || `Create Kind ${kind} Note`}
         </h2>
-        {type === "thread" && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Threads (kind 11) have a title and use flat reply structure
-          </p>
-        )}
-        {replyToEvent && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Your reply will use NIP-10 threading tags
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground mt-1">
+          Publish to selected relays with mention tagging
+        </p>
       </div>
 
       {/* Composer */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-auto">
         <PostComposer
           ref={composerRef}
           variant="card"
-          showTitleInput={type === "thread"}
           onSubmit={handleSubmit}
           searchProfiles={searchProfiles}
           searchEmojis={searchEmojis}
-          replyTo={replyToEvent}
           showSubmitButton
-          submitLabel={
-            type === "thread"
-              ? "Create Thread"
-              : replyToEvent
-                ? "Reply"
-                : "Publish"
-          }
+          submitLabel="Publish"
           isLoading={isPublishing}
-          placeholder={
-            type === "thread"
-              ? "Write your thread content..."
-              : replyToEvent
-                ? "Write your reply..."
-                : "What's on your mind?"
-          }
-          titlePlaceholder="Thread title..."
+          placeholder="What's on your mind?"
           autoFocus
         />
       </div>

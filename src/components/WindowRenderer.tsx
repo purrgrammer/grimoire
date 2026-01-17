@@ -226,8 +226,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
       case "post":
         content = (
           <PostWindow
-            type={window.props.type}
-            replyTo={window.props.replyTo}
+            kind={window.props.kind}
             customTitle={window.customTitle}
           />
         );

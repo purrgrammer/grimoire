@@ -505,26 +505,19 @@ export const manPages: Record<string, ManPageEntry> = {
   post: {
     name: "post",
     section: "1",
-    synopsis: "post [--thread] [--reply <event-id>]",
+    synopsis: "post [-k <kind>]",
     description:
-      "Create and publish Nostr posts. Supports kind 1 notes (short text posts) and kind 11 threads (posts with title). Use --reply to respond to existing events with proper NIP-10 threading. The composer includes @ mention autocomplete, : emoji support, and media attachments via Blossom.",
+      "Create and publish Nostr events with an interactive composer. Features relay selection, mention tagging, @ mention autocomplete, : emoji support, and media attachments via Blossom. Select which relays to publish to and which mentions to include as p-tags.",
     options: [
       {
-        flag: "--thread, -t",
-        description:
-          "Create a kind 11 thread with title (default: kind 1 note)",
-      },
-      {
-        flag: "--reply <id>, -r <id>",
-        description:
-          "Reply to an event (supports note1..., nevent1..., or hex ID)",
+        flag: "--kind <number>, -k <number>",
+        description: "Event kind to publish (default: 1)",
       },
     ],
     examples: [
-      "post                           Create a kind 1 note",
-      "post --thread                  Create a kind 11 thread with title",
-      "post --reply note1...          Reply to a specific event",
-      "post -r nevent1...             Reply using short flag",
+      "post              Create a kind 1 note",
+      "post -k 30023     Create a kind 30023 event",
+      "post --kind 1     Create a kind 1 note (explicit)",
     ],
     seeAlso: ["open", "req", "chat"],
     appId: "post",

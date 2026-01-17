@@ -737,18 +737,17 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       });
   }, [appId, props]);
 
-  // Post window title - based on type and reply context
+  // Post window title - based on kind
   const postTitle = useMemo(() => {
     if (appId !== "post") return null;
-    const type = props.type as "note" | "thread" | undefined;
-    const replyTo = props.replyTo as string | undefined;
+    const kind = props.kind as number | undefined;
 
-    if (type === "thread") {
-      return "Create Thread";
-    } else if (replyTo) {
-      return "Reply";
-    } else {
+    if (kind === 1) {
       return "Create Note";
+    } else if (kind) {
+      return `Create Kind ${kind}`;
+    } else {
+      return "Create Post";
     }
   }, [appId, props]);
 
