@@ -42,6 +42,7 @@ export interface CachedRelayList {
   event: NostrEvent;
   read: string[];
   write: string[];
+  inbox?: string[]; // NIP-17 private inbox relays (kind 10050)
   updatedAt: number;
 }
 
@@ -59,6 +60,58 @@ export interface CachedBlossomServerList {
   event: NostrEvent;
   servers: string[];
   updatedAt: number;
+}
+
+export interface EncryptedContentEntry {
+  id: string; // Event ID (gift wrap or seal)
+  plaintext: string; // Decrypted content (JSON string for rumor/seal)
+  savedAt: number;
+}
+
+export interface StoredGiftWrap {
+  id: string; // Event ID
+  event: NostrEvent; // Full gift wrap event
+  userPubkey: string; // Recipient pubkey (from #p tag)
+  savedAt: number;
+}
+
+/**
+ * Get all stored encrypted content IDs
+ * Used to check which gift wraps have already been decrypted
+ */
+export async function getStoredEncryptedContentIds(): Promise<Set<string>> {
+  const entries = await db.encryptedContent.toArray();
+  return new Set(entries.map((e) => e.id));
+}
+
+/**
+ * Save gift wrap events to Dexie for persistence across sessions
+ */
+export async function saveGiftWraps(
+  events: NostrEvent[],
+  userPubkey: string,
+): Promise<void> {
+  const entries: StoredGiftWrap[] = events.map((event) => ({
+    id: event.id,
+    event,
+    userPubkey,
+    savedAt: Date.now(),
+  }));
+
+  await db.giftWraps.bulkPut(entries);
+}
+
+/**
+ * Load stored gift wrap events for a user
+ */
+export async function loadStoredGiftWraps(
+  userPubkey: string,
+): Promise<NostrEvent[]> {
+  const entries = await db.giftWraps
+    .where("userPubkey")
+    .equals(userPubkey)
+    .toArray();
+  return entries.map((e) => e.event);
 }
 
 export interface LocalSpell {
@@ -98,6 +151,8 @@ class GrimoireDb extends Dexie {
   blossomServers!: Table<CachedBlossomServerList>;
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
+  encryptedContent!: Table<EncryptedContentEntry>;
+  giftWraps!: Table<StoredGiftWrap>;
 
   constructor(name: string) {
     super(name);
@@ -333,6 +388,37 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
     });
+
+    // Version 16: Add encrypted content cache for gift wraps (NIP-17/59)
+    this.version(16).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      encryptedContent: "&id, savedAt",
+    });
+
+    // Version 17: Add gift wrap event storage for NIP-17 chat
+    this.version(17).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      encryptedContent: "&id, savedAt",
+      giftWraps: "&id, userPubkey, savedAt",
+    });
   }
 }
 
@@ -356,6 +442,25 @@ export const relayLivenessStorage = {
     await db.relayLiveness.put({
       url: key,
       ...value,
+    });
+  },
+};
+
+/**
+ * Dexie storage adapter for encrypted content persistence (NIP-17/59 gift wraps)
+ * Implements the EncryptedContentCache interface expected by applesauce-common
+ */
+export const encryptedContentStorage = {
+  async getItem(id: string): Promise<string | null> {
+    const entry = await db.encryptedContent.get(id);
+    return entry?.plaintext ?? null;
+  },
+
+  async setItem(id: string, plaintext: string): Promise<void> {
+    await db.encryptedContent.put({
+      id,
+      plaintext,
+      savedAt: Date.now(),
     });
   },
 };

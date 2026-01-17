@@ -11,11 +11,16 @@ import {
   Paperclip,
   Copy,
   CopyCheck,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
 import { toast } from "sonner";
+import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
+import giftWrapService from "@/services/gift-wrap";
+import type { NostrEvent } from "@/types/nostr";
 import type {
   ChatProtocol,
   ProtocolIdentifier,
@@ -24,6 +29,7 @@ import type {
 } from "@/types/chat";
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -33,10 +39,10 @@ import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
+import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
-import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
@@ -49,8 +55,9 @@ import {
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { useProfile } from "@/hooks/useProfile";
 import { useCopy } from "@/hooks/useCopy";
-import { useAccount } from "@/hooks/useAccount";
+import { getDisplayName } from "@/lib/nostr-utils";
 import { Label } from "./ui/label";
 import {
   Tooltip,
@@ -122,6 +129,93 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
 }
 
 /**
+ * ParticipantAvatar - Renders a single participant avatar
+ */
+const ParticipantAvatar = memo(function ParticipantAvatar({
+  pubkey,
+  className,
+}: {
+  pubkey: string;
+  className?: string;
+}) {
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={profile?.picture} alt={displayName} />
+      <AvatarFallback>
+        <span className="text-[10px]">{displayName.slice(0, 2)}</span>
+      </AvatarFallback>
+    </Avatar>
+  );
+});
+
+/**
+ * ParticipantName - Renders a single participant name without accent color
+ * (for use in DM titles where we want regular text color)
+ */
+const ParticipantName = memo(function ParticipantName({
+  pubkey,
+}: {
+  pubkey: string;
+}) {
+  const { addWindow } = useGrimoire();
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  return (
+    <span
+      dir="auto"
+      className="font-semibold cursor-crosshair hover:underline hover:decoration-dotted text-foreground"
+      onClick={(e) => {
+        e.stopPropagation();
+        addWindow("profile", { pubkey });
+      }}
+    >
+      {displayName}
+    </span>
+  );
+});
+
+/**
+ * DmTitle - Renders profile names for NIP-17 DM conversations
+ * Uses regular text color (not accent) without lock icon (lock shown in header controls)
+ */
+const DmTitle = memo(function DmTitle({
+  participants,
+  activePubkey,
+}: {
+  participants: { pubkey: string }[];
+  activePubkey: string | undefined;
+}) {
+  // Filter out the current user from participants
+  const others = participants.filter((p) => p.pubkey !== activePubkey);
+
+  // Self-conversation (saved messages)
+  if (others.length === 0) {
+    return <span>Saved Messages</span>;
+  }
+
+  // 1-on-1 or group
+  return (
+    <span className="inline-flex items-baseline flex-wrap">
+      {others.slice(0, 3).map((p, i) => (
+        <span key={p.pubkey} className="inline-flex items-baseline">
+          {i > 0 && <span className="text-muted-foreground">,&nbsp;</span>}
+          <ParticipantName pubkey={p.pubkey} />
+        </span>
+      ))}
+      {others.length > 3 && (
+        <span className="text-muted-foreground">
+          &nbsp;+{others.length - 3}
+        </span>
+      )}
+    </span>
+  );
+});
+
+/**
  * Type guard for LiveActivityMetadata
  */
 function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
@@ -136,31 +230,53 @@ function isLiveActivityMetadata(value: unknown): value is LiveActivityMetadata {
 }
 
 /**
- * Get relay URLs for a conversation based on protocol
- * Used for fetching protocol-specific data like reactions
- */
-function getConversationRelays(conversation: Conversation): string[] {
-  // NIP-53 live chats: Use full relay list from liveActivity metadata
-  if (conversation.protocol === "nip-53") {
-    const liveActivity = conversation.metadata?.liveActivity;
-    if (isLiveActivityMetadata(liveActivity) && liveActivity.relays) {
-      return liveActivity.relays;
-    }
-  }
-
-  // NIP-29 groups and fallback: Use single relay URL
-  const relayUrl = conversation.metadata?.relayUrl;
-  return relayUrl ? [relayUrl] : [];
-}
-
-/**
  * Get the chat command identifier for a conversation
  * Returns a string that can be passed to the `chat` command to open this conversation
  *
+ * For NIP-17 DMs: nprofile1.../npub1... (chat partner's identifier)
  * For NIP-29 groups: relay'group-id (without wss:// prefix)
  * For NIP-53 live activities: naddr1... encoding
  */
-function getChatIdentifier(conversation: Conversation): string | null {
+function getChatIdentifier(
+  conversation: Conversation,
+  activePubkey?: string,
+): string | null {
+  if (conversation.protocol === "nip-17") {
+    // For DMs, get the other participant(s)
+    const others = conversation.participants
+      .map((p) => p.pubkey)
+      .filter((p) => p !== activePubkey);
+
+    // Self-chat or no participants
+    if (others.length === 0) {
+      // Return own npub
+      if (activePubkey) {
+        return nip19.npubEncode(activePubkey);
+      }
+      return null;
+    }
+
+    // 1-on-1 chat: return nprofile with inbox relays if available
+    if (others.length === 1) {
+      const pubkey = others[0];
+      const participantInboxRelays =
+        conversation.metadata?.participantInboxRelays;
+      const relays = participantInboxRelays?.[pubkey];
+
+      if (relays && relays.length > 0) {
+        return nip19.nprofileEncode({
+          pubkey,
+          relays: relays.slice(0, 3), // Limit to 3 relays
+        });
+      } else {
+        return nip19.npubEncode(pubkey);
+      }
+    }
+
+    // Group chat: return comma-separated npubs
+    return others.map((p) => nip19.npubEncode(p)).join(",");
+  }
+
   if (conversation.protocol === "nip-29") {
     const groupId = conversation.metadata?.groupId;
     const relayUrl = conversation.metadata?.relayUrl;
@@ -204,11 +320,41 @@ type ConversationResult =
 const ComposerReplyPreview = memo(function ComposerReplyPreview({
   replyToId,
   onClear,
+  adapter,
+  conversation,
 }: {
   replyToId: string;
   onClear: () => void;
+  adapter: ChatProtocolAdapter;
+  conversation: Conversation;
 }) {
-  const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+  // State for manually loaded events (NIP-17 synthetic events)
+  const [manualEvent, setManualEvent] = useState<NostrEvent | null>(null);
+
+  // Load the event being replied to (reactive - updates when event arrives)
+  const storeEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+
+  // Use store event if available, otherwise fall back to manually loaded event
+  const replyEvent = storeEvent ?? manualEvent;
+
+  // Fetch event from adapter if not in store (for NIP-17 synthetic events)
+  useEffect(() => {
+    if (!replyEvent) {
+      adapter
+        .loadReplyMessage(conversation, replyToId)
+        .then((event) => {
+          if (event) {
+            setManualEvent(event);
+          }
+        })
+        .catch((err) => {
+          console.error(
+            `[ComposerReplyPreview] Failed to load reply ${replyToId.slice(0, 8)}:`,
+            err,
+          );
+        });
+    }
+  }, [replyEvent, adapter, conversation, replyToId]);
 
   if (!replyEvent) {
     return (
@@ -267,12 +413,6 @@ const MessageItem = memo(function MessageItem({
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
 }) {
-  // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
-  const relays = useMemo(
-    () => getConversationRelays(conversation),
-    [conversation],
-  );
-
   // System messages (join/leave) have special styling
   if (message.type === "system") {
     return (
@@ -339,8 +479,6 @@ const MessageItem = memo(function MessageItem({
               <span className="text-xs text-muted-foreground">
                 <Timestamp timestamp={message.timestamp} />
               </span>
-              {/* Reactions display - inline after timestamp */}
-              <MessageReactions messageId={message.id} relays={relays} />
             </div>
             {shouldShowReplyPreview && (
               <ReplyPreview
@@ -372,8 +510,6 @@ const MessageItem = memo(function MessageItem({
           <span className="text-xs text-muted-foreground">
             <Timestamp timestamp={message.timestamp} />
           </span>
-          {/* Reactions display - inline after timestamp */}
-          <MessageReactions messageId={message.id} relays={relays} />
           {canReply && onReply && (
             <button
               onClick={() => onReply(message.id)}
@@ -412,8 +548,6 @@ const MessageItem = memo(function MessageItem({
       <ChatMessageContextMenu
         event={message.event}
         onReply={canReply && onReply ? () => onReply(message.id) : undefined}
-        conversation={conversation}
-        adapter={adapter}
       >
         {messageContent}
       </ChatMessageContextMenu>
@@ -437,8 +571,9 @@ export function ChatViewer({
 }: ChatViewerProps) {
   const { addWindow } = useGrimoire();
 
-  // Get active account with signing capability
-  const { pubkey, canSign, signer } = useAccount();
+  // Get active account
+  const activeAccount = use$(accountManager.active$);
+  const hasActiveAccount = !!activeAccount;
 
   // Profile search for mentions
   const { searchProfiles } = useProfileSearch();
@@ -512,14 +647,14 @@ export function ChatViewer({
     async (query: string) => {
       const availableActions = adapter.getActions({
         conversation: conversation || undefined,
-        activePubkey: pubkey,
+        activePubkey: activeAccount?.pubkey,
       });
       const lowerQuery = query.toLowerCase();
       return availableActions.filter((action) =>
         action.name.toLowerCase().includes(lowerQuery),
       );
     },
-    [adapter, conversation, pubkey],
+    [adapter, conversation, activeAccount],
   );
 
   // Cleanup subscriptions when conversation changes or component unmounts
@@ -588,6 +723,54 @@ export function ChatViewer({
   // State for tooltip open (for mobile tap support)
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
+  // For NIP-17: Get pending gift wrap count for this conversation
+  const decryptStates = use$(giftWrapService.decryptStates$);
+  const giftWraps = use$(giftWrapService.giftWraps$);
+  const [isDecryptingPending, setIsDecryptingPending] = useState(false);
+
+  // Calculate pending gift wraps for this conversation (NIP-17 only)
+  // Only count "pending" status, not "error" status
+  const pendingCount = useMemo(() => {
+    if (conversation?.protocol !== "nip-17" || !decryptStates || !giftWraps) {
+      return 0;
+    }
+
+    // Count gift wraps that are pending (excluding errors)
+    let count = 0;
+    for (const gw of giftWraps) {
+      const state = decryptStates.get(gw.id);
+      if (state?.status === "pending") {
+        // Check if this gift wrap belongs to this conversation
+        // For now, count all pending since we can't easily match to conversation
+        count++;
+      }
+    }
+    return count;
+  }, [conversation?.protocol, decryptStates, giftWraps]);
+
+  // Handle decrypting pending messages for NIP-17
+  const handleDecryptPending = useCallback(async () => {
+    if (conversation?.protocol !== "nip-17" || !activeAccount?.signer) {
+      return;
+    }
+
+    setIsDecryptingPending(true);
+    try {
+      const result = await giftWrapService.decryptAll();
+      if (result.success > 0) {
+        toast.success(`Decrypted ${result.success} messages`);
+      }
+      if (result.error > 0) {
+        toast.error(`Failed to decrypt ${result.error} messages`);
+      }
+    } catch (error) {
+      console.error("[Chat] Failed to decrypt messages:", error);
+      toast.error("Failed to decrypt messages");
+    } finally {
+      setIsDecryptingPending(false);
+    }
+  }, [conversation?.protocol, activeAccount?.signer]);
+
   // Handle sending messages with error handling
   const handleSend = async (
     content: string,
@@ -595,7 +778,7 @@ export function ChatViewer({
     emojiTags?: EmojiTag[],
     blobAttachments?: BlobAttachment[],
   ) => {
-    if (!conversation || !canSign || isSending) return;
+    if (!conversation || !hasActiveAccount || isSending) return;
 
     // Check if this is a slash command
     const slashCmd = parseSlashCommand(content);
@@ -604,8 +787,8 @@ export function ChatViewer({
       setIsSending(true);
       try {
         const result = await adapter.executeAction(slashCmd.command, {
-          activePubkey: pubkey!,
-          activeSigner: signer!,
+          activePubkey: activeAccount.pubkey,
+          activeSigner: activeAccount.signer,
           conversation,
         });
 
@@ -648,13 +831,13 @@ export function ChatViewer({
   // Handle command execution from autocomplete
   const handleCommandExecute = useCallback(
     async (action: ChatAction) => {
-      if (!conversation || !canSign || isSending) return;
+      if (!conversation || !hasActiveAccount || isSending) return;
 
       setIsSending(true);
       try {
         const result = await adapter.executeAction(action.name, {
-          activePubkey: pubkey!,
-          activeSigner: signer!,
+          activePubkey: activeAccount.pubkey,
+          activeSigner: activeAccount.signer,
           conversation,
         });
 
@@ -672,7 +855,7 @@ export function ChatViewer({
         setIsSending(false);
       }
     },
-    [conversation, canSign, isSending, adapter, pubkey, signer],
+    [conversation, hasActiveAccount, isSending, adapter, activeAccount],
   );
 
   // Handle reply button click
@@ -730,7 +913,9 @@ export function ChatViewer({
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
-    if (conversation?.protocol === "nip-29") {
+    if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
+    } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
@@ -773,6 +958,32 @@ export function ChatViewer({
     conversation?.participants,
     messages,
     liveActivity?.hostPubkey,
+  ]);
+
+  // Check if we can send messages (NIP-17 only - dynamically check relay availability)
+  const canSendMessage = useMemo(() => {
+    if (conversation?.protocol !== "nip-17") return true; // Other protocols handle this differently
+    if (!activeAccount?.pubkey) return false;
+
+    const participantInboxRelays =
+      conversation.metadata?.participantInboxRelays || {};
+    const participants = conversation.participants.map((p) => p.pubkey);
+
+    // Check if all participants (except self) have inbox relays
+    for (const pubkey of participants) {
+      if (pubkey === activeAccount.pubkey) continue; // Skip self
+      const relays = participantInboxRelays[pubkey];
+      if (!relays || relays.length === 0) {
+        return false; // Missing relay list for this participant
+      }
+    }
+
+    return true;
+  }, [
+    conversation?.protocol,
+    conversation?.metadata?.participantInboxRelays,
+    conversation?.participants,
+    activeAccount?.pubkey,
   ]);
 
   // Handle loading state
@@ -823,7 +1034,16 @@ export function ChatViewer({
                     className="text-sm font-semibold truncate cursor-help text-left"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {customTitle ? (
+                      customTitle
+                    ) : conversation.protocol === "nip-17" ? (
+                      <DmTitle
+                        participants={conversation.participants}
+                        activePubkey={activeAccount?.pubkey}
+                      />
+                    ) : (
+                      conversation.title
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -832,22 +1052,34 @@ export function ChatViewer({
                   className="max-w-md p-3"
                 >
                   <div className="flex flex-col gap-2">
-                    {/* Icon + Name */}
+                    {/* Icon/Avatar + Name */}
                     <div className="flex items-center gap-2">
-                      {conversation.metadata?.icon && (
-                        <img
-                          src={conversation.metadata.icon}
-                          alt=""
-                          className="size-6 rounded object-cover flex-shrink-0"
-                          onError={(e) => {
-                            // Hide image if it fails to load
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
+                      {/* For NIP-17 DMs, just show title without big avatars */}
+                      {conversation.protocol === "nip-17" ? (
+                        <span className="font-semibold">
+                          <DmTitle
+                            participants={conversation.participants}
+                            activePubkey={activeAccount?.pubkey}
+                          />
+                        </span>
+                      ) : (
+                        <>
+                          {conversation.metadata?.icon && (
+                            <img
+                              src={conversation.metadata.icon}
+                              alt=""
+                              className="size-6 rounded object-cover flex-shrink-0"
+                              onError={(e) => {
+                                // Hide image if it fails to load
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          )}
+                          <span className="font-semibold">
+                            {conversation.title}
+                          </span>
+                        </>
                       )}
-                      <span className="font-semibold">
-                        {conversation.title}
-                      </span>
                     </div>
                     {/* Description */}
                     {conversation.metadata?.description && (
@@ -857,26 +1089,78 @@ export function ChatViewer({
                     )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNipClick();
-                          }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
-                        >
-                          {conversation.protocol.toUpperCase()}
-                        </button>
-                      )}
-                      {(conversation.type === "group" ||
-                        conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNipClick();
+                        }}
+                        className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                      >
+                        {conversation.protocol.toUpperCase()}
+                      </button>
+                      <span className="text-primary-foreground/60">•</span>
                       <span className="capitalize text-primary-foreground/80">
                         {conversation.type}
                       </span>
                     </div>
+                    {/* Participants (NIP-17) */}
+                    {conversation.protocol === "nip-17" &&
+                      (() => {
+                        const others = conversation.participants.filter(
+                          (p) => p.pubkey !== activeAccount?.pubkey,
+                        );
+
+                        // Self-chat
+                        if (others.length === 0) {
+                          return (
+                            <div className="text-xs text-primary-foreground/80">
+                              Saved Messages
+                            </div>
+                          );
+                        }
+
+                        // 1-on-1 chat
+                        if (others.length === 1) {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <ParticipantAvatar
+                                pubkey={others[0].pubkey}
+                                className="size-4 flex-shrink-0"
+                              />
+                              <UserName
+                                pubkey={others[0].pubkey}
+                                className="text-xs text-primary-foreground"
+                              />
+                            </div>
+                          );
+                        }
+
+                        // Group chat (2+ others)
+                        return (
+                          <div className="space-y-1">
+                            <div className="text-xs text-primary-foreground/60">
+                              Participants:
+                            </div>
+                            <div className="space-y-0.5">
+                              {others.map((p) => (
+                                <div
+                                  key={p.pubkey}
+                                  className="text-xs text-primary-foreground/80 flex items-center gap-2"
+                                >
+                                  <ParticipantAvatar
+                                    pubkey={p.pubkey}
+                                    className="size-4 flex-shrink-0"
+                                  />
+                                  <UserName
+                                    pubkey={p.pubkey}
+                                    className="text-xs text-primary-foreground"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     {/* Live Activity Status */}
                     {liveActivity?.status && (
                       <div className="flex items-center gap-1.5 text-xs">
@@ -901,10 +1185,13 @@ export function ChatViewer({
               </Tooltip>
             </TooltipProvider>
             {/* Copy Chat ID button */}
-            {getChatIdentifier(conversation) && (
+            {getChatIdentifier(conversation, activeAccount?.pubkey) && (
               <button
                 onClick={() => {
-                  const chatId = getChatIdentifier(conversation);
+                  const chatId = getChatIdentifier(
+                    conversation,
+                    activeAccount?.pubkey,
+                  );
                   if (chatId) copyChatId(chatId);
                 }}
                 className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
@@ -919,17 +1206,43 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={derivedParticipants} />
-            <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
+            {/* Lock button for NIP-17 encrypted conversations */}
+            {conversation.protocol === "nip-17" && (
               <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+                onClick={handleDecryptPending}
+                disabled={
+                  pendingCount === 0 ||
+                  isDecryptingPending ||
+                  !activeAccount?.signer
+                }
+                className="hover:text-foreground transition-colors disabled:opacity-50 flex items-center gap-0.5"
+                aria-label={
+                  pendingCount > 0
+                    ? `Decrypt ${pendingCount} pending messages`
+                    : "Encrypted conversation"
+                }
               >
-                {conversation.protocol.toUpperCase()}
+                {isDecryptingPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : pendingCount > 0 ? (
+                  <>
+                    <Unlock className="size-3.5" />
+                    <span>{pendingCount}</span>
+                  </>
+                ) : (
+                  <Lock className="size-3.5" />
+                )}
               </button>
             )}
+            <MembersDropdown participants={derivedParticipants} />
+            <RelaysDropdown conversation={conversation} />
+            {/* NIP badge - clickable for all protocols */}
+            <button
+              onClick={handleNipClick}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+            >
+              {conversation.protocol.toUpperCase()}
+            </button>
           </div>
         </div>
       </div>
@@ -945,7 +1258,10 @@ export function ChatViewer({
             alignToBottom
             components={{
               Header: () =>
-                hasMore && conversationResult.status === "success" ? (
+                // NIP-17 loads all messages at once, no pagination
+                hasMore &&
+                conversationResult.status === "success" &&
+                conversation.protocol !== "nip-17" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -986,13 +1302,19 @@ export function ChatViewer({
                   adapter={adapter}
                   conversation={conversation}
                   onReply={handleReply}
-                  canReply={canSign}
+                  canReply={hasActiveAccount}
                   onScrollToMessage={handleScrollToMessage}
                 />
               );
             }}
             style={{ height: "100%" }}
           />
+        ) : messages === undefined && conversation.protocol === "nip-17" ? (
+          // NIP-17: show loading while waiting for decryption
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+            <span className="text-sm">Loading messages...</span>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No messages yet. Start the conversation!
@@ -1000,35 +1322,40 @@ export function ChatViewer({
         )}
       </div>
 
-      {/* Message composer - only show if user can sign */}
-      {canSign ? (
+      {/* Message composer - only show if user has active account */}
+      {hasActiveAccount ? (
         <div className="border-t px-2 py-1 pb-0">
           {replyTo && (
             <ComposerReplyPreview
               replyToId={replyTo}
               onClear={() => setReplyTo(undefined)}
+              adapter={adapter}
+              conversation={conversation}
             />
           )}
           <div className="flex gap-1.5 items-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
-                    onClick={openUpload}
-                    disabled={isSending}
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Attach media</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Hide upload for NIP-17 (encrypted uploads not yet supported) */}
+            {conversation.protocol !== "nip-17" && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
+                      onClick={openUpload}
+                      disabled={isSending}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>Attach media</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
@@ -1048,7 +1375,7 @@ export function ChatViewer({
               variant="secondary"
               size="sm"
               className="flex-shrink-0 h-7 px-2 text-xs"
-              disabled={isSending}
+              disabled={isSending || !canSendMessage}
               onClick={() => {
                 editorRef.current?.submit();
               }}
@@ -1076,10 +1403,10 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     case "nip-29":
       return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
     case "nip-53":

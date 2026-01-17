@@ -1096,8 +1096,8 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   },
   30009: {
     kind: 30009,
-    name: "Badge",
-    description: "Badge",
+    name: "Badge Definition",
+    description: "Badge Definition",
     nip: "58",
     icon: Award,
   },

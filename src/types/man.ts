@@ -449,19 +449,25 @@ export const manPages: Record<string, ManPageEntry> = {
   open: {
     name: "open",
     section: "1",
-    synopsis: "open <identifier>",
+    synopsis: "open <identifier> | open --json <event-json>",
     description:
-      "Open a detailed view of a Nostr event. Accepts multiple identifier formats including bech32-encoded IDs, hex IDs, and address pointers. Displays event metadata, rendered content, and raw JSON.",
+      "Open a detailed view of a Nostr event. Accepts multiple identifier formats including bech32-encoded IDs, hex IDs, and address pointers. Also supports raw JSON events via --json flag (useful for unsigned events like NIP-17 rumors). Displays event metadata, rendered content, and raw JSON.",
     options: [
       {
         flag: "<identifier>",
         description: "Event identifier in any supported format (see examples)",
+      },
+      {
+        flag: "--json <event-json>",
+        description:
+          "Raw event JSON string (useful for unsigned events like NIP-17 rumors)",
       },
     ],
     examples: [
       "open nevent1qgs8lft0t45k92c78n2zfe6ccvqzhpn977cd3h8wnl579zxhw5dvr9qqyz4nf2hlglhzhezygl5x2fdsg332fyd9q0p8ja7kvn0g53e0edzyxa32zg8  Open event with relay hints",
       "open naddr1qvzqqqrkvupzpn6956apxcad0mfp8grcuugdysg44eepex68h50t73zcathmfs49qy88wumn8ghj7mn0wvhxcmmv9uq3wamnwvaz7tmjv4kxz7fwdehhxarj9e3xzmny9uq3wamnwvaz7tmjv4kxz7fwwpexjmtpdshxuet59uq3qamnwvaz7tmwdaehgu3wd4hk6tcpz9mhxue69uhkummnw3ezuamfdejj7qghwaehxw309a3xjarrda5kuetj9eek7cmfv9kz7qg4waehxw309aex2mrp0yhxgctdw4eju6t09uq3samnwvaz7tmxd9k8getj9ehx7um5wgh8w6twv5hszymhwden5te0danxvcmgv95kutnsw43z7qgawaehxw309ahx7um5wghxy6t5vdhkjmn9wgh8xmmrd9skctcpr9mhxue69uhhyetvv9ujuumwdae8gtnnda3kjctv9uqsuamnwvaz7tmev9382tndv5hsz9nhwden5te0wfjkccte9e3k76twdaeju6t09uq3vamnwvaz7tmjv4kxz7fwxvuns6np9eu8j730qqjr2vehvyenvdtr94nrzetr956rgctr94skvvfs95eryep3x3snwve389nxy97cjwx  Open addressable event",
       "open 30023:7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194:grimoire  Open by address pointer (kind:pubkey:d-tag)",
+      'open --json \'{"kind":14,"content":"Hello","pubkey":"...","created_at":1234567890,"tags":[]}\'  Open unsigned rumor event',
     ],
     seeAlso: ["req", "kind"],
     appId: "open",
@@ -638,6 +644,18 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: ["spells          Browse your saved spells"],
     seeAlso: ["req"],
     appId: "spells",
+    category: "Nostr",
+    defaultProps: {},
+  },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox",
+    description:
+      "Manage private messages using NIP-17/NIP-59 gift wraps. View and configure your DM inbox relays (kind 10050), enable/disable gift wrap sync, track decryption status, and browse recent conversations. Supports auto-decrypt mode for hands-free message decryption.",
+    examples: ["inbox    Open the private message inbox manager"],
+    seeAlso: ["chat", "profile", "conn"],
+    appId: "inbox",
     category: "Nostr",
     defaultProps: {},
   },

@@ -6,6 +6,7 @@ import { addressLoader } from "@/services/loaders";
 import type { RelayInfo } from "@/types/app";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { getServersFromEvent } from "@/services/blossom";
+import giftWrapService from "@/services/gift-wrap";
 
 /**
  * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
@@ -125,4 +126,35 @@ export function useAccountSync() {
       storeSubscription.unsubscribe();
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
+
+  // Initialize gift wrap service ONLY when user enables inbox sync
+  // This ensures no automatic network requests or heavy operations on login
+  useEffect(() => {
+    if (!activeAccount?.pubkey) {
+      giftWrapService.cleanup();
+      return;
+    }
+
+    const pubkey = activeAccount.pubkey;
+    const signer = activeAccount.signer ?? null;
+
+    // Watch settings changes and init when enabled
+    const settingsSub = giftWrapService.settings$.subscribe((settings) => {
+      if (settings.enabled) {
+        // Only init if not already initialized for this account
+        if (giftWrapService.userPubkey !== pubkey) {
+          console.log(
+            `[useAccountSync] Initializing gift wrap service for user ${pubkey.slice(0, 8)}`,
+          );
+          giftWrapService.init(pubkey, signer);
+        }
+      }
+    });
+
+    // Cleanup on account change or logout
+    return () => {
+      settingsSub.unsubscribe();
+      giftWrapService.cleanup();
+    };
+  }, [activeAccount?.pubkey, activeAccount?.signer]);
 }

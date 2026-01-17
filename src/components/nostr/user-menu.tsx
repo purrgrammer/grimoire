@@ -1,10 +1,12 @@
-import { User, HardDrive, Palette } from "lucide-react";
+import { User, HardDrive, Palette, Mail } from "lucide-react";
 import accounts from "@/services/accounts";
+import giftWrapService from "@/services/gift-wrap";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +65,13 @@ export default function UserMenu() {
   const [showLogin, setShowLogin] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
+  // Gift wrap service state for pending message count
+  const inboxSettings = use$(giftWrapService.settings$);
+  const pendingCount = use$(giftWrapService.pendingCount$);
+  // Show badge when enabled, not auto-decrypt, and has pending messages
+  const showPendingBadge =
+    inboxSettings?.enabled && !inboxSettings?.autoDecrypt && pendingCount > 0;
+
   function openProfile() {
     if (!account?.pubkey) return;
     addWindow(
@@ -106,6 +115,25 @@ export default function UserMenu() {
                   <UserLabel pubkey={account.pubkey} />
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-crosshair"
+                onClick={() => {
+                  addWindow("inbox", {}, "Inbox");
+                }}
+              >
+                <Mail className="size-4 mr-2" />
+                <span className="flex-1">Inbox</span>
+                {showPendingBadge && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                  >
+                    {pendingCount}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
 
               {relays && relays.length > 0 && (
                 <>
@@ -158,41 +186,37 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-crosshair">
-                  <Palette className="size-4 mr-2" />
-                  Theme
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {availableThemes.map((theme) => (
-                    <DropdownMenuItem
-                      key={theme.id}
-                      className="cursor-crosshair"
-                      onClick={() => setTheme(theme.id)}
-                    >
-                      <span
-                        className={`size-2 rounded-full mr-2 ${
-                          themeId === theme.id
-                            ? "bg-primary"
-                            : "bg-muted-foreground/30"
-                        }`}
-                      />
-                      {theme.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
             </>
           ) : (
             <>
-              <DropdownMenuItem onClick={() => setShowLogin(true)}>
-                Log in
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">
                   <Palette className="size-4 mr-2" />
@@ -217,6 +241,10 @@ export default function UserMenu() {
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowLogin(true)}>
+                Log in
+              </DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>

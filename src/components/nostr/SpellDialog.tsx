@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { use$ } from "applesauce-react/hooks";
+import accounts from "@/services/accounts";
 import { parseReqCommand } from "@/lib/req-parser";
 import { reconstructCommand, detectCommandType } from "@/lib/spell-conversion";
 import type { ParsedSpell, SpellEvent } from "@/types/spell";
@@ -18,7 +20,6 @@ import { Loader2 } from "lucide-react";
 import { saveSpell } from "@/services/spell-storage";
 import { LocalSpell } from "@/services/db";
 import { PublishSpellAction } from "@/actions/publish-spell";
-import { useAccount } from "@/hooks/useAccount";
 
 /**
  * Filter command to show only spell-relevant parts
@@ -78,7 +79,7 @@ export function SpellDialog({
   existingSpell,
   onSuccess,
 }: SpellDialogProps) {
-  const { canSign } = useAccount();
+  const activeAccount = use$(accounts.active$);
 
   // Form state
   const [alias, setAlias] = useState("");
@@ -185,11 +186,9 @@ export function SpellDialog({
   const handlePublish = async () => {
     if (!isFormValid) return;
 
-    // Check for signing capability
-    if (!canSign) {
-      setErrorMessage(
-        "You need a signing account to publish. Read-only accounts cannot publish.",
-      );
+    // Check for active account
+    if (!activeAccount) {
+      setErrorMessage("No active account. Please sign in first.");
       setPublishingState("error");
       return;
     }
@@ -364,11 +363,10 @@ export function SpellDialog({
             </div>
           )}
 
-          {/* No signing capability warning */}
-          {!canSign && (
+          {/* No account warning */}
+          {!activeAccount && (
             <div className="rounded-md border border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-2 text-sm text-yellow-600 dark:text-yellow-400">
-              You need a signing account to publish spells. Read-only accounts
-              cannot publish.
+              You need to sign in to publish spells.
             </div>
           )}
         </div>
@@ -386,7 +384,7 @@ export function SpellDialog({
           </Button>
           <Button
             onClick={handlePublish}
-            disabled={!isFormValid || !canSign || isBusy}
+            disabled={!isFormValid || !activeAccount || isBusy}
           >
             {(publishingState === "signing" ||
               publishingState === "publishing") && (

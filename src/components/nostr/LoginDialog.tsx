@@ -7,10 +7,8 @@ import {
 import {
   ExtensionAccount,
   NostrConnectAccount,
-  ReadonlyAccount,
-  PrivateKeyAccount,
 } from "applesauce-accounts/accounts";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { generateSecretKey } from "nostr-tools";
 import QRCode from "qrcode";
 import {
   Dialog,
@@ -29,15 +27,9 @@ import {
   Copy,
   Check,
   AlertCircle,
-  Eye,
-  Key,
-  ShieldAlert,
-  Wand2,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import pool from "@/services/relay-pool";
-import { resolveNip05, isNip05 } from "@/lib/nip05";
-import { isValidHexPubkey, normalizeHex } from "@/lib/nostr-validation";
 
 // Default relays for NIP-46 communication
 const DEFAULT_NIP46_RELAYS = [
@@ -46,7 +38,7 @@ const DEFAULT_NIP46_RELAYS = [
   "wss://nos.lol",
 ];
 
-type LoginTab = "extension" | "readonly" | "nsec" | "nostr-connect";
+type LoginTab = "extension" | "nostr-connect";
 
 interface LoginDialogProps {
   open: boolean;
@@ -57,12 +49,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [tab, setTab] = useState<LoginTab>("extension");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Read-only login state
-  const [readonlyInput, setReadonlyInput] = useState("");
-
-  // Private key (nsec) login state
-  const [nsecInput, setNsecInput] = useState("");
 
   // NIP-46 state
   const [bunkerUrl, setBunkerUrl] = useState("");
@@ -86,8 +72,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     if (!open) {
       setLoading(false);
       setError(null);
-      setReadonlyInput("");
-      setNsecInput("");
       setBunkerUrl("");
       setQrDataUrl(null);
       setConnectUri(null);
@@ -100,13 +84,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   }, [open]);
 
   const handleSuccess = useCallback(
-    (
-      account:
-        | ExtensionAccount<unknown>
-        | NostrConnectAccount<unknown>
-        | ReadonlyAccount<unknown>
-        | PrivateKeyAccount<unknown>,
-    ) => {
+    (account: ExtensionAccount<unknown> | NostrConnectAccount<unknown>) => {
       accounts.addAccount(account);
       accounts.setActive(account);
       onOpenChange(false);
@@ -128,127 +106,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       console.error("Extension login error:", err);
       setError(
         err instanceof Error ? err.message : "Failed to connect to extension",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Read-only login
-  async function loginWithReadonly() {
-    if (!readonlyInput.trim()) {
-      setError("Please enter a pubkey, npub, nprofile, or NIP-05 address");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      let pubkey: string;
-
-      // Try npub/nprofile decode
-      if (
-        readonlyInput.startsWith("npub") ||
-        readonlyInput.startsWith("nprofile")
-      ) {
-        try {
-          const decoded = nip19.decode(readonlyInput);
-          if (decoded.type === "npub") {
-            pubkey = decoded.data;
-          } else if (decoded.type === "nprofile") {
-            pubkey = decoded.data.pubkey;
-          } else {
-            throw new Error("Invalid format");
-          }
-        } catch (err) {
-          throw new Error(
-            `Invalid bech32 identifier: ${err instanceof Error ? err.message : "unknown error"}`,
-          );
-        }
-      }
-      // Try hex pubkey
-      else if (isValidHexPubkey(readonlyInput)) {
-        pubkey = normalizeHex(readonlyInput);
-      }
-      // Try NIP-05
-      else if (isNip05(readonlyInput)) {
-        const resolved = await resolveNip05(readonlyInput);
-        if (!resolved) {
-          throw new Error(
-            `Failed to resolve NIP-05 identifier: ${readonlyInput}`,
-          );
-        }
-        pubkey = resolved;
-      } else {
-        throw new Error(
-          "Invalid format. Supported: npub1..., nprofile1..., hex pubkey, or user@domain.com",
-        );
-      }
-
-      const account = ReadonlyAccount.fromPubkey(pubkey);
-      handleSuccess(account);
-    } catch (err) {
-      console.error("Read-only login error:", err);
-      setError(err instanceof Error ? err.message : "Failed to create account");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Private key (nsec) login
-  async function loginWithNsec() {
-    if (!nsecInput.trim()) {
-      setError("Please enter a private key");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      let account: PrivateKeyAccount<unknown>;
-
-      // Try nsec decode
-      if (nsecInput.startsWith("nsec")) {
-        try {
-          account = PrivateKeyAccount.fromKey(nsecInput);
-        } catch (err) {
-          throw new Error(
-            `Invalid nsec: ${err instanceof Error ? err.message : "unknown error"}`,
-          );
-        }
-      }
-      // Try hex private key
-      else if (/^[0-9a-f]{64}$/i.test(nsecInput)) {
-        account = PrivateKeyAccount.fromKey(nsecInput);
-      } else {
-        throw new Error(
-          "Invalid format. Supported: nsec1... or 64-character hex private key",
-        );
-      }
-
-      handleSuccess(account);
-    } catch (err) {
-      console.error("Nsec login error:", err);
-      setError(err instanceof Error ? err.message : "Failed to create account");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Generate new identity
-  async function generateNewIdentity() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const account = PrivateKeyAccount.generateNew();
-      handleSuccess(account);
-    } catch (err) {
-      console.error("Generate identity error:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to generate identity",
       );
     } finally {
       setLoading(false);
@@ -409,42 +266,15 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <Button
-          onClick={generateNewIdentity}
-          disabled={loading}
-          variant="outline"
-          className="w-full"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Wand2 className="mr-2 size-4" />
-              Generate Identity
-            </>
-          )}
-        </Button>
-
         <Tabs value={tab} onValueChange={(v) => setTab(v as LoginTab)}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="extension" className="gap-2">
               <Puzzle className="size-4" />
-              <span className="hidden sm:inline">Extension</span>
-            </TabsTrigger>
-            <TabsTrigger value="readonly" className="gap-2">
-              <Eye className="size-4" />
-              <span className="hidden sm:inline">Read-Only</span>
-            </TabsTrigger>
-            <TabsTrigger value="nsec" className="gap-2">
-              <Key className="size-4" />
-              <span className="hidden sm:inline">Private Key</span>
+              Extension
             </TabsTrigger>
             <TabsTrigger value="nostr-connect" className="gap-2">
               <QrCode className="size-4" />
-              <span className="hidden sm:inline">Remote</span>
+              Nostr Connect
             </TabsTrigger>
           </TabsList>
 
@@ -483,122 +313,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 </>
               ) : (
                 "Connect with Extension"
-              )}
-            </Button>
-          </TabsContent>
-
-          <TabsContent value="readonly" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Browse Nostr in read-only mode. You can view content but cannot
-              sign events or post.
-            </p>
-
-            {error && tab === "readonly" && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label
-                htmlFor="readonly-input"
-                className="text-sm font-medium leading-none"
-              >
-                Public Key or Identifier
-              </label>
-              <Input
-                id="readonly-input"
-                placeholder="npub1..., nprofile1..., hex pubkey, or user@domain.com"
-                value={readonlyInput}
-                onChange={(e) => setReadonlyInput(e.target.value)}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Supports npub, nprofile, hex pubkey, or NIP-05 addresses
-              </p>
-            </div>
-
-            <Button
-              onClick={loginWithReadonly}
-              disabled={loading || !readonlyInput.trim()}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Eye className="mr-2 size-4" />
-                  Continue in Read-Only Mode
-                </>
-              )}
-            </Button>
-          </TabsContent>
-
-          <TabsContent value="nsec" className="space-y-4">
-            <div className="flex items-start gap-2 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-              <div className="space-y-1">
-                <p className="font-medium">Security Warning</p>
-                <p>
-                  Entering your private key is not recommended. Your key will be
-                  stored in browser localStorage and could be exposed. Consider
-                  using an extension or remote signer instead.
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Log in by pasting your private key (nsec or hex format). Only use
-              this on trusted devices.
-            </p>
-
-            {error && tab === "nsec" && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label
-                htmlFor="nsec-input"
-                className="text-sm font-medium leading-none"
-              >
-                Private Key
-              </label>
-              <Input
-                id="nsec-input"
-                type="password"
-                placeholder="nsec1... or hex private key"
-                value={nsecInput}
-                onChange={(e) => setNsecInput(e.target.value)}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Supports nsec or 64-character hex private key
-              </p>
-            </div>
-
-            <Button
-              onClick={loginWithNsec}
-              disabled={loading || !nsecInput.trim()}
-              className="w-full"
-              variant="destructive"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Key className="mr-2 size-4" />
-                  Log in with Private Key
-                </>
               )}
             </Button>
           </TabsContent>

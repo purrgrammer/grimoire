@@ -6,6 +6,7 @@ import type { NostrEvent } from "./nostr";
  */
 export const CHAT_KINDS = [
   9, // NIP-29: Group chat messages
+  14, // NIP-17: Private direct messages (inside gift wrap)
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
   1311, // NIP-53: Live chat messages
   9735, // NIP-57: Zap receipts (part of chat context)
@@ -75,6 +76,9 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+  inboxRelays?: string[]; // User's DM inbox relays (kind 10050)
+  participantInboxRelays?: Record<string, string[]>; // Per-participant inbox relays
+  unreachableParticipants?: string[]; // Participants with no known inbox relays
 }
 
 /**

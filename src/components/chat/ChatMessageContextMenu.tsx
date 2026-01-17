@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { NostrEvent } from "@/types/nostr";
-import type { Conversation } from "@/types/chat";
-import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,26 +15,20 @@ import {
   ExternalLink,
   Reply,
   MessageSquare,
-  Smile,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
 import { KindBadge } from "@/components/KindBadge";
-import { EmojiPickerDialog } from "./EmojiPickerDialog";
 import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { isAddressableKind } from "@/lib/nostr-kinds";
-import { getEmojiTags } from "@/lib/emoji-helpers";
-import type { EmojiTag } from "@/lib/emoji-helpers";
 
 interface ChatMessageContextMenuProps {
   event: NostrEvent;
   children: React.ReactNode;
   onReply?: () => void;
-  conversation?: Conversation;
-  adapter?: ChatProtocolAdapter;
 }
 
 /**
@@ -52,18 +44,22 @@ export function ChatMessageContextMenu({
   event,
   children,
   onReply,
-  conversation,
-  adapter,
 }: ChatMessageContextMenuProps) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
-  // Extract context emojis from the conversation
-  const contextEmojis = getEmojiTags(event);
+  // Check if this is an unsigned event (e.g., NIP-17 rumor)
+  // Unsigned events don't have a signature and may not have a valid ID
+  const isUnsigned = !event.sig || event.sig === "";
 
   const openEventDetail = () => {
+    if (isUnsigned) {
+      // For unsigned events, pass the raw event directly
+      addWindow("open", { rawEvent: event });
+      return;
+    }
+
     let pointer;
     // For replaceable/parameterized replaceable events, use AddressPointer
     if (isAddressableKind(event.kind)) {
@@ -119,25 +115,6 @@ export function ChatMessageContextMenu({
     setJsonDialogOpen(true);
   };
 
-  const openReactionPicker = () => {
-    setEmojiPickerOpen(true);
-  };
-
-  const handleEmojiSelect = async (emoji: string, customEmoji?: EmojiTag) => {
-    if (!conversation || !adapter) {
-      console.error(
-        "[ChatMessageContextMenu] Cannot send reaction: missing conversation or adapter",
-      );
-      return;
-    }
-
-    try {
-      await adapter.sendReaction(conversation, event.id, emoji, customEmoji);
-    } catch (err) {
-      console.error("[ChatMessageContextMenu] Failed to send reaction:", err);
-    }
-  };
-
   return (
     <>
       <ContextMenu>
@@ -164,15 +141,6 @@ export function ChatMessageContextMenu({
               <ContextMenuSeparator />
             </>
           )}
-          {conversation && adapter && (
-            <>
-              <ContextMenuItem onClick={openReactionPicker}>
-                <Smile className="size-4 mr-2" />
-                React
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-            </>
-          )}
           <ContextMenuItem onClick={copyMessageText}>
             <MessageSquare className="size-4 mr-2" />
             Copy Text
@@ -182,14 +150,16 @@ export function ChatMessageContextMenu({
             <ExternalLink className="size-4 mr-2" />
             Open Event
           </ContextMenuItem>
-          <ContextMenuItem onClick={copyEventId}>
-            {copied ? (
-              <Check className="size-4 mr-2 text-green-500" />
-            ) : (
-              <Copy className="size-4 mr-2" />
-            )}
-            {copied ? "Copied!" : "Copy ID"}
-          </ContextMenuItem>
+          {!isUnsigned && (
+            <ContextMenuItem onClick={copyEventId}>
+              {copied ? (
+                <Check className="size-4 mr-2 text-green-500" />
+              ) : (
+                <Copy className="size-4 mr-2" />
+              )}
+              {copied ? "Copied!" : "Copy ID"}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={viewEventJson}>
             <FileJson className="size-4 mr-2" />
             View JSON
@@ -202,14 +172,6 @@ export function ChatMessageContextMenu({
         onOpenChange={setJsonDialogOpen}
         title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
       />
-      {conversation && adapter && (
-        <EmojiPickerDialog
-          open={emojiPickerOpen}
-          onOpenChange={setEmojiPickerOpen}
-          onEmojiSelect={handleEmojiSelect}
-          contextEmojis={contextEmojis}
-        />
-      )}
     </>
   );
 }

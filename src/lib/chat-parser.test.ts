@@ -89,10 +89,15 @@ describe("parseChatCommand", () => {
       );
     });
 
-    it("should throw error for npub (NIP-C7 disabled)", () => {
-      expect(() => parseChatCommand(["npub1xyz"])).toThrow(
-        /Unable to determine chat protocol/,
-      );
+    it("should parse npub as NIP-17 private DM", () => {
+      // Valid npub format (64 hex chars encoded)
+      const result = parseChatCommand([
+        "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+      ]);
+
+      expect(result.protocol).toBe("nip-17");
+      expect(result.identifier.type).toBe("dm-recipient");
+      expect(result.adapter.protocol).toBe("nip-17");
     });
 
     it("should throw error for note/nevent (NIP-28 not implemented)", () => {

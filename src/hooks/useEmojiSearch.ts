@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
+import { use$ } from "applesauce-react/hooks";
 import {
   EmojiSearchService,
   type EmojiSearchResult,
 } from "@/services/emoji-search";
 import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
 import eventStore from "@/services/event-store";
+import accounts from "@/services/accounts";
 import type { NostrEvent } from "@/types/nostr";
-import { useAccount } from "./useAccount";
 
 /**
  * Hook to provide emoji search functionality with automatic indexing
@@ -14,7 +15,7 @@ import { useAccount } from "./useAccount";
  */
 export function useEmojiSearch(contextEvent?: NostrEvent) {
   const serviceRef = useRef<EmojiSearchService | null>(null);
-  const { pubkey } = useAccount();
+  const activeAccount = use$(accounts.active$);
 
   // Create service instance (singleton per component mount)
   if (!serviceRef.current) {
@@ -34,9 +35,11 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
 
   // Subscribe to user's emoji list (kind 10030) and emoji sets (kind 30030)
   useEffect(() => {
-    if (!pubkey) {
+    if (!activeAccount?.pubkey) {
       return;
     }
+
+    const pubkey = activeAccount.pubkey;
 
     // Subscribe to user's emoji list (kind 10030 - replaceable)
     const userEmojiList$ = eventStore.replaceable(10030, pubkey);
@@ -96,7 +99,7 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
       // Clear custom emojis but keep unicode
       service.clearCustom();
     };
-  }, [pubkey, service]);
+  }, [activeAccount?.pubkey, service]);
 
   // Memoize search function
   const searchEmojis = useMemo(

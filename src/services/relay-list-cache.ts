@@ -1,10 +1,13 @@
 /**
  * Relay List Cache Service
  *
- * Caches NIP-65 relay lists (kind:10002) in Dexie for fast access.
+ * Caches relay lists in Dexie for fast access:
+ * - NIP-65 relay lists (kind 10002) - outbox/inbox relays
+ * - NIP-17 inbox relays (kind 10050) - private DM inbox relays
+ *
  * Reduces network requests and improves cold start performance.
  *
- * Auto-caches kind:10002 events from EventStore when subscribed.
+ * Auto-caches kind 10002 and 10050 events from EventStore when subscribed.
  */
 
 import type { NostrEvent } from "@/types/nostr";
@@ -13,9 +16,21 @@ import { normalizeRelayURL } from "@/lib/relay-url";
 import db, { CachedRelayList } from "./db";
 import type { IEventStore } from "applesauce-core/event-store";
 import type { Subscription } from "rxjs";
+import { merge } from "rxjs";
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_MEMORY_CACHE = 100; // LRU cache size
+const DM_RELAY_LIST_KIND = 10050; // NIP-17 DM inbox relays
+
+/**
+ * Parse inbox relay URLs from kind 10050 event
+ * Tags are in format: ["relay", "wss://relay.example.com"]
+ */
+function parseInboxRelays(event: NostrEvent): string[] {
+  return event.tags
+    .filter((tag) => tag[0] === "relay" && tag[1])
+    .map((tag) => tag[1]);
+}
 
 class RelayListCache {
   private eventStoreSubscription: Subscription | null = null;
@@ -23,7 +38,7 @@ class RelayListCache {
   private cacheOrder: string[] = [];
 
   /**
-   * Subscribe to EventStore to auto-cache kind:10002 events
+   * Subscribe to EventStore to auto-cache kind 10002 and 10050 events
    */
   subscribeToEventStore(eventStore: IEventStore): void {
     if (this.eventStoreSubscription) {
@@ -31,16 +46,17 @@ class RelayListCache {
       return;
     }
 
-    // Subscribe to kind:10002 events
-    this.eventStoreSubscription = eventStore
-      .filters({ kinds: [10002] })
-      .subscribe((event: NostrEvent) => {
-        // Cache each kind:10002 event as it arrives
-        this.set(event);
-      });
+    // Subscribe to both kind 10002 (NIP-65) and kind 10050 (NIP-17 inbox)
+    this.eventStoreSubscription = merge(
+      eventStore.filters({ kinds: [10002] }),
+      eventStore.filters({ kinds: [DM_RELAY_LIST_KIND] }),
+    ).subscribe((event: NostrEvent) => {
+      // Cache each relay list event as it arrives
+      this.set(event);
+    });
 
     console.log(
-      "[RelayListCache] Subscribed to EventStore for kind:10002 events",
+      "[RelayListCache] Subscribed to EventStore for kind 10002 and 10050 events",
     );
   }
 
@@ -87,42 +103,65 @@ class RelayListCache {
 
   /**
    * Store relay list event in cache
+   * Handles both kind 10002 (NIP-65) and kind 10050 (NIP-17 inbox)
    */
   async set(event: NostrEvent): Promise<void> {
     try {
-      if (event.kind !== 10002) {
+      if (event.kind !== 10002 && event.kind !== DM_RELAY_LIST_KIND) {
         console.warn(
-          `[RelayListCache] Attempted to cache non-10002 event (kind ${event.kind})`,
+          `[RelayListCache] Attempted to cache invalid event kind ${event.kind}`,
         );
         return;
       }
 
-      // Parse relays from event
-      const readRelays = getInboxes(event);
-      const writeRelays = getOutboxes(event);
+      // Get existing cache entry (if any) to merge with
+      const existing = await db.relayLists.get(event.pubkey);
 
-      // Normalize URLs and filter invalid ones
-      const normalizedRead = readRelays
-        .map((url) => {
-          try {
-            return normalizeRelayURL(url);
-          } catch {
-            console.warn(`[RelayListCache] Invalid read relay URL: ${url}`);
-            return null;
-          }
-        })
-        .filter((url): url is string => url !== null);
+      let normalizedRead: string[] = existing?.read || [];
+      let normalizedWrite: string[] = existing?.write || [];
+      let normalizedInbox: string[] | undefined = existing?.inbox;
 
-      const normalizedWrite = writeRelays
-        .map((url) => {
-          try {
-            return normalizeRelayURL(url);
-          } catch {
-            console.warn(`[RelayListCache] Invalid write relay URL: ${url}`);
-            return null;
-          }
-        })
-        .filter((url): url is string => url !== null);
+      if (event.kind === 10002) {
+        // Parse NIP-65 relay list (outbox/inbox)
+        const readRelays = getInboxes(event);
+        const writeRelays = getOutboxes(event);
+
+        normalizedRead = readRelays
+          .map((url) => {
+            try {
+              return normalizeRelayURL(url);
+            } catch {
+              console.warn(`[RelayListCache] Invalid read relay URL: ${url}`);
+              return null;
+            }
+          })
+          .filter((url): url is string => url !== null);
+
+        normalizedWrite = writeRelays
+          .map((url) => {
+            try {
+              return normalizeRelayURL(url);
+            } catch {
+              console.warn(`[RelayListCache] Invalid write relay URL: ${url}`);
+              return null;
+            }
+          })
+          .filter((url): url is string => url !== null);
+      } else if (event.kind === DM_RELAY_LIST_KIND) {
+        // Parse NIP-17 inbox relays (kind 10050)
+        const inboxRelays = parseInboxRelays(event);
+
+        normalizedInbox = inboxRelays
+          .map((url) => {
+            try {
+              return normalizeRelayURL(url);
+            } catch {
+              console.warn(`[RelayListCache] Invalid inbox relay URL: ${url}`);
+              return null;
+            }
+          })
+          .filter((url): url is string => url !== null);
+      }
 
       // Store in Dexie and memory cache
       const cachedEntry: CachedRelayList = {
@@ -130,6 +169,7 @@ class RelayListCache {
         event,
         read: normalizedRead,
         write: normalizedWrite,
+        inbox: normalizedInbox,
         updatedAt: Date.now(),
       };
 
@@ -140,8 +180,16 @@ class RelayListCache {
       this.cacheOrder.push(event.pubkey);
       this.evictOldest();
 
+      const logParts = [`${event.pubkey.slice(0, 8)}`];
+      if (normalizedWrite.length > 0)
+        logParts.push(`${normalizedWrite.length} write`);
+      if (normalizedRead.length > 0)
+        logParts.push(`${normalizedRead.length} read`);
+      if (normalizedInbox && normalizedInbox.length > 0)
+        logParts.push(`${normalizedInbox.length} inbox`);
+
       console.debug(
-        `[RelayListCache] Cached relay list for ${event.pubkey.slice(0, 8)} (${normalizedWrite.length} write, ${normalizedRead.length} read)`,
+        `[RelayListCache] Cached relay list for ${logParts.join(", ")}`,
       );
     } catch (error) {
       console.error(
