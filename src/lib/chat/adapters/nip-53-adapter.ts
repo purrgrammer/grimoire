@@ -29,6 +29,8 @@ import {
   isValidZap,
 } from "applesauce-common/helpers/zap";
 import { EventFactory } from "applesauce-core/event-factory";
+import { getAwardedPubkeys } from "@/lib/nip58-helpers";
+import { getTagValues } from "@/lib/nostr-utils";
 
 /**
  * NIP-53 Adapter - Live Activity Chat
@@ -259,9 +261,9 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       `[NIP-53] Loading messages for ${aTagValue} from ${relays.length} relays`,
     );
 
-    // Single filter for live chat messages (kind 1311) and zaps (kind 9735)
+    // Single filter for live chat messages (kind 1311), badge awards (kind 8), and zaps (kind 9735)
     const filter: Filter = {
-      kinds: [1311, 9735],
+      kinds: [8, 1311, 9735],
       "#a": [aTagValue],
       limit: options?.limit || 50,
     };
@@ -361,7 +363,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     // Same filter as loadMessages but with until for pagination
     const filter: Filter = {
-      kinds: [1311, 9735],
+      kinds: [8, 1311, 9735],
       "#a": [aTagValue],
       until: before,
       limit: 50,
@@ -673,6 +675,30 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    * Helper: Convert Nostr event to Message
    */
   private eventToMessage(event: NostrEvent, conversationId: string): Message {
+    // Handle badge awards (kind 8) as system messages
+    if (event.kind === 8) {
+      const awardedPubkeys = getAwardedPubkeys(event);
+      const badgeAddress = getTagValues(event, "a")[0]; // Badge definition address
+
+      // Content will be set to "badge-award" to trigger special rendering
+      return {
+        id: event.id,
+        conversationId,
+        author: event.pubkey, // Issuer
+        content: "badge-award",
+        timestamp: event.created_at,
+        type: "system",
+        protocol: "nip-53",
+        metadata: {
+          encrypted: false,
+          // Store badge info for rendering
+          badgeAddress,
+          awardedPubkeys,
+        },
+        event,
+      };
+    }
+
     // Look for reply e-tags (NIP-10 style)
     const eTags = event.tags.filter((t) => t[0] === "e");
     // Find the reply tag (has "reply" marker or is the last e-tag without marker)
