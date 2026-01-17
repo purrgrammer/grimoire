@@ -144,6 +144,8 @@ import { P2pOrderRenderer } from "./P2pOrderRenderer";
 import { P2pOrderDetailRenderer } from "./P2pOrderDetailRenderer";
 import { BadgeDefinitionRenderer } from "./BadgeDefinitionRenderer";
 import { BadgeDefinitionDetailRenderer } from "./BadgeDefinitionDetailRenderer";
+import { BadgeAwardRenderer } from "./BadgeAwardRenderer";
+import { BadgeAwardDetailRenderer } from "./BadgeAwardDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -155,6 +157,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   3: Kind3Renderer, // Contact List
   6: RepostRenderer, // Repost
   7: Kind7Renderer, // Reaction
+  8: BadgeAwardRenderer, // Badge Award (NIP-58)
   9: Kind9Renderer, // Chat Message (NIP-C7)
   11: Kind1Renderer, // Public Thread Reply (NIP-10)
   16: RepostRenderer, // Generic Repost
@@ -268,6 +271,7 @@ const detailRenderers: Record<
 > = {
   0: Kind0DetailRenderer, // Profile Metadata Detail
   3: Kind3DetailView, // Contact List Detail
+  8: BadgeAwardDetailRenderer, // Badge Award Detail (NIP-58)
   777: SpellDetailRenderer, // Spell Detail
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)

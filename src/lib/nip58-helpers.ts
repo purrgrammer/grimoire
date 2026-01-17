@@ -9,7 +9,7 @@ import type { NostrEvent } from "nostr-tools";
  */
 
 /**
- * Get the unique identifier for a badge definition (d tag)
+ * Get the unique identifier for a badge (d tag)
  */
 export function getBadgeIdentifier(event: NostrEvent): string | undefined {
   return getTagValue(event, "d");
@@ -78,14 +78,14 @@ export function getBadgeImageUrl(event: NostrEvent): string | null {
 
 /**
  * Get all pubkeys awarded this badge (from kind 8 award events)
- * Note: This should be called on award events (kind 8), not badge definitions
+ * Note: This should be called on award events (kind 8), not badges (kind 30009)
  */
 export function getAwardedPubkeys(awardEvent: NostrEvent): string[] {
   return getTagValues(awardEvent, "p");
 }
 
 /**
- * Get the badge definition address referenced by an award event (kind 8)
+ * Get the badge address referenced by an award event (kind 8)
  * @returns The "a" tag value (e.g., "30009:pubkey:identifier")
  */
 export function getAwardBadgeAddress(
