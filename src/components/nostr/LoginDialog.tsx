@@ -32,6 +32,7 @@ import {
   Eye,
   Key,
   ShieldAlert,
+  Wand2,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import pool from "@/services/relay-pool";
@@ -236,6 +237,24 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     }
   }
 
+  // Generate new identity
+  async function generateNewIdentity() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const account = PrivateKeyAccount.generateNew();
+      handleSuccess(account);
+    } catch (err) {
+      console.error("Generate identity error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to generate identity",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Bunker URL login
   async function loginWithBunkerUrl() {
     if (!bunkerUrl.trim()) {
@@ -389,6 +408,25 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
             Choose a login method to access your Nostr identity
           </DialogDescription>
         </DialogHeader>
+
+        <Button
+          onClick={generateNewIdentity}
+          disabled={loading}
+          variant="outline"
+          className="w-full"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Wand2 className="mr-2 size-4" />
+              Generate Identity
+            </>
+          )}
+        </Button>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as LoginTab)}>
           <TabsList className="grid w-full grid-cols-4">
