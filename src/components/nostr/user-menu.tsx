@@ -158,37 +158,10 @@ export default function UserMenu() {
               )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-crosshair">
-                  <Palette className="size-4 mr-2" />
-                  Theme
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {availableThemes.map((theme) => (
-                    <DropdownMenuItem
-                      key={theme.id}
-                      className="cursor-crosshair"
-                      onClick={() => setTheme(theme.id)}
-                    >
-                      <span
-                        className={`size-2 rounded-full mr-2 ${
-                          themeId === theme.id
-                            ? "bg-primary"
-                            : "bg-muted-foreground/30"
-                        }`}
-                      />
-                      {theme.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
-            </>
-          ) : (
-            <>
+              <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-crosshair">
                   <Palette className="size-4 mr-2" />
@@ -213,10 +186,37 @@ export default function UserMenu() {
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
-              <DropdownMenuSeparator />
+            </>
+          ) : (
+            <>
               <DropdownMenuItem onClick={() => setShowLogin(true)}>
                 Log in
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-crosshair">
+                  <Palette className="size-4 mr-2" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {availableThemes.map((theme) => (
+                    <DropdownMenuItem
+                      key={theme.id}
+                      className="cursor-crosshair"
+                      onClick={() => setTheme(theme.id)}
+                    >
+                      <span
+                        className={`size-2 rounded-full mr-2 ${
+                          themeId === theme.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                      {theme.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </>
           )}
         </DropdownMenuContent>
