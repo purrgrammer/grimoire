@@ -48,6 +48,7 @@ function InboxViewer() {
   const decryptStates = use$(giftWrapService.decryptStates$);
   const conversations = use$(giftWrapService.conversations$);
   const inboxRelays = use$(giftWrapService.inboxRelays$);
+  const relayStats = use$(giftWrapService.relayStats$);
 
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
 
@@ -205,22 +206,53 @@ function InboxViewer() {
                   <span>{inboxRelays?.length ?? 0}</span>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuContent align="end" className="w-80">
                 <DropdownMenuLabel className="text-xs">
                   DM Inbox Relays (kind 10050)
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {inboxRelays && inboxRelays.length > 0 ? (
                   <div className="px-2 py-1 space-y-1 max-h-48 overflow-y-auto">
-                    {inboxRelays.map((relay) => (
-                      <RelayLink
-                        key={relay}
-                        url={relay}
-                        className="text-xs"
-                        iconClassname="size-3"
-                        urlClassname="text-xs"
-                      />
-                    ))}
+                    {inboxRelays.map((relay) => {
+                      const stats = relayStats?.get(relay);
+                      return (
+                        <div
+                          key={relay}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <RelayLink
+                            url={relay}
+                            className="text-xs flex-1 min-w-0"
+                            iconClassname="size-3"
+                            urlClassname="text-xs"
+                          />
+                          {stats && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono flex-shrink-0">
+                              <span
+                                className="text-green-500"
+                                title="Successfully decrypted"
+                              >
+                                {stats.success}
+                              </span>
+                              <span className="text-muted-foreground">/</span>
+                              <span
+                                className="text-red-500"
+                                title="Failed to decrypt"
+                              >
+                                {stats.failed}
+                              </span>
+                              <span className="text-muted-foreground">/</span>
+                              <span
+                                className="text-muted-foreground"
+                                title="Total gift wraps"
+                              >
+                                {stats.total}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <DropdownMenuItem disabled className="text-xs">

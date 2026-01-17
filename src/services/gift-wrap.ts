@@ -23,6 +23,7 @@ import {
   getConversationParticipants,
 } from "applesauce-common/helpers/messages";
 import { persistEncryptedContent } from "applesauce-common/helpers/encrypted-content-cache";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
 import type { NostrEvent } from "@/types/nostr";
 import type { ISigner } from "applesauce-signers";
 import eventStore from "./event-store";
@@ -77,6 +78,16 @@ export interface Conversation {
   lastMessage?: Rumor;
   lastGiftWrap?: NostrEvent;
   unreadCount?: number;
+}
+
+/** Relay statistics for gift wrap tracking */
+export interface RelayStats {
+  /** Number of successfully decrypted gift wraps from this relay */
+  success: number;
+  /** Number of failed decryption attempts from this relay */
+  failed: number;
+  /** Total gift wraps received from this relay */
+  total: number;
 }
 
 /** Settings for the inbox service */
@@ -308,6 +319,12 @@ class GiftWrapService {
   /** Inbox relays (kind 10050) */
   readonly inboxRelays$ = new BehaviorSubject<string[]>([]);
 
+  /** Relay statistics (success/fail counts per relay) */
+  private relayStats = new Map<string, RelayStats>();
+  readonly relayStats$ = new BehaviorSubject<Map<string, RelayStats>>(
+    new Map(),
+  );
+
   /** Settings */
   readonly settings$ = new BehaviorSubject<InboxSettings>(loadSettings());
 
@@ -397,6 +414,8 @@ class GiftWrapService {
     this.decryptStates$.next(new Map());
     this.pendingCount$.next(0);
     this.conversationIndex.clear();
+    this.relayStats.clear();
+    this.relayStats$.next(new Map());
 
     if (!this.settings$.value.enabled) {
       dmDebug("GiftWrap", "Inbox sync disabled, skipping initialization");
@@ -444,8 +463,16 @@ class GiftWrapService {
     if (!this.userPubkey) return;
 
     try {
+      dmInfo(
+        "GiftWrap",
+        `Loading stored gift wraps for ${this.userPubkey.slice(0, 8)}...`,
+      );
       const storedEvents = await loadStoredGiftWraps(this.userPubkey);
-      if (storedEvents.length === 0) return;
+
+      if (storedEvents.length === 0) {
+        dmInfo("GiftWrap", "No stored gift wraps found in cache");
+        return;
+      }
 
       dmInfo(
         "GiftWrap",
@@ -470,12 +497,18 @@ class GiftWrapService {
       const elapsed = performance.now() - startTime;
       dmInfo(
         "GiftWrap",
-        `Loaded ${storedEvents.length} stored gift wraps in ${elapsed.toFixed(0)}ms`,
+        `✅ Loaded ${storedEvents.length} stored gift wraps in ${elapsed.toFixed(0)}ms`,
       );
 
-      this.updateConversations();
+      // Wait a moment for applesauce encrypted content cache to attach symbols
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      dmInfo(
+        "GiftWrap",
+        `Persisted encrypted content IDs: ${this.persistedIds.size}`,
+      );
     } catch (err) {
-      console.warn(`[GiftWrap] Error loading stored gift wraps:`, err);
+      console.error(`[GiftWrap] Error loading stored gift wraps:`, err);
     }
   }
 
@@ -717,7 +750,10 @@ class GiftWrapService {
 
   /** Handle gift wraps update from timeline */
   private handleGiftWrapsUpdate(giftWraps: NostrEvent[]) {
-    dmDebug("GiftWrap", `Timeline update: ${giftWraps.length} gift wraps`);
+    dmInfo(
+      "GiftWrap",
+      `📬 Timeline update: ${giftWraps.length} gift wraps (prev: ${this.giftWraps.length})`,
+    );
 
     // Find new gift wraps
     const newGiftWraps = giftWraps.filter(
@@ -738,26 +774,80 @@ class GiftWrapService {
           });
         }
       }
+
+      // Track relay statistics for new gift wraps
+      for (const gw of newGiftWraps) {
+        const seenRelays = getSeenRelays(gw);
+        if (seenRelays && seenRelays.size > 0) {
+          for (const relayUrl of seenRelays) {
+            const existing = this.relayStats.get(relayUrl);
+            const stats: RelayStats = existing ?? {
+              success: 0,
+              failed: 0,
+              total: 0,
+            };
+            stats.total++;
+            this.relayStats.set(relayUrl, stats);
+          }
+        }
+      }
     }
 
     this.giftWraps = giftWraps;
     this.giftWraps$.next(giftWraps);
 
     // Update decrypt states for new gift wraps
+    let newUnlocked = 0;
+    let newPending = 0;
     for (const gw of giftWraps) {
       if (!this.decryptStates.has(gw.id)) {
         const hasSymbol = isGiftWrapUnlocked(gw);
         const hasPersisted = this.persistedIds.has(gw.id);
         const isUnlocked = hasSymbol || hasPersisted;
 
+        if (isUnlocked) {
+          newUnlocked++;
+        } else {
+          newPending++;
+        }
+
         this.decryptStates.set(gw.id, {
           status: isUnlocked ? "success" : "pending",
           decryptedAt: isUnlocked ? Date.now() : undefined,
         });
+
+        // Track relay stats for success
+        if (isUnlocked) {
+          const seenRelays = getSeenRelays(gw);
+          if (seenRelays && seenRelays.size > 0) {
+            for (const relayUrl of seenRelays) {
+              const existing = this.relayStats.get(relayUrl);
+              if (existing) {
+                existing.success++;
+              } else {
+                // Initialize stats for cached events that don't have relay tracking yet
+                this.relayStats.set(relayUrl, {
+                  success: 1,
+                  failed: 0,
+                  total: 1,
+                });
+              }
+            }
+          }
+        }
       }
     }
+
+    dmInfo(
+      "GiftWrap",
+      `Decrypt states: ${newUnlocked} unlocked, ${newPending} pending (total: ${this.decryptStates.size})`,
+    );
+
     this.decryptStates$.next(new Map(this.decryptStates));
     this.updatePendingCount();
+
+    // Emit relay stats
+    this.relayStats$.next(new Map(this.relayStats));
 
     // Update conversations
     this.updateConversations();
@@ -891,19 +981,45 @@ class GiftWrapService {
 
     // Mark as decrypting
     this.decryptStates.set(giftWrapId, { status: "decrypting" });
+    dmDebug(
+      "GiftWrap",
+      `🔓 Attempting to decrypt ${giftWrapId.slice(0, 8)}...`,
+    );
 
     try {
       const rumor = await unlockGiftWrap(gw, this.signer);
+
+      if (!rumor) {
+        throw new Error("unlockGiftWrap returned null/undefined");
+      }
+
       this.persistedIds.add(giftWrapId);
       this.decryptStates.set(giftWrapId, {
         status: "success",
         decryptedAt: Date.now(),
       });
       this.decryptEvent$.next({ giftWrapId, status: "success", rumor });
-      dmDebug("GiftWrap", `✅ Decrypted ${giftWrapId.slice(0, 8)}`);
+
+      // Track relay stats for successful decrypt
+      const seenRelays = getSeenRelays(gw);
+      if (seenRelays && seenRelays.size > 0) {
+        for (const relayUrl of seenRelays) {
+          const existing = this.relayStats.get(relayUrl);
+          if (existing) {
+            existing.success++;
+            this.relayStats.set(relayUrl, existing);
+          }
+        }
+        this.relayStats$.next(new Map(this.relayStats));
+      }
+
+      dmInfo(
+        "GiftWrap",
+        `✅ Decrypted ${giftWrapId.slice(0, 8)} (kind: ${rumor.kind})`,
+      );
       return rumor;
     } catch (err) {
-      const error = err instanceof Error ? err.message : "Unknown error";
+      const error = err instanceof Error ? err.message : String(err);
       dmWarn(
         "GiftWrap",
         `❌ Decrypt failed for ${giftWrapId.slice(0, 8)}: ${error}`,
@@ -912,6 +1028,20 @@ class GiftWrapService {
       // FIX: Set error state but DON'T throw - allows other decrypts to continue
       this.decryptStates.set(giftWrapId, { status: "error", error });
       this.decryptEvent$.next({ giftWrapId, status: "error", error });
+
+      // Track relay stats for failed decrypt
+      const seenRelays = getSeenRelays(gw);
+      if (seenRelays && seenRelays.size > 0) {
+        for (const relayUrl of seenRelays) {
+          const existing = this.relayStats.get(relayUrl);
+          if (existing) {
+            existing.failed++;
+            this.relayStats.set(relayUrl, existing);
+          }
+        }
+        this.relayStats$.next(new Map(this.relayStats));
+      }
+
       return null;
     }
   }
