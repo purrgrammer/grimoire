@@ -13,6 +13,8 @@ export const EMOJI_SHORTCODE_REGEX = /^:([a-zA-Z0-9_-]+):$/;
 export interface EmojiTag {
   shortcode: string;
   url: string;
+  /** Optional reference to the emoji set: "30030:pubkey:identifier" */
+  collection?: string;
 }
 
 /**
@@ -24,7 +26,8 @@ const EmojiTagsSymbol = Symbol("emojiTags");
  * Extract and cache emoji tags from an event
  * Uses applesauce's symbol-based caching to avoid recomputation
  *
- * Emoji tags format: ["emoji", "shortcode", "url"]
+ * Emoji tags format: ["emoji", "shortcode", "url", "collection?"]
+ * where collection is optional: "30030:pubkey:identifier"
  */
 export function getEmojiTags(event: NostrEvent): EmojiTag[] {
   return getOrComputeCachedValue(event, EmojiTagsSymbol, () =>
@@ -33,6 +36,7 @@ export function getEmojiTags(event: NostrEvent): EmojiTag[] {
       .map((tag) => ({
         shortcode: tag[1],
         url: tag[2],
+        collection: tag[3], // Optional 4th element
       })),
   );
 }

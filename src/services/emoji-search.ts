@@ -7,6 +7,8 @@ export interface EmojiSearchResult {
   url: string;
   /** Source of the emoji: "unicode", "user", "set:<identifier>", or "context" */
   source: string;
+  /** For emoji from sets: the full coordinate "30030:pubkey:identifier" */
+  collection?: string;
 }
 
 export class EmojiSearchService {
@@ -24,11 +26,16 @@ export class EmojiSearchService {
 
   /**
    * Add a single emoji to the search index
+   * @param shortcode - The emoji shortcode (without colons)
+   * @param url - The URL to the emoji image (or emoji char for unicode)
+   * @param source - Source type: "unicode", "user", "set:<identifier>", or "context"
+   * @param collection - For emoji from sets: the full coordinate "30030:pubkey:identifier"
    */
   async addEmoji(
     shortcode: string,
     url: string,
     source: string = "custom",
+    collection?: string,
   ): Promise<void> {
     // Normalize shortcode (lowercase, no colons)
     const normalized = shortcode.toLowerCase().replace(/^:|:$/g, "");
@@ -43,6 +50,7 @@ export class EmojiSearchService {
       shortcode: normalized,
       url,
       source,
+      collection,
     };
 
     this.emojis.set(normalized, emoji);
@@ -59,8 +67,16 @@ export class EmojiSearchService {
       event.tags.find((t) => t[0] === "d")?.[1] || "unnamed-set";
     const emojis = getEmojiTags(event);
 
+    // Build the full coordinate for collection reference
+    const collection = `30030:${event.pubkey}:${identifier}`;
+
     for (const emoji of emojis) {
-      await this.addEmoji(emoji.shortcode, emoji.url, `set:${identifier}`);
+      await this.addEmoji(
+        emoji.shortcode,
+        emoji.url,
+        `set:${identifier}`,
+        collection,
+      );
     }
   }
 

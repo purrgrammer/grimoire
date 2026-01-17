@@ -138,6 +138,7 @@ export function EmojiPickerDialog({
       onEmojiSelect(`:${result.shortcode}:`, {
         shortcode: result.shortcode,
         url: result.url,
+        collection: result.collection,
       });
       recordCustomUsage(result.shortcode, result.url);
     }

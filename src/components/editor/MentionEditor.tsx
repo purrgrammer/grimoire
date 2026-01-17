@@ -39,6 +39,8 @@ import { nip19 } from "nostr-tools";
 export interface EmojiTag {
   shortcode: string;
   url: string;
+  /** Optional reference to the emoji set: "30030:pubkey:identifier" */
+  collection?: string;
 }
 
 /**
@@ -603,6 +605,7 @@ export const MentionEditor = forwardRef<
                 const shortcode = child.attrs?.id;
                 const url = child.attrs?.url;
                 const source = child.attrs?.source;
+                const collection = child.attrs?.collection;
 
                 if (source === "unicode" && url) {
                   // Unicode emoji - output the actual character
@@ -613,7 +616,7 @@ export const MentionEditor = forwardRef<
 
                   if (url && !seenEmojis.has(shortcode)) {
                     seenEmojis.add(shortcode);
-                    emojiTags.push({ shortcode, url });
+                    emojiTags.push({ shortcode, url, collection });
                   }
                 }
               } else if (child.type === "blobAttachment") {
@@ -761,6 +764,7 @@ export const MentionEditor = forwardRef<
                         label: props.shortcode,
                         url: props.url,
                         source: props.source,
+                        collection: props.collection, // Reference to emoji set
                       },
                     },
                     { type: "text", text: " " },

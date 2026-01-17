@@ -3,6 +3,7 @@ import { map, first } from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import type { Filter } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
+import type { EmojiTag } from "@/lib/emoji-helpers";
 import type {
   Conversation,
   Message,
@@ -238,7 +239,11 @@ export class NipC7Adapter extends ChatProtocolAdapter {
     // Add NIP-30 emoji tags
     if (options?.emojiTags) {
       for (const emoji of options.emojiTags) {
-        tags.push(["emoji", emoji.shortcode, emoji.url]);
+        const emojiTag: string[] = ["emoji", emoji.shortcode, emoji.url];
+        if (emoji.collection) {
+          emojiTag.push(emoji.collection);
+        }
+        tags.push(emojiTag);
       }
     }
 
@@ -254,7 +259,7 @@ export class NipC7Adapter extends ChatProtocolAdapter {
     conversation: Conversation,
     messageId: string,
     emoji: string,
-    customEmoji?: { shortcode: string; url: string },
+    customEmoji?: EmojiTag,
   ): Promise<void> {
     const activePubkey = accountManager.active$.value?.pubkey;
     const activeSigner = accountManager.active$.value?.signer;
@@ -282,7 +287,15 @@ export class NipC7Adapter extends ChatProtocolAdapter {
 
     // Add NIP-30 custom emoji tag if provided
     if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
+      const emojiTag: string[] = [
+        "emoji",
+        customEmoji.shortcode,
+        customEmoji.url,
+      ];
+      if (customEmoji.collection) {
+        emojiTag.push(customEmoji.collection);
+      }
+      tags.push(emojiTag);
     }
 
     // Use kind 7 for reactions
