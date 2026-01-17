@@ -26,7 +26,6 @@ import { ThreadConversation } from "./ThreadConversation";
 
 export interface ThreadViewerProps {
   pointer: EventPointer | AddressPointer;
-  customTitle?: string;
 }
 
 /**
@@ -74,12 +73,12 @@ function getThreadRoot(
     // Fallback to parent pointer if no root found
     if (pointer) {
       if ("id" in pointer) {
-        return { id: pointer.id };
-      } else {
+        return pointer.id ? { id: pointer.id } : null;
+      } else if ("kind" in pointer && "pubkey" in pointer) {
         return {
-          kind: pointer.kind,
-          pubkey: pointer.pubkey,
-          identifier: pointer.identifier,
+          kind: pointer.kind as number,
+          pubkey: pointer.pubkey as string,
+          identifier: (pointer.identifier as string | undefined) || "",
         };
       }
     }
@@ -96,18 +95,18 @@ function getThreadRoot(
  * ThreadViewer - Displays a Nostr thread with root post and replies
  * Supports both NIP-10 (kind 1 replies) and NIP-22 (kind 1111 comments)
  */
-export function ThreadViewer({ pointer, customTitle }: ThreadViewerProps) {
+export function ThreadViewer({ pointer }: ThreadViewerProps) {
   const event = useNostrEvent(pointer);
   const { relays: relayStates } = useRelayState();
 
   // Get thread root
   const rootPointer = useMemo(() => {
-    if (!event) return null;
+    if (!event) return undefined;
     return getThreadRoot(event);
   }, [event]);
 
   // Load root event (might be the same as event)
-  const rootEvent = useNostrEvent(rootPointer);
+  const rootEvent = useNostrEvent(rootPointer ?? undefined);
 
   // Get relays for the root event
   const rootRelays = useMemo(() => {

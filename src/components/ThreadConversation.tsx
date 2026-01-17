@@ -45,7 +45,7 @@ function getParentId(
     // Fallback: check if reply pointer gives us an event ID
     const pointer = getCommentReplyPointer(event);
     if (pointer && "id" in pointer) {
-      return pointer.id;
+      return pointer.id || null;
     }
 
     return null;

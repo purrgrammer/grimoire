@@ -174,12 +174,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         content = <EventDetailViewer pointer={window.props.pointer} />;
         break;
       case "thread":
-        content = (
-          <ThreadViewer
-            pointer={window.props.pointer}
-            customTitle={window.customTitle}
-          />
-        );
+        content = <ThreadViewer pointer={window.props.pointer} />;
         break;
       case "profile":
         content = <ProfileViewer pubkey={window.props.pubkey} />;
