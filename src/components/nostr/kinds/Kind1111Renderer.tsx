@@ -5,11 +5,12 @@ import {
   getCommentRootPointer,
   isCommentAddressPointer,
   isCommentEventPointer,
+  isCommentExternalPointer,
   type CommentPointer,
 } from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { Reply, Hash } from "lucide-react";
+import { Reply, Hash, ExternalLink } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
@@ -66,7 +67,138 @@ function arePointersEqual(
     );
   }
 
+  if (isCommentExternalPointer(a) && isCommentExternalPointer(b)) {
+    return a.kind === b.kind && a.identifier === b.identifier;
+  }
+
   return false;
+}
+
+/**
+ * Format external identifier for display
+ */
+function formatExternalIdentifier(pointer: CommentPointer): {
+  label: string;
+  value: string;
+  url?: string;
+} {
+  if (!isCommentExternalPointer(pointer)) {
+    return { label: "Unknown", value: "" };
+  }
+
+  const { kind, identifier } = pointer;
+
+  switch (kind) {
+    case "web":
+      return {
+        label: "URL",
+        value: identifier,
+        url: identifier.startsWith("http")
+          ? identifier
+          : `https://${identifier}`,
+      };
+    case "#":
+      return {
+        label: "Hashtag",
+        value: identifier,
+      };
+    case "geo":
+      return {
+        label: "Location",
+        value: identifier.replace(/^geo:/, ""),
+        url: `https://www.openstreetmap.org/?mlat=${identifier.replace(/^geo:/, "").split(",")[0]}&mlon=${identifier.replace(/^geo:/, "").split(",")[1]}`,
+      };
+    case "isbn":
+      return {
+        label: "ISBN",
+        value: identifier.replace(/^isbn:/, ""),
+        url: `https://isbnsearch.org/isbn/${identifier.replace(/^isbn:/, "")}`,
+      };
+    case "podcast:guid":
+    case "podcast:item:guid":
+    case "podcast:publisher:guid":
+      return {
+        label: "Podcast",
+        value: identifier.replace(/^podcast:(item:|publisher:)?guid:/, ""),
+      };
+    case "doi":
+      return {
+        label: "DOI",
+        value: identifier.replace(/^doi:/, ""),
+        url: `https://doi.org/${identifier.replace(/^doi:/, "")}`,
+      };
+    case "isan":
+      return {
+        label: "ISAN",
+        value: identifier.replace(/^isan:/, ""),
+      };
+    default:
+      // Handle blockchain identifiers and generic formats
+      if (kind.includes(":tx")) {
+        return {
+          label: "Transaction",
+          value: identifier,
+        };
+      }
+      if (kind.includes(":address")) {
+        return {
+          label: "Address",
+          value: identifier,
+        };
+      }
+      return {
+        label: kind,
+        value: identifier,
+      };
+  }
+}
+
+/**
+ * External identifier card component - compact single line
+ */
+function ExternalIdentifierCard({
+  pointer,
+  icon: Icon,
+  tooltipText,
+}: {
+  pointer: CommentPointer;
+  icon: typeof ExternalLink;
+  tooltipText: string;
+}) {
+  const { label, value, url } = formatExternalIdentifier(pointer);
+
+  const content = (
+    <div className="flex items-center gap-2 p-1 bg-muted/20 text-xs rounded">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Icon className="size-3 flex-shrink-0" />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
+      <span className="text-accent font-semibold flex-shrink-0">{label}:</span>
+      <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
+        {value}
+      </div>
+    </div>
+  );
+
+  // If there's a URL, make it clickable
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:opacity-80 transition-opacity block"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return content;
 }
 
 /**
@@ -119,6 +251,7 @@ function ParentEventCard({
 /**
  * Renderer for Kind 1111 - Comment (NIP-22)
  * Shows root context (what the thread is about) and parent reply if different
+ * Supports both Nostr events and external identifiers (URLs, podcasts, etc.)
  */
 export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
   const { addWindow } = useGrimoire();
@@ -127,14 +260,22 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
   const rootPointerRaw = getCommentRootPointer(event);
   const replyPointerRaw = getCommentReplyPointer(event);
 
-  // Convert to useNostrEvent format
-  const rootPointer = convertCommentPointer(rootPointerRaw);
-  const replyPointer = convertCommentPointer(replyPointerRaw);
+  // Check if pointers are external identifiers
+  const isRootExternal = isCommentExternalPointer(rootPointerRaw);
+  const isReplyExternal = isCommentExternalPointer(replyPointerRaw);
+
+  // Convert to useNostrEvent format (only for non-external pointers)
+  const rootPointer = !isRootExternal
+    ? convertCommentPointer(rootPointerRaw)
+    : undefined;
+  const replyPointer = !isReplyExternal
+    ? convertCommentPointer(replyPointerRaw)
+    : undefined;
 
   // Check if root and reply are the same (top-level comment)
   const isTopLevel = arePointersEqual(rootPointerRaw, replyPointerRaw);
 
-  // Fetch events
+  // Fetch events (only for non-external pointers)
   const rootEvent = useNostrEvent(rootPointer, event);
   const replyEvent = useNostrEvent(replyPointer, event);
 
@@ -152,31 +293,53 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
     <BaseEventContainer event={event}>
       <TooltipProvider>
         {/* Show root context (what the comment thread is about) */}
-        {rootPointer && !rootEvent && (
-          <InlineReplySkeleton icon={<Hash className="size-3" />} />
-        )}
-
-        {rootPointer && rootEvent && (
-          <ParentEventCard
-            parentEvent={rootEvent}
-            icon={Hash}
+        {isRootExternal && rootPointerRaw ? (
+          <ExternalIdentifierCard
+            pointer={rootPointerRaw}
+            icon={ExternalLink}
             tooltipText="Comment on"
-            onClickHandler={handleRootClick}
           />
+        ) : (
+          <>
+            {rootPointer && !rootEvent && (
+              <InlineReplySkeleton icon={<Hash className="size-3" />} />
+            )}
+            {rootPointer && rootEvent && (
+              <ParentEventCard
+                parentEvent={rootEvent}
+                icon={Hash}
+                tooltipText="Comment on"
+                onClickHandler={handleRootClick}
+              />
+            )}
+          </>
         )}
 
         {/* Show reply event (immediate parent) if different from root */}
-        {!isTopLevel && replyPointer && !replyEvent && (
-          <InlineReplySkeleton icon={<Reply className="size-3" />} />
-        )}
-
-        {!isTopLevel && replyPointer && replyEvent && (
-          <ParentEventCard
-            parentEvent={replyEvent}
-            icon={Reply}
-            tooltipText="Replying to"
-            onClickHandler={handleReplyClick}
-          />
+        {!isTopLevel && (
+          <>
+            {isReplyExternal && replyPointerRaw ? (
+              <ExternalIdentifierCard
+                pointer={replyPointerRaw}
+                icon={ExternalLink}
+                tooltipText="Replying to"
+              />
+            ) : (
+              <>
+                {replyPointer && !replyEvent && (
+                  <InlineReplySkeleton icon={<Reply className="size-3" />} />
+                )}
+                {replyPointer && replyEvent && (
+                  <ParentEventCard
+                    parentEvent={replyEvent}
+                    icon={Reply}
+                    tooltipText="Replying to"
+                    onClickHandler={handleReplyClick}
+                  />
+                )}
+              </>
+            )}
+          </>
         )}
       </TooltipProvider>
 
