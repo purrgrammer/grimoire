@@ -84,11 +84,13 @@ export interface RelayInfo {
  */
 export interface NWCConnection {
   /** The wallet service's public key */
-  walletPubkey: string;
+  service: string;
   /** Relay URL(s) for communication */
   relays: string[];
-  /** Shared secret for encryption (32-byte hex) */
+  /** Shared secret for encryption */
   secret: string;
+  /** Optional lightning address (lud16) */
+  lud16?: string;
   /** Optional cached balance in millisats */
   balance?: number;
   /** Optional wallet info */

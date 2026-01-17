@@ -10,6 +10,7 @@ import CommandLauncher from "../CommandLauncher";
 import { GlobalAuthPrompt } from "../GlobalAuthPrompt";
 import { SpellbookDropdown } from "../SpellbookDropdown";
 import UserMenu from "../nostr/user-menu";
+import WalletButton from "../WalletButton";
 import { AppShellContext } from "./AppShellContext";
 
 interface AppShellProps {
@@ -76,7 +77,10 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
             <SpellbookDropdown />
           </div>
 
-          <UserMenu />
+          <div className="flex items-center gap-2">
+            <WalletButton />
+            <UserMenu />
+          </div>
         </header>
         <section className="flex-1 relative overflow-hidden">
           {children}

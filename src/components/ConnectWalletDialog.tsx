@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGrimoire } from "@/core/state";
-import { parseNWCUri, NWCClient } from "@/services/nwc-client";
+import { createWalletFromURI } from "@/services/nwc";
 
 interface ConnectWalletDialogProps {
   open: boolean;
@@ -53,27 +53,31 @@ export default function ConnectWalletDialog({
     setError(null);
 
     try {
-      // Parse the connection URI
-      const connection = parseNWCUri(connectionString);
-
-      // Create NWC client
-      const client = new NWCClient(connection);
+      // Create wallet instance from connection string
+      const wallet = createWalletFromURI(connectionString);
 
       // Test the connection by getting wallet info
-      const info = await client.getInfo();
+      const info = await wallet.getInfo();
 
       // Get initial balance
       let balance: number | undefined;
       try {
-        balance = await client.getBalance();
+        const balanceResult = await wallet.getBalance();
+        balance = balanceResult.balance;
       } catch (err) {
         console.warn("[NWC] Failed to get balance:", err);
         // Balance is optional, continue anyway
       }
 
+      // Get connection details from the wallet instance
+      const serialized = wallet.toJSON();
+
       // Save connection to state
       setNWCConnection({
-        ...connection,
+        service: serialized.service,
+        relays: serialized.relays,
+        secret: serialized.secret,
+        lud16: serialized.lud16,
         balance,
         info: {
           alias: info.alias,
