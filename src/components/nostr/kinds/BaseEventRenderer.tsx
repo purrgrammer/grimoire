@@ -10,7 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink } from "lucide-react";
+import {
+  Menu,
+  Copy,
+  Check,
+  FileJson,
+  ExternalLink,
+  MessageCircle,
+} from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -126,6 +133,27 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     addWindow("open", { pointer });
   };
 
+  const openThread = () => {
+    let pointer;
+    // For replaceable/parameterized replaceable events, use AddressPointer
+    if (isAddressableKind(event.kind)) {
+      // Find d-tag for identifier
+      const dTag = getTagValue(event, "d") || "";
+      pointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      // For regular events, use EventPointer
+      pointer = {
+        id: event.id,
+      };
+    }
+
+    addWindow("thread", { pointer });
+  };
+
   const copyEventId = () => {
     // Get relay hints from where the event has been seen
     const seenRelaysSet = getSeenRelays(event);
@@ -180,6 +208,10 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         <DropdownMenuItem onClick={openEventDetail}>
           <ExternalLink className="size-4 mr-2" />
           Open
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={openThread}>
+          <MessageCircle className="size-4 mr-2" />
+          Thread
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
