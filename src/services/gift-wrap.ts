@@ -981,10 +981,52 @@ class GiftWrapService {
 
     // Mark as decrypting
     this.decryptStates.set(giftWrapId, { status: "decrypting" });
+
+    // Debug: Check gift wrap recipient
+    const recipientTag = gw.tags.find((t) => t[0] === "p");
+    const recipientPubkey = recipientTag?.[1];
     dmDebug(
       "GiftWrap",
       `🔓 Attempting to decrypt ${giftWrapId.slice(0, 8)}...`,
     );
+    dmDebug(
+      "GiftWrap",
+      `  Recipient: ${recipientPubkey?.slice(0, 8)} (user: ${this.userPubkey?.slice(0, 8)})`,
+    );
+
+    // Verify signer pubkey matches user
+    let signerPubkey: string | undefined;
+    try {
+      signerPubkey = await this.signer.getPublicKey();
+      dmDebug("GiftWrap", `  Signer pubkey: ${signerPubkey.slice(0, 8)}`);
+      dmDebug("GiftWrap", `  Signer type: ${this.signer.constructor.name}`);
+
+      // Check if signer has NIP-44 support
+      if (typeof (this.signer as any).nip44 === "object") {
+        dmDebug("GiftWrap", `  Signer has NIP-44 support ✓`);
+      } else {
+        dmWarn(
+          "GiftWrap",
+          `  WARNING: Signer may not support NIP-44 (required for gift wraps)`,
+        );
+      }
+
+      if (signerPubkey !== this.userPubkey) {
+        throw new Error(
+          `Signer pubkey mismatch: signer=${signerPubkey.slice(0, 8)}, user=${this.userPubkey?.slice(0, 8)}`,
+        );
+      }
+
+      if (recipientPubkey && recipientPubkey !== this.userPubkey) {
+        throw new Error(
+          `Gift wrap not for this user: recipient=${recipientPubkey.slice(0, 8)}, user=${this.userPubkey.slice(0, 8)}`,
+        );
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      dmWarn("GiftWrap", `  Pre-decrypt validation failed: ${error}`);
+      throw err;
+    }
 
     try {
       const rumor = await unlockGiftWrap(gw, this.signer);
@@ -1020,10 +1062,28 @@ class GiftWrapService {
       return rumor;
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      dmWarn(
-        "GiftWrap",
-        `❌ Decrypt failed for ${giftWrapId.slice(0, 8)}: ${error}`,
-      );
+
+      // Enhanced error logging for JSON parse errors
+      if (error.includes("JSON") || error.includes("Unexpected token")) {
+        dmWarn("GiftWrap", `❌ JSON parse error for ${giftWrapId.slice(0, 8)}`);
+        dmWarn("GiftWrap", `  Error: ${error}`);
+        dmWarn("GiftWrap", `  This usually means:`);
+        dmWarn(
+          "GiftWrap",
+          `  1. Signer is decrypting with wrong key (produces garbage)`,
+        );
+        dmWarn("GiftWrap", `  2. Signer doesn't support NIP-44 encryption`);
+        dmWarn("GiftWrap", `  3. Gift wrap is corrupted or test data`);
+        dmWarn(
+          "GiftWrap",
+          `  Gift wrap content preview: ${gw.content.slice(0, 100)}...`,
+        );
+      } else {
+        dmWarn(
+          "GiftWrap",
+          `❌ Decrypt failed for ${giftWrapId.slice(0, 8)}: ${error}`,
+        );
+      }
 
       // FIX: Set error state but DON'T throw - allows other decrypts to continue
       this.decryptStates.set(giftWrapId, { status: "error", error });
