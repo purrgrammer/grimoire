@@ -8,6 +8,10 @@ interface GrimoireWelcomeProps {
 }
 
 const EXAMPLE_COMMANDS = [
+  {
+    command: "chat groups.0xchat.com'NkeVhXuWHGKKJCpn",
+    description: "Join the Grimoire welcome chat",
+  },
   { command: "nip 29", description: "View relay-based groups spec" },
   {
     command: "profile fiatjaf.com",
