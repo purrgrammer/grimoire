@@ -159,6 +159,7 @@ export default function UserMenu() {
       <ConnectWalletDialog
         open={showConnectWallet}
         onOpenChange={setShowConnectWallet}
+        onConnected={openWallet}
       />
 
       {/* Wallet Info Dialog */}

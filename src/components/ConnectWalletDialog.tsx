@@ -16,11 +16,13 @@ import { createWalletFromURI } from "@/services/nwc";
 interface ConnectWalletDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConnected?: () => void;
 }
 
 export default function ConnectWalletDialog({
   open,
   onOpenChange,
+  onConnected,
 }: ConnectWalletDialogProps) {
   const [connectionString, setConnectionString] = useState("");
   const [loading, setLoading] = useState(false);
@@ -103,6 +105,9 @@ export default function ConnectWalletDialog({
 
       // Close dialog
       onOpenChange(false);
+
+      // Call onConnected callback
+      onConnected?.();
     } catch (err) {
       console.error("Wallet connection error:", err);
       setError(err instanceof Error ? err.message : "Failed to connect wallet");

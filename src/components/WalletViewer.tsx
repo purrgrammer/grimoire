@@ -18,7 +18,6 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   LogOut,
-  AlertTriangle,
   ChevronDown,
   ExternalLink,
 } from "lucide-react";
@@ -664,10 +663,16 @@ export default function WalletViewer() {
     <div className="h-full w-full flex flex-col bg-background text-foreground">
       {/* Header */}
       <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
-        {/* Left: Wallet Name */}
-        <span className="font-semibold">
-          {walletInfo?.alias || "Lightning Wallet"}
-        </span>
+        {/* Left: Wallet Name + Status */}
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">
+            {walletInfo?.alias || "Lightning Wallet"}
+          </span>
+          <div className="flex items-center gap-1">
+            <div className="size-1.5 rounded-full bg-green-500" />
+            <span className="text-[10px] text-muted-foreground">Connected</span>
+          </div>
+        </div>
 
         {/* Right: Info Dropdown, Refresh, Disconnect */}
         <div className="flex items-center gap-2">
@@ -1070,28 +1075,40 @@ export default function WalletViewer() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="size-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Confirm Payment</p>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      {invoiceDetails?.amount && (
-                        <p className="font-semibold text-foreground">
-                          Amount:{" "}
+              <div className="rounded-lg border border-border p-4">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Confirm Payment</p>
+                  <div className="space-y-2 text-sm">
+                    {invoiceDetails?.amount && !sendAmount && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Amount:</span>
+                        <span className="font-semibold font-mono">
                           {Math.floor(invoiceDetails.amount).toLocaleString()}{" "}
                           sats
-                        </p>
-                      )}
-                      {invoiceDetails?.description && (
-                        <p>Description: {invoiceDetails.description}</p>
-                      )}
-                      {sendAmount && (
-                        <p className="text-xs">
-                          Override amount: {parseInt(sendAmount) / 1000} sats
-                        </p>
-                      )}
-                    </div>
+                        </span>
+                      </div>
+                    )}
+                    {sendAmount && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Amount:</span>
+                        <span className="font-semibold font-mono">
+                          {Math.floor(
+                            parseInt(sendAmount) / 1000,
+                          ).toLocaleString()}{" "}
+                          sats
+                        </span>
+                      </div>
+                    )}
+                    {invoiceDetails?.description && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Description:
+                        </span>
+                        <span className="truncate ml-2">
+                          {invoiceDetails.description}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1208,40 +1225,46 @@ export default function WalletViewer() {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Invoice</label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                <div className="space-y-3">
+                  <Button
+                    onClick={handleCopyInvoice}
+                    variant="default"
+                    className="w-full h-12"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="mr-2 size-5" />
+                        Copied Invoice
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-2 size-5" />
+                        Copy Invoice
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Invoice (tap to view)
+                    </label>
+                    <div
+                      className="rounded bg-muted p-3 font-mono text-xs overflow-hidden cursor-pointer hover:bg-muted/80 transition-colors"
                       onClick={handleCopyInvoice}
                     >
-                      {copied ? (
-                        <>
-                          <Check className="mr-2 size-4" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="mr-2 size-4" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
+                      <div className="truncate">{generatedInvoice}</div>
+                    </div>
                   </div>
-                  <div className="rounded bg-muted p-3 font-mono text-xs overflow-hidden">
-                    <div className="truncate">{generatedInvoice}</div>
-                  </div>
-                </div>
 
-                <Button
-                  onClick={resetReceiveDialog}
-                  variant="outline"
-                  className="w-full"
-                  disabled={checkingPayment}
-                >
-                  Generate Another
-                </Button>
+                  <Button
+                    onClick={resetReceiveDialog}
+                    variant="outline"
+                    className="w-full"
+                    disabled={checkingPayment}
+                  >
+                    Generate Another
+                  </Button>
+                </div>
               </>
             )}
           </div>
