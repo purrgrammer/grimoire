@@ -366,7 +366,7 @@ export default function WalletViewer() {
 
       try {
         setSending(true);
-        const amountSats = parseInt(sendAmount) / 1000; // Convert from millisats
+        const amountSats = parseInt(sendAmount); // Amount is in sats
         const invoice = await resolveLightningAddress(input, amountSats);
 
         // Update the invoice field with the resolved invoice
@@ -488,7 +488,8 @@ export default function WalletViewer() {
   async function handleSendPayment() {
     setSending(true);
     try {
-      const amount = sendAmount ? parseInt(sendAmount) : undefined;
+      // Convert sats to millisats for NWC protocol
+      const amount = sendAmount ? parseInt(sendAmount) * 1000 : undefined;
       await payInvoice(sendInvoice, amount);
       toast.success("Payment sent successfully");
       resetSendDialog();
@@ -1045,7 +1046,7 @@ export default function WalletViewer() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Amount (optional, millisats)
+                  Amount (sats, optional)
                 </label>
                 <Input
                   type="number"
@@ -1092,10 +1093,7 @@ export default function WalletViewer() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount:</span>
                         <span className="font-semibold font-mono">
-                          {Math.floor(
-                            parseInt(sendAmount) / 1000,
-                          ).toLocaleString()}{" "}
-                          sats
+                          {parseInt(sendAmount).toLocaleString()} sats
                         </span>
                       </div>
                     )}
@@ -1249,10 +1247,10 @@ export default function WalletViewer() {
                       Invoice (tap to view)
                     </label>
                     <div
-                      className="rounded bg-muted p-3 font-mono text-xs overflow-hidden cursor-pointer hover:bg-muted/80 transition-colors"
+                      className="rounded bg-muted p-3 font-mono text-xs cursor-pointer hover:bg-muted/80 transition-colors break-all line-clamp-2"
                       onClick={handleCopyInvoice}
                     >
-                      <div className="truncate">{generatedInvoice}</div>
+                      {generatedInvoice}
                     </div>
                   </div>
 
