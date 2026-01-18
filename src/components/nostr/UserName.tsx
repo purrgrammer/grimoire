@@ -2,7 +2,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
-import { GrimoireBadge } from "./GrimoireUsername";
+import { getGrimoireUsername, isGrimoireMember } from "@/lib/grimoire-members";
 
 interface UserNameProps {
   pubkey: string;
@@ -15,12 +15,17 @@ interface UserNameProps {
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
  * Uses highlight color for the logged-in user (themeable amber)
- * Shows Grimoire badge for Grimoire members
+ * Shows Grimoire members with yellow-orange gradient styling
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
-  const displayName = getDisplayName(pubkey, profile);
+  const isGrimoire = isGrimoireMember(pubkey);
+  const grimoireUsername = getGrimoireUsername(pubkey);
+  const displayName =
+    isGrimoire && grimoireUsername
+      ? `${grimoireUsername}@grimoire.rocks`
+      : getDisplayName(pubkey, profile);
 
   // Check if this is the logged-in user
   const isActiveAccount = state.activeAccount?.pubkey === pubkey;
@@ -34,17 +39,18 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
     <span
       dir="auto"
       className={cn(
-        "inline-flex items-center gap-1.5 font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
-        isActiveAccount ? "text-highlight" : "text-accent",
+        "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
+        isGrimoire
+          ? "bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent"
+          : isActiveAccount
+            ? "text-highlight"
+            : "text-accent",
         className,
       )}
       onClick={handleClick}
     >
-      <span>
-        {isMention ? "@" : null}
-        {displayName}
-      </span>
-      <GrimoireBadge pubkey={pubkey} />
+      {isMention ? "@" : null}
+      {displayName}
     </span>
   );
 }
