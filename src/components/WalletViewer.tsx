@@ -19,6 +19,7 @@ import {
   ArrowDownLeft,
   LogOut,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
@@ -55,6 +56,7 @@ import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
 import { RichText } from "./nostr/RichText";
 import { UserName } from "./nostr/UserName";
+import { CodeCopyButton } from "./CodeCopyButton";
 
 interface Transaction {
   type: "incoming" | "outgoing";
@@ -326,7 +328,7 @@ function TransactionLabel({ transaction }: { transaction: Transaction }) {
       <div className="text-sm min-w-0 flex items-center gap-2">
         <UserName pubkey={zapInfo.sender} className="flex-shrink-0" />
         {zapInfo.message && (
-          <span className="truncate min-w-0">
+          <span className="line-clamp-1 min-w-0">
             <RichText
               content={zapInfo.message}
               event={zapInfo.zapRequestEvent}
@@ -394,6 +396,8 @@ export default function WalletViewer() {
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [showRawTransaction, setShowRawTransaction] = useState(false);
+  const [copiedRawTx, setCopiedRawTx] = useState(false);
 
   // Load wallet info when connected
   useEffect(() => {
@@ -1191,7 +1195,16 @@ export default function WalletViewer() {
       </Dialog>
 
       {/* Transaction Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+      <Dialog
+        open={detailDialogOpen}
+        onOpenChange={(open) => {
+          setDetailDialogOpen(open);
+          if (!open) {
+            setShowRawTransaction(false);
+            setCopiedRawTx(false);
+          }
+        }}
+      >
         <DialogContent className="max-h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
@@ -1277,6 +1290,42 @@ export default function WalletViewer() {
 
                 {/* Zap Details (if this is a zap payment) */}
                 <ZapTransactionDetail transaction={selectedTransaction} />
+
+                {/* Raw Transaction (expandable) */}
+                <div className="border-t border-border pt-4 mt-4">
+                  <button
+                    onClick={() => setShowRawTransaction(!showRawTransaction)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+                  >
+                    {showRawTransaction ? (
+                      <ChevronDown className="size-4" />
+                    ) : (
+                      <ChevronRight className="size-4" />
+                    )}
+                    <span>Show Raw Transaction</span>
+                  </button>
+
+                  {showRawTransaction && (
+                    <div className="mt-3 space-y-2">
+                      <div className="relative">
+                        <pre className="text-xs font-mono bg-muted p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                          {JSON.stringify(selectedTransaction, null, 2)}
+                        </pre>
+                        <CodeCopyButton
+                          copied={copiedRawTx}
+                          onCopy={() => {
+                            navigator.clipboard.writeText(
+                              JSON.stringify(selectedTransaction, null, 2),
+                            );
+                            setCopiedRawTx(true);
+                            setTimeout(() => setCopiedRawTx(false), 2000);
+                          }}
+                          label="Copy transaction JSON"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1284,7 +1333,11 @@ export default function WalletViewer() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDetailDialogOpen(false)}
+              onClick={() => {
+                setDetailDialogOpen(false);
+                setShowRawTransaction(false);
+                setCopiedRawTx(false);
+              }}
             >
               Close
             </Button>
