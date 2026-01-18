@@ -349,14 +349,54 @@ export default function WalletViewer() {
     }
   }
 
-  function handleConfirmSend() {
+  async function handleConfirmSend() {
     if (!sendInvoice.trim()) {
-      toast.error("Please enter an invoice");
+      toast.error("Please enter an invoice or Lightning address");
       return;
     }
 
-    // Parse invoice details
-    const details = parseInvoice(sendInvoice);
+    const input = sendInvoice.trim();
+
+    // Check if it's a Lightning address
+    if (input.includes("@") && !input.toLowerCase().startsWith("ln")) {
+      // Lightning address - requires amount
+      if (!sendAmount || parseInt(sendAmount) <= 0) {
+        toast.error("Please enter an amount for Lightning address payments");
+        return;
+      }
+
+      try {
+        setSending(true);
+        const amountSats = parseInt(sendAmount) / 1000; // Convert from millisats
+        const invoice = await resolveLightningAddress(input, amountSats);
+
+        // Update the invoice field with the resolved invoice
+        setSendInvoice(invoice);
+
+        // Parse the resolved invoice
+        const details = parseInvoice(invoice);
+        if (!details) {
+          toast.error("Failed to parse resolved invoice");
+          return;
+        }
+
+        setInvoiceDetails(details);
+        setSendStep("confirm");
+      } catch (error) {
+        console.error("Failed to resolve Lightning address:", error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to resolve Lightning address",
+        );
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    // Parse BOLT11 invoice
+    const details = parseInvoice(input);
     if (!details) {
       toast.error("Invalid Lightning invoice");
       return;
@@ -366,18 +406,78 @@ export default function WalletViewer() {
     setSendStep("confirm");
   }
 
-  // Auto-proceed to confirm when valid invoice is entered
+  // Auto-proceed to confirm when valid invoice with amount is entered
   function handleInvoiceChange(value: string) {
     setSendInvoice(value);
 
     // If it looks like an invoice, try to parse it
     if (value.toLowerCase().startsWith("ln")) {
       const details = parseInvoice(value);
-      if (details) {
-        // Valid invoice, auto-proceed to confirm
+      // Only auto-proceed if invoice has an amount
+      if (details && details.amount !== undefined) {
         setInvoiceDetails(details);
         setSendStep("confirm");
       }
+    }
+  }
+
+  // Resolve Lightning address to invoice
+  async function resolveLightningAddress(address: string, amountSats: number) {
+    try {
+      const [username, domain] = address.split("@");
+      if (!username || !domain) {
+        throw new Error("Invalid Lightning address format");
+      }
+
+      // Fetch LNURL-pay endpoint
+      const lnurlUrl = `https://${domain}/.well-known/lnurlp/${username}`;
+      const response = await fetch(lnurlUrl);
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch Lightning address: ${response.statusText}`,
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.status === "ERROR") {
+        throw new Error(data.reason || "Lightning address lookup failed");
+      }
+
+      // Check amount limits (amounts are in millisats)
+      const amountMsat = amountSats * 1000;
+      if (data.minSendable && amountMsat < data.minSendable) {
+        throw new Error(
+          `Amount too small. Minimum: ${data.minSendable / 1000} sats`,
+        );
+      }
+      if (data.maxSendable && amountMsat > data.maxSendable) {
+        throw new Error(
+          `Amount too large. Maximum: ${data.maxSendable / 1000} sats`,
+        );
+      }
+
+      // Fetch invoice from callback
+      const callbackUrl = new URL(data.callback);
+      callbackUrl.searchParams.set("amount", amountMsat.toString());
+
+      const invoiceResponse = await fetch(callbackUrl.toString());
+
+      if (!invoiceResponse.ok) {
+        throw new Error(`Failed to get invoice: ${invoiceResponse.statusText}`);
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (invoiceData.status === "ERROR") {
+        throw new Error(invoiceData.reason || "Failed to generate invoice");
+      }
+
+      return invoiceData.pr; // The BOLT11 invoice
+    } catch (error) {
+      console.error("Lightning address resolution failed:", error);
+      throw error;
     }
   }
 
@@ -919,7 +1019,7 @@ export default function WalletViewer() {
             <DialogTitle>Send Payment</DialogTitle>
             <DialogDescription>
               {sendStep === "input"
-                ? "Pay a Lightning invoice. Amount can be overridden if the invoice allows it."
+                ? "Pay a Lightning invoice or Lightning address. Amount can be overridden if the invoice allows it."
                 : "Confirm payment details before sending."}
             </DialogDescription>
           </DialogHeader>
@@ -927,9 +1027,11 @@ export default function WalletViewer() {
           {sendStep === "input" ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Invoice</label>
+                <label className="text-sm font-medium">
+                  Invoice or Lightning Address
+                </label>
                 <Input
-                  placeholder="lnbc..."
+                  placeholder="lnbc... or user@domain.com"
                   value={sendInvoice}
                   onChange={(e) => handleInvoiceChange(e.target.value)}
                   className="font-mono text-xs"
@@ -942,18 +1044,28 @@ export default function WalletViewer() {
                 </label>
                 <Input
                   type="number"
-                  placeholder="Leave empty for invoice amount"
+                  placeholder="Required for Lightning addresses"
                   value={sendAmount}
                   onChange={(e) => setSendAmount(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty for invoices with fixed amounts
+                </p>
               </div>
 
               <Button
                 onClick={handleConfirmSend}
-                disabled={!sendInvoice.trim()}
+                disabled={!sendInvoice.trim() || sending}
                 className="w-full"
               >
-                Continue
+                {sending ? (
+                  <>
+                    <RefreshCw className="mr-2 size-4 animate-spin" />
+                    Resolving...
+                  </>
+                ) : (
+                  "Continue"
+                )}
               </Button>
             </div>
           ) : (
