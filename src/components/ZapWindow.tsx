@@ -40,7 +40,6 @@ import { useWallet } from "@/hooks/useWallet";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { KindRenderer } from "./nostr/kinds";
 import type { EventPointer, AddressPointer } from "@/lib/open-parser";
-import { useGrimoire } from "@/core/state";
 import accountManager from "@/services/accounts";
 import {
   MentionEditor,
@@ -48,6 +47,7 @@ import {
 } from "./editor/MentionEditor";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
+import LoginDialog from "./nostr/LoginDialog";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -99,7 +99,6 @@ export function ZapWindow({
 
   const recipientProfile = useProfile(recipientPubkey);
 
-  const { addWindow } = useGrimoire();
   const activeAccount = accountManager.active;
   const canSign = !!activeAccount?.signer;
 
@@ -122,6 +121,7 @@ export function ZapWindow({
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [invoice, setInvoice] = useState<string>("");
   const [showQrDialog, setShowQrDialog] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -378,9 +378,9 @@ export function ZapWindow({
     window.open(`lightning:${invoice}`, "_blank");
   };
 
-  // Open account selector for login
+  // Open login dialog
   const handleLogin = () => {
-    addWindow("conn", {});
+    setShowLogin(true);
   };
 
   return (
@@ -481,6 +481,9 @@ export function ZapWindow({
           )}
         </div>
       </div>
+
+      {/* Login Dialog */}
+      <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
 
       {/* QR Code Dialog */}
       <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
