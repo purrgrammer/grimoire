@@ -1,6 +1,5 @@
 import { useNip05 } from "@/hooks/useNip05";
 import { ProfileContent } from "applesauce-core/helpers";
-import { isGrimoireMember } from "@/lib/grimoire-members";
 
 export function QueryNip05({
   pubkey,
@@ -21,12 +20,6 @@ export default function Nip05({
   pubkey: string;
   profile: ProfileContent;
 }) {
-  // Grimoire members don't show NIP-05 here (handled by UserName component)
-  if (isGrimoireMember(pubkey)) {
-    return null;
-  }
-
-  // Show regular NIP-05 if available
   if (!profile?.nip05) return null;
   return <QueryNip05 pubkey={pubkey} nip05={profile.nip05} />;
 }
