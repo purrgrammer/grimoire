@@ -99,21 +99,14 @@ export default function ConnectWalletDialog({
       });
 
       // Show success toast
-      toast.success("Wallet Connected", {
-        description: info.alias
-          ? `Connected to ${info.alias}`
-          : "Successfully connected to wallet",
-      });
+      toast.success("Wallet Connected");
 
       // Close dialog
       onOpenChange(false);
     } catch (err) {
       console.error("Wallet connection error:", err);
       setError(err instanceof Error ? err.message : "Failed to connect wallet");
-      toast.error("Connection Failed", {
-        description:
-          err instanceof Error ? err.message : "Failed to connect wallet",
-      });
+      toast.error("Failed to connect wallet");
     } finally {
       setLoading(false);
     }
