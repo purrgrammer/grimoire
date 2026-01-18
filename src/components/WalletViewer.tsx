@@ -91,7 +91,7 @@ interface InvoiceDetails {
   expiry?: number;
 }
 
-const BATCH_SIZE = 10; // Smaller pages for better performance with zap rendering
+const BATCH_SIZE = 20;
 const PAYMENT_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 /**
