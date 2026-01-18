@@ -70,7 +70,7 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
         { eventStore },
       )
       .subscribe({
-        next: (response) => {
+        next: (response: NostrEvent | string) => {
           if (typeof response === "string") {
             console.log("[ChannelListRenderer] EOSE received for kind 40");
           } else {
@@ -94,7 +94,7 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
     () =>
       channelIds.length > 0
         ? eventStore.timeline({ kinds: [40], ids: channelIds }).pipe(
-            map((events) => {
+            map((events: NostrEvent[]) => {
               const eventMap = new Map<string, NostrEvent>();
               for (const evt of events) {
                 eventMap.set(evt.id, evt);
@@ -109,7 +109,9 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
   // Fetch kind 41 metadata for channels we have kind 40 for
   const kind40Pubkeys = kind40Events
     ? Array.from(
-        new Set(Array.from(kind40Events.values()).map((e) => e.pubkey)),
+        new Set(
+          Array.from(kind40Events.values()).map((e: NostrEvent) => e.pubkey),
+        ),
       )
     : [];
 
@@ -135,7 +137,7 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
         { eventStore },
       )
       .subscribe({
-        next: (response) => {
+        next: (response: NostrEvent | string) => {
           if (typeof response === "string") {
             console.log("[ChannelListRenderer] EOSE received for kind 41");
           } else {
@@ -236,7 +238,7 @@ export function ChannelListDetailRenderer({ event }: { event: NostrEvent }) {
     () =>
       channelIds.length > 0
         ? eventStore.timeline({ kinds: [40], ids: channelIds }).pipe(
-            map((events) => {
+            map((events: NostrEvent[]) => {
               const eventMap = new Map<string, NostrEvent>();
               for (const evt of events) {
                 eventMap.set(evt.id, evt);
@@ -250,7 +252,9 @@ export function ChannelListDetailRenderer({ event }: { event: NostrEvent }) {
 
   const kind40Pubkeys = kind40Events
     ? Array.from(
-        new Set(Array.from(kind40Events.values()).map((e) => e.pubkey)),
+        new Set(
+          Array.from(kind40Events.values()).map((e: NostrEvent) => e.pubkey),
+        ),
       )
     : [];
 

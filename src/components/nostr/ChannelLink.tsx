@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { nip19 } from "nostr-tools";
 import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
-import type { NostrEvent } from "@/types/nostr";
 import { useMemo } from "react";
 
 export interface ChannelLinkProps {
