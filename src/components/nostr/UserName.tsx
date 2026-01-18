@@ -40,22 +40,32 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       dir="auto"
       className={cn(
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted inline-flex items-center gap-1",
-        isGrimoire
-          ? isActiveAccount
-            ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
-            : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
-          : isActiveAccount
-            ? "text-highlight"
-            : "text-accent",
         className,
       )}
       onClick={handleClick}
     >
-      <span>
+      <span
+        className={cn(
+          isGrimoire
+            ? isActiveAccount
+              ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
+              : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
+            : isActiveAccount
+              ? "text-highlight"
+              : "text-accent",
+        )}
+      >
         {isMention ? "@" : null}
         {displayName}
       </span>
-      {isGrimoire && <BadgeCheck className="inline-block w-[1em] h-[1em]" />}
+      {isGrimoire && (
+        <BadgeCheck
+          className={cn(
+            "inline-block w-[1em] h-[1em]",
+            isActiveAccount ? "text-orange-500" : "text-violet-500",
+          )}
+        />
+      )}
     </span>
   );
 }
