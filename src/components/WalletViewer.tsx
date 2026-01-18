@@ -5,7 +5,7 @@
  * Layout: Header → Big centered balance → Send/Receive buttons → Transaction list
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Wallet,
@@ -209,6 +209,10 @@ export default function WalletViewer() {
   const [txLoadAttempted, setTxLoadAttempted] = useState(false);
   const [txLoadFailed, setTxLoadFailed] = useState(false);
 
+  // Use refs to track loading attempts without causing re-renders
+  const walletInfoLoadedRef = useRef(false);
+  const lastConnectionStateRef = useRef(isConnected);
+
   // Send dialog state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [sendInvoice, setSendInvoice] = useState("");
@@ -235,48 +239,34 @@ export default function WalletViewer() {
     useState<Transaction | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
-  // Load wallet info on mount
-  const loadWalletInfo = useCallback(async () => {
-    try {
-      const info = await getInfo();
-      setWalletInfo(info);
-    } catch (error) {
-      console.error("Failed to load wallet info:", error);
-      toast.error("Failed to load wallet info");
-    }
-  }, [getInfo]);
-
-  const loadInitialTransactions = useCallback(async () => {
-    setLoading(true);
-    setTxLoadAttempted(true);
-    try {
-      const result = await listTransactions({
-        limit: BATCH_SIZE,
-        offset: 0,
-      });
-      const txs = result.transactions || [];
-      setTransactions(txs);
-      setHasMore(txs.length === BATCH_SIZE);
-      setTxLoadFailed(false);
-    } catch (error) {
-      console.error("Failed to load transactions:", error);
-      setTxLoadFailed(true);
-      // Don't show toast on initial load - just fail silently
-      // User can retry via refresh button if needed
-    } finally {
-      setLoading(false);
-    }
-  }, [listTransactions]);
-
+  // Load wallet info when connected
   useEffect(() => {
-    if (isConnected) {
-      loadWalletInfo();
-      // Reset transaction loading flags when wallet connects
-      setTxLoadAttempted(false);
-      setTxLoadFailed(false);
-      setTransactions([]);
+    // Detect connection state changes
+    if (isConnected !== lastConnectionStateRef.current) {
+      lastConnectionStateRef.current = isConnected;
+      walletInfoLoadedRef.current = false;
+
+      if (isConnected) {
+        // Reset transaction loading flags when wallet connects
+        setTxLoadAttempted(false);
+        setTxLoadFailed(false);
+        setTransactions([]);
+        setWalletInfo(null);
+      }
     }
-  }, [isConnected, loadWalletInfo]);
+
+    // Load wallet info if connected and not yet loaded
+    if (isConnected && !walletInfoLoadedRef.current) {
+      walletInfoLoadedRef.current = true;
+      getInfo()
+        .then((info) => setWalletInfo(info))
+        .catch((error) => {
+          console.error("Failed to load wallet info:", error);
+          toast.error("Failed to load wallet info");
+          walletInfoLoadedRef.current = false; // Allow retry
+        });
+    }
+  }, [isConnected, getInfo]);
 
   // Load transactions when wallet info is available (only once)
   useEffect(() => {
@@ -285,9 +275,34 @@ export default function WalletViewer() {
       !txLoadAttempted &&
       !loading
     ) {
-      loadInitialTransactions();
+      setLoading(true);
+      setTxLoadAttempted(true);
+      listTransactions({
+        limit: BATCH_SIZE,
+        offset: 0,
+      })
+        .then((result) => {
+          const txs = result.transactions || [];
+          setTransactions(txs);
+          setHasMore(txs.length === BATCH_SIZE);
+          setTxLoadFailed(false);
+        })
+        .catch((error) => {
+          console.error("Failed to load transactions:", error);
+          setTxLoadFailed(true);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     }
-  }, [walletInfo, txLoadAttempted, loading, loadInitialTransactions]);
+  }, [walletInfo, txLoadAttempted, loading, listTransactions]);
+
+  // Helper to reload transactions (resets flags to trigger reload)
+  const reloadTransactions = useCallback(() => {
+    setTxLoadAttempted(false);
+    setTxLoadFailed(false);
+  }, []);
+
   useEffect(() => {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
@@ -302,10 +317,8 @@ export default function WalletViewer() {
           toast.success("Payment received!");
           setReceiveDialogOpen(false);
           resetReceiveDialog();
-          // Reload transactions - reset flags to allow reload
-          setTxLoadAttempted(false);
-          setTxLoadFailed(false);
-          loadInitialTransactions();
+          // Reload transactions
+          reloadTransactions();
         }
       } catch (error) {
         // Ignore errors, will retry
@@ -321,7 +334,7 @@ export default function WalletViewer() {
     receiveDialogOpen,
     walletInfo,
     lookupInvoice,
-    loadInitialTransactions,
+    reloadTransactions,
   ]);
 
   const loadMoreTransactions = useCallback(async () => {
@@ -508,10 +521,8 @@ export default function WalletViewer() {
       toast.success("Payment sent successfully");
       resetSendDialog();
       setSendDialogOpen(false);
-      // Reload transactions - reset flags to allow reload
-      setTxLoadAttempted(false);
-      setTxLoadFailed(false);
-      loadInitialTransactions();
+      // Reload transactions
+      reloadTransactions();
     } catch (error) {
       console.error("Payment failed:", error);
       toast.error(error instanceof Error ? error.message : "Payment failed");
@@ -847,15 +858,7 @@ export default function WalletViewer() {
               <p className="text-sm text-muted-foreground text-center">
                 Failed to load transaction history
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setTxLoadFailed(false);
-                  setTxLoadAttempted(false);
-                  loadInitialTransactions();
-                }}
-              >
+              <Button variant="outline" size="sm" onClick={reloadTransactions}>
                 <RefreshCw className="mr-2 size-4" />
                 Retry
               </Button>
