@@ -33,9 +33,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import QRCode from "qrcode";
-import { useProfile } from "applesauce-react/hooks";
+import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
 import { useWallet } from "@/hooks/useWallet";
@@ -397,7 +396,7 @@ export function ZapWindow({
 
               {/* Custom amount */}
               <div className="space-y-2">
-                <Label htmlFor="custom-amount">Custom Amount</Label>
+                <Label>Custom Amount</Label>
                 <Input
                   id="custom-amount"
                   type="number"
@@ -413,7 +412,7 @@ export function ZapWindow({
 
               {/* Comment */}
               <div className="space-y-2">
-                <Label htmlFor="comment">Comment (optional)</Label>
+                <Label>Comment (optional)</Label>
                 <Input
                   id="comment"
                   placeholder="Say something nice..."

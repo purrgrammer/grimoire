@@ -3,7 +3,7 @@
  */
 
 import { EventFactory } from "applesauce-core/event-factory";
-import { EventTemplate, NostrEvent } from "@/types/nostr";
+import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "./open-parser";
 import accountManager from "@/services/accounts";
 import { relayListCache } from "@/services/relay-list-cache";
@@ -88,7 +88,7 @@ export async function createZapRequest(
   }
 
   // Create event template
-  const template: EventTemplate = {
+  const template = {
     kind: 9734,
     content: params.comment || "",
     tags,

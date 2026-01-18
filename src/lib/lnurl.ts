@@ -72,7 +72,7 @@ export async function resolveLightningAddress(
 /**
  * Decode LNURL (bech32-encoded URL) to plain HTTPS URL
  */
-export function decodeLnurl(lnurl: string): string {
+export function decodeLnurl(_lnurl: string): string {
   // For simplicity, we'll require Lightning addresses (lud16) instead of lud06
   // Most modern wallets use lud16 anyway
   throw new Error(
