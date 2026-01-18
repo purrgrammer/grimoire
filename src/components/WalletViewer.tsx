@@ -926,10 +926,7 @@ export default function WalletViewer() {
           <span className="font-semibold">
             {walletInfo?.alias || "Lightning Wallet"}
           </span>
-          <div className="flex items-center gap-1">
-            <div className="size-1.5 rounded-full bg-green-500" />
-            <span className="text-[10px] text-muted-foreground">Connected</span>
-          </div>
+          <div className="size-1.5 rounded-full bg-green-500" />
         </div>
 
         {/* Right: Info Dropdown, Refresh, Disconnect */}
@@ -974,6 +971,16 @@ export default function WalletViewer() {
                           />
                         </div>
                       )}
+                    {state.nwcConnection?.lud16 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Lightning Address
+                        </span>
+                        <span className="font-mono">
+                          {state.nwcConnection.lud16}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
