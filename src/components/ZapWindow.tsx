@@ -78,7 +78,7 @@ export function ZapWindow({
   // Resolve recipient: use provided pubkey or derive from event author
   const recipientPubkey = initialRecipientPubkey || event?.pubkey || "";
 
-  const recipientProfile = useProfile(recipientPubkey, eventStore);
+  const recipientProfile = useProfile(recipientPubkey);
 
   const { wallet, payInvoice, refreshBalance, getInfo } = useWallet();
 
@@ -127,11 +127,8 @@ export function ZapWindow({
 
   // Get recipient name for display
   const recipientName = useMemo(() => {
-    const content = recipientProfile
-      ? getProfileContent(recipientProfile)
-      : null;
-    return content
-      ? getDisplayName(recipientPubkey, content)
+    return recipientProfile
+      ? getDisplayName(recipientPubkey, recipientProfile)
       : recipientPubkey.slice(0, 8);
   }, [recipientPubkey, recipientProfile]);
 
@@ -139,10 +136,11 @@ export function ZapWindow({
   const eventAuthorName = useMemo(() => {
     if (!event) return null;
     const authorProfile = eventStore.getReplaceable(0, event.pubkey);
-    const content = authorProfile ? getProfileContent(authorProfile) : null;
-    return content
-      ? getDisplayName(event.pubkey, content)
-      : event.pubkey.slice(0, 8);
+    if (authorProfile) {
+      const content = getProfileContent(authorProfile);
+      return getDisplayName(event.pubkey, content);
+    }
+    return event.pubkey.slice(0, 8);
   }, [event]);
 
   // Track amount usage
@@ -202,11 +200,8 @@ export function ZapWindow({
       trackAmountUsage(amount);
 
       // Step 1: Get Lightning address from recipient profile
-      const content = recipientProfile
-        ? getProfileContent(recipientProfile)
-        : null;
-      const lud16 = content?.lud16;
-      const lud06 = content?.lud06;
+      const lud16 = recipientProfile?.lud16;
+      const lud06 = recipientProfile?.lud06;
 
       if (!lud16 && !lud06) {
         throw new Error(
@@ -292,7 +287,7 @@ export function ZapWindow({
 
         setIsPaid(true);
         toast.success(
-          `⚡ Zapped ${amount} sats to ${content?.name || recipientName}!`,
+          `⚡ Zapped ${amount} sats to ${recipientProfile?.name || recipientName}!`,
         );
 
         // Show success message from LNURL service if available
