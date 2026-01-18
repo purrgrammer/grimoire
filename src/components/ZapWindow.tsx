@@ -510,6 +510,16 @@ export function ZapWindow({
                 </div>
               )}
 
+              {/* Amount Preview */}
+              {(selectedAmount || customAmount) && (
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-foreground">
+                    {formatAmount(selectedAmount || parseInt(customAmount))}
+                  </div>
+                  <div className="text-sm text-muted-foreground">sats</div>
+                </div>
+              )}
+
               {/* Invoice */}
               <div className="space-y-2">
                 <Label>Invoice</Label>
