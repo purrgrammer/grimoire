@@ -49,6 +49,14 @@ import {
 } from "@/components/ui/tooltip";
 import ConnectWalletDialog from "./ConnectWalletDialog";
 import { RelayLink } from "@/components/nostr/RelayLink";
+import { parseZapRequest } from "@/lib/wallet-utils";
+import { useProfile } from "@/hooks/useProfile";
+import { getDisplayName } from "@/lib/nostr-utils";
+import { Zap } from "lucide-react";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { KindRenderer } from "./nostr/kinds";
+import { RichText } from "./nostr/RichText";
+import { UserName } from "./nostr/UserName";
 
 interface Transaction {
   type: "incoming" | "outgoing";
@@ -204,6 +212,139 @@ function parseInvoice(invoice: string): InvoiceDetails | null {
     toast.error(`Invalid invoice: ${message}`);
     return null;
   }
+}
+
+/**
+ * Helper to parse coordinate string (kind:pubkey:identifier)
+ */
+function parseAddressCoordinate(
+  coordinate: string,
+): { kind: number; pubkey: string; identifier: string } | null {
+  const parts = coordinate.split(":");
+  if (parts.length !== 3) return null;
+
+  const kind = parseInt(parts[0], 10);
+  if (isNaN(kind)) return null;
+
+  return {
+    kind,
+    pubkey: parts[1],
+    identifier: parts[2],
+  };
+}
+
+/**
+ * Component to render zap details in the transaction detail dialog
+ */
+function ZapTransactionDetail({ transaction }: { transaction: Transaction }) {
+  const zapInfo = parseZapRequest(transaction);
+
+  // Parse address coordinate if present (format: kind:pubkey:identifier)
+  const addressPointer = zapInfo?.zappedEventAddress
+    ? parseAddressCoordinate(zapInfo.zappedEventAddress)
+    : null;
+
+  // Call hooks unconditionally (before early return)
+  const zappedEvent = useNostrEvent(
+    zapInfo?.zappedEventId
+      ? { id: zapInfo.zappedEventId }
+      : addressPointer || undefined,
+  );
+
+  // Early return after hooks
+  if (!zapInfo) return null;
+
+  return (
+    <div className="space-y-4 pt-4 border-t border-border">
+      {/* Zap sender */}
+      <div>
+        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+          <Zap className="size-3 fill-zap text-zap" />
+          Zap From
+        </Label>
+        <div className="mt-1">
+          <UserName pubkey={zapInfo.sender} />
+        </div>
+      </div>
+
+      {/* Zap message */}
+      {zapInfo.message && (
+        <div>
+          <Label className="text-xs text-muted-foreground">Zap Message</Label>
+          <div className="mt-1 text-sm">
+            <RichText
+              content={zapInfo.message}
+              event={zapInfo.zapRequestEvent}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Zapped event */}
+      {zappedEvent && (
+        <div>
+          <Label className="text-xs text-muted-foreground">Zapped Post</Label>
+          <div className="mt-1 border border-muted rounded-md overflow-hidden">
+            <KindRenderer event={zappedEvent} />
+          </div>
+        </div>
+      )}
+
+      {/* Loading state for zapped event */}
+      {(zapInfo.zappedEventId || zapInfo.zappedEventAddress) &&
+        !zappedEvent && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Zapped Post</Label>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Loading event...
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
+/**
+ * Component to render a transaction row with zap detection
+ */
+function TransactionLabel({ transaction }: { transaction: Transaction }) {
+  const zapInfo = parseZapRequest(transaction);
+
+  // Call hooks unconditionally (before conditional rendering)
+  const profile = useProfile(zapInfo?.sender);
+
+  // Not a zap - use original description or default label
+  if (!zapInfo) {
+    return (
+      <span className="text-sm truncate">
+        {transaction.description ||
+          (transaction.type === "incoming" ? "Received" : "Payment")}
+      </span>
+    );
+  }
+
+  // It's a zap! Show username + message preview
+  const displayName = getDisplayName(zapInfo.sender, profile);
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <Zap className="size-3.5 flex-shrink-0 fill-zap text-zap" />
+      <div className="text-sm truncate min-w-0">
+        <span className="font-medium">{displayName}</span>
+        {zapInfo.message && (
+          <>
+            <span className="text-muted-foreground">: </span>
+            <span className="inline">
+              <RichText
+                content={zapInfo.message}
+                event={zapInfo.zapRequestEvent}
+              />
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function WalletViewer() {
@@ -363,7 +504,7 @@ export default function WalletViewer() {
           // Reload transactions
           reloadTransactions();
         }
-      } catch (error) {
+      } catch {
         // Ignore errors, will retry
       } finally {
         setCheckingPayment(false);
@@ -985,9 +1126,6 @@ export default function WalletViewer() {
                 }
 
                 const tx = item.data;
-                const txLabel =
-                  tx.description ||
-                  (tx.type === "incoming" ? "Received" : "Payment");
 
                 return (
                   <div
@@ -1001,7 +1139,7 @@ export default function WalletViewer() {
                       ) : (
                         <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
                       )}
-                      <span className="text-sm truncate">{txLabel}</span>
+                      <TransactionLabel transaction={tx} />
                     </div>
                     <div className="flex-shrink-0 ml-4">
                       <p className="text-sm font-semibold font-mono">
@@ -1063,84 +1201,94 @@ export default function WalletViewer() {
 
       {/* Transaction Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
           </DialogHeader>
 
-          {selectedTransaction && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                {selectedTransaction.type === "incoming" ? (
-                  <ArrowDownLeft className="size-6 text-green-500" />
-                ) : (
-                  <ArrowUpRight className="size-6 text-red-500" />
-                )}
-                <div>
-                  <p className="text-lg font-semibold">
-                    {selectedTransaction.type === "incoming"
-                      ? "Received"
-                      : "Sent"}
-                  </p>
-                  <p className="text-2xl font-bold font-mono">
-                    {formatSats(selectedTransaction.amount)} sats
-                  </p>
+          <div className="overflow-y-auto max-h-[calc(90vh-8rem)] pr-2">
+            {selectedTransaction && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  {selectedTransaction.type === "incoming" ? (
+                    <ArrowDownLeft className="size-6 text-green-500" />
+                  ) : (
+                    <ArrowUpRight className="size-6 text-red-500" />
+                  )}
+                  <div>
+                    <p className="text-lg font-semibold">
+                      {selectedTransaction.type === "incoming"
+                        ? "Received"
+                        : "Sent"}
+                    </p>
+                    <p className="text-2xl font-bold font-mono">
+                      {formatSats(selectedTransaction.amount)} sats
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                {selectedTransaction.description && (
+                <div className="space-y-2">
+                  {selectedTransaction.description &&
+                    !parseZapRequest(selectedTransaction) && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">
+                          Description
+                        </Label>
+                        <p className="text-sm">
+                          {selectedTransaction.description}
+                        </p>
+                      </div>
+                    )}
+
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Description
+                      Date
                     </Label>
-                    <p className="text-sm">{selectedTransaction.description}</p>
+                    <p className="text-sm font-mono">
+                      {formatFullDate(selectedTransaction.created_at)}
+                    </p>
                   </div>
-                )}
 
-                <div>
-                  <Label className="text-xs text-muted-foreground">Date</Label>
-                  <p className="text-sm font-mono">
-                    {formatFullDate(selectedTransaction.created_at)}
-                  </p>
-                </div>
+                  {selectedTransaction.fees_paid !== undefined &&
+                    selectedTransaction.fees_paid > 0 && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">
+                          Fees Paid
+                        </Label>
+                        <p className="text-sm font-mono">
+                          {formatSats(selectedTransaction.fees_paid)} sats
+                        </p>
+                      </div>
+                    )}
 
-                {selectedTransaction.fees_paid !== undefined &&
-                  selectedTransaction.fees_paid > 0 && (
+                  {selectedTransaction.payment_hash && (
                     <div>
                       <Label className="text-xs text-muted-foreground">
-                        Fees Paid
+                        Payment Hash
                       </Label>
-                      <p className="text-sm font-mono">
-                        {formatSats(selectedTransaction.fees_paid)} sats
+                      <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                        {selectedTransaction.payment_hash}
                       </p>
                     </div>
                   )}
 
-                {selectedTransaction.payment_hash && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Payment Hash
-                    </Label>
-                    <p className="text-xs font-mono break-all bg-muted p-2 rounded">
-                      {selectedTransaction.payment_hash}
-                    </p>
-                  </div>
-                )}
+                  {selectedTransaction.preimage && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Preimage
+                      </Label>
+                      <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                        {selectedTransaction.preimage}
+                      </p>
+                    </div>
+                  )}
+                </div>
 
-                {selectedTransaction.preimage && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Preimage
-                    </Label>
-                    <p className="text-xs font-mono break-all bg-muted p-2 rounded">
-                      {selectedTransaction.preimage}
-                    </p>
-                  </div>
-                )}
+                {/* Zap Details (if this is a zap payment) */}
+                <ZapTransactionDetail transaction={selectedTransaction} />
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <DialogFooter>
             <Button
