@@ -206,6 +206,8 @@ export default function WalletViewer() {
   const [hasMore, setHasMore] = useState(true);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
+  const [txLoadAttempted, setTxLoadAttempted] = useState(false);
+  const [txLoadFailed, setTxLoadFailed] = useState(false);
 
   // Send dialog state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -245,7 +247,11 @@ export default function WalletViewer() {
   }, [getInfo]);
 
   const loadInitialTransactions = useCallback(async () => {
+    // Prevent repeated attempts if already failed
+    if (txLoadFailed) return;
+
     setLoading(true);
+    setTxLoadAttempted(true);
     try {
       const result = await listTransactions({
         limit: BATCH_SIZE,
@@ -254,26 +260,37 @@ export default function WalletViewer() {
       const txs = result.transactions || [];
       setTransactions(txs);
       setHasMore(txs.length === BATCH_SIZE);
+      setTxLoadFailed(false);
     } catch (error) {
       console.error("Failed to load transactions:", error);
-      toast.error("Failed to load transactions");
+      setTxLoadFailed(true);
+      // Don't show toast on initial load - just fail silently
+      // User can retry via refresh button if needed
     } finally {
       setLoading(false);
     }
-  }, [listTransactions]);
+  }, [listTransactions, txLoadFailed]);
 
   useEffect(() => {
     if (isConnected) {
       loadWalletInfo();
+      // Reset transaction loading flags when wallet connects
+      setTxLoadAttempted(false);
+      setTxLoadFailed(false);
+      setTransactions([]);
     }
   }, [isConnected, loadWalletInfo]);
 
-  // Load transactions when wallet info is available
+  // Load transactions when wallet info is available (only once)
   useEffect(() => {
-    if (walletInfo?.methods.includes("list_transactions")) {
+    if (
+      walletInfo?.methods.includes("list_transactions") &&
+      !txLoadAttempted &&
+      !loading
+    ) {
       loadInitialTransactions();
     }
-  }, [walletInfo, loadInitialTransactions]);
+  }, [walletInfo, txLoadAttempted, loading, loadInitialTransactions]);
   useEffect(() => {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
@@ -288,6 +305,9 @@ export default function WalletViewer() {
           toast.success("Payment received!");
           setReceiveDialogOpen(false);
           resetReceiveDialog();
+          // Reload transactions - reset flags to allow reload
+          setTxLoadAttempted(false);
+          setTxLoadFailed(false);
           loadInitialTransactions();
         }
       } catch (error) {
@@ -491,7 +511,9 @@ export default function WalletViewer() {
       toast.success("Payment sent successfully");
       resetSendDialog();
       setSendDialogOpen(false);
-      // Reload transactions
+      // Reload transactions - reset flags to allow reload
+      setTxLoadAttempted(false);
+      setTxLoadFailed(false);
       loadInitialTransactions();
     } catch (error) {
       console.error("Payment failed:", error);
@@ -822,6 +844,24 @@ export default function WalletViewer() {
           loading ? (
             <div className="flex h-full items-center justify-center">
               <RefreshCw className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : txLoadFailed ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+              <p className="text-sm text-muted-foreground text-center">
+                Failed to load transaction history
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTxLoadFailed(false);
+                  setTxLoadAttempted(false);
+                  loadInitialTransactions();
+                }}
+              >
+                <RefreshCw className="mr-2 size-4" />
+                Retry
+              </Button>
             </div>
           ) : transactionsWithMarkers.length === 0 ? (
             <div className="flex h-full items-center justify-center">
