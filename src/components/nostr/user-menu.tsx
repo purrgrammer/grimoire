@@ -88,7 +88,7 @@ export default function UserMenu() {
   const walletServiceProfile = useProfile(nwcConnection?.service);
 
   // Use wallet hook for real-time balance and methods
-  const { disconnect: disconnectWallet, refreshBalance } = useWallet();
+  const { disconnect: disconnectWallet, refreshBalance, balance } = useWallet();
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -111,7 +111,7 @@ export default function UserMenu() {
   }
 
   function handleDisconnectWallet() {
-    // Disconnect from NWC service (stops polling, clears wallet instance)
+    // Disconnect from NWC service (stops notifications, clears wallet instance)
     disconnectWallet();
     // Clear connection from state
     disconnectNWC();
@@ -123,7 +123,7 @@ export default function UserMenu() {
     try {
       await refreshBalance();
       toast.success("Balance refreshed");
-    } catch (error) {
+    } catch (_error) {
       toast.error("Failed to refresh balance");
     }
   }
@@ -160,22 +160,27 @@ export default function UserMenu() {
 
             <div className="space-y-4">
               {/* Balance */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Balance:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-semibold">
-                    {formatBalance(nwcConnection.balance)}
+              {(balance !== undefined ||
+                nwcConnection.balance !== undefined) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Balance:
                   </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleRefreshBalance}
-                    title="Refresh balance"
-                  >
-                    <RefreshCw className="size-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold">
+                      {formatBalance(balance ?? nwcConnection.balance)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleRefreshBalance}
+                      title="Refresh balance"
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Wallet Name */}
               <div className="flex items-center justify-between">
@@ -279,9 +284,12 @@ export default function UserMenu() {
                 >
                   <div className="flex items-center gap-2">
                     <Zap className="size-4 text-yellow-500" />
-                    <span className="text-sm">
-                      {formatBalance(nwcConnection.balance)}
-                    </span>
+                    {balance !== undefined ||
+                    nwcConnection.balance !== undefined ? (
+                      <span className="text-sm">
+                        {formatBalance(balance ?? nwcConnection.balance)}
+                      </span>
+                    ) : null}
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {getWalletName()}

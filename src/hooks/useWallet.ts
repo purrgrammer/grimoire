@@ -2,19 +2,20 @@
  * useWallet Hook
  *
  * Provides access to the NWC wallet throughout the application.
- * Handles wallet lifecycle, balance updates, and transaction methods.
+ * Fully reactive using observables - balance updates automatically via use$()
  *
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { wallet, balance, payInvoice, makeInvoice, refreshBalance } = useWallet();
+ *   const { wallet, balance, payInvoice, makeInvoice } = useWallet();
  *
  *   async function handlePay() {
  *     if (!wallet) return;
  *     await payInvoice("lnbc...");
+ *     // Balance automatically updates via notifications!
  *   }
  *
- *   return <div>Balance: {balance} sats</div>;
+ *   return <div>Balance: {balance ? Math.floor(balance / 1000) : 0} sats</div>;
  * }
  * ```
  */
@@ -26,18 +27,17 @@ import {
   getWallet,
   restoreWallet,
   clearWallet as clearWalletService,
-  setBalanceUpdateCallback,
   refreshBalance as refreshBalanceService,
   balance$,
 } from "@/services/nwc";
 import type { WalletConnect } from "applesauce-wallet-connect";
 
 export function useWallet() {
-  const { state, updateNWCBalance } = useGrimoire();
+  const { state } = useGrimoire();
   const nwcConnection = state.nwcConnection;
   const [wallet, setWallet] = useState<WalletConnect | null>(getWallet());
 
-  // Subscribe to balance updates from the service
+  // Subscribe to balance updates from observable (fully reactive!)
   const balance = use$(balance$);
 
   // Initialize wallet on mount if connection exists but no wallet instance
@@ -47,21 +47,10 @@ export function useWallet() {
       const restoredWallet = restoreWallet(nwcConnection);
       setWallet(restoredWallet);
 
-      // Refresh balance on restore
+      // Fetch initial balance
       refreshBalanceService();
     }
   }, [nwcConnection, wallet]);
-
-  // Set up balance update callback to sync with state
-  useEffect(() => {
-    setBalanceUpdateCallback((newBalance) => {
-      updateNWCBalance(newBalance);
-    });
-
-    return () => {
-      setBalanceUpdateCallback(() => {});
-    };
-  }, [updateNWCBalance]);
 
   // Update local wallet ref when connection changes
   useEffect(() => {
@@ -69,17 +58,19 @@ export function useWallet() {
     if (currentWallet !== wallet) {
       setWallet(currentWallet);
     }
-  }, [nwcConnection]);
+  }, [nwcConnection, wallet]);
 
   /**
    * Pay a BOLT11 invoice
+   * Balance will auto-update via notification subscription
    */
   async function payInvoice(invoice: string, amount?: number) {
     if (!wallet) throw new Error("No wallet connected");
 
     const result = await wallet.payInvoice(invoice, amount);
 
-    // Refresh balance after payment
+    // Balance will update automatically via notifications
+    // But we can also refresh immediately for instant feedback
     await refreshBalanceService();
 
     return result;
@@ -138,7 +129,7 @@ export function useWallet() {
   return {
     /** The wallet instance (null if not connected) */
     wallet,
-    /** Current balance in millisats (undefined if not available) */
+    /** Current balance in millisats (auto-updates via observable!) */
     balance,
     /** Whether a wallet is connected */
     isConnected: !!wallet,
