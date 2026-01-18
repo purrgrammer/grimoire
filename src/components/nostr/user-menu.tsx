@@ -1,12 +1,4 @@
-import {
-  User,
-  HardDrive,
-  Palette,
-  Wallet,
-  Zap,
-  X,
-  RefreshCw,
-} from "lucide-react";
+import { User, HardDrive, Palette, Wallet, X, RefreshCw } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -84,11 +76,19 @@ export default function UserMenu() {
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
-  // Get wallet service profile for display name
-  const walletServiceProfile = useProfile(nwcConnection?.service);
+  // Get wallet service profile for display name, using wallet relays as hints
+  const walletServiceProfile = useProfile(
+    nwcConnection?.service,
+    nwcConnection?.relays,
+  );
 
   // Use wallet hook for real-time balance and methods
-  const { disconnect: disconnectWallet, refreshBalance, balance } = useWallet();
+  const {
+    disconnect: disconnectWallet,
+    refreshBalance,
+    balance,
+    wallet,
+  } = useWallet();
 
   function openProfile() {
     if (!account?.pubkey) return;
@@ -138,6 +138,16 @@ export default function UserMenu() {
     );
   }
 
+  function openWalletServiceProfile() {
+    if (!nwcConnection?.service) return;
+    addWindow(
+      "profile",
+      { pubkey: nwcConnection.service },
+      `Profile ${nwcConnection.service.slice(0, 8)}...`,
+    );
+    setShowWalletInfo(false);
+  }
+
   return (
     <>
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
@@ -185,7 +195,27 @@ export default function UserMenu() {
               {/* Wallet Name */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Wallet:</span>
-                <span className="text-sm font-medium">{getWalletName()}</span>
+                <button
+                  onClick={openWalletServiceProfile}
+                  className="text-sm font-medium hover:underline cursor-crosshair text-primary"
+                >
+                  {getWalletName()}
+                </button>
+              </div>
+
+              {/* Connection Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`size-2 rounded-full ${
+                      wallet ? "bg-green-500" : "bg-red-500"
+                    }`}
+                  />
+                  <span className="text-sm font-medium">
+                    {wallet ? "Connected" : "Disconnected"}
+                  </span>
+                </div>
               </div>
 
               {/* Lightning Address */}
@@ -276,6 +306,8 @@ export default function UserMenu() {
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
 
+              <DropdownMenuSeparator />
+
               {/* Wallet Section */}
               {nwcConnection ? (
                 <DropdownMenuItem
@@ -283,7 +315,7 @@ export default function UserMenu() {
                   onClick={() => setShowWalletInfo(true)}
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="size-4 text-yellow-500" />
+                    <Wallet className="size-4 text-muted-foreground" />
                     {balance !== undefined ||
                     nwcConnection.balance !== undefined ? (
                       <span className="text-sm">
@@ -291,9 +323,16 @@ export default function UserMenu() {
                       </span>
                     ) : null}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {getWalletName()}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`size-1.5 rounded-full ${
+                        wallet ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {getWalletName()}
+                    </span>
+                  </div>
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
