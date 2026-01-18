@@ -2,6 +2,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
+import { GrimoireBadge } from "./GrimoireUsername";
 
 interface UserNameProps {
   pubkey: string;
@@ -14,6 +15,7 @@ interface UserNameProps {
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
  * Uses highlight color for the logged-in user (themeable amber)
+ * Shows Grimoire badge for Grimoire members
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -32,14 +34,17 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
     <span
       dir="auto"
       className={cn(
-        "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
+        "inline-flex items-center gap-1.5 font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
         isActiveAccount ? "text-highlight" : "text-accent",
         className,
       )}
       onClick={handleClick}
     >
-      {isMention ? "@" : null}
-      {displayName}
+      <span>
+        {isMention ? "@" : null}
+        {displayName}
+      </span>
+      <GrimoireBadge pubkey={pubkey} />
     </span>
   );
 }
