@@ -247,9 +247,6 @@ export default function WalletViewer() {
   }, [getInfo]);
 
   const loadInitialTransactions = useCallback(async () => {
-    // Prevent repeated attempts if already failed
-    if (txLoadFailed) return;
-
     setLoading(true);
     setTxLoadAttempted(true);
     try {
@@ -269,7 +266,7 @@ export default function WalletViewer() {
     } finally {
       setLoading(false);
     }
-  }, [listTransactions, txLoadFailed]);
+  }, [listTransactions]);
 
   useEffect(() => {
     if (isConnected) {
