@@ -309,10 +309,10 @@ const MessageItem = memo(function MessageItem({
       replyEvent &&
       (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
-    return (
-      <div className="pl-2 my-1">
+    const zapMessageContent = (
+      <div className="group pl-2 my-1">
         <div
-          className="p-[1px] rounded"
+          className="p-[1px] rounded group-hover:opacity-90 transition-opacity"
           style={{
             background:
               "linear-gradient(to right, rgb(250 204 21), rgb(251 146 60), rgb(168 85 247), rgb(34 211 238))",
@@ -341,6 +341,15 @@ const MessageItem = memo(function MessageItem({
               </span>
               {/* Reactions display - inline after timestamp */}
               <MessageReactions messageId={message.id} relays={relays} />
+              {canReply && onReply && (
+                <button
+                  onClick={() => onReply(message.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+                  title="Reply to this zap"
+                >
+                  <Reply className="size-3" />
+                </button>
+              )}
             </div>
             {shouldShowReplyPreview && (
               <ReplyPreview
@@ -361,6 +370,22 @@ const MessageItem = memo(function MessageItem({
         </div>
       </div>
     );
+
+    // Wrap in context menu if event exists
+    if (message.event) {
+      return (
+        <ChatMessageContextMenu
+          event={message.event}
+          onReply={canReply && onReply ? () => onReply(message.id) : undefined}
+          conversation={conversation}
+          adapter={adapter}
+        >
+          {zapMessageContent}
+        </ChatMessageContextMenu>
+      );
+    }
+
+    return zapMessageContent;
   }
 
   // Regular user messages - wrap in context menu if event exists
