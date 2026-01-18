@@ -157,9 +157,6 @@ export default function ConnectWalletDialog({
               disabled={loading}
               autoComplete="off"
             />
-            <p className="text-xs text-muted-foreground">
-              Format: nostr+walletconnect://pubkey?relay=...&secret=...
-            </p>
           </div>
 
           <Button

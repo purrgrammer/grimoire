@@ -75,6 +75,9 @@ export default function UserMenu() {
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
+  // Get wallet service profile for display name
+  const walletServiceProfile = useProfile(nwcConnection?.service);
+
   function openProfile() {
     if (!account?.pubkey) return;
     addWindow(
@@ -99,6 +102,16 @@ export default function UserMenu() {
     disconnectNWC();
     setShowWalletInfo(false);
     toast.success("Wallet disconnected");
+  }
+
+  function getWalletName(): string {
+    if (!nwcConnection) return "";
+    // Use service pubkey profile name, fallback to alias, then pubkey slice
+    return (
+      getDisplayName(nwcConnection.service, walletServiceProfile) ||
+      nwcConnection.info?.alias ||
+      nwcConnection.service.slice(0, 8)
+    );
   }
 
   return (
@@ -130,15 +143,11 @@ export default function UserMenu() {
                 </span>
               </div>
 
-              {/* Wallet Alias */}
-              {nwcConnection.info?.alias && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Wallet:</span>
-                  <span className="text-sm font-medium">
-                    {nwcConnection.info.alias}
-                  </span>
-                </div>
-              )}
+              {/* Wallet Name */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Wallet:</span>
+                <span className="text-sm font-medium">{getWalletName()}</span>
+              </div>
 
               {/* Lightning Address */}
               {nwcConnection.lud16 && (
@@ -177,12 +186,13 @@ export default function UserMenu() {
                 <span className="text-sm text-muted-foreground">Relays:</span>
                 <div className="mt-2 space-y-1">
                   {nwcConnection.relays.map((relay) => (
-                    <div
+                    <RelayLink
                       key={relay}
-                      className="text-xs font-mono text-muted-foreground"
-                    >
-                      {relay}
-                    </div>
+                      url={relay}
+                      className="py-1"
+                      urlClassname="text-xs"
+                      iconClassname="size-3.5"
+                    />
                   ))}
                 </div>
               </div>
@@ -226,6 +236,32 @@ export default function UserMenu() {
                   <UserLabel pubkey={account.pubkey} />
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
+
+              {/* Wallet Section */}
+              {nwcConnection ? (
+                <DropdownMenuItem
+                  className="cursor-crosshair flex items-center justify-between"
+                  onClick={() => setShowWalletInfo(true)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Zap className="size-4 text-yellow-500" />
+                    <span className="text-sm">
+                      {formatBalance(nwcConnection.balance)}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {getWalletName()}
+                  </span>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  className="cursor-crosshair"
+                  onClick={() => setShowConnectWallet(true)}
+                >
+                  <Wallet className="size-4 text-muted-foreground mr-2" />
+                  <span className="text-sm">Connect Wallet</span>
+                </DropdownMenuItem>
+              )}
 
               {relays && relays.length > 0 && (
                 <>
@@ -276,43 +312,6 @@ export default function UserMenu() {
                   </DropdownMenuGroup>
                 </>
               )}
-
-              {/* Wallet Section */}
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                  <Wallet className="size-3.5" />
-                  <span>Lightning Wallet</span>
-                </DropdownMenuLabel>
-                {nwcConnection ? (
-                  <>
-                    <DropdownMenuItem
-                      className="cursor-crosshair flex items-center justify-between"
-                      onClick={() => setShowWalletInfo(true)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Zap className="size-4 text-yellow-500" />
-                        <span className="text-sm">
-                          {formatBalance(nwcConnection.balance)}
-                        </span>
-                      </div>
-                      {nwcConnection.info?.alias && (
-                        <span className="text-xs text-muted-foreground">
-                          {nwcConnection.info.alias}
-                        </span>
-                      )}
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <DropdownMenuItem
-                    className="cursor-crosshair"
-                    onClick={() => setShowConnectWallet(true)}
-                  >
-                    <Wallet className="size-4 text-muted-foreground mr-2" />
-                    <span className="text-sm">Connect Wallet</span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuGroup>
 
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
