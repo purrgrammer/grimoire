@@ -2,7 +2,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
-import { getGrimoireUsername, isGrimoireMember } from "@/lib/grimoire-members";
+import { isGrimoireMember } from "@/lib/grimoire-members";
 
 interface UserNameProps {
   pubkey: string;
@@ -21,11 +21,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
   const isGrimoire = isGrimoireMember(pubkey);
-  const grimoireUsername = getGrimoireUsername(pubkey);
-  const displayName =
-    isGrimoire && grimoireUsername
-      ? grimoireUsername
-      : getDisplayName(pubkey, profile);
+  const displayName = getDisplayName(pubkey, profile);
 
   // Check if this is the logged-in user
   const isActiveAccount = state.activeAccount?.pubkey === pubkey;
@@ -41,7 +37,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       className={cn(
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
         isGrimoire
-          ? "bg-gradient-to-br from-yellow-400 via-orange-400 to-orange-500 bg-clip-text text-transparent"
+          ? "bg-gradient-to-br from-yellow-500 via-orange-500 to-orange-600 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
