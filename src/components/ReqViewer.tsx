@@ -97,6 +97,8 @@ interface ReqViewerProps {
   view?: ViewMode;
   nip05Authors?: string[];
   nip05PTags?: string[];
+  domainAuthors?: string[];
+  domainPTags?: string[];
   needsAccount?: boolean;
   title?: string;
 }
@@ -105,9 +107,16 @@ interface QueryDropdownProps {
   filter: NostrFilter;
   nip05Authors?: string[];
   nip05PTags?: string[];
+  domainAuthors?: string[];
+  domainPTags?: string[];
 }
 
-function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
+function QueryDropdown({
+  filter,
+  nip05Authors,
+  domainAuthors,
+  domainPTags,
+}: QueryDropdownProps) {
   const { copy: handleCopy, copied } = useCopy();
 
   // Expandable lists state
@@ -271,6 +280,13 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
                       ))}
                     </div>
                   )}
+                  {domainAuthors && domainAuthors.length > 0 && (
+                    <div className="text-xs space-y-0.5 text-muted-foreground">
+                      {domainAuthors.map((domain) => (
+                        <div key={domain}>→ @{domain}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -310,6 +326,13 @@ function QueryDropdown({ filter, nip05Authors }: QueryDropdownProps) {
                         ? "Show less"
                         : `Show all ${pTagPubkeys.length}`}
                     </button>
+                  )}
+                  {domainPTags && domainPTags.length > 0 && (
+                    <div className="text-xs space-y-0.5 text-muted-foreground">
+                      {domainPTags.map((domain) => (
+                        <div key={domain}>→ @{domain}</div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </AccordionContent>
@@ -610,6 +633,8 @@ export default function ReqViewer({
   view = "list",
   nip05Authors,
   nip05PTags,
+  domainAuthors,
+  domainPTags,
   needsAccount = false,
   title = "nostr-events",
 }: ReqViewerProps) {
@@ -1203,6 +1228,8 @@ export default function ReqViewer({
           filter={resolvedFilter}
           nip05Authors={nip05Authors}
           nip05PTags={nip05PTags}
+          domainAuthors={domainAuthors}
+          domainPTags={domainPTags}
         />
       )}
 

@@ -154,6 +154,8 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             view={window.props.view}
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
+            domainAuthors={window.props.domainAuthors}
+            domainPTags={window.props.domainPTags}
             needsAccount={window.props.needsAccount}
           />
         );

@@ -98,3 +98,111 @@ export async function resolveNip05Batch(
 
   return results;
 }
+
+/**
+ * Domain Directory Resolution (@domain syntax)
+ * Resolves @domain to all pubkeys in domain's NIP-05 directory
+ */
+
+// Cache for domain directory lookups (domain -> {pubkeys, timestamp})
+const domainDirectoryCache = new Map<
+  string,
+  { pubkeys: string[]; timestamp: number }
+>();
+const DOMAIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Check if a string looks like a domain (for @domain syntax)
+ */
+export function isDomain(value: string): boolean {
+  if (!value) return false;
+  return /^[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}$/.test(value);
+}
+
+/**
+ * Fetch all pubkeys from a domain's NIP-05 directory
+ * @param domain - Domain name (e.g., "habla.news")
+ * @returns Array of hex pubkeys from the domain's nostr.json
+ */
+export async function resolveDomainDirectory(
+  domain: string,
+): Promise<string[]> {
+  // Normalize domain to lowercase
+  const normalizedDomain = domain.toLowerCase();
+
+  // Check cache first
+  const cached = domainDirectoryCache.get(normalizedDomain);
+  if (cached && Date.now() - cached.timestamp < DOMAIN_CACHE_TTL) {
+    console.log(`Domain directory cache hit for @${normalizedDomain}`);
+    return cached.pubkeys;
+  }
+
+  try {
+    const url = `https://${normalizedDomain}/.well-known/nostr.json`;
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(5000), // 5s timeout
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `Domain directory fetch failed for @${normalizedDomain}: ${response.status}`,
+      );
+      return [];
+    }
+
+    const data = await response.json();
+
+    if (!data.names || typeof data.names !== "object") {
+      console.warn(`Invalid nostr.json format for @${normalizedDomain}`);
+      return [];
+    }
+
+    // Extract all pubkeys from the names object
+    const pubkeys = Object.values(data.names)
+      .filter((pk): pk is string => typeof pk === "string")
+      .map((pk) => pk.toLowerCase());
+
+    console.log(
+      `Resolved @${normalizedDomain} → ${pubkeys.length} pubkeys`,
+      pubkeys.slice(0, 5),
+    );
+
+    // Cache the result
+    domainDirectoryCache.set(normalizedDomain, {
+      pubkeys,
+      timestamp: Date.now(),
+    });
+
+    return pubkeys;
+  } catch (error) {
+    console.warn(
+      `Domain directory resolution failed for @${normalizedDomain}:`,
+      error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Resolve multiple domain directories in parallel
+ * @param domains - Array of domain names
+ * @returns Map of domain -> pubkeys array
+ */
+export async function resolveDomainDirectoryBatch(
+  domains: string[],
+): Promise<Map<string, string[]>> {
+  const results = new Map<string, string[]>();
+
+  await Promise.all(
+    domains.map(async (domain) => {
+      const pubkeys = await resolveDomainDirectory(domain);
+      if (pubkeys.length > 0) {
+        // Store with original domain as key
+        results.set(domain, pubkeys);
+      }
+    }),
+  );
+
+  return results;
+}

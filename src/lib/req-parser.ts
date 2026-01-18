@@ -1,6 +1,6 @@
 import { nip19 } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
-import { isNip05 } from "./nip05";
+import { isNip05, isDomain } from "./nip05";
 import {
   isValidHexPubkey,
   isValidHexEventId,
@@ -18,6 +18,9 @@ export interface ParsedReqCommand {
   nip05Authors?: string[]; // NIP-05 identifiers that need async resolution
   nip05PTags?: string[]; // NIP-05 identifiers for #p tags that need async resolution
   nip05PTagsUppercase?: string[]; // NIP-05 identifiers for #P tags that need async resolution
+  domainAuthors?: string[]; // @domain aliases for authors that need async resolution
+  domainPTags?: string[]; // @domain aliases for #p tags that need async resolution
+  domainPTagsUppercase?: string[]; // @domain aliases for #P tags that need async resolution
   needsAccount?: boolean; // True if filter contains $me or $contacts aliases
 }
 
@@ -60,6 +63,9 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
   const nip05Authors = new Set<string>();
   const nip05PTags = new Set<string>();
   const nip05PTagsUppercase = new Set<string>();
+  const domainAuthors = new Set<string>();
+  const domainPTags = new Set<string>();
+  const domainPTagsUppercase = new Set<string>();
 
   // Use sets for deduplication during accumulation
   const kinds = new Set<number>();
@@ -124,7 +130,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
         case "-a":
         case "--author": {
-          // Support comma-separated authors: -a npub1...,npub2...,user@domain.com,$me,$contacts
+          // Support comma-separated authors: -a npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts
           if (!nextArg) {
             i++;
             break;
@@ -138,6 +144,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               authors.add(normalized);
               addedAny = true;
+            } else if (authorStr.startsWith("@")) {
+              // Check for @domain syntax
+              const domain = authorStr.slice(1);
+              if (isDomain(domain)) {
+                domainAuthors.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(authorStr)) {
               // Check if it's a NIP-05 identifier
               nip05Authors.add(authorStr);
@@ -208,7 +221,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-p": {
-          // Support comma-separated pubkeys: -p npub1...,npub2...,user@domain.com,$me,$contacts
+          // Support comma-separated pubkeys: -p npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts
           if (!nextArg) {
             i++;
             break;
@@ -222,6 +235,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               pTags.add(normalized);
               addedAny = true;
+            } else if (pubkeyStr.startsWith("@")) {
+              // Check for @domain syntax
+              const domain = pubkeyStr.slice(1);
+              if (isDomain(domain)) {
+                domainPTags.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(pubkeyStr)) {
               // Check if it's a NIP-05 identifier
               nip05PTags.add(pubkeyStr);
@@ -244,7 +264,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
         case "-P": {
           // Uppercase P tag (e.g., zap sender in kind 9735)
-          // Support comma-separated pubkeys: -P npub1...,npub2...,$me,$contacts
+          // Support comma-separated pubkeys: -P npub1...,npub2...,@domain.com,$me,$contacts
           if (!nextArg) {
             i++;
             break;
@@ -258,6 +278,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               pTagsUppercase.add(normalized);
               addedAny = true;
+            } else if (pubkeyStr.startsWith("@")) {
+              // Check for @domain syntax
+              const domain = pubkeyStr.slice(1);
+              if (isDomain(domain)) {
+                domainPTagsUppercase.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(pubkeyStr)) {
               // Check if it's a NIP-05 identifier
               nip05PTagsUppercase.add(pubkeyStr);
@@ -438,6 +465,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     nip05PTagsUppercase:
       nip05PTagsUppercase.size > 0
         ? Array.from(nip05PTagsUppercase)
+        : undefined,
+    domainAuthors:
+      domainAuthors.size > 0 ? Array.from(domainAuthors) : undefined,
+    domainPTags: domainPTags.size > 0 ? Array.from(domainPTags) : undefined,
+    domainPTagsUppercase:
+      domainPTagsUppercase.size > 0
+        ? Array.from(domainPTagsUppercase)
         : undefined,
     needsAccount,
   };

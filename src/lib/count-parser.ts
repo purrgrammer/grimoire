@@ -1,6 +1,6 @@
 import { nip19 } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
-import { isNip05 } from "./nip05";
+import { isNip05, isDomain } from "./nip05";
 import {
   isValidHexPubkey,
   isValidHexEventId,
@@ -14,6 +14,9 @@ export interface ParsedCountCommand {
   nip05Authors?: string[];
   nip05PTags?: string[];
   nip05PTagsUppercase?: string[];
+  domainAuthors?: string[];
+  domainPTags?: string[];
+  domainPTagsUppercase?: string[];
   needsAccount?: boolean;
 }
 
@@ -61,6 +64,9 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
   const nip05Authors = new Set<string>();
   const nip05PTags = new Set<string>();
   const nip05PTagsUppercase = new Set<string>();
+  const domainAuthors = new Set<string>();
+  const domainPTags = new Set<string>();
+  const domainPTagsUppercase = new Set<string>();
 
   // Use sets for deduplication during accumulation
   const kinds = new Set<number>();
@@ -133,6 +139,12 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               authors.add(normalized);
               addedAny = true;
+            } else if (authorStr.startsWith("@")) {
+              const domain = authorStr.slice(1);
+              if (isDomain(domain)) {
+                domainAuthors.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(authorStr)) {
               nip05Authors.add(authorStr);
               addedAny = true;
@@ -198,6 +210,12 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               pTags.add(normalized);
               addedAny = true;
+            } else if (pubkeyStr.startsWith("@")) {
+              const domain = pubkeyStr.slice(1);
+              if (isDomain(domain)) {
+                domainPTags.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(pubkeyStr)) {
               nip05PTags.add(pubkeyStr);
               addedAny = true;
@@ -229,6 +247,12 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
             if (normalized === "$me" || normalized === "$contacts") {
               pTagsUppercase.add(normalized);
               addedAny = true;
+            } else if (pubkeyStr.startsWith("@")) {
+              const domain = pubkeyStr.slice(1);
+              if (isDomain(domain)) {
+                domainPTagsUppercase.add(domain);
+                addedAny = true;
+              }
             } else if (isNip05(pubkeyStr)) {
               nip05PTagsUppercase.add(pubkeyStr);
               addedAny = true;
@@ -376,6 +400,13 @@ export function parseCountCommand(args: string[]): ParsedCountCommand {
     nip05PTagsUppercase:
       nip05PTagsUppercase.size > 0
         ? Array.from(nip05PTagsUppercase)
+        : undefined,
+    domainAuthors:
+      domainAuthors.size > 0 ? Array.from(domainAuthors) : undefined,
+    domainPTags: domainPTags.size > 0 ? Array.from(domainPTags) : undefined,
+    domainPTagsUppercase:
+      domainPTagsUppercase.size > 0
+        ? Array.from(domainPTagsUppercase)
         : undefined,
     needsAccount,
   };

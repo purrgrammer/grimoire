@@ -153,6 +153,45 @@ describe("parseReqCommand", () => {
       const result = parseReqCommand(["-a", "user@domain.com,user@domain.com"]);
       expect(result.nip05Authors).toEqual(["user@domain.com"]);
     });
+
+    it("should accumulate @domain syntax for async resolution", () => {
+      const result = parseReqCommand(["-a", "@habla.news"]);
+      expect(result.domainAuthors).toEqual(["habla.news"]);
+      expect(result.filter.authors).toBeUndefined();
+    });
+
+    it("should accumulate multiple @domains for async resolution", () => {
+      const result = parseReqCommand(["-a", "@habla.news,@nostr.com"]);
+      expect(result.domainAuthors).toEqual(["habla.news", "nostr.com"]);
+      expect(result.filter.authors).toBeUndefined();
+    });
+
+    it("should handle mixed hex, NIP-05, and @domain", () => {
+      const hex = "a".repeat(64);
+      const result = parseReqCommand([
+        "-a",
+        `${hex},user@domain.com,@habla.news`,
+      ]);
+      expect(result.filter.authors).toEqual([hex]);
+      expect(result.nip05Authors).toEqual(["user@domain.com"]);
+      expect(result.domainAuthors).toEqual(["habla.news"]);
+    });
+
+    it("should deduplicate @domain identifiers", () => {
+      const result = parseReqCommand(["-a", "@habla.news,@habla.news"]);
+      expect(result.domainAuthors).toEqual(["habla.news"]);
+    });
+
+    it("should preserve @domain case (normalization happens in resolution)", () => {
+      const result = parseReqCommand(["-a", "@Habla.News"]);
+      expect(result.domainAuthors).toEqual(["Habla.News"]);
+    });
+
+    it("should reject invalid @domain formats", () => {
+      const result = parseReqCommand(["-a", "@invalid"]);
+      expect(result.domainAuthors).toBeUndefined();
+      expect(result.filter.authors).toBeUndefined();
+    });
   });
 
   describe("event ID flag (-e)", () => {
@@ -577,6 +616,23 @@ describe("parseReqCommand", () => {
       const result = parseReqCommand(["-p", `${hex},${hex}`]);
       expect(result.filter["#p"]).toEqual([hex]);
     });
+
+    it("should accumulate @domain syntax for #p tags", () => {
+      const result = parseReqCommand(["-p", "@habla.news"]);
+      expect(result.domainPTags).toEqual(["habla.news"]);
+      expect(result.filter["#p"]).toBeUndefined();
+    });
+
+    it("should handle mixed hex, NIP-05, and @domain for #p tags", () => {
+      const hex = "a".repeat(64);
+      const result = parseReqCommand([
+        "-p",
+        `${hex},user@domain.com,@habla.news`,
+      ]);
+      expect(result.filter["#p"]).toEqual([hex]);
+      expect(result.nip05PTags).toEqual(["user@domain.com"]);
+      expect(result.domainPTags).toEqual(["habla.news"]);
+    });
   });
 
   describe("uppercase P tag flag (-P)", () => {
@@ -639,6 +695,23 @@ describe("parseReqCommand", () => {
       const hex = "a".repeat(64);
       const result = parseReqCommand(["-P", `${hex},${hex}`]);
       expect(result.filter["#P"]).toEqual([hex]);
+    });
+
+    it("should accumulate @domain syntax for #P tags", () => {
+      const result = parseReqCommand(["-P", "@habla.news"]);
+      expect(result.domainPTagsUppercase).toEqual(["habla.news"]);
+      expect(result.filter["#P"]).toBeUndefined();
+    });
+
+    it("should handle mixed hex, NIP-05, and @domain for #P tags", () => {
+      const hex = "a".repeat(64);
+      const result = parseReqCommand([
+        "-P",
+        `${hex},user@domain.com,@habla.news`,
+      ]);
+      expect(result.filter["#P"]).toEqual([hex]);
+      expect(result.nip05PTagsUppercase).toEqual(["user@domain.com"]);
+      expect(result.domainPTagsUppercase).toEqual(["habla.news"]);
     });
 
     it("should handle $me alias in #P tags", () => {

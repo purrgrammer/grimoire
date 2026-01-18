@@ -5,7 +5,7 @@ import type { AppId } from "./app";
 import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
-import { resolveNip05Batch } from "@/lib/nip05";
+import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
 
@@ -318,6 +318,50 @@ export const manPages: Record<string, ManPageEntry> = {
         }
       }
 
+      // Resolve domain directories if present
+      const allDomains = [
+        ...(parsed.domainAuthors || []),
+        ...(parsed.domainPTags || []),
+        ...(parsed.domainPTagsUppercase || []),
+      ];
+
+      if (allDomains.length > 0) {
+        const resolved = await resolveDomainDirectoryBatch(allDomains);
+
+        // Add resolved authors to filter
+        if (parsed.domainAuthors) {
+          for (const domain of parsed.domainAuthors) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter.authors) parsed.filter.authors = [];
+              parsed.filter.authors.push(...pubkeys);
+            }
+          }
+        }
+
+        // Add resolved #p tags to filter
+        if (parsed.domainPTags) {
+          for (const domain of parsed.domainPTags) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter["#p"]) parsed.filter["#p"] = [];
+              parsed.filter["#p"].push(...pubkeys);
+            }
+          }
+        }
+
+        // Add resolved #P tags to filter
+        if (parsed.domainPTagsUppercase) {
+          for (const domain of parsed.domainPTagsUppercase) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter["#P"]) parsed.filter["#P"] = [];
+              parsed.filter["#P"].push(...pubkeys);
+            }
+          }
+        }
+      }
+
       return parsed;
     },
     defaultProps: { filter: { kinds: [1], limit: 50 } },
@@ -438,6 +482,47 @@ export const manPages: Record<string, ManPageEntry> = {
             if (pubkey) {
               if (!parsed.filter["#P"]) parsed.filter["#P"] = [];
               parsed.filter["#P"].push(pubkey);
+            }
+          }
+        }
+      }
+
+      // Resolve domain directories if present
+      const allDomains = [
+        ...(parsed.domainAuthors || []),
+        ...(parsed.domainPTags || []),
+        ...(parsed.domainPTagsUppercase || []),
+      ];
+
+      if (allDomains.length > 0) {
+        const resolved = await resolveDomainDirectoryBatch(allDomains);
+
+        if (parsed.domainAuthors) {
+          for (const domain of parsed.domainAuthors) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter.authors) parsed.filter.authors = [];
+              parsed.filter.authors.push(...pubkeys);
+            }
+          }
+        }
+
+        if (parsed.domainPTags) {
+          for (const domain of parsed.domainPTags) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter["#p"]) parsed.filter["#p"] = [];
+              parsed.filter["#p"].push(...pubkeys);
+            }
+          }
+        }
+
+        if (parsed.domainPTagsUppercase) {
+          for (const domain of parsed.domainPTagsUppercase) {
+            const pubkeys = resolved.get(domain);
+            if (pubkeys) {
+              if (!parsed.filter["#P"]) parsed.filter["#P"] = [];
+              parsed.filter["#P"].push(...pubkeys);
             }
           }
         }
