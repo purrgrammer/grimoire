@@ -43,6 +43,9 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const ZapViewer = lazy(() =>
+  import("./ZapViewer").then((m) => ({ default: m.ZapViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -172,6 +175,15 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "profile":
         content = <ProfileViewer pubkey={window.props.pubkey} />;
+        break;
+      case "zap":
+        content = (
+          <ZapViewer
+            pubkey={window.props.pubkey}
+            eventId={window.props.eventId}
+            address={window.props.address}
+          />
+        );
         break;
       case "encode":
         content = <EncodeViewer args={window.props.args} />;

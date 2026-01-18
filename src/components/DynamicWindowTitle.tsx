@@ -356,6 +356,27 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     return `Profile ${profilePubkey.slice(0, 8)}...`;
   }, [appId, profilePubkey, profile]);
 
+  // Zap titles
+  const zapPubkey = appId === "zap" ? props.pubkey : null;
+  const zapProfile = useProfile(zapPubkey || "");
+
+  const zapTitle = useMemo(() => {
+    if (appId !== "zap" || !zapPubkey) return null;
+
+    const displayName = zapProfile?.display_name || zapProfile?.name;
+
+    if (displayName) {
+      return (
+        <div className="flex items-center gap-1">
+          <span>Zap</span>
+          <UserName pubkey={zapPubkey} className="text-inherit" />
+        </div>
+      );
+    }
+
+    return `Zap ${zapPubkey.slice(0, 8)}...`;
+  }, [appId, zapPubkey, zapProfile]);
+
   // Event titles - use unified title extraction
   const eventPointer: EventPointer | AddressPointer | undefined =
     appId === "open" ? props.pointer : undefined;
@@ -759,6 +780,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = profileTitle;
       icon = getCommandIcon("profile");
       tooltip = rawCommand;
+    } else if (zapTitle) {
+      title = zapTitle;
+      icon = getCommandIcon("zap");
+      tooltip = rawCommand;
     } else if (eventTitle && appId === "open") {
       title = eventTitle;
       // Use the event's kind icon if we have the event loaded
@@ -830,6 +855,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     event,
     customTitle,
     profileTitle,
+    zapTitle,
     eventTitle,
     kindTitle,
     relayTitle,

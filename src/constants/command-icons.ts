@@ -16,6 +16,7 @@ import {
   Wifi,
   MessageSquare,
   Hash,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -67,6 +68,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   profile: {
     icon: User,
     description: "View a Nostr user profile",
+  },
+  zap: {
+    icon: Zap,
+    description: "Send Lightning zaps via NIP-57",
   },
   relay: {
     icon: Radio,

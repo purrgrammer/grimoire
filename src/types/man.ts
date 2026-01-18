@@ -8,6 +8,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parseZapCommand } from "@/lib/zap-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -526,6 +527,40 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[], activeAccountPubkey?: string) => {
       const parsed = await parseProfileCommand(args, activeAccountPubkey);
+      return parsed;
+    },
+  },
+  zap: {
+    name: "zap",
+    section: "1",
+    synopsis: "zap <recipient> [event|address]",
+    description:
+      "Send Lightning zaps (tips) to Nostr users and content via NIP-57. Opens an interactive zap interface with amount selection, message input, and payment options. Supports zapping users, events, and addressable events. Uses Nostr Wallet Connect (NWC) if available, otherwise displays QR code for manual payment.",
+    options: [
+      {
+        flag: "<recipient>",
+        description:
+          "Recipient identifier: npub, nprofile, hex pubkey, NIP-05 identifier, or $me",
+      },
+      {
+        flag: "[event|address]",
+        description:
+          "Optional event to zap: note, nevent, naddr, hex event ID, or kind:pubkey:d-tag coordinate",
+      },
+    ],
+    examples: [
+      "zap fiatjaf.com                       Zap user via NIP-05",
+      "zap npub1...                          Zap user by npub",
+      "zap $me                               Zap yourself (testing)",
+      "zap alice@example.com note1...        Zap a specific event",
+      "zap npub1... naddr1...                Zap an addressable event (article, etc)",
+      "zap fiatjaf.com 30023:pubkey:slug     Zap article by coordinate",
+    ],
+    seeAlso: ["profile", "open", "req"],
+    appId: "zap",
+    category: "Nostr",
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      const parsed = await parseZapCommand(args, activeAccountPubkey);
       return parsed;
     },
   },
