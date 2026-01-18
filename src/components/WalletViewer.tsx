@@ -20,6 +20,8 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
@@ -341,7 +343,11 @@ function TransactionLabel({ transaction }: { transaction: Transaction }) {
 }
 
 export default function WalletViewer() {
-  const { state, disconnectNWC: disconnectNWCFromState } = useGrimoire();
+  const {
+    state,
+    disconnectNWC: disconnectNWCFromState,
+    toggleWalletBalancesBlur,
+  } = useGrimoire();
   const {
     wallet,
     balance,
@@ -1053,9 +1059,20 @@ export default function WalletViewer() {
 
       {/* Big Centered Balance */}
       <div className="py-4 flex flex-col items-center justify-center">
-        <div className="text-4xl font-bold font-mono">
-          {formatSats(balance)}
-        </div>
+        <button
+          onClick={toggleWalletBalancesBlur}
+          className="text-4xl font-bold font-mono hover:opacity-70 transition-opacity cursor-pointer flex items-center gap-3"
+          title="Click to toggle privacy blur"
+        >
+          <span>
+            {state.walletBalancesBlurred ? "✦✦✦✦✦✦" : formatSats(balance)}
+          </span>
+          {state.walletBalancesBlurred ? (
+            <EyeOff className="size-5 text-muted-foreground" />
+          ) : (
+            <Eye className="size-5 text-muted-foreground" />
+          )}
+        </button>
       </div>
 
       {/* Send / Receive Buttons */}
@@ -1145,7 +1162,9 @@ export default function WalletViewer() {
                     </div>
                     <div className="flex-shrink-0 ml-4">
                       <p className="text-sm font-semibold font-mono">
-                        {formatSats(tx.amount)}
+                        {state.walletBalancesBlurred
+                          ? "✦✦✦✦"
+                          : formatSats(tx.amount)}
                       </p>
                     </div>
                   </div>
@@ -1233,7 +1252,9 @@ export default function WalletViewer() {
                         : "Sent"}
                     </p>
                     <p className="text-2xl font-bold font-mono">
-                      {formatSats(selectedTransaction.amount)} sats
+                      {state.walletBalancesBlurred
+                        ? "✦✦✦✦✦✦ sats"
+                        : `${formatSats(selectedTransaction.amount)} sats`}
                     </p>
                   </div>
                 </div>
@@ -1267,7 +1288,9 @@ export default function WalletViewer() {
                           Fees Paid
                         </Label>
                         <p className="text-sm font-mono">
-                          {formatSats(selectedTransaction.fees_paid)} sats
+                          {state.walletBalancesBlurred
+                            ? "✦✦✦✦ sats"
+                            : `${formatSats(selectedTransaction.fees_paid)} sats`}
                         </p>
                       </div>
                     )}

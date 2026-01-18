@@ -370,6 +370,10 @@ export const useGrimoire = () => {
     setState((prev) => Logic.disconnectNWC(prev));
   }, [setState]);
 
+  const toggleWalletBalancesBlur = useCallback(() => {
+    setState((prev) => Logic.toggleWalletBalancesBlur(prev));
+  }, [setState]);
+
   return {
     state,
     isTemporary,
@@ -400,5 +404,6 @@ export const useGrimoire = () => {
     updateNWCBalance,
     updateNWCInfo,
     disconnectNWC,
+    toggleWalletBalancesBlur,
   };
 };

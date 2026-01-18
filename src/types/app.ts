@@ -137,4 +137,5 @@ export interface GrimoireState {
     isPublished?: boolean; // Whether it has been published to Nostr
   };
   nwcConnection?: NWCConnection;
+  walletBalancesBlurred?: boolean; // Privacy: blur balances and transaction amounts
 }
