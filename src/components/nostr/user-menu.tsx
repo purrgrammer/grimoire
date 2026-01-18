@@ -99,6 +99,10 @@ export default function UserMenu() {
     );
   }
 
+  function openWallet() {
+    addWindow("wallet", {}, "Wallet");
+  }
+
   async function logout() {
     if (!account) return;
     accounts.removeAccount(account);
@@ -155,6 +159,7 @@ export default function UserMenu() {
       <ConnectWalletDialog
         open={showConnectWallet}
         onOpenChange={setShowConnectWallet}
+        onConnected={openWallet}
       />
 
       {/* Wallet Info Dialog */}
@@ -295,7 +300,7 @@ export default function UserMenu() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80" align="start">
-          {account ? (
+          {account && (
             <>
               <DropdownMenuGroup>
                 <DropdownMenuLabel
@@ -307,43 +312,47 @@ export default function UserMenu() {
               </DropdownMenuGroup>
 
               <DropdownMenuSeparator />
+            </>
+          )}
 
-              {/* Wallet Section */}
-              {nwcConnection ? (
-                <DropdownMenuItem
-                  className="cursor-crosshair flex items-center justify-between"
-                  onClick={() => setShowWalletInfo(true)}
-                >
-                  <div className="flex items-center gap-2">
-                    <Wallet className="size-4 text-muted-foreground" />
-                    {balance !== undefined ||
-                    nwcConnection.balance !== undefined ? (
-                      <span className="text-sm">
-                        {formatBalance(balance ?? nwcConnection.balance)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        wallet ? "bg-green-500" : "bg-red-500"
-                      }`}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {getWalletName()}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  className="cursor-crosshair"
-                  onClick={() => setShowConnectWallet(true)}
-                >
-                  <Wallet className="size-4 text-muted-foreground mr-2" />
-                  <span className="text-sm">Connect Wallet</span>
-                </DropdownMenuItem>
-              )}
+          {/* Wallet Section - Always show */}
+          {nwcConnection ? (
+            <DropdownMenuItem
+              className="cursor-crosshair flex items-center justify-between"
+              onClick={openWallet}
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="size-4 text-muted-foreground" />
+                {balance !== undefined ||
+                nwcConnection.balance !== undefined ? (
+                  <span className="text-sm">
+                    {formatBalance(balance ?? nwcConnection.balance)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`size-1.5 rounded-full ${
+                    wallet ? "bg-green-500" : "bg-red-500"
+                  }`}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {getWalletName()}
+                </span>
+              </div>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              className="cursor-crosshair"
+              onClick={() => setShowConnectWallet(true)}
+            >
+              <Wallet className="size-4 text-muted-foreground mr-2" />
+              <span className="text-sm">Connect Wallet</span>
+            </DropdownMenuItem>
+          )}
 
+          {account && (
+            <>
               {relays && relays.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
@@ -398,64 +407,44 @@ export default function UserMenu() {
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
                 Log out
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-crosshair">
-                  <Palette className="size-4 mr-2" />
-                  Theme
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {availableThemes.map((theme) => (
-                    <DropdownMenuItem
-                      key={theme.id}
-                      className="cursor-crosshair"
-                      onClick={() => setTheme(theme.id)}
-                    >
-                      <span
-                        className={`size-2 rounded-full mr-2 ${
-                          themeId === theme.id
-                            ? "bg-primary"
-                            : "bg-muted-foreground/30"
-                        }`}
-                      />
-                      {theme.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
             </>
-          ) : (
+          )}
+
+          {!account && (
             <>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowLogin(true)}>
                 Log in
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-crosshair">
-                  <Palette className="size-4 mr-2" />
-                  Theme
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {availableThemes.map((theme) => (
-                    <DropdownMenuItem
-                      key={theme.id}
-                      className="cursor-crosshair"
-                      onClick={() => setTheme(theme.id)}
-                    >
-                      <span
-                        className={`size-2 rounded-full mr-2 ${
-                          themeId === theme.id
-                            ? "bg-primary"
-                            : "bg-muted-foreground/30"
-                        }`}
-                      />
-                      {theme.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
             </>
           )}
+
+          {/* Theme Section - Always show */}
+          <DropdownMenuSeparator />
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="cursor-crosshair">
+              <Palette className="size-4 mr-2" />
+              Theme
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {availableThemes.map((theme) => (
+                <DropdownMenuItem
+                  key={theme.id}
+                  className="cursor-crosshair"
+                  onClick={() => setTheme(theme.id)}
+                >
+                  <span
+                    className={`size-2 rounded-full mr-2 ${
+                      themeId === theme.id
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
+                    }`}
+                  />
+                  {theme.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
         </DropdownMenuContent>
       </DropdownMenu>
     </>

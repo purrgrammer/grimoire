@@ -119,6 +119,50 @@ export function useWallet() {
   }
 
   /**
+   * List recent transactions
+   * @param options - Pagination and filter options
+   */
+  async function listTransactions(options?: {
+    from?: number;
+    until?: number;
+    limit?: number;
+    offset?: number;
+    unpaid?: boolean;
+    type?: "incoming" | "outgoing";
+  }) {
+    if (!wallet) throw new Error("No wallet connected");
+
+    return await wallet.listTransactions(options);
+  }
+
+  /**
+   * Look up an invoice by payment hash
+   * @param paymentHash - The payment hash to look up
+   */
+  async function lookupInvoice(paymentHash: string) {
+    if (!wallet) throw new Error("No wallet connected");
+
+    return await wallet.lookupInvoice(paymentHash);
+  }
+
+  /**
+   * Pay to a node pubkey directly (keysend)
+   * @param pubkey - The node pubkey to pay
+   * @param amount - Amount in millisats
+   * @param preimage - Optional preimage (hex string)
+   */
+  async function payKeysend(pubkey: string, amount: number, preimage?: string) {
+    if (!wallet) throw new Error("No wallet connected");
+
+    const result = await wallet.payKeysend(pubkey, amount, preimage);
+
+    // Refresh balance after payment
+    await refreshBalanceService();
+
+    return result;
+  }
+
+  /**
    * Disconnect the wallet
    */
   function disconnect() {
@@ -143,6 +187,12 @@ export function useWallet() {
     getBalance,
     /** Manually refresh balance */
     refreshBalance,
+    /** List recent transactions */
+    listTransactions,
+    /** Look up an invoice by payment hash */
+    lookupInvoice,
+    /** Pay to a node pubkey directly (keysend) */
+    payKeysend,
     /** Disconnect wallet */
     disconnect,
   };

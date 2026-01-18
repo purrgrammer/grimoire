@@ -785,4 +785,16 @@ export const manPages: Record<string, ManPageEntry> = {
     },
     defaultProps: { subcommand: "servers" },
   },
+  wallet: {
+    name: "wallet",
+    section: "1",
+    synopsis: "wallet",
+    description:
+      "View and manage your Nostr Wallet Connect (NWC) Lightning wallet. Display wallet balance, transaction history, send/receive payments, and view wallet capabilities. The wallet interface adapts based on the methods supported by your connected wallet provider.",
+    examples: ["wallet    Open wallet viewer and manage Lightning payments"],
+    seeAlso: ["profile"],
+    appId: "wallet",
+    category: "Nostr",
+    defaultProps: {},
+  },
 };

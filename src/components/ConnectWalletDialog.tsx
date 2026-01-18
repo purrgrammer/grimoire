@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Wallet, AlertCircle } from "lucide-react";
+import { Loader2, Wallet, AlertCircle, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,11 +16,13 @@ import { createWalletFromURI } from "@/services/nwc";
 interface ConnectWalletDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConnected?: () => void;
 }
 
 export default function ConnectWalletDialog({
   open,
   onOpenChange,
+  onConnected,
 }: ConnectWalletDialogProps) {
   const [connectionString, setConnectionString] = useState("");
   const [loading, setLoading] = useState(false);
@@ -103,6 +105,9 @@ export default function ConnectWalletDialog({
 
       // Close dialog
       onOpenChange(false);
+
+      // Call onConnected callback
+      onConnected?.();
     } catch (err) {
       console.error("Wallet connection error:", err);
       setError(err instanceof Error ? err.message : "Failed to connect wallet");
@@ -124,9 +129,23 @@ export default function ConnectWalletDialog({
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Enter your wallet connection string. You can get this from your
-            wallet provider (Alby, Mutiny, etc.)
+            Enter your wallet connection string. You can get this from your NWC
+            wallet provider.
           </p>
+
+          {/* Security warning */}
+          <div className="flex items-start gap-2 rounded-md border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-yellow-600 dark:text-yellow-500" />
+            <div className="space-y-1">
+              <p className="font-medium text-yellow-900 dark:text-yellow-200">
+                Security Notice
+              </p>
+              <p className="text-yellow-800 dark:text-yellow-300">
+                Your wallet connection will be stored in browser storage. Only
+                connect on trusted devices.
+              </p>
+            </div>
+          </div>
 
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
