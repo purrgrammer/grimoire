@@ -19,7 +19,6 @@ import {
   ArrowDownLeft,
   LogOut,
   ChevronDown,
-  ExternalLink,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
@@ -49,6 +48,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import ConnectWalletDialog from "./ConnectWalletDialog";
+import { RelayLink } from "@/components/nostr/RelayLink";
 
 interface Transaction {
   type: "incoming" | "outgoing";
@@ -825,21 +825,17 @@ export default function WalletViewer() {
                     )}
                     {state.nwcConnection?.relays &&
                       state.nwcConnection.relays.length > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Relay</span>
-                          <a
-                            href={state.nwcConnection.relays[0]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono text-primary hover:underline flex items-center gap-1"
-                          >
-                            <span className="truncate max-w-[180px]">
-                              {state.nwcConnection.relays[0]
-                                .replace("wss://", "")
-                                .replace("ws://", "")}
-                            </span>
-                            <ExternalLink className="size-3 flex-shrink-0" />
-                          </a>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            Relay
+                          </span>
+                          <RelayLink
+                            url={state.nwcConnection.relays[0]}
+                            className="py-0"
+                            urlClassname="text-xs"
+                            iconClassname="size-3"
+                            showInboxOutbox={false}
+                          />
                         </div>
                       )}
                   </div>
