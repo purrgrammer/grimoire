@@ -5,6 +5,7 @@
  */
 
 import { NostrEvent } from "@/types/nostr";
+import { getOrComputeCachedValue } from "applesauce-core/helpers";
 
 export interface ZapRequestInfo {
   sender: string; // pubkey of the zapper
@@ -14,43 +15,41 @@ export interface ZapRequestInfo {
   amount?: number; // amount in sats (if available)
 }
 
-// Cache for parsed zap requests (keyed by description string)
-// Use Map with size limit to prevent unbounded growth
-const zapRequestCache = new Map<string, ZapRequestInfo | null>();
-const MAX_CACHE_SIZE = 500;
+// Symbol for caching parsed zap requests on transaction objects
+const ZapRequestSymbol = Symbol("zapRequest");
 
 /**
- * Try to parse a zap request from a transaction description
+ * Try to parse a zap request from a transaction
  * Transaction descriptions for zaps contain a JSON-stringified kind 9734 event
- * Results are cached to avoid re-parsing the same descriptions
+ * Results are cached on the transaction object using applesauce pattern
  *
- * @param description - The transaction description field
+ * @param transaction - The transaction object with description field
  * @returns ZapRequestInfo if this is a zap payment, null otherwise
  */
-export function parseZapRequest(description?: string): ZapRequestInfo | null {
-  if (!description) return null;
+export function parseZapRequest(transaction: {
+  description?: string;
+}): ZapRequestInfo | null {
+  if (!transaction.description) return null;
 
-  // Check cache first
-  if (zapRequestCache.has(description)) {
-    return zapRequestCache.get(description)!;
-  }
+  // Use applesauce caching pattern - cache result on transaction object
+  return getOrComputeCachedValue(transaction, ZapRequestSymbol, () => {
+    const description = transaction.description!;
 
-  let result: ZapRequestInfo | null = null;
+    try {
+      // Try to parse as JSON
+      const parsed = JSON.parse(description);
 
-  try {
-    // Try to parse as JSON
-    const parsed = JSON.parse(description);
+      // Check if it's a valid zap request (kind 9734)
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        parsed.kind !== 9734 ||
+        !parsed.pubkey ||
+        typeof parsed.pubkey !== "string"
+      ) {
+        return null;
+      }
 
-    // Check if it's a valid zap request (kind 9734)
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      parsed.kind !== 9734 ||
-      !parsed.pubkey ||
-      typeof parsed.pubkey !== "string"
-    ) {
-      result = null;
-    } else {
       const event = parsed as NostrEvent;
 
       // Extract zapped event from tags
@@ -75,51 +74,15 @@ export function parseZapRequest(description?: string): ZapRequestInfo | null {
         }
       }
 
-      result = {
+      return {
         sender: event.pubkey,
         message: event.content || "",
         zappedEventId,
         zappedEventAddress,
       };
+    } catch {
+      // Not JSON or parsing failed - not a zap request
+      return null;
     }
-  } catch {
-    // Not JSON or parsing failed - not a zap request
-    result = null;
-  }
-
-  // Cache the result (with size limit to prevent unbounded growth)
-  if (zapRequestCache.size >= MAX_CACHE_SIZE) {
-    // Remove oldest entry (first key in the map)
-    const firstKey = zapRequestCache.keys().next().value;
-    if (firstKey) {
-      zapRequestCache.delete(firstKey);
-    }
-  }
-  zapRequestCache.set(description, result);
-
-  return result;
-}
-
-/**
- * Get a short preview of a zap message for display in lists
- * Truncates to maxLength characters and removes line breaks
- *
- * @param message - The full zap message
- * @param maxLength - Maximum length before truncation (default 50)
- * @returns Truncated message with ellipsis if needed
- */
-export function getZapMessagePreview(
-  message: string,
-  maxLength: number = 50,
-): string {
-  if (!message) return "";
-
-  // Remove line breaks and extra whitespace
-  const cleaned = message.replace(/\s+/g, " ").trim();
-
-  if (cleaned.length <= maxLength) {
-    return cleaned;
-  }
-
-  return cleaned.substring(0, maxLength - 1) + "…";
+  });
 }
