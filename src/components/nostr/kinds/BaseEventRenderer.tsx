@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink } from "lucide-react";
+import { Menu, Copy, Check, FileJson, ExternalLink, Zap } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -157,6 +157,29 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     setJsonDialogOpen(true);
   };
 
+  const zapEvent = () => {
+    // Create event pointer for the zap
+    let eventPointer;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      eventPointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      eventPointer = {
+        id: event.id,
+      };
+    }
+
+    // Open zap window with event context
+    addWindow("zap", {
+      recipientPubkey: event.pubkey,
+      eventPointer,
+    });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -180,6 +203,10 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         <DropdownMenuItem onClick={openEventDetail}>
           <ExternalLink className="size-4 mr-2" />
           Open
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={zapEvent}>
+          <Zap className="size-4 mr-2 text-yellow-500" />
+          Zap
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>

@@ -158,11 +158,34 @@ export function ZapWindow({
     }
   };
 
+  // Generate QR code for invoice
+  const generateQrCode = async (invoiceText: string) => {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(invoiceText, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
+      return qrDataUrl;
+    } catch (error) {
+      console.error("QR code generation error:", error);
+      throw new Error("Failed to generate QR code");
+    }
+  };
+
   // Handle zap payment flow
   const handleZap = async (useWallet: boolean) => {
     const amount = selectedAmount || parseInt(customAmount);
     if (!amount || amount <= 0) {
       toast.error("Please enter a valid amount");
+      return;
+    }
+
+    if (!recipientPubkey) {
+      toast.error("No recipient specified");
       return;
     }
 
@@ -179,25 +202,104 @@ export function ZapWindow({
       const lud06 = content?.lud06;
 
       if (!lud16 && !lud06) {
-        throw new Error("Recipient has no Lightning address configured");
+        throw new Error(
+          "Recipient has no Lightning address configured in their profile",
+        );
       }
 
-      // Step 2: Resolve LNURL to get callback URL
-      // TODO: Implement full LNURL resolution and zap request creation
-      // For now, show a placeholder message
-      toast.error(
-        "Zap functionality coming soon! Need to implement LNURL resolution and zap request creation.",
+      // Step 2: Resolve LNURL to get callback URL and nostrPubkey
+      toast.info("Resolving Lightning address...");
+
+      let lnurlData;
+      if (lud16) {
+        const { resolveLightningAddress, validateZapSupport } =
+          await import("@/lib/lnurl");
+        lnurlData = await resolveLightningAddress(lud16);
+        validateZapSupport(lnurlData);
+      } else if (lud06) {
+        throw new Error(
+          "LNURL (lud06) not supported. Recipient should use a Lightning address (lud16) instead.",
+        );
+      }
+
+      if (!lnurlData) {
+        throw new Error("Failed to resolve Lightning address");
+      }
+
+      // Validate amount is within acceptable range
+      const amountMillisats = amount * 1000;
+      if (amountMillisats < lnurlData.minSendable) {
+        throw new Error(
+          `Amount too small. Minimum: ${Math.ceil(lnurlData.minSendable / 1000)} sats`,
+        );
+      }
+      if (amountMillisats > lnurlData.maxSendable) {
+        throw new Error(
+          `Amount too large. Maximum: ${Math.floor(lnurlData.maxSendable / 1000)} sats`,
+        );
+      }
+
+      // Validate comment length if provided
+      if (comment && lnurlData.commentAllowed) {
+        if (comment.length > lnurlData.commentAllowed) {
+          throw new Error(
+            `Comment too long. Maximum ${lnurlData.commentAllowed} characters.`,
+          );
+        }
+      }
+
+      // Step 3: Create and sign zap request event (kind 9734)
+      toast.info("Creating zap request...");
+      const { createZapRequest, serializeZapRequest } =
+        await import("@/lib/create-zap-request");
+
+      const zapRequest = await createZapRequest({
+        recipientPubkey,
+        amountMillisats,
+        comment,
+        eventPointer,
+        lnurl: lud16 || undefined,
+      });
+
+      const serializedZapRequest = serializeZapRequest(zapRequest);
+
+      // Step 4: Fetch invoice from LNURL callback
+      toast.info("Fetching invoice...");
+      const { fetchInvoiceFromCallback } = await import("@/lib/lnurl");
+
+      const invoiceResponse = await fetchInvoiceFromCallback(
+        lnurlData.callback,
+        amountMillisats,
+        serializedZapRequest,
+        comment || undefined,
       );
 
-      // Placeholder for full implementation:
-      // 1. Resolve LNURL (lud16 or lud06) to get callback URL and nostrPubkey
-      // 2. Create kind 9734 zap request event
-      // 3. Sign zap request with user's key
-      // 4. Send GET request to callback with zap request and amount
-      // 5. Get invoice from callback
-      // 6. If useWallet: pay invoice with NWC
-      //    Else: show QR code
-      // 7. Listen for kind 9735 receipt (optional)
+      const invoiceText = invoiceResponse.pr;
+
+      // Step 5: Pay or show QR code
+      if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
+        // Pay with NWC wallet
+        toast.info("Paying invoice with wallet...");
+        await payInvoice(invoiceText);
+        await refreshBalance();
+
+        setIsPaid(true);
+        toast.success(
+          `⚡ Zapped ${amount} sats to ${content?.name || recipientName}!`,
+        );
+
+        // Show success message from LNURL service if available
+        if (invoiceResponse.successAction?.message) {
+          toast.info(invoiceResponse.successAction.message);
+        }
+      } else {
+        // Show QR code and invoice
+        const qrUrl = await generateQrCode(invoiceText);
+        setQrCodeUrl(qrUrl);
+        setInvoice(invoiceText);
+        setShowQrDialog(true);
+        toast.success("Invoice ready! Scan or copy to pay.");
+      }
     } catch (error) {
       console.error("Zap error:", error);
       toast.error(
