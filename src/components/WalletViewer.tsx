@@ -140,10 +140,15 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
 }
 
 /**
- * Parse a BOLT11 invoice to extract details
+ * Parse a BOLT11 invoice to extract details with security validations
  */
 function parseInvoice(invoice: string): InvoiceDetails | null {
   try {
+    // Validate format
+    if (!invoice.toLowerCase().startsWith("ln")) {
+      throw new Error("Invalid invoice format");
+    }
+
     const decoded = decodeBolt11(invoice);
 
     // Extract amount (in millisats)
@@ -152,6 +157,11 @@ function parseInvoice(invoice: string): InvoiceDetails | null {
       amountSection && "value" in amountSection
         ? Number(amountSection.value) / 1000 // Convert to sats
         : undefined;
+
+    // Validate amount is reasonable (< 21M BTC in sats = 2.1 quadrillion msats)
+    if (amount && amount > 2100000000000000) {
+      throw new Error("Amount exceeds maximum possible value");
+    }
 
     // Extract description
     const descSection = decoded.sections.find((s) => s.name === "description");
@@ -172,6 +182,15 @@ function parseInvoice(invoice: string): InvoiceDetails | null {
     // Extract expiry
     const expiry = decoded.expiry;
 
+    // Check if invoice is expired
+    if (timestamp && expiry) {
+      const expiresAt = timestamp + expiry;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (expiresAt < nowSeconds) {
+        throw new Error("Invoice has expired");
+      }
+    }
+
     return {
       amount,
       description,
@@ -180,6 +199,9 @@ function parseInvoice(invoice: string): InvoiceDetails | null {
     };
   } catch (error) {
     console.error("Failed to parse invoice:", error);
+    const message =
+      error instanceof Error ? error.message : "Invalid invoice format";
+    toast.error(`Invalid invoice: ${message}`);
     return null;
   }
 }
@@ -212,6 +234,8 @@ export default function WalletViewer() {
   // Use refs to track loading attempts without causing re-renders
   const walletInfoLoadedRef = useRef(false);
   const lastConnectionStateRef = useRef(isConnected);
+  const lastBalanceRefreshRef = useRef(0);
+  const lastTxLoadRef = useRef(0);
 
   // Send dialog state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -308,6 +332,16 @@ export default function WalletViewer() {
 
   // Helper to reload transactions (resets flags to trigger reload)
   const reloadTransactions = useCallback(() => {
+    // Rate limiting: minimum 5 seconds between transaction reloads
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastTxLoadRef.current;
+    if (timeSinceLastLoad < 5000) {
+      const waitTime = Math.ceil((5000 - timeSinceLastLoad) / 1000);
+      toast.warning(`Please wait ${waitTime}s before reloading transactions`);
+      return;
+    }
+
+    lastTxLoadRef.current = now;
     setTxLoadAttempted(false);
     setTxLoadFailed(false);
   }, []);
@@ -373,6 +407,16 @@ export default function WalletViewer() {
   }, [walletInfo, hasMore, loadingMore, transactions.length, listTransactions]);
 
   async function handleRefreshBalance() {
+    // Rate limiting: minimum 2 seconds between refreshes
+    const now = Date.now();
+    const timeSinceLastRefresh = now - lastBalanceRefreshRef.current;
+    if (timeSinceLastRefresh < 2000) {
+      const waitTime = Math.ceil((2000 - timeSinceLastRefresh) / 1000);
+      toast.warning(`Please wait ${waitTime}s before refreshing again`);
+      return;
+    }
+
+    lastBalanceRefreshRef.current = now;
     setLoading(true);
     try {
       await refreshBalance();
@@ -456,7 +500,7 @@ export default function WalletViewer() {
     }
   }
 
-  // Resolve Lightning address to invoice
+  // Resolve Lightning address to invoice with security validations
   async function resolveLightningAddress(address: string, amountSats: number) {
     try {
       const [username, domain] = address.split("@");
@@ -464,52 +508,83 @@ export default function WalletViewer() {
         throw new Error("Invalid Lightning address format");
       }
 
-      // Fetch LNURL-pay endpoint
+      // Security: Enforce HTTPS only
       const lnurlUrl = `https://${domain}/.well-known/lnurlp/${username}`;
-      const response = await fetch(lnurlUrl);
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch Lightning address: ${response.statusText}`,
+      // Security: Add timeout for fetch requests (5 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const response = await fetch(lnurlUrl, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch Lightning address: ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (data.status === "ERROR") {
+          throw new Error(data.reason || "Lightning address lookup failed");
+        }
+
+        // Validate callback URL uses HTTPS
+        if (!data.callback || !data.callback.startsWith("https://")) {
+          throw new Error("Invalid callback URL (must use HTTPS)");
+        }
+
+        // Check amount limits (amounts are in millisats)
+        const amountMsat = amountSats * 1000;
+        if (data.minSendable && amountMsat < data.minSendable) {
+          throw new Error(
+            `Amount too small. Minimum: ${data.minSendable / 1000} sats`,
+          );
+        }
+        if (data.maxSendable && amountMsat > data.maxSendable) {
+          throw new Error(
+            `Amount too large. Maximum: ${data.maxSendable / 1000} sats`,
+          );
+        }
+
+        // Fetch invoice from callback
+        const callbackUrl = new URL(data.callback);
+        callbackUrl.searchParams.set("amount", amountMsat.toString());
+
+        const invoiceController = new AbortController();
+        const invoiceTimeoutId = setTimeout(
+          () => invoiceController.abort(),
+          5000,
         );
+
+        const invoiceResponse = await fetch(callbackUrl.toString(), {
+          signal: invoiceController.signal,
+        });
+        clearTimeout(invoiceTimeoutId);
+
+        if (!invoiceResponse.ok) {
+          throw new Error(
+            `Failed to get invoice: ${invoiceResponse.statusText}`,
+          );
+        }
+
+        const invoiceData = await invoiceResponse.json();
+
+        if (invoiceData.status === "ERROR") {
+          throw new Error(invoiceData.reason || "Failed to generate invoice");
+        }
+
+        return invoiceData.pr; // The BOLT11 invoice
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          throw new Error("Request timeout (5 seconds)");
+        }
+        throw fetchError;
       }
-
-      const data = await response.json();
-
-      if (data.status === "ERROR") {
-        throw new Error(data.reason || "Lightning address lookup failed");
-      }
-
-      // Check amount limits (amounts are in millisats)
-      const amountMsat = amountSats * 1000;
-      if (data.minSendable && amountMsat < data.minSendable) {
-        throw new Error(
-          `Amount too small. Minimum: ${data.minSendable / 1000} sats`,
-        );
-      }
-      if (data.maxSendable && amountMsat > data.maxSendable) {
-        throw new Error(
-          `Amount too large. Maximum: ${data.maxSendable / 1000} sats`,
-        );
-      }
-
-      // Fetch invoice from callback
-      const callbackUrl = new URL(data.callback);
-      callbackUrl.searchParams.set("amount", amountMsat.toString());
-
-      const invoiceResponse = await fetch(callbackUrl.toString());
-
-      if (!invoiceResponse.ok) {
-        throw new Error(`Failed to get invoice: ${invoiceResponse.statusText}`);
-      }
-
-      const invoiceData = await invoiceResponse.json();
-
-      if (invoiceData.status === "ERROR") {
-        throw new Error(invoiceData.reason || "Failed to generate invoice");
-      }
-
-      return invoiceData.pr; // The BOLT11 invoice
     } catch (error) {
       console.error("Lightning address resolution failed:", error);
       throw error;
@@ -845,18 +920,32 @@ export default function WalletViewer() {
       </div>
 
       {/* Send / Receive Buttons */}
-      <div className="px-4 pb-3">
-        <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
-          <Button onClick={() => setReceiveDialogOpen(true)} variant="outline">
-            <Download className="mr-2 size-4" />
-            Receive
-          </Button>
-          <Button onClick={() => setSendDialogOpen(true)} variant="default">
-            <Send className="mr-2 size-4" />
-            Send
-          </Button>
-        </div>
-      </div>
+      {walletInfo &&
+        (walletInfo.methods.includes("pay_invoice") ||
+          walletInfo.methods.includes("make_invoice")) && (
+          <div className="px-4 pb-3">
+            <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
+              {walletInfo.methods.includes("make_invoice") && (
+                <Button
+                  onClick={() => setReceiveDialogOpen(true)}
+                  variant="outline"
+                >
+                  <Download className="mr-2 size-4" />
+                  Receive
+                </Button>
+              )}
+              {walletInfo.methods.includes("pay_invoice") && (
+                <Button
+                  onClick={() => setSendDialogOpen(true)}
+                  variant="default"
+                >
+                  <Send className="mr-2 size-4" />
+                  Send
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
       {/* Transaction History */}
       <div className="flex-1 overflow-hidden">
