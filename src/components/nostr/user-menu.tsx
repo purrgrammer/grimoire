@@ -1,4 +1,4 @@
-import { User, HardDrive, Palette } from "lucide-react";
+import { User, HardDrive, Palette, Wallet, Zap, X } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -17,13 +17,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
+import ConnectWalletDialog from "@/components/ConnectWalletDialog";
 import { useState } from "react";
 import { useTheme } from "@/lib/themes";
+import { toast } from "sonner";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -56,11 +65,14 @@ function UserLabel({ pubkey }: { pubkey: string }) {
 
 export default function UserMenu() {
   const account = use$(accounts.active$);
-  const { state, addWindow } = useGrimoire();
+  const { state, addWindow, disconnectNWC } = useGrimoire();
   const relays = state.activeAccount?.relays;
   const blossomServers = state.activeAccount?.blossomServers;
+  const nwcConnection = state.nwcConnection;
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showConnectWallet, setShowConnectWallet] = useState(false);
+  const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
   function openProfile() {
@@ -77,10 +89,118 @@ export default function UserMenu() {
     accounts.removeAccount(account);
   }
 
+  function formatBalance(millisats?: number): string {
+    if (millisats === undefined) return "—";
+    const sats = Math.floor(millisats / 1000);
+    return sats.toLocaleString();
+  }
+
+  function handleDisconnectWallet() {
+    disconnectNWC();
+    setShowWalletInfo(false);
+    toast.success("Wallet disconnected");
+  }
+
   return (
     <>
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
       <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
+      <ConnectWalletDialog
+        open={showConnectWallet}
+        onOpenChange={setShowConnectWallet}
+      />
+
+      {/* Wallet Info Dialog */}
+      {nwcConnection && (
+        <Dialog open={showWalletInfo} onOpenChange={setShowWalletInfo}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Wallet Info</DialogTitle>
+              <DialogDescription>
+                Connected Lightning wallet details
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Balance */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Balance:</span>
+                <span className="text-lg font-semibold">
+                  {formatBalance(nwcConnection.balance)}
+                </span>
+              </div>
+
+              {/* Wallet Alias */}
+              {nwcConnection.info?.alias && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Wallet:</span>
+                  <span className="text-sm font-medium">
+                    {nwcConnection.info.alias}
+                  </span>
+                </div>
+              )}
+
+              {/* Lightning Address */}
+              {nwcConnection.lud16 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Address:
+                  </span>
+                  <span className="text-sm font-mono">
+                    {nwcConnection.lud16}
+                  </span>
+                </div>
+              )}
+
+              {/* Supported Methods */}
+              {nwcConnection.info?.methods &&
+                nwcConnection.info.methods.length > 0 && (
+                  <div>
+                    <span className="text-sm text-muted-foreground">
+                      Supported Methods:
+                    </span>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {nwcConnection.info.methods.map((method) => (
+                        <span
+                          key={method}
+                          className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                        >
+                          {method}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Relays */}
+              <div>
+                <span className="text-sm text-muted-foreground">Relays:</span>
+                <div className="mt-2 space-y-1">
+                  {nwcConnection.relays.map((relay) => (
+                    <div
+                      key={relay}
+                      className="text-xs font-mono text-muted-foreground"
+                    >
+                      {relay}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Disconnect Button */}
+              <Button
+                onClick={handleDisconnectWallet}
+                variant="destructive"
+                className="w-full"
+              >
+                <X className="mr-2 size-4" />
+                Disconnect Wallet
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -156,6 +276,43 @@ export default function UserMenu() {
                   </DropdownMenuGroup>
                 </>
               )}
+
+              {/* Wallet Section */}
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
+                  <Wallet className="size-3.5" />
+                  <span>Lightning Wallet</span>
+                </DropdownMenuLabel>
+                {nwcConnection ? (
+                  <>
+                    <DropdownMenuItem
+                      className="cursor-crosshair flex items-center justify-between"
+                      onClick={() => setShowWalletInfo(true)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Zap className="size-4 text-yellow-500" />
+                        <span className="text-sm">
+                          {formatBalance(nwcConnection.balance)}
+                        </span>
+                      </div>
+                      {nwcConnection.info?.alias && (
+                        <span className="text-xs text-muted-foreground">
+                          {nwcConnection.info.alias}
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem
+                    className="cursor-crosshair"
+                    onClick={() => setShowConnectWallet(true)}
+                  >
+                    <Wallet className="size-4 text-muted-foreground mr-2" />
+                    <span className="text-sm">Connect Wallet</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
 
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-crosshair">
