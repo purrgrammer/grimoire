@@ -345,6 +345,31 @@ export const useGrimoire = () => {
     dispatch({ type: "DISCARD_TEMP" });
   }, [dispatch]);
 
+  const setNWCConnection = useCallback(
+    (connection: any) => {
+      setState((prev) => Logic.setNWCConnection(prev, connection));
+    },
+    [setState],
+  );
+
+  const updateNWCBalance = useCallback(
+    (balance: number) => {
+      setState((prev) => Logic.updateNWCBalance(prev, balance));
+    },
+    [setState],
+  );
+
+  const updateNWCInfo = useCallback(
+    (info: any) => {
+      setState((prev) => Logic.updateNWCInfo(prev, info));
+    },
+    [setState],
+  );
+
+  const disconnectNWC = useCallback(() => {
+    setState((prev) => Logic.disconnectNWC(prev));
+  }, [setState]);
+
   return {
     state,
     isTemporary,
@@ -371,5 +396,9 @@ export const useGrimoire = () => {
     switchToTemporary,
     applyTemporaryToPersistent,
     discardTemporary,
+    setNWCConnection,
+    updateNWCBalance,
+    updateNWCInfo,
+    disconnectNWC,
   };
 };

@@ -12,9 +12,13 @@ import db from "@/services/db";
  * - Pubkey changes while a fetch is in progress
  *
  * @param pubkey - The user's public key (hex)
+ * @param relayHints - Optional relay URLs to try fetching from
  * @returns ProfileContent or undefined if loading/not found
  */
-export function useProfile(pubkey?: string): ProfileContent | undefined {
+export function useProfile(
+  pubkey?: string,
+  relayHints?: string[],
+): ProfileContent | undefined {
   const [profile, setProfile] = useState<ProfileContent | undefined>();
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -37,8 +41,12 @@ export function useProfile(pubkey?: string): ProfileContent | undefined {
       }
     });
 
-    // Fetch from network
-    const sub = profileLoader({ kind: kinds.Metadata, pubkey }).subscribe({
+    // Fetch from network with optional relay hints
+    const sub = profileLoader({
+      kind: kinds.Metadata,
+      pubkey,
+      ...(relayHints && relayHints.length > 0 && { relays: relayHints }),
+    }).subscribe({
       next: async (fetchedEvent) => {
         if (controller.signal.aborted) return;
         if (!fetchedEvent || !fetchedEvent.content) return;
@@ -77,7 +85,7 @@ export function useProfile(pubkey?: string): ProfileContent | undefined {
       controller.abort();
       sub.unsubscribe();
     };
-  }, [pubkey]);
+  }, [pubkey, relayHints]);
 
   return profile;
 }

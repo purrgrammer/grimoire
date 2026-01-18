@@ -79,6 +79,30 @@ export interface RelayInfo {
   write: boolean;
 }
 
+/**
+ * Nostr Wallet Connect (NIP-47) wallet connection
+ */
+export interface NWCConnection {
+  /** The wallet service's public key */
+  service: string;
+  /** Relay URL(s) for communication */
+  relays: string[];
+  /** Shared secret for encryption */
+  secret: string;
+  /** Optional lightning address (lud16) */
+  lud16?: string;
+  /** Optional cached balance in millisats */
+  balance?: number;
+  /** Optional wallet info */
+  info?: {
+    alias?: string;
+    methods?: string[];
+    notifications?: string[];
+  };
+  /** Last connection time */
+  lastConnected?: number;
+}
+
 export interface GrimoireState {
   __version: number; // Schema version for migrations
   windows: Record<string, WindowInstance>;
@@ -110,4 +134,5 @@ export interface GrimoireState {
     localId?: string; // Local DB ID if saved to library
     isPublished?: boolean; // Whether it has been published to Nostr
   };
+  nwcConnection?: NWCConnection;
 }
