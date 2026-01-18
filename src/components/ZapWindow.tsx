@@ -11,7 +11,7 @@
  * - Shows feed render of zapped event
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Zap,
@@ -43,8 +43,6 @@ import { getProfileContent } from "applesauce-core/helpers";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { KindRenderer } from "./nostr/kinds";
 import type { EventPointer, AddressPointer } from "@/lib/open-parser";
-import { isAddressableKind } from "applesauce-core/helpers";
-import type { NostrEvent } from "@/types/nostr";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -83,7 +81,17 @@ export function ZapWindow({
 
   const recipientProfile = useProfile(recipientPubkey, eventStore);
 
-  const { wallet, walletInfo, payInvoice, refreshBalance } = useWallet();
+  const { wallet, payInvoice, refreshBalance, getInfo } = useWallet();
+
+  // Fetch wallet info
+  const [walletInfo, setWalletInfo] = useState<any>(null);
+  useEffect(() => {
+    if (wallet) {
+      getInfo()
+        .then((info) => setWalletInfo(info))
+        .catch((error) => console.error("Failed to get wallet info:", error));
+    }
+  }, [wallet, getInfo]);
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
