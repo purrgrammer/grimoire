@@ -25,6 +25,7 @@ import {
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
 import { useGrimoire } from "@/core/state";
+import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -140,14 +141,48 @@ function isDifferentDay(timestamp1: number, timestamp2: number): boolean {
 }
 
 /**
- * Parse a BOLT11 invoice to extract details (basic parsing)
+ * Parse a BOLT11 invoice to extract details
  */
-function parseInvoice(_invoice: string): InvoiceDetails {
-  // This is a simplified parser - in production you'd use a proper BOLT11 library
-  // For now, just return basic structure
-  return {
-    description: "Lightning Payment",
-  };
+function parseInvoice(invoice: string): InvoiceDetails | null {
+  try {
+    const decoded = decodeBolt11(invoice);
+
+    // Extract amount (in millisats)
+    const amountSection = decoded.sections.find((s) => s.name === "amount");
+    const amount =
+      amountSection && "value" in amountSection
+        ? Number(amountSection.value) / 1000 // Convert to sats
+        : undefined;
+
+    // Extract description
+    const descSection = decoded.sections.find((s) => s.name === "description");
+    const description =
+      descSection && "value" in descSection
+        ? String(descSection.value)
+        : undefined;
+
+    // Extract timestamp
+    const timestampSection = decoded.sections.find(
+      (s) => s.name === "timestamp",
+    );
+    const timestamp =
+      timestampSection && "value" in timestampSection
+        ? Number(timestampSection.value)
+        : undefined;
+
+    // Extract expiry
+    const expiry = decoded.expiry;
+
+    return {
+      amount,
+      description,
+      timestamp,
+      expiry,
+    };
+  } catch (error) {
+    console.error("Failed to parse invoice:", error);
+    return null;
+  }
 }
 
 export default function WalletViewer() {
@@ -322,8 +357,28 @@ export default function WalletViewer() {
 
     // Parse invoice details
     const details = parseInvoice(sendInvoice);
+    if (!details) {
+      toast.error("Invalid Lightning invoice");
+      return;
+    }
+
     setInvoiceDetails(details);
     setSendStep("confirm");
+  }
+
+  // Auto-proceed to confirm when valid invoice is entered
+  function handleInvoiceChange(value: string) {
+    setSendInvoice(value);
+
+    // If it looks like an invoice, try to parse it
+    if (value.toLowerCase().startsWith("ln")) {
+      const details = parseInvoice(value);
+      if (details) {
+        // Valid invoice, auto-proceed to confirm
+        setInvoiceDetails(details);
+        setSendStep("confirm");
+      }
+    }
   }
 
   function handleBackToInput() {
@@ -876,7 +931,7 @@ export default function WalletViewer() {
                 <Input
                   placeholder="lnbc..."
                   value={sendInvoice}
-                  onChange={(e) => setSendInvoice(e.target.value)}
+                  onChange={(e) => handleInvoiceChange(e.target.value)}
                   className="font-mono text-xs"
                 />
               </div>
@@ -909,11 +964,20 @@ export default function WalletViewer() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Confirm Payment</p>
                     <div className="space-y-1 text-sm text-muted-foreground">
+                      {invoiceDetails?.amount && (
+                        <p className="font-semibold text-foreground">
+                          Amount:{" "}
+                          {Math.floor(invoiceDetails.amount).toLocaleString()}{" "}
+                          sats
+                        </p>
+                      )}
                       {invoiceDetails?.description && (
                         <p>Description: {invoiceDetails.description}</p>
                       )}
                       {sendAmount && (
-                        <p>Amount: {parseInt(sendAmount) / 1000} sats</p>
+                        <p className="text-xs">
+                          Override amount: {parseInt(sendAmount) / 1000} sats
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1053,8 +1117,8 @@ export default function WalletViewer() {
                       )}
                     </Button>
                   </div>
-                  <div className="break-all rounded bg-muted p-3 font-mono text-xs truncate">
-                    {generatedInvoice}
+                  <div className="rounded bg-muted p-3 font-mono text-xs overflow-hidden">
+                    <div className="truncate">{generatedInvoice}</div>
                   </div>
                 </div>
 
