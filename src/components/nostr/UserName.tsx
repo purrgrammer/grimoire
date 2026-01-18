@@ -3,6 +3,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
 import { isGrimoireMember } from "@/lib/grimoire-members";
+import { BadgeCheck } from "lucide-react";
 
 interface UserNameProps {
   pubkey: string;
@@ -15,9 +16,10 @@ interface UserNameProps {
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
  * Uses highlight color for the logged-in user (themeable orange)
- * Shows Grimoire members with 4-color gradient styling:
- * - Yellow→Orange→Amber for logged-in member (bright shimmer at top)
- * - Violet→Purple→Fuchsia for other members (bright highlight at top)
+ * Shows Grimoire members with elegant 2-color gradient styling and badge check:
+ * - Orange→Amber gradient for logged-in member
+ * - Violet→Fuchsia gradient for other members
+ * - BadgeCheck icon that scales with username size
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -37,11 +39,11 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
     <span
       dir="auto"
       className={cn(
-        "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
+        "font-semibold cursor-crosshair hover:underline hover:decoration-dotted inline-flex items-center gap-1",
         isGrimoire
           ? isActiveAccount
-            ? "bg-gradient-to-br from-yellow-300 via-orange-400 via-orange-500 to-amber-600 bg-clip-text text-transparent"
-            : "bg-gradient-to-br from-violet-400 via-violet-500 via-purple-500 to-fuchsia-600 bg-clip-text text-transparent"
+            ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
+            : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
@@ -49,8 +51,11 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       )}
       onClick={handleClick}
     >
-      {isMention ? "@" : null}
-      {displayName}
+      <span>
+        {isMention ? "@" : null}
+        {displayName}
+      </span>
+      {isGrimoire && <BadgeCheck className="inline-block w-[1em] h-[1em]" />}
     </span>
   );
 }
