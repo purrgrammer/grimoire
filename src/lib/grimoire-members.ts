@@ -24,7 +24,7 @@ export interface GrimoireMember {
 export const GRIMOIRE_MEMBERS: readonly GrimoireMember[] = [
   {
     username: "_",
-    pubkey: "ce3cd5ba3ae52cec4e4b267fb29f1d2a526a5f4b8e8475d8a603a63c8925295f",
+    pubkey: "60dfe8bda41b70736ae9a16385fa95c8d76792746c6f5e0a6249223e8779c667",
     nip05: "_@grimoire.rocks",
   },
   {

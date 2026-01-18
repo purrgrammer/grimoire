@@ -24,7 +24,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const grimoireUsername = getGrimoireUsername(pubkey);
   const displayName =
     isGrimoire && grimoireUsername
-      ? `${grimoireUsername}@grimoire.rocks`
+      ? grimoireUsername
       : getDisplayName(pubkey, profile);
 
   // Check if this is the logged-in user

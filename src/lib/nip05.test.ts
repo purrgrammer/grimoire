@@ -2,15 +2,17 @@ import { describe, it, expect } from "vitest";
 import { nip19 } from "nostr-tools";
 
 describe("NIP-19 Decoding for Grimoire Members", () => {
-  it("should decode npub for _ username", () => {
-    const npub =
-      "npub1eras6w483zu6ee8kewfdm97n72fdkfd4e8ujgch0d3jfycfflwhsytskz0";
-    const decoded = nip19.decode(npub);
+  it("should decode nprofile for _ username", () => {
+    const nprofile =
+      "nprofile1qyg8wumn8ghj7mn0wd68ytnddakj7qg4waehxw309aex2mrp0yhxgctdw4eju6t09uq3vamnwvaz7tmhda6zumn0wd68ytnsv9e8g7f0qyfhwumn8ghj7am0wsh82arcduhx7mn99uq35amnwvaz7tms09exzmtfvshxv6tpw34xze3wvdhk6tcpzamhxue69uhhyetvv9ujuurjd9kkzmpwdejhgtcppemhxue69uhkummn9ekx7mp0qqsv37cd82nc3wdvunmvhykajlfl9ykmyk6un7fyvthkceyjvy5lhtcpnnnuw";
+    const decoded = nip19.decode(nprofile);
 
-    expect(decoded.type).toBe("npub");
-    expect(decoded.data).toBe(
-      "ce3cd5ba3ae52cec4e4b267fb29f1d2a526a5f4b8e8475d8a603a63c8925295f",
-    );
+    expect(decoded.type).toBe("nprofile");
+    if (decoded.type === "nprofile") {
+      expect(decoded.data.pubkey).toBe(
+        "60dfe8bda41b70736ae9a16385fa95c8d76792746c6f5e0a6249223e8779c667",
+      );
+    }
   });
 
   it("should decode nprofile for verbiricha username", () => {

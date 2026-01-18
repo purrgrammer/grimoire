@@ -10,7 +10,7 @@ import {
 
 describe("Grimoire Members", () => {
   const underscorePubkey =
-    "ce3cd5ba3ae52cec4e4b267fb29f1d2a526a5f4b8e8475d8a603a63c8925295f";
+    "60dfe8bda41b70736ae9a16385fa95c8d76792746c6f5e0a6249223e8779c667";
   const verbirichaPubkey =
     "7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194";
   const randomPubkey =
