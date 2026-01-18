@@ -199,13 +199,13 @@ export default function UserMenu() {
                     >
                       <span>
                         {state.walletBalancesBlurred
-                          ? "••••••"
+                          ? "✦✦✦✦✦✦"
                           : formatBalance(balance ?? nwcConnection.balance)}
                       </span>
                       {state.walletBalancesBlurred ? (
-                        <EyeOff className="size-3.5 text-muted-foreground" />
+                        <EyeOff className="size-3 text-muted-foreground" />
                       ) : (
-                        <Eye className="size-3.5 text-muted-foreground" />
+                        <Eye className="size-3 text-muted-foreground" />
                       )}
                     </button>
                     <Button
@@ -350,7 +350,7 @@ export default function UserMenu() {
                 nwcConnection.balance !== undefined ? (
                   <span className="text-sm">
                     {state.walletBalancesBlurred
-                      ? "••••"
+                      ? "✦✦✦✦"
                       : formatBalance(balance ?? nwcConnection.balance)}
                   </span>
                 ) : null}

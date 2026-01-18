@@ -1065,12 +1065,12 @@ export default function WalletViewer() {
           title="Click to toggle privacy blur"
         >
           <span>
-            {state.walletBalancesBlurred ? "••••••" : formatSats(balance)}
+            {state.walletBalancesBlurred ? "✦✦✦✦✦✦" : formatSats(balance)}
           </span>
           {state.walletBalancesBlurred ? (
-            <EyeOff className="size-6 text-muted-foreground" />
+            <EyeOff className="size-5 text-muted-foreground" />
           ) : (
-            <Eye className="size-6 text-muted-foreground" />
+            <Eye className="size-5 text-muted-foreground" />
           )}
         </button>
       </div>
@@ -1163,7 +1163,7 @@ export default function WalletViewer() {
                     <div className="flex-shrink-0 ml-4">
                       <p className="text-sm font-semibold font-mono">
                         {state.walletBalancesBlurred
-                          ? "••••"
+                          ? "✦✦✦✦"
                           : formatSats(tx.amount)}
                       </p>
                     </div>
@@ -1253,7 +1253,7 @@ export default function WalletViewer() {
                     </p>
                     <p className="text-2xl font-bold font-mono">
                       {state.walletBalancesBlurred
-                        ? "•••••• sats"
+                        ? "✦✦✦✦✦✦ sats"
                         : `${formatSats(selectedTransaction.amount)} sats`}
                     </p>
                   </div>
@@ -1289,7 +1289,7 @@ export default function WalletViewer() {
                         </Label>
                         <p className="text-sm font-mono">
                           {state.walletBalancesBlurred
-                            ? "•••• sats"
+                            ? "✦✦✦✦ sats"
                             : `${formatSats(selectedTransaction.fees_paid)} sats`}
                         </p>
                       </div>
@@ -1447,9 +1447,8 @@ export default function WalletViewer() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount:</span>
                         <span className="font-semibold font-mono">
-                          {state.walletBalancesBlurred
-                            ? "•••••• sats"
-                            : `${Math.floor(invoiceDetails.amount).toLocaleString()} sats`}
+                          {Math.floor(invoiceDetails.amount).toLocaleString()}{" "}
+                          sats
                         </span>
                       </div>
                     )}
@@ -1457,9 +1456,7 @@ export default function WalletViewer() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount:</span>
                         <span className="font-semibold font-mono">
-                          {state.walletBalancesBlurred
-                            ? "•••••• sats"
-                            : `${parseInt(sendAmount).toLocaleString()} sats`}
+                          {parseInt(sendAmount).toLocaleString()} sats
                         </span>
                       </div>
                     )}
