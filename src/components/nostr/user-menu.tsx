@@ -1,4 +1,13 @@
-import { User, HardDrive, Palette, Wallet, X, RefreshCw } from "lucide-react";
+import {
+  User,
+  HardDrive,
+  Palette,
+  Wallet,
+  X,
+  RefreshCw,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -66,7 +75,8 @@ function UserLabel({ pubkey }: { pubkey: string }) {
 
 export default function UserMenu() {
   const account = use$(accounts.active$);
-  const { state, addWindow, disconnectNWC } = useGrimoire();
+  const { state, addWindow, disconnectNWC, toggleWalletBalancesBlur } =
+    useGrimoire();
   const relays = state.activeAccount?.relays;
   const blossomServers = state.activeAccount?.blossomServers;
   const nwcConnection = state.nwcConnection;
@@ -182,9 +192,22 @@ export default function UserMenu() {
                     Balance:
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-semibold">
-                      {formatBalance(balance ?? nwcConnection.balance)}
-                    </span>
+                    <button
+                      onClick={toggleWalletBalancesBlur}
+                      className="text-lg font-semibold hover:opacity-70 transition-opacity cursor-pointer flex items-center gap-1.5"
+                      title="Click to toggle privacy blur"
+                    >
+                      <span
+                        className={state.walletBalancesBlurred ? "blur-sm" : ""}
+                      >
+                        {formatBalance(balance ?? nwcConnection.balance)}
+                      </span>
+                      {state.walletBalancesBlurred ? (
+                        <EyeOff className="size-3.5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="size-3.5 text-muted-foreground" />
+                      )}
+                    </button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -325,7 +348,9 @@ export default function UserMenu() {
                 <Wallet className="size-4 text-muted-foreground" />
                 {balance !== undefined ||
                 nwcConnection.balance !== undefined ? (
-                  <span className="text-sm">
+                  <span
+                    className={`text-sm ${state.walletBalancesBlurred ? "blur-sm" : ""}`}
+                  >
                     {formatBalance(balance ?? nwcConnection.balance)}
                   </span>
                 ) : null}

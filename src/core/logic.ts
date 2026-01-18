@@ -593,3 +593,12 @@ export const disconnectNWC = (state: GrimoireState): GrimoireState => {
     nwcConnection: undefined,
   };
 };
+
+export const toggleWalletBalancesBlur = (
+  state: GrimoireState,
+): GrimoireState => {
+  return {
+    ...state,
+    walletBalancesBlurred: !state.walletBalancesBlurred,
+  };
+};
