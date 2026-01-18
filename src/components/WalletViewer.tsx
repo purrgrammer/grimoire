@@ -50,8 +50,6 @@ import {
 import ConnectWalletDialog from "./ConnectWalletDialog";
 import { RelayLink } from "@/components/nostr/RelayLink";
 import { parseZapRequest } from "@/lib/wallet-utils";
-import { useProfile } from "@/hooks/useProfile";
-import { getDisplayName } from "@/lib/nostr-utils";
 import { Zap } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
@@ -310,9 +308,6 @@ function ZapTransactionDetail({ transaction }: { transaction: Transaction }) {
 function TransactionLabel({ transaction }: { transaction: Transaction }) {
   const zapInfo = parseZapRequest(transaction);
 
-  // Call hooks unconditionally (before conditional rendering)
-  const profile = useProfile(zapInfo?.sender);
-
   // Not a zap - use original description or default label
   if (!zapInfo) {
     return (
@@ -323,24 +318,20 @@ function TransactionLabel({ transaction }: { transaction: Transaction }) {
     );
   }
 
-  // It's a zap! Show username + message preview
-  const displayName = getDisplayName(zapInfo.sender, profile);
+  // It's a zap! Show username + message on one line
 
   return (
     <div className="flex items-center gap-2 min-w-0">
       <Zap className="size-3.5 flex-shrink-0 fill-zap text-zap" />
-      <div className="text-sm truncate min-w-0">
-        <span className="font-medium">{displayName}</span>
+      <div className="text-sm truncate min-w-0 flex items-center gap-1">
+        <UserName pubkey={zapInfo.sender} className="flex-shrink-0" />
         {zapInfo.message && (
-          <>
-            <span className="text-muted-foreground">: </span>
-            <span className="inline">
-              <RichText
-                content={zapInfo.message}
-                event={zapInfo.zapRequestEvent}
-              />
-            </span>
-          </>
+          <span className="truncate">
+            <RichText
+              content={zapInfo.message}
+              event={zapInfo.zapRequestEvent}
+            />
+          </span>
         )}
       </div>
     </div>
@@ -1201,12 +1192,12 @@ export default function WalletViewer() {
 
       {/* Transaction Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-h-[90vh] flex flex-col">
+        <DialogContent className="max-h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-y-auto max-h-[calc(90vh-8rem)] pr-2">
+          <div className="overflow-y-auto max-h-[calc(70vh-8rem)] pr-2">
             {selectedTransaction && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
