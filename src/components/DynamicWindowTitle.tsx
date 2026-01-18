@@ -867,10 +867,6 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = chatTitle;
       icon = getCommandIcon("chat");
       tooltip = rawCommand;
-    } else if (zapTitle) {
-      title = zapTitle;
-      icon = getCommandIcon("zap");
-      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
