@@ -303,6 +303,34 @@ function generateRawCommand(appId: string, props: any): string {
     case "spells":
       return "spells";
 
+    case "zap":
+      if (props.recipientPubkey) {
+        try {
+          const npub = nip19.npubEncode(props.recipientPubkey);
+          let result = `zap ${npub}`;
+          if (props.eventPointer) {
+            if ("id" in props.eventPointer) {
+              const nevent = nip19.neventEncode({ id: props.eventPointer.id });
+              result += ` ${nevent}`;
+            } else if (
+              "kind" in props.eventPointer &&
+              "pubkey" in props.eventPointer
+            ) {
+              const naddr = nip19.naddrEncode({
+                kind: props.eventPointer.kind,
+                pubkey: props.eventPointer.pubkey,
+                identifier: props.eventPointer.identifier || "",
+              });
+              result += ` ${naddr}`;
+            }
+          }
+          return result;
+        } catch {
+          return `zap ${props.recipientPubkey.slice(0, 16)}...`;
+        }
+      }
+      return "zap";
+
     default:
       return appId;
   }

@@ -43,6 +43,9 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const WalletViewer = lazy(() => import("./WalletViewer"));
+const ZapWindow = lazy(() =>
+  import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
+);
 const CountViewer = lazy(() => import("./CountViewer"));
 
 // Loading fallback component
@@ -225,6 +228,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "wallet":
         content = <WalletViewer />;
+        break;
+      case "zap":
+        content = (
+          <ZapWindow
+            recipientPubkey={window.props.recipientPubkey}
+            eventPointer={window.props.eventPointer}
+          />
+        );
         break;
       default:
         content = (

@@ -8,6 +8,7 @@ import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
+import { parseZapCommand } from "@/lib/zap-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -611,6 +612,38 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[], activeAccountPubkey?: string) => {
       const parsed = await parseProfileCommand(args, activeAccountPubkey);
+      return parsed;
+    },
+  },
+  zap: {
+    name: "zap",
+    section: "1",
+    synopsis: "zap <profile|event> [event]",
+    description:
+      "Send a Lightning zap (NIP-57) to a Nostr user or event. Zaps are Lightning payments with proof published to Nostr. Supports zapping profiles directly or events with context. Requires the recipient to have a Lightning address (lud16/lud06) configured in their profile.",
+    options: [
+      {
+        flag: "<profile>",
+        description:
+          "Recipient: npub, nprofile, hex pubkey, user@domain.com, $me",
+      },
+      {
+        flag: "<event>",
+        description: "Event to zap: note, nevent, naddr, hex ID (optional)",
+      },
+    ],
+    examples: [
+      "zap fiatjaf.com                      Zap a user by NIP-05",
+      "zap npub1...                         Zap a user by npub",
+      "zap nevent1...                       Zap an event (recipient = event author)",
+      "zap npub1... nevent1...              Zap a specific user for a specific event",
+      "zap alice@domain.com naddr1...       Zap with event context",
+    ],
+    seeAlso: ["profile", "open", "wallet"],
+    appId: "zap",
+    category: "Nostr",
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      const parsed = await parseZapCommand(args, activeAccountPubkey);
       return parsed;
     },
   },

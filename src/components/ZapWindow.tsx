@@ -1,0 +1,428 @@
+/**
+ * ZapWindow Component
+ *
+ * UI for sending Lightning zaps to Nostr users and events (NIP-57)
+ *
+ * Features:
+ * - Send zaps to profiles or events
+ * - Preset and custom amounts
+ * - Remembers most-used amounts
+ * - NWC wallet payment or QR code fallback
+ * - Shows feed render of zapped event
+ */
+
+import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
+import {
+  Zap,
+  Wallet,
+  QrCode,
+  Copy,
+  ExternalLink,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import QRCode from "qrcode";
+import { useProfile } from "applesauce-react/hooks";
+import { use$ } from "applesauce-react/hooks";
+import eventStore from "@/services/event-store";
+import { useWallet } from "@/hooks/useWallet";
+import { getProfileContent } from "applesauce-core/helpers";
+import { getDisplayName } from "@/lib/nostr-utils";
+import { KindRenderer } from "./nostr/kinds";
+import type { EventPointer, AddressPointer } from "@/lib/open-parser";
+import { isAddressableKind } from "applesauce-core/helpers";
+import type { NostrEvent } from "@/types/nostr";
+
+export interface ZapWindowProps {
+  /** Recipient pubkey (who receives the zap) */
+  recipientPubkey: string;
+  /** Optional event being zapped (adds context) */
+  eventPointer?: EventPointer | AddressPointer;
+}
+
+// Default preset amounts in sats
+const DEFAULT_PRESETS = [21, 100, 500, 1000, 5000, 10000];
+
+// LocalStorage keys
+const STORAGE_KEY_CUSTOM_AMOUNTS = "grimoire_zap_custom_amounts";
+const STORAGE_KEY_AMOUNT_USAGE = "grimoire_zap_amount_usage";
+
+export function ZapWindow({
+  recipientPubkey: initialRecipientPubkey,
+  eventPointer,
+}: ZapWindowProps) {
+  // Load event if we have a pointer and no recipient pubkey (derive from event author)
+  const event = use$(() => {
+    if (!eventPointer) return undefined;
+    if ("id" in eventPointer) {
+      return eventStore.event(eventPointer.id);
+    }
+    // AddressPointer
+    return eventStore.replaceable(
+      eventPointer.kind,
+      eventPointer.pubkey,
+      eventPointer.identifier,
+    );
+  }, [eventPointer]);
+
+  // Resolve recipient: use provided pubkey or derive from event author
+  const recipientPubkey = initialRecipientPubkey || event?.pubkey || "";
+
+  const recipientProfile = useProfile(recipientPubkey, eventStore);
+
+  const { wallet, walletInfo, payInvoice, refreshBalance } = useWallet();
+
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [customAmount, setCustomAmount] = useState("");
+  const [comment, setComment] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [invoice, setInvoice] = useState<string>("");
+  const [showQrDialog, setShowQrDialog] = useState(false);
+
+  // Load custom amounts and usage stats from localStorage
+  const [customAmounts, setCustomAmounts] = useState<number[]>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY_CUSTOM_AMOUNTS);
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  const [amountUsage, setAmountUsage] = useState<Record<string, number>>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY_AMOUNT_USAGE);
+    return stored ? JSON.parse(stored) : {};
+  });
+
+  // Combine preset and custom amounts, sort by usage
+  const availableAmounts = useMemo(() => {
+    const all = [...DEFAULT_PRESETS, ...customAmounts];
+    const unique = Array.from(new Set(all));
+    // Sort by usage count (descending), then by amount
+    return unique.sort((a, b) => {
+      const usageA = amountUsage[a] || 0;
+      const usageB = amountUsage[b] || 0;
+      if (usageA !== usageB) return usageB - usageA;
+      return a - b;
+    });
+  }, [customAmounts, amountUsage]);
+
+  // Get recipient name for display
+  const recipientName = useMemo(() => {
+    const content = recipientProfile
+      ? getProfileContent(recipientProfile)
+      : null;
+    return content
+      ? getDisplayName(recipientPubkey, content)
+      : recipientPubkey.slice(0, 8);
+  }, [recipientPubkey, recipientProfile]);
+
+  // Get event author name if zapping an event
+  const eventAuthorName = useMemo(() => {
+    if (!event) return null;
+    const authorProfile = eventStore.getReplaceable(0, event.pubkey);
+    const content = authorProfile ? getProfileContent(authorProfile) : null;
+    return content
+      ? getDisplayName(event.pubkey, content)
+      : event.pubkey.slice(0, 8);
+  }, [event]);
+
+  // Track amount usage
+  const trackAmountUsage = (amount: number) => {
+    const newUsage = {
+      ...amountUsage,
+      [amount]: (amountUsage[amount] || 0) + 1,
+    };
+    setAmountUsage(newUsage);
+    localStorage.setItem(STORAGE_KEY_AMOUNT_USAGE, JSON.stringify(newUsage));
+
+    // If it's a custom amount not in our list, add it
+    if (!DEFAULT_PRESETS.includes(amount) && !customAmounts.includes(amount)) {
+      const newCustomAmounts = [...customAmounts, amount];
+      setCustomAmounts(newCustomAmounts);
+      localStorage.setItem(
+        STORAGE_KEY_CUSTOM_AMOUNTS,
+        JSON.stringify(newCustomAmounts),
+      );
+    }
+  };
+
+  // Handle zap payment flow
+  const handleZap = async (useWallet: boolean) => {
+    const amount = selectedAmount || parseInt(customAmount);
+    if (!amount || amount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Track usage
+      trackAmountUsage(amount);
+
+      // Step 1: Get Lightning address from recipient profile
+      const content = recipientProfile
+        ? getProfileContent(recipientProfile)
+        : null;
+      const lud16 = content?.lud16;
+      const lud06 = content?.lud06;
+
+      if (!lud16 && !lud06) {
+        throw new Error("Recipient has no Lightning address configured");
+      }
+
+      // Step 2: Resolve LNURL to get callback URL
+      // TODO: Implement full LNURL resolution and zap request creation
+      // For now, show a placeholder message
+      toast.error(
+        "Zap functionality coming soon! Need to implement LNURL resolution and zap request creation.",
+      );
+
+      // Placeholder for full implementation:
+      // 1. Resolve LNURL (lud16 or lud06) to get callback URL and nostrPubkey
+      // 2. Create kind 9734 zap request event
+      // 3. Sign zap request with user's key
+      // 4. Send GET request to callback with zap request and amount
+      // 5. Get invoice from callback
+      // 6. If useWallet: pay invoice with NWC
+      //    Else: show QR code
+      // 7. Listen for kind 9735 receipt (optional)
+    } catch (error) {
+      console.error("Zap error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to send zap",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Copy to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  // Open in wallet
+  const openInWallet = (invoice: string) => {
+    window.open(`lightning:${invoice}`, "_blank");
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-background overflow-hidden">
+      {/* Header */}
+      <div className="flex-none border-b border-border p-4">
+        <div className="flex items-center gap-3">
+          <Zap className="size-5 text-yellow-500" />
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold">
+              Zap {eventAuthorName || recipientName}
+            </h2>
+            {event && (
+              <p className="text-sm text-muted-foreground">
+                For their{" "}
+                {event.kind === 1 ? "note" : `kind ${event.kind} event`}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto p-6 space-y-6">
+          {/* Show event preview if zapping an event */}
+          {event && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Zapping Event
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <KindRenderer event={event} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Amount Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Amount (sats)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Preset amounts */}
+              <div className="grid grid-cols-3 gap-2">
+                {availableAmounts.map((amount) => (
+                  <Button
+                    key={amount}
+                    variant={selectedAmount === amount ? "default" : "outline"}
+                    onClick={() => {
+                      setSelectedAmount(amount);
+                      setCustomAmount("");
+                    }}
+                    className="relative"
+                  >
+                    {amount.toLocaleString()}
+                    {amountUsage[amount] && (
+                      <span className="absolute top-1 right-1 size-1.5 rounded-full bg-yellow-500" />
+                    )}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Custom amount */}
+              <div className="space-y-2">
+                <Label htmlFor="custom-amount">Custom Amount</Label>
+                <Input
+                  id="custom-amount"
+                  type="number"
+                  placeholder="Enter amount in sats"
+                  value={customAmount}
+                  onChange={(e) => {
+                    setCustomAmount(e.target.value);
+                    setSelectedAmount(null);
+                  }}
+                  min="1"
+                />
+              </div>
+
+              {/* Comment */}
+              <div className="space-y-2">
+                <Label htmlFor="comment">Comment (optional)</Label>
+                <Input
+                  id="comment"
+                  placeholder="Say something nice..."
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment Methods */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Method</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {wallet && walletInfo?.methods.includes("pay_invoice") ? (
+                <Button
+                  onClick={() => handleZap(true)}
+                  disabled={isProcessing || (!selectedAmount && !customAmount)}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : isPaid ? (
+                    <>
+                      <CheckCircle2 className="size-4 mr-2" />
+                      Zap Sent!
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="size-4 mr-2" />
+                      Pay with Wallet (
+                      {selectedAmount || parseInt(customAmount) || 0} sats)
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-2">
+                  Connect a wallet to pay directly
+                </div>
+              )}
+
+              <Button
+                onClick={() => handleZap(false)}
+                disabled={isProcessing || (!selectedAmount && !customAmount)}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                <QrCode className="size-4 mr-2" />
+                Show QR Code / Copy Invoice
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lightning Invoice</DialogTitle>
+            <DialogDescription>
+              Scan with your Lightning wallet or copy the invoice
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {qrCodeUrl && (
+              <div className="flex justify-center p-4 bg-white rounded-lg">
+                <img
+                  src={qrCodeUrl}
+                  alt="Lightning Invoice QR Code"
+                  className="w-64 h-64"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Invoice</Label>
+              <div className="flex gap-2">
+                <Input value={invoice} readOnly className="font-mono text-xs" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copyToClipboard(invoice)}
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => openInWallet(invoice)}
+              >
+                <ExternalLink className="size-4 mr-2" />
+                Open in Wallet
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => copyToClipboard(invoice)}
+              >
+                <Copy className="size-4 mr-2" />
+                Copy Invoice
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
