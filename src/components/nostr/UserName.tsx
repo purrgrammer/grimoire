@@ -15,9 +15,9 @@ interface UserNameProps {
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
  * Uses highlight color for the logged-in user (themeable orange)
- * Shows Grimoire members with gradient styling:
- * - Orange gradient for logged-in Grimoire member (matches highlight)
- * - Purple-pink gradient for other Grimoire members (matches accent)
+ * Shows Grimoire members with 4-color gradient styling:
+ * - Yellow→Orange→Amber for logged-in member (bright shimmer at top)
+ * - Violet→Purple→Fuchsia for other members (bright highlight at top)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -40,8 +40,8 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
         isGrimoire
           ? isActiveAccount
-            ? "bg-gradient-to-br from-orange-400 via-orange-500 to-amber-600 bg-clip-text text-transparent"
-            : "bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600 bg-clip-text text-transparent"
+            ? "bg-gradient-to-br from-yellow-300 via-orange-400 via-orange-500 to-amber-600 bg-clip-text text-transparent"
+            : "bg-gradient-to-br from-violet-400 via-violet-500 via-purple-500 to-fuchsia-600 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
