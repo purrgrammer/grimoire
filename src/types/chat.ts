@@ -6,6 +6,7 @@ import type { NostrEvent } from "./nostr";
  */
 export const CHAT_KINDS = [
   9, // NIP-29: Group chat messages
+  42, // NIP-28: Channel messages
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
   1311, // NIP-53: Live chat messages
   9735, // NIP-57: Zap receipts (part of chat context)
