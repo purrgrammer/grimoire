@@ -14,10 +14,10 @@ interface UserNameProps {
  * Component that displays a user's name from their Nostr profile
  * Shows placeholder derived from pubkey while loading or if no profile exists
  * Clicking opens the user's profile
- * Uses highlight color for the logged-in user (themeable amber)
+ * Uses highlight color for the logged-in user (themeable orange)
  * Shows Grimoire members with gradient styling:
- * - Orange-yellow gradient for logged-in Grimoire member
- * - Purple-blue gradient for other Grimoire members
+ * - Orange gradient for logged-in Grimoire member (matches highlight)
+ * - Purple-pink gradient for other Grimoire members (matches accent)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -40,8 +40,8 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
         isGrimoire
           ? isActiveAccount
-            ? "bg-gradient-to-br from-yellow-500 via-orange-500 to-orange-600 bg-clip-text text-transparent"
-            : "bg-gradient-to-br from-blue-400 via-purple-400 to-purple-500 bg-clip-text text-transparent"
+            ? "bg-gradient-to-br from-orange-400 via-orange-500 to-amber-600 bg-clip-text text-transparent"
+            : "bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
