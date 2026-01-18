@@ -474,6 +474,23 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const countHashtags =
     appId === "count" && props.filter?.["#t"] ? props.filter["#t"] : [];
 
+  // Zap titles
+  const zapRecipientPubkey = appId === "zap" ? props.recipientPubkey : null;
+  const zapRecipientProfile = useProfile(zapRecipientPubkey || "");
+  const zapTitle = useMemo(() => {
+    if (appId !== "zap" || !zapRecipientPubkey) return null;
+
+    if (zapRecipientProfile) {
+      const name =
+        zapRecipientProfile.display_name ||
+        zapRecipientProfile.name ||
+        `${zapRecipientPubkey.slice(0, 8)}...`;
+      return `Zap ${name}`;
+    }
+
+    return `Zap ${zapRecipientPubkey.slice(0, 8)}...`;
+  }, [appId, zapRecipientPubkey, zapRecipientProfile]);
+
   // REQ titles
   const reqTitle = useMemo(() => {
     if (appId !== "req") return null;
@@ -783,7 +800,11 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     }
 
     // Priority order for title selection (dynamic titles based on data)
-    if (profileTitle) {
+    if (zapTitle) {
+      title = zapTitle;
+      icon = getCommandIcon("zap");
+      tooltip = rawCommand;
+    } else if (profileTitle) {
       title = profileTitle;
       icon = getCommandIcon("profile");
       tooltip = rawCommand;
@@ -846,6 +867,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = chatTitle;
       icon = getCommandIcon("chat");
       tooltip = rawCommand;
+    } else if (zapTitle) {
+      title = zapTitle;
+      icon = getCommandIcon("zap");
+      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
@@ -857,6 +882,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     props,
     event,
     customTitle,
+    zapTitle,
     profileTitle,
     eventTitle,
     kindTitle,

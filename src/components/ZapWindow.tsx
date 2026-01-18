@@ -16,11 +16,11 @@ import { toast } from "sonner";
 import {
   Zap,
   Wallet,
-  QrCode,
   Copy,
   ExternalLink,
   Loader2,
   CheckCircle2,
+  LogIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,10 +38,11 @@ import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import eventStore from "@/services/event-store";
 import { useWallet } from "@/hooks/useWallet";
-import { getProfileContent } from "applesauce-core/helpers";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { KindRenderer } from "./nostr/kinds";
 import type { EventPointer, AddressPointer } from "@/lib/open-parser";
+import { useGrimoire } from "@/core/state";
+import accountManager from "@/services/accounts";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -79,6 +80,10 @@ export function ZapWindow({
   const recipientPubkey = initialRecipientPubkey || event?.pubkey || "";
 
   const recipientProfile = useProfile(recipientPubkey);
+
+  const { addWindow } = useGrimoire();
+  const activeAccount = accountManager.active;
+  const canSign = !!activeAccount?.signer;
 
   const { wallet, payInvoice, refreshBalance, getInfo } = useWallet();
 
@@ -131,17 +136,6 @@ export function ZapWindow({
       ? getDisplayName(recipientPubkey, recipientProfile)
       : recipientPubkey.slice(0, 8);
   }, [recipientPubkey, recipientProfile]);
-
-  // Get event author name if zapping an event
-  const eventAuthorName = useMemo(() => {
-    if (!event) return null;
-    const authorProfile = eventStore.getReplaceable(0, event.pubkey);
-    if (authorProfile) {
-      const content = getProfileContent(authorProfile);
-      return getDisplayName(event.pubkey, content);
-    }
-    return event.pubkey.slice(0, 8);
-  }, [event]);
 
   // Track amount usage
   const trackAmountUsage = (amount: number) => {
@@ -327,26 +321,13 @@ export function ZapWindow({
     window.open(`lightning:${invoice}`, "_blank");
   };
 
+  // Open account selector for login
+  const handleLogin = () => {
+    addWindow("conn", {});
+  };
+
   return (
     <div className="h-full flex flex-col bg-background overflow-hidden">
-      {/* Header */}
-      <div className="flex-none border-b border-border p-4">
-        <div className="flex items-center gap-3">
-          <Zap className="size-5 text-yellow-500" />
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold">
-              Zap {eventAuthorName || recipientName}
-            </h2>
-            {event && (
-              <p className="text-sm text-muted-foreground">
-                For their{" "}
-                {event.kind === 1 ? "note" : `kind ${event.kind} event`}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-6 space-y-6">
           {/* Show event preview if zapping an event */}
@@ -364,110 +345,104 @@ export function ZapWindow({
           )}
 
           {/* Amount Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Amount (sats)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Preset amounts */}
-              <div className="grid grid-cols-3 gap-2">
-                {availableAmounts.map((amount) => (
-                  <Button
-                    key={amount}
-                    variant={selectedAmount === amount ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedAmount(amount);
-                      setCustomAmount("");
-                    }}
-                    className="relative"
-                  >
-                    {amount.toLocaleString()}
-                    {amountUsage[amount] && (
-                      <span className="absolute top-1 right-1 size-1.5 rounded-full bg-yellow-500" />
-                    )}
-                  </Button>
-                ))}
-              </div>
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Amount (sats)
+            </h3>
 
-              {/* Custom amount */}
-              <div className="space-y-2">
-                <Label>Custom Amount</Label>
-                <Input
-                  id="custom-amount"
-                  type="number"
-                  placeholder="Enter amount in sats"
-                  value={customAmount}
-                  onChange={(e) => {
-                    setCustomAmount(e.target.value);
-                    setSelectedAmount(null);
-                  }}
-                  min="1"
-                />
-              </div>
-
-              {/* Comment */}
-              <div className="space-y-2">
-                <Label>Comment (optional)</Label>
-                <Input
-                  id="comment"
-                  placeholder="Say something nice..."
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  maxLength={200}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Payment Methods */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Method</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {wallet && walletInfo?.methods.includes("pay_invoice") ? (
+            {/* Preset amounts */}
+            <div className="grid grid-cols-3 gap-2">
+              {availableAmounts.map((amount) => (
                 <Button
-                  onClick={() => handleZap(true)}
-                  disabled={isProcessing || (!selectedAmount && !customAmount)}
-                  className="w-full"
-                  size="lg"
+                  key={amount}
+                  variant={selectedAmount === amount ? "default" : "outline"}
+                  onClick={() => {
+                    setSelectedAmount(amount);
+                    setCustomAmount("");
+                  }}
+                  className="relative"
                 >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : isPaid ? (
-                    <>
-                      <CheckCircle2 className="size-4 mr-2" />
-                      Zap Sent!
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="size-4 mr-2" />
-                      Pay with Wallet (
-                      {selectedAmount || parseInt(customAmount) || 0} sats)
-                    </>
+                  {amount.toLocaleString()}
+                  {amountUsage[amount] && (
+                    <span className="absolute top-1 right-1 size-1.5 rounded-full bg-yellow-500" />
                   )}
                 </Button>
-              ) : (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  Connect a wallet to pay directly
-                </div>
-              )}
+              ))}
+            </div>
 
-              <Button
-                onClick={() => handleZap(false)}
-                disabled={isProcessing || (!selectedAmount && !customAmount)}
-                variant="outline"
-                className="w-full"
-                size="lg"
-              >
-                <QrCode className="size-4 mr-2" />
-                Show QR Code / Copy Invoice
-              </Button>
-            </CardContent>
-          </Card>
+            {/* Custom amount */}
+            <div className="space-y-2">
+              <Label>Custom Amount</Label>
+              <Input
+                id="custom-amount"
+                type="number"
+                placeholder="Enter amount in sats"
+                value={customAmount}
+                onChange={(e) => {
+                  setCustomAmount(e.target.value);
+                  setSelectedAmount(null);
+                }}
+                min="1"
+              />
+            </div>
+
+            {/* Comment */}
+            <div className="space-y-2">
+              <Label>Comment (optional)</Label>
+              <Input
+                id="comment"
+                placeholder="Say something nice..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                maxLength={200}
+              />
+            </div>
+          </div>
+
+          {/* Payment Button */}
+          {!canSign ? (
+            <Button
+              onClick={handleLogin}
+              className="w-full"
+              size="lg"
+              variant="default"
+            >
+              <LogIn className="size-4 mr-2" />
+              Log in to Zap
+            </Button>
+          ) : (
+            <Button
+              onClick={() =>
+                handleZap(wallet && walletInfo?.methods.includes("pay_invoice"))
+              }
+              disabled={isProcessing || (!selectedAmount && !customAmount)}
+              className="w-full"
+              size="lg"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : isPaid ? (
+                <>
+                  <CheckCircle2 className="size-4 mr-2" />
+                  Zap Sent!
+                </>
+              ) : wallet && walletInfo?.methods.includes("pay_invoice") ? (
+                <>
+                  <Wallet className="size-4 mr-2" />
+                  Pay with Wallet (
+                  {selectedAmount || parseInt(customAmount) || 0} sats)
+                </>
+              ) : (
+                <>
+                  <Zap className="size-4 mr-2" />
+                  Pay ({selectedAmount || parseInt(customAmount) || 0} sats)
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
