@@ -41,7 +41,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
         isGrimoire
           ? isActiveAccount
             ? "bg-gradient-to-br from-yellow-500 via-orange-500 to-orange-600 bg-clip-text text-transparent"
-            : "bg-gradient-to-br from-blue-400 via-purple-500 to-purple-600 bg-clip-text text-transparent"
+            : "bg-gradient-to-br from-blue-400 via-purple-400 to-purple-500 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
