@@ -25,12 +25,12 @@ export const GRIMOIRE_MEMBERS: readonly GrimoireMember[] = [
   {
     username: "_",
     pubkey: "ce3cd5ba3ae52cec4e4b267fb29f1d2a526a5f4b8e8475d8a603a63c8925295f",
-    nip05: "_@grimoire.pro",
+    nip05: "_@grimoire.rocks",
   },
   {
     username: "verbiricha",
     pubkey: "7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194",
-    nip05: "verbiricha@grimoire.pro",
+    nip05: "verbiricha@grimoire.rocks",
   },
 ] as const;
 

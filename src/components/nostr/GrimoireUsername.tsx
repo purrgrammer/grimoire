@@ -32,7 +32,7 @@ export function GrimoireUsername({
       )}
       title={`Grimoire member: ${member.nip05}`}
     >
-      <span>{member.username}@grimoire.pro</span>
+      <span>{member.username}@grimoire.rocks</span>
       {showIcon && (
         <BookOpen
           className="h-3.5 w-3.5 text-accent"

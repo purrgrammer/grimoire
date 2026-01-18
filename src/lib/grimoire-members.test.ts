@@ -59,7 +59,7 @@ describe("Grimoire Members", () => {
       expect(member).toBeDefined();
       expect(member?.username).toBe("_");
       expect(member?.pubkey).toBe(underscorePubkey);
-      expect(member?.nip05).toBe("_@grimoire.pro");
+      expect(member?.nip05).toBe("_@grimoire.rocks");
     });
 
     it("should return member info for verbiricha username", () => {
@@ -67,7 +67,7 @@ describe("Grimoire Members", () => {
       expect(member).toBeDefined();
       expect(member?.username).toBe("verbiricha");
       expect(member?.pubkey).toBe(verbirichaPubkey);
-      expect(member?.nip05).toBe("verbiricha@grimoire.pro");
+      expect(member?.nip05).toBe("verbiricha@grimoire.rocks");
     });
 
     it("should return undefined for non-member", () => {
@@ -83,15 +83,15 @@ describe("Grimoire Members", () => {
   });
 
   describe("getGrimoireMemberByNip05", () => {
-    it("should return member info for _@grimoire.pro", () => {
-      const member = getGrimoireMemberByNip05("_@grimoire.pro");
+    it("should return member info for _@grimoire.rocks", () => {
+      const member = getGrimoireMemberByNip05("_@grimoire.rocks");
       expect(member).toBeDefined();
       expect(member?.username).toBe("_");
       expect(member?.pubkey).toBe(underscorePubkey);
     });
 
-    it("should return member info for verbiricha@grimoire.pro", () => {
-      const member = getGrimoireMemberByNip05("verbiricha@grimoire.pro");
+    it("should return member info for verbiricha@grimoire.rocks", () => {
+      const member = getGrimoireMemberByNip05("verbiricha@grimoire.rocks");
       expect(member).toBeDefined();
       expect(member?.username).toBe("verbiricha");
       expect(member?.pubkey).toBe(verbirichaPubkey);
@@ -122,9 +122,9 @@ describe("Grimoire Members", () => {
 
   describe("getGrimoireNip05", () => {
     it("should return NIP-05 for member", () => {
-      expect(getGrimoireNip05(underscorePubkey)).toBe("_@grimoire.pro");
+      expect(getGrimoireNip05(underscorePubkey)).toBe("_@grimoire.rocks");
       expect(getGrimoireNip05(verbirichaPubkey)).toBe(
-        "verbiricha@grimoire.pro",
+        "verbiricha@grimoire.rocks",
       );
     });
 
