@@ -32,6 +32,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -81,7 +82,7 @@ interface InvoiceDetails {
 }
 
 const BATCH_SIZE = 20;
-const PAYMENT_CHECK_INTERVAL = 2000; // Check every 2 seconds
+const PAYMENT_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 /**
  * Helper: Format timestamp as a readable day marker
@@ -167,6 +168,7 @@ export default function WalletViewer() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
 
   // Send dialog state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -188,6 +190,11 @@ export default function WalletViewer() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
+
+  // Transaction detail dialog state
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
   // Load wallet info on mount
   useEffect(() => {
@@ -409,7 +416,13 @@ export default function WalletViewer() {
 
   function handleDisconnect() {
     disconnect();
+    setDisconnectDialogOpen(false);
     toast.success("Wallet disconnected");
+  }
+
+  function handleTransactionClick(tx: Transaction) {
+    setSelectedTransaction(tx);
+    setDetailDialogOpen(true);
   }
 
   function formatSats(millisats: number | undefined): string {
@@ -422,6 +435,10 @@ export default function WalletViewer() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  }
+
+  function formatFullDate(timestamp: number): string {
+    return new Date(timestamp * 1000).toLocaleString();
   }
 
   // Process transactions to include day markers
@@ -501,7 +518,7 @@ export default function WalletViewer() {
           {walletInfo?.alias || "Lightning Wallet"}
         </span>
 
-        {/* Right: Info Dropdown & Refresh */}
+        {/* Right: Info Dropdown, Refresh, Disconnect */}
         <div className="flex items-center gap-2">
           {walletInfo && (
             <DropdownMenu>
@@ -582,11 +599,24 @@ export default function WalletViewer() {
             </TooltipTrigger>
             <TooltipContent>Refresh Balance</TooltipContent>
           </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setDisconnectDialogOpen(true)}
+                className="flex items-center gap-1 text-muted-foreground hover:text-destructive transition-colors"
+                aria-label="Disconnect wallet"
+              >
+                <LogOut className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Disconnect Wallet</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* Big Centered Balance */}
-      <div className="border-b border-border py-8 flex flex-col items-center justify-center">
+      <div className="py-4 flex flex-col items-center justify-center">
         <div className="text-4xl font-bold font-mono">
           {formatSats(balance)}
         </div>
@@ -594,7 +624,7 @@ export default function WalletViewer() {
       </div>
 
       {/* Send / Receive Buttons */}
-      <div className="border-b border-border p-4">
+      <div className="px-4 pb-3">
         <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
           <Button onClick={() => setSendDialogOpen(true)} variant="default">
             <Send className="mr-2 size-4" />
@@ -608,7 +638,7 @@ export default function WalletViewer() {
       </div>
 
       {/* Transaction History */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden border-t border-border">
         {walletInfo?.methods.includes("list_transactions") ? (
           loading ? (
             <div className="flex h-full items-center justify-center">
@@ -646,7 +676,8 @@ export default function WalletViewer() {
                 return (
                   <div
                     key={tx.payment_hash || index}
-                    className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0"
+                    className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
+                    onClick={() => handleTransactionClick(tx)}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {tx.type === "incoming" ? (
@@ -690,17 +721,124 @@ export default function WalletViewer() {
         )}
       </div>
 
-      {/* Footer with Disconnect */}
-      <div className="border-t border-border p-4">
-        <Button
-          variant="destructive"
-          onClick={handleDisconnect}
-          className="w-full"
-        >
-          <LogOut className="mr-2 size-4" />
-          Disconnect Wallet
-        </Button>
-      </div>
+      {/* Disconnect Confirmation Dialog */}
+      <Dialog
+        open={disconnectDialogOpen}
+        onOpenChange={setDisconnectDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect Wallet?</DialogTitle>
+            <DialogDescription>
+              This will disconnect your Lightning wallet. You can reconnect at
+              any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDisconnectDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDisconnect}>
+              Disconnect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+          </DialogHeader>
+
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {selectedTransaction.type === "incoming" ? (
+                  <ArrowDownLeft className="size-6 text-green-500" />
+                ) : (
+                  <ArrowUpRight className="size-6 text-red-500" />
+                )}
+                <div>
+                  <p className="text-lg font-semibold">
+                    {selectedTransaction.type === "incoming"
+                      ? "Received"
+                      : "Sent"}
+                  </p>
+                  <p className="text-2xl font-bold font-mono">
+                    {formatSats(selectedTransaction.amount)} sats
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {selectedTransaction.description && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Description
+                    </Label>
+                    <p className="text-sm">{selectedTransaction.description}</p>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">Date</Label>
+                  <p className="text-sm font-mono">
+                    {formatFullDate(selectedTransaction.created_at)}
+                  </p>
+                </div>
+
+                {selectedTransaction.fees_paid !== undefined &&
+                  selectedTransaction.fees_paid > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Fees Paid
+                      </Label>
+                      <p className="text-sm font-mono">
+                        {formatSats(selectedTransaction.fees_paid)} sats
+                      </p>
+                    </div>
+                  )}
+
+                {selectedTransaction.payment_hash && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Payment Hash
+                    </Label>
+                    <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                      {selectedTransaction.payment_hash}
+                    </p>
+                  </div>
+                )}
+
+                {selectedTransaction.preimage && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Preimage
+                    </Label>
+                    <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                      {selectedTransaction.preimage}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDetailDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Send Dialog */}
       <Dialog
@@ -904,7 +1042,7 @@ export default function WalletViewer() {
                       )}
                     </Button>
                   </div>
-                  <div className="break-all rounded bg-muted p-3 font-mono text-xs max-h-32 overflow-y-auto">
+                  <div className="break-all rounded bg-muted p-3 font-mono text-xs truncate">
                     {generatedInvoice}
                   </div>
                 </div>
