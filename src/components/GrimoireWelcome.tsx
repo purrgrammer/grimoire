@@ -1,6 +1,7 @@
 import { Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
+import { DonationProgress } from "./DonationProgress";
 
 interface GrimoireWelcomeProps {
   onLaunchCommand: () => void;
@@ -61,6 +62,9 @@ export function GrimoireWelcome({
             a nostr client for magicians
           </p>
         </div>
+
+        {/* Donation Progress */}
+        <DonationProgress />
 
         {/* Launch button */}
         <div className="flex flex-col items-center gap-3">
