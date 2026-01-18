@@ -40,7 +40,13 @@ export async function resolveLightningAddress(
   const url = `https://${domain}/.well-known/lnurlp/${username}`;
 
   try {
-    const response = await fetch(url);
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       throw new Error(
         `Failed to fetch LNURL data: ${response.status} ${response.statusText}`,
@@ -63,6 +69,11 @@ export async function resolveLightningAddress(
     return data;
   } catch (error) {
     if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        throw new Error(
+          "Lightning address request timed out. Please try again.",
+        );
+      }
       throw error;
     }
     throw new Error(`Failed to resolve Lightning address: ${error}`);
@@ -102,10 +113,17 @@ export async function fetchInvoiceFromCallback(
   }
 
   try {
-    const response = await fetch(url.toString());
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    const response = await fetch(url.toString(), { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
       throw new Error(
-        `Failed to fetch invoice: ${response.status} ${response.statusText}`,
+        `Failed to fetch invoice (${response.status}): ${errorText || response.statusText}`,
       );
     }
 
@@ -118,6 +136,9 @@ export async function fetchInvoiceFromCallback(
     return data;
   } catch (error) {
     if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        throw new Error("Invoice request timed out. Please try again.");
+      }
       throw error;
     }
     throw new Error(`Failed to fetch invoice from callback: ${error}`);

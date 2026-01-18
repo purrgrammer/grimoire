@@ -162,6 +162,11 @@ export function ZapWindow({
       : recipientPubkey.slice(0, 8);
   }, [recipientPubkey, recipientProfile]);
 
+  // Check if recipient has a lightning address
+  const hasLightningAddress = !!(
+    recipientProfile?.lud16 || recipientProfile?.lud06
+  );
+
   // Track amount usage
   const trackAmountUsage = (amount: number) => {
     const newUsage = {
@@ -229,8 +234,6 @@ export function ZapWindow({
       }
 
       // Step 2: Resolve LNURL to get callback URL and nostrPubkey
-      toast.info("Resolving Lightning address...");
-
       let lnurlData;
       if (lud16) {
         lnurlData = await resolveLightningAddress(lud16);
@@ -277,8 +280,6 @@ export function ZapWindow({
       }
 
       // Step 3: Create and sign zap request event (kind 9734)
-      toast.info("Creating zap request...");
-
       const zapRequest = await createZapRequest({
         recipientPubkey,
         amountMillisats,
@@ -291,8 +292,6 @@ export function ZapWindow({
       const serializedZapRequest = serializeZapRequest(zapRequest);
 
       // Step 4: Fetch invoice from LNURL callback
-      toast.info("Fetching invoice...");
-
       const invoiceResponse = await fetchInvoiceFromCallback(
         lnurlData.callback,
         amountMillisats,
@@ -305,8 +304,6 @@ export function ZapWindow({
       // Step 5: Pay or show QR code
       if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
         // Pay with NWC wallet with timeout
-        toast.info("Paying invoice with wallet...");
-
         try {
           // Race between payment and 30 second timeout
           const paymentPromise = payInvoice(invoiceText);
@@ -319,15 +316,9 @@ export function ZapWindow({
 
           setIsPaid(true);
           toast.success(`⚡ Zapped ${amount} sats to ${recipientName}!`);
-
-          // Show success message from LNURL service if available
-          if (invoiceResponse.successAction?.message) {
-            toast.info(invoiceResponse.successAction.message);
-          }
         } catch (error) {
           if (error instanceof Error && error.message === "TIMEOUT") {
             // Payment timed out - show QR code with retry option
-            toast.warning("Wallet payment timed out. Showing QR code instead.");
             setPaymentTimedOut(true);
             const qrUrl = await generateQrCode(invoiceText);
             setQrCodeUrl(qrUrl);
@@ -344,7 +335,6 @@ export function ZapWindow({
         setQrCodeUrl(qrUrl);
         setInvoice(invoiceText);
         setShowQrDialog(true);
-        toast.success("Invoice ready! Scan or copy to pay.");
       }
     } catch (error) {
       console.error("Zap error:", error);
@@ -385,8 +375,6 @@ export function ZapWindow({
     setPaymentTimedOut(false);
 
     try {
-      toast.info("Retrying payment with wallet...");
-
       // Try again with timeout
       const paymentPromise = payInvoice(invoice);
       const timeoutPromise = new Promise((_, reject) =>
@@ -401,7 +389,7 @@ export function ZapWindow({
       toast.success("⚡ Payment successful!");
     } catch (error) {
       if (error instanceof Error && error.message === "TIMEOUT") {
-        toast.error("Payment timed out again. Please try manually.");
+        toast.error("Payment timed out. Please try manually.");
         setPaymentTimedOut(true);
         setShowQrDialog(true);
       } else {
@@ -526,11 +514,11 @@ export function ZapWindow({
               {/* Amount Selection */}
               <div className="space-y-2">
                 {/* Preset amounts - single row */}
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {availableAmounts.map((amount) => (
                     <Button
                       key={amount}
-                      size="sm"
+                      size="default"
                       variant={
                         selectedAmount === amount ? "default" : "outline"
                       }
@@ -539,6 +527,7 @@ export function ZapWindow({
                         setCustomAmount("");
                       }}
                       className="relative"
+                      disabled={!hasLightningAddress}
                     >
                       {formatAmount(amount)}
                       {amountUsage[amount] && (
@@ -546,29 +535,40 @@ export function ZapWindow({
                       )}
                     </Button>
                   ))}
-                  {/* Custom amount inline */}
-                  <Input
-                    type="number"
-                    placeholder="Custom"
-                    value={customAmount}
-                    onChange={(e) => {
-                      setCustomAmount(e.target.value);
-                      setSelectedAmount(null);
-                    }}
-                    min="1"
-                    className="flex-1 h-9"
-                  />
                 </div>
 
-                {/* Comment with emoji support - single row */}
-                <MentionEditor
-                  ref={editorRef}
-                  placeholder="Say something nice..."
-                  searchProfiles={searchProfiles}
-                  searchEmojis={searchEmojis}
-                  className="rounded-md border border-input bg-background px-3 py-2"
+                {/* Custom amount - separate line */}
+                <Input
+                  type="number"
+                  placeholder="Custom amount (sats)"
+                  value={customAmount}
+                  onChange={(e) => {
+                    setCustomAmount(e.target.value);
+                    setSelectedAmount(null);
+                  }}
+                  min="1"
+                  disabled={!hasLightningAddress}
+                  className="w-full"
                 />
+
+                {/* Comment with emoji support */}
+                {hasLightningAddress && (
+                  <MentionEditor
+                    ref={editorRef}
+                    placeholder="Say something nice..."
+                    searchProfiles={searchProfiles}
+                    searchEmojis={searchEmojis}
+                    className="rounded-md border border-input bg-background px-3 py-2"
+                  />
+                )}
               </div>
+
+              {/* No Lightning Address Warning */}
+              {!hasLightningAddress && (
+                <div className="text-sm text-muted-foreground text-center py-2 border border-dashed rounded-md">
+                  This user has not configured a Lightning address
+                </div>
+              )}
 
               {/* Payment Button */}
               {!canSign ? (
@@ -577,6 +577,7 @@ export function ZapWindow({
                   className="w-full"
                   size="lg"
                   variant="default"
+                  disabled={!hasLightningAddress}
                 >
                   <LogIn className="size-4 mr-2" />
                   Log in to Zap
@@ -591,6 +592,7 @@ export function ZapWindow({
                         )
                   }
                   disabled={
+                    !hasLightningAddress ||
                     isProcessing ||
                     (!isPaid && !selectedAmount && !customAmount)
                   }
