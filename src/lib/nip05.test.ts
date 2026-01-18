@@ -10,7 +10,7 @@ describe("NIP-19 Decoding for Grimoire Members", () => {
     expect(decoded.type).toBe("nprofile");
     if (decoded.type === "nprofile") {
       expect(decoded.data.pubkey).toBe(
-        "60dfe8bda41b70736ae9a16385fa95c8d76792746c6f5e0a6249223e8779c667",
+        "c8fb0d3aa788b9ace4f6cb92dd97d3f292db25b5c9f92462ef6c64926129fbaf",
       );
     }
   });

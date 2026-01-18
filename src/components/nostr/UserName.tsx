@@ -41,7 +41,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       className={cn(
         "font-semibold cursor-crosshair hover:underline hover:decoration-dotted",
         isGrimoire
-          ? "bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent"
+          ? "bg-gradient-to-br from-yellow-400 via-orange-400 to-orange-500 bg-clip-text text-transparent"
           : isActiveAccount
             ? "text-highlight"
             : "text-accent",
