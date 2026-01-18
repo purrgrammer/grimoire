@@ -634,7 +634,7 @@ export function ZapWindow({
                     placeholder="Say something nice..."
                     searchProfiles={searchProfiles}
                     searchEmojis={searchEmojis}
-                    className="rounded-md border border-input bg-background px-3 py-2"
+                    className="rounded-md border border-input bg-background px-3 py-1 text-base md:text-sm min-h-9"
                   />
                 )}
               </div>
