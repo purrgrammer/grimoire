@@ -24,6 +24,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import QRCode from "qrcode";
 import {
   Tooltip,
@@ -81,12 +88,14 @@ export default function WalletViewer() {
   const [hasMore, setHasMore] = useState(true);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
 
-  // Send state
+  // Send dialog state
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [sendInvoice, setSendInvoice] = useState("");
   const [sendAmount, setSendAmount] = useState("");
   const [sending, setSending] = useState(false);
 
-  // Receive state
+  // Receive dialog state
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [receiveAmount, setReceiveAmount] = useState("");
   const [receiveDescription, setReceiveDescription] = useState("");
   const [generatedInvoice, setGeneratedInvoice] = useState("");
@@ -188,6 +197,7 @@ export default function WalletViewer() {
       toast.success("Payment sent successfully");
       setSendInvoice("");
       setSendAmount("");
+      setSendDialogOpen(false);
       // Reload transactions
       loadInitialTransactions();
     } catch (error) {
@@ -293,129 +303,253 @@ export default function WalletViewer() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header with Balance */}
-      <div className="border-b border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Wallet className="size-6 text-primary" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold">
-                  {walletInfo?.alias || "Lightning Wallet"}
-                </h2>
-                {walletInfo && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="size-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <div className="space-y-2">
-                          <div className="font-semibold">Capabilities:</div>
-                          <div className="space-y-1">
-                            {walletInfo.methods.map((method) => (
-                              <div
-                                key={method}
-                                className="flex items-center gap-2 text-xs"
-                              >
-                                <Check className="size-3 text-green-500" />
-                                <span className="font-mono">{method}</span>
-                              </div>
-                            ))}
-                          </div>
+    <div className="h-full w-full flex flex-col bg-background text-foreground">
+      {/* Header */}
+      <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
+        {/* Left: Wallet Name & Balance */}
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">
+            {walletInfo?.alias || "Lightning Wallet"}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">
+            {formatSats(balance)} sats
+          </span>
+          {walletInfo && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="size-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <div className="space-y-2">
+                    <div className="font-semibold">Capabilities:</div>
+                    <div className="space-y-1">
+                      {walletInfo.methods.map((method) => (
+                        <div
+                          key={method}
+                          className="flex items-center gap-2 text-xs"
+                        >
+                          <Check className="size-3 text-green-500" />
+                          <span className="font-mono">{method}</span>
                         </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Balance: {formatSats(balance)} sats
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshBalance}
-            disabled={loading}
-          >
-            <RefreshCw
-              className={`mr-2 size-4 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+                      ))}
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setReceiveDialogOpen(true)}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Receive payment"
+              >
+                <Download className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Receive</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setSendDialogOpen(true)}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Send payment"
+              >
+                <Send className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Send</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleRefreshBalance}
+                disabled={loading}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                aria-label="Refresh balance"
+              >
+                <RefreshCw
+                  className={`size-3 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh Balance</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="mx-auto max-w-4xl space-y-4">
-          {/* Send and Receive Row */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Send Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Send className="size-4" />
-                  Send Payment
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Invoice</label>
-                  <Input
-                    placeholder="lnbc..."
-                    value={sendInvoice}
-                    onChange={(e) => setSendInvoice(e.target.value)}
-                    disabled={sending}
-                    className="font-mono text-xs"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Amount (optional, millisats)
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="Leave empty for invoice amount"
-                    value={sendAmount}
-                    onChange={(e) => setSendAmount(e.target.value)}
-                    disabled={sending}
-                  />
-                </div>
-
-                <Button
-                  onClick={handleSendPayment}
-                  disabled={sending || !sendInvoice.trim()}
-                  className="w-full"
+      {/* Transaction History */}
+      <div className="flex-1 overflow-hidden">
+        {walletInfo?.methods.includes("list_transactions") ? (
+          loading ? (
+            <div className="flex h-full items-center justify-center">
+              <RefreshCw className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                No transactions found
+              </p>
+            </div>
+          ) : (
+            <Virtuoso
+              data={transactions}
+              endReached={loadMoreTransactions}
+              itemContent={(index, tx) => (
+                <div
+                  key={tx.payment_hash || index}
+                  className="flex items-center justify-between border-b border-border px-4 py-3 hover:bg-muted/50 transition-colors flex-shrink-0"
                 >
-                  {sending ? (
-                    <>
-                      <RefreshCw className="mr-2 size-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-2 size-4" />
-                      Send
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {tx.type === "incoming" ? (
+                      <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
+                    ) : (
+                      <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-sm font-medium">
+                          {tx.type === "incoming" ? "Received" : "Sent"}
+                        </p>
+                        {tx.description && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {tx.description}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {formatDate(tx.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-4">
+                    <p className="text-sm font-semibold font-mono">
+                      {tx.type === "incoming" ? "+" : "-"}
+                      {formatSats(tx.amount)}
+                    </p>
+                    {tx.fees_paid !== undefined && tx.fees_paid > 0 && (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        Fee: {formatSats(tx.fees_paid)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              components={{
+                Footer: () =>
+                  loadingMore ? (
+                    <div className="flex justify-center py-4 border-b border-border">
+                      <RefreshCw className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : !hasMore && transactions.length > 0 ? (
+                    <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
+                      No more transactions
+                    </div>
+                  ) : null,
+              }}
+            />
+          )
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              Transaction history not available
+            </p>
+          </div>
+        )}
+      </div>
 
-            {/* Receive Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Download className="size-4" />
-                  Receive Payment
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+      {/* Footer with Disconnect */}
+      <div className="border-t border-border p-4">
+        <Button
+          variant="destructive"
+          onClick={handleDisconnect}
+          className="w-full"
+        >
+          <LogOut className="mr-2 size-4" />
+          Disconnect Wallet
+        </Button>
+      </div>
+
+      {/* Send Dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Payment</DialogTitle>
+            <DialogDescription>
+              Pay a Lightning invoice. Amount can be overridden if the invoice
+              allows it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice</label>
+              <Input
+                placeholder="lnbc..."
+                value={sendInvoice}
+                onChange={(e) => setSendInvoice(e.target.value)}
+                disabled={sending}
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Amount (optional, millisats)
+              </label>
+              <Input
+                type="number"
+                placeholder="Leave empty for invoice amount"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+                disabled={sending}
+              />
+            </div>
+
+            <Button
+              onClick={handleSendPayment}
+              disabled={sending || !sendInvoice.trim()}
+              className="w-full"
+            >
+              {sending ? (
+                <>
+                  <RefreshCw className="mr-2 size-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 size-4" />
+                  Send Payment
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receive Dialog */}
+      <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Receive Payment</DialogTitle>
+            <DialogDescription>
+              Generate a Lightning invoice to receive sats.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {!generatedInvoice ? (
+              <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Amount (sats)</label>
                   <Input
@@ -456,145 +590,63 @@ export default function WalletViewer() {
                     </>
                   )}
                 </Button>
-              </CardContent>
-            </Card>
-          </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-center">
+                  {invoiceQR && (
+                    <img
+                      src={invoiceQR}
+                      alt="Invoice QR Code"
+                      className="size-64 rounded-lg border border-border"
+                    />
+                  )}
+                </div>
 
-          {/* Generated Invoice Display */}
-          {generatedInvoice && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <div className="flex justify-center">
-                    {invoiceQR && (
-                      <img
-                        src={invoiceQR}
-                        alt="Invoice QR Code"
-                        className="size-64 rounded-lg border border-border"
-                      />
-                    )}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Invoice</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyInvoice}
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="mr-2 size-4" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-2 size-4" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">Invoice</label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCopyInvoice}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="mr-2 size-4" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="mr-2 size-4" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <div className="break-all rounded bg-muted p-3 font-mono text-xs">
-                      {generatedInvoice}
-                    </div>
+                  <div className="break-all rounded bg-muted p-3 font-mono text-xs max-h-32 overflow-y-auto">
+                    {generatedInvoice}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Transactions List */}
-          {walletInfo?.methods.includes("list_transactions") && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Transaction History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <RefreshCw className="size-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : transactions.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No transactions found
-                  </p>
-                ) : (
-                  <div className="h-96">
-                    <Virtuoso
-                      data={transactions}
-                      endReached={loadMoreTransactions}
-                      itemContent={(index, tx) => (
-                        <div
-                          key={tx.payment_hash || index}
-                          className="flex items-start justify-between border-b border-border py-3 last:border-0"
-                        >
-                          <div className="flex items-start gap-3">
-                            {tx.type === "incoming" ? (
-                              <ArrowDownLeft className="mt-0.5 size-5 text-green-500" />
-                            ) : (
-                              <ArrowUpRight className="mt-0.5 size-5 text-red-500" />
-                            )}
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">
-                                {tx.type === "incoming" ? "Received" : "Sent"}
-                              </p>
-                              {tx.description && (
-                                <p className="text-xs text-muted-foreground">
-                                  {tx.description}
-                                </p>
-                              )}
-                              <p className="text-xs text-muted-foreground">
-                                {formatDate(tx.created_at)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold">
-                              {tx.type === "incoming" ? "+" : "-"}
-                              {formatSats(tx.amount)} sats
-                            </p>
-                            {tx.fees_paid !== undefined && tx.fees_paid > 0 && (
-                              <p className="text-xs text-muted-foreground">
-                                Fee: {formatSats(tx.fees_paid)} sats
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      components={{
-                        Footer: () =>
-                          loadingMore ? (
-                            <div className="flex justify-center py-4">
-                              <RefreshCw className="size-5 animate-spin text-muted-foreground" />
-                            </div>
-                          ) : !hasMore && transactions.length > 0 ? (
-                            <div className="py-4 text-center text-sm text-muted-foreground">
-                              No more transactions
-                            </div>
-                          ) : null,
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Disconnect Button */}
-          <div className="flex justify-center pb-4">
-            <Button
-              variant="outline"
-              onClick={handleDisconnect}
-              className="w-full max-w-xs"
-            >
-              <LogOut className="mr-2 size-4" />
-              Disconnect Wallet
-            </Button>
+                <Button
+                  onClick={() => {
+                    setGeneratedInvoice("");
+                    setInvoiceQR("");
+                    setReceiveAmount("");
+                    setReceiveDescription("");
+                    setCopied(false);
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Generate Another
+                </Button>
+              </>
+            )}
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
