@@ -20,9 +20,11 @@ import {
   LogOut,
   AlertTriangle,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
+import { useGrimoire } from "@/core/state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +151,7 @@ function parseInvoice(_invoice: string): InvoiceDetails {
 }
 
 export default function WalletViewer() {
+  const { state } = useGrimoire();
   const {
     wallet,
     balance,
@@ -430,13 +433,6 @@ export default function WalletViewer() {
     return Math.floor(millisats / 1000).toLocaleString();
   }
 
-  function formatTime(timestamp: number): string {
-    return new Date(timestamp * 1000).toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   function formatFullDate(timestamp: number): string {
     return new Date(timestamp * 1000).toLocaleString();
   }
@@ -545,6 +541,25 @@ export default function WalletViewer() {
                         </span>
                       </div>
                     )}
+                    {state.nwcConnection?.relays &&
+                      state.nwcConnection.relays.length > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Relay</span>
+                          <a
+                            href={state.nwcConnection.relays[0]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-primary hover:underline flex items-center gap-1"
+                          >
+                            <span className="truncate max-w-[180px]">
+                              {state.nwcConnection.relays[0]
+                                .replace("wss://", "")
+                                .replace("ws://", "")}
+                            </span>
+                            <ExternalLink className="size-3 flex-shrink-0" />
+                          </a>
+                        </div>
+                      )}
                   </div>
 
                   <div className="space-y-2">
@@ -604,7 +619,7 @@ export default function WalletViewer() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setDisconnectDialogOpen(true)}
-                className="flex items-center gap-1 text-muted-foreground hover:text-destructive transition-colors"
+                className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors"
                 aria-label="Disconnect wallet"
               >
                 <LogOut className="size-3" />
@@ -620,25 +635,24 @@ export default function WalletViewer() {
         <div className="text-4xl font-bold font-mono">
           {formatSats(balance)}
         </div>
-        <div className="text-sm text-muted-foreground mt-1">sats</div>
       </div>
 
       {/* Send / Receive Buttons */}
       <div className="px-4 pb-3">
         <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
-          <Button onClick={() => setSendDialogOpen(true)} variant="default">
-            <Send className="mr-2 size-4" />
-            Send
-          </Button>
           <Button onClick={() => setReceiveDialogOpen(true)} variant="outline">
             <Download className="mr-2 size-4" />
             Receive
+          </Button>
+          <Button onClick={() => setSendDialogOpen(true)} variant="default">
+            <Send className="mr-2 size-4" />
+            Send
           </Button>
         </div>
       </div>
 
       {/* Transaction History */}
-      <div className="flex-1 overflow-hidden border-t border-border">
+      <div className="flex-1 overflow-hidden">
         {walletInfo?.methods.includes("list_transactions") ? (
           loading ? (
             <div className="flex h-full items-center justify-center">
@@ -686,9 +700,6 @@ export default function WalletViewer() {
                         <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
                       )}
                       <span className="text-sm truncate">{txLabel}</span>
-                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                        {formatTime(tx.created_at)}
-                      </span>
                     </div>
                     <div className="flex-shrink-0 ml-4">
                       <p className="text-sm font-semibold font-mono">
