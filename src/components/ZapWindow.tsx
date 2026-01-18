@@ -32,6 +32,7 @@ import eventStore from "@/services/event-store";
 import { useWallet } from "@/hooks/useWallet";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { KindRenderer } from "./nostr/kinds";
+import { UserName } from "./nostr/UserName";
 import type { EventPointer, AddressPointer } from "@/lib/open-parser";
 import accountManager from "@/services/accounts";
 import {
@@ -58,7 +59,7 @@ export interface ZapWindowProps {
 }
 
 // Default preset amounts in sats
-const DEFAULT_PRESETS = [21, 100, 500, 1000, 5000, 10000];
+const DEFAULT_PRESETS = [21, 420, 2100, 42000];
 
 // LocalStorage keys
 const STORAGE_KEY_CUSTOM_AMOUNTS = "grimoire_zap_custom_amounts";
@@ -187,7 +188,7 @@ export function ZapWindow({
     }
   };
 
-  // Generate QR code for invoice
+  // Generate QR code for invoice with optional profile picture overlay
   const generateQrCode = async (invoiceText: string) => {
     try {
       const qrDataUrl = await QRCode.toDataURL(invoiceText, {
@@ -198,7 +199,70 @@ export function ZapWindow({
           light: "#FFFFFF",
         },
       });
-      return qrDataUrl;
+
+      // If profile has picture, overlay it in the center
+      const profilePicUrl = recipientProfile?.picture;
+      if (!profilePicUrl) {
+        return qrDataUrl;
+      }
+
+      // Create canvas to overlay profile picture
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return qrDataUrl;
+
+      // Load QR code image
+      const qrImage = new Image();
+      await new Promise((resolve, reject) => {
+        qrImage.onload = resolve;
+        qrImage.onerror = reject;
+        qrImage.src = qrDataUrl;
+      });
+
+      canvas.width = qrImage.width;
+      canvas.height = qrImage.height;
+
+      // Draw QR code
+      ctx.drawImage(qrImage, 0, 0);
+
+      // Load and draw profile picture
+      const profileImage = new Image();
+      profileImage.crossOrigin = "anonymous";
+
+      await new Promise((resolve) => {
+        profileImage.onload = resolve;
+        profileImage.onerror = () => resolve(null); // Silently fail if image doesn't load
+        profileImage.src = profilePicUrl;
+      });
+
+      // Only overlay if image loaded successfully
+      if (profileImage.complete && profileImage.naturalHeight !== 0) {
+        const size = canvas.width * 0.25; // 25% of QR code size
+        const x = (canvas.width - size) / 2;
+        const y = (canvas.height - size) / 2;
+
+        // Draw white background circle
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(
+          canvas.width / 2,
+          canvas.height / 2,
+          size / 2 + 4,
+          0,
+          2 * Math.PI,
+        );
+        ctx.fill();
+
+        // Clip to circle for profile picture
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, size / 2, 0, 2 * Math.PI);
+        ctx.clip();
+        ctx.drawImage(profileImage, x, y, size, size);
+        ctx.restore();
+      }
+
+      return canvas.toDataURL();
     } catch (error) {
       console.error("QR code generation error:", error);
       throw new Error("Failed to generate QR code");
@@ -413,7 +477,7 @@ export function ZapWindow({
               {/* Header */}
               <div className="text-center space-y-2">
                 <div className="text-2xl font-semibold">
-                  Zap {recipientName}
+                  Zap <UserName pubkey={recipientPubkey} />
                 </div>
                 <div className="text-sm text-muted-foreground">
                   Scan with your Lightning wallet or copy the invoice
@@ -451,24 +515,14 @@ export function ZapWindow({
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => openInWallet(invoice)}
-                >
-                  <ExternalLink className="size-4 mr-2" />
-                  Open in Wallet
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => copyToClipboard(invoice)}
-                >
-                  <Copy className="size-4 mr-2" />
-                  Copy Invoice
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => openInWallet(invoice)}
+              >
+                <ExternalLink className="size-4 mr-2" />
+                Open in Wallet
+              </Button>
 
               {/* Retry with wallet button if payment timed out */}
               {paymentTimedOut &&
@@ -502,7 +556,9 @@ export function ZapWindow({
               {/* Show recipient info if not zapping an event */}
               {!event && (
                 <div className="text-center space-y-2 py-4">
-                  <div className="text-2xl font-semibold">{recipientName}</div>
+                  <div className="text-2xl font-semibold">
+                    <UserName pubkey={recipientPubkey} />
+                  </div>
                   {recipientProfile?.lud16 && (
                     <div className="text-sm text-muted-foreground font-mono">
                       {recipientProfile.lud16}
