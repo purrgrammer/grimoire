@@ -323,10 +323,10 @@ function TransactionLabel({ transaction }: { transaction: Transaction }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
       <Zap className="size-3.5 flex-shrink-0 fill-zap text-zap" />
-      <div className="text-sm truncate min-w-0 flex items-center gap-1">
+      <div className="text-sm min-w-0 flex items-center gap-2">
         <UserName pubkey={zapInfo.sender} className="flex-shrink-0" />
         {zapInfo.message && (
-          <span className="truncate">
+          <span className="truncate min-w-0">
             <RichText
               content={zapInfo.message}
               event={zapInfo.zapRequestEvent}
