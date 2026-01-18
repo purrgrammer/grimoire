@@ -24,13 +24,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import QRCode from "qrcode";
 import { useProfile } from "@/hooks/useProfile";
@@ -48,6 +41,12 @@ import {
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import LoginDialog from "./nostr/LoginDialog";
+import { resolveLightningAddress, validateZapSupport } from "@/lib/lnurl";
+import {
+  createZapRequest,
+  serializeZapRequest,
+} from "@/lib/create-zap-request";
+import { fetchInvoiceFromCallback } from "@/lib/lnurl";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -234,8 +233,6 @@ export function ZapWindow({
 
       let lnurlData;
       if (lud16) {
-        const { resolveLightningAddress, validateZapSupport } =
-          await import("@/lib/lnurl");
         lnurlData = await resolveLightningAddress(lud16);
         validateZapSupport(lnurlData);
       } else if (lud06) {
@@ -281,8 +278,6 @@ export function ZapWindow({
 
       // Step 3: Create and sign zap request event (kind 9734)
       toast.info("Creating zap request...");
-      const { createZapRequest, serializeZapRequest } =
-        await import("@/lib/create-zap-request");
 
       const zapRequest = await createZapRequest({
         recipientPubkey,
@@ -297,7 +292,6 @@ export function ZapWindow({
 
       // Step 4: Fetch invoice from LNURL callback
       toast.info("Fetching invoice...");
-      const { fetchInvoiceFromCallback } = await import("@/lib/lnurl");
 
       const invoiceResponse = await fetchInvoiceFromCallback(
         lnurlData.callback,
@@ -324,9 +318,7 @@ export function ZapWindow({
           await refreshBalance();
 
           setIsPaid(true);
-          toast.success(
-            `⚡ Zapped ${amount} sats to ${recipientProfile?.name || recipientName}!`,
-          );
+          toast.success(`⚡ Zapped ${amount} sats to ${recipientName}!`);
 
           // Show success message from LNURL service if available
           if (invoiceResponse.successAction?.message) {
@@ -427,190 +419,215 @@ export function ZapWindow({
     <div className="h-full flex flex-col bg-background overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-4 space-y-3">
-          {/* Show event preview if zapping an event */}
-          {event && <KindRenderer event={event} />}
+          {/* Show QR Code View if invoice exists */}
+          {showQrDialog ? (
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="text-center space-y-2">
+                <div className="text-2xl font-semibold">
+                  Zap {recipientName}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Scan with your Lightning wallet or copy the invoice
+                </div>
+              </div>
 
-          {/* Amount Selection */}
-          <div className="space-y-2">
-            {/* Preset amounts - single row */}
-            <div className="flex flex-wrap gap-1.5">
-              {availableAmounts.map((amount) => (
+              {/* QR Code */}
+              {qrCodeUrl && (
+                <div className="flex justify-center p-4 bg-white rounded-lg">
+                  <img
+                    src={qrCodeUrl}
+                    alt="Lightning Invoice QR Code"
+                    className="w-64 h-64"
+                  />
+                </div>
+              )}
+
+              {/* Invoice */}
+              <div className="space-y-2">
+                <Label>Invoice</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={invoice}
+                    readOnly
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(invoice)}
+                  >
+                    <Copy className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
                 <Button
-                  key={amount}
-                  size="sm"
-                  variant={selectedAmount === amount ? "default" : "outline"}
-                  onClick={() => {
-                    setSelectedAmount(amount);
-                    setCustomAmount("");
-                  }}
-                  className="relative"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => openInWallet(invoice)}
                 >
-                  {formatAmount(amount)}
-                  {amountUsage[amount] && (
-                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-yellow-500" />
+                  <ExternalLink className="size-4 mr-2" />
+                  Open in Wallet
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => copyToClipboard(invoice)}
+                >
+                  <Copy className="size-4 mr-2" />
+                  Copy Invoice
+                </Button>
+              </div>
+
+              {/* Retry with wallet button if payment timed out */}
+              {paymentTimedOut &&
+                wallet &&
+                walletInfo?.methods.includes("pay_invoice") && (
+                  <Button
+                    onClick={handleRetryWallet}
+                    disabled={isProcessing}
+                    className="w-full"
+                    variant="default"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="size-4 mr-2" />
+                        Retry with Wallet
+                      </>
+                    )}
+                  </Button>
+                )}
+            </div>
+          ) : (
+            <>
+              {/* Show event preview if zapping an event */}
+              {event && <KindRenderer event={event} />}
+
+              {/* Show recipient info if not zapping an event */}
+              {!event && (
+                <div className="text-center space-y-2 py-4">
+                  <div className="text-2xl font-semibold">{recipientName}</div>
+                  {recipientProfile?.lud16 && (
+                    <div className="text-sm text-muted-foreground font-mono">
+                      {recipientProfile.lud16}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Amount Selection */}
+              <div className="space-y-2">
+                {/* Preset amounts - single row */}
+                <div className="flex flex-wrap gap-1.5">
+                  {availableAmounts.map((amount) => (
+                    <Button
+                      key={amount}
+                      size="sm"
+                      variant={
+                        selectedAmount === amount ? "default" : "outline"
+                      }
+                      onClick={() => {
+                        setSelectedAmount(amount);
+                        setCustomAmount("");
+                      }}
+                      className="relative"
+                    >
+                      {formatAmount(amount)}
+                      {amountUsage[amount] && (
+                        <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-yellow-500" />
+                      )}
+                    </Button>
+                  ))}
+                  {/* Custom amount inline */}
+                  <Input
+                    type="number"
+                    placeholder="Custom"
+                    value={customAmount}
+                    onChange={(e) => {
+                      setCustomAmount(e.target.value);
+                      setSelectedAmount(null);
+                    }}
+                    min="1"
+                    className="flex-1 h-9"
+                  />
+                </div>
+
+                {/* Comment with emoji support - single row */}
+                <MentionEditor
+                  ref={editorRef}
+                  placeholder="Say something nice..."
+                  searchProfiles={searchProfiles}
+                  searchEmojis={searchEmojis}
+                  className="rounded-md border border-input bg-background px-3 py-2"
+                />
+              </div>
+
+              {/* Payment Button */}
+              {!canSign ? (
+                <Button
+                  onClick={handleLogin}
+                  className="w-full"
+                  size="lg"
+                  variant="default"
+                >
+                  <LogIn className="size-4 mr-2" />
+                  Log in to Zap
+                </Button>
+              ) : (
+                <Button
+                  onClick={() =>
+                    isPaid
+                      ? onClose?.()
+                      : handleZap(
+                          wallet && walletInfo?.methods.includes("pay_invoice"),
+                        )
+                  }
+                  disabled={
+                    isProcessing ||
+                    (!isPaid && !selectedAmount && !customAmount)
+                  }
+                  className="w-full"
+                  size="lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : isPaid ? (
+                    <>
+                      <CheckCircle2 className="size-4 mr-2" />
+                      Done
+                    </>
+                  ) : wallet && walletInfo?.methods.includes("pay_invoice") ? (
+                    <>
+                      <Wallet className="size-4 mr-2" />
+                      Pay with Wallet (
+                      {selectedAmount || parseInt(customAmount) || 0} sats)
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="size-4 mr-2" />
+                      Pay ({selectedAmount || parseInt(customAmount) || 0} sats)
+                    </>
                   )}
                 </Button>
-              ))}
-              {/* Custom amount inline */}
-              <Input
-                type="number"
-                placeholder="Custom"
-                value={customAmount}
-                onChange={(e) => {
-                  setCustomAmount(e.target.value);
-                  setSelectedAmount(null);
-                }}
-                min="1"
-                className="flex-1 h-9"
-              />
-            </div>
-
-            {/* Comment with emoji support - single row */}
-            <MentionEditor
-              ref={editorRef}
-              placeholder="Say something nice..."
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              className="rounded-md border border-input bg-background px-3 py-2"
-            />
-          </div>
-
-          {/* Payment Button */}
-          {!canSign ? (
-            <Button
-              onClick={handleLogin}
-              className="w-full"
-              size="lg"
-              variant="default"
-            >
-              <LogIn className="size-4 mr-2" />
-              Log in to Zap
-            </Button>
-          ) : (
-            <Button
-              onClick={() =>
-                isPaid
-                  ? onClose?.()
-                  : handleZap(
-                      wallet && walletInfo?.methods.includes("pay_invoice"),
-                    )
-              }
-              disabled={
-                isProcessing || (!isPaid && !selectedAmount && !customAmount)
-              }
-              className="w-full"
-              size="lg"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="size-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : isPaid ? (
-                <>
-                  <CheckCircle2 className="size-4 mr-2" />
-                  Done
-                </>
-              ) : wallet && walletInfo?.methods.includes("pay_invoice") ? (
-                <>
-                  <Wallet className="size-4 mr-2" />
-                  Pay with Wallet (
-                  {selectedAmount || parseInt(customAmount) || 0} sats)
-                </>
-              ) : (
-                <>
-                  <Zap className="size-4 mr-2" />
-                  Pay ({selectedAmount || parseInt(customAmount) || 0} sats)
-                </>
               )}
-            </Button>
+            </>
           )}
         </div>
       </div>
 
       {/* Login Dialog */}
       <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
-
-      {/* QR Code Dialog */}
-      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Lightning Invoice</DialogTitle>
-            <DialogDescription>
-              Scan with your Lightning wallet or copy the invoice
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {qrCodeUrl && (
-              <div className="flex justify-center p-4 bg-white rounded-lg">
-                <img
-                  src={qrCodeUrl}
-                  alt="Lightning Invoice QR Code"
-                  className="w-64 h-64"
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Invoice</Label>
-              <div className="flex gap-2">
-                <Input value={invoice} readOnly className="font-mono text-xs" />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => copyToClipboard(invoice)}
-                >
-                  <Copy className="size-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => openInWallet(invoice)}
-              >
-                <ExternalLink className="size-4 mr-2" />
-                Open in Wallet
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => copyToClipboard(invoice)}
-              >
-                <Copy className="size-4 mr-2" />
-                Copy Invoice
-              </Button>
-            </div>
-
-            {/* Retry with wallet button if payment timed out */}
-            {paymentTimedOut &&
-              wallet &&
-              walletInfo?.methods.includes("pay_invoice") && (
-                <Button
-                  onClick={handleRetryWallet}
-                  disabled={isProcessing}
-                  className="w-full"
-                  variant="default"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Retrying...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="size-4 mr-2" />
-                      Retry with Wallet
-                    </>
-                  )}
-                </Button>
-              )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
