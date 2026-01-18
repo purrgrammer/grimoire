@@ -2,7 +2,7 @@
  * Grimoire Member System
  *
  * Defines special usernames for Grimoire project members with custom NIP-05 style identifiers.
- * Members get special visual styling and verification badges.
+ * Members get special gradient styling to distinguish them visually.
  */
 
 /**
@@ -13,13 +13,13 @@ export interface GrimoireMember {
   username: string;
   /** Hex pubkey */
   pubkey: string;
-  /** NIP-05 style identifier (e.g., "_@grimoire.pro") */
+  /** NIP-05 style identifier (e.g., "_@grimoire.rocks") */
   nip05: string;
 }
 
 /**
  * Official Grimoire project members
- * These users get special username styling and verification badges
+ * These users get special gradient styling applied to their usernames
  */
 export const GRIMOIRE_MEMBERS: readonly GrimoireMember[] = [
   {
@@ -68,7 +68,7 @@ export function getGrimoireMember(pubkey: string): GrimoireMember | undefined {
 
 /**
  * Get Grimoire member info by NIP-05 identifier
- * @param nip05 - NIP-05 identifier (e.g., "_@grimoire.pro")
+ * @param nip05 - NIP-05 identifier (e.g., "_@grimoire.rocks")
  * @returns Member info or undefined
  */
 export function getGrimoireMemberByNip05(
