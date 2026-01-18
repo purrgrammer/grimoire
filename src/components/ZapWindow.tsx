@@ -63,6 +63,19 @@ const DEFAULT_PRESETS = [21, 100, 500, 1000, 5000, 10000];
 const STORAGE_KEY_CUSTOM_AMOUNTS = "grimoire_zap_custom_amounts";
 const STORAGE_KEY_AMOUNT_USAGE = "grimoire_zap_amount_usage";
 
+/**
+ * Format amount with k/m suffix for large numbers
+ */
+function formatAmount(amount: number): string {
+  if (amount >= 1000000) {
+    return `${(amount / 1000000).toFixed(amount % 1000000 === 0 ? 0 : 1)}m`;
+  }
+  if (amount >= 1000) {
+    return `${(amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1)}k`;
+  }
+  return amount.toString();
+}
+
 export function ZapWindow({
   recipientPubkey: initialRecipientPubkey,
   eventPointer,
@@ -113,7 +126,15 @@ export function ZapWindow({
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
   const { searchProfiles } = useProfileSearch();
-  const { searchEmojis } = useEmojiSearch();
+  const { searchEmojis, service: emojiService } = useEmojiSearch();
+
+  // Debug emoji search on mount
+  useEffect(() => {
+    console.log("[Zap] Emoji search service initialized:", emojiService);
+    searchEmojis("fire").then((results) => {
+      console.log("[Zap] Test emoji search for 'fire':", results);
+    });
+  }, [searchEmojis, emojiService]);
 
   // Load custom amounts and usage stats from localStorage
   const [customAmounts, setCustomAmounts] = useState<number[]>(() => {
@@ -206,6 +227,13 @@ export function ZapWindow({
       const lud16 = recipientProfile?.lud16;
       const lud06 = recipientProfile?.lud06;
 
+      console.log("[Zap] Recipient profile:", {
+        pubkey: recipientPubkey,
+        lud16,
+        lud06,
+        profile: recipientProfile,
+      });
+
       if (!lud16 && !lud06) {
         throw new Error(
           "Recipient has no Lightning address configured in their profile",
@@ -217,10 +245,13 @@ export function ZapWindow({
 
       let lnurlData;
       if (lud16) {
+        console.log("[Zap] Resolving Lightning address:", lud16);
         const { resolveLightningAddress, validateZapSupport } =
           await import("@/lib/lnurl");
         lnurlData = await resolveLightningAddress(lud16);
+        console.log("[Zap] LNURL data:", lnurlData);
         validateZapSupport(lnurlData);
+        console.log("[Zap] Zap support validated");
       } else if (lud06) {
         throw new Error(
           "LNURL (lud06) not supported. Recipient should use a Lightning address (lud16) instead.",
@@ -275,19 +306,26 @@ export function ZapWindow({
         lnurl: lud16 || undefined,
         emojiTags,
       });
+      console.log("[Zap] Zap request created:", zapRequest);
 
       const serializedZapRequest = serializeZapRequest(zapRequest);
+      console.log(
+        "[Zap] Serialized zap request length:",
+        serializedZapRequest.length,
+      );
 
       // Step 4: Fetch invoice from LNURL callback
       toast.info("Fetching invoice...");
       const { fetchInvoiceFromCallback } = await import("@/lib/lnurl");
 
+      console.log("[Zap] Fetching invoice from callback:", lnurlData.callback);
       const invoiceResponse = await fetchInvoiceFromCallback(
         lnurlData.callback,
         amountMillisats,
         serializedZapRequest,
         comment || undefined,
       );
+      console.log("[Zap] Invoice response:", invoiceResponse);
 
       const invoiceText = invoiceResponse.pr;
 
@@ -348,21 +386,18 @@ export function ZapWindow({
   return (
     <div className="h-full flex flex-col bg-background overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
+        <div className="max-w-2xl mx-auto p-4 space-y-3">
           {/* Show event preview if zapping an event */}
           {event && <KindRenderer event={event} />}
 
           {/* Amount Selection */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Amount (sats)
-            </h3>
-
-            {/* Preset amounts */}
-            <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-2">
+            {/* Preset amounts - single row */}
+            <div className="flex flex-wrap gap-1.5">
               {availableAmounts.map((amount) => (
                 <Button
                   key={amount}
+                  size="sm"
                   variant={selectedAmount === amount ? "default" : "outline"}
                   onClick={() => {
                     setSelectedAmount(amount);
@@ -370,41 +405,34 @@ export function ZapWindow({
                   }}
                   className="relative"
                 >
-                  {amount.toLocaleString()}
+                  {formatAmount(amount)}
                   {amountUsage[amount] && (
-                    <span className="absolute top-1 right-1 size-1.5 rounded-full bg-yellow-500" />
+                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-yellow-500" />
                   )}
                 </Button>
               ))}
-            </div>
-
-            {/* Custom amount */}
-            <div className="space-y-2">
-              <Label>Custom Amount</Label>
+              {/* Custom amount inline */}
               <Input
-                id="custom-amount"
                 type="number"
-                placeholder="Enter amount in sats"
+                placeholder="Custom"
                 value={customAmount}
                 onChange={(e) => {
                   setCustomAmount(e.target.value);
                   setSelectedAmount(null);
                 }}
                 min="1"
+                className="w-24 h-9"
               />
             </div>
 
-            {/* Comment with emoji support */}
-            <div className="space-y-2">
-              <Label>Comment (optional)</Label>
-              <MentionEditor
-                ref={editorRef}
-                placeholder="Say something nice..."
-                searchProfiles={searchProfiles}
-                searchEmojis={searchEmojis}
-                className="min-h-[60px] rounded-md border border-input bg-background px-3 py-2"
-              />
-            </div>
+            {/* Comment with emoji support - single row */}
+            <MentionEditor
+              ref={editorRef}
+              placeholder="Say something nice..."
+              searchProfiles={searchProfiles}
+              searchEmojis={searchEmojis}
+              className="rounded-md border border-input bg-background px-3 py-2"
+            />
           </div>
 
           {/* Payment Button */}
