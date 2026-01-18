@@ -512,15 +512,17 @@ export default function WalletViewer() {
   }
 
   async function handleGenerateInvoice() {
-    const amount = parseInt(receiveAmount);
-    if (!amount || amount <= 0) {
+    const amountSats = parseInt(receiveAmount);
+    if (!amountSats || amountSats <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
 
     setGenerating(true);
     try {
-      const result = await makeInvoice(amount, {
+      // Convert sats to millisats for NWC protocol
+      const amountMillisats = amountSats * 1000;
+      const result = await makeInvoice(amountMillisats, {
         description: receiveDescription || undefined,
       });
 
