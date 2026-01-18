@@ -125,6 +125,7 @@ export function ZapWindow({
   const [invoice, setInvoice] = useState<string>("");
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [paymentTimedOut, setPaymentTimedOut] = useState(false);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -334,25 +335,48 @@ export function ZapWindow({
 
       // Step 5: Pay or show QR code
       if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
-        // Pay with NWC wallet
+        // Pay with NWC wallet with timeout
         toast.info("Paying invoice with wallet...");
-        await payInvoice(invoiceText);
-        await refreshBalance();
 
-        setIsPaid(true);
-        toast.success(
-          `⚡ Zapped ${amount} sats to ${recipientProfile?.name || recipientName}!`,
-        );
+        try {
+          // Race between payment and 30 second timeout
+          const paymentPromise = payInvoice(invoiceText);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("TIMEOUT")), 30000),
+          );
 
-        // Show success message from LNURL service if available
-        if (invoiceResponse.successAction?.message) {
-          toast.info(invoiceResponse.successAction.message);
-        }
+          await Promise.race([paymentPromise, timeoutPromise]);
+          await refreshBalance();
 
-        // Close the window after successful zap
-        if (onClose) {
-          // Small delay to let the user see the success toast
-          setTimeout(() => onClose(), 1500);
+          setIsPaid(true);
+          toast.success(
+            `⚡ Zapped ${amount} sats to ${recipientProfile?.name || recipientName}!`,
+          );
+
+          // Show success message from LNURL service if available
+          if (invoiceResponse.successAction?.message) {
+            toast.info(invoiceResponse.successAction.message);
+          }
+
+          // Close the window after successful zap
+          if (onClose) {
+            // Small delay to let the user see the success toast
+            setTimeout(() => onClose(), 1500);
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message === "TIMEOUT") {
+            // Payment timed out - show QR code with retry option
+            console.log("[Zap] Wallet payment timed out, showing QR code");
+            toast.warning("Wallet payment timed out. Showing QR code instead.");
+            setPaymentTimedOut(true);
+            const qrUrl = await generateQrCode(invoiceText);
+            setQrCodeUrl(qrUrl);
+            setInvoice(invoiceText);
+            setShowQrDialog(true);
+          } else {
+            // Other payment error - re-throw
+            throw error;
+          }
         }
       } else {
         // Show QR code and invoice
@@ -390,6 +414,51 @@ export function ZapWindow({
   // Open login dialog
   const handleLogin = () => {
     setShowLogin(true);
+  };
+
+  // Retry wallet payment
+  const handleRetryWallet = async () => {
+    if (!invoice || !wallet) return;
+
+    setIsProcessing(true);
+    setShowQrDialog(false);
+    setPaymentTimedOut(false);
+
+    try {
+      toast.info("Retrying payment with wallet...");
+
+      // Try again with timeout
+      const paymentPromise = payInvoice(invoice);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT")), 30000),
+      );
+
+      await Promise.race([paymentPromise, timeoutPromise]);
+      await refreshBalance();
+
+      setIsPaid(true);
+      toast.success("⚡ Payment successful!");
+
+      // Close the window after successful zap
+      if (onClose) {
+        setTimeout(() => onClose(), 1500);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === "TIMEOUT") {
+        console.log("[Zap] Wallet payment timed out again");
+        toast.error("Payment timed out again. Please try manually.");
+        setPaymentTimedOut(true);
+        setShowQrDialog(true);
+      } else {
+        console.error("[Zap] Retry payment error:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to retry payment",
+        );
+        setShowQrDialog(true);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -430,7 +499,7 @@ export function ZapWindow({
                   setSelectedAmount(null);
                 }}
                 min="1"
-                className="w-24 h-9"
+                className="flex-1 h-9"
               />
             </div>
 
@@ -547,6 +616,30 @@ export function ZapWindow({
                 Copy Invoice
               </Button>
             </div>
+
+            {/* Retry with wallet button if payment timed out */}
+            {paymentTimedOut &&
+              wallet &&
+              walletInfo?.methods.includes("pay_invoice") && (
+                <Button
+                  onClick={handleRetryWallet}
+                  disabled={isProcessing}
+                  className="w-full"
+                  variant="default"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="size-4 mr-2" />
+                      Retry with Wallet
+                    </>
+                  )}
+                </Button>
+              )}
           </div>
         </DialogContent>
       </Dialog>
