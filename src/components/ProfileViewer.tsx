@@ -398,7 +398,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
               />
               {/* NIP-05 */}
               {profile.nip05 && (
-                <div className="text-xs">
+                <div className="text-xs text-muted-foreground">
                   <Nip05 pubkey={pubkey} profile={profile} />
                 </div>
               )}
