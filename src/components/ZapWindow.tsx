@@ -130,15 +130,7 @@ export function ZapWindow({
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
   const { searchProfiles } = useProfileSearch();
-  const { searchEmojis, service: emojiService } = useEmojiSearch();
-
-  // Debug emoji search on mount
-  useEffect(() => {
-    console.log("[Zap] Emoji search service initialized:", emojiService);
-    searchEmojis("fire").then((results) => {
-      console.log("[Zap] Test emoji search for 'fire':", results);
-    });
-  }, [searchEmojis, emojiService]);
+  const { searchEmojis } = useEmojiSearch();
 
   // Load custom amounts and usage stats from localStorage
   const [customAmounts, setCustomAmounts] = useState<number[]>(() => {
@@ -231,13 +223,6 @@ export function ZapWindow({
       const lud16 = recipientProfile?.lud16;
       const lud06 = recipientProfile?.lud06;
 
-      console.log("[Zap] Recipient profile:", {
-        pubkey: recipientPubkey,
-        lud16,
-        lud06,
-        profile: recipientProfile,
-      });
-
       if (!lud16 && !lud06) {
         throw new Error(
           "Recipient has no Lightning address configured in their profile",
@@ -249,13 +234,10 @@ export function ZapWindow({
 
       let lnurlData;
       if (lud16) {
-        console.log("[Zap] Resolving Lightning address:", lud16);
         const { resolveLightningAddress, validateZapSupport } =
           await import("@/lib/lnurl");
         lnurlData = await resolveLightningAddress(lud16);
-        console.log("[Zap] LNURL data:", lnurlData);
         validateZapSupport(lnurlData);
-        console.log("[Zap] Zap support validated");
       } else if (lud06) {
         throw new Error(
           "LNURL (lud06) not supported. Recipient should use a Lightning address (lud16) instead.",
@@ -310,26 +292,19 @@ export function ZapWindow({
         lnurl: lud16 || undefined,
         emojiTags,
       });
-      console.log("[Zap] Zap request created:", zapRequest);
 
       const serializedZapRequest = serializeZapRequest(zapRequest);
-      console.log(
-        "[Zap] Serialized zap request length:",
-        serializedZapRequest.length,
-      );
 
       // Step 4: Fetch invoice from LNURL callback
       toast.info("Fetching invoice...");
       const { fetchInvoiceFromCallback } = await import("@/lib/lnurl");
 
-      console.log("[Zap] Fetching invoice from callback:", lnurlData.callback);
       const invoiceResponse = await fetchInvoiceFromCallback(
         lnurlData.callback,
         amountMillisats,
         serializedZapRequest,
         comment || undefined,
       );
-      console.log("[Zap] Invoice response:", invoiceResponse);
 
       const invoiceText = invoiceResponse.pr;
 
@@ -357,16 +332,9 @@ export function ZapWindow({
           if (invoiceResponse.successAction?.message) {
             toast.info(invoiceResponse.successAction.message);
           }
-
-          // Close the window after successful zap
-          if (onClose) {
-            // Small delay to let the user see the success toast
-            setTimeout(() => onClose(), 1500);
-          }
         } catch (error) {
           if (error instanceof Error && error.message === "TIMEOUT") {
             // Payment timed out - show QR code with retry option
-            console.log("[Zap] Wallet payment timed out, showing QR code");
             toast.warning("Wallet payment timed out. Showing QR code instead.");
             setPaymentTimedOut(true);
             const qrUrl = await generateQrCode(invoiceText);
@@ -437,20 +405,14 @@ export function ZapWindow({
       await refreshBalance();
 
       setIsPaid(true);
+      setShowQrDialog(false);
       toast.success("⚡ Payment successful!");
-
-      // Close the window after successful zap
-      if (onClose) {
-        setTimeout(() => onClose(), 1500);
-      }
     } catch (error) {
       if (error instanceof Error && error.message === "TIMEOUT") {
-        console.log("[Zap] Wallet payment timed out again");
         toast.error("Payment timed out again. Please try manually.");
         setPaymentTimedOut(true);
         setShowQrDialog(true);
       } else {
-        console.error("[Zap] Retry payment error:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to retry payment",
         );
@@ -527,9 +489,15 @@ export function ZapWindow({
           ) : (
             <Button
               onClick={() =>
-                handleZap(wallet && walletInfo?.methods.includes("pay_invoice"))
+                isPaid
+                  ? onClose?.()
+                  : handleZap(
+                      wallet && walletInfo?.methods.includes("pay_invoice"),
+                    )
               }
-              disabled={isProcessing || (!selectedAmount && !customAmount)}
+              disabled={
+                isProcessing || (!isPaid && !selectedAmount && !customAmount)
+              }
               className="w-full"
               size="lg"
             >
@@ -541,7 +509,7 @@ export function ZapWindow({
               ) : isPaid ? (
                 <>
                   <CheckCircle2 className="size-4 mr-2" />
-                  Zap Sent!
+                  Done
                 </>
               ) : wallet && walletInfo?.methods.includes("pay_invoice") ? (
                 <>
