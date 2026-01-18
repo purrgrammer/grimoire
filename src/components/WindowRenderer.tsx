@@ -234,6 +234,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
           <ZapWindow
             recipientPubkey={window.props.recipientPubkey}
             eventPointer={window.props.eventPointer}
+            onClose={onClose}
           />
         );
         break;

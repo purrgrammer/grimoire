@@ -54,6 +54,8 @@ export interface ZapWindowProps {
   recipientPubkey: string;
   /** Optional event being zapped (adds context) */
   eventPointer?: EventPointer | AddressPointer;
+  /** Callback to close the window */
+  onClose?: () => void;
 }
 
 // Default preset amounts in sats
@@ -79,6 +81,7 @@ function formatAmount(amount: number): string {
 export function ZapWindow({
   recipientPubkey: initialRecipientPubkey,
   eventPointer,
+  onClose,
 }: ZapWindowProps) {
   // Load event if we have a pointer and no recipient pubkey (derive from event author)
   const event = use$(() => {
@@ -344,6 +347,12 @@ export function ZapWindow({
         // Show success message from LNURL service if available
         if (invoiceResponse.successAction?.message) {
           toast.info(invoiceResponse.successAction.message);
+        }
+
+        // Close the window after successful zap
+        if (onClose) {
+          // Small delay to let the user see the success toast
+          setTimeout(() => onClose(), 1500);
         }
       } else {
         // Show QR code and invoice
