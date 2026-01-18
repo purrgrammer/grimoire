@@ -62,7 +62,9 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
         <BadgeCheck
           className={cn(
             "inline-block w-[1em] h-[1em]",
-            isActiveAccount ? "text-orange-500" : "text-violet-500",
+            isActiveAccount
+              ? "bg-gradient-to-tr from-amber-600 to-amber-400 bg-clip-text text-transparent"
+              : "bg-gradient-to-tr from-fuchsia-600 to-fuchsia-400 bg-clip-text text-transparent",
           )}
         />
       )}
