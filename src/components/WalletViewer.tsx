@@ -234,20 +234,46 @@ export default function WalletViewer() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
   // Load wallet info on mount
+  const loadWalletInfo = useCallback(async () => {
+    try {
+      const info = await getInfo();
+      setWalletInfo(info);
+    } catch (error) {
+      console.error("Failed to load wallet info:", error);
+      toast.error("Failed to load wallet info");
+    }
+  }, [getInfo]);
+
+  const loadInitialTransactions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listTransactions({
+        limit: BATCH_SIZE,
+        offset: 0,
+      });
+      const txs = result.transactions || [];
+      setTransactions(txs);
+      setHasMore(txs.length === BATCH_SIZE);
+    } catch (error) {
+      console.error("Failed to load transactions:", error);
+      toast.error("Failed to load transactions");
+    } finally {
+      setLoading(false);
+    }
+  }, [listTransactions]);
+
   useEffect(() => {
     if (isConnected) {
       loadWalletInfo();
     }
-  }, [isConnected]);
+  }, [isConnected, loadWalletInfo]);
 
   // Load transactions when wallet info is available
   useEffect(() => {
     if (walletInfo?.methods.includes("list_transactions")) {
       loadInitialTransactions();
     }
-  }, [walletInfo]);
-
-  // Check for incoming payment when invoice is generated
+  }, [walletInfo, loadInitialTransactions]);
   useEffect(() => {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
@@ -280,34 +306,6 @@ export default function WalletViewer() {
     lookupInvoice,
     loadInitialTransactions,
   ]);
-
-  async function loadWalletInfo() {
-    try {
-      const info = await getInfo();
-      setWalletInfo(info);
-    } catch (error) {
-      console.error("Failed to load wallet info:", error);
-      toast.error("Failed to load wallet info");
-    }
-  }
-
-  async function loadInitialTransactions() {
-    setLoading(true);
-    try {
-      const result = await listTransactions({
-        limit: BATCH_SIZE,
-        offset: 0,
-      });
-      const txs = result.transactions || [];
-      setTransactions(txs);
-      setHasMore(txs.length === BATCH_SIZE);
-    } catch (error) {
-      console.error("Failed to load transactions:", error);
-      toast.error("Failed to load transactions");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const loadMoreTransactions = useCallback(async () => {
     if (
@@ -364,8 +362,8 @@ export default function WalletViewer() {
         return;
       }
 
+      setSending(true);
       try {
-        setSending(true);
         const amountSats = parseInt(sendAmount); // Amount is in sats
         const invoice = await resolveLightningAddress(input, amountSats);
 
@@ -375,8 +373,7 @@ export default function WalletViewer() {
         // Parse the resolved invoice
         const details = parseInvoice(invoice);
         if (!details) {
-          toast.error("Failed to parse resolved invoice");
-          return;
+          throw new Error("Failed to parse resolved invoice");
         }
 
         setInvoiceDetails(details);
@@ -558,11 +555,16 @@ export default function WalletViewer() {
     }
   }
 
-  function handleCopyInvoice() {
-    navigator.clipboard.writeText(generatedInvoice);
-    setCopied(true);
-    toast.success("Invoice copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopyInvoice() {
+    try {
+      await navigator.clipboard.writeText(generatedInvoice);
+      setCopied(true);
+      toast.success("Invoice copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy invoice:", error);
+      toast.error("Failed to copy to clipboard");
+    }
   }
 
   function resetReceiveDialog() {
