@@ -1,4 +1,12 @@
-import { User, HardDrive, Palette, Wallet, Zap, X } from "lucide-react";
+import {
+  User,
+  HardDrive,
+  Palette,
+  Wallet,
+  Zap,
+  X,
+  RefreshCw,
+} from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -33,6 +41,7 @@ import ConnectWalletDialog from "@/components/ConnectWalletDialog";
 import { useState } from "react";
 import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
+import { useWallet } from "@/hooks/useWallet";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -78,6 +87,9 @@ export default function UserMenu() {
   // Get wallet service profile for display name
   const walletServiceProfile = useProfile(nwcConnection?.service);
 
+  // Use wallet hook for real-time balance and methods
+  const { disconnect: disconnectWallet, refreshBalance } = useWallet();
+
   function openProfile() {
     if (!account?.pubkey) return;
     addWindow(
@@ -99,9 +111,21 @@ export default function UserMenu() {
   }
 
   function handleDisconnectWallet() {
+    // Disconnect from NWC service (stops polling, clears wallet instance)
+    disconnectWallet();
+    // Clear connection from state
     disconnectNWC();
     setShowWalletInfo(false);
     toast.success("Wallet disconnected");
+  }
+
+  async function handleRefreshBalance() {
+    try {
+      await refreshBalance();
+      toast.success("Balance refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh balance");
+    }
   }
 
   function getWalletName(): string {
@@ -138,9 +162,19 @@ export default function UserMenu() {
               {/* Balance */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Balance:</span>
-                <span className="text-lg font-semibold">
-                  {formatBalance(nwcConnection.balance)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold">
+                    {formatBalance(nwcConnection.balance)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshBalance}
+                    title="Refresh balance"
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </Button>
+                </div>
               </div>
 
               {/* Wallet Name */}
