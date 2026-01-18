@@ -120,6 +120,7 @@ export function ZapWindow({
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPayingWithWallet, setIsPayingWithWallet] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [invoice, setInvoice] = useState<string>("");
@@ -365,9 +366,15 @@ export function ZapWindow({
 
       const invoiceText = invoiceResponse.pr;
 
+      // Generate QR code upfront so we can show it immediately on error
+      const qrUrl = await generateQrCode(invoiceText);
+      setQrCodeUrl(qrUrl);
+      setInvoice(invoiceText);
+
       // Step 5: Pay or show QR code
       if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
         // Pay with NWC wallet with timeout
+        setIsPayingWithWallet(true);
         try {
           // Race between payment and 30 second timeout
           const paymentPromise = payInvoice(invoiceText);
@@ -379,25 +386,27 @@ export function ZapWindow({
           await refreshBalance();
 
           setIsPaid(true);
+          setIsPayingWithWallet(false);
           toast.success(`⚡ Zapped ${amount} sats to ${recipientName}!`);
         } catch (error) {
+          // Payment failed or timed out - show QR code immediately
+          setIsPayingWithWallet(false);
+          setPaymentTimedOut(true);
+          setShowQrDialog(true);
+
+          // Show specific error message
           if (error instanceof Error && error.message === "TIMEOUT") {
-            // Payment timed out - show QR code with retry option
-            setPaymentTimedOut(true);
-            const qrUrl = await generateQrCode(invoiceText);
-            setQrCodeUrl(qrUrl);
-            setInvoice(invoiceText);
-            setShowQrDialog(true);
+            toast.error("Payment timed out. Use QR code or retry with wallet.");
           } else {
-            // Other payment error - re-throw
-            throw error;
+            toast.error(
+              error instanceof Error
+                ? `Payment failed: ${error.message}`
+                : "Payment failed. Use QR code or retry.",
+            );
           }
         }
       } else {
-        // Show QR code and invoice
-        const qrUrl = await generateQrCode(invoiceText);
-        setQrCodeUrl(qrUrl);
-        setInvoice(invoiceText);
+        // Show QR code and invoice directly
         setShowQrDialog(true);
       }
     } catch (error) {
@@ -435,6 +444,7 @@ export function ZapWindow({
     if (!invoice || !wallet) return;
 
     setIsProcessing(true);
+    setIsPayingWithWallet(true);
     setShowQrDialog(false);
     setPaymentTimedOut(false);
 
@@ -452,18 +462,19 @@ export function ZapWindow({
       setShowQrDialog(false);
       toast.success("⚡ Payment successful!");
     } catch (error) {
+      setShowQrDialog(true);
+      setPaymentTimedOut(true);
+
       if (error instanceof Error && error.message === "TIMEOUT") {
         toast.error("Payment timed out. Please try manually.");
-        setPaymentTimedOut(true);
-        setShowQrDialog(true);
       } else {
         toast.error(
           error instanceof Error ? error.message : "Failed to retry payment",
         );
-        setShowQrDialog(true);
       }
     } finally {
       setIsProcessing(false);
+      setIsPayingWithWallet(false);
     }
   };
 
@@ -515,38 +526,43 @@ export function ZapWindow({
               </div>
 
               {/* Actions */}
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => openInWallet(invoice)}
-              >
-                <ExternalLink className="size-4 mr-2" />
-                Open in Wallet
-              </Button>
+              <div className="space-y-2">
+                {/* Retry with wallet button if payment failed/timed out */}
+                {paymentTimedOut &&
+                  wallet &&
+                  walletInfo?.methods.includes("pay_invoice") && (
+                    <Button
+                      onClick={handleRetryWallet}
+                      disabled={isProcessing}
+                      className="w-full"
+                      variant="default"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="size-4 mr-2 animate-spin" />
+                          {isPayingWithWallet
+                            ? "Paying with wallet..."
+                            : "Retrying..."}
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="size-4 mr-2" />
+                          Retry with NWC Wallet
+                        </>
+                      )}
+                    </Button>
+                  )}
 
-              {/* Retry with wallet button if payment timed out */}
-              {paymentTimedOut &&
-                wallet &&
-                walletInfo?.methods.includes("pay_invoice") && (
-                  <Button
-                    onClick={handleRetryWallet}
-                    disabled={isProcessing}
-                    className="w-full"
-                    variant="default"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="size-4 mr-2 animate-spin" />
-                        Retrying...
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="size-4 mr-2" />
-                        Retry with Wallet
-                      </>
-                    )}
-                  </Button>
-                )}
+                {/* Always show option to open in external wallet */}
+                <Button
+                  variant={paymentTimedOut ? "outline" : "default"}
+                  className="w-full"
+                  onClick={() => openInWallet(invoice)}
+                >
+                  <ExternalLink className="size-4 mr-2" />
+                  Open in External Wallet
+                </Button>
+              </div>
             </div>
           ) : (
             <>
@@ -658,7 +674,9 @@ export function ZapWindow({
                   {isProcessing ? (
                     <>
                       <Loader2 className="size-4 mr-2 animate-spin" />
-                      Processing...
+                      {isPayingWithWallet
+                        ? "Paying with wallet..."
+                        : "Processing..."}
                     </>
                   ) : isPaid ? (
                     <>
