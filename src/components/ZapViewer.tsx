@@ -88,6 +88,15 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
     }
   }, []);
 
+  // Debug: Log wallet state changes
+  useEffect(() => {
+    console.log("[ZapViewer] Wallet state:", {
+      hasWallet: !!wallet,
+      balance: balance,
+      balanceInSats: balance ? Math.floor(balance / 1000) : 0,
+    });
+  }, [wallet, balance]);
+
   // Get sorted presets (most frequent first, then defaults)
   const sortedPresets = useMemo(() => {
     const historyAmounts = amountHistory
@@ -134,23 +143,30 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
       return;
     }
 
+    console.log("[ZapViewer] Generating invoice for", lud16, "amount:", amount);
     setIsLoading(true);
     setError("");
 
     try {
       const amountMsats = Number(amount) * 1000;
+      console.log("[ZapViewer] Amount in msats:", amountMsats);
 
       // Get active account for signing zap request
       const account = accountManager.active;
       if (!account) {
         throw new Error("No active account. Please login first.");
       }
+      console.log("[ZapViewer] Using account:", account.pubkey.slice(0, 8));
 
       // Get zap endpoint from LNURL
+      console.log("[ZapViewer] Fetching zap endpoint from LNURL...");
       const zapEndpoint = await getZapEndpoint(lud16);
       if (!zapEndpoint) {
-        throw new Error("Failed to fetch LNURL endpoint");
+        throw new Error(
+          "Failed to fetch LNURL endpoint. The recipient may not support zaps.",
+        );
       }
+      console.log("[ZapViewer] Zap endpoint:", zapEndpoint);
 
       // Create zap request
       const relays = state.activeAccount?.relays?.map((r) => r.url) || [
@@ -180,8 +196,10 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
       }
 
       // Sign the zap request
+      console.log("[ZapViewer] Signing zap request...");
       const signedZapRequest =
         await account.signer.signEvent(zapRequestTemplate);
+      console.log("[ZapViewer] Zap request signed:", signedZapRequest.id);
 
       // Request invoice from LNURL endpoint
       const params = new URLSearchParams({
@@ -189,12 +207,17 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
         nostr: JSON.stringify(signedZapRequest),
       });
 
+      console.log("[ZapViewer] Requesting invoice from LNURL...");
       const response = await fetch(`${zapEndpoint}?${params.toString()}`);
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[ZapViewer] LNURL error response:", errorText);
         throw new Error(`LNURL request failed: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log("[ZapViewer] LNURL response:", data);
+
       if (data.status === "ERROR") {
         throw new Error(data.reason || "LNURL error");
       }
@@ -203,6 +226,10 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
         throw new Error("No invoice returned from LNURL endpoint");
       }
 
+      console.log(
+        "[ZapViewer] Invoice received:",
+        data.pr.slice(0, 20) + "...",
+      );
       setInvoice(data.pr);
 
       // Generate QR code
@@ -230,21 +257,59 @@ export function ZapViewer({ pubkey, eventId, address }: ZapViewerProps) {
 
   // Pay with NWC
   const handlePayWithWallet = async () => {
-    if (!wallet || !invoice) return;
+    if (!wallet || !invoice) {
+      console.error("[ZapViewer] Missing wallet or invoice");
+      return;
+    }
 
+    console.log("[ZapViewer] Starting payment with wallet");
     setIsLoading(true);
     setPaymentStatus("pending");
     setError("");
 
     try {
-      await payInvoice(invoice);
+      // Validate invoice format (basic check)
+      if (!invoice.toLowerCase().startsWith("lnbc")) {
+        throw new Error("Invalid invoice format (must start with lnbc)");
+      }
+
+      console.log("[ZapViewer] Calling payInvoice...");
+
+      // Add timeout wrapper to prevent hanging
+      const paymentPromise = payInvoice(invoice);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Payment timeout after 60 seconds")),
+          60000,
+        ),
+      );
+
+      await Promise.race([paymentPromise, timeoutPromise]);
+
+      console.log("[ZapViewer] Payment successful");
       setPaymentStatus("success");
 
       // Start monitoring for zap receipt
       monitorForZapReceipt();
     } catch (err) {
-      console.error("Payment failed:", err);
-      setError(err instanceof Error ? err.message : "Payment failed");
+      console.error("[ZapViewer] Payment failed:", err);
+
+      // Provide user-friendly error messages
+      let errorMessage = "Payment failed";
+      if (err instanceof Error) {
+        if (err.message.includes("timeout")) {
+          errorMessage =
+            "Payment timed out. Please try again or check your wallet.";
+        } else if (err.message.includes("insufficient")) {
+          errorMessage = "Insufficient balance in wallet.";
+        } else if (err.message.includes("Invalid")) {
+          errorMessage = err.message;
+        } else {
+          errorMessage = `Payment failed: ${err.message}`;
+        }
+      }
+
+      setError(errorMessage);
       setPaymentStatus("failed");
     } finally {
       setIsLoading(false);
