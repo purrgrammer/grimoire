@@ -42,12 +42,13 @@ import {
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import LoginDialog from "./nostr/LoginDialog";
-import { resolveLightningAddress, validateZapSupport } from "@/lib/lnurl";
+import { validateZapSupport } from "@/lib/lnurl";
 import {
   createZapRequest,
   serializeZapRequest,
 } from "@/lib/create-zap-request";
 import { fetchInvoiceFromCallback } from "@/lib/lnurl";
+import { useLnurlCache } from "@/hooks/useLnurlCache";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -116,6 +117,9 @@ export function ZapWindow({
         .catch((error) => console.error("Failed to get wallet info:", error));
     }
   }, [wallet, getInfo]);
+
+  // Cache LNURL data for recipient's Lightning address
+  const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
@@ -288,7 +292,7 @@ export function ZapWindow({
       // Track usage
       trackAmountUsage(amount);
 
-      // Step 1: Get Lightning address from recipient profile
+      // Step 1: Verify recipient has Lightning address configured
       const lud16 = recipientProfile?.lud16;
       const lud06 = recipientProfile?.lud06;
 
@@ -298,20 +302,20 @@ export function ZapWindow({
         );
       }
 
-      // Step 2: Resolve LNURL to get callback URL and nostrPubkey
-      let lnurlData;
-      if (lud16) {
-        lnurlData = await resolveLightningAddress(lud16);
-        validateZapSupport(lnurlData);
-      } else if (lud06) {
+      if (lud06) {
         throw new Error(
           "LNURL (lud06) not supported. Recipient should use a Lightning address (lud16) instead.",
         );
       }
 
+      // Step 2: Use cached LNURL data (fetched by useLnurlCache hook)
       if (!lnurlData) {
-        throw new Error("Failed to resolve Lightning address");
+        throw new Error(
+          "Failed to resolve Lightning address. Please wait and try again.",
+        );
       }
+
+      validateZapSupport(lnurlData);
 
       // Validate amount is within acceptable range
       const amountMillisats = amount * 1000;
