@@ -185,7 +185,7 @@ function parseInvoice(invoice: string): InvoiceDetails | null {
 }
 
 export default function WalletViewer() {
-  const { state } = useGrimoire();
+  const { state, disconnectNWC: disconnectNWCFromState } = useGrimoire();
   const {
     wallet,
     balance,
@@ -616,6 +616,9 @@ export default function WalletViewer() {
   }
 
   function handleDisconnect() {
+    // Clear NWC connection from Grimoire state first
+    disconnectNWCFromState();
+    // Then clear the wallet service
     disconnect();
     setDisconnectDialogOpen(false);
     toast.success("Wallet disconnected");
