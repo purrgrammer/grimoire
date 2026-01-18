@@ -11,7 +11,7 @@
  * - Shows feed render of zapped event
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Zap,
@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +42,12 @@ import { KindRenderer } from "./nostr/kinds";
 import type { EventPointer, AddressPointer } from "@/lib/open-parser";
 import { useGrimoire } from "@/core/state";
 import accountManager from "@/services/accounts";
+import {
+  MentionEditor,
+  type MentionEditorHandle,
+} from "./editor/MentionEditor";
+import { useEmojiSearch } from "@/hooks/useEmojiSearch";
+import { useProfileSearch } from "@/hooks/useProfileSearch";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -99,12 +104,16 @@ export function ZapWindow({
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
-  const [comment, setComment] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [invoice, setInvoice] = useState<string>("");
   const [showQrDialog, setShowQrDialog] = useState(false);
+
+  // Editor ref and search functions
+  const editorRef = useRef<MentionEditorHandle>(null);
+  const { searchProfiles } = useProfileSearch();
+  const { searchEmojis } = useEmojiSearch();
 
   // Load custom amounts and usage stats from localStorage
   const [customAmounts, setCustomAmounts] = useState<number[]>(() => {
@@ -235,6 +244,15 @@ export function ZapWindow({
         );
       }
 
+      // Get comment and emoji tags from editor
+      const serialized = editorRef.current?.getSerializedContent() || {
+        text: "",
+        emojiTags: [],
+        blobAttachments: [],
+      };
+      const comment = serialized.text;
+      const emojiTags = serialized.emojiTags;
+
       // Validate comment length if provided
       if (comment && lnurlData.commentAllowed) {
         if (comment.length > lnurlData.commentAllowed) {
@@ -255,6 +273,7 @@ export function ZapWindow({
         comment,
         eventPointer,
         lnurl: lud16 || undefined,
+        emojiTags,
       });
 
       const serializedZapRequest = serializeZapRequest(zapRequest);
@@ -331,18 +350,7 @@ export function ZapWindow({
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-6 space-y-6">
           {/* Show event preview if zapping an event */}
-          {event && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Zapping Event
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <KindRenderer event={event} />
-              </CardContent>
-            </Card>
-          )}
+          {event && <KindRenderer event={event} />}
 
           {/* Amount Selection */}
           <div className="space-y-4">
@@ -386,15 +394,15 @@ export function ZapWindow({
               />
             </div>
 
-            {/* Comment */}
+            {/* Comment with emoji support */}
             <div className="space-y-2">
               <Label>Comment (optional)</Label>
-              <Input
-                id="comment"
+              <MentionEditor
+                ref={editorRef}
                 placeholder="Say something nice..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                maxLength={200}
+                searchProfiles={searchProfiles}
+                searchEmojis={searchEmojis}
+                className="min-h-[60px] rounded-md border border-input bg-background px-3 py-2"
               />
             </div>
           </div>

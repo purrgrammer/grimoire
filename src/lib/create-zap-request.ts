@@ -9,6 +9,11 @@ import accountManager from "@/services/accounts";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
+export interface EmojiTag {
+  shortcode: string;
+  url: string;
+}
+
 export interface ZapRequestParams {
   /** Recipient pubkey (who receives the zap) */
   recipientPubkey: string;
@@ -22,6 +27,8 @@ export interface ZapRequestParams {
   relays?: string[];
   /** LNURL for the recipient */
   lnurl?: string;
+  /** NIP-30 custom emoji tags */
+  emojiTags?: EmojiTag[];
 }
 
 /**
@@ -84,6 +91,13 @@ export async function createZapRequest(
       if (params.eventPointer.relays && params.eventPointer.relays.length > 0) {
         tags.push(["a", coordinate, params.eventPointer.relays[0]]);
       }
+    }
+  }
+
+  // Add NIP-30 emoji tags
+  if (params.emojiTags) {
+    for (const emoji of params.emojiTags) {
+      tags.push(["emoji", emoji.shortcode, emoji.url]);
     }
   }
 
