@@ -13,6 +13,7 @@ export interface ZapRequestInfo {
   zappedEventId?: string; // ID of the zapped event (from e tag)
   zappedEventAddress?: string; // Address of the zapped event (from a tag)
   amount?: number; // amount in sats (if available)
+  zapRequestEvent: NostrEvent; // The full kind 9734 zap request event
 }
 
 // Symbol for caching parsed zap requests on transaction objects
@@ -79,6 +80,7 @@ export function parseZapRequest(transaction: {
         message: event.content || "",
         zappedEventId,
         zappedEventAddress,
+        zapRequestEvent: event,
       };
     } catch {
       // Not JSON or parsing failed - not a zap request
