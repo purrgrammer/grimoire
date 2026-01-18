@@ -110,7 +110,7 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
   const kind40Pubkeys = kind40Events
     ? Array.from(
         new Set(
-          Array.from(kind40Events.values()).map((e: NostrEvent) => e.pubkey),
+          Array.from<NostrEvent>(kind40Events.values()).map((e) => e.pubkey),
         ),
       )
     : [];
@@ -253,7 +253,7 @@ export function ChannelListDetailRenderer({ event }: { event: NostrEvent }) {
   const kind40Pubkeys = kind40Events
     ? Array.from(
         new Set(
-          Array.from(kind40Events.values()).map((e: NostrEvent) => e.pubkey),
+          Array.from<NostrEvent>(kind40Events.values()).map((e) => e.pubkey),
         ),
       )
     : [];
