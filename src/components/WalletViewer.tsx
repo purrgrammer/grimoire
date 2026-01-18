@@ -252,6 +252,15 @@ export default function WalletViewer() {
         setTxLoadFailed(false);
         setTransactions([]);
         setWalletInfo(null);
+      } else {
+        // Clear all state when wallet disconnects
+        setTxLoadAttempted(false);
+        setTxLoadFailed(false);
+        setTransactions([]);
+        setWalletInfo(null);
+        setLoading(false);
+        setLoadingMore(false);
+        setHasMore(true);
       }
     }
 

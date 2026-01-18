@@ -129,8 +129,8 @@ export default function ConnectWalletDialog({
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Enter your wallet connection string. You can get this from your
-            wallet provider (Alby, Mutiny, etc.)
+            Enter your wallet connection string. You can get this from your NWC
+            wallet provider.
           </p>
 
           {error && (
