@@ -1,5 +1,5 @@
 {
-  "name": "Grimoire - A Nostr Client for Magicians",
+  "name": "Grimoire",
   "short_name": "Grimoire",
   "description": "A tiling window manager interface for exploring the Nostr protocol. Each window is a Nostr app (profile viewer, event feed, NIP documentation, etc.). Commands are launched Unix-style via Cmd+K palette.",
   "start_url": "/",
@@ -49,13 +49,5 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["social", "utilities", "productivity"],
-  "shortcuts": [
-    {
-      "name": "Command Palette",
-      "short_name": "Commands",
-      "description": "Open the command palette to launch Nostr apps",
-      "url": "/?action=command-palette"
-    }
-  ]
+  "categories": ["social", "utilities", "productivity", "nostr"]
 }
