@@ -1161,93 +1161,99 @@ export default function WalletViewer() {
         )}
 
       {/* Transaction History */}
-      <div className="flex-1 overflow-hidden">
-        {walletInfo?.methods.includes("list_transactions") ? (
-          loading ? (
-            <div className="flex h-full items-center justify-center">
-              <RefreshCw className="size-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : txLoadFailed ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
-              <p className="text-sm text-muted-foreground text-center">
-                Failed to load transaction history
-              </p>
-              <Button variant="outline" size="sm" onClick={reloadTransactions}>
-                <RefreshCw className="mr-2 size-4" />
-                Retry
-              </Button>
-            </div>
-          ) : transactionsWithMarkers.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                No transactions found
-              </p>
-            </div>
-          ) : (
-            <Virtuoso
-              data={transactionsWithMarkers}
-              endReached={loadMoreTransactions}
-              itemContent={(index, item) => {
-                if (item.type === "day-marker") {
+      <div className="flex-1 overflow-hidden flex justify-center">
+        <div className="w-full max-w-md">
+          {walletInfo?.methods.includes("list_transactions") ? (
+            loading ? (
+              <div className="flex h-full items-center justify-center">
+                <RefreshCw className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : txLoadFailed ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  Failed to load transaction history
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={reloadTransactions}
+                >
+                  <RefreshCw className="mr-2 size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : transactionsWithMarkers.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-muted-foreground">
+                  No transactions found
+                </p>
+              </div>
+            ) : (
+              <Virtuoso
+                data={transactionsWithMarkers}
+                endReached={loadMoreTransactions}
+                itemContent={(index, item) => {
+                  if (item.type === "day-marker") {
+                    return (
+                      <div
+                        className="flex justify-center py-2"
+                        key={`marker-${item.timestamp}`}
+                      >
+                        <Label className="text-[10px] text-muted-foreground">
+                          {item.data}
+                        </Label>
+                      </div>
+                    );
+                  }
+
+                  const tx = item.data;
+
                   return (
                     <div
-                      className="flex justify-center py-2"
-                      key={`marker-${item.timestamp}`}
+                      key={tx.payment_hash || index}
+                      className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
+                      onClick={() => handleTransactionClick(tx)}
                     >
-                      <Label className="text-[10px] text-muted-foreground">
-                        {item.data}
-                      </Label>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {tx.type === "incoming" ? (
+                          <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
+                        )}
+                        <TransactionLabel transaction={tx} />
+                      </div>
+                      <div className="flex-shrink-0 ml-4">
+                        <p className="text-sm font-semibold font-mono">
+                          {state.walletBalancesBlurred
+                            ? "✦✦✦✦"
+                            : formatSats(tx.amount)}
+                        </p>
+                      </div>
                     </div>
                   );
-                }
-
-                const tx = item.data;
-
-                return (
-                  <div
-                    key={tx.payment_hash || index}
-                    className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
-                    onClick={() => handleTransactionClick(tx)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {tx.type === "incoming" ? (
-                        <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
-                      ) : (
-                        <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
-                      )}
-                      <TransactionLabel transaction={tx} />
-                    </div>
-                    <div className="flex-shrink-0 ml-4">
-                      <p className="text-sm font-semibold font-mono">
-                        {state.walletBalancesBlurred
-                          ? "✦✦✦✦"
-                          : formatSats(tx.amount)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              }}
-              components={{
-                Footer: () =>
-                  loadingMore ? (
-                    <div className="flex justify-center py-4 border-b border-border">
-                      <RefreshCw className="size-4 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : !hasMore && transactions.length > 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
-                      No more transactions
-                    </div>
-                  ) : null,
-              }}
-            />
-          )
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-muted-foreground">
-              Transaction history not available
-            </p>
-          </div>
-        )}
+                }}
+                components={{
+                  Footer: () =>
+                    loadingMore ? (
+                      <div className="flex justify-center py-4 border-b border-border">
+                        <RefreshCw className="size-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : !hasMore && transactions.length > 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
+                        No more transactions
+                      </div>
+                    ) : null,
+                }}
+              />
+            )
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Transaction history not available
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Disconnect Confirmation Dialog */}
