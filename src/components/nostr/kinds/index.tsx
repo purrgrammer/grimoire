@@ -148,6 +148,11 @@ import { BadgeAwardRenderer } from "./BadgeAwardRenderer";
 import { BadgeAwardDetailRenderer } from "./BadgeAwardDetailRenderer";
 import { ProfileBadgesRenderer } from "./ProfileBadgesRenderer";
 import { ProfileBadgesDetailRenderer } from "./ProfileBadgesDetailRenderer";
+import { ChannelCreationRenderer } from "./ChannelCreationRenderer";
+import { ChannelCreationDetailRenderer } from "./ChannelCreationDetailRenderer";
+import { ChannelMetadataRenderer } from "./ChannelMetadataRenderer";
+import { ChannelMessageRenderer } from "./ChannelMessageRenderer";
+import { ChannelMessageDetailRenderer } from "./ChannelMessageDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -167,6 +172,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   20: Kind20Renderer, // Picture (NIP-68)
   21: Kind21Renderer, // Video Event (NIP-71)
   22: Kind22Renderer, // Short Video (NIP-71)
+  40: ChannelCreationRenderer, // Channel Creation (NIP-28)
+  41: ChannelMetadataRenderer, // Channel Metadata (NIP-28)
+  42: ChannelMessageRenderer, // Channel Message (NIP-28)
   1063: Kind1063Renderer, // File Metadata (NIP-94)
   1111: Kind1111Renderer, // Post (NIP-22)
   1222: VoiceMessageRenderer, // Voice Message (NIP-A0)
@@ -275,6 +283,8 @@ const detailRenderers: Record<
   0: Kind0DetailRenderer, // Profile Metadata Detail
   3: Kind3DetailView, // Contact List Detail
   8: BadgeAwardDetailRenderer, // Badge Award Detail (NIP-58)
+  40: ChannelCreationDetailRenderer, // Channel Creation Detail (NIP-28)
+  42: ChannelMessageDetailRenderer, // Channel Message Detail (NIP-28)
   777: SpellDetailRenderer, // Spell Detail
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
