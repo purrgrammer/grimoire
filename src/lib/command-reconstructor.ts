@@ -96,6 +96,74 @@ export function reconstructCommand(window: WindowInstance): string {
       case "debug":
         return "debug";
 
+      case "zap": {
+        // Reconstruct zap command from props
+        const parts: string[] = ["zap"];
+
+        // Add recipient pubkey (encode as npub for readability)
+        if (props.recipientPubkey) {
+          try {
+            const npub = nip19.npubEncode(props.recipientPubkey);
+            parts.push(npub);
+          } catch {
+            parts.push(props.recipientPubkey);
+          }
+        }
+
+        // Add event pointer if present
+        if (props.eventPointer) {
+          const pointer = props.eventPointer;
+          try {
+            if ("id" in pointer) {
+              // EventPointer
+              const nevent = nip19.neventEncode({
+                id: pointer.id,
+                relays: pointer.relays,
+                author: pointer.author,
+                kind: pointer.kind,
+              });
+              parts.push(nevent);
+            } else if ("kind" in pointer) {
+              // AddressPointer
+              const naddr = nip19.naddrEncode({
+                kind: pointer.kind,
+                pubkey: pointer.pubkey,
+                identifier: pointer.identifier,
+                relays: pointer.relays,
+              });
+              parts.push(naddr);
+            }
+          } catch {
+            // Fallback to raw ID
+            if ("id" in pointer) {
+              parts.push(pointer.id);
+            }
+          }
+        }
+
+        // Add custom tags
+        if (props.customTags && props.customTags.length > 0) {
+          for (const tag of props.customTags) {
+            if (tag.length >= 2) {
+              parts.push("-T", tag[0], tag[1]);
+              // Add relay hint if present
+              if (tag[2]) {
+                parts.push(tag[2]);
+              }
+            }
+          }
+        }
+
+        // Add relays
+        if (props.relays && props.relays.length > 0) {
+          for (const relay of props.relays) {
+            parts.push("-r", relay);
+          }
+        }
+
+        return parts.join(" ");
+      }
+
       case "chat": {
         // Reconstruct chat command from protocol and identifier
         const { protocol, identifier } = props;
