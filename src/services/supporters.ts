@@ -70,7 +70,7 @@ class SupportersService {
   private async subscribeToZapReceipts() {
     try {
       // Start with hardcoded relays for immediate cold start
-      let grimRelays = [...GRIMOIRE_ZAP_RELAYS];
+      const grimRelays = [...GRIMOIRE_ZAP_RELAYS];
 
       // Fetch relay list in background (non-blocking)
       // Don't await - let it happen in parallel with subscription
