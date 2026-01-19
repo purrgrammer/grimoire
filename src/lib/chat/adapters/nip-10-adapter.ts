@@ -16,7 +16,6 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
-import { getTagValues } from "@/lib/nostr-utils";
 import { normalizeURL } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
 import { getNip10References } from "applesauce-common/helpers";
@@ -637,7 +636,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
    */
   private async getThreadRelays(
     rootEvent: NostrEvent,
-    providedEvent: NostrEvent,
+    _providedEvent: NostrEvent,
     providedRelays: string[],
   ): Promise<string[]> {
     const relays = new Set<string>();
