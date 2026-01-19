@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -31,6 +32,7 @@ import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
+import { getKindName } from "@/constants/kinds";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -275,6 +277,148 @@ function formatBlobSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
+
+// Create event mention node for nostr: URI previews
+const EventMentionNode = Node.create({
+  name: "eventMention",
+  group: "inline",
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      nostrUri: { default: null },
+      decodedType: { default: null }, // 'note', 'nevent', or 'naddr'
+      eventId: { default: null },
+      kind: { default: null },
+      pubkey: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-event-mention="true"]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-event-mention": "true" }),
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { decodedType, kind, nostrUri } = node.attrs;
+
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className =
+        "event-mention inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs align-middle cursor-pointer hover:bg-primary/20 transition-colors";
+      dom.contentEditable = "false";
+      dom.title = nostrUri || "Event mention";
+
+      // Icon based on type
+      const icon = document.createElement("span");
+      icon.textContent = "📝";
+      dom.appendChild(icon);
+
+      // Label showing event type
+      const label = document.createElement("span");
+      label.className = "text-foreground font-medium";
+      const kindName = kind !== null ? getKindName(kind) : "event";
+      label.textContent = kindName;
+      dom.appendChild(label);
+
+      // Type indicator
+      const typeLabel = document.createElement("span");
+      typeLabel.className = "text-muted-foreground text-[10px]";
+      typeLabel.textContent = decodedType || "note";
+      dom.appendChild(typeLabel);
+
+      return { dom };
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("eventMentionPaste"),
+        props: {
+          handlePaste: (view, event) => {
+            const text = event.clipboardData?.getData("text/plain");
+            if (!text) return false;
+
+            // Match nostr: URIs (note, nevent, naddr)
+            const nostrUriRegex = /nostr:(note|nevent|naddr)1[a-z0-9]+/gi;
+            const matches = text.match(nostrUriRegex);
+
+            if (!matches) return false;
+
+            // If the entire paste is just a nostr URI, convert it to an event mention
+            if (matches.length === 1 && text.trim() === matches[0]) {
+              event.preventDefault();
+
+              const nostrUri = matches[0];
+              try {
+                const decoded = nip19.decode(nostrUri.replace("nostr:", ""));
+                let decodedType: string;
+                let eventId: string | null = null;
+                let kind: number | null = null;
+                let pubkey: string | null = null;
+
+                if (decoded.type === "note") {
+                  decodedType = "note";
+                  eventId = decoded.data as string;
+                  kind = 1; // Assume kind 1 for note
+                } else if (decoded.type === "nevent") {
+                  decodedType = "nevent";
+                  const data = decoded.data as nip19.EventPointer;
+                  eventId = data.id;
+                  kind = data.kind ?? null;
+                  pubkey = data.author ?? null;
+                } else if (decoded.type === "naddr") {
+                  decodedType = "naddr";
+                  const data = decoded.data as nip19.AddressPointer;
+                  kind = data.kind;
+                  pubkey = data.pubkey;
+                } else {
+                  return false;
+                }
+
+                const { tr } = view.state;
+                const { from } = view.state.selection;
+
+                tr.replaceWith(
+                  from,
+                  from,
+                  view.state.schema.nodes.eventMention.create({
+                    nostrUri,
+                    decodedType,
+                    eventId,
+                    kind,
+                    pubkey,
+                  }),
+                );
+
+                view.dispatch(tr);
+                return true;
+              } catch (err) {
+                // Invalid nostr URI, let default paste behavior handle it
+                return false;
+              }
+            }
+
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+});
 
 export const MentionEditor = forwardRef<
   MentionEditorHandle,
@@ -632,6 +776,12 @@ export const MentionEditor = forwardRef<
                     });
                   }
                 }
+              } else if (child.type === "eventMention") {
+                // Event mention - output the original nostr: URI
+                const { nostrUri } = child.attrs;
+                if (nostrUri) {
+                  text += nostrUri;
+                }
               }
             });
             text += "\n";
@@ -736,6 +886,8 @@ export const MentionEditor = forwardRef<
         }),
         // Add blob attachment extension for media previews
         BlobAttachmentNode,
+        // Add event mention extension for nostr: URI previews
+        EventMentionNode,
       ];
 
       // Add emoji extension if search is provided
