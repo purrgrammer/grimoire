@@ -58,7 +58,7 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
           adapter: null, // No adapter needed for group list view
         };
       }
-    } catch (e) {
+    } catch (_e) {
       // Not a valid naddr, continue to adapter parsing
     }
   }

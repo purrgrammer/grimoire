@@ -90,12 +90,13 @@ export function getRootEventTitle(event: NostrEvent): string {
       return getTagValue(event, "title") || "Live Activity";
     case 30024: // Draft long-form article
       return getArticleTitle(event) || "Draft Article";
-    case 1: // Note
-      // Take first line or first 50 chars
+    case 1: {
+      // Note - Take first line or first 50 chars
       const firstLine = event.content.split("\n")[0];
       return firstLine.length > 50
         ? firstLine.slice(0, 50).trim() + "..."
         : firstLine.trim() || "Note";
+    }
     case 30078: // Application-specific data
       return getTagValue(event, "d") || "Application Data";
     case 30040: // Video event
