@@ -1577,7 +1577,7 @@ export default function WalletViewer() {
                           Description:
                         </span>
                         <span
-                          className="truncate text-right min-w-0"
+                          className="line-clamp-1 text-right min-w-0"
                           title={invoiceDetails.description}
                         >
                           {invoiceDetails.description}
