@@ -13,6 +13,13 @@ export interface ParsedZapCommand {
   recipientPubkey: string;
   /** Optional event being zapped (adds context to the zap) */
   eventPointer?: EventPointer | AddressPointer;
+  /**
+   * Custom tags to include in the zap request
+   * Used for protocol-specific tagging like NIP-53 live activity references
+   */
+  customTags?: string[][];
+  /** Relays where the zap receipt should be published */
+  relays?: string[];
 }
 
 /**
@@ -22,6 +29,10 @@ export interface ParsedZapCommand {
  * - `zap <profile>` - Zap a person
  * - `zap <event>` - Zap an event (recipient derived from event author)
  * - `zap <profile> <event>` - Zap a specific person for a specific event
+ *
+ * Options:
+ * - `-T, --tag <type> <value> [relay]` - Add custom tag (can be repeated)
+ * - `-r, --relay <url>` - Add relay for zap receipt publication (can be repeated)
  *
  * Profile formats: npub, nprofile, hex pubkey, user@domain.com, $me
  * Event formats: note, nevent, naddr, hex event ID
@@ -36,31 +47,110 @@ export async function parseZapCommand(
     );
   }
 
-  const firstArg = args[0];
-  const secondArg = args[1];
+  // Parse flags and positional args
+  const positionalArgs: string[] = [];
+  const customTags: string[][] = [];
+  const relays: string[] = [];
 
-  // Case 1: Two arguments - zap <profile> <event>
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "-T" || arg === "--tag") {
+      // Parse tag: -T <type> <value> [relay-hint]
+      // Minimum 2 values after -T (type and value), optional relay hint
+      const tagType = args[i + 1];
+      const tagValue = args[i + 2];
+
+      if (!tagType || !tagValue) {
+        throw new Error(
+          "Tag requires at least 2 arguments: -T <type> <value> [relay-hint]",
+        );
+      }
+
+      // Build tag array
+      const tag = [tagType, tagValue];
+
+      // Check if next arg is a relay hint (starts with ws:// or wss://)
+      const potentialRelay = args[i + 3];
+      if (
+        potentialRelay &&
+        (potentialRelay.startsWith("ws://") ||
+          potentialRelay.startsWith("wss://"))
+      ) {
+        try {
+          tag.push(normalizeRelayURL(potentialRelay));
+          i += 4;
+        } catch {
+          // Not a valid relay, don't include
+          i += 3;
+        }
+      } else {
+        i += 3;
+      }
+
+      customTags.push(tag);
+    } else if (arg === "-r" || arg === "--relay") {
+      // Parse relay: -r <url>
+      const relayUrl = args[i + 1];
+      if (!relayUrl) {
+        throw new Error("Relay option requires a URL: -r <url>");
+      }
+
+      try {
+        relays.push(normalizeRelayURL(relayUrl));
+      } catch {
+        throw new Error(`Invalid relay URL: ${relayUrl}`);
+      }
+      i += 2;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
+      positionalArgs.push(arg);
+      i += 1;
+    }
+  }
+
+  if (positionalArgs.length === 0) {
+    throw new Error(
+      "Recipient or event required. Usage: zap <profile> or zap <event> or zap <profile> <event>",
+    );
+  }
+
+  const firstArg = positionalArgs[0];
+  const secondArg = positionalArgs[1];
+
+  // Build result with optional custom tags and relays
+  const buildResult = (
+    recipientPubkey: string,
+    eventPointer?: EventPointer | AddressPointer,
+  ): ParsedZapCommand => {
+    const result: ParsedZapCommand = { recipientPubkey };
+    if (eventPointer) result.eventPointer = eventPointer;
+    if (customTags.length > 0) result.customTags = customTags;
+    if (relays.length > 0) result.relays = relays;
+    return result;
+  };
+
+  // Case 1: Two positional arguments - zap <profile> <event>
   if (secondArg) {
     const recipientPubkey = await parseProfile(firstArg, activeAccountPubkey);
     const eventPointer = parseEventPointer(secondArg);
-    return { recipientPubkey, eventPointer };
+    return buildResult(recipientPubkey, eventPointer);
   }
 
-  // Case 2: One argument - try event first, then profile
+  // Case 2: One positional argument - try event first, then profile
   // Events have more specific patterns (nevent, naddr, note)
   const eventPointer = tryParseEventPointer(firstArg);
   if (eventPointer) {
     // For events, we'll need to fetch the event to get the author
     // For now, we'll return a placeholder and let the component fetch it
-    return {
-      recipientPubkey: "", // Will be filled in by component from event author
-      eventPointer,
-    };
+    return buildResult("", eventPointer);
   }
 
   // Must be a profile
   const recipientPubkey = await parseProfile(firstArg, activeAccountPubkey);
-  return { recipientPubkey };
+  return buildResult(recipientPubkey);
 }
 
 /**

@@ -154,6 +154,7 @@ export function ChatMessageContextMenu({
     addWindow("zap", {
       recipientPubkey: zapConfig.recipientPubkey,
       customTags: zapConfig.customTags,
+      relays: zapConfig.relays,
     });
   };
 

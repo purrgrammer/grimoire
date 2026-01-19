@@ -62,6 +62,8 @@ export interface ZapWindowProps {
    * Used for protocol-specific tagging like NIP-53 live activity references
    */
   customTags?: string[][];
+  /** Relays where the zap receipt should be published */
+  relays?: string[];
 }
 
 // Default preset amounts in sats
@@ -89,6 +91,7 @@ export function ZapWindow({
   eventPointer,
   onClose,
   customTags,
+  relays: propsRelays,
 }: ZapWindowProps) {
   // Load event if we have a pointer and no recipient pubkey (derive from event author)
   const event = use$(() => {
@@ -360,6 +363,7 @@ export function ZapWindow({
         amountMillisats,
         comment,
         eventPointer,
+        relays: propsRelays,
         lnurl: lud16 || undefined,
         emojiTags,
         customTags,
