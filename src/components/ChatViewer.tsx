@@ -437,6 +437,10 @@ export function ChatViewer({
   customTitle,
   headerPrefix,
 }: ChatViewerProps) {
+  console.log("[ChatViewer] Received props:", {
+    protocol,
+    identifier: identifier?.type,
+  });
   const { addWindow } = useGrimoire();
 
   // Get active account with signing capability
