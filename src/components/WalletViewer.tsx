@@ -1630,7 +1630,6 @@ export default function WalletViewer() {
             <DialogTitle>Receive Payment</DialogTitle>
             <DialogDescription>
               Generate a Lightning invoice to receive sats.
-              {checkingPayment && " Waiting for payment..."}
             </DialogDescription>
           </DialogHeader>
 
