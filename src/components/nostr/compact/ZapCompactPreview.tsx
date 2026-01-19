@@ -21,12 +21,6 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
   const zapRequest = useMemo(() => getZapRequest(event), [event]);
   const zapRecipient = useMemo(() => getZapRecipient(event), [event]);
 
-  // Get zap comment from request
-  const zapMessage = useMemo(() => {
-    if (!zapRequest) return null;
-    return zapRequest.content || null;
-  }, [zapRequest]);
-
   // Get zapped content pointers
   const eventPointer = useMemo(() => getZapEventPointer(event), [event]);
   const addressPointer = useMemo(() => getZapAddressPointer(event), [event]);
@@ -49,10 +43,10 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
         {amountInSats.toLocaleString("en", { notation: "compact" })}
       </span>
       {zapRecipient && <UserName pubkey={zapRecipient} />}
-      {zapMessage && (
+      {zapRequest?.content && (
         <span className="truncate line-clamp-1 flex-shrink-0">
           <RichText
-            content={zapMessage}
+            event={zapRequest}
             className="inline text-sm leading-none"
             options={{ showMedia: false, showEventEmbeds: false }}
           />
