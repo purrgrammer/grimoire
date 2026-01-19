@@ -1,6 +1,7 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "./chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
@@ -64,11 +65,12 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
-    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note)
+    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note for kind 1)
+    new Nip22Adapter(), // NIP-22 - Comment chat (nevent/naddr for non-kind-1)
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
+    new Nip29Adapter(), // NIP-29 - Relay groups
+    new Nip53Adapter(), // NIP-53 - Live activity chat
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
@@ -91,6 +93,10 @@ Currently supported formats:
     Examples:
       chat nevent1qqsxyz... (thread with relay hints)
       chat note1abc... (thread with event ID only)
+  - nevent1.../naddr1... (NIP-22 comment chat, non-kind-1 events)
+    Examples:
+      chat nevent1... (article, badge, or other event)
+      chat naddr1... (addressable event like kind 30023 article)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev

@@ -17,6 +17,7 @@ export const CHAT_KINDS = [
 export type ChatProtocol =
   | "nip-c7"
   | "nip-17"
+  | "nip-22"
   | "nip-28"
   | "nip-29"
   | "nip-53"
@@ -88,6 +89,16 @@ export interface ConversationMetadata {
   providedEventId?: string; // Original event from nevent (may be reply)
   threadDepth?: number; // Approximate depth of thread
   relays?: string[]; // Relays for this conversation
+
+  // NIP-22 comments
+  rootAddress?: {
+    // For addressable event roots (articles, etc.)
+    kind: number;
+    pubkey: string;
+    identifier: string;
+  };
+  rootExternal?: string; // For external identifier roots (URLs, hashtags)
+  rootKind?: number; // Kind of the root content
 }
 
 /**
@@ -235,6 +246,30 @@ export interface ThreadIdentifier {
 }
 
 /**
+ * NIP-22 comment identifier (comments on non-kind-1 events)
+ */
+export interface CommentIdentifier {
+  type: "comment";
+  /** Event pointer or address pointer to the root or comment */
+  value:
+    | {
+        // Event pointer (for regular events)
+        id: string;
+        relays?: string[];
+        author?: string;
+        kind?: number;
+      }
+    | {
+        // Address pointer (for addressable events like articles)
+        kind: number;
+        pubkey: string;
+        identifier: string;
+      };
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -245,7 +280,8 @@ export type ProtocolIdentifier =
   | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier
-  | ThreadIdentifier;
+  | ThreadIdentifier
+  | CommentIdentifier;
 
 /**
  * Chat command parsing result
