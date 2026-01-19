@@ -1513,6 +1513,161 @@ describe("parseReqCommand", () => {
     });
   });
 
+  describe("comma-separated values spanning multiple tokens", () => {
+    describe("kind flag (-k)", () => {
+      it("should parse kinds when space after comma creates separate tokens", () => {
+        // Simulates input: -k 1, 1111 (where shell tokenizes as ["-k", "1,", "1111"])
+        const result = parseReqCommand(["-k", "1,", "1111"]);
+        expect(result.filter.kinds).toEqual([1, 1111]);
+      });
+
+      it("should parse multiple tokens with trailing commas", () => {
+        // Simulates input: -k 1, 3, 7 (tokenized as ["-k", "1,", "3,", "7"])
+        const result = parseReqCommand(["-k", "1,", "3,", "7"]);
+        expect(result.filter.kinds).toEqual([1, 3, 7]);
+      });
+
+      it("should stop consuming tokens when hitting a flag", () => {
+        // Simulates input: -k 1, -l 10 (tokenized as ["-k", "1,", "-l", "10"])
+        const result = parseReqCommand(["-k", "1,", "-l", "10"]);
+        expect(result.filter.kinds).toEqual([1]);
+        expect(result.filter.limit).toBe(10);
+      });
+
+      it("should stop consuming tokens when hitting a relay URL", () => {
+        // Simulates input: -k 1, relay.com (tokenized as ["-k", "1,", "relay.com"])
+        const result = parseReqCommand(["-k", "1,", "relay.com"]);
+        expect(result.filter.kinds).toEqual([1]);
+        expect(result.relays).toEqual(["wss://relay.com/"]);
+      });
+
+      it("should handle mixed single token and multi-token values", () => {
+        // Simulates input: -k 1,3, 7 (tokenized as ["-k", "1,3,", "7"])
+        const result = parseReqCommand(["-k", "1,3,", "7"]);
+        expect(result.filter.kinds).toEqual([1, 3, 7]);
+      });
+    });
+
+    describe("author flag (-a)", () => {
+      it("should parse authors when space after comma creates separate tokens", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        // Simulates input: -a hex1, hex2 (tokenized as ["-a", "hex1,", "hex2"])
+        const result = parseReqCommand(["-a", `${hex1},`, hex2]);
+        expect(result.filter.authors).toEqual([hex1, hex2]);
+      });
+
+      it("should stop consuming tokens when hitting a flag", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-a", `${hex},`, "-k", "1"]);
+        expect(result.filter.authors).toEqual([hex]);
+        expect(result.filter.kinds).toEqual([1]);
+      });
+    });
+
+    describe("event ID flag (-e)", () => {
+      it("should parse event IDs when space after comma creates separate tokens", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-e", `${hex1},`, hex2]);
+        expect(result.filter["#e"]).toEqual([hex1, hex2]);
+      });
+    });
+
+    describe("pubkey tag flag (-p)", () => {
+      it("should parse pubkeys when space after comma creates separate tokens", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-p", `${hex1},`, hex2]);
+        expect(result.filter["#p"]).toEqual([hex1, hex2]);
+      });
+    });
+
+    describe("uppercase P tag flag (-P)", () => {
+      it("should parse pubkeys when space after comma creates separate tokens", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-P", `${hex1},`, hex2]);
+        expect(result.filter["#P"]).toEqual([hex1, hex2]);
+      });
+    });
+
+    describe("hashtag flag (-t)", () => {
+      it("should parse hashtags when space after comma creates separate tokens", () => {
+        // Simulates input: -t nostr, bitcoin (tokenized as ["-t", "nostr,", "bitcoin"])
+        const result = parseReqCommand(["-t", "nostr,", "bitcoin"]);
+        expect(result.filter["#t"]).toEqual(["nostr", "bitcoin"]);
+      });
+
+      it("should parse multiple tokens with trailing commas", () => {
+        // Simulates input: -t nostr, bitcoin, lightning
+        const result = parseReqCommand([
+          "-t",
+          "nostr,",
+          "bitcoin,",
+          "lightning",
+        ]);
+        expect(result.filter["#t"]).toEqual(["nostr", "bitcoin", "lightning"]);
+      });
+    });
+
+    describe("d-tag flag (-d)", () => {
+      it("should parse d-tags when space after comma creates separate tokens", () => {
+        const result = parseReqCommand(["-d", "article1,", "article2"]);
+        expect(result.filter["#d"]).toEqual(["article1", "article2"]);
+      });
+    });
+
+    describe("generic tag flag (--tag, -T)", () => {
+      it("should parse generic tag values when space after comma creates separate tokens", () => {
+        // Simulates input: --tag a val1, val2 (tokenized as ["--tag", "a", "val1,", "val2"])
+        const result = parseReqCommand(["--tag", "a", "val1,", "val2"]);
+        expect(result.filter["#a"]).toEqual(["val1", "val2"]);
+      });
+
+      it("should stop at flags", () => {
+        const result = parseReqCommand(["--tag", "a", "val1,", "-k", "1"]);
+        expect(result.filter["#a"]).toEqual(["val1"]);
+        expect(result.filter.kinds).toEqual([1]);
+      });
+    });
+
+    describe("complex scenarios with multi-token values", () => {
+      it("should handle multiple flags with trailing commas", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand([
+          "-k",
+          "1,",
+          "3",
+          "-a",
+          `${hex}`,
+          "-t",
+          "nostr,",
+          "bitcoin",
+        ]);
+        expect(result.filter.kinds).toEqual([1, 3]);
+        expect(result.filter.authors).toEqual([hex]);
+        expect(result.filter["#t"]).toEqual(["nostr", "bitcoin"]);
+      });
+
+      it("should handle trailing comma at end of input", () => {
+        // No more tokens to consume, should just parse what we have
+        const result = parseReqCommand(["-k", "1,"]);
+        expect(result.filter.kinds).toEqual([1]);
+      });
+
+      it("should not consume relay URLs as value continuations", () => {
+        const result = parseReqCommand([
+          "-t",
+          "nostr,",
+          "wss://relay.damus.io",
+        ]);
+        expect(result.filter["#t"]).toEqual(["nostr"]);
+        expect(result.relays).toEqual(["wss://relay.damus.io/"]);
+      });
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty args", () => {
       const result = parseReqCommand([]);

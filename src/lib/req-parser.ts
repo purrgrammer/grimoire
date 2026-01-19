@@ -49,6 +49,56 @@ function parseCommaSeparated<T>(
 }
 
 /**
+ * Check if a value ends with a trailing comma, indicating more values may follow in the next token
+ */
+function hasTrailingComma(value: string): boolean {
+  return value.trimEnd().endsWith(",");
+}
+
+/**
+ * Check if a token looks like a flag (starts with -)
+ */
+function isFlag(token: string): boolean {
+  return token.startsWith("-");
+}
+
+/**
+ * Collect all comma-separated values that may span multiple tokens.
+ * Handles cases like "-k 1, 1111" where "1," and "1111" are separate tokens.
+ * Returns the merged value string and the number of additional tokens consumed.
+ */
+function collectCommaSeparatedTokens(
+  currentValue: string,
+  args: string[],
+  startIndex: number,
+): { mergedValue: string; tokensConsumed: number } {
+  let mergedValue = currentValue;
+  let tokensConsumed = 0;
+  let lookIndex = startIndex;
+
+  // Keep consuming tokens while the current value ends with a trailing comma
+  // and the next token is not a flag
+  while (hasTrailingComma(mergedValue) && lookIndex < args.length) {
+    const nextToken = args[lookIndex];
+    // Stop if the next token is a flag or looks like a relay URL
+    if (
+      isFlag(nextToken) ||
+      isRelayDomain(nextToken) ||
+      nextToken.startsWith("wss://") ||
+      nextToken.startsWith("ws://")
+    ) {
+      break;
+    }
+    // Append the next token to our value
+    mergedValue = mergedValue + nextToken;
+    tokensConsumed++;
+    lookIndex++;
+  }
+
+  return { mergedValue, tokensConsumed };
+}
+
+/**
  * Parse REQ command arguments into a Nostr filter
  * Supports:
  * - Filters: -k (kinds), -a (authors: hex/npub/nprofile/NIP-05), -l (limit), -e (note/nevent/naddr/hex), -p (#p: hex/npub/nprofile/NIP-05), -P (#P: hex/npub/nprofile/NIP-05), -t (#t), -d (#d), --tag/-T (any #tag)
@@ -111,20 +161,26 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
       switch (flag) {
         case "-k":
         case "--kind": {
-          // Support comma-separated kinds: -k 1,3,7
+          // Support comma-separated kinds: -k 1,3,7 or -k 1, 3, 7 (with spaces)
           if (!nextArg) {
             i++;
             break;
           }
-          const addedAny = parseCommaSeparated(
+          // Collect values that may span multiple tokens (e.g., "-k 1, 1111")
+          const { mergedValue, tokensConsumed } = collectCommaSeparatedTokens(
             nextArg,
+            args,
+            i + 2,
+          );
+          const addedAny = parseCommaSeparated(
+            mergedValue,
             (v) => {
               const kind = parseInt(v, 10);
               return isNaN(kind) ? null : kind;
             },
             kinds,
           );
-          i += addedAny ? 2 : 1;
+          i += addedAny ? 2 + tokensConsumed : 1;
           break;
         }
 
@@ -135,8 +191,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             i++;
             break;
           }
+          // Collect values that may span multiple tokens (e.g., "-a npub1, npub2")
+          const { mergedValue, tokensConsumed } = collectCommaSeparatedTokens(
+            nextArg,
+            args,
+            i + 2,
+          );
           let addedAny = false;
-          const values = nextArg.split(",").map((a) => a.trim());
+          const values = mergedValue.split(",").map((a) => a.trim());
           for (const authorStr of values) {
             if (!authorStr) continue;
             // Check for $me and $contacts aliases (case-insensitive)
@@ -167,7 +229,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
               }
             }
           }
-          i += addedAny ? 2 : 1;
+          i += addedAny ? 2 + tokensConsumed : 1;
           break;
         }
 
@@ -190,8 +252,15 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             break;
           }
 
+          // Collect values that may span multiple tokens (e.g., "-e note1, nevent1")
+          const { mergedValue, tokensConsumed } = collectCommaSeparatedTokens(
+            nextArg,
+            args,
+            i + 2,
+          );
+
           let addedAny = false;
-          const values = nextArg.split(",").map((v) => v.trim());
+          const values = mergedValue.split(",").map((v) => v.trim());
 
           for (const val of values) {
             if (!val) continue;
@@ -216,7 +285,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             }
           }
 
-          i += addedAny ? 2 : 1;
+          i += addedAny ? 2 + tokensConsumed : 1;
           break;
         }
 
@@ -226,8 +295,11 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             i++;
             break;
           }
+          // Collect values that may span multiple tokens (e.g., "-p npub1, npub2")
+          const { mergedValue: mergedValueP, tokensConsumed: tokensConsumedP } =
+            collectCommaSeparatedTokens(nextArg, args, i + 2);
           let addedAny = false;
-          const values = nextArg.split(",").map((p) => p.trim());
+          const values = mergedValueP.split(",").map((p) => p.trim());
           for (const pubkeyStr of values) {
             if (!pubkeyStr) continue;
             // Check for $me and $contacts aliases (case-insensitive)
@@ -258,7 +330,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
               }
             }
           }
-          i += addedAny ? 2 : 1;
+          i += addedAny ? 2 + tokensConsumedP : 1;
           break;
         }
 
@@ -269,8 +341,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             i++;
             break;
           }
+          // Collect values that may span multiple tokens (e.g., "-P npub1, npub2")
+          const {
+            mergedValue: mergedValuePU,
+            tokensConsumed: tokensConsumedPU,
+          } = collectCommaSeparatedTokens(nextArg, args, i + 2);
           let addedAny = false;
-          const values = nextArg.split(",").map((p) => p.trim());
+          const values = mergedValuePU.split(",").map((p) => p.trim());
           for (const pubkeyStr of values) {
             if (!pubkeyStr) continue;
             // Check for $me and $contacts aliases (case-insensitive)
@@ -301,19 +378,24 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
               }
             }
           }
-          i += addedAny ? 2 : 1;
+          i += addedAny ? 2 + tokensConsumedPU : 1;
           break;
         }
 
         case "-t": {
           // Support comma-separated hashtags: -t nostr,bitcoin,lightning
           if (nextArg) {
+            // Collect values that may span multiple tokens (e.g., "-t nostr, bitcoin")
+            const {
+              mergedValue: mergedValueT,
+              tokensConsumed: tokensConsumedT,
+            } = collectCommaSeparatedTokens(nextArg, args, i + 2);
             const addedAny = parseCommaSeparated(
-              nextArg,
+              mergedValueT,
               (v) => v, // hashtags are already strings
               tTags,
             );
-            i += addedAny ? 2 : 1;
+            i += addedAny ? 2 + tokensConsumedT : 1;
           } else {
             i++;
           }
@@ -323,12 +405,17 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         case "-d": {
           // Support comma-separated d-tags: -d article1,article2,article3
           if (nextArg) {
+            // Collect values that may span multiple tokens (e.g., "-d art1, art2")
+            const {
+              mergedValue: mergedValueD,
+              tokensConsumed: tokensConsumedD,
+            } = collectCommaSeparatedTokens(nextArg, args, i + 2);
             const addedAny = parseCommaSeparated(
-              nextArg,
+              mergedValueD,
               (v) => v, // d-tags are already strings
               dTags,
             );
-            i += addedAny ? 2 : 1;
+            i += addedAny ? 2 + tokensConsumedD : 1;
           } else {
             i++;
           }
@@ -410,14 +497,20 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
             genericTags.set(letter, tagSet);
           }
 
+          // Collect values that may span multiple tokens (e.g., "--tag a val1, val2")
+          const {
+            mergedValue: mergedValueTag,
+            tokensConsumed: tokensConsumedTag,
+          } = collectCommaSeparatedTokens(valueArg, args, i + 3);
+
           // Parse comma-separated values
           const addedAny = parseCommaSeparated(
-            valueArg,
+            mergedValueTag,
             (v) => v, // tag values are already strings
             tagSet,
           );
 
-          i += addedAny ? 3 : 1;
+          i += addedAny ? 3 + tokensConsumedTag : 1;
           break;
         }
 
