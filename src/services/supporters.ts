@@ -72,7 +72,7 @@ class SupportersService {
       console.log("[Supporters] Fetching Grimoire relay list (kind 10002)...");
 
       // First, explicitly fetch Grimoire's kind 10002 relay list
-      // This ensures we have the latest relay list before subscribing
+      // Use longer timeout for cold start (10 seconds)
       try {
         await firstValueFrom(
           addressLoader({
@@ -80,9 +80,12 @@ class SupportersService {
             pubkey: GRIMOIRE_DONATE_PUBKEY,
             identifier: "",
           }).pipe(
-            rxTimeout(5000), // 5 second timeout
-            catchError(() => {
-              console.warn("[Supporters] Timeout fetching relay list");
+            rxTimeout(10000), // 10 second timeout for cold start
+            catchError((err) => {
+              console.warn(
+                "[Supporters] Timeout/error fetching relay list:",
+                err.message,
+              );
               return of(null);
             }),
           ),
@@ -90,6 +93,9 @@ class SupportersService {
       } catch (err) {
         console.warn("[Supporters] Failed to fetch relay list:", err);
       }
+
+      // Give relayListCache a moment to update
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Now get Grimoire's inbox relays from cache (should be populated from fetch above)
       let grimRelays = await relayListCache.getInboxRelays(
@@ -111,7 +117,9 @@ class SupportersService {
       }
 
       console.log(
-        `[Supporters] Subscribing to zaps on ${grimRelays.length} relays`,
+        `[Supporters] Subscribing to zaps on ${grimRelays.length} relays:`,
+        grimRelays.slice(0, 3).join(", "),
+        grimRelays.length > 3 ? `...and ${grimRelays.length - 3} more` : "",
       );
 
       // Subscribe to zap receipts (kind 9735) for Grimoire
@@ -131,7 +139,7 @@ class SupportersService {
         },
       });
 
-      // Watch event store for new zaps
+      // Watch event store for new zaps and process them
       const timeline = eventStore.timeline([
         {
           kinds: [9735],
@@ -139,10 +147,17 @@ class SupportersService {
         },
       ]);
 
-      timeline.subscribe(async (events) => {
+      // Store timeline subscription for cleanup (prevent memory leak)
+      const timelineSubscription = timeline.subscribe(async (events) => {
+        console.log(
+          `[Supporters] Processing ${events.length} zap events from eventStore`,
+        );
         // Process all events in parallel
         await Promise.all(events.map((event) => this.processZapReceipt(event)));
       });
+
+      // Add timeline subscription to main subscription for proper cleanup
+      this.subscription.add(timelineSubscription);
     } catch (error) {
       console.error("[Supporters] Failed to subscribe to zap receipts:", error);
     }
