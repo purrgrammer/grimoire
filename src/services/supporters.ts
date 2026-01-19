@@ -109,32 +109,40 @@ class SupportersService {
         },
       ]);
 
-      // Start loading events (pushes to event store)
-      this.subscription = loader().subscribe({
+      // Subscribe to insert stream from eventStore
+      // This catches events as they're added in real-time
+      const eventSubscription = eventStore.insert$.subscribe(
+        (event: NostrEvent) => {
+          // Filter for zaps to Grimoire
+          if (
+            event.kind === 9735 &&
+            event.tags.some(
+              (t: string[]) => t[0] === "p" && t[1] === GRIMOIRE_DONATE_PUBKEY,
+            )
+          ) {
+            console.log(
+              `[Supporters] Received zap event ${event.id.slice(0, 8)} from eventStore.insert$`,
+            );
+            this.processZapReceipt(event);
+          }
+        },
+      );
+
+      // Start the loader (pushes events to store)
+      const loaderSubscription = loader().subscribe({
         error: (error) => {
           console.error("[Supporters] Timeline loader error:", error);
         },
-      });
-
-      // Watch event store for new zaps and process them
-      const timeline = eventStore.timeline([
-        {
-          kinds: [9735],
-          "#p": [GRIMOIRE_DONATE_PUBKEY],
+        complete: () => {
+          console.log("[Supporters] Timeline loader completed");
         },
-      ]);
-
-      // Store timeline subscription for cleanup (prevent memory leak)
-      const timelineSubscription = timeline.subscribe(async (events) => {
-        console.log(
-          `[Supporters] Processing ${events.length} zap events from eventStore`,
-        );
-        // Process all events in parallel
-        await Promise.all(events.map((event) => this.processZapReceipt(event)));
       });
 
-      // Add timeline subscription to main subscription for proper cleanup
-      this.subscription.add(timelineSubscription);
+      // Combine subscriptions for cleanup
+      this.subscription = eventSubscription;
+      if (this.subscription && loaderSubscription) {
+        this.subscription.add(loaderSubscription);
+      }
     } catch (error) {
       console.error("[Supporters] Failed to subscribe to zap receipts:", error);
     }
