@@ -278,7 +278,7 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={openChatWindow}>
           <MessageSquare className="size-4 mr-2" />
-          {event.kind === 1 ? "Chat" : "Comments"}
+          Chat
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>

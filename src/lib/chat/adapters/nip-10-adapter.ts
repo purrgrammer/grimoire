@@ -30,6 +30,7 @@ import {
   eventToMessage,
   AGGREGATOR_RELAYS,
 } from "../utils";
+import { Nip22Adapter } from "./nip-22-adapter";
 
 const LOG_PREFIX = "[NIP-10]";
 
@@ -122,8 +123,24 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       throw new Error("Event not found");
     }
 
+    // If not kind 1, delegate to NIP-22 comment adapter
     if (providedEvent.kind !== 1) {
-      throw new Error(`Expected kind 1 note, got kind ${providedEvent.kind}`);
+      console.log(
+        `${LOG_PREFIX} Event is kind ${providedEvent.kind}, delegating to NIP-22`,
+      );
+      const nip22Adapter = new Nip22Adapter();
+      // Build a comment identifier from the event
+      const commentIdentifier = {
+        type: "comment" as const,
+        value: {
+          id: providedEvent.id,
+          relays: relayHints,
+          author: providedEvent.pubkey,
+          kind: providedEvent.kind,
+        },
+        relays: relayHints,
+      };
+      return nip22Adapter.resolveConversation(commentIdentifier);
     }
 
     // 2. Parse NIP-10 references to find root
