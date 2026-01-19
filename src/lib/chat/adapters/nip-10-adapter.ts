@@ -847,7 +847,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
   private eventToMessage(
     event: NostrEvent,
     conversationId: string,
-    rootEventId: string,
+    _rootEventId: string,
   ): Message | null {
     // Handle zap receipts (kind 9735)
     if (event.kind === 9735) {
@@ -867,14 +867,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       let replyTo: string | undefined;
 
       if (refs.reply?.e) {
-        // Replying to another reply
+        // Replying to another reply - show reply preview
         replyTo = refs.reply.e.id;
-      } else if (refs.root?.e) {
-        // Replying directly to root
-        replyTo = refs.root.e.id;
       } else {
-        // Malformed or legacy reply - assume replying to root
-        replyTo = rootEventId;
+        // Replying directly to root or malformed - don't show reply preview
+        // (replying to root is implied in thread chat context)
+        replyTo = undefined;
       }
 
       return {
