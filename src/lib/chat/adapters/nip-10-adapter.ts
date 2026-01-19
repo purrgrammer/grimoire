@@ -20,6 +20,7 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeURL } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
 import { getNip10References } from "applesauce-common/helpers";
@@ -712,13 +713,9 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // 6. Fallback to popular relays if we have too few
+    // 6. Fallback to aggregator relays if we have too few
     if (relays.size < 3) {
-      [
-        "wss://relay.damus.io",
-        "wss://nos.lol",
-        "wss://relay.nostr.band",
-      ].forEach((r) => relays.add(r));
+      AGGREGATOR_RELAYS.forEach((r) => relays.add(r));
     }
 
     // Limit to 10 relays max for performance
@@ -811,8 +808,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       if (outbox.length > 0) return outbox.slice(0, 5);
     }
 
-    // Fallback to popular relays
-    return ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+    // Fallback to aggregator relays
+    return AGGREGATOR_RELAYS;
   }
 
   /**
