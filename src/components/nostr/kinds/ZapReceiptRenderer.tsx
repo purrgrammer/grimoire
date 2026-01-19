@@ -36,12 +36,6 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
   const zappedEvent = useNostrEvent(eventPointer || undefined);
   const zappedAddress = useNostrEvent(addressPointer || undefined);
 
-  // Get zap comment from request
-  const zapComment = useMemo(() => {
-    if (!zapRequest) return null;
-    return zapRequest.content || null;
-  }, [zapRequest]);
-
   // Format amount (convert from msats to sats)
   const amountInSats = useMemo(() => {
     if (!zapAmount) return 0;
@@ -76,9 +70,9 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
         </div>
 
         {/* Zap comment */}
-        {zapComment && (
+        {zapRequest && zapRequest.content && (
           <div className="text-sm">
-            <RichText content={zapComment} />
+            <RichText event={zapRequest} />
           </div>
         )}
 
