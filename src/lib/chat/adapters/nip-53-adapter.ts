@@ -603,12 +603,14 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       relays,
     };
 
+    // Don't pass top-level relays - let createZapRequest collect outbox relays
+    // from both eventPointer.author (recipient) and addressPointer.pubkey (stream host)
+    // The relay hints in the pointers will also be included
     return {
       supported: true,
       recipientPubkey: message.author,
       eventPointer,
       addressPointer,
-      relays,
     };
   }
 
