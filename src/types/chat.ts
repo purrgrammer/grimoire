@@ -30,7 +30,7 @@ export type ConversationType = "dm" | "channel" | "group" | "live-chat";
 /**
  * Participant role in a conversation
  */
-export type ParticipantRole = "admin" | "moderator" | "member" | "host";
+export type ParticipantRole = "admin" | "moderator" | "member" | "host" | "op";
 
 /**
  * Participant in a conversation

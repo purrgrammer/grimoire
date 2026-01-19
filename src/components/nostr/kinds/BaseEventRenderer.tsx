@@ -10,7 +10,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, Copy, Check, FileJson, ExternalLink, Zap } from "lucide-react";
+import {
+  Menu,
+  Copy,
+  Check,
+  FileJson,
+  ExternalLink,
+  Zap,
+  MessageSquare,
+} from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -184,6 +192,20 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     });
   };
 
+  const openChatWindow = () => {
+    // Only kind 1 notes support NIP-10 thread chat
+    if (event.kind === 1) {
+      const seenRelaysSet = getSeenRelays(event);
+      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+      const nevent = nip19.neventEncode({
+        id: event.id,
+        author: event.pubkey,
+        relays: relays,
+      });
+      addWindow("chat", { args: [nevent] });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -212,6 +234,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </DropdownMenuItem>
+        {event.kind === 1 && (
+          <DropdownMenuItem onClick={openChatWindow}>
+            <MessageSquare className="size-4 mr-2" />
+            Chat
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (

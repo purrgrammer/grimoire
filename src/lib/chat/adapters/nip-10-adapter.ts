@@ -1,4 +1,4 @@
-import { Observable, firstValueFrom } from "rxjs";
+import { Observable, firstValueFrom, combineLatest } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
@@ -250,26 +250,46 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     this.subscriptions.set(conversationId, subscription);
 
     // Return observable from EventStore
-    return eventStore
-      .timeline({ kinds: [1, 7, 9735], "#e": [rootEventId] })
-      .pipe(
-        map((events) => {
-          // Filter out the root event itself (we don't want it in messages list)
-          const threadEvents = events.filter((e) => e.id !== rootEventId);
+    // Combine root event with replies
+    const rootEvent$ = eventStore.event(rootEventId);
+    const replies$ = eventStore.timeline({
+      kinds: [1, 7, 9735],
+      "#e": [rootEventId],
+    });
 
-          // Convert events to messages
-          const messages = threadEvents
-            .map((event) =>
-              this.eventToMessage(event, conversationId, rootEventId),
-            )
-            .filter((msg): msg is Message => msg !== null);
+    return combineLatest([rootEvent$, replies$]).pipe(
+      map(([rootEvent, replyEvents]) => {
+        const messages: Message[] = [];
 
-          console.log(`[NIP-10] Timeline has ${messages.length} messages`);
+        // Add root event as first message
+        if (rootEvent) {
+          const rootMessage = this.rootEventToMessage(
+            rootEvent,
+            conversationId,
+            rootEventId,
+          );
+          if (rootMessage) {
+            messages.push(rootMessage);
+          }
+        }
 
-          // Sort by timestamp ascending (chronological order)
-          return messages.sort((a, b) => a.timestamp - b.timestamp);
-        }),
-      );
+        // Convert replies to messages
+        const replyMessages = replyEvents
+          .map((event) =>
+            this.eventToMessage(event, conversationId, rootEventId),
+          )
+          .filter((msg): msg is Message => msg !== null);
+
+        messages.push(...replyMessages);
+
+        console.log(
+          `[NIP-10] Timeline has ${messages.length} messages (including root)`,
+        );
+
+        // Sort by timestamp ascending (chronological order)
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
+      }),
+    );
   }
 
   /**
@@ -597,7 +617,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // Root author is always first
     participants.set(rootEvent.pubkey, {
       pubkey: rootEvent.pubkey,
-      role: "admin", // Root author is "admin" of the thread
+      role: "op", // Root author is "op" (original poster) of the thread
     });
 
     // Add p-tags from root event
@@ -765,6 +785,35 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     // Fallback to popular relays
     return ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+  }
+
+  /**
+   * Convert root event to Message object
+   */
+  private rootEventToMessage(
+    event: NostrEvent,
+    conversationId: string,
+    _rootEventId: string,
+  ): Message | null {
+    if (event.kind !== 1) {
+      return null;
+    }
+
+    // Root event has no replyTo field
+    return {
+      id: event.id,
+      conversationId,
+      author: event.pubkey,
+      content: event.content,
+      timestamp: event.created_at,
+      type: "user",
+      replyTo: undefined,
+      protocol: "nip-10",
+      metadata: {
+        encrypted: false,
+      },
+      event,
+    };
   }
 
   /**

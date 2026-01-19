@@ -34,7 +34,6 @@ import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
-import { KindRenderer } from "./nostr/kinds";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
@@ -306,15 +305,10 @@ const MessageItem = memo(function MessageItem({
     // Only show reply preview if:
     // 1. The event exists in our store
     // 2. The event is a chat kind (includes messages, nutzaps, live chat, and zap receipts)
-    // 3. NOT replying to root in NIP-10 thread (root is already visible at top)
-    const isReplyingToThreadRoot =
-      conversation.protocol === "nip-10" &&
-      zapReplyTo === conversation.metadata?.rootEventId;
     const shouldShowReplyPreview =
       zapReplyTo &&
       replyEvent &&
-      (CHAT_KINDS as readonly number[]).includes(replyEvent.kind) &&
-      !isReplyingToThreadRoot;
+      (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
     return (
       <div className="pl-2 my-1">
@@ -394,18 +388,14 @@ const MessageItem = memo(function MessageItem({
         <div className="break-words overflow-hidden">
           {message.event ? (
             <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo &&
-                !(
-                  conversation.protocol === "nip-10" &&
-                  message.replyTo === conversation.metadata?.rootEventId
-                ) && (
-                  <ReplyPreview
-                    replyToId={message.replyTo}
-                    adapter={adapter}
-                    conversation={conversation}
-                    onScrollToMessage={onScrollToMessage}
-                  />
-                )}
+              {message.replyTo && (
+                <ReplyPreview
+                  replyToId={message.replyTo}
+                  adapter={adapter}
+                  conversation={conversation}
+                  onScrollToMessage={onScrollToMessage}
+                />
+              )}
             </RichText>
           ) : (
             <span className="whitespace-pre-wrap break-words">
@@ -517,16 +507,6 @@ export function ChatViewer({
     conversationResult?.status === "success"
       ? conversationResult.conversation
       : null;
-
-  // Check if this is a NIP-10 thread
-  const isThreadChat = protocol === "nip-10";
-
-  // Fetch root event for NIP-10 threads
-  const rootEventId = conversation?.metadata?.rootEventId;
-  const rootEvent = use$(
-    () => (rootEventId ? eventStore.event(rootEventId) : undefined),
-    [rootEventId],
-  );
 
   // Slash command search for action autocomplete
   // Context-aware: only shows relevant actions based on membership status
@@ -752,7 +732,9 @@ export function ChatViewer({
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
-    if (conversation?.protocol === "nip-29") {
+    if (conversation?.protocol === "nip-10") {
+      addWindow("nip", { number: 10 });
+    } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
@@ -842,23 +824,10 @@ export function ChatViewer({
               <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
                   <button
-                    className="text-sm font-semibold truncate cursor-help text-left flex items-center gap-1.5"
+                    className="text-sm font-semibold truncate cursor-help text-left"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {isThreadChat && rootEvent ? (
-                      <>
-                        <UserName
-                          pubkey={rootEvent.pubkey}
-                          className="text-sm font-semibold flex-shrink-0"
-                        />
-                        <span className="text-muted-foreground">•</span>
-                        <span className="truncate">
-                          {customTitle || conversation.title}
-                        </span>
-                      </>
-                    ) : (
-                      customTitle || conversation.title
-                    )}
+                    {customTitle || conversation.title}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -970,90 +939,69 @@ export function ChatViewer({
       </div>
 
       {/* Message timeline with virtualization */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* NIP-10 Thread: Show root event at top */}
-        {isThreadChat && rootEvent && (
-          <div className="border-b bg-muted/10 flex-shrink-0">
-            <div className="max-w-2xl mx-auto py-4 px-3">
-              {/* Use KindRenderer to render root with full feed functionality */}
-              <KindRenderer event={rootEvent} depth={0} />
-            </div>
-            {/* Visual separator */}
-            <div className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
-              <div className="flex-1 h-px bg-border" />
-              <span>Replies</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
+      <div className="flex-1 overflow-hidden">
+        {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
+          <Virtuoso
+            ref={virtuosoRef}
+            data={messagesWithMarkers}
+            initialTopMostItemIndex={messagesWithMarkers.length - 1}
+            followOutput="smooth"
+            alignToBottom
+            components={{
+              Header: () =>
+                hasMore && conversationResult.status === "success" ? (
+                  <div className="flex justify-center py-2">
+                    <Button
+                      onClick={handleLoadOlder}
+                      disabled={isLoadingOlder}
+                      variant="ghost"
+                      size="sm"
+                    >
+                      {isLoadingOlder ? (
+                        <>
+                          <Loader2 className="size-3 animate-spin" />
+                          <span className="text-xs">Loading...</span>
+                        </>
+                      ) : (
+                        "Load older messages"
+                      )}
+                    </Button>
+                  </div>
+                ) : null,
+              Footer: () => <div className="h-1" />,
+            }}
+            itemContent={(_index, item) => {
+              if (item.type === "day-marker") {
+                return (
+                  <div
+                    className="flex justify-center py-2"
+                    key={`marker-${item.timestamp}`}
+                  >
+                    <Label className="text-[10px] text-muted-foreground">
+                      {item.data}
+                    </Label>
+                  </div>
+                );
+              }
+              return (
+                <MessageItem
+                  key={item.data.id}
+                  message={item.data}
+                  adapter={adapter}
+                  conversation={conversation}
+                  onReply={handleReply}
+                  canReply={canSign}
+                  onScrollToMessage={handleScrollToMessage}
+                />
+              );
+            }}
+            style={{ height: "100%" }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No messages yet. Start the conversation!
           </div>
         )}
-
-        {/* Scrollable messages list */}
-        <div className="flex-1 overflow-hidden">
-          {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
-            <Virtuoso
-              ref={virtuosoRef}
-              data={messagesWithMarkers}
-              initialTopMostItemIndex={messagesWithMarkers.length - 1}
-              followOutput="smooth"
-              alignToBottom
-              components={{
-                Header: () =>
-                  hasMore && conversationResult.status === "success" ? (
-                    <div className="flex justify-center py-2">
-                      <Button
-                        onClick={handleLoadOlder}
-                        disabled={isLoadingOlder}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        {isLoadingOlder ? (
-                          <>
-                            <Loader2 className="size-3 animate-spin" />
-                            <span className="text-xs">Loading...</span>
-                          </>
-                        ) : (
-                          "Load older messages"
-                        )}
-                      </Button>
-                    </div>
-                  ) : null,
-                Footer: () => <div className="h-1" />,
-              }}
-              itemContent={(_index, item) => {
-                if (item.type === "day-marker") {
-                  return (
-                    <div
-                      className="flex justify-center py-2"
-                      key={`marker-${item.timestamp}`}
-                    >
-                      <Label className="text-[10px] text-muted-foreground">
-                        {item.data}
-                      </Label>
-                    </div>
-                  );
-                }
-                return (
-                  <MessageItem
-                    key={item.data.id}
-                    message={item.data}
-                    adapter={adapter}
-                    conversation={conversation}
-                    onReply={handleReply}
-                    canReply={canSign}
-                    onScrollToMessage={handleScrollToMessage}
-                  />
-                );
-              }}
-              style={{ height: "100%" }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {isThreadChat
-                ? "No replies yet. Start the conversation!"
-                : "No messages yet. Start the conversation!"}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Message composer - only show if user can sign */}
