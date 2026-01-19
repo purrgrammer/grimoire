@@ -12,6 +12,7 @@ import {
   Copy,
   CopyCheck,
   FileText,
+  MessageSquare,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
@@ -26,6 +27,7 @@ import type {
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -34,6 +36,7 @@ import type { ChatAction } from "@/types/chat-actions";
 import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
+import { KindRenderer } from "./nostr/kinds";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -262,6 +265,7 @@ const MessageItem = memo(function MessageItem({
   onReply,
   canReply,
   onScrollToMessage,
+  isRootPost = false,
 }: {
   message: Message;
   adapter: ChatProtocolAdapter;
@@ -269,12 +273,29 @@ const MessageItem = memo(function MessageItem({
   onReply?: (messageId: string) => void;
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
+  isRootPost?: boolean;
 }) {
   // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
   const relays = useMemo(
     () => getConversationRelays(conversation),
     [conversation],
   );
+
+  // Root post: render using KindRenderer with bare mode (no header/footer)
+  if (isRootPost && message.event) {
+    return (
+      <div className="border-b border-border/50 px-3 py-2 bg-muted/20">
+        <div className="flex items-center gap-2 mb-2">
+          <UserName pubkey={message.author} className="text-sm font-medium" />
+          <span className="text-xs text-muted-foreground">
+            <Timestamp timestamp={message.timestamp} />
+          </span>
+          <MessageReactions messageId={message.id} relays={relays} />
+        </div>
+        <KindRenderer event={message.event} bare={true} />
+      </div>
+    );
+  }
 
   // System messages (join/leave) have special styling
   if (message.type === "system") {
@@ -917,6 +938,11 @@ export function ChatViewer({
                           <FileText className="size-3" />
                           Thread
                         </span>
+                      ) : conversation.protocol === "nip-22" ? (
+                        <span className="flex items-center gap-1 text-primary-foreground/80">
+                          <MessageSquare className="size-3" />
+                          Comments
+                        </span>
                       ) : (
                         <span className="capitalize text-primary-foreground/80">
                           {conversation.type}
@@ -993,7 +1019,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-22" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -1027,6 +1054,10 @@ export function ChatViewer({
                   </div>
                 );
               }
+              // Check if this is the root post (for NIP-10/NIP-22)
+              const rootEventId = conversation.metadata?.rootEventId;
+              const isRootPost = rootEventId === item.data.id;
+
               return (
                 <MessageItem
                   key={item.data.id}
@@ -1036,6 +1067,7 @@ export function ChatViewer({
                   onReply={handleReply}
                   canReply={canSign}
                   onScrollToMessage={handleScrollToMessage}
+                  isRootPost={isRootPost}
                 />
               );
             }}
@@ -1126,13 +1158,16 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
+ * Currently NIP-10 (thread chat), NIP-22 (comment chat), NIP-29 (relay-based groups)
+ * and NIP-53 (live activity chat) are supported
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
+    case "nip-22":
+      return new Nip22Adapter();
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
     case "nip-29":

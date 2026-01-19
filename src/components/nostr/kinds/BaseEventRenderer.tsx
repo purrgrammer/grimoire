@@ -48,6 +48,11 @@ export interface BaseEventProps {
     pubkey: string;
     label?: string; // e.g., "Host", "Sender", "Zapper", "From"
   };
+  /**
+   * If true, render content without header/footer wrapper
+   * Used in chat views where the container provides its own context
+   */
+  bare?: boolean;
 }
 
 /**
@@ -193,16 +198,49 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-      // Open chat with NIP-10 thread protocol
+    // Kind 1 notes use NIP-10 thread protocol
+    if (event.kind === 1) {
       addWindow("chat", {
         protocol: "nip-10",
         identifier: {
           type: "thread",
+          value: {
+            id: event.id,
+            relays,
+            author: event.pubkey,
+            kind: event.kind,
+          },
+          relays,
+        },
+      });
+      return;
+    }
+
+    // All other events use NIP-22 comment protocol
+    if (isAddressableKind(event.kind)) {
+      // Addressable events use address pointer
+      const dTag = getTagValue(event, "d") || "";
+      addWindow("chat", {
+        protocol: "nip-22",
+        identifier: {
+          type: "comment",
+          value: {
+            kind: event.kind,
+            pubkey: event.pubkey,
+            identifier: dTag,
+          },
+          relays,
+        },
+      });
+    } else {
+      // Regular events use event pointer
+      addWindow("chat", {
+        protocol: "nip-22",
+        identifier: {
+          type: "comment",
           value: {
             id: event.id,
             relays,
@@ -243,12 +281,10 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </DropdownMenuItem>
-        {event.kind === 1 && (
-          <DropdownMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          Chat
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (
@@ -332,6 +368,8 @@ export function ClickableEventTitle({
 /**
  * Base event container with universal header
  * Kind-specific renderers can wrap their content with this
+ *
+ * @param bare - If true, render children without header/footer wrapper
  */
 /**
  * Format relative time (e.g., "2m ago", "3h ago", "5d ago")
@@ -341,6 +379,7 @@ export function BaseEventContainer({
   event,
   children,
   authorOverride,
+  bare = false,
 }: {
   event: NostrEvent;
   children: React.ReactNode;
@@ -348,8 +387,14 @@ export function BaseEventContainer({
     pubkey: string;
     label?: string;
   };
+  bare?: boolean;
 }) {
   const { locale } = useGrimoire();
+
+  // If bare mode, just render children without wrapper
+  if (bare) {
+    return <>{children}</>;
+  }
 
   // Format relative time for display
   const relativeTime = formatTimestamp(

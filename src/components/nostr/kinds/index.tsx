@@ -237,9 +237,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
  * Default renderer for kinds without custom implementations
  * Shows basic event info with raw content
  */
-function DefaultKindRenderer({ event }: BaseEventProps) {
+function DefaultKindRenderer({ event, bare = false }: BaseEventProps) {
   return (
-    <BaseEventContainer event={event}>
+    <BaseEventContainer event={event} bare={bare}>
       <div className="text-sm text-muted-foreground">
         <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
           {event.content || "(empty content)"}
@@ -256,12 +256,14 @@ function DefaultKindRenderer({ event }: BaseEventProps) {
 export function KindRenderer({
   event,
   depth = 0,
+  bare = false,
 }: {
   event: NostrEvent;
   depth?: number;
+  bare?: boolean;
 }) {
   const Renderer = kindRenderers[event.kind] || DefaultKindRenderer;
-  return <Renderer event={event} depth={depth} />;
+  return <Renderer event={event} depth={depth} bare={bare} />;
 }
 
 /**

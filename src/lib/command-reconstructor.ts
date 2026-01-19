@@ -204,6 +204,66 @@ export function reconstructCommand(window: WindowInstance): string {
           }
         }
 
+        // NIP-10 threads: chat nevent1...
+        if (protocol === "nip-10" && identifier.type === "thread") {
+          const { id, relays, author, kind } = identifier.value || {};
+
+          if (id) {
+            try {
+              const nevent = nip19.neventEncode({
+                id,
+                relays,
+                author,
+                kind,
+              });
+              return `chat ${nevent}`;
+            } catch {
+              // Fallback to raw ID
+              return `chat ${id}`;
+            }
+          }
+        }
+
+        // NIP-22 comments: chat nevent1... or chat naddr1...
+        if (protocol === "nip-22" && identifier.type === "comment") {
+          const value = identifier.value;
+
+          if (value) {
+            try {
+              // Event pointer (has id)
+              if ("id" in value) {
+                const nevent = nip19.neventEncode({
+                  id: value.id,
+                  relays: value.relays,
+                  author: value.author,
+                  kind: value.kind,
+                });
+                return `chat ${nevent}`;
+              }
+
+              // Address pointer (has kind, pubkey, identifier)
+              if (
+                "kind" in value &&
+                "pubkey" in value &&
+                "identifier" in value
+              ) {
+                const naddr = nip19.naddrEncode({
+                  kind: value.kind,
+                  pubkey: value.pubkey,
+                  identifier: value.identifier,
+                  relays: identifier.relays,
+                });
+                return `chat ${naddr}`;
+              }
+            } catch {
+              // Fallback if encoding fails
+              if ("id" in value) {
+                return `chat ${value.id}`;
+              }
+            }
+          }
+        }
+
         return "chat";
       }
 
