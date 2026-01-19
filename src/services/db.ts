@@ -385,7 +385,8 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
       lnurlCache: "&address, fetchedAt",
-      grimoireZaps: "&eventId, senderPubkey, timestamp",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
     });
   }
 }

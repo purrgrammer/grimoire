@@ -40,7 +40,7 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/useWallet";
@@ -49,11 +49,7 @@ import {
   GRIMOIRE_DONATE_PUBKEY,
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
-import {
-  getMonthlyDonations,
-  MONTHLY_GOAL_SATS,
-  supporters$,
-} from "@/services/supporters";
+import supportersService, { MONTHLY_GOAL_SATS } from "@/services/supporters";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -98,10 +94,15 @@ export default function UserMenu() {
   const { themeId, setTheme, availableThemes } = useTheme();
 
   // Subscribe to supporters to trigger re-render when donations change
-  use$(supporters$);
+  const supporters = use$(supportersService.supporters$);
+
+  // Load monthly donations async
+  const [monthlyDonations, setMonthlyDonations] = useState(0);
+  useEffect(() => {
+    supportersService.getMonthlyDonations().then(setMonthlyDonations);
+  }, [supporters]); // Reload when supporters change
 
   // Calculate monthly donation progress
-  const monthlyDonations = getMonthlyDonations();
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
 
   // Format numbers for display

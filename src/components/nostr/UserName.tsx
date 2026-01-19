@@ -21,15 +21,15 @@ interface UserNameProps {
  * - Orange→Amber gradient for logged-in member
  * - Violet→Fuchsia gradient for other members
  * - BadgeCheck icon that scales with username size
- * Shows Grimoire supporters (non-members who zapped) with:
- * - Yellow/gold accent color
- * - Small Zap icon (⚡)
+ * Shows Grimoire supporters (non-members who zapped):
+ * - Premium supporters (2.1k+ sats/month): Zap badge in their username color
+ * - Regular supporters: Yellow text + filled yellow zap icon
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
   const isGrimoire = isGrimoireMember(pubkey);
-  const isSupporter = useIsSupporter(pubkey);
+  const { isSupporter, isPremiumSupporter } = useIsSupporter(pubkey);
   const displayName = getDisplayName(pubkey, profile);
 
   // Check if this is the logged-in user
@@ -55,7 +55,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
             ? isActiveAccount
               ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
               : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
-            : isSupporter
+            : isSupporter && !isPremiumSupporter
               ? "text-yellow-500"
               : isActiveAccount
                 ? "text-highlight"
@@ -75,8 +75,19 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
       )}
       {!isGrimoire && isSupporter && (
         <Zap
-          className="inline-block w-[0.85em] h-[0.85em] text-yellow-500 fill-yellow-500"
-          aria-label="Grimoire Supporter"
+          className={cn(
+            "inline-block w-[0.85em] h-[0.85em]",
+            isPremiumSupporter
+              ? isActiveAccount
+                ? "text-highlight fill-highlight"
+                : "text-accent fill-accent"
+              : "text-yellow-500 fill-yellow-500",
+          )}
+          aria-label={
+            isPremiumSupporter
+              ? "Premium Grimoire Supporter"
+              : "Grimoire Supporter"
+          }
         />
       )}
     </span>

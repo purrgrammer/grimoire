@@ -3,16 +3,37 @@
  */
 
 import { use$ } from "applesauce-react/hooks";
-import { supporters$ } from "@/services/supporters";
+import { useState, useEffect } from "react";
+import supportersService from "@/services/supporters";
 
 /**
  * Check if a pubkey belongs to a Grimoire supporter
  * @param pubkey - User's hex public key
- * @returns true if user has zapped Grimoire
+ * @returns Object with supporter status and premium status
  */
-export function useIsSupporter(pubkey: string | undefined): boolean {
-  const supporters = use$(supporters$);
+export function useIsSupporter(pubkey: string | undefined): {
+  isSupporter: boolean;
+  isPremiumSupporter: boolean;
+} {
+  const supporters = use$(supportersService.supporters$);
+  const [isPremium, setIsPremium] = useState(false);
 
-  if (!pubkey) return false;
-  return supporters.has(pubkey);
+  // Check premium status async
+  useEffect(() => {
+    if (!pubkey || !supporters.has(pubkey)) {
+      setIsPremium(false);
+      return;
+    }
+
+    supportersService.isPremiumSupporter(pubkey).then(setIsPremium);
+  }, [pubkey, supporters]);
+
+  if (!pubkey) {
+    return { isSupporter: false, isPremiumSupporter: false };
+  }
+
+  return {
+    isSupporter: supporters.has(pubkey),
+    isPremiumSupporter: isPremium,
+  };
 }
