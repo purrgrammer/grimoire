@@ -57,12 +57,50 @@ export async function createZapRequest(
   }
 
   // Get relays for zap receipt publication
+  // Priority: explicit params.relays > semantic author relays > sender read relays > aggregators
   let relays = params.relays;
   if (!relays || relays.length === 0) {
-    // Use sender's read relays (where they want to receive zap receipts)
-    const senderReadRelays =
-      (await relayListCache.getInboxRelays(account.pubkey)) || [];
-    relays = senderReadRelays.length > 0 ? senderReadRelays : AGGREGATOR_RELAYS;
+    const collectedRelays: string[] = [];
+
+    // Collect outbox relays from semantic authors (event author and/or addressable event pubkey)
+    const authorsToQuery: string[] = [];
+    if (params.eventPointer?.author) {
+      authorsToQuery.push(params.eventPointer.author);
+    }
+    if (params.addressPointer?.pubkey) {
+      authorsToQuery.push(params.addressPointer.pubkey);
+    }
+
+    // Deduplicate authors
+    const uniqueAuthors = [...new Set(authorsToQuery)];
+
+    // Fetch outbox relays for each author
+    for (const authorPubkey of uniqueAuthors) {
+      const authorOutboxes =
+        (await relayListCache.getOutboxRelays(authorPubkey)) || [];
+      collectedRelays.push(...authorOutboxes);
+    }
+
+    // Include relay hints from pointers
+    if (params.eventPointer?.relays) {
+      collectedRelays.push(...params.eventPointer.relays);
+    }
+    if (params.addressPointer?.relays) {
+      collectedRelays.push(...params.addressPointer.relays);
+    }
+
+    // Deduplicate collected relays
+    const uniqueRelays = [...new Set(collectedRelays)];
+
+    if (uniqueRelays.length > 0) {
+      relays = uniqueRelays;
+    } else {
+      // Fallback to sender's read relays (where they want to receive zap receipts)
+      const senderReadRelays =
+        (await relayListCache.getInboxRelays(account.pubkey)) || [];
+      relays =
+        senderReadRelays.length > 0 ? senderReadRelays : AGGREGATOR_RELAYS;
+    }
   }
 
   // Build tags
