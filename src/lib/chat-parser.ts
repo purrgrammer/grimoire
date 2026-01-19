@@ -64,13 +64,14 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   }
 
   // Try each adapter in priority order
+  // More specific adapters first, NIP-22 last as fallback
   const adapters = [
     new Nip10Adapter(), // NIP-10 - Thread chat (kind 1 notes only)
-    new Nip22Adapter(), // NIP-22 - Comment threads (any kind except kind 1)
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
+    new Nip29Adapter(), // Phase 4 - Relay groups (kind 39000)
+    new Nip53Adapter(), // Phase 5 - Live activity chat (kind 30311)
+    new Nip22Adapter(), // NIP-22 - Comment threads (fallback for all other kinds)
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
