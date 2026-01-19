@@ -11,8 +11,10 @@ import type { EventPointer, AddressPointer } from "./open-parser";
 export interface ParsedZapCommand {
   /** Recipient pubkey (who receives the zap) */
   recipientPubkey: string;
-  /** Optional event being zapped (adds context to the zap) */
-  eventPointer?: EventPointer | AddressPointer;
+  /** Optional event being zapped - regular events (e-tag) */
+  eventPointer?: EventPointer;
+  /** Optional addressable event being zapped - replaceable events (a-tag) */
+  addressPointer?: AddressPointer;
   /**
    * Custom tags to include in the zap request
    * Used for protocol-specific tagging like NIP-53 live activity references
@@ -123,10 +125,17 @@ export async function parseZapCommand(
   // Build result with optional custom tags and relays
   const buildResult = (
     recipientPubkey: string,
-    eventPointer?: EventPointer | AddressPointer,
+    pointer?: EventPointer | AddressPointer,
   ): ParsedZapCommand => {
     const result: ParsedZapCommand = { recipientPubkey };
-    if (eventPointer) result.eventPointer = eventPointer;
+    // Separate EventPointer from AddressPointer based on presence of 'id' vs 'kind'
+    if (pointer) {
+      if ("id" in pointer) {
+        result.eventPointer = pointer;
+      } else if ("kind" in pointer) {
+        result.addressPointer = pointer;
+      }
+    }
     if (customTags.length > 0) result.customTags = customTags;
     if (relays.length > 0) result.relays = relays;
     return result;
@@ -135,17 +144,17 @@ export async function parseZapCommand(
   // Case 1: Two positional arguments - zap <profile> <event>
   if (secondArg) {
     const recipientPubkey = await parseProfile(firstArg, activeAccountPubkey);
-    const eventPointer = parseEventPointer(secondArg);
-    return buildResult(recipientPubkey, eventPointer);
+    const pointer = parseEventPointer(secondArg);
+    return buildResult(recipientPubkey, pointer);
   }
 
   // Case 2: One positional argument - try event first, then profile
   // Events have more specific patterns (nevent, naddr, note)
-  const eventPointer = tryParseEventPointer(firstArg);
-  if (eventPointer) {
+  const pointer = tryParseEventPointer(firstArg);
+  if (pointer) {
     // For events, we'll need to fetch the event to get the author
     // For now, we'll return a placeholder and let the component fetch it
-    return buildResult("", eventPointer);
+    return buildResult("", pointer);
   }
 
   // Must be a profile
