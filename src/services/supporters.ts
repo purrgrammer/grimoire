@@ -46,23 +46,33 @@ let cachedMonthlyDonations = 0;
 
 /**
  * Load supporters from DB and update reactive observable and cached values
+ * Uses efficient Dexie queries to minimize memory usage
  */
 async function refreshSupporters() {
   try {
-    // Get all zaps from the DB
-    const zaps = await db.grimoireZaps.toArray();
-    const uniqueSenders = new Set(zaps.map((zap) => zap.senderPubkey));
+    // Get unique sender pubkeys efficiently
+    const uniquePubkeys = await db.grimoireZaps
+      .orderBy("senderPubkey")
+      .uniqueKeys();
+    const uniqueSenders = new Set(uniquePubkeys as string[]);
 
-    // Update total donations cache
-    cachedTotalDonations = zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+    // Calculate total donations by iterating once
+    let totalDonations = 0;
+    await db.grimoireZaps.each((zap) => {
+      totalDonations += zap.amountSats;
+    });
+    cachedTotalDonations = totalDonations;
 
-    // Update monthly donations cache (last 30 days)
+    // Calculate monthly donations efficiently (indexed query)
     const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
-    const recentZaps = zaps.filter((zap) => zap.timestamp >= thirtyDaysAgo);
-    cachedMonthlyDonations = recentZaps.reduce(
-      (sum, zap) => sum + zap.amountSats,
-      0,
-    );
+    let monthlyDonations = 0;
+    await db.grimoireZaps
+      .where("timestamp")
+      .aboveOrEqual(thirtyDaysAgo)
+      .each((zap) => {
+        monthlyDonations += zap.amountSats;
+      });
+    cachedMonthlyDonations = monthlyDonations;
 
     // Emit updated set
     supporters$.next(uniqueSenders);
@@ -154,39 +164,44 @@ export async function isSupporter(pubkey: string): Promise<boolean> {
 }
 
 /**
- * Get supporter info for a pubkey
+ * Get supporter info for a pubkey (efficient indexed query)
  */
 export async function getSupporterInfo(
   pubkey: string,
 ): Promise<SupporterInfo | undefined> {
-  const zaps = await db.grimoireZaps
+  let totalSats = 0;
+  let zapCount = 0;
+  let lastZapTimestamp = 0;
+
+  await db.grimoireZaps
     .where("senderPubkey")
     .equals(pubkey)
-    .toArray();
+    .each((zap) => {
+      totalSats += zap.amountSats;
+      zapCount += 1;
+      lastZapTimestamp = Math.max(lastZapTimestamp, zap.timestamp);
+    });
 
-  if (zaps.length === 0) return undefined;
-
-  const totalSats = zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
-  const lastZapTimestamp = Math.max(...zaps.map((zap) => zap.timestamp));
+  if (zapCount === 0) return undefined;
 
   return {
     pubkey,
     totalSats,
-    zapCount: zaps.length,
+    zapCount,
     lastZapTimestamp,
   };
 }
 
 /**
  * Get all supporters sorted by total sats (descending)
+ * Groups and aggregates efficiently using Map
  */
 export async function getAllSupporters(): Promise<SupporterInfo[]> {
-  const zaps = await db.grimoireZaps.toArray();
-
-  // Group by sender pubkey
+  // Group by sender pubkey efficiently
   const supporterMap = new Map<string, SupporterInfo>();
 
-  for (const zap of zaps) {
+  // Use Dexie iteration to avoid loading all into memory at once
+  await db.grimoireZaps.each((zap) => {
     const existing = supporterMap.get(zap.senderPubkey);
     if (existing) {
       existing.totalSats += zap.amountSats;
@@ -203,8 +218,9 @@ export async function getAllSupporters(): Promise<SupporterInfo[]> {
         lastZapTimestamp: zap.timestamp,
       });
     }
-  }
+  });
 
+  // Sort by total sats descending
   return Array.from(supporterMap.values()).sort(
     (a, b) => b.totalSats - a.totalSats,
   );
@@ -220,20 +236,24 @@ export function getTotalDonations(): number {
 
 /**
  * Get total donations received (all-time) - async version
- * Queries DB directly for up-to-date value
+ * Queries DB directly for up-to-date value using efficient iteration
  */
 export async function getTotalDonationsAsync(): Promise<number> {
-  const zaps = await db.grimoireZaps.toArray();
-  return zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+  let total = 0;
+  await db.grimoireZaps.each((zap) => {
+    total += zap.amountSats;
+  });
+  return total;
 }
 
 /**
- * Get supporter count
+ * Get supporter count (efficient - uses Dexie uniqueKeys)
  */
 export async function getSupporterCount(): Promise<number> {
-  const zaps = await db.grimoireZaps.toArray();
-  const uniqueSenders = new Set(zaps.map((zap) => zap.senderPubkey));
-  return uniqueSenders.size;
+  const uniquePubkeys = await db.grimoireZaps
+    .orderBy("senderPubkey")
+    .uniqueKeys();
+  return uniquePubkeys.length;
 }
 
 /**
@@ -246,37 +266,43 @@ export function getMonthlyDonations(): number {
 
 /**
  * Get donations received in the last 30 days - async version
- * Queries DB directly for up-to-date value
+ * Queries DB directly for up-to-date value using indexed query
  */
 export async function getMonthlyDonationsAsync(): Promise<number> {
   const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
 
-  const recentZaps = await db.grimoireZaps
+  let total = 0;
+  await db.grimoireZaps
     .where("timestamp")
     .aboveOrEqual(thirtyDaysAgo)
-    .toArray();
+    .each((zap) => {
+      total += zap.amountSats;
+    });
 
-  return recentZaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+  return total;
 }
 
 /**
  * Get donations received in the current calendar month
- * Resets on the first of each month
+ * Resets on the first of each month (efficient indexed query)
  */
 export async function getCurrentMonthDonations(): Promise<number> {
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstOfMonthTimestamp = Math.floor(firstOfMonth.getTime() / 1000);
 
-  const monthZaps = await db.grimoireZaps
+  let total = 0;
+  await db.grimoireZaps
     .where("timestamp")
     .aboveOrEqual(firstOfMonthTimestamp)
-    .toArray();
+    .each((zap) => {
+      total += zap.amountSats;
+    });
 
-  return monthZaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+  return total;
 }
 
 /**
- * Monthly donation goal in sats (210 million sats = 2.1 BTC)
+ * Monthly donation goal in sats (210k sats = 0.0021 BTC)
  */
-export const MONTHLY_GOAL_SATS = 210_000_000;
+export const MONTHLY_GOAL_SATS = 210_000;
