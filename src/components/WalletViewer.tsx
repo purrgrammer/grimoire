@@ -1572,12 +1572,12 @@ export default function WalletViewer() {
                       </div>
                     )}
                     {invoiceDetails?.description && (
-                      <div className="flex justify-between gap-2">
+                      <div className="flex justify-between gap-2 min-w-0">
                         <span className="text-muted-foreground flex-shrink-0">
                           Description:
                         </span>
                         <span
-                          className="truncate text-right"
+                          className="truncate text-right min-w-0"
                           title={invoiceDetails.description}
                         >
                           {invoiceDetails.description}
