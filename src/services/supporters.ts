@@ -109,8 +109,7 @@ class SupportersService {
         },
       ]);
 
-      // Subscribe to insert stream from eventStore
-      // This catches events as they're added in real-time
+      // Subscribe to insert stream from eventStore for real-time new events
       const eventSubscription = eventStore.insert$.subscribe(
         (event: NostrEvent) => {
           // Filter for zaps to Grimoire
@@ -121,12 +120,28 @@ class SupportersService {
             )
           ) {
             console.log(
-              `[Supporters] Received zap event ${event.id.slice(0, 8)} from eventStore.insert$`,
+              `[Supporters] Received NEW zap event ${event.id.slice(0, 8)} from eventStore.insert$`,
             );
             this.processZapReceipt(event);
           }
         },
       );
+
+      // Also subscribe to timeline to process ALL existing events
+      const timeline = eventStore.timeline([
+        {
+          kinds: [9735],
+          "#p": [GRIMOIRE_DONATE_PUBKEY],
+        },
+      ]);
+
+      const timelineSubscription = timeline.subscribe(async (events) => {
+        console.log(
+          `[Supporters] Timeline has ${events.length} total zap events`,
+        );
+        // Process all existing events (includes both old and new)
+        await Promise.all(events.map((event) => this.processZapReceipt(event)));
+      });
 
       // Start the loader (pushes events to store)
       const loaderSubscription = loader().subscribe({
@@ -138,9 +153,10 @@ class SupportersService {
         },
       });
 
-      // Combine subscriptions for cleanup
+      // Combine all subscriptions for cleanup
       this.subscription = eventSubscription;
-      if (this.subscription && loaderSubscription) {
+      if (this.subscription) {
+        this.subscription.add(timelineSubscription);
         this.subscription.add(loaderSubscription);
       }
     } catch (error) {
