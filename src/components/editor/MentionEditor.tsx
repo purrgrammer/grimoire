@@ -34,7 +34,7 @@ import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
 import { getKindName } from "@/constants/kinds";
-import { eventStore } from "@/services/event-store";
+import eventStore from "@/services/event-store";
 import { MemoizedInlineEventPreview } from "../nostr/InlineEventPreview";
 import type { NostrEvent } from "@/types/nostr";
 import { FileText } from "lucide-react";
@@ -297,6 +297,7 @@ const EventMentionNode = Node.create({
       eventId: { default: null },
       kind: { default: null },
       pubkey: { default: null },
+      identifier: { default: null }, // For naddr (d tag)
     };
   },
 
@@ -317,7 +318,8 @@ const EventMentionNode = Node.create({
 
   addNodeView() {
     return ({ node }) => {
-      const { decodedType, kind, nostrUri, eventId, pubkey } = node.attrs;
+      const { decodedType, kind, nostrUri, eventId, pubkey, identifier } =
+        node.attrs;
 
       // Create wrapper span
       const dom = document.createElement("span");
@@ -333,19 +335,14 @@ const EventMentionNode = Node.create({
       if (eventId) {
         // For note/nevent - try to get by ID
         event = eventStore.event(eventId);
-      } else if (decodedType === "naddr" && kind !== null && pubkey) {
-        // For naddr - try to get replaceable event
-        // Get the identifier from the original naddr
-        try {
-          const decoded = nip19.decode(nostrUri.replace("nostr:", ""));
-          if (decoded.type === "naddr") {
-            const identifier = (decoded.data as nip19.AddressPointer)
-              .identifier;
-            event = eventStore.replaceable(kind, pubkey, identifier);
-          }
-        } catch {
-          // Failed to decode, fall through to fallback
-        }
+      } else if (
+        decodedType === "naddr" &&
+        kind !== null &&
+        pubkey &&
+        identifier !== null
+      ) {
+        // For naddr - try to get replaceable event using stored identifier
+        event = eventStore.replaceable(kind, pubkey, identifier);
       }
 
       // Render the component
@@ -452,6 +449,7 @@ const EventMentionNode = Node.create({
                 let eventId: string | null = null;
                 let kind: number | null = null;
                 let pubkey: string | null = null;
+                let identifier: string | null = null;
 
                 if (decoded.type === "note") {
                   decodedType = "note";
@@ -468,6 +466,7 @@ const EventMentionNode = Node.create({
                   const data = decoded.data as nip19.AddressPointer;
                   kind = data.kind;
                   pubkey = data.pubkey;
+                  identifier = data.identifier;
                 } else {
                   return false;
                 }
@@ -484,6 +483,7 @@ const EventMentionNode = Node.create({
                     eventId,
                     kind,
                     pubkey,
+                    identifier,
                   }),
                 );
 
