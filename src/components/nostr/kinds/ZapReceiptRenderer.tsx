@@ -70,12 +70,7 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
             })}
           </span>
           <span className="text-xs text-muted-foreground">sats</span>
-          {zapRecipient && (
-            <>
-              <span className="text-xs text-muted-foreground">→</span>
-              <UserName pubkey={zapRecipient} />
-            </>
-          )}
+          {zapRecipient && <UserName pubkey={zapRecipient} />}
         </div>
 
         {/* Zap comment */}
