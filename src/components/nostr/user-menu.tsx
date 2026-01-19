@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Zap,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -43,6 +44,11 @@ import { useState } from "react";
 import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/useWallet";
+import { Progress } from "@/components/ui/progress";
+import {
+  GRIMOIRE_DONATE_PUBKEY,
+  GRIMOIRE_LIGHTNING_ADDRESS,
+} from "@/lib/grimoire-members";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -111,6 +117,17 @@ export default function UserMenu() {
 
   function openWallet() {
     addWindow("wallet", {}, "Wallet");
+  }
+
+  function openDonate() {
+    addWindow(
+      "zap",
+      {
+        recipientPubkey: GRIMOIRE_DONATE_PUBKEY,
+        recipientLightningAddress: GRIMOIRE_LIGHTNING_ADDRESS,
+      },
+      "Support Grimoire",
+    );
   }
 
   async function logout() {
@@ -375,6 +392,30 @@ export default function UserMenu() {
               <span className="text-sm">Connect Wallet</span>
             </DropdownMenuItem>
           )}
+
+          {/* Support Grimoire Section */}
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              className="cursor-crosshair flex items-center gap-2"
+              onClick={openDonate}
+            >
+              <Zap className="size-4 text-yellow-500" />
+              <span className="text-sm font-medium">Support Grimoire</span>
+            </DropdownMenuItem>
+
+            {/* Monthly Goal Tracker */}
+            <div className="px-2 py-2 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Monthly goal</span>
+                <span className="font-medium">42k / 500k sats</span>
+              </div>
+              <Progress value={8.4} className="h-1.5" />
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                Help us build the best Nostr developer tool
+              </p>
+            </div>
+          </DropdownMenuGroup>
 
           {account && (
             <>

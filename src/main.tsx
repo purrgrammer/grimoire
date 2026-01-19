@@ -9,9 +9,13 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initializeErrorHandling } from "./lib/error-handler";
 import { ThemeProvider } from "./lib/themes";
+import { initSupporters } from "./services/supporters";
 
 // Initialize global error handling
 initializeErrorHandling();
+
+// Initialize supporter tracking
+initSupporters();
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary level="app">

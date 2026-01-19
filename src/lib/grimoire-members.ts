@@ -94,3 +94,15 @@ export function getGrimoireUsername(pubkey: string): string | undefined {
 export function getGrimoireNip05(pubkey: string): string | undefined {
   return membersByPubkey.get(pubkey.toLowerCase())?.nip05;
 }
+
+/**
+ * Official Grimoire project pubkey for donations
+ * Corresponds to user "_" in GRIMOIRE_MEMBERS
+ */
+export const GRIMOIRE_DONATE_PUBKEY =
+  "c8fb0d3aa788b9ace4f6cb92dd97d3f292db25b5c9f92462ef6c64926129fbaf";
+
+/**
+ * Official Grimoire project Lightning address for donations
+ */
+export const GRIMOIRE_LIGHTNING_ADDRESS = "grimoire@coinos.io";

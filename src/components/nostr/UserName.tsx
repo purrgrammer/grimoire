@@ -3,7 +3,8 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
 import { isGrimoireMember } from "@/lib/grimoire-members";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, Zap } from "lucide-react";
+import { useIsSupporter } from "@/hooks/useIsSupporter";
 
 interface UserNameProps {
   pubkey: string;
@@ -20,11 +21,15 @@ interface UserNameProps {
  * - Orange→Amber gradient for logged-in member
  * - Violet→Fuchsia gradient for other members
  * - BadgeCheck icon that scales with username size
+ * Shows Grimoire supporters (non-members who zapped) with:
+ * - Yellow/gold accent color
+ * - Small Zap icon (⚡)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
   const profile = useProfile(pubkey);
   const isGrimoire = isGrimoireMember(pubkey);
+  const isSupporter = useIsSupporter(pubkey);
   const displayName = getDisplayName(pubkey, profile);
 
   // Check if this is the logged-in user
@@ -50,9 +55,11 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
             ? isActiveAccount
               ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
               : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
-            : isActiveAccount
-              ? "text-highlight"
-              : "text-accent",
+            : isSupporter
+              ? "text-yellow-500"
+              : isActiveAccount
+                ? "text-highlight"
+                : "text-accent",
         )}
       >
         {isMention ? "@" : null}
@@ -64,6 +71,12 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
             "inline-block w-[1em] h-[1em]",
             isActiveAccount ? "text-amber-500" : "text-fuchsia-500",
           )}
+        />
+      )}
+      {!isGrimoire && isSupporter && (
+        <Zap
+          className="inline-block w-[0.85em] h-[0.85em] text-yellow-500 fill-yellow-500"
+          aria-label="Grimoire Supporter"
         />
       )}
     </span>
