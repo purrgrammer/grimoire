@@ -21,11 +21,20 @@ import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
 import accountManager from "@/services/accounts";
 import { getDisplayName } from "@/lib/nostr-utils";
-import { Copy, Settings, RefreshCw, MessageSquare } from "lucide-react";
+import {
+  Copy,
+  Settings,
+  RefreshCw,
+  MessageSquare,
+  ChevronDown,
+} from "lucide-react";
 import { useCopy } from "@/hooks/useCopy";
 import { toast } from "sonner";
+import giftWrapManager from "@/services/gift-wrap";
 
 interface InboxViewerProps {}
+
+const CONVERSATIONS_PAGE_SIZE = 50;
 
 export function InboxViewer(_props: InboxViewerProps) {
   const { state, updateGiftWrapSettings } = useGrimoire();
@@ -33,6 +42,8 @@ export function InboxViewer(_props: InboxViewerProps) {
   const stats = useGiftWrapStats();
   const conversations = useGiftWrapConversations();
   const [showSettings, setShowSettings] = useState(false);
+  const [conversationsPage, setConversationsPage] = useState(1);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   const syncEnabled = state.giftWrapSettings?.syncEnabled ?? true;
   const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? true;
@@ -53,20 +64,36 @@ export function InboxViewer(_props: InboxViewerProps) {
       .map((t) => t[1]);
   }, [dmRelayEvent]);
 
-  // Convert conversations map to sorted array
-  const conversationsList = useMemo(() => {
-    if (!conversations) return [];
-    return Array.from(conversations.entries())
-      .map(([key, latestMessage]) => ({
-        key,
-        latestMessage,
-        otherPubkey:
-          latestMessage.senderPubkey === pubkey
-            ? latestMessage.recipientPubkey
-            : latestMessage.senderPubkey,
-      }))
-      .sort((a, b) => b.latestMessage.createdAt - a.latestMessage.createdAt);
-  }, [conversations, pubkey]);
+  // Convert conversations map to sorted array with pagination
+  const { conversationsList, totalConversations, hasMoreConversations } =
+    useMemo(() => {
+      if (!conversations)
+        return {
+          conversationsList: [],
+          totalConversations: 0,
+          hasMoreConversations: false,
+        };
+
+      const allConversations = Array.from(conversations.entries())
+        .map(([key, latestMessage]) => ({
+          key,
+          latestMessage,
+          otherPubkey:
+            latestMessage.senderPubkey === pubkey
+              ? latestMessage.recipientPubkey
+              : latestMessage.senderPubkey,
+        }))
+        .sort((a, b) => b.latestMessage.createdAt - a.latestMessage.createdAt);
+
+      const pageSize = CONVERSATIONS_PAGE_SIZE * conversationsPage;
+      const pagedConversations = allConversations.slice(0, pageSize);
+
+      return {
+        conversationsList: pagedConversations,
+        totalConversations: allConversations.length,
+        hasMoreConversations: allConversations.length > pageSize,
+      };
+    }, [conversations, pubkey, conversationsPage]);
 
   const handleToggleSync = () => {
     updateGiftWrapSettings({ syncEnabled: !syncEnabled });
@@ -93,6 +120,27 @@ export function InboxViewer(_props: InboxViewerProps) {
         detail: `chat ${npub}`,
       }),
     );
+  };
+
+  const handleLoadMoreConversations = () => {
+    setConversationsPage((prev) => prev + 1);
+  };
+
+  const handleLoadOlderGiftWraps = async () => {
+    setIsLoadingOlder(true);
+    try {
+      const count = await giftWrapManager.loadOlderGiftWraps();
+      if (count > 0) {
+        toast.success(`Loaded ${count} older gift wraps`);
+      } else {
+        toast.info("No older gift wraps found");
+      }
+    } catch (error) {
+      console.error("[Inbox] Error loading older gift wraps:", error);
+      toast.error("Failed to load older gift wraps");
+    } finally {
+      setIsLoadingOlder(false);
+    }
   };
 
   if (!pubkey) {
@@ -158,7 +206,17 @@ export function InboxViewer(_props: InboxViewerProps) {
 
       {/* Stats Panel */}
       <div className="border-b bg-muted/30 px-4 py-3">
-        <h3 className="mb-2 text-sm font-semibold">Gift Wrap Statistics</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Gift Wrap Statistics</h3>
+          <button
+            onClick={handleLoadOlderGiftWraps}
+            disabled={isLoadingOlder}
+            className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+            title="Load older gift wraps from relays"
+          >
+            {isLoadingOlder ? "Loading..." : "Load Older"}
+          </button>
+        </div>
         <div className="grid grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold">{stats.totalGiftWraps}</div>
@@ -183,6 +241,13 @@ export function InboxViewer(_props: InboxViewerProps) {
             <div className="text-xs text-muted-foreground">Pending</div>
           </div>
         </div>
+        {stats.oldestGiftWrap && stats.newestGiftWrap && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            Storage:{" "}
+            {new Date(stats.oldestGiftWrap * 1000).toLocaleDateString()} -{" "}
+            {new Date(stats.newestGiftWrap * 1000).toLocaleDateString()}
+          </div>
+        )}
       </div>
 
       {/* DM Relays Panel */}
@@ -210,7 +275,10 @@ export function InboxViewer(_props: InboxViewerProps) {
       <div className="flex-1 overflow-auto">
         <div className="px-4 py-3">
           <h3 className="mb-2 text-sm font-semibold">
-            Conversations ({conversationsList.length})
+            Conversations ({conversationsList.length}
+            {totalConversations > conversationsList.length &&
+              ` of ${totalConversations}`}
+            )
           </h3>
           {conversationsList.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
@@ -221,17 +289,33 @@ export function InboxViewer(_props: InboxViewerProps) {
               </p>
             </div>
           ) : (
-            <div className="space-y-1">
-              {conversationsList.map(({ key, latestMessage, otherPubkey }) => (
-                <ConversationRow
-                  key={key}
-                  conversationKey={key}
-                  otherPubkey={otherPubkey}
-                  latestMessage={latestMessage}
-                  onClick={() => handleOpenConversation(key, otherPubkey)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="space-y-1">
+                {conversationsList.map(
+                  ({ key, latestMessage, otherPubkey }) => (
+                    <ConversationRow
+                      key={key}
+                      conversationKey={key}
+                      otherPubkey={otherPubkey}
+                      latestMessage={latestMessage}
+                      onClick={() => handleOpenConversation(key, otherPubkey)}
+                    />
+                  ),
+                )}
+              </div>
+              {hasMoreConversations && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={handleLoadMoreConversations}
+                    className="flex items-center gap-2 rounded border px-4 py-2 text-sm hover:bg-muted"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                    Load More Conversations (
+                    {totalConversations - conversationsList.length} remaining)
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

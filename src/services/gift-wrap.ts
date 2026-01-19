@@ -20,7 +20,19 @@ export interface GiftWrapStats {
   successfulDecryptions: number;
   failedDecryptions: number;
   pendingDecryptions: number;
+  oldestGiftWrap?: number; // Unix timestamp of oldest gift wrap
+  newestGiftWrap?: number; // Unix timestamp of newest gift wrap
 }
+
+/**
+ * Gift wrap sync configuration
+ */
+const GIFT_WRAP_CONFIG = {
+  INITIAL_LIMIT: 500, // Max gift wraps to fetch on initial sync
+  PAGINATION_SIZE: 100, // Batch size for loading older gift wraps
+  MAX_STORAGE_DAYS: 90, // Keep gift wraps for 90 days
+  AUTH_TIMEOUT_MS: 10000, // Wait 10s for auth before proceeding
+};
 
 /**
  * Rumor structure (unsigned event from NIP-59)
@@ -45,10 +57,15 @@ class GiftWrapManager {
     failedDecryptions: 0,
     pendingDecryptions: 0,
   });
+  private lastSyncTimestamp: number = 0; // Last sync time (for incremental updates)
+  private isAuthenticating = false;
+  private authenticated = new Set<string>(); // Track which relays are authenticated
 
   /**
    * Start syncing gift wraps for the active account
-   * Subscribes to kind 1059 events from user's DM relays
+   * 1. Gets DM relays
+   * 2. Authenticates with dummy REQ (triggers NIP-42 AUTH)
+   * 3. Subscribes to gift wraps with pagination
    */
   async startSync(): Promise<void> {
     const account = accountManager.active$.value;
@@ -66,18 +83,42 @@ class GiftWrapManager {
     // Get user's DM relays (kind 10050) or fall back to general relays
     const dmRelays = await this.getDMRelays(pubkey);
     if (dmRelays.length === 0) {
-      console.warn("[GiftWrap] No DM relays found, using general relays");
+      console.warn("[GiftWrap] No DM relays found, cannot sync gift wraps");
       // TODO: Get general relays from user's relay list
       return;
     }
 
     console.log(`[GiftWrap] Syncing from ${dmRelays.length} relays:`, dmRelays);
 
-    // Subscribe to gift wraps (kind 1059) addressed to us
+    // Step 1: Authenticate with relays using dummy REQ
+    // This triggers NIP-42 AUTH which is required for relays to serve kind 1059
+    await this.authenticateWithRelays(dmRelays, pubkey);
+
+    // Step 2: Determine sync window (initial vs incremental)
+    const now = Math.floor(Date.now() / 1000);
+    const isInitialSync = this.lastSyncTimestamp === 0;
+
+    let since: number | undefined;
+    if (isInitialSync) {
+      // Initial sync: Fetch last N days of gift wraps
+      since = now - GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
+      console.log(
+        `[GiftWrap] Initial sync from ${new Date(since * 1000).toISOString()}`,
+      );
+    } else {
+      // Incremental sync: Fetch only new gift wraps since last sync
+      since = this.lastSyncTimestamp;
+      console.log(
+        `[GiftWrap] Incremental sync from ${new Date(since * 1000).toISOString()}`,
+      );
+    }
+
+    // Step 3: Subscribe to gift wraps with pagination
     const filter: Filter = {
       kinds: [1059],
       "#p": [pubkey],
-      limit: 100,
+      since,
+      limit: isInitialSync ? GIFT_WRAP_CONFIG.INITIAL_LIMIT : undefined,
     };
 
     const subscription = pool
@@ -88,6 +129,8 @@ class GiftWrapManager {
         next: (response) => {
           if (typeof response === "string") {
             console.log("[GiftWrap] EOSE received");
+            // Update last sync timestamp after EOSE
+            this.lastSyncTimestamp = now;
           } else {
             console.log(
               `[GiftWrap] Received gift wrap: ${response.id.slice(0, 8)}...`,
@@ -108,11 +151,14 @@ class GiftWrapManager {
 
     this.subscriptions.set(pubkey, subscription);
 
-    // Process any existing gift wraps in the event store
+    // Process any existing gift wraps in the event store (from previous sessions)
     await this.processExistingGiftWraps(pubkey);
 
     // Update stats
     await this.updateStats();
+
+    // Clean up old gift wraps
+    await this.cleanupOldGiftWraps();
   }
 
   /**
@@ -122,6 +168,189 @@ class GiftWrapManager {
     console.log("[GiftWrap] Stopping sync");
     this.subscriptions.forEach((sub) => sub.unsubscribe());
     this.subscriptions.clear();
+  }
+
+  /**
+   * Authenticate with relays using dummy REQ
+   * This triggers NIP-42 AUTH which is required for relays to serve kind 1059
+   */
+  private async authenticateWithRelays(
+    relays: string[],
+    pubkey: string,
+  ): Promise<void> {
+    if (this.isAuthenticating) {
+      console.log("[GiftWrap] Already authenticating, skipping");
+      return;
+    }
+
+    this.isAuthenticating = true;
+    console.log("[GiftWrap] Authenticating with relays...");
+
+    try {
+      // Send a dummy REQ to trigger AUTH
+      // We'll request kind 1059 with a very restrictive filter (no results expected)
+      const dummyFilter: Filter = {
+        kinds: [1059],
+        "#p": [pubkey],
+        limit: 1,
+        since: Math.floor(Date.now() / 1000), // Only future events (none exist)
+      };
+
+      // Create a promise that resolves after timeout or first event
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          subscription.unsubscribe();
+          resolve();
+        }, GIFT_WRAP_CONFIG.AUTH_TIMEOUT_MS);
+
+        const subscription = pool
+          .subscription(relays, [dummyFilter], {})
+          .subscribe({
+            next: (response) => {
+              // Got EOSE or event, auth likely completed
+              if (typeof response === "string") {
+                clearTimeout(timeout);
+                subscription.unsubscribe();
+                resolve();
+              }
+            },
+            error: () => {
+              clearTimeout(timeout);
+              resolve();
+            },
+          });
+      });
+
+      console.log("[GiftWrap] Authentication complete");
+      relays.forEach((relay) => this.authenticated.add(relay));
+    } catch (error) {
+      console.error("[GiftWrap] Authentication error:", error);
+    } finally {
+      this.isAuthenticating = false;
+    }
+  }
+
+  /**
+   * Load older gift wraps for pagination
+   * Fetches gift wraps before the oldest currently loaded
+   */
+  async loadOlderGiftWraps(): Promise<number> {
+    const account = accountManager.active$.value;
+    if (!account) {
+      console.log("[GiftWrap] No active account");
+      return 0;
+    }
+
+    const { pubkey } = account;
+
+    // Get oldest gift wrap timestamp
+    const decryptions = await db.giftWrapDecryptions
+      .where("recipientPubkey")
+      .equals(pubkey)
+      .sortBy("lastAttempt");
+
+    if (decryptions.length === 0) {
+      console.log("[GiftWrap] No gift wraps to paginate from");
+      return 0;
+    }
+
+    const oldestTimestamp = decryptions[0].lastAttempt;
+    const cutoff = oldestTimestamp - 30 * 24 * 60 * 60; // 30 days before oldest
+
+    console.log(
+      `[GiftWrap] Loading older gift wraps before ${new Date(oldestTimestamp * 1000).toISOString()}`,
+    );
+
+    // Get DM relays
+    const dmRelays = await this.getDMRelays(pubkey);
+    if (dmRelays.length === 0) {
+      console.warn("[GiftWrap] No DM relays found");
+      return 0;
+    }
+
+    // Fetch older gift wraps
+    const filter: Filter = {
+      kinds: [1059],
+      "#p": [pubkey],
+      until: oldestTimestamp,
+      since: cutoff,
+      limit: GIFT_WRAP_CONFIG.PAGINATION_SIZE,
+    };
+
+    let count = 0;
+
+    await new Promise<void>((resolve) => {
+      const subscription = pool
+        .subscription(dmRelays, [filter], {
+          eventStore,
+        })
+        .subscribe({
+          next: (response) => {
+            if (typeof response === "string") {
+              console.log(`[GiftWrap] Loaded ${count} older gift wraps`);
+              subscription.unsubscribe();
+              resolve();
+            } else {
+              count++;
+              this.processGiftWrap(response, pubkey).catch((error) => {
+                console.error(
+                  `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                  error,
+                );
+              });
+            }
+          },
+          error: () => {
+            subscription.unsubscribe();
+            resolve();
+          },
+        });
+    });
+
+    // Update stats
+    await this.updateStats();
+
+    return count;
+  }
+
+  /**
+   * Clean up old gift wraps to prevent storage bloat
+   * Removes decryption records older than MAX_STORAGE_DAYS
+   */
+  private async cleanupOldGiftWraps(): Promise<void> {
+    const cutoff =
+      Math.floor(Date.now() / 1000) -
+      GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
+
+    console.log(
+      `[GiftWrap] Cleaning up gift wraps older than ${new Date(cutoff * 1000).toISOString()}`,
+    );
+
+    // Delete old decryption records
+    const oldDecryptions = await db.giftWrapDecryptions
+      .where("lastAttempt")
+      .below(cutoff)
+      .toArray();
+
+    if (oldDecryptions.length > 0) {
+      console.log(
+        `[GiftWrap] Removing ${oldDecryptions.length} old decryption records`,
+      );
+      await db.giftWrapDecryptions.bulkDelete(
+        oldDecryptions.map((d) => d.giftWrapId),
+      );
+    }
+
+    // Delete old unsealed DMs
+    const oldDMs = await db.unsealedDMs
+      .where("receivedAt")
+      .below(cutoff)
+      .toArray();
+
+    if (oldDMs.length > 0) {
+      console.log(`[GiftWrap] Removing ${oldDMs.length} old unsealed DMs`);
+      await db.unsealedDMs.bulkDelete(oldDMs.map((d) => d.id));
+    }
   }
 
   /**
@@ -363,6 +592,18 @@ class GiftWrapManager {
   private async updateStats(): Promise<void> {
     const decryptions = await db.giftWrapDecryptions.toArray();
 
+    // Find oldest and newest gift wrap timestamps
+    let oldestTimestamp: number | undefined;
+    let newestTimestamp: number | undefined;
+
+    if (decryptions.length > 0) {
+      const timestamps = decryptions
+        .map((d) => d.lastAttempt)
+        .sort((a, b) => a - b);
+      oldestTimestamp = timestamps[0];
+      newestTimestamp = timestamps[timestamps.length - 1];
+    }
+
     const stats: GiftWrapStats = {
       totalGiftWraps: decryptions.length,
       successfulDecryptions: decryptions.filter(
@@ -374,6 +615,8 @@ class GiftWrapManager {
       pendingDecryptions: decryptions.filter(
         (d) => d.decryptionState === "pending",
       ).length,
+      oldestGiftWrap: oldestTimestamp,
+      newestGiftWrap: newestTimestamp,
     };
 
     this.stats$.next(stats);
