@@ -197,12 +197,21 @@ export function EventMenu({ event }: { event: NostrEvent }) {
     if (event.kind === 1) {
       const seenRelaysSet = getSeenRelays(event);
       const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-      const nevent = nip19.neventEncode({
-        id: event.id,
-        author: event.pubkey,
-        relays: relays,
+
+      // Open chat with NIP-10 thread protocol
+      addWindow("chat", {
+        protocol: "nip-10",
+        identifier: {
+          type: "thread",
+          value: {
+            id: event.id,
+            relays,
+            author: event.pubkey,
+            kind: event.kind,
+          },
+          relays,
+        },
       });
-      addWindow("chat", { args: [nevent] });
     }
   };
 
