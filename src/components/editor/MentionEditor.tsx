@@ -6,6 +6,7 @@ import {
   useCallback,
   useRef,
 } from "react";
+import { createRoot } from "react-dom/client";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -33,6 +34,9 @@ import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
 import { getKindName } from "@/constants/kinds";
+import { eventStore } from "@/services/event-store";
+import { MemoizedInlineEventPreview } from "../nostr/InlineEventPreview";
+import type { NostrEvent } from "@/types/nostr";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -312,34 +316,64 @@ const EventMentionNode = Node.create({
 
   addNodeView() {
     return ({ node }) => {
-      const { decodedType, kind, nostrUri } = node.attrs;
+      const { decodedType, kind, nostrUri, eventId, pubkey } = node.attrs;
 
       // Create wrapper span
       const dom = document.createElement("span");
-      dom.className =
-        "event-mention inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs align-middle cursor-pointer hover:bg-primary/20 transition-colors";
+      dom.className = "event-mention inline-block align-middle";
       dom.contentEditable = "false";
-      dom.title = nostrUri || "Event mention";
 
-      // Icon based on type
-      const icon = document.createElement("span");
-      icon.textContent = "📝";
-      dom.appendChild(icon);
+      // Create React root for rendering
+      const root = createRoot(dom);
 
-      // Label showing event type
-      const label = document.createElement("span");
-      label.className = "text-foreground font-medium";
-      const kindName = kind !== null ? getKindName(kind) : "event";
-      label.textContent = kindName;
-      dom.appendChild(label);
+      // Try to load the event from the store
+      let event: NostrEvent | undefined;
 
-      // Type indicator
-      const typeLabel = document.createElement("span");
-      typeLabel.className = "text-muted-foreground text-[10px]";
-      typeLabel.textContent = decodedType || "note";
-      dom.appendChild(typeLabel);
+      if (eventId) {
+        // For note/nevent - try to get by ID
+        event = eventStore.event(eventId);
+      } else if (decodedType === "naddr" && kind !== null && pubkey) {
+        // For naddr - try to get replaceable event
+        // Get the identifier from the original naddr
+        try {
+          const decoded = nip19.decode(nostrUri.replace("nostr:", ""));
+          if (decoded.type === "naddr") {
+            const identifier = (decoded.data as nip19.AddressPointer)
+              .identifier;
+            event = eventStore.replaceable(kind, pubkey, identifier);
+          }
+        } catch {
+          // Failed to decode, fall through to fallback
+        }
+      }
 
-      return { dom };
+      // Render the component
+      if (event) {
+        // Event found - render full preview
+        root.render(<MemoizedInlineEventPreview event={event} />);
+      } else {
+        // Event not found - render compact fallback
+        const kindName = kind !== null ? getKindName(kind) : "event";
+        root.render(
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs align-middle pointer-events-none">
+            <span>📝</span>
+            <span className="text-foreground font-medium text-[10px]">
+              {kindName}
+            </span>
+            <span className="text-muted-foreground text-[9px]">
+              {decodedType || "note"}
+            </span>
+          </span>,
+        );
+      }
+
+      return {
+        dom,
+        destroy: () => {
+          // Cleanup React root when node is destroyed
+          root.unmount();
+        },
+      };
     };
   },
 
