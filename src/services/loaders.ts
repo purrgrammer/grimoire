@@ -52,7 +52,6 @@ function extractRelayContext(event: NostrEvent): {
 // Aggregator relays for better event discovery
 // IMPORTANT: URLs must be normalized (trailing slash, lowercase) to match RelayStateManager keys
 export const AGGREGATOR_RELAYS = [
-  "wss://relay.nostr.band/",
   "wss://nos.lol/",
   "wss://purplepag.es/",
   "wss://relay.primal.net/",

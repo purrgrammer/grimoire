@@ -58,6 +58,10 @@ class SupportersService {
   async init() {
     console.log("[Supporters] Initializing...");
 
+    // Log existing zaps in DB
+    const existingCount = await db.grimoireZaps.count();
+    console.log(`[Supporters] Found ${existingCount} existing zaps in DB`);
+
     // Clean up existing subscription if any
     if (this.subscription) {
       this.subscription.unsubscribe();
@@ -191,23 +195,45 @@ class SupportersService {
   private async processZapReceipt(event: NostrEvent) {
     try {
       // Only process valid zaps
-      if (!isValidZap(event)) return;
+      if (!isValidZap(event)) {
+        console.log(`[Supporters] Invalid zap event ${event.id.slice(0, 8)}`);
+        return;
+      }
 
       // Double-check recipient is Grimoire
       const recipient = getZapRecipient(event);
-      if (recipient !== GRIMOIRE_DONATE_PUBKEY) return;
+      if (recipient !== GRIMOIRE_DONATE_PUBKEY) {
+        console.log(
+          `[Supporters] Zap not for Grimoire: ${recipient?.slice(0, 8)}`,
+        );
+        return;
+      }
 
       // Get sender
       const sender = getZapSender(event);
-      if (!sender) return;
+      if (!sender) {
+        console.log(
+          `[Supporters] No sender found for zap ${event.id.slice(0, 8)}`,
+        );
+        return;
+      }
 
       // Check if already recorded (deduplication)
       const existing = await db.grimoireZaps.get(event.id);
-      if (existing) return;
+      if (existing) {
+        console.log(`[Supporters] Duplicate zap ${event.id.slice(0, 8)}`);
+        return;
+      }
 
       // Get amount (millisats -> sats)
       const amountMsats = getZapAmount(event);
       const amountSats = amountMsats ? Math.floor(amountMsats / 1000) : 0;
+
+      if (amountSats === 0) {
+        console.log(
+          `[Supporters] Zap with 0 sats: ${event.id.slice(0, 8)} (${amountMsats} msats)`,
+        );
+      }
 
       // Get comment from zap request
       const zapRequest = getZapRequest(event);
@@ -225,7 +251,7 @@ class SupportersService {
       await db.grimoireZaps.add(zapRecord);
 
       console.log(
-        `[Supporters] Recorded zap: ${amountSats} sats from ${sender.slice(0, 8)}`,
+        `[Supporters] ✓ Recorded zap: ${amountSats} sats from ${sender.slice(0, 8)} at ${new Date(event.created_at * 1000).toISOString()}`,
       );
     } catch (error) {
       // Silently ignore duplicate key errors (race condition protection)

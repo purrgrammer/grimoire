@@ -76,9 +76,7 @@ describe("eventLoader", () => {
       expect(result).toBeDefined();
       expect((result as any)._testPointer.id).toBe("test123");
       // mergeRelaySets normalizes URLs with trailing slash
-      expect((result as any)._testPointer.relays).toContain(
-        "wss://relay.nostr.band/",
-      );
+      expect((result as any)._testPointer.relays).toContain("wss://nos.lol/");
     });
 
     it("should handle EventPointer with relay hints", () => {
@@ -100,9 +98,7 @@ describe("eventLoader", () => {
 
       expect(result).toBeDefined();
       // mergeRelaySets normalizes URLs with trailing slash
-      expect((result as any)._testPointer.relays).toContain(
-        "wss://relay.nostr.band/",
-      );
+      expect((result as any)._testPointer.relays).toContain("wss://nos.lol/");
     });
   });
 
@@ -249,7 +245,7 @@ describe("eventLoader", () => {
       expect(relays).toContain("wss://r-tag.com/");
       expect(relays).toContain("wss://e-tag.com/");
       // mergeRelaySets normalizes aggregator relays with trailing slash
-      expect(relays).toContain("wss://relay.nostr.band/");
+      expect(relays).toContain("wss://nos.lol/");
     });
   });
 
@@ -328,9 +324,7 @@ describe("eventLoader", () => {
 
       expect(result).toBeDefined();
       // mergeRelaySets normalizes aggregator relays with trailing slash
-      expect((result as any)._testPointer.relays).toContain(
-        "wss://relay.nostr.band/",
-      );
+      expect((result as any)._testPointer.relays).toContain("wss://nos.lol/");
     });
 
     it("should handle invalid e tags gracefully", () => {
@@ -390,7 +384,7 @@ describe("eventLoader", () => {
       const relays = (result as any)._testPointer.relays;
 
       // Should only have aggregator relays (normalized with trailing slash)
-      expect(relays).toContain("wss://relay.nostr.band/");
+      expect(relays).toContain("wss://nos.lol/");
       expect(relays).toContain("wss://nos.lol/");
       expect(relays).toContain("wss://purplepag.es/");
       expect(relays).toContain("wss://relay.primal.net/");

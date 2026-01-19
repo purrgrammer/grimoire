@@ -655,7 +655,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     // Default fallback relays for live activities
-    return ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+    return ["wss://relay.damus.io", "wss://nos.lol", "wss://purplepag.es"];
   }
 
   /**
