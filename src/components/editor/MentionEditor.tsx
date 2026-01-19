@@ -37,6 +37,7 @@ import { getKindName } from "@/constants/kinds";
 import { eventStore } from "@/services/event-store";
 import { MemoizedInlineEventPreview } from "../nostr/InlineEventPreview";
 import type { NostrEvent } from "@/types/nostr";
+import { FileText } from "lucide-react";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -355,12 +356,12 @@ const EventMentionNode = Node.create({
         // Event not found - render compact fallback
         const kindName = kind !== null ? getKindName(kind) : "event";
         root.render(
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs align-middle pointer-events-none">
-            <span>📝</span>
-            <span className="text-foreground font-medium text-[10px]">
+          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-primary/10 border border-primary/20 align-middle pointer-events-none whitespace-nowrap max-w-[180px]">
+            <FileText className="size-3 text-muted-foreground shrink-0" />
+            <span className="text-foreground font-medium text-[10px] truncate">
               {kindName}
             </span>
-            <span className="text-muted-foreground text-[9px]">
+            <span className="text-muted-foreground text-[9px] shrink-0">
               {decodedType || "note"}
             </span>
           </span>,
