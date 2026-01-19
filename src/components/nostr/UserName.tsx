@@ -23,7 +23,7 @@ interface UserNameProps {
  * - BadgeCheck icon that scales with username size
  * Shows Grimoire supporters (non-members who zapped):
  * - Premium supporters (2.1k+ sats/month): Zap badge in their username color
- * - Regular supporters: Yellow text + filled yellow zap icon
+ * - Regular supporters: Yellow zap badge (no username color change)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -55,11 +55,9 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
             ? isActiveAccount
               ? "bg-gradient-to-tr from-orange-400 to-amber-600 bg-clip-text text-transparent"
               : "bg-gradient-to-tr from-violet-500 to-fuchsia-600 bg-clip-text text-transparent"
-            : isSupporter && !isPremiumSupporter
-              ? "text-yellow-500"
-              : isActiveAccount
-                ? "text-highlight"
-                : "text-accent",
+            : isActiveAccount
+              ? "text-highlight"
+              : "text-accent",
         )}
       >
         {isMention ? "@" : null}
