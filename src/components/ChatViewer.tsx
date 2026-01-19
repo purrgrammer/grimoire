@@ -306,10 +306,15 @@ const MessageItem = memo(function MessageItem({
     // Only show reply preview if:
     // 1. The event exists in our store
     // 2. The event is a chat kind (includes messages, nutzaps, live chat, and zap receipts)
+    // 3. NOT replying to root in NIP-10 thread (root is already visible at top)
+    const isReplyingToThreadRoot =
+      conversation.protocol === "nip-10" &&
+      zapReplyTo === conversation.metadata?.rootEventId;
     const shouldShowReplyPreview =
       zapReplyTo &&
       replyEvent &&
-      (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
+      (CHAT_KINDS as readonly number[]).includes(replyEvent.kind) &&
+      !isReplyingToThreadRoot;
 
     return (
       <div className="pl-2 my-1">
@@ -389,14 +394,18 @@ const MessageItem = memo(function MessageItem({
         <div className="break-words overflow-hidden">
           {message.event ? (
             <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo && (
-                <ReplyPreview
-                  replyToId={message.replyTo}
-                  adapter={adapter}
-                  conversation={conversation}
-                  onScrollToMessage={onScrollToMessage}
-                />
-              )}
+              {message.replyTo &&
+                !(
+                  conversation.protocol === "nip-10" &&
+                  message.replyTo === conversation.metadata?.rootEventId
+                ) && (
+                  <ReplyPreview
+                    replyToId={message.replyTo}
+                    adapter={adapter}
+                    conversation={conversation}
+                    onScrollToMessage={onScrollToMessage}
+                  />
+                )}
             </RichText>
           ) : (
             <span className="whitespace-pre-wrap break-words">
