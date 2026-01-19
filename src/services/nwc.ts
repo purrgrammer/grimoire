@@ -29,6 +29,23 @@ let notificationSubscription: Subscription | null = null;
 export const balance$ = new BehaviorSubject<number | undefined>(undefined);
 
 /**
+ * Cached wallet info type
+ * Contains the essential fields from NIP-47 get_info response
+ */
+export type WalletInfo = {
+  alias?: string;
+  methods: string[];
+  notifications?: string[];
+  network?: string;
+};
+
+/**
+ * Observable for wallet info
+ * Cached from initial connection, components can subscribe via use$()
+ */
+export const info$ = new BehaviorSubject<WalletInfo | undefined>(undefined);
+
+/**
  * Helper to convert hex string to Uint8Array
  */
 function hexToBytes(hex: string): Uint8Array {
@@ -107,6 +124,11 @@ export function restoreWallet(connection: NWCConnection): WalletConnect {
     balance$.next(connection.balance);
   }
 
+  // Set cached info from connection
+  if (connection.info) {
+    info$.next(connection.info);
+  }
+
   subscribeToNotifications(walletInstance);
   return walletInstance;
 }
@@ -128,6 +150,15 @@ export function clearWallet(): void {
   }
   walletInstance = null;
   balance$.next(undefined);
+  info$.next(undefined);
+}
+
+/**
+ * Set the cached wallet info
+ * Called after initial connection to cache the get_info response
+ */
+export function setWalletInfo(info: WalletInfo): void {
+  info$.next(info);
 }
 
 /**

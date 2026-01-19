@@ -98,8 +98,9 @@ export interface NWCConnection {
   /** Optional wallet info */
   info?: {
     alias?: string;
-    methods?: string[];
+    methods: string[];
     notifications?: string[];
+    network?: string;
   };
   /** Last connection time */
   lastConnected?: number;

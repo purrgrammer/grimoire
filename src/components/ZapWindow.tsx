@@ -11,7 +11,7 @@
  * - Shows feed render of zapped event
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Zap,
@@ -117,17 +117,7 @@ export function ZapWindow({
   const activeAccount = accountManager.active;
   const canSign = !!activeAccount?.signer;
 
-  const { wallet, payInvoice, refreshBalance, getInfo } = useWallet();
-
-  // Fetch wallet info
-  const [walletInfo, setWalletInfo] = useState<any>(null);
-  useEffect(() => {
-    if (wallet) {
-      getInfo()
-        .then((info) => setWalletInfo(info))
-        .catch((error) => console.error("Failed to get wallet info:", error));
-    }
-  }, [wallet, getInfo]);
+  const { wallet, info: walletInfo, payInvoice, refreshBalance } = useWallet();
 
   // Cache LNURL data for recipient's Lightning address
   const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
@@ -717,7 +707,10 @@ export function ZapWindow({
                     isPaid
                       ? onClose?.()
                       : handleZap(
-                          wallet && walletInfo?.methods.includes("pay_invoice"),
+                          !!(
+                            wallet &&
+                            walletInfo?.methods.includes("pay_invoice")
+                          ),
                         )
                   }
                   disabled={

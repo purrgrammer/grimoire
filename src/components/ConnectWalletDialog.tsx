@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGrimoire } from "@/core/state";
-import { createWalletFromURI } from "@/services/nwc";
+import { createWalletFromURI, setWalletInfo } from "@/services/nwc";
 
 interface ConnectWalletDialogProps {
   open: boolean;
@@ -85,6 +85,7 @@ export default function ConnectWalletDialog({
           alias: info.alias,
           methods: info.methods,
           notifications: info.notifications,
+          network: info.network,
         },
       });
 
@@ -93,12 +94,15 @@ export default function ConnectWalletDialog({
         updateNWCBalance(balance);
       }
 
-      // Update info
-      updateNWCInfo({
+      // Update info in state and observable
+      const cachedInfo = {
         alias: info.alias,
         methods: info.methods,
         notifications: info.notifications,
-      });
+        network: info.network,
+      };
+      updateNWCInfo(cachedInfo);
+      setWalletInfo(cachedInfo);
 
       // Show success toast
       toast.success("Wallet Connected");

@@ -29,6 +29,8 @@ import {
   clearWallet as clearWalletService,
   refreshBalance as refreshBalanceService,
   balance$,
+  info$,
+  type WalletInfo,
 } from "@/services/nwc";
 import type { WalletConnect } from "applesauce-wallet-connect";
 
@@ -39,6 +41,9 @@ export function useWallet() {
 
   // Subscribe to balance updates from observable (fully reactive!)
   const balance = use$(balance$);
+
+  // Subscribe to cached wallet info (from initial connection)
+  const info = use$(info$);
 
   // Initialize wallet on mount if connection exists but no wallet instance
   useEffect(() => {
@@ -175,13 +180,15 @@ export function useWallet() {
     wallet,
     /** Current balance in millisats (auto-updates via observable!) */
     balance,
+    /** Cached wallet info (alias, methods, notifications) from initial connection */
+    info,
     /** Whether a wallet is connected */
     isConnected: !!wallet,
     /** Pay a BOLT11 invoice */
     payInvoice,
     /** Generate a new invoice */
     makeInvoice,
-    /** Get wallet information */
+    /** Get wallet information (prefer using cached `info` instead) */
     getInfo,
     /** Get current balance */
     getBalance,
@@ -197,3 +204,5 @@ export function useWallet() {
     disconnect,
   };
 }
+
+export type { WalletInfo };

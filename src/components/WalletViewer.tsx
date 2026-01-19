@@ -76,17 +76,6 @@ interface Transaction {
   metadata?: Record<string, any>;
 }
 
-interface WalletInfo {
-  alias?: string;
-  color?: string;
-  pubkey?: string;
-  network?: string;
-  block_height?: number;
-  block_hash?: string;
-  methods: string[];
-  notifications?: string[];
-}
-
 interface InvoiceDetails {
   amount?: number;
   description?: string;
@@ -408,8 +397,8 @@ export default function WalletViewer() {
   const {
     wallet,
     balance,
+    info: walletInfo,
     isConnected,
-    getInfo,
     refreshBalance,
     listTransactions,
     makeInvoice,
@@ -417,8 +406,6 @@ export default function WalletViewer() {
     lookupInvoice,
     disconnect,
   } = useWallet();
-
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -429,7 +416,6 @@ export default function WalletViewer() {
   const [txLoadFailed, setTxLoadFailed] = useState(false);
 
   // Use refs to track loading attempts without causing re-renders
-  const walletInfoLoadedRef = useRef(false);
   const lastConnectionStateRef = useRef(isConnected);
   const lastBalanceRefreshRef = useRef(0);
   const lastTxLoadRef = useRef(0);
@@ -462,43 +448,28 @@ export default function WalletViewer() {
   const [showRawTransaction, setShowRawTransaction] = useState(false);
   const [copiedRawTx, setCopiedRawTx] = useState(false);
 
-  // Load wallet info when connected
+  // Reset state when connection changes
   useEffect(() => {
     // Detect connection state changes
     if (isConnected !== lastConnectionStateRef.current) {
       lastConnectionStateRef.current = isConnected;
-      walletInfoLoadedRef.current = false;
 
       if (isConnected) {
         // Reset transaction loading flags when wallet connects
         setTxLoadAttempted(false);
         setTxLoadFailed(false);
         setTransactions([]);
-        setWalletInfo(null);
       } else {
         // Clear all state when wallet disconnects
         setTxLoadAttempted(false);
         setTxLoadFailed(false);
         setTransactions([]);
-        setWalletInfo(null);
         setLoading(false);
         setLoadingMore(false);
         setHasMore(true);
       }
     }
-
-    // Load wallet info if connected and not yet loaded
-    if (isConnected && !walletInfoLoadedRef.current) {
-      walletInfoLoadedRef.current = true;
-      getInfo()
-        .then((info) => setWalletInfo(info))
-        .catch((error) => {
-          console.error("Failed to load wallet info:", error);
-          toast.error("Failed to load wallet info");
-          walletInfoLoadedRef.current = false; // Allow retry
-        });
-    }
-  }, [isConnected, getInfo]);
+  }, [isConnected]);
 
   // Load transactions when wallet info is available (only once)
   useEffect(() => {
