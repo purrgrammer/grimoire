@@ -42,6 +42,12 @@ export const MONTHLY_GOAL_SATS = 210_000;
  */
 export const PREMIUM_SUPPORTER_THRESHOLD = 2_100;
 
+/**
+ * Hardcoded relays known to have Grimoire zaps
+ * Used as immediate fallback for cold start before relay list loads
+ */
+const GRIMOIRE_ZAP_RELAYS = ["wss://nos.lol", "wss://lightning.red"];
+
 class SupportersService {
   private subscription: Subscription | null = null;
 
@@ -69,57 +75,28 @@ class SupportersService {
    */
   private async subscribeToZapReceipts() {
     try {
-      console.log("[Supporters] Fetching Grimoire relay list (kind 10002)...");
-
-      // First, explicitly fetch Grimoire's kind 10002 relay list
-      // Use longer timeout for cold start (10 seconds)
-      try {
-        await firstValueFrom(
-          addressLoader({
-            kind: 10002,
-            pubkey: GRIMOIRE_DONATE_PUBKEY,
-            identifier: "",
-          }).pipe(
-            rxTimeout(10000), // 10 second timeout for cold start
-            catchError((err) => {
-              console.warn(
-                "[Supporters] Timeout/error fetching relay list:",
-                err.message,
-              );
-              return of(null);
-            }),
-          ),
-        );
-      } catch (err) {
-        console.warn("[Supporters] Failed to fetch relay list:", err);
-      }
-
-      // Give relayListCache a moment to update
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Now get Grimoire's inbox relays from cache (should be populated from fetch above)
-      let grimRelays = await relayListCache.getInboxRelays(
-        GRIMOIRE_DONATE_PUBKEY,
+      // Start with hardcoded relays for immediate cold start
+      let grimRelays = [...GRIMOIRE_ZAP_RELAYS];
+      console.log(
+        "[Supporters] Starting with hardcoded relays:",
+        grimRelays.join(", "),
       );
 
-      // Fallback to aggregators if no relays found
-      if (!grimRelays || grimRelays.length === 0) {
-        console.warn(
-          "[Supporters] No inbox relays found for Grimoire, using aggregators only",
-        );
-        grimRelays = AGGREGATOR_RELAYS;
-      } else {
-        console.log(
-          `[Supporters] Found ${grimRelays.length} inbox relays for Grimoire`,
-        );
-        // Add aggregators as fallback
-        grimRelays = [...grimRelays, ...AGGREGATOR_RELAYS];
-      }
+      // Fetch relay list in background (non-blocking)
+      // Don't await - let it happen in parallel with subscription
+      this.fetchAndMergeRelayList().then((fetchedRelays) => {
+        if (fetchedRelays.length > 0) {
+          console.log(
+            `[Supporters] Fetched ${fetchedRelays.length} additional relays from kind 10002`,
+          );
+        }
+      });
+
+      // Add aggregators as additional fallback
+      grimRelays = [...grimRelays, ...AGGREGATOR_RELAYS];
 
       console.log(
-        `[Supporters] Subscribing to zaps on ${grimRelays.length} relays:`,
-        grimRelays.slice(0, 3).join(", "),
-        grimRelays.length > 3 ? `...and ${grimRelays.length - 3} more` : "",
+        `[Supporters] Subscribing to zaps on ${grimRelays.length} relays`,
       );
 
       // Subscribe to zap receipts (kind 9735) for Grimoire
@@ -160,6 +137,51 @@ class SupportersService {
       this.subscription.add(timelineSubscription);
     } catch (error) {
       console.error("[Supporters] Failed to subscribe to zap receipts:", error);
+    }
+  }
+
+  /**
+   * Fetch Grimoire's relay list from kind 10002 (non-blocking)
+   * Returns array of relay URLs
+   */
+  private async fetchAndMergeRelayList(): Promise<string[]> {
+    try {
+      console.log("[Supporters] Fetching Grimoire relay list (kind 10002)...");
+
+      await firstValueFrom(
+        addressLoader({
+          kind: 10002,
+          pubkey: GRIMOIRE_DONATE_PUBKEY,
+          identifier: "",
+        }).pipe(
+          rxTimeout(10000),
+          catchError((err) => {
+            console.warn(
+              "[Supporters] Timeout/error fetching relay list:",
+              err.message,
+            );
+            return of(null);
+          }),
+        ),
+      );
+
+      // Give relayListCache a moment to update
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Get inbox relays from cache
+      const inboxRelays = await relayListCache.getInboxRelays(
+        GRIMOIRE_DONATE_PUBKEY,
+      );
+
+      if (inboxRelays && inboxRelays.length > 0) {
+        console.log(`[Supporters] Found ${inboxRelays.length} inbox relays`);
+        return inboxRelays;
+      }
+
+      return [];
+    } catch (err) {
+      console.warn("[Supporters] Failed to fetch relay list:", err);
+      return [];
     }
   }
 
