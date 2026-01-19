@@ -23,9 +23,7 @@ import {
 import { getEventDisplayTitle } from "@/lib/event-title";
 import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
-import { getLiveHost } from "@/lib/live-activity";
-import type { NostrEvent } from "@/types/nostr";
-import { getZapSender } from "applesauce-common/helpers/zap";
+import { getSemanticAuthor } from "@/lib/semantic-author";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
@@ -35,31 +33,6 @@ export interface WindowTitleData {
   title: string | ReactElement;
   icon?: LucideIcon;
   tooltip?: string;
-}
-
-/**
- * Get the semantic author of an event based on kind-specific logic
- * Returns the pubkey that should be displayed as the "author" for UI purposes
- *
- * Examples:
- * - Zaps (9735): Returns the zapper (P tag), not the lightning service pubkey
- * - Live activities (30311): Returns the host (first p tag with "Host" role)
- * - Regular events: Returns event.pubkey
- */
-function getSemanticAuthor(event: NostrEvent): string {
-  switch (event.kind) {
-    case 9735: {
-      // Zap: show the zapper, not the lightning service pubkey
-      const zapSender = getZapSender(event);
-      return zapSender || event.pubkey;
-    }
-    case 30311: {
-      // Live activity: show the host
-      return getLiveHost(event);
-    }
-    default:
-      return event.pubkey;
-  }
 }
 
 /**

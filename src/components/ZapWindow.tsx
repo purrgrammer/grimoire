@@ -49,6 +49,7 @@ import {
 } from "@/lib/create-zap-request";
 import { fetchInvoiceFromCallback } from "@/lib/lnurl";
 import { useLnurlCache } from "@/hooks/useLnurlCache";
+import { getSemanticAuthor } from "@/lib/semantic-author";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
@@ -98,8 +99,10 @@ export function ZapWindow({
     );
   }, [eventPointer]);
 
-  // Resolve recipient: use provided pubkey or derive from event author
-  const recipientPubkey = initialRecipientPubkey || event?.pubkey || "";
+  // Resolve recipient: use provided pubkey or derive from semantic author
+  // For zaps, this returns the zapper; for streams, returns the host; etc.
+  const recipientPubkey =
+    initialRecipientPubkey || (event ? getSemanticAuthor(event) : "");
 
   const recipientProfile = useProfile(recipientPubkey);
 
