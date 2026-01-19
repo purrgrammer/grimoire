@@ -28,6 +28,13 @@ export interface ZapConfig {
   unsupportedReason?: string;
   /** Recipient pubkey (who receives the sats) */
   recipientPubkey: string;
+  /** Addressable event context for a-tag (e.g., live activity) */
+  addressPointer?: {
+    kind: number;
+    pubkey: string;
+    identifier: string;
+    relays?: string[];
+  };
   /** Custom tags to include in the zap request (beyond standard p/amount/relays) */
   customTags?: string[][];
   /** Relays where the zap receipt should be published */

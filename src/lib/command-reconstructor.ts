@@ -110,34 +110,34 @@ export function reconstructCommand(window: WindowInstance): string {
           }
         }
 
-        // Add event pointer if present
+        // Add event pointer if present (e-tag context)
         if (props.eventPointer) {
           const pointer = props.eventPointer;
           try {
-            if ("id" in pointer) {
-              // EventPointer
-              const nevent = nip19.neventEncode({
-                id: pointer.id,
-                relays: pointer.relays,
-                author: pointer.author,
-                kind: pointer.kind,
-              });
-              parts.push(nevent);
-            } else if ("kind" in pointer) {
-              // AddressPointer
-              const naddr = nip19.naddrEncode({
-                kind: pointer.kind,
-                pubkey: pointer.pubkey,
-                identifier: pointer.identifier,
-                relays: pointer.relays,
-              });
-              parts.push(naddr);
-            }
+            const nevent = nip19.neventEncode({
+              id: pointer.id,
+              relays: pointer.relays,
+              author: pointer.author,
+              kind: pointer.kind,
+            });
+            parts.push(nevent);
           } catch {
             // Fallback to raw ID
-            if ("id" in pointer) {
-              parts.push(pointer.id);
-            }
+            parts.push(pointer.id);
+          }
+        }
+
+        // Add address pointer if present (a-tag context, e.g., live activity)
+        if (props.addressPointer) {
+          const pointer = props.addressPointer;
+          // Use -T a to add the a-tag as coordinate
+          parts.push(
+            "-T",
+            "a",
+            `${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`,
+          );
+          if (pointer.relays?.[0]) {
+            parts.push(pointer.relays[0]);
           }
         }
 

@@ -580,7 +580,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     const { pubkey: activityPubkey, identifier } = activityAddress;
-    const aTagValue = `30311:${activityPubkey}:${identifier}`;
     const hostPubkey = liveActivity?.hostPubkey;
     const goal = liveActivity?.goal;
 
@@ -592,13 +591,17 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           ? [conversation.metadata.relayUrl]
           : [];
 
-    // Build custom tags
-    const customTags: string[][] = [
-      // Always a-tag the live activity
-      ["a", aTagValue, relays[0] || ""],
-    ];
+    // Build addressPointer for the live activity (a-tag)
+    const addressPointer = {
+      kind: 30311,
+      pubkey: activityPubkey,
+      identifier,
+      relays,
+    };
 
+    // Build custom tags for special cases only
     // If zapping the host AND stream has a goal, e-tag the goal
+    const customTags: string[][] = [];
     if (message.author === hostPubkey && goal) {
       customTags.push(["e", goal, relays[0] || ""]);
     }
@@ -606,7 +609,8 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     return {
       supported: true,
       recipientPubkey: message.author,
-      customTags,
+      addressPointer,
+      customTags: customTags.length > 0 ? customTags : undefined,
       relays,
     };
   }
