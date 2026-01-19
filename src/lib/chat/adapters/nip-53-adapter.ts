@@ -1,5 +1,5 @@
 import { Observable, firstValueFrom } from "rxjs";
-import { map, first, toArray } from "rxjs/operators";
+import { map, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import {
@@ -21,19 +21,21 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import {
   parseLiveActivity,
   getLiveStatus,
   getLiveHost,
 } from "@/lib/live-activity";
-import {
-  getZapAmount,
-  getZapRequest,
-  getZapSender,
-  isValidZap,
-} from "applesauce-common/helpers/zap";
+import { isValidZap } from "applesauce-common/helpers/zap";
 import { EventFactory } from "applesauce-core/event-factory";
+import {
+  fetchEvent,
+  getOutboxRelays,
+  AGGREGATOR_RELAYS,
+  zapReceiptToMessage,
+  eventToMessage,
+  getNip10ReplyTo,
+} from "../utils";
 
 /**
  * NIP-53 Adapter - Live Activity Chat
@@ -108,8 +110,14 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     );
 
     // Use author's outbox relays plus any relay hints
-    const authorOutboxes = await this.getAuthorOutboxes(pubkey);
-    const relays = [...new Set([...relayHints, ...authorOutboxes])];
+    const authorOutboxes = await getOutboxRelays(pubkey, {
+      maxRelays: 3,
+      logPrefix: "[NIP-53]",
+    });
+    // If no outbox relays found, use aggregator relays as fallback
+    const outboxFallback =
+      authorOutboxes.length > 0 ? authorOutboxes : AGGREGATOR_RELAYS;
+    const relays = [...new Set([...relayHints, ...outboxFallback])];
 
     if (relays.length === 0) {
       throw new Error("No relays available to fetch live activity");
@@ -184,7 +192,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     // Combine activity relays, relay hints, and host outboxes for comprehensive coverage
     const chatRelays = [
-      ...new Set([...activity.relays, ...relayHints, ...authorOutboxes]),
+      ...new Set([...activity.relays, ...relayHints, ...outboxFallback]),
     ];
 
     console.log(
@@ -306,16 +314,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     return eventStore.timeline(filter).pipe(
       map((events) => {
         const messages = events
-          .map((event) => {
-            // Convert zaps (kind 9735) using zapToMessage
-            if (event.kind === 9735) {
-              // Only include valid zaps
-              if (!isValidZap(event)) return null;
-              return this.zapToMessage(event, conversation.id);
-            }
-            // All other events (kind 1311) use eventToMessage
-            return this.eventToMessage(event, conversation.id);
-          })
+          .map((event) => this.convertEventToMessage(event, conversation.id))
           .filter((msg): msg is Message => msg !== null);
 
         console.log(`[NIP-53] Timeline has ${messages.length} events`);
@@ -382,13 +381,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     // Convert events to messages
     const messages = events
-      .map((event) => {
-        if (event.kind === 9735) {
-          if (!isValidZap(event)) return null;
-          return this.zapToMessage(event, conversation.id);
-        }
-        return this.eventToMessage(event, conversation.id);
-      })
+      .map((event) => this.convertEventToMessage(event, conversation.id))
       .filter((msg): msg is Message => msg !== null);
 
     // loadMoreMessages returns events in desc order from relay,
@@ -623,105 +616,33 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     conversation: Conversation,
     eventId: string,
   ): Promise<NostrEvent | null> {
-    // First check EventStore
-    const cachedEvent = await eventStore
-      .event(eventId)
-      .pipe(first())
-      .toPromise();
-    if (cachedEvent) {
-      return cachedEvent;
-    }
+    // Get relays from conversation metadata
+    const relays = this.getConversationRelays(conversation);
 
-    // Not in store, fetch from activity relays
-    const liveActivity = conversation.metadata?.liveActivity as
-      | {
-          relays?: string[];
-        }
-      | undefined;
-
-    // Get relays - use immutable pattern to avoid mutating metadata
-    const relays =
-      liveActivity?.relays && liveActivity.relays.length > 0
-        ? liveActivity.relays
-        : conversation.metadata?.relayUrl
-          ? [conversation.metadata.relayUrl]
-          : [];
-
-    if (relays.length === 0) {
-      console.warn("[NIP-53] No relays for loading reply message");
-      return null;
-    }
-
-    console.log(
-      `[NIP-53] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.length} relays`,
-    );
-
-    const filter: Filter = {
-      ids: [eventId],
-      limit: 1,
-    };
-
-    const events: NostrEvent[] = [];
-    const obs = pool.subscription(relays, [filter], { eventStore });
-
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        console.log(
-          `[NIP-53] Reply message fetch timeout for ${eventId.slice(0, 8)}...`,
-        );
-        resolve();
-      }, 3000);
-
-      const sub = obs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            events.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error(`[NIP-53] Reply message fetch error:`, err);
-          sub.unsubscribe();
-          resolve();
-        },
-      });
+    return fetchEvent(eventId, {
+      relayHints: relays,
+      timeout: 3000,
+      logPrefix: "[NIP-53]",
     });
-
-    return events[0] || null;
   }
 
   /**
-   * Helper: Get author's outbox relays via NIP-65
+   * Helper: Get relays from conversation metadata
    */
-  private async getAuthorOutboxes(pubkey: string): Promise<string[]> {
-    try {
-      // Try to get from EventStore first (kind 10002)
-      const relayListEvent = await eventStore
-        .replaceable(10002, pubkey)
-        .pipe(first())
-        .toPromise();
+  private getConversationRelays(conversation: Conversation): string[] {
+    const liveActivity = conversation.metadata?.liveActivity as
+      | { relays?: string[] }
+      | undefined;
 
-      if (relayListEvent) {
-        // Extract write relays from r tags
-        const writeRelays = relayListEvent.tags
-          .filter((t) => t[0] === "r" && (!t[2] || t[2] === "write"))
-          .map((t) => t[1])
-          .filter(Boolean);
-
-        if (writeRelays.length > 0) {
-          return writeRelays.slice(0, 3); // Limit to 3 relays
-        }
-      }
-    } catch {
-      // Fall through to defaults
+    if (liveActivity?.relays && liveActivity.relays.length > 0) {
+      return liveActivity.relays;
     }
 
-    // Default fallback relays for live activities
-    return AGGREGATOR_RELAYS;
+    if (conversation.metadata?.relayUrl) {
+      return [conversation.metadata.relayUrl];
+    }
+
+    return [];
   }
 
   /**
@@ -736,65 +657,26 @@ export class Nip53Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Helper: Convert Nostr event to Message
+   * Helper: Convert Nostr event to Message using shared utilities
    */
-  private eventToMessage(event: NostrEvent, conversationId: string): Message {
-    // Look for reply e-tags (NIP-10 style)
-    const eTags = event.tags.filter((t) => t[0] === "e");
-    // Find the reply tag (has "reply" marker or is the last e-tag without marker)
-    const replyTag =
-      eTags.find((t) => t[3] === "reply") ||
-      eTags.find((t) => !t[3] && eTags.length === 1);
-    const replyTo = replyTag?.[1];
+  private convertEventToMessage(
+    event: NostrEvent,
+    conversationId: string,
+  ): Message | null {
+    // Convert zap receipts (kind 9735)
+    if (event.kind === 9735) {
+      if (!isValidZap(event)) return null;
+      return zapReceiptToMessage(event, {
+        conversationId,
+        protocol: "nip-53",
+      });
+    }
 
-    return {
-      id: event.id,
+    // All other events (kind 1311) use eventToMessage with NIP-10 style reply extraction
+    return eventToMessage(event, {
       conversationId,
-      author: event.pubkey,
-      content: event.content,
-      timestamp: event.created_at,
-      type: "user",
-      replyTo,
       protocol: "nip-53",
-      metadata: {
-        encrypted: false,
-      },
-      event,
-    };
-  }
-
-  /**
-   * Helper: Convert zap receipt to Message
-   */
-  private zapToMessage(event: NostrEvent, conversationId: string): Message {
-    const zapSender = getZapSender(event);
-    const zapAmount = getZapAmount(event);
-    const zapRequest = getZapRequest(event);
-
-    // Convert from msats to sats
-    const amountInSats = zapAmount ? Math.floor(zapAmount / 1000) : 0;
-
-    // Get zap comment from request
-    const zapComment = zapRequest?.content || "";
-
-    // The recipient is the pubkey in the p tag of the zap receipt
-    const pTag = event.tags.find((t) => t[0] === "p");
-    const zapRecipient = pTag?.[1] || event.pubkey;
-
-    return {
-      id: event.id,
-      conversationId,
-      author: zapSender || event.pubkey,
-      content: zapComment,
-      timestamp: event.created_at,
-      type: "zap",
-      protocol: "nip-53",
-      metadata: {
-        encrypted: false,
-        zapAmount: amountInSats,
-        zapRecipient,
-      },
-      event,
-    };
+      getReplyTo: getNip10ReplyTo,
+    });
   }
 }

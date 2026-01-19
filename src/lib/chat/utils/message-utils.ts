@@ -71,7 +71,7 @@ export function zapReceiptToMessage(
   };
 }
 
-export interface NutzapToMessageOptions extends ZapToMessageOptions {}
+export type NutzapToMessageOptions = ZapToMessageOptions;
 
 /**
  * Convert a nutzap event (kind 9321) to a Message
