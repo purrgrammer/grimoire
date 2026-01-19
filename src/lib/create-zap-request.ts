@@ -118,8 +118,9 @@ export async function createZapRequest(
 }
 
 /**
- * Serialize zap request event to URL-encoded JSON for LNURL callback
+ * Serialize zap request event to JSON string for LNURL callback
+ * Note: Do NOT encodeURIComponent here - URLSearchParams.set() will handle encoding
  */
 export function serializeZapRequest(event: NostrEvent): string {
-  return encodeURIComponent(JSON.stringify(event));
+  return JSON.stringify(event);
 }
