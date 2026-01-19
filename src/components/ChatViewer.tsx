@@ -262,6 +262,7 @@ const MessageItem = memo(function MessageItem({
   onReply,
   canReply,
   onScrollToMessage,
+  isRootMessage,
 }: {
   message: Message;
   adapter: ChatProtocolAdapter;
@@ -269,6 +270,7 @@ const MessageItem = memo(function MessageItem({
   onReply?: (messageId: string) => void;
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
+  isRootMessage?: boolean;
 }) {
   // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
   const relays = useMemo(
@@ -377,7 +379,7 @@ const MessageItem = memo(function MessageItem({
           </span>
           {/* Reactions display - inline after timestamp */}
           <MessageReactions messageId={message.id} relays={relays} />
-          {canReply && onReply && (
+          {canReply && onReply && !isRootMessage && (
             <button
               onClick={() => onReply(message.id)}
               className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
@@ -414,7 +416,11 @@ const MessageItem = memo(function MessageItem({
     return (
       <ChatMessageContextMenu
         event={message.event}
-        onReply={canReply && onReply ? () => onReply(message.id) : undefined}
+        onReply={
+          canReply && onReply && !isRootMessage
+            ? () => onReply(message.id)
+            : undefined
+        }
         conversation={conversation}
         adapter={adapter}
         message={message}
@@ -1027,6 +1033,11 @@ export function ChatViewer({
                   </div>
                 );
               }
+              // For NIP-10 threads, check if this is the root message
+              const isRootMessage =
+                protocol === "nip-10" &&
+                conversation.metadata?.rootEventId === item.data.id;
+
               return (
                 <MessageItem
                   key={item.data.id}
@@ -1036,6 +1047,7 @@ export function ChatViewer({
                   onReply={handleReply}
                   canReply={canSign}
                   onScrollToMessage={handleScrollToMessage}
+                  isRootMessage={isRootMessage}
                 />
               );
             }}
