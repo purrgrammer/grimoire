@@ -250,7 +250,21 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     // Extract participants from both admins and members events
     const participantsMap = new Map<string, Participant>();
 
-    // Process kind:39001 (admins with roles)
+    // Process kind:39002 FIRST (members list includes ALL members)
+    // Per NIP-29: kind 39002 includes both admins and regular members
+    const memberEvents = participantEvents.filter((e) => e.kind === 39002);
+    for (const event of memberEvents) {
+      // Each p tag: ["p", "<pubkey>"]
+      for (const tag of event.tags) {
+        if (tag[0] === "p" && tag[1]) {
+          const pubkey = tag[1];
+          // Add as member (will be upgraded to admin role if in kind 39001)
+          participantsMap.set(pubkey, { pubkey, role: "member" });
+        }
+      }
+    }
+
+    // Process kind:39001 SECOND (upgrade admins with their roles)
     const adminEvents = participantEvents.filter((e) => e.kind === 39001);
     for (const event of adminEvents) {
       // Each p tag: ["p", "<pubkey>", "<role1>", "<role2>", ...]
@@ -259,22 +273,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
           const pubkey = tag[1];
           const roles = tag.slice(2).filter((r) => r); // Get all roles after pubkey
           const primaryRole = normalizeRole(roles[0]); // Use first role as primary
+          // Upgrade to admin role (overwrites "member" if already in map)
           participantsMap.set(pubkey, { pubkey, role: primaryRole });
-        }
-      }
-    }
-
-    // Process kind:39002 (members without roles)
-    const memberEvents = participantEvents.filter((e) => e.kind === 39002);
-    for (const event of memberEvents) {
-      // Each p tag: ["p", "<pubkey>"]
-      for (const tag of event.tags) {
-        if (tag[0] === "p" && tag[1]) {
-          const pubkey = tag[1];
-          // Only add if not already in map (admins take precedence)
-          if (!participantsMap.has(pubkey)) {
-            participantsMap.set(pubkey, { pubkey, role: "member" });
-          }
         }
       }
     }
