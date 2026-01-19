@@ -58,7 +58,10 @@ export async function createZapRequest(
 
   // Get relays for zap receipt publication
   // Priority: explicit params.relays > semantic author relays > sender read relays > aggregators
-  let relays = params.relays;
+  let relays: string[] | undefined = params.relays
+    ? [...new Set(params.relays)] // Deduplicate explicit relays
+    : undefined;
+
   if (!relays || relays.length === 0) {
     const collectedRelays: string[] = [];
 
