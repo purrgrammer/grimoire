@@ -447,8 +447,21 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const countHashtags =
     appId === "count" && props.filter?.["#t"] ? props.filter["#t"] : [];
 
-  // Zap titles
-  const zapRecipientPubkey = appId === "zap" ? props.recipientPubkey : null;
+  // Zap titles - load event to derive recipient if needed
+  const zapEventPointer: EventPointer | AddressPointer | undefined =
+    appId === "zap" ? props.eventPointer : undefined;
+  const zapEvent = useNostrEvent(zapEventPointer);
+
+  // Derive recipient: use explicit pubkey or semantic author from event
+  const zapRecipientPubkey = useMemo(() => {
+    if (appId !== "zap") return null;
+    // If explicit recipient provided, use it
+    if (props.recipientPubkey) return props.recipientPubkey;
+    // Otherwise derive from event's semantic author
+    if (zapEvent) return getSemanticAuthor(zapEvent);
+    return null;
+  }, [appId, props.recipientPubkey, zapEvent]);
+
   const zapRecipientProfile = useProfile(zapRecipientPubkey || "");
   const zapTitle = useMemo(() => {
     if (appId !== "zap" || !zapRecipientPubkey) return null;
