@@ -6,10 +6,12 @@
  */
 
 import { BehaviorSubject, Subscription } from "rxjs";
+import { firstValueFrom, timeout as rxTimeout, of } from "rxjs";
+import { catchError } from "rxjs/operators";
 import eventStore from "./event-store";
 import pool from "./relay-pool";
 import relayListCache from "./relay-list-cache";
-import { createTimelineLoader } from "./loaders";
+import { createTimelineLoader, addressLoader } from "./loaders";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import {
   getZapRecipient,
@@ -89,7 +91,29 @@ class SupportersService {
    */
   private async subscribeToZapReceipts() {
     try {
-      // Get Grimoire's read relays (inbox relays for receiving zaps)
+      console.log("[Supporters] Fetching Grimoire relay list (kind 10002)...");
+
+      // First, explicitly fetch Grimoire's kind 10002 relay list
+      // This ensures we have the latest relay list before subscribing
+      try {
+        await firstValueFrom(
+          addressLoader({
+            kind: 10002,
+            pubkey: GRIMOIRE_DONATE_PUBKEY,
+            identifier: "",
+          }).pipe(
+            rxTimeout(5000), // 5 second timeout
+            catchError(() => {
+              console.warn("[Supporters] Timeout fetching relay list");
+              return of(null);
+            }),
+          ),
+        );
+      } catch (err) {
+        console.warn("[Supporters] Failed to fetch relay list:", err);
+      }
+
+      // Now get Grimoire's inbox relays from cache (should be populated from fetch above)
       let grimRelays = await relayListCache.getInboxRelays(
         GRIMOIRE_DONATE_PUBKEY,
       );
@@ -97,10 +121,13 @@ class SupportersService {
       // Fallback to aggregators if no relays found
       if (!grimRelays || grimRelays.length === 0) {
         console.warn(
-          "[Supporters] No inbox relays found for Grimoire, using aggregators",
+          "[Supporters] No inbox relays found for Grimoire, using aggregators only",
         );
         grimRelays = AGGREGATOR_RELAYS;
       } else {
+        console.log(
+          `[Supporters] Found ${grimRelays.length} inbox relays for Grimoire`,
+        );
         // Add aggregators as fallback
         grimRelays = [...grimRelays, ...AGGREGATOR_RELAYS];
       }
