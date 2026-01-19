@@ -385,9 +385,9 @@ describe("eventLoader", () => {
 
       // Should only have aggregator relays (normalized with trailing slash)
       expect(relays).toContain("wss://nos.lol/");
-      expect(relays).toContain("wss://nos.lol/");
-      expect(relays).toContain("wss://purplepag.es/");
+      expect(relays).toContain("wss://relay.snort.social/");
       expect(relays).toContain("wss://relay.primal.net/");
+      expect(relays).toContain("wss://relay.damus.io/");
     });
 
     it("should limit cached relays to 3", () => {

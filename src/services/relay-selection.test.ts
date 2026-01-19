@@ -76,7 +76,7 @@ describe("selectRelaysForFilter", () => {
       const relayListEvent = createRelayListEvent(testSecretKeys[0], [
         ["r", "wss://relay.damus.io"],
         ["r", "wss://nos.lol"],
-        ["r", "wss://purplepag.es", "read"],
+        ["r", "wss://relay.snort.social", "read"],
       ]);
 
       // Add to event store
@@ -99,7 +99,7 @@ describe("selectRelaysForFilter", () => {
         result.relays.includes("wss://nos.lol/");
       expect(hasWriteRelay).toBe(true);
       // Should NOT include read-only relay
-      expect(result.relays).not.toContain("wss://purplepag.es/");
+      expect(result.relays).not.toContain("wss://relay.snort.social/");
     });
 
     it("should handle multiple authors", async () => {
@@ -141,7 +141,7 @@ describe("selectRelaysForFilter", () => {
       const relayListEvent = createRelayListEvent(testSecretKeys[2], [
         ["r", "wss://relay.damus.io", "write"],
         ["r", "wss://nos.lol", "read"],
-        ["r", "wss://purplepag.es", "read"],
+        ["r", "wss://relay.snort.social", "read"],
       ]);
 
       eventStore.add(relayListEvent);
@@ -160,7 +160,7 @@ describe("selectRelaysForFilter", () => {
       // Should include at least one read relay - selectOptimalRelays may pick subset
       const hasReadRelay =
         result.relays.includes("wss://nos.lol/") ||
-        result.relays.includes("wss://purplepag.es/");
+        result.relays.includes("wss://relay.snort.social/");
       expect(hasReadRelay).toBe(true);
       // Should NOT include write-only relay
       expect(result.relays).not.toContain("wss://relay.damus.io/");

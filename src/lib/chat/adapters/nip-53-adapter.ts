@@ -21,6 +21,7 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import {
   parseLiveActivity,
   getLiveStatus,
@@ -720,7 +721,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     // Default fallback relays for live activities
-    return ["wss://relay.damus.io", "wss://nos.lol", "wss://purplepag.es"];
+    return AGGREGATOR_RELAYS;
   }
 
   /**

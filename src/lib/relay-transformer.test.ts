@@ -296,7 +296,7 @@ describe("relayReferences transformer", () => {
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.snort.social",
-        "wss://purplepag.es",
+        "wss://relay.primal.net",
         "wss://nostr.wine",
       ];
 

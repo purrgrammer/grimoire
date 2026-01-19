@@ -53,8 +53,9 @@ function extractRelayContext(event: NostrEvent): {
 // IMPORTANT: URLs must be normalized (trailing slash, lowercase) to match RelayStateManager keys
 export const AGGREGATOR_RELAYS = [
   "wss://nos.lol/",
-  "wss://purplepag.es/",
+  "wss://relay.snort.social/",
   "wss://relay.primal.net/",
+  "wss://relay.damus.io/",
 ];
 
 // Base event loader (used internally)

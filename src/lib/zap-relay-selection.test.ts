@@ -11,9 +11,10 @@ vi.mock("@/services/relay-list-cache", () => ({
 // Mock the loaders for AGGREGATOR_RELAYS
 vi.mock("@/services/loaders", () => ({
   AGGREGATOR_RELAYS: [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://relay.nostr.band",
+    "wss://nos.lol/",
+    "wss://relay.snort.social/",
+    "wss://relay.primal.net/",
+    "wss://relay.damus.io/",
   ],
 }));
 
@@ -152,7 +153,7 @@ describe("selectZapRelays", () => {
 
       expect(result.relays.length).toBeGreaterThan(0);
       expect(result.sources.fallback.length).toBeGreaterThan(0);
-      expect(result.relays).toContain("wss://relay.damus.io");
+      expect(result.relays).toContain("wss://relay.damus.io/");
     });
 
     it("should use fallback when recipient has empty relay list", async () => {
