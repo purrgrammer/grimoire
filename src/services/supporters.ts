@@ -109,7 +109,7 @@ class SupportersService {
         {
           kinds: [9735],
           "#p": [GRIMOIRE_DONATE_PUBKEY],
-          limit: 1000,
+          limit: 500, // Many relays reject limits over 500
         },
       ]);
 
