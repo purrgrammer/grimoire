@@ -44,6 +44,7 @@ export interface ParsedLiveActivity {
   // Additional
   hashtags: string[]; // 't' tags
   relays: string[]; // 'relays' tag values
+  goal?: string; // Event ID of a kind 9041 zap goal
 
   // Computed
   lastUpdate: number; // event.created_at

@@ -57,6 +57,11 @@ export interface ZapWindowProps {
   eventPointer?: EventPointer | AddressPointer;
   /** Callback to close the window */
   onClose?: () => void;
+  /**
+   * Custom tags to include in the zap request
+   * Used for protocol-specific tagging like NIP-53 live activity references
+   */
+  customTags?: string[][];
 }
 
 // Default preset amounts in sats
@@ -83,6 +88,7 @@ export function ZapWindow({
   recipientPubkey: initialRecipientPubkey,
   eventPointer,
   onClose,
+  customTags,
 }: ZapWindowProps) {
   // Load event if we have a pointer and no recipient pubkey (derive from event author)
   const event = use$(() => {
@@ -356,6 +362,7 @@ export function ZapWindow({
         eventPointer,
         lnurl: lud16 || undefined,
         emojiTags,
+        customTags,
       });
 
       const serializedZapRequest = serializeZapRequest(zapRequest);

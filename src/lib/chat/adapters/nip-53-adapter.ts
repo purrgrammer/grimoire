@@ -2,7 +2,11 @@ import { Observable, firstValueFrom } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
+import {
+  ChatProtocolAdapter,
+  type SendMessageOptions,
+  type ZapConfig,
+} from "./base-adapter";
 import type {
   Conversation,
   Message,
@@ -214,6 +218,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           totalParticipants: activity.totalParticipants,
           hashtags: activity.hashtags,
           relays: chatRelays,
+          goal: activity.goal,
         },
       },
       unreadCount: 0,
@@ -546,6 +551,63 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       supportsGroupManagement: false, // No join/leave semantics
       canCreateConversations: false, // Activities created via streaming software
       requiresRelay: false, // Works across multiple relays
+    };
+  }
+
+  /**
+   * Get zap configuration for a message in a live activity
+   *
+   * NIP-53 zap tagging rules:
+   * - Always include: p-tag (message author), a-tag (live activity)
+   * - If zapping the host AND stream has a goal: also e-tag the goal
+   */
+  getZapConfig(message: Message, conversation: Conversation): ZapConfig {
+    const activityAddress = conversation.metadata?.activityAddress;
+    const liveActivity = conversation.metadata?.liveActivity as
+      | {
+          relays?: string[];
+          hostPubkey?: string;
+          goal?: string;
+        }
+      | undefined;
+
+    if (!activityAddress) {
+      return {
+        supported: false,
+        unsupportedReason: "Missing activity address",
+        recipientPubkey: "",
+      };
+    }
+
+    const { pubkey: activityPubkey, identifier } = activityAddress;
+    const aTagValue = `30311:${activityPubkey}:${identifier}`;
+    const hostPubkey = liveActivity?.hostPubkey;
+    const goal = liveActivity?.goal;
+
+    // Get relays
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
+
+    // Build custom tags
+    const customTags: string[][] = [
+      // Always a-tag the live activity
+      ["a", aTagValue, relays[0] || ""],
+    ];
+
+    // If zapping the host AND stream has a goal, e-tag the goal
+    if (message.author === hostPubkey && goal) {
+      customTags.push(["e", goal, relays[0] || ""]);
+    }
+
+    return {
+      supported: true,
+      recipientPubkey: message.author,
+      customTags,
+      relays,
     };
   }
 

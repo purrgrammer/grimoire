@@ -29,6 +29,12 @@ export interface ZapRequestParams {
   lnurl?: string;
   /** NIP-30 custom emoji tags */
   emojiTags?: EmojiTag[];
+  /**
+   * Custom tags to include in the zap request (beyond standard p/amount/relays)
+   * Used for protocol-specific tagging like NIP-53 live activity references
+   * These are added after eventPointer tags to allow overriding
+   */
+  customTags?: string[][];
 }
 
 /**
@@ -91,6 +97,13 @@ export async function createZapRequest(
       if (params.eventPointer.relays && params.eventPointer.relays.length > 0) {
         tags.push(["a", coordinate, params.eventPointer.relays[0]]);
       }
+    }
+  }
+
+  // Add custom tags (protocol-specific like NIP-53 live activity references)
+  if (params.customTags) {
+    for (const tag of params.customTags) {
+      tags.push(tag);
     }
   }
 

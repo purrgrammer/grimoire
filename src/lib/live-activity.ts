@@ -48,6 +48,7 @@ export function parseLiveActivity(event: NostrEvent): ParsedLiveActivity {
     participants,
     hashtags: getTagValues(event, "t"),
     relays: getTagValues(event, "relays"),
+    goal: getTagValue(event, "goal"),
     lastUpdate: event.created_at || Date.now() / 1000,
   };
 }
