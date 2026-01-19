@@ -14,6 +14,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -98,9 +99,27 @@ export default function UserMenu() {
 
   // Load monthly donations async
   const [monthlyDonations, setMonthlyDonations] = useState(0);
+  const [isRefreshingZaps, setIsRefreshingZaps] = useState(false);
+
   useEffect(() => {
     supportersService.getMonthlyDonations().then(setMonthlyDonations);
   }, [supporters]); // Reload when supporters change
+
+  // Manual refresh zaps
+  async function refreshZaps() {
+    setIsRefreshingZaps(true);
+    try {
+      // Re-fetch Grimoire relay list and reload timeline
+      await supportersService.init();
+      // Update monthly donations
+      const donations = await supportersService.getMonthlyDonations();
+      setMonthlyDonations(donations);
+    } catch (error) {
+      console.error("Failed to refresh zaps:", error);
+    } finally {
+      setIsRefreshingZaps(false);
+    }
+  }
 
   // Calculate monthly donation progress
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
@@ -419,17 +438,30 @@ export default function UserMenu() {
           {/* Support Grimoire Section */}
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem
-              className="cursor-crosshair flex items-center gap-2"
+            <div
+              className="px-2 py-2 cursor-crosshair hover:bg-accent/50 transition-colors"
               onClick={openDonate}
             >
-              <Zap className="size-4 text-yellow-500" />
-              <span className="text-sm font-medium">Support Grimoire</span>
-            </DropdownMenuItem>
-
-            {/* Monthly Goal Tracker */}
-            <div className="px-2 py-2 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Zap className="size-4 text-yellow-500" />
+                  <span className="text-sm font-medium">Support Grimoire</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    refreshZaps();
+                  }}
+                  disabled={isRefreshingZaps}
+                  className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  title="Refresh donation stats"
+                >
+                  <RefreshCw
+                    className={cn("size-3", isRefreshingZaps && "animate-spin")}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-muted-foreground">Monthly goal</span>
                 <span className="font-medium">
                   {formatSats(monthlyDonations)} /{" "}
@@ -437,9 +469,6 @@ export default function UserMenu() {
                 </span>
               </div>
               <Progress value={goalProgress} className="h-1.5" />
-              <p className="text-[10px] text-muted-foreground leading-tight">
-                Help us build the best Nostr developer tool
-              </p>
             </div>
           </DropdownMenuGroup>
 
