@@ -284,9 +284,6 @@ const MessageItem = memo(function MessageItem({
   if (conversation.protocol === "nip-22" && message.metadata?.isRootMessage) {
     return (
       <div className="px-3 py-2 border-l-4 border-primary/50">
-        <div className="text-xs text-muted-foreground mb-2 font-medium">
-          Commenting on:
-        </div>
         <KindRenderer event={message.event} depth={0} />
       </div>
     );

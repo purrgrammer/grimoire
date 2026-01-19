@@ -193,16 +193,46 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-      // Open chat with NIP-10 thread protocol
+    // For addressable events (kind 30000-39999), use naddr format
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+
+      // Determine protocol based on kind
+      let protocol: "nip-22" | "nip-29" | "nip-53" = "nip-22";
+      if (event.kind === 30311)
+        protocol = "nip-53"; // Live activity
+      else if (event.kind === 39000) protocol = "nip-29"; // Group metadata
+
       addWindow("chat", {
-        protocol: "nip-10",
+        protocol,
         identifier: {
-          type: "thread",
+          type:
+            protocol === "nip-53"
+              ? "live-activity"
+              : protocol === "nip-29"
+                ? "group"
+                : "comment-thread",
+          value: {
+            kind: event.kind,
+            pubkey: event.pubkey,
+            identifier: dTag,
+          },
+          relays,
+        },
+      });
+    } else {
+      // For regular events, use nevent/note format
+      // Kind 1 always uses NIP-10, others use NIP-22
+      const protocol = event.kind === 1 ? "nip-10" : "nip-22";
+      const type = event.kind === 1 ? "thread" : "comment-thread";
+
+      addWindow("chat", {
+        protocol,
+        identifier: {
+          type,
           value: {
             id: event.id,
             relays,
@@ -243,12 +273,10 @@ export function EventMenu({ event }: { event: NostrEvent }) {
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </DropdownMenuItem>
-        {event.kind === 1 && (
-          <DropdownMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          Chat
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (

@@ -640,8 +640,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // Limit to 10 relays for performance
-    return Array.from(relaySet).slice(0, 10);
+    return Array.from(relaySet);
   }
 
   /**
