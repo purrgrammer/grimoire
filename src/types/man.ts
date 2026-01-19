@@ -557,6 +557,34 @@ export const manPages: Record<string, ManPageEntry> = {
       return parsed;
     },
   },
+  post: {
+    name: "post",
+    section: "1",
+    synopsis: "post [text...]",
+    description:
+      "Compose and publish a text note (kind 1) to Nostr. Opens a WYSIWYG composer with profile mentions (@username), emoji autocomplete (:emoji:), file uploads with preview, and relay selection. Supports multi-line text, NIP-30 custom emoji, NIP-92 media attachments (imeta tags), and NIP-27 mentions (nostr: URIs). If text is provided as arguments, pre-fills the composer.",
+    options: [
+      {
+        flag: "[text...]",
+        description:
+          "Optional text to pre-fill the composer (optional). If omitted, opens empty composer.",
+      },
+    ],
+    examples: [
+      "post                           Open empty composer",
+      "post Hello Nostr!              Pre-fill composer with text",
+      "post GM fam                    Quick post with pre-filled content",
+    ],
+    seeAlso: ["chat", "profile", "open"],
+    appId: "post",
+    category: "Nostr",
+    argParser: (args: string[]) => {
+      // Join all args as initial content (if any)
+      const initialContent = args.length > 0 ? args.join(" ") : undefined;
+      return { initialContent };
+    },
+    defaultProps: {},
+  },
   chat: {
     name: "chat",
     section: "1",

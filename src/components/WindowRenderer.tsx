@@ -47,6 +47,9 @@ const ZapWindow = lazy(() =>
   import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const NoteComposer = lazy(() =>
+  import("./NoteComposer").then((m) => ({ default: m.NoteComposer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -240,6 +243,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             onClose={onClose}
           />
         );
+        break;
+      case "post":
+        content = <NoteComposer initialContent={window.props.initialContent} />;
         break;
       default:
         content = (

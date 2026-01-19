@@ -304,6 +304,17 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "zap";
 
+    case "post":
+      if (props.initialContent) {
+        // Truncate to first 30 chars for title
+        const truncated =
+          props.initialContent.length > 30
+            ? `${props.initialContent.slice(0, 30)}...`
+            : props.initialContent;
+        return `post ${truncated}`;
+      }
+      return "post";
+
     default:
       return appId;
   }
