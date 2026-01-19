@@ -9,6 +9,7 @@ import type {
 import { transitionAuthState, type AuthEvent } from "@/lib/auth-state-machine";
 import { createLogger } from "@/lib/logger";
 import { normalizeRelayURL } from "@/lib/relay-url";
+import { canAccountSign } from "@/hooks/useAccount";
 import pool from "./relay-pool";
 import accountManager from "./accounts";
 import db from "./db";
@@ -18,16 +19,6 @@ const logger = createLogger("RelayStateManager");
 const MAX_NOTICES = 20;
 const MAX_ERRORS = 20;
 const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-/**
- * Check if an account can sign events
- * Read-only accounts cannot sign and should not be prompted for auth
- */
-function canAccountSign(account: typeof accountManager.active): boolean {
-  if (!account) return false;
-  const accountType = account.constructor.name;
-  return accountType !== "ReadonlyAccount";
-}
 
 /**
  * Observable values emitted by relay observables

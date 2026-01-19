@@ -3,6 +3,19 @@ import { use$ } from "applesauce-react/hooks";
 import accounts from "@/services/accounts";
 
 /**
+ * Check if an account can sign events
+ * Read-only accounts cannot sign and should not be prompted for auth
+ *
+ * @param account - The account to check (can be undefined)
+ * @returns true if the account can sign, false otherwise
+ */
+export function canAccountSign(account: typeof accounts.active): boolean {
+  if (!account) return false;
+  const accountType = account.constructor.name;
+  return accountType !== "ReadonlyAccount";
+}
+
+/**
  * Hook to access the active account with signing capability detection
  *
  * @returns {object} Account state
@@ -45,18 +58,8 @@ export function useAccount() {
 
     // Check if the account has a functional signer
     // Read-only accounts have a signer that throws errors on sign operations
-    // We detect this by checking for the ReadonlySigner type or checking signer methods
     const signer = account.signer;
-    let canSign = false;
-
-    if (signer) {
-      // ReadonlyAccount from applesauce-accounts has a ReadonlySigner
-      // that throws on signEvent, nip04, nip44 operations
-      // We can detect it by checking if it's an instance with the expected methods
-      // but we'll use a safer approach: check the account type name
-      const accountType = account.constructor.name;
-      canSign = accountType !== "ReadonlyAccount";
-    }
+    const canSign = canAccountSign(account);
 
     return {
       account,
