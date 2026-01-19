@@ -26,6 +26,7 @@ import type {
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -41,6 +42,7 @@ import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
+import { KindRenderer } from "./nostr/kinds";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
 import LoginDialog from "./nostr/LoginDialog";
@@ -277,6 +279,18 @@ const MessageItem = memo(function MessageItem({
     () => getConversationRelays(conversation),
     [conversation],
   );
+
+  // NIP-22 root messages: render with KindRenderer for proper event display
+  if (conversation.protocol === "nip-22" && message.metadata?.isRootMessage) {
+    return (
+      <div className="px-3 py-2 border-l-4 border-primary/50">
+        <div className="text-xs text-muted-foreground mb-2 font-medium">
+          Commenting on:
+        </div>
+        <KindRenderer event={message.event} depth={0} />
+      </div>
+    );
+  }
 
   // System messages (join/leave) have special styling
   if (message.type === "system") {
@@ -999,7 +1013,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-22" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -1033,9 +1048,9 @@ export function ChatViewer({
                   </div>
                 );
               }
-              // For NIP-10 threads, check if this is the root message
+              // For NIP-10 and NIP-22, check if this is the root message
               const isRootMessage =
-                protocol === "nip-10" &&
+                (protocol === "nip-10" || protocol === "nip-22") &&
                 conversation.metadata?.rootEventId === item.data.id;
 
               return (
@@ -1138,13 +1153,15 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
+ * Currently NIP-10 (thread chat), NIP-22 (comment threads), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
+    case "nip-22":
+      return new Nip22Adapter();
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
     case "nip-29":

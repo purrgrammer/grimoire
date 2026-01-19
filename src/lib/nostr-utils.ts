@@ -3,7 +3,10 @@ import type { NostrEvent } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
 import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
+import { getArticleTitle } from "applesauce-common/helpers";
+import { getTagValue } from "applesauce-core/helpers";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
+import { EVENT_KINDS } from "@/constants/kinds";
 
 export function derivePlaceholderName(pubkey: string): string {
   return `${pubkey.slice(0, 4)}:${pubkey.slice(-4)}`;
@@ -73,6 +76,45 @@ export function getDisplayName(
     return metadata.name;
   }
   return derivePlaceholderName(pubkey);
+}
+
+/**
+ * Extract a display title from a root event being commented on
+ * Uses kind-specific logic to generate appropriate titles
+ */
+export function getRootEventTitle(event: NostrEvent): string {
+  switch (event.kind) {
+    case 30023: // Long-form article
+      return getArticleTitle(event) || "Article";
+    case 30311: // Live activity
+      return getTagValue(event, "title") || "Live Activity";
+    case 30024: // Draft long-form article
+      return getArticleTitle(event) || "Draft Article";
+    case 1: // Note
+      // Take first line or first 50 chars
+      const firstLine = event.content.split("\n")[0];
+      return firstLine.length > 50
+        ? firstLine.slice(0, 50).trim() + "..."
+        : firstLine.trim() || "Note";
+    case 30078: // Application-specific data
+      return getTagValue(event, "d") || "Application Data";
+    case 30040: // Video event
+      return getTagValue(event, "title") || "Video";
+    case 30041: // Audio event (podcast episode, music track)
+      return getTagValue(event, "title") || "Audio";
+    case 31922: // Date-based calendar event
+    case 31923: // Time-based calendar event
+      return (
+        getTagValue(event, "name") ||
+        getTagValue(event, "title") ||
+        "Calendar Event"
+      );
+    default: {
+      // Fallback to kind name from registry, or generic message
+      const kindInfo = EVENT_KINDS[event.kind];
+      return kindInfo?.name || `Kind ${event.kind} Event`;
+    }
+  }
 }
 
 /**
