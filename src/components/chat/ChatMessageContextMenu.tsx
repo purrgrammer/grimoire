@@ -155,6 +155,8 @@ export function ChatMessageContextMenu({
       recipientPubkey: zapConfig.recipientPubkey,
       customTags: zapConfig.customTags,
       relays: zapConfig.relays,
+      // Include the message event as context for zap preview
+      eventPointer: { id: event.id, author: event.pubkey },
     });
   };
 
