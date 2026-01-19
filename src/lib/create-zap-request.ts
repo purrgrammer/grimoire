@@ -3,11 +3,11 @@
  */
 
 import { EventFactory } from "applesauce-core/event-factory";
+import type { ISigner } from "applesauce-signers";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "./open-parser";
 import accountManager from "@/services/accounts";
-import { relayListCache } from "@/services/relay-list-cache";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { selectZapRelays } from "./zap-relay-selection";
 
 export interface EmojiTag {
   shortcode: string;
@@ -36,75 +36,50 @@ export interface ZapRequestParams {
    * Used for additional protocol-specific tagging
    */
   customTags?: string[][];
+  /** Optional signer for anonymous zaps (overrides account signer) */
+  signer?: ISigner;
 }
 
 /**
  * Create and sign a zap request event (kind 9734)
  * This event is NOT published to relays - it's sent to the LNURL callback
+ *
+ * @param params.signer - Optional signer for anonymous zaps. When provided,
+ *                        uses this signer instead of the active account's signer.
  */
 export async function createZapRequest(
   params: ZapRequestParams,
 ): Promise<NostrEvent> {
-  const account = accountManager.active;
+  // Use provided signer (for anonymous zaps) or fall back to account signer
+  let signer = params.signer;
+  let senderPubkey: string | undefined;
 
-  if (!account) {
-    throw new Error("No active account. Please log in to send zaps.");
-  }
+  if (signer) {
+    // Anonymous zap - use provided signer
+    senderPubkey = await signer.getPublicKey();
+  } else {
+    // Normal zap - use account signer
+    const account = accountManager.active;
 
-  const signer = account.signer;
-  if (!signer) {
-    throw new Error("No signer available for active account");
+    if (!account) {
+      throw new Error("No active account. Please log in to send zaps.");
+    }
+
+    signer = account.signer;
+    if (!signer) {
+      throw new Error("No signer available for active account");
+    }
+    senderPubkey = account.pubkey;
   }
 
   // Get relays for zap receipt publication
-  // Priority: explicit params.relays > semantic author relays > sender read relays > aggregators
-  let relays: string[] | undefined = params.relays
-    ? [...new Set(params.relays)] // Deduplicate explicit relays
-    : undefined;
-
-  if (!relays || relays.length === 0) {
-    const collectedRelays: string[] = [];
-
-    // Collect outbox relays from semantic authors (event author and/or addressable event pubkey)
-    const authorsToQuery: string[] = [];
-    if (params.eventPointer?.author) {
-      authorsToQuery.push(params.eventPointer.author);
-    }
-    if (params.addressPointer?.pubkey) {
-      authorsToQuery.push(params.addressPointer.pubkey);
-    }
-
-    // Deduplicate authors
-    const uniqueAuthors = [...new Set(authorsToQuery)];
-
-    // Fetch outbox relays for each author
-    for (const authorPubkey of uniqueAuthors) {
-      const authorOutboxes =
-        (await relayListCache.getOutboxRelays(authorPubkey)) || [];
-      collectedRelays.push(...authorOutboxes);
-    }
-
-    // Include relay hints from pointers
-    if (params.eventPointer?.relays) {
-      collectedRelays.push(...params.eventPointer.relays);
-    }
-    if (params.addressPointer?.relays) {
-      collectedRelays.push(...params.addressPointer.relays);
-    }
-
-    // Deduplicate collected relays
-    const uniqueRelays = [...new Set(collectedRelays)];
-
-    if (uniqueRelays.length > 0) {
-      relays = uniqueRelays;
-    } else {
-      // Fallback to sender's read relays (where they want to receive zap receipts)
-      const senderReadRelays =
-        (await relayListCache.getInboxRelays(account.pubkey)) || [];
-      relays =
-        senderReadRelays.length > 0 ? senderReadRelays : AGGREGATOR_RELAYS;
-    }
-  }
+  // Priority: explicit relays > recipient's inbox > sender's inbox > fallback aggregators
+  const zapRelayResult = await selectZapRelays({
+    recipientPubkey: params.recipientPubkey,
+    senderPubkey,
+    explicitRelays: params.relays,
+  });
+  const relays = zapRelayResult.relays;
 
   // Build tags
   const tags: string[][] = [

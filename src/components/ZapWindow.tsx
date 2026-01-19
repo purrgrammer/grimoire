@@ -21,10 +21,14 @@ import {
   Loader2,
   CheckCircle2,
   LogIn,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PrivateKeySigner } from "applesauce-signers";
+import { generateSecretKey } from "nostr-tools";
 import QRCode from "qrcode";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -138,6 +142,7 @@ export function ZapWindow({
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [paymentTimedOut, setPaymentTimedOut] = useState(false);
+  const [zapAnonymously, setZapAnonymously] = useState(false);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -356,6 +361,13 @@ export function ZapWindow({
       }
 
       // Step 3: Create and sign zap request event (kind 9734)
+      // If zapping anonymously, create a throwaway signer
+      let anonymousSigner;
+      if (zapAnonymously) {
+        const throwawayKey = generateSecretKey();
+        anonymousSigner = new PrivateKeySigner(throwawayKey);
+      }
+
       const zapRequest = await createZapRequest({
         recipientPubkey,
         amountMillisats,
@@ -366,6 +378,7 @@ export function ZapWindow({
         lnurl: lud16 || undefined,
         emojiTags,
         customTags,
+        signer: anonymousSigner,
       });
 
       const serializedZapRequest = serializeZapRequest(zapRequest);
@@ -657,6 +670,26 @@ export function ZapWindow({
                     className="rounded-md border border-input bg-background px-3 py-1 text-base md:text-sm min-h-9"
                   />
                 )}
+
+                {/* Anonymous zap checkbox */}
+                {hasLightningAddress && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="zap-anonymously"
+                      checked={zapAnonymously}
+                      onCheckedChange={(checked) =>
+                        setZapAnonymously(checked === true)
+                      }
+                    />
+                    <label
+                      htmlFor="zap-anonymously"
+                      className="text-sm text-muted-foreground cursor-pointer flex items-center gap-1.5"
+                    >
+                      <EyeOff className="size-3.5" />
+                      Zap anonymously
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* No Lightning Address Warning */}
@@ -667,7 +700,7 @@ export function ZapWindow({
               )}
 
               {/* Payment Button */}
-              {!canSign ? (
+              {!canSign && !zapAnonymously ? (
                 <Button
                   onClick={handleLogin}
                   className="w-full"
@@ -711,6 +744,12 @@ export function ZapWindow({
                     <>
                       <Wallet className="size-4 mr-2" />
                       Pay with Wallet (
+                      {selectedAmount || parseInt(customAmount) || 0} sats)
+                    </>
+                  ) : zapAnonymously ? (
+                    <>
+                      <EyeOff className="size-4 mr-2" />
+                      Zap Anonymously (
                       {selectedAmount || parseInt(customAmount) || 0} sats)
                     </>
                   ) : (
