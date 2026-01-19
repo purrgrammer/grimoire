@@ -285,14 +285,14 @@ const MessageItem = memo(function MessageItem({
   if (isRootPost && message.event) {
     return (
       <div className="border-b border-border/50 px-3 py-2 bg-muted/20">
-        <KindRenderer event={message.event} bare={true} />
-        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/30">
+        <div className="flex items-center gap-2 mb-2">
           <UserName pubkey={message.author} className="text-sm font-medium" />
           <span className="text-xs text-muted-foreground">
             <Timestamp timestamp={message.timestamp} />
           </span>
           <MessageReactions messageId={message.id} relays={relays} />
         </div>
+        <KindRenderer event={message.event} bare={true} />
       </div>
     );
   }
@@ -1019,7 +1019,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-22" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
