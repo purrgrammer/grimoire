@@ -3,7 +3,7 @@ import { getDisplayName } from "@/lib/nostr-utils";
 import { cn } from "@/lib/utils";
 import { useGrimoire } from "@/core/state";
 import { isGrimoireMember } from "@/lib/grimoire-members";
-import { BadgeCheck, Zap } from "lucide-react";
+import { BadgeCheck, Flame } from "lucide-react";
 import { useIsSupporter } from "@/hooks/useIsSupporter";
 
 interface UserNameProps {
@@ -22,8 +22,8 @@ interface UserNameProps {
  * - Violet→Fuchsia gradient for other members
  * - BadgeCheck icon that scales with username size
  * Shows Grimoire supporters (non-members who zapped):
- * - Premium supporters (2.1k+ sats/month): Zap badge in their username color
- * - Regular supporters: Yellow zap badge (no username color change)
+ * - Premium supporters (2.1k+ sats/month): Flame badge in their username color
+ * - Regular supporters: Yellow flame badge (no username color change)
  */
 export function UserName({ pubkey, isMention, className }: UserNameProps) {
   const { addWindow, state } = useGrimoire();
@@ -72,7 +72,7 @@ export function UserName({ pubkey, isMention, className }: UserNameProps) {
         />
       )}
       {!isGrimoire && isSupporter && (
-        <Zap
+        <Flame
           className={cn(
             "inline-block w-[0.85em] h-[0.85em]",
             isPremiumSupporter
