@@ -413,7 +413,12 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
                 </div>
                 <RichText
                   className="text-sm whitespace-pre-wrap break-words"
-                  content={profile.about}
+                  event={
+                    profileEvent
+                      ? { ...profileEvent, content: profile.about }
+                      : undefined
+                  }
+                  content={profileEvent ? undefined : profile.about}
                 />
               </div>
             )}

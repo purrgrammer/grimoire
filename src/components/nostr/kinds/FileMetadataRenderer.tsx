@@ -103,7 +103,12 @@ export function Kind1063Renderer({ event }: BaseEventProps) {
         </div>
 
         {/* Description/Summary */}
-        {summary && <RichText content={summary} className="text-sm" />}
+        {summary && (
+          <RichText
+            event={{ ...event, content: summary }}
+            className="text-sm"
+          />
+        )}
 
         {/* Download button */}
         {metadata.url && (

@@ -53,7 +53,7 @@ export function GenericRepostCompactPreview({ event }: { event: NostrEvent }) {
           />
           <span className="truncate line-clamp-1">
             <RichText
-              content={preview || ""}
+              event={{ ...repostedEvent, content: preview || "" }}
               className="inline text-sm leading-none"
               options={{ showMedia: false, showEventEmbeds: false }}
             />

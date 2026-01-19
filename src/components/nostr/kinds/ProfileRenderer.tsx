@@ -40,7 +40,7 @@ export function Kind0Renderer({ event }: BaseEventProps) {
           {/* About */}
           {about && (
             <p className="text-sm text-muted-foreground line-clamp-5">
-              <RichText content={about} />
+              <RichText event={{ ...event, content: about }} />
             </p>
           )}
 

@@ -77,7 +77,7 @@ export function DefaultCompactPreview({ event }: { event: NostrEvent }) {
     <span className="truncate line-clamp-1 text-muted-foreground text-sm">
       {hasSpecificTitle ? (
         <RichText
-          content={title}
+          event={{ ...event, content: title }}
           className="inline text-sm leading-none"
           options={{ showMedia: false, showEventEmbeds: false }}
         />
