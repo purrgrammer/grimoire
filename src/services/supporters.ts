@@ -2,7 +2,8 @@
  * Grimoire Supporters System
  *
  * Tracks users who have zapped Grimoire by monitoring kind 9735 (zap receipt) events
- * where the recipient is the Grimoire donation pubkey.
+ * where the recipient is the Grimoire donation pubkey. Stores individual zap records
+ * in IndexedDB for accurate monthly tracking and historical data.
  */
 
 import { BehaviorSubject } from "rxjs";
@@ -12,9 +13,11 @@ import {
   getZapSender,
   getZapAmount,
   isValidZap,
+  getZapRequest,
 } from "applesauce-common/helpers/zap";
 import { GRIMOIRE_DONATE_PUBKEY } from "@/lib/grimoire-members";
 import type { NostrEvent } from "@/types/nostr";
+import db, { type GrimoireZap } from "./db";
 
 export interface SupporterInfo {
   pubkey: string;
@@ -24,51 +27,54 @@ export interface SupporterInfo {
 }
 
 /**
- * Supporters map: pubkey -> SupporterInfo
- */
-const supportersMap = new Map<string, SupporterInfo>();
-
-/**
  * Observable set of supporter pubkeys for reactive UI
+ * Updated whenever a new zap is recorded
  */
 export const supporters$ = new BehaviorSubject<Set<string>>(new Set());
 
 /**
- * Load supporters from localStorage cache
+ * Cached total donations (all-time)
+ * Updated when new zaps are processed
  */
-function loadSupportersFromCache() {
-  try {
-    const cached = localStorage.getItem("grimoire:supporters");
-    if (!cached) return;
+let cachedTotalDonations = 0;
 
-    const data = JSON.parse(cached) as Record<string, SupporterInfo>;
-    Object.entries(data).forEach(([pubkey, info]) => {
-      supportersMap.set(pubkey, info);
-    });
+/**
+ * Cached monthly donations
+ * Updated when new zaps are processed
+ */
+let cachedMonthlyDonations = 0;
+
+/**
+ * Load supporters from DB and update reactive observable and cached values
+ */
+async function refreshSupporters() {
+  try {
+    // Get all zaps from the DB
+    const zaps = await db.grimoireZaps.toArray();
+    const uniqueSenders = new Set(zaps.map((zap) => zap.senderPubkey));
+
+    // Update total donations cache
+    cachedTotalDonations = zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+
+    // Update monthly donations cache (last 30 days)
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+    const recentZaps = zaps.filter((zap) => zap.timestamp >= thirtyDaysAgo);
+    cachedMonthlyDonations = recentZaps.reduce(
+      (sum, zap) => sum + zap.amountSats,
+      0,
+    );
 
     // Emit updated set
-    supporters$.next(new Set(supportersMap.keys()));
+    supporters$.next(uniqueSenders);
   } catch (error) {
-    console.error("Failed to load supporters from cache:", error);
+    console.error("Failed to refresh supporters from DB:", error);
   }
 }
 
 /**
- * Save supporters to localStorage cache
+ * Process a zap receipt event and store in DB
  */
-function saveSupportersToCache() {
-  try {
-    const data = Object.fromEntries(supportersMap.entries());
-    localStorage.setItem("grimoire:supporters", JSON.stringify(data));
-  } catch (error) {
-    console.error("Failed to save supporters to cache:", error);
-  }
-}
-
-/**
- * Process a zap receipt event and update supporter info
- */
-function processZapReceipt(event: NostrEvent) {
+async function processZapReceipt(event: NostrEvent) {
   // Only process valid zaps
   if (!isValidZap(event)) return;
 
@@ -84,29 +90,31 @@ function processZapReceipt(event: NostrEvent) {
   const amountMsats = getZapAmount(event);
   const amountSats = amountMsats ? Math.floor(amountMsats / 1000) : 0;
 
-  // Update or create supporter info
-  const existing = supportersMap.get(sender);
-  if (existing) {
-    existing.totalSats += amountSats;
-    existing.zapCount += 1;
-    existing.lastZapTimestamp = Math.max(
-      existing.lastZapTimestamp,
-      event.created_at,
-    );
-  } else {
-    supportersMap.set(sender, {
-      pubkey: sender,
-      totalSats: amountSats,
-      zapCount: 1,
-      lastZapTimestamp: event.created_at,
-    });
+  // Get comment from zap request
+  const zapRequest = getZapRequest(event);
+  const comment = zapRequest?.content;
+
+  // Check if we've already recorded this zap
+  const existing = await db.grimoireZaps.get(event.id);
+  if (existing) return; // Already recorded
+
+  // Store zap in DB
+  const zapRecord: GrimoireZap = {
+    eventId: event.id,
+    senderPubkey: sender,
+    amountSats,
+    timestamp: event.created_at,
+    comment: comment || undefined,
+  };
+
+  try {
+    await db.grimoireZaps.add(zapRecord);
+
+    // Refresh supporters observable
+    await refreshSupporters();
+  } catch (error) {
+    console.error("Failed to store zap in DB:", error);
   }
-
-  // Emit updated set
-  supporters$.next(new Set(supportersMap.keys()));
-
-  // Persist to cache
-  saveSupportersToCache();
 }
 
 /**
@@ -126,8 +134,8 @@ function subscribeToZapReceipts() {
  * Initialize supporter tracking
  */
 export function initSupporters() {
-  // Load from cache first
-  loadSupportersFromCache();
+  // Load supporters from DB
+  refreshSupporters();
 
   // Subscribe to new zaps
   subscribeToZapReceipts();
@@ -136,39 +144,138 @@ export function initSupporters() {
 /**
  * Check if a pubkey is a Grimoire supporter
  */
-export function isSupporter(pubkey: string): boolean {
-  return supportersMap.has(pubkey);
+export async function isSupporter(pubkey: string): Promise<boolean> {
+  const count = await db.grimoireZaps
+    .where("senderPubkey")
+    .equals(pubkey)
+    .count();
+  return count > 0;
 }
 
 /**
  * Get supporter info for a pubkey
  */
-export function getSupporterInfo(pubkey: string): SupporterInfo | undefined {
-  return supportersMap.get(pubkey);
+export async function getSupporterInfo(
+  pubkey: string,
+): Promise<SupporterInfo | undefined> {
+  const zaps = await db.grimoireZaps
+    .where("senderPubkey")
+    .equals(pubkey)
+    .toArray();
+
+  if (zaps.length === 0) return undefined;
+
+  const totalSats = zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+  const lastZapTimestamp = Math.max(...zaps.map((zap) => zap.timestamp));
+
+  return {
+    pubkey,
+    totalSats,
+    zapCount: zaps.length,
+    lastZapTimestamp,
+  };
 }
 
 /**
  * Get all supporters sorted by total sats (descending)
  */
-export function getAllSupporters(): SupporterInfo[] {
-  return Array.from(supportersMap.values()).sort(
+export async function getAllSupporters(): Promise<SupporterInfo[]> {
+  const zaps = await db.grimoireZaps.toArray();
+
+  // Group by sender pubkey
+  const supporterMap = new Map<string, SupporterInfo>();
+
+  for (const zap of zaps) {
+    const existing = supporterMap.get(zap.senderPubkey);
+    if (existing) {
+      existing.totalSats += zap.amountSats;
+      existing.zapCount += 1;
+      existing.lastZapTimestamp = Math.max(
+        existing.lastZapTimestamp,
+        zap.timestamp,
+      );
+    } else {
+      supporterMap.set(zap.senderPubkey, {
+        pubkey: zap.senderPubkey,
+        totalSats: zap.amountSats,
+        zapCount: 1,
+        lastZapTimestamp: zap.timestamp,
+      });
+    }
+  }
+
+  return Array.from(supporterMap.values()).sort(
     (a, b) => b.totalSats - a.totalSats,
   );
 }
 
 /**
- * Get total donations received
+ * Get total donations received (all-time)
+ * Returns cached value for synchronous access
  */
 export function getTotalDonations(): number {
-  return Array.from(supportersMap.values()).reduce(
-    (sum, info) => sum + info.totalSats,
-    0,
-  );
+  return cachedTotalDonations;
+}
+
+/**
+ * Get total donations received (all-time) - async version
+ * Queries DB directly for up-to-date value
+ */
+export async function getTotalDonationsAsync(): Promise<number> {
+  const zaps = await db.grimoireZaps.toArray();
+  return zaps.reduce((sum, zap) => sum + zap.amountSats, 0);
 }
 
 /**
  * Get supporter count
  */
-export function getSupporterCount(): number {
-  return supportersMap.size;
+export async function getSupporterCount(): Promise<number> {
+  const zaps = await db.grimoireZaps.toArray();
+  const uniqueSenders = new Set(zaps.map((zap) => zap.senderPubkey));
+  return uniqueSenders.size;
 }
+
+/**
+ * Get donations received in the last 30 days
+ * Returns cached value for synchronous access
+ */
+export function getMonthlyDonations(): number {
+  return cachedMonthlyDonations;
+}
+
+/**
+ * Get donations received in the last 30 days - async version
+ * Queries DB directly for up-to-date value
+ */
+export async function getMonthlyDonationsAsync(): Promise<number> {
+  const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+
+  const recentZaps = await db.grimoireZaps
+    .where("timestamp")
+    .aboveOrEqual(thirtyDaysAgo)
+    .toArray();
+
+  return recentZaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+}
+
+/**
+ * Get donations received in the current calendar month
+ * Resets on the first of each month
+ */
+export async function getCurrentMonthDonations(): Promise<number> {
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const firstOfMonthTimestamp = Math.floor(firstOfMonth.getTime() / 1000);
+
+  const monthZaps = await db.grimoireZaps
+    .where("timestamp")
+    .aboveOrEqual(firstOfMonthTimestamp)
+    .toArray();
+
+  return monthZaps.reduce((sum, zap) => sum + zap.amountSats, 0);
+}
+
+/**
+ * Monthly donation goal in sats (210 million sats = 2.1 BTC)
+ */
+export const MONTHLY_GOAL_SATS = 210_000_000;

@@ -49,6 +49,11 @@ import {
   GRIMOIRE_DONATE_PUBKEY,
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
+import {
+  getMonthlyDonations,
+  MONTHLY_GOAL_SATS,
+  supporters$,
+} from "@/services/supporters";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -91,6 +96,23 @@ export default function UserMenu() {
   const [showConnectWallet, setShowConnectWallet] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
+
+  // Subscribe to supporters to trigger re-render when donations change
+  use$(supporters$);
+
+  // Calculate monthly donation progress
+  const monthlyDonations = getMonthlyDonations();
+  const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
+
+  // Format numbers for display
+  function formatSats(sats: number): string {
+    if (sats >= 1_000_000) {
+      return `${(sats / 1_000_000).toFixed(1)}M`;
+    } else if (sats >= 1_000) {
+      return `${Math.floor(sats / 1_000)}k`;
+    }
+    return sats.toString();
+  }
 
   // Get wallet service profile for display name, using wallet relays as hints
   const walletServiceProfile = useProfile(
@@ -408,9 +430,12 @@ export default function UserMenu() {
             <div className="px-2 py-2 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Monthly goal</span>
-                <span className="font-medium">42k / 500k sats</span>
+                <span className="font-medium">
+                  {formatSats(monthlyDonations)} /{" "}
+                  {formatSats(MONTHLY_GOAL_SATS)} sats
+                </span>
               </div>
-              <Progress value={8.4} className="h-1.5" />
+              <Progress value={goalProgress} className="h-1.5" />
               <p className="text-[10px] text-muted-foreground leading-tight">
                 Help us build the best Nostr developer tool
               </p>

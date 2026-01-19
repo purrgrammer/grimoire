@@ -100,6 +100,14 @@ export interface LnurlCache {
   fetchedAt: number; // Timestamp for cache invalidation
 }
 
+export interface GrimoireZap {
+  eventId: string; // Primary key - zap receipt event ID
+  senderPubkey: string; // Who sent the zap
+  amountSats: number; // Amount in sats (not msats)
+  timestamp: number; // Unix timestamp when zap was sent (created_at)
+  comment?: string; // Optional zap comment/message
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -112,6 +120,7 @@ class GrimoireDb extends Dexie {
   spells!: Table<LocalSpell>;
   spellbooks!: Table<LocalSpellbook>;
   lnurlCache!: Table<LnurlCache>;
+  grimoireZaps!: Table<GrimoireZap>;
 
   constructor(name: string) {
     super(name);
@@ -361,6 +370,22 @@ class GrimoireDb extends Dexie {
       spells: "&id, alias, createdAt, isPublished, deletedAt",
       spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
       lnurlCache: "&address, fetchedAt",
+    });
+
+    // Version 17: Add Grimoire donation tracking
+    this.version(17).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps: "&eventId, senderPubkey, timestamp",
     });
   }
 }
