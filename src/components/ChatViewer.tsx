@@ -43,6 +43,7 @@ import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
+import LoginDialog from "./nostr/LoginDialog";
 import {
   MentionEditor,
   type MentionEditorHandle,
@@ -591,6 +592,9 @@ export function ChatViewer({
   // State for tooltip open (for mobile tap support)
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
+  // State for login dialog
+  const [showLogin, setShowLogin] = useState(false);
+
   // Handle sending messages with error handling
   const handleSend = async (
     content: string,
@@ -1104,9 +1108,18 @@ export function ChatViewer({
         </div>
       ) : (
         <div className="border-t px-2 py-1 text-center text-sm text-muted-foreground">
-          Sign in to send messages
+          <button
+            onClick={() => setShowLogin(true)}
+            className="hover:text-foreground transition-colors underline"
+          >
+            Sign in
+          </button>{" "}
+          to send messages
         </div>
       )}
+
+      {/* Login dialog */}
+      <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
     </div>
   );
 }
