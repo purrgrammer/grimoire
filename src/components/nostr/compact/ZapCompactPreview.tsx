@@ -6,6 +6,7 @@ import {
   getZapEventPointer,
   getZapAddressPointer,
   getZapRequest,
+  getZapRecipient,
 } from "applesauce-common/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
@@ -13,11 +14,12 @@ import { RichText } from "../RichText";
 
 /**
  * Compact preview for Kind 9735 (Zap Receipt)
- * Layout: [amount] [zap message] [target pubkey] [preview]
+ * Layout: [amount] [recipient] [zap message] [preview]
  */
 export function ZapCompactPreview({ event }: { event: NostrEvent }) {
   const zapAmount = useMemo(() => getZapAmount(event), [event]);
   const zapRequest = useMemo(() => getZapRequest(event), [event]);
+  const zapRecipient = useMemo(() => getZapRecipient(event), [event]);
 
   // Get zap comment from request
   const zapMessage = useMemo(() => {
@@ -46,6 +48,7 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
       <span className="text-yellow-500 font-medium shrink-0">
         {amountInSats.toLocaleString("en", { notation: "compact" })}
       </span>
+      {zapRecipient && <UserName pubkey={zapRecipient} />}
       {zapMessage && (
         <span className="truncate line-clamp-1 flex-shrink-0">
           <RichText
@@ -56,16 +59,13 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
         </span>
       )}
       {zappedEvent && (
-        <>
-          <UserName pubkey={zappedEvent.pubkey} />
-          <span className="text-muted-foreground truncate line-clamp-1">
-            <RichText
-              event={zappedEvent}
-              className="inline text-sm leading-none"
-              options={{ showMedia: false, showEventEmbeds: false }}
-            />
-          </span>
-        </>
+        <span className="text-muted-foreground truncate line-clamp-1">
+          <RichText
+            event={zappedEvent}
+            className="inline text-sm leading-none"
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
+        </span>
       )}
     </span>
   );
