@@ -12,11 +12,12 @@ import giftWrapManager from "@/services/gift-wrap";
  * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
  */
 export function useAccountSync() {
+  const grimoire = useGrimoire();
   const {
     setActiveAccount,
     setActiveAccountRelays,
     setActiveAccountBlossomServers,
-  } = useGrimoire();
+  } = grimoire;
   const eventStore = useEventStore();
 
   // Watch active account from accounts service
@@ -129,8 +130,10 @@ export function useAccountSync() {
 
   // Start gift wrap sync (NIP-17) when account changes
   useEffect(() => {
-    if (!activeAccount?.pubkey) {
-      // Stop sync when no account is active
+    const syncEnabled = grimoire.state.giftWrapSettings?.syncEnabled ?? true;
+
+    if (!activeAccount?.pubkey || !syncEnabled) {
+      // Stop sync when no account is active or sync is disabled
       giftWrapManager.stopSync();
       return;
     }
@@ -144,5 +147,5 @@ export function useAccountSync() {
     return () => {
       giftWrapManager.stopSync();
     };
-  }, [activeAccount?.pubkey]);
+  }, [activeAccount?.pubkey, grimoire.state.giftWrapSettings?.syncEnabled]);
 }

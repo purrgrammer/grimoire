@@ -587,6 +587,21 @@ export const manPages: Record<string, ManPageEntry> = {
       };
     },
   },
+  inbox: {
+    name: "inbox",
+    section: "1",
+    synopsis: "inbox",
+    description:
+      "View NIP-17 direct message inbox dashboard. Shows gift wrap decryption statistics, DM relay status (kind 10050), and a compact list of all conversations. Allows toggling gift wrap sync on/off and auto-decryption settings. Click any conversation to open a chat window.",
+    options: [],
+    examples: ["inbox                                 Open DM inbox dashboard"],
+    seeAlso: ["chat"],
+    appId: "inbox",
+    category: "Nostr",
+    argParser: () => {
+      return {};
+    },
+  },
   profile: {
     name: "profile",
     section: "1",

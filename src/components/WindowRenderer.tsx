@@ -47,6 +47,9 @@ const ZapWindow = lazy(() =>
   import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const InboxViewer = lazy(() =>
+  import("./InboxViewer").then((m) => ({ default: m.InboxViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -207,6 +210,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             />
           );
         }
+        break;
+      case "inbox":
+        content = <InboxViewer />;
         break;
       case "spells":
         content = <SpellsViewer />;

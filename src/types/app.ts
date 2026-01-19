@@ -18,6 +18,7 @@ export type AppId =
   | "debug"
   | "conn"
   | "chat"
+  | "inbox"
   | "spells"
   | "spellbooks"
   | "blossom"
@@ -138,4 +139,8 @@ export interface GrimoireState {
   };
   nwcConnection?: NWCConnection;
   walletBalancesBlurred?: boolean; // Privacy: blur balances and transaction amounts
+  giftWrapSettings?: {
+    syncEnabled: boolean; // Enable/disable gift wrap sync (NIP-17 DMs)
+    autoDecrypt: boolean; // Automatically decrypt received gift wraps
+  };
 }

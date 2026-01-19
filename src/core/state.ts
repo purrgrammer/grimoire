@@ -374,6 +374,13 @@ export const useGrimoire = () => {
     setState((prev) => Logic.toggleWalletBalancesBlur(prev));
   }, [setState]);
 
+  const updateGiftWrapSettings = useCallback(
+    (settings: Partial<{ syncEnabled: boolean; autoDecrypt: boolean }>) => {
+      setState((prev) => Logic.updateGiftWrapSettings(prev, settings));
+    },
+    [setState],
+  );
+
   return {
     state,
     isTemporary,
@@ -405,5 +412,6 @@ export const useGrimoire = () => {
     updateNWCInfo,
     disconnectNWC,
     toggleWalletBalancesBlur,
+    updateGiftWrapSettings,
   };
 };
