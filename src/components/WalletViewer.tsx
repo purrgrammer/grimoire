@@ -993,7 +993,7 @@ export default function WalletViewer() {
         </div>
 
         {/* Right: Info Dropdown, Refresh, Disconnect */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {walletInfo && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1633,7 +1633,6 @@ export default function WalletViewer() {
             <DialogTitle>Receive Payment</DialogTitle>
             <DialogDescription>
               Generate a Lightning invoice to receive sats.
-              {checkingPayment && " Waiting for payment..."}
             </DialogDescription>
           </DialogHeader>
 
