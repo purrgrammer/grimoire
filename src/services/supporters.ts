@@ -54,12 +54,6 @@ class SupportersService {
    * Can be called multiple times (re-initializes subscription)
    */
   async init() {
-    console.log("[Supporters] Initializing...");
-
-    // Log existing zaps in DB
-    const existingCount = await db.grimoireZaps.count();
-    console.log(`[Supporters] Found ${existingCount} existing zaps in DB`);
-
     // Clean up existing subscription if any
     if (this.subscription) {
       this.subscription.unsubscribe();
@@ -68,8 +62,6 @@ class SupportersService {
 
     // Subscribe to new zaps (will fetch relay list)
     await this.subscribeToZapReceipts();
-
-    console.log("[Supporters] Initialized");
   }
 
   /**
@@ -79,24 +71,10 @@ class SupportersService {
     try {
       // Start with hardcoded relays for immediate cold start
       let grimRelays = [...GRIMOIRE_ZAP_RELAYS];
-      console.log(
-        "[Supporters] Starting with hardcoded relays:",
-        grimRelays.join(", "),
-      );
 
       // Fetch relay list in background (non-blocking)
       // Don't await - let it happen in parallel with subscription
-      this.fetchAndMergeRelayList().then((fetchedRelays) => {
-        if (fetchedRelays.length > 0) {
-          console.log(
-            `[Supporters] Fetched ${fetchedRelays.length} additional relays from kind 10002`,
-          );
-        }
-      });
-
-      console.log(
-        `[Supporters] Subscribing to zaps on ${grimRelays.length} relays`,
-      );
+      this.fetchAndMergeRelayList();
 
       // Subscribe to zap receipts (kind 9735) for Grimoire
       // Using 'p' tag filter for recipient (NIP-57 zap receipts tag the recipient)
@@ -112,17 +90,11 @@ class SupportersService {
       // TimelineLoader returns Observable<NostrEvent> - emits individual events from relays
       const loaderSubscription = loader().subscribe({
         next: (event: NostrEvent) => {
-          console.log(
-            `[Supporters] Received zap from loader: ${event.id.slice(0, 8)}`,
-          );
           // Process each event as it arrives from relays
           this.processZapReceipt(event);
         },
         error: (error) => {
           console.error("[Supporters] Timeline loader error:", error);
-        },
-        complete: () => {
-          console.log("[Supporters] Timeline loader completed (EOSE)");
         },
       });
 
@@ -139,8 +111,6 @@ class SupportersService {
    */
   private async fetchAndMergeRelayList(): Promise<string[]> {
     try {
-      console.log("[Supporters] Fetching Grimoire relay list (kind 10002)...");
-
       await firstValueFrom(
         addressLoader({
           kind: 10002,
@@ -148,13 +118,7 @@ class SupportersService {
           identifier: "",
         }).pipe(
           rxTimeout(10000),
-          catchError((err) => {
-            console.warn(
-              "[Supporters] Timeout/error fetching relay list:",
-              err.message,
-            );
-            return of(null);
-          }),
+          catchError(() => of(null)),
         ),
       );
 
@@ -167,13 +131,11 @@ class SupportersService {
       );
 
       if (inboxRelays && inboxRelays.length > 0) {
-        console.log(`[Supporters] Found ${inboxRelays.length} inbox relays`);
         return inboxRelays;
       }
 
       return [];
     } catch (err) {
-      console.warn("[Supporters] Failed to fetch relay list:", err);
       return [];
     }
   }
@@ -184,45 +146,23 @@ class SupportersService {
   private async processZapReceipt(event: NostrEvent) {
     try {
       // Only process valid zaps
-      if (!isValidZap(event)) {
-        console.log(`[Supporters] Invalid zap event ${event.id.slice(0, 8)}`);
-        return;
-      }
+      if (!isValidZap(event)) return;
 
       // Double-check recipient is Grimoire
       const recipient = getZapRecipient(event);
-      if (recipient !== GRIMOIRE_DONATE_PUBKEY) {
-        console.log(
-          `[Supporters] Zap not for Grimoire: ${recipient?.slice(0, 8)}`,
-        );
-        return;
-      }
+      if (recipient !== GRIMOIRE_DONATE_PUBKEY) return;
 
       // Get sender
       const sender = getZapSender(event);
-      if (!sender) {
-        console.log(
-          `[Supporters] No sender found for zap ${event.id.slice(0, 8)}`,
-        );
-        return;
-      }
+      if (!sender) return;
 
       // Check if already recorded (deduplication)
       const existing = await db.grimoireZaps.get(event.id);
-      if (existing) {
-        console.log(`[Supporters] Duplicate zap ${event.id.slice(0, 8)}`);
-        return;
-      }
+      if (existing) return;
 
       // Get amount (millisats -> sats)
       const amountMsats = getZapAmount(event);
       const amountSats = amountMsats ? Math.floor(amountMsats / 1000) : 0;
-
-      if (amountSats === 0) {
-        console.log(
-          `[Supporters] Zap with 0 sats: ${event.id.slice(0, 8)} (${amountMsats} msats)`,
-        );
-      }
 
       // Get comment from zap request
       const zapRequest = getZapRequest(event);
@@ -238,10 +178,6 @@ class SupportersService {
       };
 
       await db.grimoireZaps.add(zapRecord);
-
-      console.log(
-        `[Supporters] ✓ Recorded zap: ${amountSats} sats from ${sender.slice(0, 8)} at ${new Date(event.created_at * 1000).toISOString()}`,
-      );
     } catch (error) {
       // Silently ignore duplicate key errors (race condition protection)
       if ((error as any).name !== "ConstraintError") {

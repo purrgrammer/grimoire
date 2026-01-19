@@ -37,17 +37,12 @@ export function GrimoireWelcome({
     useLiveQuery(async () => {
       const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
       let total = 0;
-      let count = 0;
       await db.grimoireZaps
         .where("timestamp")
         .aboveOrEqual(thirtyDaysAgo)
         .each((zap) => {
           total += zap.amountSats;
-          count++;
         });
-      console.log(
-        `[GrimoireWelcome] Found ${count} zaps in last 30 days, total: ${total} sats (cutoff: ${new Date(thirtyDaysAgo * 1000).toISOString()})`,
-      );
       return total;
     }, []) ?? 0;
 
