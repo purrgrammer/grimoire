@@ -111,8 +111,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const pointer = identifier.value;
     const relayHints = identifier.relays || [];
 
-    console.log(`[NIP-10] Fetching event ${pointer.id.slice(0, 8)}...`);
-
     // 1. Fetch the provided event
     const providedEvent = await this.fetchEvent(pointer.id, relayHints);
     if (!providedEvent) {
@@ -131,7 +129,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     if (refs.root?.e) {
       // This is a reply - fetch the root
       rootId = refs.root.e.id;
-      console.log(`[NIP-10] Fetching root event ${rootId.slice(0, 8)}...`);
 
       const fetchedRoot = await this.fetchEvent(
         rootId,
@@ -145,7 +142,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       // No root reference - this IS the root
       rootEvent = providedEvent;
       rootId = providedEvent.id;
-      console.log(`[NIP-10] Provided event is the root`);
     }
 
     // 3. Determine conversation relays
@@ -153,11 +149,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       rootEvent,
       providedEvent,
       relayHints,
-    );
-
-    console.log(
-      `[NIP-10] Using ${conversationRelays.length} relays:`,
-      conversationRelays,
     );
 
     // 4. Extract title from root content
@@ -196,8 +187,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     if (!rootEventId) {
       throw new Error("Root event ID required");
     }
-
-    console.log(`[NIP-10] Loading thread ${rootEventId.slice(0, 8)}...`);
 
     // Build filter for all thread events:
     // - kind 1: replies to root
@@ -241,11 +230,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-10] EOSE received");
           } else {
-            console.log(
-              `[NIP-10] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
-            );
+            // Event received and added to EventStore
           }
         },
       });
@@ -286,9 +272,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
         messages.push(...replyMessages);
 
-        console.log(
-          `[NIP-10] Timeline has ${messages.length} messages (including root)`,
-        );
 
         // Sort by timestamp ascending (chronological order)
         return messages.sort((a, b) => a.timestamp - b.timestamp);
@@ -310,9 +293,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       throw new Error("Root event ID required");
     }
 
-    console.log(
-      `[NIP-10] Loading older messages for ${rootEventId.slice(0, 8)} before ${before}`,
-    );
 
     // Same filters as loadMessages but with until for pagination
     const filters: Filter[] = [
@@ -340,8 +320,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const events = await firstValueFrom(
       pool.request(relays, filters, { eventStore }).pipe(toArray()),
     );
-
-    console.log(`[NIP-10] Loaded ${events.length} older events`);
 
     const conversationId = `nip-10:${rootEventId}`;
 
@@ -474,9 +452,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const draft = await factory.build({ kind: 1, content, tags });
     const event = await factory.sign(draft);
 
-    console.log(
-      `[NIP-10] Publishing reply with ${tags.length} tags to ${relays.length} relays`,
-    );
 
     // Publish to conversation relays
     await publishEventToRelays(event, relays);
@@ -527,8 +502,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // Create and sign kind 7 event
     const draft = await factory.build({ kind: 7, content: emoji, tags });
     const event = await factory.sign(draft);
-
-    console.log(`[NIP-10] Publishing reaction to ${relays.length} relays`);
 
     // Publish to conversation relays
     await publishEventToRelays(event, relays);
@@ -581,9 +554,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       return null;
     }
 
-    console.log(
-      `[NIP-10] Fetching reply message ${eventId.slice(0, 8)} from ${relays.length} relays`,
-    );
 
     const filter: Filter = {
       ids: [eventId],
@@ -758,9 +728,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       ].forEach((r) => relays.add(r));
     }
 
-    console.log(
-      `[NIP-10] Collected ${relays.size} relays from root, ${participantsToCheck.length} participants, and fallbacks`,
-    );
 
     // Limit to 10 relays max for performance
     return Array.from(relays).slice(0, 10);
@@ -815,7 +782,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        console.log(`[NIP-10] Fetch timeout for ${eventId.slice(0, 8)}...`);
         resolve();
       }, 5000);
 
