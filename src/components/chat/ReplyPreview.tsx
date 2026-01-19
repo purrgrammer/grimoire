@@ -26,6 +26,9 @@ export const ReplyPreview = memo(function ReplyPreview({
   // Load the event being replied to (reactive - updates when event arrives)
   const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
 
+  // Check if replying to thread root (NIP-10)
+  const isRoot = conversation.metadata?.rootEventId === replyToId;
+
   // Fetch event from relays if not in store
   useEffect(() => {
     if (!replyEvent) {
@@ -47,7 +50,7 @@ export const ReplyPreview = memo(function ReplyPreview({
   if (!replyEvent) {
     return (
       <div className="text-xs text-muted-foreground mb-0.5">
-        ↳ Replying to {replyToId.slice(0, 8)}...
+        ↳ Replying to {isRoot ? "thread root" : replyToId.slice(0, 8)}...
       </div>
     );
   }
@@ -59,10 +62,14 @@ export const ReplyPreview = memo(function ReplyPreview({
       title="Click to scroll to message"
     >
       <span className="flex-shrink-0">↳</span>
-      <UserName
-        pubkey={replyEvent.pubkey}
-        className="font-medium flex-shrink-0"
-      />
+      {isRoot ? (
+        <span className="font-medium flex-shrink-0">thread root</span>
+      ) : (
+        <UserName
+          pubkey={replyEvent.pubkey}
+          className="font-medium flex-shrink-0"
+        />
+      )}
       <div className="line-clamp-1 overflow-hidden flex-1 min-w-0">
         <RichText
           event={replyEvent}

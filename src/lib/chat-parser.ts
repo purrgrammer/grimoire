@@ -1,5 +1,6 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
+import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
@@ -11,11 +12,12 @@ import { nip19 } from "nostr-tools";
  * Parse a chat command identifier and auto-detect the protocol
  *
  * Tries each adapter's parseIdentifier() in priority order:
- * 1. NIP-17 (encrypted DMs) - prioritized for privacy
- * 2. NIP-28 (channels) - specific event format (kind 40)
- * 3. NIP-29 (groups) - specific group ID format
- * 4. NIP-53 (live chat) - specific addressable format (kind 30311)
- * 5. NIP-C7 (simple chat) - fallback for generic pubkeys
+ * 1. NIP-10 (thread chat) - nevent/note format for kind 1 threads
+ * 2. NIP-17 (encrypted DMs) - prioritized for privacy
+ * 3. NIP-28 (channels) - specific event format (kind 40)
+ * 4. NIP-29 (groups) - specific group ID format
+ * 5. NIP-53 (live chat) - specific addressable format (kind 30311)
+ * 6. NIP-C7 (simple chat) - fallback for generic pubkeys
  *
  * @param args - Command arguments (first arg is the identifier)
  * @returns Parsed result with protocol and identifier
@@ -62,6 +64,7 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
 
   // Try each adapter in priority order
   const adapters = [
+    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note)
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
     new Nip29Adapter(), // Phase 4 - Relay groups
@@ -84,6 +87,10 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
+  - nevent1.../note1... (NIP-10 thread chat, kind 1 notes)
+    Examples:
+      chat nevent1qqsxyz... (thread with relay hints)
+      chat note1abc... (thread with event ID only)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
@@ -99,7 +106,6 @@ Currently supported formats:
       chat naddr1... (group list address)
 
 More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)
-  - note/nevent (NIP-28 public channels)`,
+  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)`,
   );
 }

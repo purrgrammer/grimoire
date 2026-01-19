@@ -23,12 +23,15 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
 
   // Get relays for this conversation (immutable pattern)
   const liveActivityRelays = conversation.metadata?.liveActivity?.relays;
+  const metadataRelays = conversation.metadata?.relays;
   const relays: string[] =
     Array.isArray(liveActivityRelays) && liveActivityRelays.length > 0
       ? liveActivityRelays
-      : conversation.metadata?.relayUrl
-        ? [conversation.metadata.relayUrl]
-        : [];
+      : Array.isArray(metadataRelays) && metadataRelays.length > 0
+        ? metadataRelays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
 
   // Pre-compute normalized URLs and state lookups in a single pass (O(n))
   const relayData = relays.map((url) => {

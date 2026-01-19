@@ -14,7 +14,13 @@ export const CHAT_KINDS = [
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol = "nip-c7" | "nip-17" | "nip-28" | "nip-29" | "nip-53";
+export type ChatProtocol =
+  | "nip-c7"
+  | "nip-17"
+  | "nip-28"
+  | "nip-29"
+  | "nip-53"
+  | "nip-10";
 
 /**
  * Conversation type
@@ -61,8 +67,8 @@ export interface ConversationMetadata {
 
   // NIP-29 group
   groupId?: string; // host'group-id format
-  relayUrl?: string; // Relay enforcing group rules
-  description?: string; // Group description
+  relayUrl?: string; // Relay URL for single-relay protocols
+  description?: string; // Group/thread description
   icon?: string; // Group icon/picture URL
 
   // NIP-53 live chat
@@ -76,6 +82,12 @@ export interface ConversationMetadata {
   // NIP-17 DM
   encrypted?: boolean;
   giftWrapped?: boolean;
+
+  // NIP-10 thread
+  rootEventId?: string; // Thread root event ID
+  providedEventId?: string; // Original event from nevent (may be reply)
+  threadDepth?: number; // Approximate depth of thread
+  relays?: string[]; // Relays for this conversation
 }
 
 /**
@@ -207,6 +219,22 @@ export interface GroupListIdentifier {
 }
 
 /**
+ * NIP-10 thread identifier (kind 1 note thread)
+ */
+export interface ThreadIdentifier {
+  type: "thread";
+  /** Event pointer to the provided event (may be root or a reply) */
+  value: {
+    id: string;
+    relays?: string[];
+    author?: string;
+    kind?: number;
+  };
+  /** Relay hints from nevent encoding */
+  relays?: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -216,7 +244,8 @@ export type ProtocolIdentifier =
   | DMIdentifier
   | NIP05Identifier
   | ChannelIdentifier
-  | GroupListIdentifier;
+  | GroupListIdentifier
+  | ThreadIdentifier;
 
 /**
  * Chat command parsing result

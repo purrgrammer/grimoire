@@ -133,6 +133,18 @@ export function ChatMessageContextMenu({
     setEmojiPickerOpen(true);
   };
 
+  const openZapWindow = () => {
+    if (!zapConfig || !zapConfig.supported) return;
+
+    addWindow("zap", {
+      recipientPubkey: zapConfig.recipientPubkey,
+      eventPointer: zapConfig.eventPointer,
+      addressPointer: zapConfig.addressPointer,
+      customTags: zapConfig.customTags,
+      relays: zapConfig.relays,
+    });
+  };
+
   const handleEmojiSelect = async (emoji: string, customEmoji?: EmojiTag) => {
     if (!conversation || !adapter) {
       console.error(
@@ -146,18 +158,6 @@ export function ChatMessageContextMenu({
     } catch (err) {
       console.error("[ChatMessageContextMenu] Failed to send reaction:", err);
     }
-  };
-
-  const openZapWindow = () => {
-    if (!zapConfig || !zapConfig.supported) return;
-
-    addWindow("zap", {
-      recipientPubkey: zapConfig.recipientPubkey,
-      eventPointer: zapConfig.eventPointer,
-      addressPointer: zapConfig.addressPointer,
-      customTags: zapConfig.customTags,
-      relays: zapConfig.relays,
-    });
   };
 
   return (
