@@ -228,11 +228,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const subscription = pool
       .subscription(relays, filters, { eventStore })
       .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-          } else {
-            // Event received and added to EventStore
-          }
+        next: (_response) => {
+          // EOSE or event - both handled by EventStore
         },
       });
 
@@ -272,7 +269,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
         messages.push(...replyMessages);
 
-
         // Sort by timestamp ascending (chronological order)
         return messages.sort((a, b) => a.timestamp - b.timestamp);
       }),
@@ -292,7 +288,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     if (!rootEventId) {
       throw new Error("Root event ID required");
     }
-
 
     // Same filters as loadMessages but with until for pagination
     const filters: Filter[] = [
@@ -452,7 +447,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const draft = await factory.build({ kind: 1, content, tags });
     const event = await factory.sign(draft);
 
-
     // Publish to conversation relays
     await publishEventToRelays(event, relays);
   }
@@ -553,7 +547,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       console.warn("[NIP-10] No relays for loading reply message");
       return null;
     }
-
 
     const filter: Filter = {
       ids: [eventId],
@@ -703,7 +696,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         if (outbox.length > 0) {
           relays.add(normalizeURL(outbox[0]));
         }
-      } catch (err) {
+      } catch (_err) {
         // Silently continue if participant has no relay list
       }
     }
@@ -727,7 +720,6 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         "wss://relay.nostr.band",
       ].forEach((r) => relays.add(r));
     }
-
 
     // Limit to 10 relays max for performance
     return Array.from(relays).slice(0, 10);
