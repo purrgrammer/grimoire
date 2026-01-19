@@ -2,7 +2,11 @@ import { Observable, firstValueFrom, combineLatest } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
+import {
+  ChatProtocolAdapter,
+  type SendMessageOptions,
+  type ZapConfig,
+} from "./base-adapter";
 import type {
   Conversation,
   Message,
@@ -528,6 +532,30 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     // Publish to conversation relays
     await publishEventToRelays(event, relays);
+  }
+
+  /**
+   * Get zap configuration for a message in a NIP-10 thread
+   * Returns configuration for how zap requests should be constructed
+   */
+  getZapConfig(message: Message, conversation: Conversation): ZapConfig {
+    // Get relays from conversation metadata
+    const relays = conversation.metadata?.relays || [];
+
+    // Build eventPointer for the message being zapped
+    const eventPointer = {
+      id: message.id,
+      author: message.author,
+      relays,
+    };
+
+    // Recipient is the message author
+    return {
+      supported: true,
+      recipientPubkey: message.author,
+      eventPointer,
+      relays,
+    };
   }
 
   /**
