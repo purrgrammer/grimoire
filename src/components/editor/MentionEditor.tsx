@@ -352,19 +352,67 @@ const EventMentionNode = Node.create({
             const text = event.clipboardData?.getData("text/plain");
             if (!text) return false;
 
-            // Match nostr: URIs (note, nevent, naddr)
-            const nostrUriRegex = /nostr:(note|nevent|naddr)1[a-z0-9]+/gi;
+            // Match nostr identifiers with or without "nostr:" prefix
+            const nostrUriRegex =
+              /(?:nostr:)?(note|nevent|naddr|npub|nprofile)1[a-z0-9]+/gi;
             const matches = text.match(nostrUriRegex);
 
             if (!matches) return false;
 
-            // If the entire paste is just a nostr URI, convert it to an event mention
+            // If the entire paste is just a nostr identifier, convert it appropriately
             if (matches.length === 1 && text.trim() === matches[0]) {
               event.preventDefault();
 
-              const nostrUri = matches[0];
+              const matchedText = matches[0];
+              // Strip "nostr:" prefix if present for decoding
+              const identifier = matchedText.replace(/^nostr:/i, "");
+
               try {
-                const decoded = nip19.decode(nostrUri.replace("nostr:", ""));
+                const decoded = nip19.decode(identifier);
+
+                // Handle profile identifiers (npub/nprofile) - convert to @ mention
+                if (decoded.type === "npub") {
+                  const pubkey = decoded.data as string;
+                  const { tr } = view.state;
+                  const { from } = view.state.selection;
+
+                  tr.replaceWith(
+                    from,
+                    from,
+                    view.state.schema.nodes.mention.create({
+                      id: pubkey,
+                      label: pubkey.slice(0, 8),
+                    }),
+                  );
+                  // Add space after mention
+                  tr.insertText(" ", from + 1);
+                  view.dispatch(tr);
+                  return true;
+                } else if (decoded.type === "nprofile") {
+                  const data = decoded.data as nip19.ProfilePointer;
+                  const { tr } = view.state;
+                  const { from } = view.state.selection;
+
+                  tr.replaceWith(
+                    from,
+                    from,
+                    view.state.schema.nodes.mention.create({
+                      id: data.pubkey,
+                      label: data.pubkey.slice(0, 8),
+                    }),
+                  );
+                  // Add space after mention
+                  tr.insertText(" ", from + 1);
+                  view.dispatch(tr);
+                  return true;
+                }
+
+                // Handle event identifiers (note/nevent/naddr) - convert to event mention
+                // Always store with "nostr:" prefix for consistency
+                const nostrUri = matchedText.startsWith("nostr:")
+                  ? matchedText
+                  : `nostr:${identifier}`;
+
                 let decodedType: string;
                 let eventId: string | null = null;
                 let kind: number | null = null;
@@ -407,7 +455,7 @@ const EventMentionNode = Node.create({
                 view.dispatch(tr);
                 return true;
               } catch (err) {
-                // Invalid nostr URI, let default paste behavior handle it
+                // Invalid nostr identifier, let default paste behavior handle it
                 return false;
               }
             }
