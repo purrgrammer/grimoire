@@ -99,12 +99,35 @@ const PAYMENT_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 /**
  * Helper: Detect if a transaction is a Bitcoin on-chain transaction
- * Bitcoin transactions have a preimage that is a 64-character hex string (txid)
+ * Bitcoin transactions have invoice field containing a Bitcoin address instead of a Lightning invoice
+ * Bitcoin address formats:
+ * - Legacy (P2PKH): starts with 1
+ * - P2SH: starts with 3
+ * - Bech32 (native segwit): starts with bc1
+ * - Bech32m (taproot): starts with bc1p
  */
 function isBitcoinTransaction(transaction: Transaction): boolean {
-  if (!transaction.preimage) return false;
-  // Bitcoin txid is 64 hex characters (32 bytes)
-  return /^[0-9a-f]{64}$/i.test(transaction.preimage);
+  if (!transaction.invoice) return false;
+
+  const invoice = transaction.invoice.trim();
+
+  // Lightning invoices start with "ln" (lnbc, lntb, lnbcrt, etc.)
+  if (invoice.toLowerCase().startsWith("ln")) {
+    return false;
+  }
+
+  // Check if it looks like a Bitcoin address
+  // Legacy: 1... (26-35 chars)
+  // P2SH: 3... (26-35 chars)
+  // Bech32: bc1... (42-62 chars for bc1q, 62 chars for bc1p)
+  // Testnet: tb1..., 2..., m/n...
+  const isBitcoinAddress =
+    /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(invoice) || // Legacy or P2SH
+    /^bc1[a-z0-9]{39,59}$/i.test(invoice) || // Mainnet bech32/bech32m
+    /^tb1[a-z0-9]{39,59}$/i.test(invoice) || // Testnet bech32
+    /^[2mn][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(invoice); // Testnet legacy
+
+  return isBitcoinAddress;
 }
 
 /**
@@ -1329,8 +1352,17 @@ export default function WalletViewer() {
                   {(() => {
                     const isBitcoin = isBitcoinTransaction(selectedTransaction);
 
-                    if (isBitcoin && selectedTransaction.preimage) {
+                    if (isBitcoin) {
                       // Bitcoin on-chain transaction - show Transaction ID with mempool.space link
+                      // For Bitcoin txs, payment_hash contains the txid (preimage is also the txid)
+                      const txid =
+                        selectedTransaction.payment_hash ||
+                        selectedTransaction.preimage;
+
+                      if (!txid) {
+                        return null;
+                      }
+
                       return (
                         <div>
                           <Label className="text-xs text-muted-foreground">
@@ -1338,13 +1370,10 @@ export default function WalletViewer() {
                           </Label>
                           <div className="flex items-start gap-2">
                             <p className="text-xs font-mono break-all bg-muted p-2 rounded flex-1">
-                              {selectedTransaction.preimage}
+                              {txid}
                             </p>
                             <a
-                              href={getMempoolUrl(
-                                selectedTransaction.preimage,
-                                walletInfo?.network,
-                              )}
+                              href={getMempoolUrl(txid, walletInfo?.network)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-xs text-primary hover:underline mt-2 flex-shrink-0"
