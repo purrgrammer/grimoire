@@ -125,8 +125,9 @@ function subscribeToZapReceipts() {
   const timeline = eventStore.timeline([{ kinds: [9735], limit: 1000 }]);
 
   // Process existing and new zap receipts
-  timeline.subscribe((events) => {
-    events.forEach(processZapReceipt);
+  timeline.subscribe(async (events) => {
+    // Process all events in parallel (DB handles deduplication)
+    await Promise.all(events.map((event) => processZapReceipt(event)));
   });
 }
 
