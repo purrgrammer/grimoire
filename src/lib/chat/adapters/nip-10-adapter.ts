@@ -110,7 +110,11 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     }
 
     const pointer = identifier.value;
-    const relayHints = identifier.relays || [];
+    // Merge relay hints from both top-level and value (nevent encoding includes both)
+    const relayHints = [
+      ...(identifier.relays || []),
+      ...(pointer.relays || []),
+    ];
 
     // 1. Fetch the provided event
     const providedEvent = await this.fetchEvent(pointer.id, relayHints);
@@ -791,6 +795,9 @@ export class Nip10Adapter extends ChatProtocolAdapter {
           console.error(`[NIP-10] Fetch error:`, err);
           sub.unsubscribe();
           resolve();
+        },
+        complete: () => {
+          clearTimeout(timeout);
         },
       });
     });

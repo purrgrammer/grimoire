@@ -136,7 +136,11 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     }
 
     const pointer = identifier.value;
-    const relayHints = identifier.relays || [];
+    // Merge relay hints from both top-level and value (nevent encoding includes both)
+    const relayHints = [
+      ...(identifier.relays || []),
+      ...(pointer.relays || []),
+    ];
 
     // 1. Fetch the root event
     let rootEvent: NostrEvent;
@@ -544,6 +548,15 @@ export class Nip22Adapter extends ChatProtocolAdapter {
               resolve(response);
             }
           },
+          error: (err) => {
+            clearTimeout(timeout);
+            sub.unsubscribe();
+            console.error("[NIP-22] Subscription error:", err);
+            resolve(null);
+          },
+          complete: () => {
+            clearTimeout(timeout);
+          },
         });
     });
   }
@@ -598,6 +611,15 @@ export class Nip22Adapter extends ChatProtocolAdapter {
               sub.unsubscribe();
               resolve(response);
             }
+          },
+          error: (err) => {
+            clearTimeout(timeout);
+            sub.unsubscribe();
+            console.error("[NIP-22] Subscription error:", err);
+            resolve(null);
+          },
+          complete: () => {
+            clearTimeout(timeout);
           },
         });
     });
