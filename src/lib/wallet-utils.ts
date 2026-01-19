@@ -119,3 +119,37 @@ export function parseZapRequest(transaction: {
     return null;
   });
 }
+
+// Symbol for caching invoice description on transaction objects
+const InvoiceDescriptionSymbol = Symbol("invoiceDescription");
+
+/**
+ * Extract the description from a BOLT11 invoice
+ * Results are cached on the transaction object using applesauce pattern
+ *
+ * @param transaction - The transaction object with invoice field
+ * @returns The invoice description string, or undefined if not available
+ */
+export function getInvoiceDescription(transaction: {
+  invoice?: string;
+}): string | undefined {
+  // Use applesauce caching pattern - cache result on transaction object
+  return getOrComputeCachedValue(transaction, InvoiceDescriptionSymbol, () => {
+    if (!transaction.invoice) return undefined;
+
+    try {
+      const decoded = decodeBolt11(transaction.invoice);
+      const descSection = decoded.sections.find(
+        (s) => s.name === "description",
+      );
+
+      if (descSection && "value" in descSection) {
+        return String(descSection.value);
+      }
+    } catch {
+      // Invoice decoding failed, ignore
+    }
+
+    return undefined;
+  });
+}

@@ -6,6 +6,7 @@ import {
   getZapEventPointer,
   getZapAddressPointer,
   getZapRequest,
+  getZapRecipient,
 } from "applesauce-common/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
@@ -13,17 +14,12 @@ import { RichText } from "../RichText";
 
 /**
  * Compact preview for Kind 9735 (Zap Receipt)
- * Layout: [amount] [zap message] [target pubkey] [preview]
+ * Layout: [amount] [recipient] [zap message] [preview]
  */
 export function ZapCompactPreview({ event }: { event: NostrEvent }) {
   const zapAmount = useMemo(() => getZapAmount(event), [event]);
   const zapRequest = useMemo(() => getZapRequest(event), [event]);
-
-  // Get zap comment from request
-  const zapMessage = useMemo(() => {
-    if (!zapRequest) return null;
-    return zapRequest.content || null;
-  }, [zapRequest]);
+  const zapRecipient = useMemo(() => getZapRecipient(event), [event]);
 
   // Get zapped content pointers
   const eventPointer = useMemo(() => getZapEventPointer(event), [event]);
@@ -46,26 +42,24 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
       <span className="text-yellow-500 font-medium shrink-0">
         {amountInSats.toLocaleString("en", { notation: "compact" })}
       </span>
-      {zapMessage && (
+      {zapRecipient && <UserName pubkey={zapRecipient} />}
+      {zapRequest?.content && (
         <span className="truncate line-clamp-1 flex-shrink-0">
           <RichText
-            content={zapMessage}
+            event={zapRequest}
             className="inline text-sm leading-none"
             options={{ showMedia: false, showEventEmbeds: false }}
           />
         </span>
       )}
       {zappedEvent && (
-        <>
-          <UserName pubkey={zappedEvent.pubkey} />
-          <span className="text-muted-foreground truncate line-clamp-1">
-            <RichText
-              event={zappedEvent}
-              className="inline text-sm leading-none"
-              options={{ showMedia: false, showEventEmbeds: false }}
-            />
-          </span>
-        </>
+        <span className="text-muted-foreground truncate line-clamp-1">
+          <RichText
+            event={zappedEvent}
+            className="inline text-sm leading-none"
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
+        </span>
       )}
     </span>
   );

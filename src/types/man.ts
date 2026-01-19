@@ -618,9 +618,10 @@ export const manPages: Record<string, ManPageEntry> = {
   zap: {
     name: "zap",
     section: "1",
-    synopsis: "zap <profile|event> [event]",
+    synopsis:
+      "zap <profile|event> [event] [-T <type> <value> [relay]] [-r <relay>]",
     description:
-      "Send a Lightning zap (NIP-57) to a Nostr user or event. Zaps are Lightning payments with proof published to Nostr. Supports zapping profiles directly or events with context. Requires the recipient to have a Lightning address (lud16/lud06) configured in their profile.",
+      "Send a Lightning zap (NIP-57) to a Nostr user or event. Zaps are Lightning payments with proof published to Nostr. Supports zapping profiles directly or events with context. Custom tags can be added for protocol-specific tagging (e.g., NIP-53 live activities). Requires the recipient to have a Lightning address (lud16/lud06) configured in their profile.",
     options: [
       {
         flag: "<profile>",
@@ -631,6 +632,16 @@ export const manPages: Record<string, ManPageEntry> = {
         flag: "<event>",
         description: "Event to zap: note, nevent, naddr, hex ID (optional)",
       },
+      {
+        flag: "-T, --tag <type> <value> [relay]",
+        description:
+          "Add custom tag to zap request (can be repeated). Used for protocol-specific tagging like NIP-53 a-tags",
+      },
+      {
+        flag: "-r, --relay <url>",
+        description:
+          "Relay where zap receipt should be published (can be repeated)",
+      },
     ],
     examples: [
       "zap fiatjaf.com                      Zap a user by NIP-05",
@@ -638,6 +649,8 @@ export const manPages: Record<string, ManPageEntry> = {
       "zap nevent1...                       Zap an event (recipient = event author)",
       "zap npub1... nevent1...              Zap a specific user for a specific event",
       "zap alice@domain.com naddr1...       Zap with event context",
+      "zap npub1... -T a 30311:pk:id wss://relay.example.com    Zap with live activity a-tag",
+      "zap npub1... -r wss://relay1.com -r wss://relay2.com     Zap with custom relays",
     ],
     seeAlso: ["profile", "open", "wallet"],
     appId: "zap",

@@ -9,6 +9,7 @@ import type {
 import { transitionAuthState, type AuthEvent } from "@/lib/auth-state-machine";
 import { createLogger } from "@/lib/logger";
 import { normalizeRelayURL } from "@/lib/relay-url";
+import { canAccountSign } from "@/hooks/useAccount";
 import pool from "./relay-pool";
 import accountManager from "./accounts";
 import db from "./db";
@@ -381,6 +382,11 @@ class RelayStateManager {
       throw new Error("No active account to authenticate with");
     }
 
+    // Check if account can sign (read-only accounts cannot authenticate)
+    if (!canAccountSign(account)) {
+      throw new Error("Active account cannot sign events (read-only account)");
+    }
+
     // Update status to authenticating
     state.authStatus = "authenticating";
     state.stats.authAttemptsCount++;
@@ -491,8 +497,9 @@ class RelayStateManager {
     try {
       const normalizedUrl = normalizeRelayURL(relayUrl);
 
-      // Don't prompt if there's no active account
-      if (!accountManager.active) return false;
+      // Don't prompt if there's no active account or account can't sign
+      const account = accountManager.active;
+      if (!account || !canAccountSign(account)) return false;
 
       // Check permanent preferences
       const pref = this.authPreferences.get(normalizedUrl);

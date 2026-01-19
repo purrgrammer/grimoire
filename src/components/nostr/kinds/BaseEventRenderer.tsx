@@ -21,6 +21,7 @@ import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
+import { getSemanticAuthor } from "@/lib/semantic-author";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -173,9 +174,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       };
     }
 
+    // Get semantic author (e.g., zapper for zaps, host for streams)
+    const recipientPubkey = getSemanticAuthor(event);
+
     // Open zap window with event context
     addWindow("zap", {
-      recipientPubkey: event.pubkey,
+      recipientPubkey,
       eventPointer,
     });
   };

@@ -8,12 +8,14 @@ import {
   getZapEventPointer,
   getZapAddressPointer,
   getZapSender,
+  getZapRecipient,
   isValidZap,
 } from "applesauce-common/helpers/zap";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./index";
 import { RichText } from "../RichText";
 import { EventCardSkeleton } from "@/components/ui/skeleton";
+import { UserName } from "../UserName";
 
 /**
  * Renderer for Kind 9735 - Zap Receipts
@@ -25,6 +27,7 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
 
   // Get zap details using applesauce helpers
   const zapSender = useMemo(() => getZapSender(event), [event]);
+  const zapRecipient = useMemo(() => getZapRecipient(event), [event]);
   const zapAmount = useMemo(() => getZapAmount(event), [event]);
   const zapRequest = useMemo(() => getZapRequest(event), [event]);
 
@@ -35,12 +38,6 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
   // Fetch both events separately
   const zappedEvent = useNostrEvent(eventPointer || undefined);
   const zappedAddress = useNostrEvent(addressPointer || undefined);
-
-  // Get zap comment from request
-  const zapComment = useMemo(() => {
-    if (!zapRequest) return null;
-    return zapRequest.content || null;
-  }, [zapRequest]);
 
   // Format amount (convert from msats to sats)
   const amountInSats = useMemo(() => {
@@ -73,12 +70,13 @@ export function Kind9735Renderer({ event }: BaseEventProps) {
             })}
           </span>
           <span className="text-xs text-muted-foreground">sats</span>
+          {zapRecipient && <UserName pubkey={zapRecipient} />}
         </div>
 
         {/* Zap comment */}
-        {zapComment && (
+        {zapRequest && zapRequest.content && (
           <div className="text-sm">
-            <RichText content={zapComment} />
+            <RichText event={zapRequest} />
           </div>
         )}
 

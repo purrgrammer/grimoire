@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
@@ -52,7 +53,7 @@ import {
 } from "@/components/ui/tooltip";
 import ConnectWalletDialog from "./ConnectWalletDialog";
 import { RelayLink } from "@/components/nostr/RelayLink";
-import { parseZapRequest } from "@/lib/wallet-utils";
+import { parseZapRequest, getInvoiceDescription } from "@/lib/wallet-utils";
 import { Zap } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./nostr/kinds";
@@ -95,6 +96,62 @@ interface InvoiceDetails {
 
 const BATCH_SIZE = 20;
 const PAYMENT_CHECK_INTERVAL = 5000; // Check every 5 seconds
+
+/**
+ * Helper: Detect if a transaction is a Bitcoin on-chain transaction
+ * Bitcoin transactions have invoice field containing a Bitcoin address instead of a Lightning invoice
+ * Bitcoin address formats:
+ * - Legacy (P2PKH): starts with 1
+ * - P2SH: starts with 3
+ * - Bech32 (native segwit): starts with bc1
+ * - Bech32m (taproot): starts with bc1p
+ */
+function isBitcoinTransaction(transaction: Transaction): boolean {
+  if (!transaction.invoice) return false;
+
+  const invoice = transaction.invoice.trim();
+
+  // Lightning invoices start with "ln" (lnbc, lntb, lnbcrt, etc.)
+  if (invoice.toLowerCase().startsWith("ln")) {
+    return false;
+  }
+
+  // Check if it looks like a Bitcoin address
+  // Legacy: 1... (26-35 chars)
+  // P2SH: 3... (26-35 chars)
+  // Bech32: bc1... (42-62 chars for bc1q, 62 chars for bc1p)
+  // Testnet: tb1..., 2..., m/n...
+  const isBitcoinAddress =
+    /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(invoice) || // Legacy or P2SH
+    /^bc1[a-z0-9]{39,59}$/i.test(invoice) || // Mainnet bech32/bech32m
+    /^tb1[a-z0-9]{39,59}$/i.test(invoice) || // Testnet bech32
+    /^[2mn][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(invoice); // Testnet legacy
+
+  return isBitcoinAddress;
+}
+
+/**
+ * Helper: Extract txid from preimage field
+ * Bitcoin preimage format: "txid" or "txid:outputIndex"
+ * We only need the txid part for mempool.space
+ */
+function extractTxid(preimage: string): string {
+  // Remove output index if present (e.g., "txid:0" -> "txid")
+  return preimage.split(":")[0];
+}
+
+/**
+ * Helper: Get mempool.space URL for a Bitcoin transaction
+ */
+function getMempoolUrl(txid: string, network?: string): string {
+  const baseUrl =
+    network === "testnet"
+      ? "https://mempool.space/testnet"
+      : network === "signet"
+        ? "https://mempool.space/signet"
+        : "https://mempool.space";
+  return `${baseUrl}/tx/${txid}`;
+}
 
 /**
  * Helper: Format timestamp as a readable day marker
@@ -312,14 +369,14 @@ function ZapTransactionDetail({ transaction }: { transaction: Transaction }) {
 function TransactionLabel({ transaction }: { transaction: Transaction }) {
   const zapInfo = parseZapRequest(transaction);
 
-  // Not a zap - use original description or default label
+  // Not a zap - use original description, invoice description, or default label
   if (!zapInfo) {
-    return (
-      <span className="text-sm truncate">
-        {transaction.description ||
-          (transaction.type === "incoming" ? "Received" : "Payment")}
-      </span>
-    );
+    const description =
+      transaction.description ||
+      getInvoiceDescription(transaction) ||
+      (transaction.type === "incoming" ? "Received" : "Payment");
+
+    return <span className="text-sm truncate">{description}</span>;
   }
 
   // It's a zap! Show username + message on one line
@@ -1104,93 +1161,99 @@ export default function WalletViewer() {
         )}
 
       {/* Transaction History */}
-      <div className="flex-1 overflow-hidden">
-        {walletInfo?.methods.includes("list_transactions") ? (
-          loading ? (
-            <div className="flex h-full items-center justify-center">
-              <RefreshCw className="size-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : txLoadFailed ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
-              <p className="text-sm text-muted-foreground text-center">
-                Failed to load transaction history
-              </p>
-              <Button variant="outline" size="sm" onClick={reloadTransactions}>
-                <RefreshCw className="mr-2 size-4" />
-                Retry
-              </Button>
-            </div>
-          ) : transactionsWithMarkers.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                No transactions found
-              </p>
-            </div>
-          ) : (
-            <Virtuoso
-              data={transactionsWithMarkers}
-              endReached={loadMoreTransactions}
-              itemContent={(index, item) => {
-                if (item.type === "day-marker") {
+      <div className="flex-1 overflow-hidden flex justify-center">
+        <div className="w-full max-w-md">
+          {walletInfo?.methods.includes("list_transactions") ? (
+            loading ? (
+              <div className="flex h-full items-center justify-center">
+                <RefreshCw className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : txLoadFailed ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  Failed to load transaction history
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={reloadTransactions}
+                >
+                  <RefreshCw className="mr-2 size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : transactionsWithMarkers.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-muted-foreground">
+                  No transactions found
+                </p>
+              </div>
+            ) : (
+              <Virtuoso
+                data={transactionsWithMarkers}
+                endReached={loadMoreTransactions}
+                itemContent={(index, item) => {
+                  if (item.type === "day-marker") {
+                    return (
+                      <div
+                        className="flex justify-center py-2"
+                        key={`marker-${item.timestamp}`}
+                      >
+                        <Label className="text-[10px] text-muted-foreground">
+                          {item.data}
+                        </Label>
+                      </div>
+                    );
+                  }
+
+                  const tx = item.data;
+
                   return (
                     <div
-                      className="flex justify-center py-2"
-                      key={`marker-${item.timestamp}`}
+                      key={tx.payment_hash || index}
+                      className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
+                      onClick={() => handleTransactionClick(tx)}
                     >
-                      <Label className="text-[10px] text-muted-foreground">
-                        {item.data}
-                      </Label>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {tx.type === "incoming" ? (
+                          <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
+                        )}
+                        <TransactionLabel transaction={tx} />
+                      </div>
+                      <div className="flex-shrink-0 ml-4">
+                        <p className="text-sm font-semibold font-mono">
+                          {state.walletBalancesBlurred
+                            ? "✦✦✦✦"
+                            : formatSats(tx.amount)}
+                        </p>
+                      </div>
                     </div>
                   );
-                }
-
-                const tx = item.data;
-
-                return (
-                  <div
-                    key={tx.payment_hash || index}
-                    className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
-                    onClick={() => handleTransactionClick(tx)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {tx.type === "incoming" ? (
-                        <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
-                      ) : (
-                        <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
-                      )}
-                      <TransactionLabel transaction={tx} />
-                    </div>
-                    <div className="flex-shrink-0 ml-4">
-                      <p className="text-sm font-semibold font-mono">
-                        {state.walletBalancesBlurred
-                          ? "✦✦✦✦"
-                          : formatSats(tx.amount)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              }}
-              components={{
-                Footer: () =>
-                  loadingMore ? (
-                    <div className="flex justify-center py-4 border-b border-border">
-                      <RefreshCw className="size-4 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : !hasMore && transactions.length > 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
-                      No more transactions
-                    </div>
-                  ) : null,
-              }}
-            />
-          )
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-muted-foreground">
-              Transaction history not available
-            </p>
-          </div>
-        )}
+                }}
+                components={{
+                  Footer: () =>
+                    loadingMore ? (
+                      <div className="flex justify-center py-4 border-b border-border">
+                        <RefreshCw className="size-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : !hasMore && transactions.length > 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
+                        No more transactions
+                      </div>
+                    ) : null,
+                }}
+              />
+            )
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Transaction history not available
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Disconnect Confirmation Dialog */}
@@ -1231,7 +1294,7 @@ export default function WalletViewer() {
           }
         }}
       >
-        <DialogContent className="max-h-[70vh] flex flex-col">
+        <DialogContent className="max-w-md max-h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
           </DialogHeader>
@@ -1260,17 +1323,24 @@ export default function WalletViewer() {
                 </div>
 
                 <div className="space-y-2">
-                  {selectedTransaction.description &&
-                    !parseZapRequest(selectedTransaction) && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">
-                          Description
-                        </Label>
-                        <p className="text-sm">
-                          {selectedTransaction.description}
-                        </p>
-                      </div>
-                    )}
+                  {(() => {
+                    const description =
+                      selectedTransaction.description ||
+                      getInvoiceDescription(selectedTransaction);
+                    const isZap = parseZapRequest(selectedTransaction);
+
+                    return (
+                      description &&
+                      !isZap && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Description
+                          </Label>
+                          <p className="text-sm">{description}</p>
+                        </div>
+                      )
+                    );
+                  })()}
 
                   <div>
                     <Label className="text-xs text-muted-foreground">
@@ -1295,27 +1365,68 @@ export default function WalletViewer() {
                       </div>
                     )}
 
-                  {selectedTransaction.payment_hash && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Payment Hash
-                      </Label>
-                      <p className="text-xs font-mono break-all bg-muted p-2 rounded">
-                        {selectedTransaction.payment_hash}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    const isBitcoin = isBitcoinTransaction(selectedTransaction);
 
-                  {selectedTransaction.preimage && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Preimage
-                      </Label>
-                      <p className="text-xs font-mono break-all bg-muted p-2 rounded">
-                        {selectedTransaction.preimage}
-                      </p>
-                    </div>
-                  )}
+                    if (isBitcoin) {
+                      // Bitcoin on-chain transaction - show Transaction ID with mempool.space link
+                      // For Bitcoin txs, preimage contains the txid (possibly with :outputIndex)
+                      if (!selectedTransaction.preimage) {
+                        return null;
+                      }
+
+                      const txid = extractTxid(selectedTransaction.preimage);
+
+                      return (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Transaction ID
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-mono break-all bg-muted p-2 rounded flex-1">
+                              {txid}
+                            </p>
+                            <a
+                              href={getMempoolUrl(txid, walletInfo?.network)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
+                              title="View on mempool.space"
+                            >
+                              <ExternalLink className="size-4" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Lightning transaction - show payment hash and preimage
+                    return (
+                      <>
+                        {selectedTransaction.payment_hash && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">
+                              Payment Hash
+                            </Label>
+                            <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                              {selectedTransaction.payment_hash}
+                            </p>
+                          </div>
+                        )}
+
+                        {selectedTransaction.preimage && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">
+                              Preimage
+                            </Label>
+                            <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                              {selectedTransaction.preimage}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Zap Details (if this is a zap payment) */}

@@ -18,6 +18,36 @@ import type {
 } from "@/types/chat-actions";
 
 /**
+ * Zap configuration for chat messages
+ * Defines how zap requests should be constructed for protocol-specific tagging
+ */
+export interface ZapConfig {
+  /** Whether zapping is supported for this message/conversation */
+  supported: boolean;
+  /** Reason why zapping is not supported (if supported=false) */
+  unsupportedReason?: string;
+  /** Recipient pubkey (who receives the sats) */
+  recipientPubkey: string;
+  /** Event being zapped for e-tag (e.g., chat message) */
+  eventPointer?: {
+    id: string;
+    author?: string;
+    relays?: string[];
+  };
+  /** Addressable event context for a-tag (e.g., live activity) */
+  addressPointer?: {
+    kind: number;
+    pubkey: string;
+    identifier: string;
+    relays?: string[];
+  };
+  /** Custom tags to include in the zap request (beyond standard p/amount/relays) */
+  customTags?: string[][];
+  /** Relays where the zap receipt should be published */
+  relays?: string[];
+}
+
+/**
  * Blob attachment metadata for imeta tags (NIP-92)
  */
 export interface BlobAttachmentMeta {
@@ -179,6 +209,26 @@ export abstract class ChatProtocolAdapter {
    * Optional - only for protocols with leave semantics (groups)
    */
   leaveConversation?(conversation: Conversation): Promise<void>;
+
+  /**
+   * Get zap configuration for a message
+   * Returns configuration for how zap requests should be constructed,
+   * including protocol-specific tagging (e.g., a-tag for live activities)
+   *
+   * Default implementation returns unsupported.
+   * Override in adapters that support zapping.
+   *
+   * @param message - The message being zapped
+   * @param conversation - The conversation context
+   * @returns ZapConfig with supported=true and tagging info, or supported=false with reason
+   */
+  getZapConfig(_message: Message, _conversation: Conversation): ZapConfig {
+    return {
+      supported: false,
+      unsupportedReason: "Zaps are not supported for this protocol",
+      recipientPubkey: "",
+    };
+  }
 
   /**
    * Get available actions for this protocol

@@ -49,6 +49,7 @@ export interface LiveActivityMetadata {
   totalParticipants?: number;
   hashtags: string[];
   relays: string[];
+  goal?: string; // Event ID of a kind 9041 zap goal
 }
 
 /**

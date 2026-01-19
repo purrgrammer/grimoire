@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, Message } from "@/types/chat";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import {
   ContextMenu,
@@ -18,6 +18,7 @@ import {
   Reply,
   MessageSquare,
   Smile,
+  Zap,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
@@ -37,6 +38,8 @@ interface ChatMessageContextMenuProps {
   onReply?: () => void;
   conversation?: Conversation;
   adapter?: ChatProtocolAdapter;
+  /** Message object for protocol-specific actions like zapping */
+  message?: Message;
 }
 
 /**
@@ -54,6 +57,7 @@ export function ChatMessageContextMenu({
   onReply,
   conversation,
   adapter,
+  message,
 }: ChatMessageContextMenuProps) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
@@ -62,6 +66,12 @@ export function ChatMessageContextMenu({
 
   // Extract context emojis from the conversation
   const contextEmojis = getEmojiTags(event);
+
+  // Get zap configuration from adapter
+  const zapConfig = useMemo(() => {
+    if (!adapter || !message || !conversation) return null;
+    return adapter.getZapConfig(message, conversation);
+  }, [adapter, message, conversation]);
 
   const openEventDetail = () => {
     let pointer;
@@ -138,6 +148,18 @@ export function ChatMessageContextMenu({
     }
   };
 
+  const openZapWindow = () => {
+    if (!zapConfig || !zapConfig.supported) return;
+
+    addWindow("zap", {
+      recipientPubkey: zapConfig.recipientPubkey,
+      eventPointer: zapConfig.eventPointer,
+      addressPointer: zapConfig.addressPointer,
+      customTags: zapConfig.customTags,
+      relays: zapConfig.relays,
+    });
+  };
+
   return (
     <>
       <ContextMenu>
@@ -170,6 +192,12 @@ export function ChatMessageContextMenu({
                 <Smile className="size-4 mr-2" />
                 React
               </ContextMenuItem>
+              {zapConfig?.supported && (
+                <ContextMenuItem onClick={openZapWindow}>
+                  <Zap className="size-4 mr-2" />
+                  Zap
+                </ContextMenuItem>
+              )}
               <ContextMenuSeparator />
             </>
           )}

@@ -21,10 +21,14 @@ import {
   Loader2,
   CheckCircle2,
   LogIn,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PrivateKeySigner } from "applesauce-signers";
+import { generateSecretKey } from "nostr-tools";
 import QRCode from "qrcode";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -49,14 +53,24 @@ import {
 } from "@/lib/create-zap-request";
 import { fetchInvoiceFromCallback } from "@/lib/lnurl";
 import { useLnurlCache } from "@/hooks/useLnurlCache";
+import { getSemanticAuthor } from "@/lib/semantic-author";
 
 export interface ZapWindowProps {
   /** Recipient pubkey (who receives the zap) */
   recipientPubkey: string;
-  /** Optional event being zapped (adds context) */
-  eventPointer?: EventPointer | AddressPointer;
+  /** Optional event being zapped (adds e-tag for context) */
+  eventPointer?: EventPointer;
+  /** Optional addressable event context (adds a-tag, e.g., live activity) */
+  addressPointer?: AddressPointer;
   /** Callback to close the window */
   onClose?: () => void;
+  /**
+   * Custom tags to include in the zap request
+   * Used for protocol-specific tagging like NIP-53 live activity references
+   */
+  customTags?: string[][];
+  /** Relays where the zap receipt should be published */
+  relays?: string[];
 }
 
 // Default preset amounts in sats
@@ -82,24 +96,21 @@ function formatAmount(amount: number): string {
 export function ZapWindow({
   recipientPubkey: initialRecipientPubkey,
   eventPointer,
+  addressPointer,
   onClose,
+  customTags,
+  relays: propsRelays,
 }: ZapWindowProps) {
-  // Load event if we have a pointer and no recipient pubkey (derive from event author)
+  // Load event if we have an eventPointer and no recipient pubkey (derive from event author)
   const event = use$(() => {
     if (!eventPointer) return undefined;
-    if ("id" in eventPointer) {
-      return eventStore.event(eventPointer.id);
-    }
-    // AddressPointer
-    return eventStore.replaceable(
-      eventPointer.kind,
-      eventPointer.pubkey,
-      eventPointer.identifier,
-    );
+    return eventStore.event(eventPointer.id);
   }, [eventPointer]);
 
-  // Resolve recipient: use provided pubkey or derive from event author
-  const recipientPubkey = initialRecipientPubkey || event?.pubkey || "";
+  // Resolve recipient: use provided pubkey or derive from semantic author
+  // For zaps, this returns the zapper; for streams, returns the host; etc.
+  const recipientPubkey =
+    initialRecipientPubkey || (event ? getSemanticAuthor(event) : "");
 
   const recipientProfile = useProfile(recipientPubkey);
 
@@ -131,6 +142,7 @@ export function ZapWindow({
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [paymentTimedOut, setPaymentTimedOut] = useState(false);
+  const [zapAnonymously, setZapAnonymously] = useState(false);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -349,13 +361,24 @@ export function ZapWindow({
       }
 
       // Step 3: Create and sign zap request event (kind 9734)
+      // If zapping anonymously, create a throwaway signer
+      let anonymousSigner;
+      if (zapAnonymously) {
+        const throwawayKey = generateSecretKey();
+        anonymousSigner = new PrivateKeySigner(throwawayKey);
+      }
+
       const zapRequest = await createZapRequest({
         recipientPubkey,
         amountMillisats,
         comment,
         eventPointer,
+        addressPointer,
+        relays: propsRelays,
         lnurl: lud16 || undefined,
         emojiTags,
+        customTags,
+        signer: anonymousSigner,
       });
 
       const serializedZapRequest = serializeZapRequest(zapRequest);
@@ -647,6 +670,26 @@ export function ZapWindow({
                     className="rounded-md border border-input bg-background px-3 py-1 text-base md:text-sm min-h-9"
                   />
                 )}
+
+                {/* Anonymous zap checkbox */}
+                {hasLightningAddress && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="zap-anonymously"
+                      checked={zapAnonymously}
+                      onCheckedChange={(checked) =>
+                        setZapAnonymously(checked === true)
+                      }
+                    />
+                    <label
+                      htmlFor="zap-anonymously"
+                      className="text-sm text-muted-foreground cursor-pointer flex items-center gap-1.5"
+                    >
+                      <EyeOff className="size-3.5" />
+                      Zap anonymously
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* No Lightning Address Warning */}
@@ -657,7 +700,7 @@ export function ZapWindow({
               )}
 
               {/* Payment Button */}
-              {!canSign ? (
+              {!canSign && !zapAnonymously ? (
                 <Button
                   onClick={handleLogin}
                   className="w-full"
@@ -701,6 +744,12 @@ export function ZapWindow({
                     <>
                       <Wallet className="size-4 mr-2" />
                       Pay with Wallet (
+                      {selectedAmount || parseInt(customAmount) || 0} sats)
+                    </>
+                  ) : zapAnonymously ? (
+                    <>
+                      <EyeOff className="size-4 mr-2" />
+                      Zap Anonymously (
                       {selectedAmount || parseInt(customAmount) || 0} sats)
                     </>
                   ) : (

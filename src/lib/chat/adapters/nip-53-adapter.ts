@@ -2,7 +2,11 @@ import { Observable, firstValueFrom } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
+import {
+  ChatProtocolAdapter,
+  type SendMessageOptions,
+  type ZapConfig,
+} from "./base-adapter";
 import type {
   Conversation,
   Message,
@@ -214,6 +218,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           totalParticipants: activity.totalParticipants,
           hashtags: activity.hashtags,
           relays: chatRelays,
+          goal: activity.goal,
         },
       },
       unreadCount: 0,
@@ -546,6 +551,66 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       supportsGroupManagement: false, // No join/leave semantics
       canCreateConversations: false, // Activities created via streaming software
       requiresRelay: false, // Works across multiple relays
+    };
+  }
+
+  /**
+   * Get zap configuration for a message in a live activity
+   *
+   * NIP-53 zap tagging rules:
+   * - p-tag: message author (recipient)
+   * - e-tag: message event being zapped
+   * - a-tag: live activity context
+   */
+  getZapConfig(message: Message, conversation: Conversation): ZapConfig {
+    const activityAddress = conversation.metadata?.activityAddress;
+    const liveActivity = conversation.metadata?.liveActivity as
+      | {
+          relays?: string[];
+        }
+      | undefined;
+
+    if (!activityAddress) {
+      return {
+        supported: false,
+        unsupportedReason: "Missing activity address",
+        recipientPubkey: "",
+      };
+    }
+
+    const { pubkey: activityPubkey, identifier } = activityAddress;
+
+    // Get relays
+    const relays =
+      liveActivity?.relays && liveActivity.relays.length > 0
+        ? liveActivity.relays
+        : conversation.metadata?.relayUrl
+          ? [conversation.metadata.relayUrl]
+          : [];
+
+    // Build eventPointer for the message being zapped (e-tag)
+    const eventPointer = {
+      id: message.id,
+      author: message.author,
+      relays,
+    };
+
+    // Build addressPointer for the live activity (a-tag)
+    const addressPointer = {
+      kind: 30311,
+      pubkey: activityPubkey,
+      identifier,
+      relays,
+    };
+
+    // Don't pass top-level relays - let createZapRequest collect outbox relays
+    // from both eventPointer.author (recipient) and addressPointer.pubkey (stream host)
+    // The relay hints in the pointers will also be included
+    return {
+      supported: true,
+      recipientPubkey: message.author,
+      eventPointer,
+      addressPointer,
     };
   }
 

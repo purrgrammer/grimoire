@@ -23,9 +23,7 @@ import {
 import { getEventDisplayTitle } from "@/lib/event-title";
 import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
-import { getLiveHost } from "@/lib/live-activity";
-import type { NostrEvent } from "@/types/nostr";
-import { getZapSender } from "applesauce-common/helpers/zap";
+import { getSemanticAuthor } from "@/lib/semantic-author";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
@@ -35,31 +33,6 @@ export interface WindowTitleData {
   title: string | ReactElement;
   icon?: LucideIcon;
   tooltip?: string;
-}
-
-/**
- * Get the semantic author of an event based on kind-specific logic
- * Returns the pubkey that should be displayed as the "author" for UI purposes
- *
- * Examples:
- * - Zaps (9735): Returns the zapper (P tag), not the lightning service pubkey
- * - Live activities (30311): Returns the host (first p tag with "Host" role)
- * - Regular events: Returns event.pubkey
- */
-function getSemanticAuthor(event: NostrEvent): string {
-  switch (event.kind) {
-    case 9735: {
-      // Zap: show the zapper, not the lightning service pubkey
-      const zapSender = getZapSender(event);
-      return zapSender || event.pubkey;
-    }
-    case 30311: {
-      // Live activity: show the host
-      return getLiveHost(event);
-    }
-    default:
-      return event.pubkey;
-  }
 }
 
 /**
@@ -474,8 +447,21 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const countHashtags =
     appId === "count" && props.filter?.["#t"] ? props.filter["#t"] : [];
 
-  // Zap titles
-  const zapRecipientPubkey = appId === "zap" ? props.recipientPubkey : null;
+  // Zap titles - load event to derive recipient if needed
+  const zapEventPointer: EventPointer | AddressPointer | undefined =
+    appId === "zap" ? props.eventPointer : undefined;
+  const zapEvent = useNostrEvent(zapEventPointer);
+
+  // Derive recipient: use explicit pubkey or semantic author from event
+  const zapRecipientPubkey = useMemo(() => {
+    if (appId !== "zap") return null;
+    // If explicit recipient provided, use it
+    if (props.recipientPubkey) return props.recipientPubkey;
+    // Otherwise derive from event's semantic author
+    if (zapEvent) return getSemanticAuthor(zapEvent);
+    return null;
+  }, [appId, props.recipientPubkey, zapEvent]);
+
   const zapRecipientProfile = useProfile(zapRecipientPubkey || "");
   const zapTitle = useMemo(() => {
     if (appId !== "zap" || !zapRecipientPubkey) return null;
