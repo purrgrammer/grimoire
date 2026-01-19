@@ -909,6 +909,9 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const sender = getZapSender(zapReceipt);
     const recipient = getZapRecipient(zapReceipt);
 
+    // Convert from msats to sats
+    const amountInSats = amount ? Math.floor(amount / 1000) : 0;
+
     // Find what event is being zapped (e-tag in zap receipt)
     const eTag = zapReceipt.tags.find((t) => t[0] === "e");
     const replyTo = eTag?.[1];
@@ -935,7 +938,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       replyTo,
       protocol: "nip-10",
       metadata: {
-        zapAmount: amount,
+        zapAmount: amountInSats,
         zapRecipient: recipient,
       },
       event: zapReceipt,
