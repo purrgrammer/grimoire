@@ -1103,7 +1103,7 @@ export function ChatViewer({
           {uploadDialog}
         </div>
       ) : (
-        <div className="border-t px-3 py-2 text-center text-sm text-muted-foreground">
+        <div className="border-t px-2 py-1 text-center text-sm text-muted-foreground">
           Sign in to send messages
         </div>
       )}
