@@ -1288,7 +1288,7 @@ export default function WalletViewer() {
           }
         }}
       >
-        <DialogContent className="max-h-[70vh] flex flex-col">
+        <DialogContent className="max-w-md max-h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
           </DialogHeader>
