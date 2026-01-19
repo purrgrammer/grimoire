@@ -100,12 +100,17 @@ export default function UserMenu() {
     useLiveQuery(async () => {
       const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
       let total = 0;
+      let count = 0;
       await db.grimoireZaps
         .where("timestamp")
         .aboveOrEqual(thirtyDaysAgo)
         .each((zap) => {
           total += zap.amountSats;
+          count++;
         });
+      console.log(
+        `[UserMenu] Found ${count} zaps in last 30 days, total: ${total} sats`,
+      );
       return total;
     }, []) ?? 0;
 

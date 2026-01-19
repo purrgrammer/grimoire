@@ -12,7 +12,6 @@ import eventStore from "./event-store";
 import pool from "./relay-pool";
 import relayListCache from "./relay-list-cache";
 import { createTimelineLoader, addressLoader } from "./loaders";
-import { AGGREGATOR_RELAYS } from "./loaders";
 import {
   getZapRecipient,
   getZapSender,
@@ -46,7 +45,7 @@ export const PREMIUM_SUPPORTER_THRESHOLD = 2_100;
  * Hardcoded relays known to have Grimoire zaps
  * Used as immediate fallback for cold start before relay list loads
  */
-const GRIMOIRE_ZAP_RELAYS = ["wss://nos.lol", "wss://lightning.red"];
+const GRIMOIRE_ZAP_RELAYS = ["wss://nos.lol"];
 
 class SupportersService {
   private subscription: Subscription | null = null;
@@ -95,9 +94,6 @@ class SupportersService {
           );
         }
       });
-
-      // Add aggregators as additional fallback
-      grimRelays = [...grimRelays, ...AGGREGATOR_RELAYS];
 
       console.log(
         `[Supporters] Subscribing to zaps on ${grimRelays.length} relays`,
