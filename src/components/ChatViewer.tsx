@@ -329,9 +329,12 @@ const MessageItem = memo(function MessageItem({
               />
               <Zap className="size-4 fill-yellow-500 text-yellow-500" />
               <span className="text-yellow-500 font-bold">
-                {(message.metadata?.zapAmount || 0).toLocaleString("en", {
-                  notation: "compact",
-                })}
+                {((message.metadata?.zapAmount || 0) / 1000).toLocaleString(
+                  "en",
+                  {
+                    notation: "compact",
+                  },
+                )}
               </span>
               {message.metadata?.zapRecipient && (
                 <UserName
