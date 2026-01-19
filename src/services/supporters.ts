@@ -5,7 +5,7 @@
  * Subscribes to relays and stores individual zap records in IndexedDB for accurate tracking.
  */
 
-import { BehaviorSubject, Subscription } from "rxjs";
+import { Subscription } from "rxjs";
 import { firstValueFrom, timeout as rxTimeout, of } from "rxjs";
 import { catchError } from "rxjs/operators";
 import eventStore from "./event-store";
@@ -44,46 +44,24 @@ export const PREMIUM_SUPPORTER_THRESHOLD = 2_100;
 
 class SupportersService {
   private subscription: Subscription | null = null;
-  private initialized = false;
-
-  /**
-   * Observable set of supporter pubkeys for reactive UI
-   * Updated whenever a new zap is recorded
-   */
-  public readonly supporters$ = new BehaviorSubject<Set<string>>(new Set());
 
   /**
    * Initialize the service - subscribe to zap receipts
+   * Can be called multiple times (re-initializes subscription)
    */
   async init() {
-    if (this.initialized) return;
-    this.initialized = true;
-
     console.log("[Supporters] Initializing...");
 
-    // Load existing supporters from DB
-    await this.refreshSupporters();
+    // Clean up existing subscription if any
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+      this.subscription = null;
+    }
 
-    // Subscribe to new zaps
+    // Subscribe to new zaps (will fetch relay list)
     await this.subscribeToZapReceipts();
 
     console.log("[Supporters] Initialized");
-  }
-
-  /**
-   * Load supporters from DB and update observable
-   */
-  private async refreshSupporters() {
-    try {
-      // Get unique sender pubkeys efficiently using Dexie uniqueKeys
-      const uniquePubkeys = await db.grimoireZaps
-        .orderBy("senderPubkey")
-        .uniqueKeys();
-
-      this.supporters$.next(new Set(uniquePubkeys as string[]));
-    } catch (error) {
-      console.error("[Supporters] Failed to refresh from DB:", error);
-    }
   }
 
   /**
@@ -212,9 +190,6 @@ class SupportersService {
       console.log(
         `[Supporters] Recorded zap: ${amountSats} sats from ${sender.slice(0, 8)}`,
       );
-
-      // Refresh supporters (updates observable)
-      await this.refreshSupporters();
     } catch (error) {
       // Silently ignore duplicate key errors (race condition protection)
       if ((error as any).name !== "ConstraintError") {
@@ -391,7 +366,6 @@ class SupportersService {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
-    this.initialized = false;
   }
 }
 
@@ -399,6 +373,5 @@ class SupportersService {
 const supportersService = new SupportersService();
 export default supportersService;
 
-// Legacy exports for compatibility
-export const supporters$ = supportersService.supporters$;
+// Legacy export for compatibility
 export const initSupporters = () => supportersService.init();

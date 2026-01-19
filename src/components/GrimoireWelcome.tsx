@@ -1,6 +1,10 @@
 import { Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
+import { Progress } from "./ui/progress";
+import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import { useLiveQuery } from "dexie-react-hooks";
+import db from "@/services/db";
 
 interface GrimoireWelcomeProps {
   onLaunchCommand: () => void;
@@ -9,22 +13,52 @@ interface GrimoireWelcomeProps {
 
 const EXAMPLE_COMMANDS = [
   {
+    command: "zap grimoire.rocks",
+    description: "Support Grimoire development",
+    showProgress: true,
+  },
+  {
     command: "chat groups.0xchat.com'NkeVhXuWHGKKJCpn",
     description: "Join the Grimoire welcome chat",
   },
-  { command: "nip 29", description: "View relay-based groups spec" },
   {
     command: "profile fiatjaf.com",
     description: "Explore a Nostr profile",
   },
   { command: "req -k 1 -l 20", description: "Query recent notes" },
-  { command: "nips", description: "Browse all NIPs" },
 ];
 
 export function GrimoireWelcome({
   onLaunchCommand,
   onExecuteCommand,
 }: GrimoireWelcomeProps) {
+  // Calculate monthly donations reactively from DB (last 30 days)
+  const monthlyDonations =
+    useLiveQuery(async () => {
+      const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+      let total = 0;
+      await db.grimoireZaps
+        .where("timestamp")
+        .aboveOrEqual(thirtyDaysAgo)
+        .each((zap) => {
+          total += zap.amountSats;
+        });
+      return total;
+    }, []) ?? 0;
+
+  // Calculate progress
+  const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
+
+  // Format sats
+  function formatSats(sats: number): string {
+    if (sats >= 1_000_000) {
+      return `${(sats / 1_000_000).toFixed(1)}M`;
+    } else if (sats >= 1_000) {
+      return `${Math.floor(sats / 1_000)}k`;
+    }
+    return sats.toString();
+  }
+
   return (
     <div className="h-full w-full flex items-center justify-center">
       <div className="flex flex-col items-center gap-8">
@@ -89,7 +123,7 @@ export function GrimoireWelcome({
           <p className="text-muted-foreground text-xs font-mono mb-1">
             Try these commands:
           </p>
-          {EXAMPLE_COMMANDS.map(({ command, description }) => (
+          {EXAMPLE_COMMANDS.map(({ command, description, showProgress }) => (
             <button
               key={command}
               onClick={() => onExecuteCommand(command)}
@@ -101,6 +135,18 @@ export function GrimoireWelcome({
               <div className="text-xs text-muted-foreground mt-0.5">
                 {description}
               </div>
+              {showProgress && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>Monthly goal</span>
+                    <span>
+                      {formatSats(monthlyDonations)} /{" "}
+                      {formatSats(MONTHLY_GOAL_SATS)} sats
+                    </span>
+                  </div>
+                  <Progress value={goalProgress} className="h-1" />
+                </div>
+              )}
             </button>
           ))}
         </div>

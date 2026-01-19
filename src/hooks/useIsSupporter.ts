@@ -2,9 +2,10 @@
  * Hook to check if a user is a Grimoire supporter
  */
 
-import { use$ } from "applesauce-react/hooks";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useState, useEffect } from "react";
 import supportersService from "@/services/supporters";
+import db from "@/services/db";
 
 /**
  * Check if a pubkey belongs to a Grimoire supporter
@@ -15,8 +16,18 @@ export function useIsSupporter(pubkey: string | undefined): {
   isSupporter: boolean;
   isPremiumSupporter: boolean;
 } {
-  const supporters = use$(supportersService.supporters$);
+  // Get all unique supporter pubkeys reactively from DB
+  const supporterPubkeys = useLiveQuery(
+    () => db.grimoireZaps.orderBy("senderPubkey").uniqueKeys(),
+    [],
+  );
+
   const [isPremium, setIsPremium] = useState(false);
+
+  // Convert to Set for efficient lookup
+  const supporters = supporterPubkeys
+    ? new Set(supporterPubkeys as string[])
+    : new Set<string>();
 
   // Check premium status async
   useEffect(() => {
@@ -26,7 +37,7 @@ export function useIsSupporter(pubkey: string | undefined): {
     }
 
     supportersService.isPremiumSupporter(pubkey).then(setIsPremium);
-  }, [pubkey, supporters]);
+  }, [pubkey, supporters.size]); // Use supporters.size to avoid Set equality issues
 
   if (!pubkey) {
     return { isSupporter: false, isPremiumSupporter: false };

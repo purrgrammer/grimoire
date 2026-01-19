@@ -14,8 +14,9 @@ import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { useGrimoire } from "@/core/state";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useLiveQuery } from "dexie-react-hooks";
+import db from "@/services/db";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +42,7 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/useWallet";
@@ -50,7 +51,7 @@ import {
   GRIMOIRE_DONATE_PUBKEY,
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
-import supportersService, { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import { MONTHLY_GOAL_SATS } from "@/services/supporters";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -94,32 +95,19 @@ export default function UserMenu() {
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
-  // Subscribe to supporters to trigger re-render when donations change
-  const supporters = use$(supportersService.supporters$);
-
-  // Load monthly donations async
-  const [monthlyDonations, setMonthlyDonations] = useState(0);
-  const [isRefreshingZaps, setIsRefreshingZaps] = useState(false);
-
-  useEffect(() => {
-    supportersService.getMonthlyDonations().then(setMonthlyDonations);
-  }, [supporters]); // Reload when supporters change
-
-  // Manual refresh zaps
-  async function refreshZaps() {
-    setIsRefreshingZaps(true);
-    try {
-      // Re-fetch Grimoire relay list and reload timeline
-      await supportersService.init();
-      // Update monthly donations
-      const donations = await supportersService.getMonthlyDonations();
-      setMonthlyDonations(donations);
-    } catch (error) {
-      console.error("Failed to refresh zaps:", error);
-    } finally {
-      setIsRefreshingZaps(false);
-    }
-  }
+  // Calculate monthly donations reactively from DB (last 30 days)
+  const monthlyDonations =
+    useLiveQuery(async () => {
+      const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+      let total = 0;
+      await db.grimoireZaps
+        .where("timestamp")
+        .aboveOrEqual(thirtyDaysAgo)
+        .each((zap) => {
+          total += zap.amountSats;
+        });
+      return total;
+    }, []) ?? 0;
 
   // Calculate monthly donation progress
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
@@ -442,24 +430,9 @@ export default function UserMenu() {
               className="px-2 py-2 cursor-crosshair hover:bg-accent/50 transition-colors"
               onClick={openDonate}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <Zap className="size-4 text-yellow-500" />
-                  <span className="text-sm font-medium">Support Grimoire</span>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    refreshZaps();
-                  }}
-                  disabled={isRefreshingZaps}
-                  className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  title="Refresh donation stats"
-                >
-                  <RefreshCw
-                    className={cn("size-3", isRefreshingZaps && "animate-spin")}
-                  />
-                </button>
+              <div className="flex items-center gap-2 mb-1.5">
+                <Zap className="size-4 text-yellow-500" />
+                <span className="text-sm font-medium">Support Grimoire</span>
               </div>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-muted-foreground">Monthly goal</span>
