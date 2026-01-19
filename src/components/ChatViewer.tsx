@@ -11,6 +11,7 @@ import {
   Paperclip,
   Copy,
   CopyCheck,
+  FileText,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
@@ -437,10 +438,6 @@ export function ChatViewer({
   customTitle,
   headerPrefix,
 }: ChatViewerProps) {
-  console.log("[ChatViewer] Received props:", {
-    protocol,
-    identifier: identifier?.type,
-  });
   const { addWindow } = useGrimoire();
 
   // Get active account with signing capability
@@ -752,33 +749,63 @@ export function ChatViewer({
     ? conversation?.metadata?.liveActivity
     : undefined;
 
-  // Derive participants from messages for live activities (unique pubkeys who have chatted)
+  // Derive participants from messages for live activities and NIP-10 threads
   const derivedParticipants = useMemo(() => {
-    if (conversation?.type !== "live-chat" || !messages) {
-      return conversation?.participants || [];
-    }
+    // NIP-10 threads: derive from messages with OP first
+    if (protocol === "nip-10" && messages && conversation) {
+      const rootAuthor = conversation.metadata?.rootEventId
+        ? messages.find((m) => m.id === conversation.metadata?.rootEventId)
+            ?.author
+        : undefined;
 
-    const hostPubkey = liveActivity?.hostPubkey;
-    const participants: { pubkey: string; role: "host" | "member" }[] = [];
+      const participants: { pubkey: string; role: "op" | "member" }[] = [];
 
-    // Host always first
-    if (hostPubkey) {
-      participants.push({ pubkey: hostPubkey, role: "host" });
-    }
-
-    // Add other participants from messages (excluding host)
-    const seen = new Set(hostPubkey ? [hostPubkey] : []);
-    for (const msg of messages) {
-      if (msg.type !== "system" && !seen.has(msg.author)) {
-        seen.add(msg.author);
-        participants.push({ pubkey: msg.author, role: "member" });
+      // OP (root author) always first
+      if (rootAuthor) {
+        participants.push({ pubkey: rootAuthor, role: "op" });
       }
+
+      // Add other participants from messages (excluding OP)
+      const seen = new Set(rootAuthor ? [rootAuthor] : []);
+      for (const msg of messages) {
+        if (msg.type !== "system" && !seen.has(msg.author)) {
+          seen.add(msg.author);
+          participants.push({ pubkey: msg.author, role: "member" });
+        }
+      }
+
+      return participants;
     }
 
-    return participants;
+    // Live activities: derive from messages with host first
+    if (conversation?.type === "live-chat" && messages) {
+      const hostPubkey = liveActivity?.hostPubkey;
+      const participants: { pubkey: string; role: "host" | "member" }[] = [];
+
+      // Host always first
+      if (hostPubkey) {
+        participants.push({ pubkey: hostPubkey, role: "host" });
+      }
+
+      // Add other participants from messages (excluding host)
+      const seen = new Set(hostPubkey ? [hostPubkey] : []);
+      for (const msg of messages) {
+        if (msg.type !== "system" && !seen.has(msg.author)) {
+          seen.add(msg.author);
+          participants.push({ pubkey: msg.author, role: "member" });
+        }
+      }
+
+      return participants;
+    }
+
+    // Other protocols: use static participants from conversation
+    return conversation?.participants || [];
   }, [
+    protocol,
     conversation?.type,
     conversation?.participants,
+    conversation?.metadata?.rootEventId,
     messages,
     liveActivity?.hostPubkey,
   ]);
@@ -881,9 +908,16 @@ export function ChatViewer({
                         conversation.type === "live-chat") && (
                         <span className="text-primary-foreground/60">•</span>
                       )}
-                      <span className="capitalize text-primary-foreground/80">
-                        {conversation.type}
-                      </span>
+                      {conversation.protocol === "nip-10" ? (
+                        <span className="flex items-center gap-1 text-primary-foreground/80">
+                          <FileText className="size-3" />
+                          Thread
+                        </span>
+                      ) : (
+                        <span className="capitalize text-primary-foreground/80">
+                          {conversation.type}
+                        </span>
+                      )}
                     </div>
                     {/* Live Activity Status */}
                     {liveActivity?.status && (
@@ -953,7 +987,9 @@ export function ChatViewer({
             alignToBottom
             components={{
               Header: () =>
-                hasMore && conversationResult.status === "success" ? (
+                hasMore &&
+                conversationResult.status === "success" &&
+                protocol !== "nip-10" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}

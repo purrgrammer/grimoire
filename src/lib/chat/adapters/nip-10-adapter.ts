@@ -681,10 +681,11 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
   /**
    * Determine best relays for the thread
+   * Includes relays from root author, provided event author, p-tagged participants, and active user
    */
   private async getThreadRelays(
     rootEvent: NostrEvent,
-    _providedEvent: NostrEvent,
+    providedEvent: NostrEvent,
     providedRelays: string[],
   ): Promise<string[]> {
     const relays = new Set<string>();
@@ -692,7 +693,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // 1. Provided relay hints
     providedRelays.forEach((r) => relays.add(normalizeURL(r)));
 
-    // 2. Root author's outbox relays (NIP-65)
+    // 2. Root author's outbox relays (NIP-65) - highest priority
     try {
       const rootOutbox = await this.getOutboxRelays(rootEvent.pubkey);
       rootOutbox.slice(0, 3).forEach((r) => relays.add(normalizeURL(r)));
@@ -700,9 +701,46 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       console.warn("[NIP-10] Failed to get root author outbox:", err);
     }
 
-    // 3. Active user's outbox (for publishing replies)
+    // 3. Collect unique participant pubkeys from both events' p-tags
+    const participantPubkeys = new Set<string>();
+
+    // Add p-tags from root event
+    for (const tag of rootEvent.tags) {
+      if (tag[0] === "p" && tag[1]) {
+        participantPubkeys.add(tag[1]);
+      }
+    }
+
+    // Add p-tags from provided event
+    for (const tag of providedEvent.tags) {
+      if (tag[0] === "p" && tag[1]) {
+        participantPubkeys.add(tag[1]);
+      }
+    }
+
+    // Add provided event author if different from root
+    if (providedEvent.pubkey !== rootEvent.pubkey) {
+      participantPubkeys.add(providedEvent.pubkey);
+    }
+
+    // 4. Fetch outbox relays from participant subset (limit to avoid slowdown)
+    // Take first 5 participants to get relay diversity without excessive fetching
+    const participantsToCheck = Array.from(participantPubkeys).slice(0, 5);
+    for (const pubkey of participantsToCheck) {
+      try {
+        const outbox = await this.getOutboxRelays(pubkey);
+        // Add 1 relay from each participant for diversity
+        if (outbox.length > 0) {
+          relays.add(normalizeURL(outbox[0]));
+        }
+      } catch (err) {
+        // Silently continue if participant has no relay list
+      }
+    }
+
+    // 5. Active user's outbox (for publishing replies)
     const activePubkey = accountManager.active$.value?.pubkey;
-    if (activePubkey) {
+    if (activePubkey && !participantPubkeys.has(activePubkey)) {
       try {
         const userOutbox = await this.getOutboxRelays(activePubkey);
         userOutbox.slice(0, 2).forEach((r) => relays.add(normalizeURL(r)));
@@ -711,7 +749,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // 4. Fallback to popular relays if we have too few
+    // 6. Fallback to popular relays if we have too few
     if (relays.size < 3) {
       [
         "wss://relay.damus.io",
@@ -720,8 +758,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       ].forEach((r) => relays.add(r));
     }
 
-    // Limit to 7 relays max for performance
-    return Array.from(relays).slice(0, 7);
+    console.log(
+      `[NIP-10] Collected ${relays.size} relays from root, ${participantsToCheck.length} participants, and fallbacks`,
+    );
+
+    // Limit to 10 relays max for performance
+    return Array.from(relays).slice(0, 10);
   }
 
   /**
