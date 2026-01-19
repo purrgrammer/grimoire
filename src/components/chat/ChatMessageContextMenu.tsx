@@ -153,9 +153,7 @@ export function ChatMessageContextMenu({
 
     addWindow("zap", {
       recipientPubkey: zapConfig.recipientPubkey,
-      // Include the message event as context for zap preview (e-tag)
-      eventPointer: { id: event.id, author: event.pubkey },
-      // Include addressable event context if provided (a-tag, e.g., live activity)
+      eventPointer: zapConfig.eventPointer,
       addressPointer: zapConfig.addressPointer,
       customTags: zapConfig.customTags,
       relays: zapConfig.relays,

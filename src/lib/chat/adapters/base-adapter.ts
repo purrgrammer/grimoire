@@ -28,6 +28,12 @@ export interface ZapConfig {
   unsupportedReason?: string;
   /** Recipient pubkey (who receives the sats) */
   recipientPubkey: string;
+  /** Event being zapped for e-tag (e.g., chat message) */
+  eventPointer?: {
+    id: string;
+    author?: string;
+    relays?: string[];
+  };
   /** Addressable event context for a-tag (e.g., live activity) */
   addressPointer?: {
     kind: number;

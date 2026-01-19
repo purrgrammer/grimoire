@@ -558,16 +558,15 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    * Get zap configuration for a message in a live activity
    *
    * NIP-53 zap tagging rules:
-   * - Always include: p-tag (message author), a-tag (live activity)
-   * - If zapping the host AND stream has a goal: also e-tag the goal
+   * - p-tag: message author (recipient)
+   * - e-tag: message event being zapped
+   * - a-tag: live activity context
    */
   getZapConfig(message: Message, conversation: Conversation): ZapConfig {
     const activityAddress = conversation.metadata?.activityAddress;
     const liveActivity = conversation.metadata?.liveActivity as
       | {
           relays?: string[];
-          hostPubkey?: string;
-          goal?: string;
         }
       | undefined;
 
@@ -580,8 +579,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     const { pubkey: activityPubkey, identifier } = activityAddress;
-    const hostPubkey = liveActivity?.hostPubkey;
-    const goal = liveActivity?.goal;
 
     // Get relays
     const relays =
@@ -591,6 +588,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           ? [conversation.metadata.relayUrl]
           : [];
 
+    // Build eventPointer for the message being zapped (e-tag)
+    const eventPointer = {
+      id: message.id,
+      author: message.author,
+      relays,
+    };
+
     // Build addressPointer for the live activity (a-tag)
     const addressPointer = {
       kind: 30311,
@@ -599,18 +603,11 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       relays,
     };
 
-    // Build custom tags for special cases only
-    // If zapping the host AND stream has a goal, e-tag the goal
-    const customTags: string[][] = [];
-    if (message.author === hostPubkey && goal) {
-      customTags.push(["e", goal, relays[0] || ""]);
-    }
-
     return {
       supported: true,
       recipientPubkey: message.author,
+      eventPointer,
       addressPointer,
-      customTags: customTags.length > 0 ? customTags : undefined,
       relays,
     };
   }
