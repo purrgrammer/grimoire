@@ -48,6 +48,11 @@ export interface BaseEventProps {
     pubkey: string;
     label?: string; // e.g., "Host", "Sender", "Zapper", "From"
   };
+  /**
+   * If true, render content without header/footer wrapper
+   * Used in chat views where the container provides its own context
+   */
+  bare?: boolean;
 }
 
 /**
@@ -363,6 +368,8 @@ export function ClickableEventTitle({
 /**
  * Base event container with universal header
  * Kind-specific renderers can wrap their content with this
+ *
+ * @param bare - If true, render children without header/footer wrapper
  */
 /**
  * Format relative time (e.g., "2m ago", "3h ago", "5d ago")
@@ -372,6 +379,7 @@ export function BaseEventContainer({
   event,
   children,
   authorOverride,
+  bare = false,
 }: {
   event: NostrEvent;
   children: React.ReactNode;
@@ -379,8 +387,14 @@ export function BaseEventContainer({
     pubkey: string;
     label?: string;
   };
+  bare?: boolean;
 }) {
   const { locale } = useGrimoire();
+
+  // If bare mode, just render children without wrapper
+  if (bare) {
+    return <>{children}</>;
+  }
 
   // Format relative time for display
   const relativeTime = formatTimestamp(

@@ -71,7 +71,11 @@ function ParentEventCard({
  * Renderer for Kind 1 - Short Text Note (NIP-10 threading)
  * Shows immediate parent (reply) only for cleaner display
  */
-export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
+export function Kind1Renderer({
+  event,
+  depth = 0,
+  bare = false,
+}: BaseEventProps) {
   const { addWindow } = useGrimoire();
 
   // Use NIP-10 threading helpers
@@ -93,14 +97,14 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
   };
 
   return (
-    <BaseEventContainer event={event}>
+    <BaseEventContainer event={event} bare={bare}>
       <TooltipProvider>
-        {/* Show reply event (immediate parent) */}
-        {replyPointer && !replyEvent && (
+        {/* Show reply event (immediate parent) - hide in bare mode */}
+        {!bare && replyPointer && !replyEvent && (
           <InlineReplySkeleton icon={<Reply className="size-3" />} />
         )}
 
-        {replyPointer && replyEvent && (
+        {!bare && replyPointer && replyEvent && (
           <ParentEventCard
             parentEvent={replyEvent}
             icon={Reply}
