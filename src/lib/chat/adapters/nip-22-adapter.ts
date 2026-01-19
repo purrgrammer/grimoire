@@ -23,12 +23,7 @@ import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeURL } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
-import {
-  getZapAmount,
-  getZapSender,
-  getZapComment,
-} from "applesauce-common/helpers";
-import { getTagValue } from "applesauce-core/helpers";
+import { getZapAmount, getZapSender } from "applesauce-common/helpers";
 import { getRootEventTitle } from "@/lib/nostr-utils";
 
 /**
@@ -313,9 +308,11 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     conversation: Conversation,
     before: number,
   ): Promise<Message[]> {
-    return (
-      this.loadMessages(conversation, { before, limit: 50 }).toPromise() || []
-    );
+    const messages = await this.loadMessages(conversation, {
+      before,
+      limit: 50,
+    }).toPromise();
+    return messages || [];
   }
 
   /**
@@ -485,7 +482,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
    * Load a replied-to message
    */
   async loadReplyMessage(
-    conversation: Conversation,
+    _conversation: Conversation,
     eventId: string,
   ): Promise<NostrEvent | null> {
     const event = await eventStore.event(eventId).toPromise();
@@ -535,10 +532,16 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         .subscription(relays, [{ ids: [eventId] }], { eventStore })
         .subscribe({
           next: (response) => {
-            if (response.type === "event" && response.event.id === eventId) {
+            if (typeof response === "string") {
+              // EOSE received
               clearTimeout(timeout);
               sub.unsubscribe();
-              resolve(response.event);
+              resolve(null);
+            } else if (response.id === eventId) {
+              // Event received
+              clearTimeout(timeout);
+              sub.unsubscribe();
+              resolve(response);
             }
           },
         });
@@ -584,10 +587,16 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         )
         .subscribe({
           next: (response) => {
-            if (response.type === "event") {
+            if (typeof response === "string") {
+              // EOSE received
               clearTimeout(timeout);
               sub.unsubscribe();
-              resolve(response.event);
+              resolve(null);
+            } else {
+              // Event received
+              clearTimeout(timeout);
+              sub.unsubscribe();
+              resolve(response);
             }
           },
         });
@@ -747,14 +756,13 @@ export class Nip22Adapter extends ChatProtocolAdapter {
    * Convert zap receipt (kind 9735) to zap message
    */
   private zapToMessage(
-    event: NostrEvent,
+    zapReceipt: NostrEvent,
     conversationId: string,
   ): Message | null {
     try {
       // Extract zap metadata
-      const amount = getZapAmount(event);
-      const sender = getZapSender(event);
-      const comment = getZapComment(event);
+      const amount = getZapAmount(zapReceipt);
+      const sender = getZapSender(zapReceipt);
 
       if (!amount || !sender) {
         return null; // Invalid zap
@@ -764,15 +772,27 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       const sats = Math.floor(amount / 1000);
 
       // Find zapped event/comment
-      const eTag = event.tags.find((t) => t[0] === "e");
+      const eTag = zapReceipt.tags.find((t) => t[0] === "e");
       const zappedEventId = eTag?.[1];
 
+      // Get zap request event for comment
+      const zapRequestTag = zapReceipt.tags.find((t) => t[0] === "description");
+      let comment = "";
+      if (zapRequestTag && zapRequestTag[1]) {
+        try {
+          const zapRequest = JSON.parse(zapRequestTag[1]) as NostrEvent;
+          comment = zapRequest.content || "";
+        } catch {
+          // Invalid JSON
+        }
+      }
+
       return {
-        id: event.id,
+        id: zapReceipt.id,
         conversationId,
         author: sender,
-        content: comment || "", // Zap comment (optional)
-        timestamp: event.created_at,
+        content: comment, // Zap comment (optional)
+        timestamp: zapReceipt.created_at,
         type: "zap",
         replyTo: zappedEventId, // Link to zapped comment
         protocol: "nip-22",
@@ -780,7 +800,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
           encrypted: false,
           zapAmount: sats,
         },
-        event,
+        event: zapReceipt,
       };
     } catch {
       return null;
