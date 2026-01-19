@@ -318,8 +318,7 @@ const EventMentionNode = Node.create({
 
   addNodeView() {
     return ({ node }) => {
-      const { decodedType, kind, nostrUri, eventId, pubkey, identifier } =
-        node.attrs;
+      const { decodedType, kind, eventId, pubkey, identifier } = node.attrs;
 
       // Create wrapper span
       const dom = document.createElement("span");
@@ -397,10 +396,10 @@ const EventMentionNode = Node.create({
 
               const matchedText = matches[0];
               // Strip "nostr:" prefix if present for decoding
-              const identifier = matchedText.replace(/^nostr:/i, "");
+              const nip19String = matchedText.replace(/^nostr:/i, "");
 
               try {
-                const decoded = nip19.decode(identifier);
+                const decoded = nip19.decode(nip19String);
 
                 // Handle profile identifiers (npub/nprofile) - convert to @ mention
                 if (decoded.type === "npub") {
@@ -443,7 +442,7 @@ const EventMentionNode = Node.create({
                 // Always store with "nostr:" prefix for consistency
                 const nostrUri = matchedText.startsWith("nostr:")
                   ? matchedText
-                  : `nostr:${identifier}`;
+                  : `nostr:${nip19String}`;
 
                 let decodedType: string;
                 let eventId: string | null = null;
