@@ -20,6 +20,16 @@ const MAX_ERRORS = 20;
 const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 /**
+ * Check if an account can sign events
+ * Read-only accounts cannot sign and should not be prompted for auth
+ */
+function canAccountSign(account: typeof accountManager.active): boolean {
+  if (!account) return false;
+  const accountType = account.constructor.name;
+  return accountType !== "ReadonlyAccount";
+}
+
+/**
  * Observable values emitted by relay observables
  * Note: Using startWith() to ensure immediate emission with current values
  */
@@ -381,6 +391,11 @@ class RelayStateManager {
       throw new Error("No active account to authenticate with");
     }
 
+    // Check if account can sign (read-only accounts cannot authenticate)
+    if (!canAccountSign(account)) {
+      throw new Error("Active account cannot sign events (read-only account)");
+    }
+
     // Update status to authenticating
     state.authStatus = "authenticating";
     state.stats.authAttemptsCount++;
@@ -491,8 +506,9 @@ class RelayStateManager {
     try {
       const normalizedUrl = normalizeRelayURL(relayUrl);
 
-      // Don't prompt if there's no active account
-      if (!accountManager.active) return false;
+      // Don't prompt if there's no active account or account can't sign
+      const account = accountManager.active;
+      if (!account || !canAccountSign(account)) return false;
 
       // Check permanent preferences
       const pref = this.authPreferences.get(normalizedUrl);

@@ -144,6 +144,94 @@ const text = getHighlightText(event);
 - ❌ Direct calls to applesauce helpers (they cache internally)
 - ❌ Grimoire helpers that wrap `getTagValue` (caching propagates)
 
+## Major Hooks
+
+Grimoire provides custom React hooks for common Nostr operations. All hooks handle cleanup automatically.
+
+### Account & Authentication
+
+**`useAccount()`** (`src/hooks/useAccount.ts`):
+- Access active account with signing capability detection
+- Returns: `{ account, pubkey, canSign, signer, isLoggedIn }`
+- **Critical**: Always check `canSign` before signing operations
+- Read-only accounts have `canSign: false` and no `signer`
+
+```typescript
+const { canSign, signer, pubkey } = useAccount();
+if (canSign) {
+  // Can sign and publish events
+  await signer.signEvent(event);
+} else {
+  // Show "log in to post" message
+}
+```
+
+### Nostr Data Fetching
+
+**`useProfile(pubkey, relayHints?)`** (`src/hooks/useProfile.ts`):
+- Fetch and cache user profile metadata (kind 0)
+- Loads from IndexedDB first (fast), then network
+- Uses AbortController to prevent race conditions
+- Returns: `ProfileContent | undefined`
+
+**`useNostrEvent(pointer, context?)`** (`src/hooks/useNostrEvent.ts`):
+- Unified hook for fetching events by ID, EventPointer, or AddressPointer
+- Supports relay hints via context (pubkey string or full event)
+- Auto-loads missing events using smart relay selection
+- Returns: `NostrEvent | undefined`
+
+**`useTimeline(id, filters, relays, options?)`** (`src/hooks/useTimeline.ts`):
+- Subscribe to timeline of events matching filters
+- Uses applesauce loaders for efficient caching
+- Returns: `{ events, loading, error }`
+- The `id` parameter is for caching (use stable string)
+
+### Relay Management
+
+**`useRelayState()`** (`src/hooks/useRelayState.ts`):
+- Access global relay state and auth management
+- Returns relay connection states, pending auth challenges, preferences
+- Methods: `authenticateRelay()`, `rejectAuth()`, `setAuthPreference()`
+- Automatically subscribes to relay state updates
+
+**`useRelayInfo(relayUrl)`** (`src/hooks/useRelayInfo.ts`):
+- Fetch NIP-11 relay information document
+- Cached in IndexedDB with 24-hour TTL
+- Returns: `RelayInfo | undefined`
+
+**`useOutboxRelays(pubkey)`** (`src/hooks/useOutboxRelays.ts`):
+- Get user's outbox relays from kind 10002 relay list
+- Cached via RelayListCache for performance
+- Returns: `string[] | undefined`
+
+### Advanced Hooks
+
+**`useReqTimelineEnhanced(filter, relays, options)`** (`src/hooks/useReqTimelineEnhanced.ts`):
+- Enhanced timeline with accurate state tracking
+- Tracks per-relay EOSE and connection state
+- Returns: `{ events, state, relayStates, stats }`
+- Use for REQ viewer and advanced timeline UIs
+
+**`useNip05(nip05Address)`** (`src/hooks/useNip05.ts`):
+- Resolve NIP-05 identifier to pubkey
+- Cached with 1-hour TTL
+- Returns: `{ pubkey, relays, loading, error }`
+
+**`useNip19Decode(nip19String)`** (`src/hooks/useNip19Decode.ts`):
+- Decode nprofile, nevent, naddr, note, npub strings
+- Returns: `{ type, data, error }`
+
+### Utility Hooks
+
+**`useStableValue(value)`** / **`useStableArray(array)`** (`src/hooks/useStable.ts`):
+- Prevent unnecessary re-renders from deep equality
+- Use for filters, options, relay arrays
+- Returns stable reference when deep-equal
+
+**`useCopy()`** (`src/hooks/useCopy.ts`):
+- Copy text to clipboard with toast feedback
+- Returns: `{ copy, copied }` function and state
+
 ## Key Conventions
 
 - **Path Alias**: `@/` = `./src/`
