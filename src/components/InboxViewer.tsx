@@ -19,20 +19,13 @@ import {
 } from "@/hooks/useGiftWrap";
 import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
-import accountManager from "@/services/accounts";
 import { getDisplayName } from "@/lib/nostr-utils";
-import {
-  Copy,
-  Settings,
-  RefreshCw,
-  MessageSquare,
-  ChevronDown,
-} from "lucide-react";
+import { Copy, Settings, MessageSquare, ChevronDown } from "lucide-react";
 import { useCopy } from "@/hooks/useCopy";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
 
-interface InboxViewerProps {}
+type InboxViewerProps = Record<string, never>;
 
 const CONVERSATIONS_PAGE_SIZE = 50;
 
@@ -50,18 +43,15 @@ export function InboxViewer(_props: InboxViewerProps) {
 
   // Get DM relays (kind 10050)
   const dmRelayEvent = use$(() => {
-    if (!pubkey) return null;
-    return eventStore
-      .getAll()
-      .filter((e) => e.kind === 10050 && e.pubkey === pubkey)
-      .sort((a, b) => b.created_at - a.created_at)[0];
+    if (!pubkey) return undefined;
+    return eventStore.replaceable(10050, pubkey, "");
   }, [pubkey]);
 
   const dmRelays = useMemo(() => {
     if (!dmRelayEvent) return [];
     return dmRelayEvent.tags
-      .filter((t) => t[0] === "relay" && t[1])
-      .map((t) => t[1]);
+      .filter((t: string[]) => t[0] === "relay" && t[1])
+      .map((t: string[]) => t[1]);
   }, [dmRelayEvent]);
 
   // Convert conversations map to sorted array with pagination
@@ -110,7 +100,7 @@ export function InboxViewer(_props: InboxViewerProps) {
   };
 
   const handleOpenConversation = (
-    conversationKey: string,
+    _conversationKey: string,
     otherPubkey: string,
   ) => {
     // Open chat window with the other participant
@@ -122,8 +112,16 @@ export function InboxViewer(_props: InboxViewerProps) {
     );
   };
 
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const handleLoadMoreConversations = () => {
-    setConversationsPage((prev) => prev + 1);
+    if (isLoadingMore) return; // Prevent double-clicks
+    setIsLoadingMore(true);
+    // Use setTimeout to ensure UI updates
+    setTimeout(() => {
+      setConversationsPage((prev) => prev + 1);
+      setIsLoadingMore(false);
+    }, 100);
   };
 
   const handleLoadOlderGiftWraps = async () => {
@@ -307,11 +305,13 @@ export function InboxViewer(_props: InboxViewerProps) {
                 <div className="mt-4 flex justify-center">
                   <button
                     onClick={handleLoadMoreConversations}
-                    className="flex items-center gap-2 rounded border px-4 py-2 text-sm hover:bg-muted"
+                    disabled={isLoadingMore}
+                    className="flex items-center gap-2 rounded border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
                   >
                     <ChevronDown className="h-4 w-4" />
-                    Load More Conversations (
-                    {totalConversations - conversationsList.length} remaining)
+                    {isLoadingMore
+                      ? "Loading..."
+                      : `Load More Conversations (${totalConversations - conversationsList.length} remaining)`}
                   </button>
                 </div>
               )}
@@ -341,7 +341,8 @@ function ConversationRow({
 
   const handleCopyPubkey = (e: React.MouseEvent) => {
     e.stopPropagation();
-    copy(otherPubkey, "Pubkey copied");
+    copy(otherPubkey);
+    toast.success("Pubkey copied");
   };
 
   // Format timestamp

@@ -37,6 +37,7 @@ export function useGiftWrapConversations(): Map<string, UnsealedDM> | null {
     string,
     UnsealedDM
   > | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const activeAccount = use$(accountManager.active$);
 
   useEffect(() => {
@@ -45,26 +46,44 @@ export function useGiftWrapConversations(): Map<string, UnsealedDM> | null {
       return;
     }
 
+    let isMounted = true;
+
     // Load conversations from storage
-    giftWrapManager
-      .getConversations(activeAccount.pubkey)
-      .then(setConversations)
-      .catch((error) => {
+    const loadConversations = async () => {
+      if (isLoading) return; // Prevent overlapping fetches
+
+      setIsLoading(true);
+      try {
+        const result = await giftWrapManager.getConversations(
+          activeAccount.pubkey,
+        );
+        if (isMounted) {
+          setConversations(result);
+        }
+      } catch (error) {
         console.error("[useGiftWrapConversations] Failed to load:", error);
-        setConversations(new Map());
-      });
+        if (isMounted) {
+          setConversations(new Map());
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Initial load
+    loadConversations();
 
     // Poll for updates every 5 seconds
     // TODO: Replace with proper reactive subscription when gift wrap manager emits updates
-    const interval = setInterval(() => {
-      giftWrapManager
-        .getConversations(activeAccount.pubkey)
-        .then(setConversations)
-        .catch(console.error);
-    }, 5000);
+    const interval = setInterval(loadConversations, 5000);
 
-    return () => clearInterval(interval);
-  }, [activeAccount?.pubkey]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [activeAccount?.pubkey]); // Removed isLoading from deps to avoid infinite loop
 
   return conversations;
 }
@@ -76,6 +95,7 @@ export function useConversationMessages(
   conversationKey: string | null,
 ): UnsealedDM[] | null {
   const [messages, setMessages] = useState<UnsealedDM[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!conversationKey) {
@@ -83,26 +103,43 @@ export function useConversationMessages(
       return;
     }
 
+    let isMounted = true;
+
     // Load messages from storage
-    giftWrapManager
-      .getConversationMessages(conversationKey)
-      .then(setMessages)
-      .catch((error) => {
+    const loadMessages = async () => {
+      if (isLoading) return; // Prevent overlapping fetches
+
+      setIsLoading(true);
+      try {
+        const result =
+          await giftWrapManager.getConversationMessages(conversationKey);
+        if (isMounted) {
+          setMessages(result);
+        }
+      } catch (error) {
         console.error("[useConversationMessages] Failed to load:", error);
-        setMessages([]);
-      });
+        if (isMounted) {
+          setMessages([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Initial load
+    loadMessages();
 
     // Poll for updates every 3 seconds
     // TODO: Replace with proper reactive subscription
-    const interval = setInterval(() => {
-      giftWrapManager
-        .getConversationMessages(conversationKey)
-        .then(setMessages)
-        .catch(console.error);
-    }, 3000);
+    const interval = setInterval(loadMessages, 3000);
 
-    return () => clearInterval(interval);
-  }, [conversationKey]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [conversationKey]); // Removed isLoading from deps to avoid infinite loop
 
   return messages;
 }

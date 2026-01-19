@@ -60,6 +60,7 @@ class GiftWrapManager {
   private lastSyncTimestamp: number = 0; // Last sync time (for incremental updates)
   private isAuthenticating = false;
   private authenticated = new Set<string>(); // Track which relays are authenticated
+  private isSyncing = false; // Prevent concurrent sync attempts
 
   /**
    * Start syncing gift wraps for the active account
@@ -68,6 +69,12 @@ class GiftWrapManager {
    * 3. Subscribes to gift wraps with pagination
    */
   async startSync(): Promise<void> {
+    // Prevent concurrent sync attempts
+    if (this.isSyncing) {
+      console.log("[GiftWrap] Sync already in progress, skipping");
+      return;
+    }
+
     const account = accountManager.active$.value;
     if (!account) {
       console.log("[GiftWrap] No active account");
@@ -77,88 +84,101 @@ class GiftWrapManager {
     const { pubkey } = account;
     console.log(`[GiftWrap] Starting sync for ${pubkey.slice(0, 8)}...`);
 
-    // Stop any existing sync
-    this.stopSync();
+    this.isSyncing = true;
 
-    // Get user's DM relays (kind 10050) or fall back to general relays
-    const dmRelays = await this.getDMRelays(pubkey);
-    if (dmRelays.length === 0) {
-      console.warn("[GiftWrap] No DM relays found, cannot sync gift wraps");
-      // TODO: Get general relays from user's relay list
-      return;
-    }
+    try {
+      // Stop any existing sync
+      this.stopSync();
 
-    console.log(`[GiftWrap] Syncing from ${dmRelays.length} relays:`, dmRelays);
+      // Get user's DM relays (kind 10050) or fall back to general relays
+      const dmRelays = await this.getDMRelays(pubkey);
+      if (dmRelays.length === 0) {
+        console.warn("[GiftWrap] No DM relays found, cannot sync gift wraps");
+        // TODO: Get general relays from user's relay list
+        return;
+      }
 
-    // Step 1: Authenticate with relays using dummy REQ
-    // This triggers NIP-42 AUTH which is required for relays to serve kind 1059
-    await this.authenticateWithRelays(dmRelays, pubkey);
-
-    // Step 2: Determine sync window (initial vs incremental)
-    const now = Math.floor(Date.now() / 1000);
-    const isInitialSync = this.lastSyncTimestamp === 0;
-
-    let since: number | undefined;
-    if (isInitialSync) {
-      // Initial sync: Fetch last N days of gift wraps
-      since = now - GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
       console.log(
-        `[GiftWrap] Initial sync from ${new Date(since * 1000).toISOString()}`,
+        `[GiftWrap] Syncing from ${dmRelays.length} relays:`,
+        dmRelays,
       );
-    } else {
-      // Incremental sync: Fetch only new gift wraps since last sync
-      since = this.lastSyncTimestamp;
-      console.log(
-        `[GiftWrap] Incremental sync from ${new Date(since * 1000).toISOString()}`,
-      );
-    }
 
-    // Step 3: Subscribe to gift wraps with pagination
-    const filter: Filter = {
-      kinds: [1059],
-      "#p": [pubkey],
-      since,
-      limit: isInitialSync ? GIFT_WRAP_CONFIG.INITIAL_LIMIT : undefined,
-    };
+      // Step 1: Authenticate with relays using dummy REQ
+      // This triggers NIP-42 AUTH which is required for relays to serve kind 1059
+      await this.authenticateWithRelays(dmRelays, pubkey);
 
-    const subscription = pool
-      .subscription(dmRelays, [filter], {
-        eventStore, // Automatically add to event store
-      })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            console.log("[GiftWrap] EOSE received");
-            // Update last sync timestamp after EOSE
-            this.lastSyncTimestamp = now;
-          } else {
-            console.log(
-              `[GiftWrap] Received gift wrap: ${response.id.slice(0, 8)}...`,
-            );
-            // Process gift wrap asynchronously
-            this.processGiftWrap(response, pubkey).catch((error) => {
-              console.error(
-                `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
-                error,
+      // Step 2: Determine sync window (initial vs incremental)
+      const now = Math.floor(Date.now() / 1000);
+      const isInitialSync = this.lastSyncTimestamp === 0;
+
+      let since: number | undefined;
+      if (isInitialSync) {
+        // Initial sync: Fetch last N days of gift wraps
+        since = now - GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
+        console.log(
+          `[GiftWrap] Initial sync from ${new Date(since * 1000).toISOString()}`,
+        );
+      } else {
+        // Incremental sync: Fetch only new gift wraps since last sync
+        since = this.lastSyncTimestamp;
+        console.log(
+          `[GiftWrap] Incremental sync from ${new Date(since * 1000).toISOString()}`,
+        );
+      }
+
+      // Step 3: Subscribe to gift wraps with pagination
+      const filter: Filter = {
+        kinds: [1059],
+        "#p": [pubkey],
+        since,
+        limit: isInitialSync ? GIFT_WRAP_CONFIG.INITIAL_LIMIT : undefined,
+      };
+
+      const subscription = pool
+        .subscription(dmRelays, [filter], {
+          eventStore, // Automatically add to event store
+        })
+        .subscribe({
+          next: (response) => {
+            if (typeof response === "string") {
+              console.log("[GiftWrap] EOSE received");
+              // Update last sync timestamp after EOSE
+              this.lastSyncTimestamp = now;
+            } else {
+              console.log(
+                `[GiftWrap] Received gift wrap: ${response.id.slice(0, 8)}...`,
               );
-            });
-          }
-        },
-        error: (error) => {
-          console.error("[GiftWrap] Subscription error:", error);
-        },
-      });
+              // Process gift wrap asynchronously
+              this.processGiftWrap(response, pubkey).catch((error) => {
+                console.error(
+                  `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                  error,
+                );
+              });
+            }
+          },
+          error: (error) => {
+            console.error("[GiftWrap] Subscription error:", error);
+          },
+        });
 
-    this.subscriptions.set(pubkey, subscription);
+      this.subscriptions.set(pubkey, subscription);
 
-    // Process any existing gift wraps in the event store (from previous sessions)
-    await this.processExistingGiftWraps(pubkey);
+      // Process any existing gift wraps in the event store (from previous sessions)
+      await this.processExistingGiftWraps(pubkey);
 
-    // Update stats
-    await this.updateStats();
+      // Update stats
+      await this.updateStats();
 
-    // Clean up old gift wraps
-    await this.cleanupOldGiftWraps();
+      // Clean up old gift wraps
+      await this.cleanupOldGiftWraps();
+    } catch (error) {
+      console.error("[GiftWrap] Fatal error during sync:", error);
+      // Clean up on error
+      this.stopSync();
+    } finally {
+      this.isSyncing = false;
+    }
   }
 
   /**
@@ -198,27 +218,34 @@ class GiftWrapManager {
 
       // Create a promise that resolves after timeout or first event
       await new Promise<void>((resolve) => {
+        let subscription: Subscription | null = null;
+
         const timeout = setTimeout(() => {
-          subscription.unsubscribe();
+          if (subscription) {
+            subscription.unsubscribe();
+          }
           resolve();
         }, GIFT_WRAP_CONFIG.AUTH_TIMEOUT_MS);
 
-        const subscription = pool
-          .subscription(relays, [dummyFilter], {})
-          .subscribe({
-            next: (response) => {
-              // Got EOSE or event, auth likely completed
-              if (typeof response === "string") {
-                clearTimeout(timeout);
-                subscription.unsubscribe();
-                resolve();
-              }
-            },
-            error: () => {
+        subscription = pool.subscription(relays, [dummyFilter], {}).subscribe({
+          next: (response) => {
+            // Got EOSE or event, auth likely completed
+            if (typeof response === "string") {
               clearTimeout(timeout);
+              if (subscription) {
+                subscription.unsubscribe();
+              }
               resolve();
-            },
-          });
+            }
+          },
+          error: () => {
+            clearTimeout(timeout);
+            if (subscription) {
+              subscription.unsubscribe();
+            }
+            resolve();
+          },
+        });
       });
 
       console.log("[GiftWrap] Authentication complete");
@@ -358,18 +385,13 @@ class GiftWrapManager {
    */
   private async getDMRelays(pubkey: string): Promise<string[]> {
     // Try to get kind 10050 from event store
-    const dmRelayEvent = eventStore.get(
-      eventStore
-        .getAll()
-        .filter((e) => e.kind === 10050 && e.pubkey === pubkey)
-        .sort((a, b) => b.created_at - a.created_at)[0]?.id || "",
-    );
+    const dmRelayEvent = eventStore.getReplaceable(10050, pubkey, "");
 
     if (dmRelayEvent) {
       // Extract relay URLs from "relay" tags
       const relays = dmRelayEvent.tags
-        .filter((t) => t[0] === "relay" && t[1])
-        .map((t) => t[1]);
+        .filter((t: string[]) => t[0] === "relay" && t[1])
+        .map((t: string[]) => t[1]);
 
       if (relays.length > 0) {
         return relays;
@@ -387,13 +409,10 @@ class GiftWrapManager {
     console.log("[GiftWrap] Processing existing gift wraps...");
 
     // Get all kind 1059 events addressed to us
-    const giftWraps = eventStore
-      .getAll()
-      .filter(
-        (e) =>
-          e.kind === 1059 &&
-          e.tags.some((t) => t[0] === "p" && t[1] === pubkey),
-      );
+    const giftWraps = eventStore.getByFilters({
+      kinds: [1059],
+      "#p": [pubkey],
+    });
 
     console.log(`[GiftWrap] Found ${giftWraps.length} existing gift wraps`);
 
@@ -587,34 +606,46 @@ class GiftWrapManager {
   }
 
   /**
-   * Update statistics
+   * Update statistics (optimized to avoid loading all records into memory)
    */
   private async updateStats(): Promise<void> {
-    const decryptions = await db.giftWrapDecryptions.toArray();
+    // Use Dexie's count() to avoid loading all records
+    const totalGiftWraps = await db.giftWrapDecryptions.count();
+    const successfulDecryptions = await db.giftWrapDecryptions
+      .where("decryptionState")
+      .equals("success")
+      .count();
+    const failedDecryptions = await db.giftWrapDecryptions
+      .where("decryptionState")
+      .equals("failed")
+      .count();
+    const pendingDecryptions = await db.giftWrapDecryptions
+      .where("decryptionState")
+      .equals("pending")
+      .count();
 
-    // Find oldest and newest gift wrap timestamps
+    // Find oldest and newest gift wrap timestamps efficiently
     let oldestTimestamp: number | undefined;
     let newestTimestamp: number | undefined;
 
-    if (decryptions.length > 0) {
-      const timestamps = decryptions
-        .map((d) => d.lastAttempt)
-        .sort((a, b) => a - b);
-      oldestTimestamp = timestamps[0];
-      newestTimestamp = timestamps[timestamps.length - 1];
+    if (totalGiftWraps > 0) {
+      const oldest = await db.giftWrapDecryptions
+        .orderBy("lastAttempt")
+        .first();
+      const newest = await db.giftWrapDecryptions
+        .orderBy("lastAttempt")
+        .reverse()
+        .first();
+
+      oldestTimestamp = oldest?.lastAttempt;
+      newestTimestamp = newest?.lastAttempt;
     }
 
     const stats: GiftWrapStats = {
-      totalGiftWraps: decryptions.length,
-      successfulDecryptions: decryptions.filter(
-        (d) => d.decryptionState === "success",
-      ).length,
-      failedDecryptions: decryptions.filter(
-        (d) => d.decryptionState === "failed",
-      ).length,
-      pendingDecryptions: decryptions.filter(
-        (d) => d.decryptionState === "pending",
-      ).length,
+      totalGiftWraps,
+      successfulDecryptions,
+      failedDecryptions,
+      pendingDecryptions,
       oldestGiftWrap: oldestTimestamp,
       newestGiftWrap: newestTimestamp,
     };

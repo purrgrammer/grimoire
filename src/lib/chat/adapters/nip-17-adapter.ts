@@ -9,13 +9,7 @@
  */
 
 import { Observable, from, map } from "rxjs";
-import {
-  nip19,
-  nip44,
-  generateSecretKey,
-  getPublicKey,
-  finalizeEvent,
-} from "nostr-tools";
+import { nip19, nip44, generateSecretKey, finalizeEvent } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
@@ -23,12 +17,10 @@ import type {
   ProtocolIdentifier,
   ChatCapabilities,
   LoadMessagesOptions,
-  DMIdentifier,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
 import giftWrapManager from "@/services/gift-wrap";
 import eventStore from "@/services/event-store";
-import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { publishEventToRelays } from "@/services/hub";
 import type { UnsealedDM } from "@/services/db";
@@ -256,14 +248,14 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     // Step 3: Create the gift wrap (kind 1059)
     // Generate ephemeral keypair for gift wrap
     const ephemeralSecretKey = generateSecretKey();
-    const ephemeralPubkey = getPublicKey(ephemeralSecretKey);
 
     // Encrypt the seal with ephemeral key → recipient
     const sealJSON = JSON.stringify(seal);
-    const encryptedSeal = nip44.encrypt(
-      sealJSON,
-      nip44.utils.getConversationKey(ephemeralSecretKey, recipientPubkey),
+    const conversationKey = nip44.getConversationKey(
+      ephemeralSecretKey,
+      recipientPubkey,
     );
+    const encryptedSeal = nip44.encrypt(sealJSON, conversationKey);
 
     // Create and sign gift wrap with ephemeral key
     const giftWrapDraft = {
@@ -275,26 +267,45 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
     const giftWrap = finalizeEvent(giftWrapDraft, ephemeralSecretKey);
 
-    // Publish gift wrap to recipient's relays
-    await publishEventToRelays(giftWrap, targetRelays);
+    // Publish gift wrap to recipient's relays with error handling
+    try {
+      await publishEventToRelays(giftWrap, targetRelays);
+      console.log(
+        `[NIP-17] Sent message to ${recipientPubkey.slice(0, 8)}... via ${targetRelays.length} relays`,
+      );
+    } catch (error) {
+      console.error(
+        "[NIP-17] Failed to publish gift wrap to recipient:",
+        error,
+      );
+      throw new Error(
+        `Failed to send message: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
 
     // Also send a copy to ourselves (for sent message history)
-    const selfGiftWrapDraft = {
-      kind: 1059,
-      content: nip44.encrypt(
-        sealJSON,
-        nip44.utils.getConversationKey(ephemeralSecretKey, activePubkey),
-      ),
-      tags: [["p", activePubkey]],
-      created_at: this.randomPastTimestamp(),
-    };
+    // Don't fail the whole operation if this fails
+    try {
+      const selfConversationKey = nip44.getConversationKey(
+        ephemeralSecretKey,
+        activePubkey,
+      );
+      const selfGiftWrapDraft = {
+        kind: 1059,
+        content: nip44.encrypt(sealJSON, selfConversationKey),
+        tags: [["p", activePubkey]],
+        created_at: this.randomPastTimestamp(),
+      };
 
-    const selfGiftWrap = finalizeEvent(selfGiftWrapDraft, ephemeralSecretKey);
-    await publishEventToRelays(selfGiftWrap, senderDMRelays);
-
-    console.log(
-      `[NIP-17] Sent message to ${recipientPubkey.slice(0, 8)}... via ${targetRelays.length} relays`,
-    );
+      const selfGiftWrap = finalizeEvent(selfGiftWrapDraft, ephemeralSecretKey);
+      await publishEventToRelays(selfGiftWrap, senderDMRelays);
+    } catch (error) {
+      console.warn(
+        "[NIP-17] Failed to save copy to own relays (non-fatal):",
+        error,
+      );
+      // Don't throw - message was already sent to recipient
+    }
   }
 
   /**
@@ -400,17 +411,12 @@ export class Nip17Adapter extends ChatProtocolAdapter {
    */
   private async getDMRelays(pubkey: string): Promise<string[]> {
     // Try to get kind 10050 from event store
-    const dmRelayEvent = eventStore.get(
-      eventStore
-        .getAll()
-        .filter((e) => e.kind === 10050 && e.pubkey === pubkey)
-        .sort((a, b) => b.created_at - a.created_at)[0]?.id || "",
-    );
+    const dmRelayEvent = eventStore.getReplaceable(10050, pubkey, "");
 
     if (dmRelayEvent) {
       const relays = dmRelayEvent.tags
-        .filter((t) => t[0] === "relay" && t[1])
-        .map((t) => t[1]);
+        .filter((t: string[]) => t[0] === "relay" && t[1])
+        .map((t: string[]) => t[1]);
 
       if (relays.length > 0) {
         return relays;
