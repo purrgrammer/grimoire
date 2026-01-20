@@ -15,7 +15,7 @@ import {
   Globe,
   Lock,
   CreditCard,
-  Zap,
+  Hammer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -133,7 +133,7 @@ export function Kind30166Renderer({ event }: BaseEventProps) {
               variant="outline"
               className="h-5 px-1.5 gap-1 text-purple-600 border-purple-600/30"
             >
-              <Zap className="size-3" />
+              <Hammer className="size-3" />
               PoW
             </Badge>
           )}

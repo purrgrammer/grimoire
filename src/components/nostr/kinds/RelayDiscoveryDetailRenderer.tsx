@@ -24,7 +24,7 @@ import {
   Globe,
   Lock,
   CreditCard,
-  Zap,
+  Hammer,
   MapPin,
   Shield,
   Tag,
@@ -207,7 +207,7 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
             {requirements.pow !== undefined && (
               <div className="flex items-center gap-2 text-sm">
                 {requirements.pow ? (
-                  <Zap className="size-4 text-purple-600" />
+                  <Hammer className="size-4 text-purple-600" />
                 ) : (
                   <CheckCircle className="size-4 text-green-600" />
                 )}
