@@ -29,7 +29,7 @@ export interface GiftWrapStats {
  */
 const GIFT_WRAP_CONFIG = {
   INITIAL_LIMIT: 500, // Max gift wraps to fetch on initial sync
-  PAGINATION_SIZE: 100, // Batch size for loading older gift wraps
+  PAGINATION_SIZE: 200, // Batch size for loading older gift wraps
   MAX_STORAGE_DAYS: 90, // Keep gift wraps for 90 days
   AUTH_TIMEOUT_MS: 10000, // Wait 10s for auth before proceeding
 };

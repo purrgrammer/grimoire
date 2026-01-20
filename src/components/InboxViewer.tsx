@@ -537,16 +537,16 @@ function ConversationRow({
       onClick={onClick}
       className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
-      {/* Name */}
-      <div className="w-28 shrink-0">
+      {/* Name - no fixed width */}
+      <div className="shrink-0">
         <UserName
           pubkey={otherPubkey}
           className="text-xs font-medium truncate"
         />
       </div>
 
-      {/* Message preview - use CSS truncation and RichText */}
-      <div className="flex-1 min-w-0 truncate text-muted-foreground/70">
+      {/* Message preview - use CSS truncation and RichText with pointer-events-none */}
+      <div className="flex-1 min-w-0 truncate text-muted-foreground/70 pointer-events-none">
         <RichText content={latestMessage.content} className="line-clamp-1" />
       </div>
 

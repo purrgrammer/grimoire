@@ -746,6 +746,8 @@ export function ChatViewer({
   const handleNipClick = useCallback(() => {
     if (conversation?.protocol === "nip-10") {
       addWindow("nip", { number: 10 });
+    } else if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
     } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
@@ -974,15 +976,12 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
-            )}
+            <button
+              onClick={handleNipClick}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+            >
+              {conversation.protocol.toUpperCase()}
+            </button>
           </div>
         </div>
       </div>
