@@ -5,6 +5,7 @@ import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
 import { GroupLink } from "../GroupLink";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import { isValidPubkey } from "@/lib/chat-parser";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -31,42 +32,60 @@ function extractGroups(event: { tags: string[][] }): Array<{
 
 /**
  * Public Chats Renderer (Kind 10009)
- * NIP-51 list of NIP-29 groups
+ * NIP-51 list of NIP-29 groups and Communikeys
  * Displays each group as a clickable link with icon and name
  * Batch-loads metadata for all groups to show their names
+ * For Communikeys (pubkey-based groups), fetches kind 0 (profile) metadata
+ * For regular NIP-29 groups, fetches kind 39000 (group metadata)
  */
 export function PublicChatsRenderer({ event }: BaseEventProps) {
   const groups = extractGroups(event);
 
-  // Batch-load metadata for all groups at once
+  // Split groups into Communikeys (valid pubkeys) and regular NIP-29 groups
   // Filter out "_" which is the unmanaged relay group (doesn't have metadata)
-  const groupIds = groups.map((g) => g.groupId).filter((id) => id !== "_");
+  const communikeyGroups = groups.filter(
+    (g) => g.groupId !== "_" && isValidPubkey(g.groupId),
+  );
+  const nip29Groups = groups.filter(
+    (g) => g.groupId !== "_" && !isValidPubkey(g.groupId),
+  );
 
-  // Subscribe to relays to fetch group metadata
+  const communikeyPubkeys = communikeyGroups.map((g) => g.groupId);
+  const nip29GroupIds = nip29Groups.map((g) => g.groupId);
+
   // Extract unique relay URLs from groups
   const relayUrls = Array.from(new Set(groups.map((g) => g.relayUrl)));
 
   useEffect(() => {
-    if (groupIds.length === 0) return;
+    if (communikeyPubkeys.length === 0 && nip29GroupIds.length === 0) return;
 
     console.log(
-      `[PublicChatsRenderer] Fetching metadata for ${groupIds.length} groups from ${relayUrls.length} relays`,
+      `[PublicChatsRenderer] Fetching metadata for ${communikeyPubkeys.length} Communikeys and ${nip29GroupIds.length} NIP-29 groups from ${relayUrls.length} relays`,
     );
 
-    // Subscribe to fetch metadata events (kind 39000) from the group relays
+    // Build filters for both types
+    const filters = [];
+
+    // Fetch kind 0 (profiles) for Communikeys
+    if (communikeyPubkeys.length > 0) {
+      filters.push({ kinds: [0], authors: communikeyPubkeys });
+    }
+
+    // Fetch kind 39000 (group metadata) for regular NIP-29 groups
+    if (nip29GroupIds.length > 0) {
+      filters.push({ kinds: [39000], "#d": nip29GroupIds });
+    }
+
+    // Subscribe to fetch metadata from the group relays
     const subscription = pool
-      .subscription(
-        relayUrls,
-        [{ kinds: [39000], "#d": groupIds }],
-        { eventStore }, // Automatically add to store
-      )
+      .subscription(relayUrls, filters, { eventStore })
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
             console.log("[PublicChatsRenderer] EOSE received for metadata");
           } else {
             console.log(
-              `[PublicChatsRenderer] Received metadata: ${response.id.slice(0, 8)}...`,
+              `[PublicChatsRenderer] Received metadata k${response.kind}: ${response.id.slice(0, 8)}...`,
             );
           }
         },
@@ -75,26 +94,47 @@ export function PublicChatsRenderer({ event }: BaseEventProps) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [groupIds.join(","), relayUrls.join(",")]);
+  }, [
+    communikeyPubkeys.join(","),
+    nip29GroupIds.join(","),
+    relayUrls.join(","),
+  ]);
 
+  // Build combined metadata map from both kind 0 (Communikeys) and kind 39000 (NIP-29)
   const groupMetadataMap = use$(
     () =>
-      groupIds.length > 0
-        ? eventStore.timeline([{ kinds: [39000], "#d": groupIds }]).pipe(
-            map((events) => {
-              const metadataMap = new Map<string, NostrEvent>();
-              for (const evt of events) {
-                // Extract group ID from #d tag
-                const dTag = evt.tags.find((t) => t[0] === "d");
-                if (dTag && dTag[1]) {
-                  metadataMap.set(dTag[1], evt);
+      communikeyPubkeys.length > 0 || nip29GroupIds.length > 0
+        ? eventStore
+            .timeline([
+              ...(communikeyPubkeys.length > 0
+                ? [{ kinds: [0], authors: communikeyPubkeys }]
+                : []),
+              ...(nip29GroupIds.length > 0
+                ? [{ kinds: [39000], "#d": nip29GroupIds }]
+                : []),
+            ])
+            .pipe(
+              map((events) => {
+                const metadataMap = new Map<string, NostrEvent>();
+
+                for (const evt of events) {
+                  if (evt.kind === 0) {
+                    // Communikey profile (kind 0) - map by pubkey
+                    metadataMap.set(evt.pubkey, evt);
+                  } else if (evt.kind === 39000) {
+                    // NIP-29 group metadata - map by d-tag (group ID)
+                    const dTag = evt.tags.find((t) => t[0] === "d");
+                    if (dTag && dTag[1]) {
+                      metadataMap.set(dTag[1], evt);
+                    }
+                  }
                 }
-              }
-              return metadataMap;
-            }),
-          )
+
+                return metadataMap;
+              }),
+            )
         : undefined,
-    [groupIds.join(",")],
+    [communikeyPubkeys.join(","), nip29GroupIds.join(",")],
   );
 
   if (groups.length === 0) {
