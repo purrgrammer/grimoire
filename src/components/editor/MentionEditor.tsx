@@ -337,43 +337,60 @@ const NostrEventPreview = Node.create({
         "nostr-event-preview inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs align-middle";
       dom.contentEditable = "false";
 
-      // Icon based on type
+      // Helper to get kind icon
+      const getKindIcon = (kind?: number): string => {
+        if (!kind) return "📝";
+        if (kind === 0) return "👤"; // Profile
+        if (kind === 1) return "📝"; // Note
+        if (kind === 3) return "👥"; // Contacts
+        if (kind === 6) return "🔁"; // Repost
+        if (kind === 7) return "❤️"; // Reaction
+        if (kind === 9735) return "⚡"; // Zap
+        if (kind === 30023) return "📄"; // Long-form
+        if (kind === 30311) return "🎙️"; // Live event
+        if (kind === 1063) return "📦"; // File metadata
+        if (kind >= 30000 && kind < 40000) return "📌"; // Addressable
+        if (kind >= 10000 && kind < 20000) return "🔄"; // Replaceable
+        return "📝"; // Default
+      };
+
+      // Icon based on type and kind
       const icon = document.createElement("span");
       icon.className = "text-primary flex-shrink-0";
-      if (type === "npub" || type === "nprofile") {
-        icon.textContent = "👤";
-      } else if (type === "note" || type === "nevent") {
-        icon.textContent = "📝";
-      } else if (type === "naddr") {
-        icon.textContent = "📄";
-      } else {
-        icon.textContent = "🔗";
-      }
-      dom.appendChild(icon);
 
-      // Type label
-      const typeLabel = document.createElement("span");
-      typeLabel.className = "text-primary font-mono font-medium";
-      typeLabel.textContent = type.toUpperCase();
-      dom.appendChild(typeLabel);
+      // Content label
+      const label = document.createElement("span");
+      label.className = "text-muted-foreground truncate max-w-[120px]";
 
-      // ID preview (truncated)
-      const idLabel = document.createElement("span");
-      idLabel.className = "text-muted-foreground truncate max-w-[80px]";
       if (type === "npub") {
-        idLabel.textContent = `${data.slice(0, 8)}...`;
-      } else if (type === "note") {
-        idLabel.textContent = `${data.slice(0, 8)}...`;
-      } else if (type === "nevent") {
-        idLabel.textContent = `${data.id.slice(0, 8)}...`;
-      } else if (type === "naddr") {
-        idLabel.textContent = data.identifier
-          ? `${data.identifier.slice(0, 12)}...`
-          : `kind:${data.kind}`;
+        // npub: 👤 pubkey
+        icon.textContent = "👤";
+        label.textContent = data.slice(0, 8);
       } else if (type === "nprofile") {
-        idLabel.textContent = `${data.pubkey.slice(0, 8)}...`;
+        // nprofile: 👤 pubkey
+        icon.textContent = "👤";
+        label.textContent = data.pubkey.slice(0, 8);
+      } else if (type === "note") {
+        // note: 📝 event-id
+        icon.textContent = "📝";
+        label.textContent = data.slice(0, 8);
+      } else if (type === "nevent") {
+        // nevent: kind-icon event-id (or author if available)
+        icon.textContent = getKindIcon(data.kind);
+        // nevent can optionally include author
+        if (data.author) {
+          label.textContent = data.author.slice(0, 8);
+        } else {
+          label.textContent = data.id.slice(0, 8);
+        }
+      } else if (type === "naddr") {
+        // naddr: kind-icon author
+        icon.textContent = getKindIcon(data.kind);
+        label.textContent = data.pubkey.slice(0, 8);
       }
-      dom.appendChild(idLabel);
+
+      dom.appendChild(icon);
+      dom.appendChild(label);
 
       return { dom };
     };
