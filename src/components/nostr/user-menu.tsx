@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   Zap,
-  Trophy,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -40,6 +39,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
+import { TopContributor } from "./TopContributor";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
@@ -79,36 +79,6 @@ function UserLabel({ pubkey }: { pubkey: string }) {
           <Nip05 pubkey={pubkey} profile={profile} />
         </span>
       ) : null}
-    </div>
-  );
-}
-
-function TopContributor({
-  pubkey,
-  amount,
-}: {
-  pubkey: string;
-  amount: number;
-}) {
-  const profile = useProfile(pubkey);
-  const displayName = getDisplayName(pubkey, profile);
-
-  function formatSats(sats: number): string {
-    if (sats >= 1_000_000) {
-      return `${(sats / 1_000_000).toFixed(1)}M`;
-    } else if (sats >= 1_000) {
-      return `${Math.floor(sats / 1_000)}k`;
-    }
-    return sats.toString();
-  }
-
-  return (
-    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
-      <Trophy className="size-3.5 text-yellow-500" />
-      <span className="text-xs text-muted-foreground flex-1 truncate">
-        {displayName}
-      </span>
-      <span className="text-xs font-medium">{formatSats(amount)} sats</span>
     </div>
   );
 }
