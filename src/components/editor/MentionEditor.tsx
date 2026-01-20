@@ -286,7 +286,7 @@ const NostrEventPreview = Node.create({
 
   addAttributes() {
     return {
-      type: { default: null }, // 'npub' | 'note' | 'nevent' | 'naddr' | 'nprofile'
+      type: { default: null }, // 'note' | 'nevent' | 'naddr'
       data: { default: null }, // Decoded bech32 data (varies by type)
     };
   },
@@ -310,16 +310,12 @@ const NostrEventPreview = Node.create({
     // Serialize back to nostr: URI for plain text export
     const { type, data } = node.attrs;
     try {
-      if (type === "npub") {
-        return `nostr:${nip19.npubEncode(data)}`;
-      } else if (type === "note") {
+      if (type === "note") {
         return `nostr:${nip19.noteEncode(data)}`;
       } else if (type === "nevent") {
         return `nostr:${nip19.neventEncode(data)}`;
       } else if (type === "naddr") {
         return `nostr:${nip19.naddrEncode(data)}`;
-      } else if (type === "nprofile") {
-        return `nostr:${nip19.nprofileEncode(data)}`;
       }
     } catch (err) {
       console.error("[NostrEventPreview] Failed to encode:", err);
@@ -337,60 +333,27 @@ const NostrEventPreview = Node.create({
         "nostr-event-preview inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs align-middle";
       dom.contentEditable = "false";
 
-      // Helper to get kind icon
-      const getKindIcon = (kind?: number): string => {
-        if (!kind) return "📝";
-        if (kind === 0) return "👤"; // Profile
-        if (kind === 1) return "📝"; // Note
-        if (kind === 3) return "👥"; // Contacts
-        if (kind === 6) return "🔁"; // Repost
-        if (kind === 7) return "❤️"; // Reaction
-        if (kind === 9735) return "⚡"; // Zap
-        if (kind === 30023) return "📄"; // Long-form
-        if (kind === 30311) return "🎙️"; // Live event
-        if (kind === 1063) return "📦"; // File metadata
-        if (kind >= 30000 && kind < 40000) return "📌"; // Addressable
-        if (kind >= 10000 && kind < 20000) return "🔄"; // Replaceable
-        return "📝"; // Default
-      };
-
-      // Icon based on type and kind
-      const icon = document.createElement("span");
-      icon.className = "text-primary flex-shrink-0";
+      // Type label
+      const typeLabel = document.createElement("span");
+      typeLabel.className = "text-primary font-medium";
 
       // Content label
-      const label = document.createElement("span");
-      label.className = "text-muted-foreground truncate max-w-[120px]";
+      const contentLabel = document.createElement("span");
+      contentLabel.className = "text-muted-foreground truncate max-w-[140px]";
 
-      if (type === "npub") {
-        // npub: 👤 pubkey
-        icon.textContent = "👤";
-        label.textContent = data.slice(0, 8);
-      } else if (type === "nprofile") {
-        // nprofile: 👤 pubkey
-        icon.textContent = "👤";
-        label.textContent = data.pubkey.slice(0, 8);
-      } else if (type === "note") {
-        // note: 📝 event-id
-        icon.textContent = "📝";
-        label.textContent = data.slice(0, 8);
-      } else if (type === "nevent") {
-        // nevent: kind-icon event-id (or author if available)
-        icon.textContent = getKindIcon(data.kind);
-        // nevent can optionally include author
-        if (data.author) {
-          label.textContent = data.author.slice(0, 8);
-        } else {
-          label.textContent = data.id.slice(0, 8);
-        }
+      if (type === "note" || type === "nevent") {
+        // event + short ID
+        typeLabel.textContent = "event";
+        contentLabel.textContent =
+          type === "note" ? data.slice(0, 8) : data.id.slice(0, 8);
       } else if (type === "naddr") {
-        // naddr: kind-icon author
-        icon.textContent = getKindIcon(data.kind);
-        label.textContent = data.pubkey.slice(0, 8);
+        // address + d identifier (or short pubkey if no identifier)
+        typeLabel.textContent = "address";
+        contentLabel.textContent = data.identifier || data.pubkey.slice(0, 8);
       }
 
-      dom.appendChild(icon);
-      dom.appendChild(label);
+      dom.appendChild(typeLabel);
+      dom.appendChild(contentLabel);
 
       return { dom };
     };
@@ -439,12 +402,21 @@ const NostrPasteHandler = Extension.create({
               try {
                 const decoded = nip19.decode(bech32);
 
-                // Create preview node based on type
+                // For npub/nprofile, create regular mention nodes (reuse existing infrastructure)
                 if (decoded.type === "npub") {
+                  const pubkey = decoded.data as string;
                   nodes.push(
-                    view.state.schema.nodes.nostrEventPreview.create({
-                      type: "npub",
-                      data: decoded.data,
+                    view.state.schema.nodes.mention.create({
+                      id: pubkey,
+                      label: pubkey.slice(0, 8), // Will be updated with profile name if available
+                    }),
+                  );
+                } else if (decoded.type === "nprofile") {
+                  const pubkey = (decoded.data as any).pubkey;
+                  nodes.push(
+                    view.state.schema.nodes.mention.create({
+                      id: pubkey,
+                      label: pubkey.slice(0, 8), // Will be updated with profile name if available
                     }),
                   );
                 } else if (decoded.type === "note") {
@@ -465,13 +437,6 @@ const NostrPasteHandler = Extension.create({
                   nodes.push(
                     view.state.schema.nodes.nostrEventPreview.create({
                       type: "naddr",
-                      data: decoded.data,
-                    }),
-                  );
-                } else if (decoded.type === "nprofile") {
-                  nodes.push(
-                    view.state.schema.nodes.nostrEventPreview.create({
-                      type: "nprofile",
                       data: decoded.data,
                     }),
                   );
@@ -882,16 +847,12 @@ export const MentionEditor = forwardRef<
                 // Nostr event preview - serialize back to nostr: URI
                 const { type, data } = child.attrs;
                 try {
-                  if (type === "npub") {
-                    text += `nostr:${nip19.npubEncode(data)}`;
-                  } else if (type === "note") {
+                  if (type === "note") {
                     text += `nostr:${nip19.noteEncode(data)}`;
                   } else if (type === "nevent") {
                     text += `nostr:${nip19.neventEncode(data)}`;
                   } else if (type === "naddr") {
                     text += `nostr:${nip19.naddrEncode(data)}`;
-                  } else if (type === "nprofile") {
-                    text += `nostr:${nip19.nprofileEncode(data)}`;
                   }
                 } catch (err) {
                   console.error(
