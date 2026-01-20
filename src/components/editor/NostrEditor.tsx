@@ -311,16 +311,21 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
 
 /**
  * Create a TipTap suggestion configuration from our SuggestionConfig
+ * Uses a ref to always get the latest search function (since TipTap captures at mount)
  */
 function createSuggestionConfig<T>(
-  config: SuggestionConfig<T>,
+  configRef: React.MutableRefObject<SuggestionConfig<T> | undefined>,
+  triggerChar: string,
   handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
 ): Omit<SuggestionOptions<T>, "editor"> {
   return {
-    char: config.char,
-    allowSpaces: config.allowSpaces ?? false,
-    allow: config.allow,
+    char: triggerChar,
+    allowSpaces: configRef.current?.allowSpaces ?? false,
+    allow: configRef.current?.allow,
     items: async ({ query }) => {
+      // Always use the current config from ref to get fresh search function
+      const config = configRef.current;
+      if (!config) return [];
       return await config.search(query);
     },
     render: () => {
@@ -330,6 +335,9 @@ function createSuggestionConfig<T>(
 
       return {
         onStart: (props) => {
+          const config = configRef.current;
+          if (!config) return;
+
           editorRef = props.editor;
           component = new ReactRenderer(config.component as never, {
             props: {
@@ -415,6 +423,23 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
     ref,
   ) => {
     const handleSubmitRef = useRef<(editor: unknown) => void>(() => {});
+
+    // Refs for suggestion configs - TipTap captures these at mount, so we use refs
+    // to always get the latest search functions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mentionConfigRef = useRef<SuggestionConfig<any> | undefined>(
+      undefined,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const emojiConfigRef = useRef<SuggestionConfig<any> | undefined>(undefined);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const slashConfigRef = useRef<SuggestionConfig<any> | undefined>(undefined);
+
+    // Initialize refs immediately (for first render) and update when suggestions change
+    // This ensures the refs have values before extensions are created
+    mentionConfigRef.current = suggestions.find((s) => s.char === "@");
+    emojiConfigRef.current = suggestions.find((s) => s.char === ":");
+    slashConfigRef.current = suggestions.find((s) => s.char === "/");
 
     // Helper function to serialize editor content
     const serializeContent = useCallback(
@@ -573,14 +598,13 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         createBlobAttachmentNode(blobPreview),
       ];
 
-      // Add mention extension for @ mentions (find it in suggestions)
-      const mentionConfig = suggestions.find((s) => s.char === "@");
-      if (mentionConfig) {
+      // Add mention extension for @ mentions (uses ref for latest config)
+      if (mentionConfigRef.current) {
         exts.push(
           Mention.configure({
             HTMLAttributes: { class: "mention" },
             suggestion: {
-              ...createSuggestionConfig(mentionConfig, handleSubmitRef),
+              ...createSuggestionConfig(mentionConfigRef, "@", handleSubmitRef),
               command: ({
                 editor,
                 range,
@@ -590,7 +614,9 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 range: unknown;
                 props: unknown;
               }) => {
-                const result = mentionConfig.onSelect(props as never);
+                const config = mentionConfigRef.current;
+                if (!config) return;
+                const result = config.onSelect(props as never);
                 const ed = editor as {
                   chain: () => {
                     focus: () => {
@@ -617,14 +643,13 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         );
       }
 
-      // Add emoji extension (find it in suggestions)
-      const emojiConfig = suggestions.find((s) => s.char === ":");
-      if (emojiConfig) {
+      // Add emoji extension (uses ref for latest config)
+      if (emojiConfigRef.current) {
         exts.push(
           EmojiMention.configure({
             HTMLAttributes: { class: "emoji" },
             suggestion: {
-              ...createSuggestionConfig(emojiConfig, handleSubmitRef),
+              ...createSuggestionConfig(emojiConfigRef, ":", handleSubmitRef),
               command: ({
                 editor,
                 range,
@@ -634,7 +659,9 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 range: unknown;
                 props: unknown;
               }) => {
-                const result = emojiConfig.onSelect(props as never);
+                const config = emojiConfigRef.current;
+                if (!config) return;
+                const result = config.onSelect(props as never);
                 const ed = editor as {
                   chain: () => {
                     focus: () => {
@@ -658,15 +685,14 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         );
       }
 
-      // Add slash command extension (find it in suggestions)
-      const slashConfig = suggestions.find((s) => s.char === "/");
-      if (slashConfig) {
+      // Add slash command extension (uses ref for latest config)
+      if (slashConfigRef.current) {
         const SlashCommand = Mention.extend({ name: "slashCommand" });
         exts.push(
           SlashCommand.configure({
             HTMLAttributes: { class: "slash-command" },
             suggestion: {
-              ...createSuggestionConfig(slashConfig, handleSubmitRef),
+              ...createSuggestionConfig(slashConfigRef, "/", handleSubmitRef),
               command: ({
                 editor,
                 props,
@@ -674,12 +700,14 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 editor: unknown;
                 props: unknown;
               }) => {
+                const config = slashConfigRef.current;
+                if (!config) return;
                 const ed = editor as { commands: { clearContent: () => void } };
-                if (slashConfig.clearOnSelect !== false) {
+                if (config.clearOnSelect !== false) {
                   ed.commands.clearContent();
                 }
-                if (slashConfig.onExecute) {
-                  slashConfig.onExecute(props as never).catch((error) => {
+                if (config.onExecute) {
+                  config.onExecute(props as never).catch((error) => {
                     console.error(
                       "[NostrEditor] Command execution failed:",
                       error,
@@ -695,54 +723,10 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         );
       }
 
-      // Add any additional custom suggestions (not @, :, or /)
-      const customSuggestions = suggestions.filter(
-        (s) => !["@", ":", "/"].includes(s.char),
-      );
-      for (const config of customSuggestions) {
-        const CustomMention = Mention.extend({
-          name: `suggestion-${config.char}`,
-        });
-        exts.push(
-          CustomMention.configure({
-            HTMLAttributes: { class: `suggestion-${config.char}` },
-            suggestion: {
-              ...createSuggestionConfig(config, handleSubmitRef),
-              command: ({
-                editor,
-                range,
-                props,
-              }: {
-                editor: unknown;
-                range: unknown;
-                props: unknown;
-              }) => {
-                const result = config.onSelect(props as never);
-                const ed = editor as {
-                  chain: () => {
-                    focus: () => {
-                      insertContentAt: (
-                        range: unknown,
-                        content: unknown[],
-                      ) => { run: () => void };
-                    };
-                  };
-                };
-                ed.chain()
-                  .focus()
-                  .insertContentAt(range, [
-                    { type: result.type, attrs: result.attrs },
-                    { type: "text", text: " " },
-                  ])
-                  .run();
-              },
-            },
-          }),
-        );
-      }
-
       return exts;
-    }, [suggestions, submitBehavior, placeholder, blobPreview]);
+      // Note: We don't depend on suggestions here - we use refs that are updated
+      // synchronously when suggestions change, ensuring the search functions are always fresh
+    }, [submitBehavior, placeholder, blobPreview]);
 
     const editor = useEditor({
       extensions,

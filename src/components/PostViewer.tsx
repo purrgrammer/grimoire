@@ -184,7 +184,7 @@ export function PostViewer() {
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-3">
       <div className="flex-1 min-h-0">
         <NostrEditor
           ref={editorRef}
@@ -192,14 +192,14 @@ export function PostViewer() {
           variant="full"
           submitBehavior="button-only"
           blobPreview="gallery"
-          minLines={10}
+          minLines={6}
           suggestions={suggestions}
           onChange={handleChange}
           autoFocus
         />
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t mt-4">
+      <div className="flex items-center justify-between pt-2 border-t mt-2">
         <Button
           type="button"
           variant="ghost"
