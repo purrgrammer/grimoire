@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   Zap,
+  PenSquare,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -42,6 +43,7 @@ import { RelayLink } from "./RelayLink";
 import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
+import PostDialog from "@/components/PostDialog";
 import { useState } from "react";
 import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
@@ -93,6 +95,7 @@ export default function UserMenu() {
   const [showLogin, setShowLogin] = useState(false);
   const [showConnectWallet, setShowConnectWallet] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
+  const [showPost, setShowPost] = useState(false);
   const { themeId, setTheme, availableThemes } = useTheme();
 
   // Calculate monthly donations reactively from DB (last 30 days)
@@ -218,6 +221,7 @@ export default function UserMenu() {
         onOpenChange={setShowConnectWallet}
         onConnected={openWallet}
       />
+      <PostDialog open={showPost} onOpenChange={setShowPost} />
 
       {/* Wallet Info Dialog */}
       {nwcConnection && (
@@ -379,6 +383,13 @@ export default function UserMenu() {
                 >
                   <UserLabel pubkey={account.pubkey} />
                 </DropdownMenuLabel>
+                <DropdownMenuItem
+                  className="cursor-crosshair"
+                  onClick={() => setShowPost(true)}
+                >
+                  <PenSquare className="size-4 mr-2" />
+                  New Post
+                </DropdownMenuItem>
               </DropdownMenuGroup>
 
               <DropdownMenuSeparator />
