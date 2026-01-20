@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   Zap,
+  Trophy,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -51,7 +52,7 @@ import {
   GRIMOIRE_DONATE_PUBKEY,
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
-import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import supportersService, { MONTHLY_GOAL_SATS } from "@/services/supporters";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -82,6 +83,36 @@ function UserLabel({ pubkey }: { pubkey: string }) {
   );
 }
 
+function TopContributor({
+  pubkey,
+  amount,
+}: {
+  pubkey: string;
+  amount: number;
+}) {
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  function formatSats(sats: number): string {
+    if (sats >= 1_000_000) {
+      return `${(sats / 1_000_000).toFixed(1)}M`;
+    } else if (sats >= 1_000) {
+      return `${Math.floor(sats / 1_000)}k`;
+    }
+    return sats.toString();
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
+      <Trophy className="size-3.5 text-yellow-500" />
+      <span className="text-xs text-muted-foreground flex-1 truncate">
+        {displayName}
+      </span>
+      <span className="text-xs font-medium">{formatSats(amount)} sats</span>
+    </div>
+  );
+}
+
 export default function UserMenu() {
   const account = use$(accounts.active$);
   const { state, addWindow, disconnectNWC, toggleWalletBalancesBlur } =
@@ -108,6 +139,12 @@ export default function UserMenu() {
         });
       return total;
     }, []) ?? 0;
+
+  // Get top monthly contributor reactively
+  const topContributor = useLiveQuery(
+    async () => supportersService.getTopMonthlyContributor(),
+    [],
+  );
 
   // Calculate monthly donation progress
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
@@ -442,6 +479,12 @@ export default function UserMenu() {
                 </span>
               </div>
               <Progress value={goalProgress} className="h-1.5" />
+              {topContributor && (
+                <TopContributor
+                  pubkey={topContributor.pubkey}
+                  amount={topContributor.totalSats}
+                />
+              )}
             </div>
           </DropdownMenuGroup>
 

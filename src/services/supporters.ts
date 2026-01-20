@@ -337,6 +337,47 @@ class SupportersService {
   }
 
   /**
+   * Get top contributor for the current calendar month
+   * Returns the supporter with the highest total zaps this month
+   */
+  async getTopMonthlyContributor(): Promise<SupporterInfo | undefined> {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstOfMonthTimestamp = Math.floor(firstOfMonth.getTime() / 1000);
+
+    const supporterMap = new Map<string, SupporterInfo>();
+
+    // Aggregate zaps by sender for current month
+    await db.grimoireZaps
+      .where("timestamp")
+      .aboveOrEqual(firstOfMonthTimestamp)
+      .each((zap) => {
+        const existing = supporterMap.get(zap.senderPubkey);
+        if (existing) {
+          existing.totalSats += zap.amountSats;
+          existing.zapCount += 1;
+          existing.lastZapTimestamp = Math.max(
+            existing.lastZapTimestamp,
+            zap.timestamp,
+          );
+        } else {
+          supporterMap.set(zap.senderPubkey, {
+            pubkey: zap.senderPubkey,
+            totalSats: zap.amountSats,
+            zapCount: 1,
+            lastZapTimestamp: zap.timestamp,
+          });
+        }
+      });
+
+    // Find top contributor
+    const supporters = Array.from(supporterMap.values());
+    if (supporters.length === 0) return undefined;
+
+    return supporters.sort((a, b) => b.totalSats - a.totalSats)[0];
+  }
+
+  /**
    * Get supporter count using Dexie uniqueKeys
    */
   async getSupporterCount(): Promise<number> {
