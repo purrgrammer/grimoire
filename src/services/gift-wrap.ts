@@ -270,18 +270,29 @@ class GiftWrapManager {
 
     const { pubkey } = account;
 
-    // Get oldest gift wrap timestamp
+    // Get oldest gift wrap timestamp, or use lastSyncTimestamp if no gift wraps yet
     const decryptions = await db.giftWrapDecryptions
       .where("recipientPubkey")
       .equals(pubkey)
       .sortBy("lastAttempt");
 
+    let oldestTimestamp: number;
     if (decryptions.length === 0) {
-      console.log("[GiftWrap] No gift wraps to paginate from");
-      return 0;
+      // No gift wraps yet - use lastSyncTimestamp or current time
+      if (this.lastSyncTimestamp > 0) {
+        oldestTimestamp = this.lastSyncTimestamp;
+        console.log("[GiftWrap] No gift wraps yet, using last sync timestamp");
+      } else {
+        // First time - start from 90 days ago
+        const now = Math.floor(Date.now() / 1000);
+        oldestTimestamp =
+          now - GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
+        console.log("[GiftWrap] No gift wraps yet, starting from 90 days ago");
+      }
+    } else {
+      oldestTimestamp = decryptions[0].lastAttempt;
     }
 
-    const oldestTimestamp = decryptions[0].lastAttempt;
     const cutoff = oldestTimestamp - 30 * 24 * 60 * 60; // 30 days before oldest
 
     console.log(
@@ -381,10 +392,10 @@ class GiftWrapManager {
   }
 
   /**
-   * Get DM relays from user's kind 10050 event
+   * Get DM relays from user's kind 10050 event, with fallback to general relays
    */
   private async getDMRelays(pubkey: string): Promise<string[]> {
-    // Try to get kind 10050 from event store
+    // Try to get kind 10050 (DM relay list) from event store
     const dmRelayEvent = eventStore.getReplaceable(10050, pubkey, "");
 
     if (dmRelayEvent) {
@@ -394,11 +405,50 @@ class GiftWrapManager {
         .map((t: string[]) => t[1]);
 
       if (relays.length > 0) {
+        console.log(
+          `[GiftWrap] Using ${relays.length} DM relays from kind 10050`,
+        );
         return relays;
       }
     }
 
-    // TODO: Fall back to general relay list (kind 10002 or kind 3)
+    console.log(
+      "[GiftWrap] No kind 10050 found, falling back to general relays",
+    );
+
+    // Fall back to general relay list (kind 10002)
+    const relayListEvent = eventStore.getReplaceable(10002, pubkey, "");
+    if (relayListEvent) {
+      const relays = relayListEvent.tags
+        .filter((t: string[]) => t[0] === "r" && t[1])
+        .map((t: string[]) => t[1]);
+
+      if (relays.length > 0) {
+        console.log(`[GiftWrap] Using ${relays.length} relays from kind 10002`);
+        return relays;
+      }
+    }
+
+    console.log("[GiftWrap] No kind 10002 found, falling back to contact list");
+
+    // Final fallback to contact list relays (kind 3)
+    const contactsEvent = eventStore.getReplaceable(3, pubkey, "");
+    if (contactsEvent) {
+      try {
+        const content = JSON.parse(contactsEvent.content);
+        if (typeof content === "object" && content !== null) {
+          const relays = Object.keys(content);
+          if (relays.length > 0) {
+            console.log(`[GiftWrap] Using ${relays.length} relays from kind 3`);
+            return relays;
+          }
+        }
+      } catch (error) {
+        console.warn("[GiftWrap] Failed to parse kind 3 content:", error);
+      }
+    }
+
+    console.warn("[GiftWrap] No relays found for user");
     return [];
   }
 

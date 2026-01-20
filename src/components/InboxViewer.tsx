@@ -20,10 +20,22 @@ import {
 import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
 import { getDisplayName } from "@/lib/nostr-utils";
-import { Copy, Settings, MessageSquare, ChevronDown } from "lucide-react";
+import {
+  Copy,
+  Settings,
+  MessageSquare,
+  ChevronDown,
+  Radio,
+} from "lucide-react";
 import { useCopy } from "@/hooks/useCopy";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
+import { RelayLink } from "@/components/nostr/RelayLink";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type InboxViewerProps = Record<string, never>;
 
@@ -37,6 +49,7 @@ export function InboxViewer(_props: InboxViewerProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [conversationsPage, setConversationsPage] = useState(1);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [relaysOpen, setRelaysOpen] = useState(false);
 
   const syncEnabled = state.giftWrapSettings?.syncEnabled ?? true;
   const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? true;
@@ -249,25 +262,37 @@ export function InboxViewer(_props: InboxViewerProps) {
       </div>
 
       {/* DM Relays Panel */}
-      <div className="border-b bg-muted/20 px-4 py-3">
-        <h3 className="mb-2 text-sm font-semibold">DM Relays (Kind 10050)</h3>
-        {dmRelays.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {dmRelays.map((relay) => (
-              <span
-                key={relay}
-                className="rounded bg-muted px-2 py-1 text-xs font-mono"
-              >
-                {relay}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No DM relays configured (using general relays)
-          </p>
-        )}
-      </div>
+      <Collapsible
+        open={relaysOpen}
+        onOpenChange={setRelaysOpen}
+        className="border-b bg-muted/20"
+      >
+        <div className="px-4 py-3">
+          <CollapsibleTrigger className="flex w-full items-center justify-between hover:opacity-70">
+            <div className="flex items-center gap-2">
+              <Radio className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">
+                DM Relays ({dmRelays.length})
+              </h3>
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-3 space-y-1.5">
+            {dmRelays.length > 0 ? (
+              dmRelays.map((relay) => (
+                <RelayLink key={relay} url={relay} showInboxOutbox={false} />
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No DM relays configured. Using general relays from kind 10002 or
+                kind 3.
+              </p>
+            )}
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       {/* Conversations List */}
       <div className="flex-1 overflow-auto">
@@ -281,10 +306,51 @@ export function InboxViewer(_props: InboxViewerProps) {
           {conversationsList.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               <MessageSquare className="mx-auto mb-2 h-12 w-12 opacity-50" />
-              <p>No conversations yet</p>
-              <p className="text-xs">
-                Start a chat using: <code>chat npub...</code>
-              </p>
+              {!pubkey ? (
+                <>
+                  <p>No account active</p>
+                  <p className="text-xs mt-1">
+                    Login to view your encrypted messages
+                  </p>
+                </>
+              ) : !syncEnabled ? (
+                <>
+                  <p>Gift wrap sync is disabled</p>
+                  <p className="text-xs mt-1">
+                    Enable sync in settings to receive NIP-17 messages
+                  </p>
+                </>
+              ) : dmRelays.length === 0 && stats.totalGiftWraps === 0 ? (
+                <>
+                  <p>No relays configured</p>
+                  <p className="text-xs mt-1">
+                    Configure kind 10050 (DM relays) or kind 10002 (general
+                    relays)
+                  </p>
+                  <p className="text-xs mt-1">
+                    Try clicking "Load Older" to fetch messages from available
+                    relays
+                  </p>
+                </>
+              ) : stats.totalGiftWraps === 0 ? (
+                <>
+                  <p>No gift wraps received yet</p>
+                  <p className="text-xs mt-1">
+                    Waiting for encrypted messages on {dmRelays.length} relay
+                    {dmRelays.length !== 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs mt-1">
+                    Try "Load Older" to fetch older messages
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>No conversations yet</p>
+                  <p className="text-xs mt-1">
+                    Start a chat using: <code>chat npub...</code>
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>
