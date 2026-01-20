@@ -56,8 +56,8 @@ export function PostViewer() {
   // Use pubkey as draft key - one draft per account, persists across reloads
   const draftKey = pubkey ? `${DRAFT_STORAGE_PREFIX}${pubkey}` : null;
 
-  // Load draft from localStorage on mount
-  const [initialContent, setInitialContent] = useState<string | undefined>(
+  // Load draft from localStorage on mount (stores full TipTap JSON for rich content)
+  const [initialContent, setInitialContent] = useState<object | undefined>(
     undefined,
   );
   const draftLoadedRef = useRef(false);
@@ -69,30 +69,30 @@ export function PostViewer() {
     try {
       const savedDraft = localStorage.getItem(draftKey);
       if (savedDraft) {
-        setInitialContent(savedDraft);
+        const parsed = JSON.parse(savedDraft);
+        setInitialContent(parsed);
       }
     } catch (error) {
       console.warn("[PostViewer] Failed to load draft:", error);
     }
   }, [draftKey]);
 
-  // Save draft to localStorage when content changes
-  const saveDraft = useCallback(
-    (content: SerializedContent) => {
-      if (!draftKey) return;
-      try {
-        if (content.text.trim()) {
-          localStorage.setItem(draftKey, content.text);
-        } else {
-          localStorage.removeItem(draftKey);
-        }
-      } catch (error) {
-        // localStorage might be full or disabled
-        console.warn("[PostViewer] Failed to save draft:", error);
+  // Save draft to localStorage when content changes (uses full TipTap JSON)
+  const saveDraft = useCallback(() => {
+    if (!draftKey || !editorRef.current) return;
+    try {
+      const json = editorRef.current.getJSON();
+      const text = editorRef.current.getContent();
+      if (text.trim()) {
+        localStorage.setItem(draftKey, JSON.stringify(json));
+      } else {
+        localStorage.removeItem(draftKey);
       }
-    },
-    [draftKey],
-  );
+    } catch (error) {
+      // localStorage might be full or disabled
+      console.warn("[PostViewer] Failed to save draft:", error);
+    }
+  }, [draftKey]);
 
   // Clear draft from localStorage
   const clearDraft = useCallback(() => {
@@ -218,15 +218,12 @@ export function PostViewer() {
   }, [handlePublish]);
 
   // Handle content change - save draft and reset published state
-  const handleChange = useCallback(
-    (content: SerializedContent) => {
-      if (isPublished) {
-        setIsPublished(false);
-      }
-      saveDraft(content);
-    },
-    [isPublished, saveDraft],
-  );
+  const handleChange = useCallback(() => {
+    if (isPublished) {
+      setIsPublished(false);
+    }
+    saveDraft();
+  }, [isPublished, saveDraft]);
 
   if (!canSign) {
     return (

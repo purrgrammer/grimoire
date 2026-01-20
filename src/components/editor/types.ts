@@ -113,6 +113,10 @@ export interface NostrEditorHandle {
   clear: () => void;
   getContent: () => string;
   getSerializedContent: () => SerializedContent;
+  /** Get the full TipTap JSON content (for draft persistence) */
+  getJSON: () => object | null;
+  /** Set content from string or TipTap JSON */
+  setContent: (content: string | object) => void;
   isEmpty: () => boolean;
   submit: () => void;
   /** Insert text at the current cursor position */
