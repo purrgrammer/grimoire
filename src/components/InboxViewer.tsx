@@ -20,15 +20,30 @@ import {
 import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
 import { getDisplayName } from "@/lib/nostr-utils";
-import { Settings, MessageSquare, ChevronDown, Radio } from "lucide-react";
+import {
+  Settings,
+  MessageSquare,
+  Radio,
+  ShieldCheck,
+  ShieldAlert,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
 import { RelayLink } from "@/components/nostr/RelayLink";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type InboxViewerProps = Record<string, never>;
 
@@ -39,13 +54,11 @@ export function InboxViewer(_props: InboxViewerProps) {
   const { pubkey } = useAccount();
   const stats = useGiftWrapStats();
   const conversations = useGiftWrapConversations();
-  const [showSettings, setShowSettings] = useState(false);
   const [conversationsPage, setConversationsPage] = useState(1);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
-  const [relaysOpen, setRelaysOpen] = useState(false);
 
   const syncEnabled = state.giftWrapSettings?.syncEnabled ?? false;
-  const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? true;
+  const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? false;
 
   // Get DM relays (kind 10050)
   const dmRelayEvent = use$(() => {
@@ -147,6 +160,25 @@ export function InboxViewer(_props: InboxViewerProps) {
     }
   };
 
+  const [isBatchDecrypting, setIsBatchDecrypting] = useState(false);
+
+  const handleBatchDecrypt = async () => {
+    setIsBatchDecrypting(true);
+    try {
+      const count = await giftWrapManager.batchDecryptPending();
+      if (count > 0) {
+        toast.success(`Decrypted ${count} gift wraps`);
+      } else {
+        toast.info("No pending gift wraps to decrypt");
+      }
+    } catch (error) {
+      console.error("[Inbox] Error batch decrypting:", error);
+      toast.error("Failed to batch decrypt");
+    } finally {
+      setIsBatchDecrypting(false);
+    }
+  };
+
   if (!pubkey) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -161,124 +193,165 @@ export function InboxViewer(_props: InboxViewerProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      {/* Header - Single Row with Heading, Stats, Relays, Settings */}
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          {/* Left: Heading */}
-          <h2 className="text-lg font-semibold">Inbox</h2>
+      {/* Compact Header - Like req viewer */}
+      <div className="border-b px-4 py-2 font-mono text-xs flex items-center justify-between">
+        {/* Left: Status */}
+        <div className="flex items-center gap-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 cursor-help">
+                {syncEnabled ? (
+                  <ShieldCheck className="size-3 text-green-600/70" />
+                ) : (
+                  <ShieldAlert className="size-3 text-muted-foreground/50" />
+                )}
+                <span className="text-muted-foreground">
+                  {syncEnabled ? "SYNC" : "OFF"}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {syncEnabled
+                  ? "Gift wrap sync enabled"
+                  : "Gift wrap sync disabled"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
 
-          {/* Center: Gift Wrap Stats */}
-          <div className="flex flex-1 items-center justify-center gap-6">
-            <div className="text-center">
-              <div className="text-lg font-bold">{stats.totalGiftWraps}</div>
-              <div className="text-xs text-muted-foreground">Total</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-green-600">
+        {/* Right: Stats + Controls */}
+        <div className="flex items-center gap-3">
+          {/* Stats - Compact numbers only */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-muted-foreground/80">
+                {stats.totalGiftWraps}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Total gift wraps</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-green-600/70">
                 {stats.successfulDecryptions}
-              </div>
-              <div className="text-xs text-muted-foreground">Success</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-red-600">
-                {stats.failedDecryptions}
-              </div>
-              <div className="text-xs text-muted-foreground">Failed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-yellow-600">
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Successfully decrypted</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-red-600/70">{stats.failedDecryptions}</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Failed decryptions</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-yellow-600/70">
                 {stats.pendingDecryptions}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Pending decryptions</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Relay Dropdown (no chevron) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-muted-foreground/80 hover:text-foreground transition-colors">
+                <Radio className="size-3" />
+                <span>{dmRelays.length}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel>DM Relays</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="max-h-64 overflow-y-auto space-y-1 p-2">
+                {dmRelays.length > 0 ? (
+                  dmRelays.map((relay) => (
+                    <RelayLink
+                      key={relay}
+                      url={relay}
+                      showInboxOutbox={false}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground p-2">
+                    No DM relays configured. Using general relays from kind
+                    10002 or kind 3.
+                  </p>
+                )}
               </div>
-              <div className="text-xs text-muted-foreground">Pending</div>
-            </div>
-          </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* Right: Relay dropdown + Settings */}
-          <div className="flex items-center gap-2">
-            {/* Relay Icon + Count Dropdown */}
-            <Collapsible open={relaysOpen} onOpenChange={setRelaysOpen}>
-              <CollapsibleTrigger asChild>
-                <button
-                  className="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-muted"
-                  title="DM Relays"
-                >
-                  <Radio className="h-4 w-4" />
-                  <span className="text-sm font-medium">{dmRelays.length}</span>
-                  <ChevronDown
-                    className={`h-3 w-3 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
+          {/* Settings Dropdown (no chevron) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="text-muted-foreground/80 hover:text-foreground transition-colors">
+                <Settings className="size-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="p-2 space-y-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncEnabled}
+                    onChange={handleToggleSync}
+                    className="h-3.5 w-3.5"
                   />
-                </button>
-              </CollapsibleTrigger>
-              {relaysOpen && (
-                <div className="absolute right-16 top-14 z-10 w-72 rounded-md border bg-popover p-3 shadow-lg">
-                  <CollapsibleContent className="space-y-1.5">
-                    <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                      DM RELAYS
-                    </div>
-                    {dmRelays.length > 0 ? (
-                      dmRelays.map((relay) => (
-                        <RelayLink
-                          key={relay}
-                          url={relay}
-                          showInboxOutbox={false}
-                        />
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No DM relays configured. Using general relays from kind
-                        10002 or kind 3.
-                      </p>
-                    )}
-                  </CollapsibleContent>
-                </div>
+                  <span>Enable sync</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoDecrypt}
+                    onChange={handleToggleAutoDecrypt}
+                    className="h-3.5 w-3.5"
+                    disabled={!syncEnabled}
+                  />
+                  <span>Auto-decrypt</span>
+                </label>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLoadOlderGiftWraps}
+                disabled={isLoadingOlder}
+              >
+                {isLoadingOlder ? "Loading..." : "Load Older"}
+              </DropdownMenuItem>
+              {!autoDecrypt && stats.pendingDecryptions > 0 && (
+                <DropdownMenuItem
+                  onClick={handleBatchDecrypt}
+                  disabled={isBatchDecrypting}
+                >
+                  {isBatchDecrypting ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="size-3 animate-spin" />
+                      Decrypting...
+                    </span>
+                  ) : (
+                    `Decrypt ${stats.pendingDecryptions} Pending`
+                  )}
+                </DropdownMenuItem>
               )}
-            </Collapsible>
-
-            {/* Settings Icon */}
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="rounded p-2 hover:bg-muted"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-
-      {/* Settings Panel (Collapsible) */}
-      {showSettings && (
-        <div className="border-b bg-muted/50 px-4 py-3">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={syncEnabled}
-                onChange={handleToggleSync}
-                className="h-4 w-4"
-              />
-              <span className="text-sm">Enable gift wrap sync</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={autoDecrypt}
-                onChange={handleToggleAutoDecrypt}
-                className="h-4 w-4"
-                disabled={!syncEnabled}
-              />
-              <span className="text-sm">Auto-decrypt received gift wraps</span>
-            </label>
-            <button
-              onClick={handleLoadOlderGiftWraps}
-              disabled={isLoadingOlder}
-              className="mt-2 w-full rounded px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
-            >
-              {isLoadingOlder ? "Loading..." : "Load Older Gift Wraps"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Conversations List */}
       <div className="flex-1 overflow-auto">
@@ -402,24 +475,21 @@ function ConversationRow({
   return (
     <div
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-3 border-b px-4 py-2 hover:bg-muted/50 last:border-b-0"
+      className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
-      {/* Avatar placeholder */}
-      <div className="h-8 w-8 shrink-0 rounded-full bg-primary/20" />
-
       {/* Name */}
-      <span className="w-32 shrink-0 truncate font-medium text-sm">
+      <span className="w-28 shrink-0 truncate font-medium text-muted-foreground">
         {displayName}
       </span>
 
       {/* Message preview */}
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+      <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
         {preview}
         {truncated && "..."}
       </span>
 
       {/* Timestamp */}
-      <span className="shrink-0 text-xs text-muted-foreground">{timeStr}</span>
+      <span className="shrink-0 text-muted-foreground/50">{timeStr}</span>
     </div>
   );
 }

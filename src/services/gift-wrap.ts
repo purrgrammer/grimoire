@@ -352,6 +352,75 @@ class GiftWrapManager {
   }
 
   /**
+   * Batch decrypt all pending gift wraps
+   * Returns the number of successfully decrypted gift wraps
+   */
+  async batchDecryptPending(): Promise<number> {
+    const account = accountManager.active$.value;
+    if (!account) {
+      console.log("[GiftWrap] No active account");
+      return 0;
+    }
+
+    const { pubkey } = account;
+
+    // Get all pending decryptions
+    const pending = await db.giftWrapDecryptions
+      .where("decryptionState")
+      .equals("pending")
+      .and((d) => d.recipientPubkey === pubkey)
+      .toArray();
+
+    if (pending.length === 0) {
+      console.log("[GiftWrap] No pending decryptions");
+      return 0;
+    }
+
+    console.log(
+      `[GiftWrap] Batch decrypting ${pending.length} pending gift wraps`,
+    );
+
+    let successCount = 0;
+
+    // Process each pending gift wrap
+    for (const decryption of pending) {
+      try {
+        // Get the gift wrap event from event store
+        const giftWrap = eventStore.getEvent(decryption.giftWrapId);
+        if (!giftWrap) {
+          console.warn(
+            `[GiftWrap] Gift wrap ${decryption.giftWrapId} not found in event store`,
+          );
+          continue;
+        }
+
+        // Attempt to decrypt
+        await this.processGiftWrap(giftWrap, pubkey);
+
+        // Check if it succeeded
+        const updated = await db.giftWrapDecryptions.get(decryption.giftWrapId);
+        if (updated?.decryptionState === "success") {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(
+          `[GiftWrap] Error batch decrypting ${decryption.giftWrapId.slice(0, 8)}:`,
+          error,
+        );
+      }
+    }
+
+    console.log(
+      `[GiftWrap] Batch decrypt completed: ${successCount}/${pending.length} succeeded`,
+    );
+
+    // Update stats
+    await this.updateStats();
+
+    return successCount;
+  }
+
+  /**
    * Clean up old gift wraps to prevent storage bloat
    * Removes decryption records older than MAX_STORAGE_DAYS
    */
