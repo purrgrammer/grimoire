@@ -23,6 +23,7 @@ import {
   LogIn,
   EyeOff,
 } from "lucide-react";
+import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -135,6 +136,15 @@ export function ZapWindow({
     if (!verifyUrl || !showQrDialog || isPaid) return;
 
     const checkPayment = async () => {
+      // Check if invoice has expired
+      if (invoiceExpiry) {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        if (nowSeconds > invoiceExpiry) {
+          console.debug("Invoice expired, stopping payment verification");
+          return; // Stop polling if expired
+        }
+      }
+
       setCheckingPayment(true);
       try {
         const result = await verifyPayment(verifyUrl);
@@ -165,6 +175,7 @@ export function ZapWindow({
     verifyUrl,
     showQrDialog,
     isPaid,
+    invoiceExpiry,
     selectedAmount,
     customAmount,
     recipientName,
@@ -186,6 +197,7 @@ export function ZapWindow({
   const [zapAnonymously, setZapAnonymously] = useState(false);
   const [verifyUrl, setVerifyUrl] = useState<string>("");
   const [checkingPayment, setCheckingPayment] = useState(false);
+  const [invoiceExpiry, setInvoiceExpiry] = useState<number | null>(null); // Unix timestamp when invoice expires
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -222,6 +234,13 @@ export function ZapWindow({
       ? getDisplayName(recipientPubkey, recipientProfile)
       : recipientPubkey.slice(0, 8);
   }, [recipientPubkey, recipientProfile]);
+
+  // Check if invoice has expired
+  const isInvoiceExpired = useMemo(() => {
+    if (!invoiceExpiry) return false;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return nowSeconds > invoiceExpiry;
+  }, [invoiceExpiry]);
 
   // Check if recipient has a lightning address
   const hasLightningAddress = !!(
@@ -441,6 +460,26 @@ export function ZapWindow({
       setQrCodeUrl(qrUrl);
       setInvoice(invoiceText);
 
+      // Decode invoice to extract expiration time
+      try {
+        const decoded = decodeBolt11(invoiceText);
+        const timestampSection = decoded.sections.find(
+          (s) => s.name === "timestamp",
+        );
+        const timestamp =
+          timestampSection && "value" in timestampSection
+            ? Number(timestampSection.value)
+            : undefined;
+        const expiry = decoded.expiry;
+
+        if (timestamp && expiry) {
+          const expiresAt = timestamp + expiry;
+          setInvoiceExpiry(expiresAt);
+        }
+      } catch (error) {
+        console.error("Failed to decode invoice for expiry:", error);
+      }
+
       // Store verify URL if available for payment polling
       if (invoiceResponse.verify) {
         setVerifyUrl(invoiceResponse.verify);
@@ -572,26 +611,16 @@ export function ZapWindow({
 
               {/* QR Code */}
               {qrCodeUrl && (
-                <div className="flex justify-center p-4 bg-white rounded-lg">
+                <div
+                  className={`flex justify-center p-4 bg-white rounded-lg transition-all ${
+                    isInvoiceExpired ? "grayscale opacity-50" : ""
+                  }`}
+                >
                   <img
                     src={qrCodeUrl}
                     alt="Lightning Invoice QR Code"
                     className="w-64 h-64"
                   />
-                </div>
-              )}
-
-              {/* Payment Verification Status */}
-              {verifyUrl && (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  {checkingPayment && (
-                    <Loader2 className="size-3 animate-spin" />
-                  )}
-                  <span>
-                    {checkingPayment
-                      ? "Checking for payment..."
-                      : "Waiting for payment (auto-checking every 30s)"}
-                  </span>
                 </div>
               )}
 
