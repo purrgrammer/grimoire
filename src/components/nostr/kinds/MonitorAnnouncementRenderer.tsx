@@ -1,5 +1,10 @@
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   getMonitorFrequency,
   getMonitorChecks,
@@ -19,6 +24,11 @@ export function Kind10166Renderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
+        {/* Clickable Title */}
+        <ClickableEventTitle event={event} className="text-base font-semibold">
+          Relay Monitor
+        </ClickableEventTitle>
+
         {/* Monitoring Frequency */}
         {frequency && !isNaN(frequency) && (
           <div className="flex items-center gap-2 text-sm">
@@ -33,10 +43,10 @@ export function Kind10166Renderer({ event }: BaseEventProps) {
         {/* Check Types */}
         {checks.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Activity className="size-3" />
-              <span>Monitoring:</span>
-            </div>
+              Monitoring
+            </Label>
             <div className="flex flex-wrap gap-1.5">
               {checks.map((check) => (
                 <Badge

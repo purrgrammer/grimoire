@@ -1,8 +1,10 @@
 import { NostrEvent } from "@/types/nostr";
 import { RelayLink } from "../RelayLink";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { JsonViewer } from "@/components/JsonViewer";
 import { UserName } from "../UserName";
+import { NIPBadge } from "@/components/NIPBadge";
 import {
   getRelayUrl,
   getRttMetrics,
@@ -28,6 +30,8 @@ import {
   Tag,
   Filter,
   Clock,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "@/hooks/useLocale";
@@ -92,10 +96,10 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
         rtt.read !== undefined ||
         rtt.write !== undefined) && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
             <Activity className="size-4" />
             Performance Metrics
-          </h3>
+          </Label>
           <div className="grid grid-cols-3 gap-3">
             {rtt.open !== undefined && !isNaN(rtt.open) && (
               <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/50">
@@ -124,10 +128,10 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Relay Characteristics */}
       {(networkType || relayType || geohash) && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
             <Globe className="size-4" />
             Characteristics
-          </h3>
+          </Label>
           <div className="flex flex-wrap gap-2">
             {networkType && (
               <Badge variant="outline" className="gap-1.5 px-3 py-1">
@@ -156,21 +160,18 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Requirements Section */}
       {Object.keys(requirements).length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
             <Shield className="size-4" />
             Requirements
-          </h3>
+          </Label>
           <div className="flex flex-col gap-2">
             {requirements.auth !== undefined && (
               <div className="flex items-center gap-2 text-sm">
-                <Lock
-                  className={cn(
-                    "size-4",
-                    requirements.auth
-                      ? "text-orange-600"
-                      : "text-muted-foreground",
-                  )}
-                />
+                {requirements.auth ? (
+                  <Lock className="size-4 text-orange-600" />
+                ) : (
+                  <CheckCircle className="size-4 text-green-600" />
+                )}
                 <span>
                   Authentication{" "}
                   {requirements.auth ? "required" : "not required"}
@@ -179,14 +180,11 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
             )}
             {requirements.payment !== undefined && (
               <div className="flex items-center gap-2 text-sm">
-                <CreditCard
-                  className={cn(
-                    "size-4",
-                    requirements.payment
-                      ? "text-blue-600"
-                      : "text-muted-foreground",
-                  )}
-                />
+                {requirements.payment ? (
+                  <CreditCard className="size-4 text-blue-600" />
+                ) : (
+                  <CheckCircle className="size-4 text-green-600" />
+                )}
                 <span>
                   Payment {requirements.payment ? "required" : "not required"}
                 </span>
@@ -194,14 +192,11 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
             )}
             {requirements.writes !== undefined && (
               <div className="flex items-center gap-2 text-sm">
-                <Zap
-                  className={cn(
-                    "size-4",
-                    requirements.writes
-                      ? "text-green-600"
-                      : "text-muted-foreground",
-                  )}
-                />
+                {requirements.writes ? (
+                  <CheckCircle className="size-4 text-green-600" />
+                ) : (
+                  <XCircle className="size-4 text-red-600" />
+                )}
                 <span>
                   {requirements.writes
                     ? "Write access enabled"
@@ -211,14 +206,11 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
             )}
             {requirements.pow !== undefined && (
               <div className="flex items-center gap-2 text-sm">
-                <Shield
-                  className={cn(
-                    "size-4",
-                    requirements.pow
-                      ? "text-purple-600"
-                      : "text-muted-foreground",
-                  )}
-                />
+                {requirements.pow ? (
+                  <Zap className="size-4 text-purple-600" />
+                ) : (
+                  <CheckCircle className="size-4 text-green-600" />
+                )}
                 <span>
                   Proof of work {requirements.pow ? "required" : "not required"}
                 </span>
@@ -231,18 +223,18 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Supported NIPs */}
       {nips.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">
+          <Label className="text-muted-foreground">
             Supported NIPs ({nips.length})
-          </h3>
+          </Label>
           <div className="flex flex-wrap gap-1.5">
             {nips.map((nip) => (
-              <Badge
+              <NIPBadge
                 key={nip}
-                variant="secondary"
-                className="font-mono text-xs"
-              >
-                {nip}
-              </Badge>
+                nipNumber={nip.toString().padStart(2, "0")}
+                showName={false}
+                showNIPPrefix={false}
+                className="text-xs"
+              />
             ))}
           </div>
         </div>
@@ -251,10 +243,10 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Accepted Kinds */}
       {kinds.accepted.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
             <Filter className="size-4" />
             Accepted Kinds ({kinds.accepted.length})
-          </h3>
+          </Label>
           <div className="flex flex-wrap gap-1.5">
             {kinds.accepted.map((kind) => (
               <Badge key={kind} variant="outline" className="font-mono text-xs">
@@ -268,10 +260,10 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Rejected Kinds */}
       {kinds.rejected.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-            <Filter className="size-4" />
+          <Label className="flex items-center gap-2 text-muted-foreground">
+            <XCircle className="size-4" />
             Rejected Kinds ({kinds.rejected.length})
-          </h3>
+          </Label>
           <div className="flex flex-wrap gap-1.5">
             {kinds.rejected.map((kind) => (
               <Badge
@@ -289,10 +281,10 @@ export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Topics */}
       {topics.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Label className="flex items-center gap-2 text-muted-foreground">
             <Tag className="size-4" />
             Topics ({topics.length})
-          </h3>
+          </Label>
           <div className="flex flex-wrap gap-1.5">
             {topics.map((topic, index) => (
               <Badge key={index} variant="secondary" className="text-xs">

@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { UserName } from "../UserName";
 import {
   getMonitorFrequency,
@@ -38,10 +39,10 @@ export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
         {/* Monitoring Frequency */}
         {frequency && !isNaN(frequency) && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-muted-foreground">
               <Clock className="size-4" />
               Publishing Frequency
-            </h3>
+            </Label>
             <div className="p-3 rounded-lg bg-muted/50">
               <span className="text-lg font-semibold">
                 {formatFrequency(frequency)}
@@ -56,10 +57,10 @@ export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
         {/* Check Types Performed */}
         {checks.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-muted-foreground">
               <Activity className="size-4" />
               Check Types ({checks.length})
-            </h3>
+            </Label>
             <div className="flex flex-wrap gap-2">
               {checks.map((check) => (
                 <Badge key={check} variant="secondary" className="px-3 py-1.5">
@@ -73,10 +74,10 @@ export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
         {/* Timeout Configurations */}
         {Object.keys(timeouts).length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-muted-foreground">
               <Timer className="size-4" />
               Timeout Configurations
-            </h3>
+            </Label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {Object.entries(timeouts).map(([checkType, timeout]) => (
                 <div
@@ -98,10 +99,10 @@ export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
         {/* Geographic Location */}
         {geohash && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-muted-foreground">
               <MapPin className="size-4" />
               Location
-            </h3>
+            </Label>
             <Badge variant="outline" className="gap-2 px-3 py-1.5">
               <MapPin className="size-4" />
               <span className="font-mono">{geohash}</span>
@@ -113,9 +114,7 @@ export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
       {/* Monitor Description */}
       {event.content && event.content.trim() !== "" && (
         <div className="space-y-2 pt-4 border-t">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            About this Monitor
-          </h3>
+          <Label className="text-muted-foreground">About this Monitor</Label>
           <p className="text-sm whitespace-pre-wrap">{event.content}</p>
         </div>
       )}
