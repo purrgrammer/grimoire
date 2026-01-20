@@ -61,6 +61,7 @@ class GiftWrapManager {
   private isAuthenticating = false;
   private authenticated = new Set<string>(); // Track which relays are authenticated
   private isSyncing = false; // Prevent concurrent sync attempts
+  private statsUpdateTimer: NodeJS.Timeout | null = null; // Debounce stats updates
 
   /**
    * Start syncing gift wraps for the active account
@@ -610,6 +611,9 @@ class GiftWrapManager {
         `[GiftWrap] Failed to decrypt ${giftWrapId.slice(0, 8)}:`,
         error,
       );
+    } finally {
+      // Update stats after processing (debounced to batch multiple updates)
+      this.debouncedUpdateStats();
     }
   }
 
@@ -779,6 +783,19 @@ class GiftWrapManager {
     };
 
     this.stats$.next(stats);
+  }
+
+  /**
+   * Debounced stats update - delays stats calculation to batch multiple updates
+   */
+  private debouncedUpdateStats(): void {
+    if (this.statsUpdateTimer) {
+      clearTimeout(this.statsUpdateTimer);
+    }
+    this.statsUpdateTimer = setTimeout(() => {
+      this.updateStats();
+      this.statsUpdateTimer = null;
+    }, 500); // Wait 500ms after last gift wrap before updating stats
   }
 
   /**

@@ -8,7 +8,7 @@
  * - Conversation list (compact view)
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { nip19 } from "nostr-tools";
 import { useGrimoire } from "@/core/state";
@@ -17,9 +17,7 @@ import {
   useGiftWrapStats,
   useGiftWrapConversations,
 } from "@/hooks/useGiftWrap";
-import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
-import { getDisplayName } from "@/lib/nostr-utils";
 import {
   Settings,
   MessageSquare,
@@ -27,10 +25,16 @@ import {
   ShieldCheck,
   ShieldAlert,
   Loader2,
+  Plug,
+  PlugZap,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
+import relayStateManager from "@/services/relay-state-manager";
+import type { GlobalRelayState } from "@/types/relay-state";
 import { RelayLink } from "@/components/nostr/RelayLink";
+import { UserName } from "@/components/nostr/UserName";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,9 +60,23 @@ export function InboxViewer(_props: InboxViewerProps) {
   const conversations = useGiftWrapConversations();
   const [conversationsPage, setConversationsPage] = useState(1);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [relayState, setRelayState] = useState<GlobalRelayState | null>(null);
 
   const syncEnabled = state.giftWrapSettings?.syncEnabled ?? false;
   const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? false;
+
+  // Subscribe to relay state changes
+  useEffect(() => {
+    // Get initial state
+    setRelayState(relayStateManager.getState());
+
+    // Subscribe to updates
+    const unsubscribe = relayStateManager.subscribe((newState) => {
+      setRelayState(newState);
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Get DM relays (kind 10050)
   const dmRelayEvent = use$(() => {
@@ -72,6 +90,15 @@ export function InboxViewer(_props: InboxViewerProps) {
       .filter((t: string[]) => t[0] === "relay" && t[1])
       .map((t: string[]) => t[1]);
   }, [dmRelayEvent]);
+
+  // Calculate connected relay count
+  const connectedRelayCount = useMemo(() => {
+    if (!relayState || dmRelays.length === 0) return 0;
+    return dmRelays.filter((url) => {
+      const state = relayState.relays[url];
+      return state?.connectionState === "connected";
+    }).length;
+  }, [relayState, dmRelays]);
 
   // Convert conversations map to sorted array with pagination
   const { conversationsList, totalConversations, hasMoreConversations } =
@@ -270,7 +297,9 @@ export function InboxViewer(_props: InboxViewerProps) {
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-1 text-muted-foreground/80 hover:text-foreground transition-colors">
                 <Radio className="size-3" />
-                <span>{dmRelays.length}</span>
+                <span>
+                  {connectedRelayCount}/{dmRelays.length}
+                </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
@@ -278,13 +307,61 @@ export function InboxViewer(_props: InboxViewerProps) {
               <DropdownMenuSeparator />
               <div className="max-h-64 overflow-y-auto space-y-1 p-2">
                 {dmRelays.length > 0 ? (
-                  dmRelays.map((relay) => (
-                    <RelayLink
-                      key={relay}
-                      url={relay}
-                      showInboxOutbox={false}
-                    />
-                  ))
+                  dmRelays.map((relay) => {
+                    const state = relayState?.relays[relay];
+                    const isConnected = state?.connectionState === "connected";
+                    const isAuth = state?.authStatus === "authenticated";
+
+                    return (
+                      <div
+                        key={relay}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <RelayLink
+                            key={relay}
+                            url={relay}
+                            showInboxOutbox={false}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Connection status */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-help">
+                                {isConnected ? (
+                                  <Plug className="size-3 text-green-600/70" />
+                                ) : (
+                                  <PlugZap className="size-3 text-muted-foreground/50" />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {isConnected
+                                  ? "Connected"
+                                  : state?.connectionState || "Disconnected"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          {/* Auth status */}
+                          {isAuth && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <Lock className="size-3 text-blue-600/70" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Authenticated</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-xs text-muted-foreground p-2">
                     No DM relays configured. Using general relays from kind
@@ -451,9 +528,6 @@ function ConversationRow({
   latestMessage,
   onClick,
 }: ConversationRowProps) {
-  const profile = useProfile(otherPubkey);
-  const displayName = getDisplayName(otherPubkey, profile);
-
   // Format timestamp
   const timestamp = new Date(latestMessage.createdAt * 1000);
   const now = new Date();
@@ -475,12 +549,12 @@ function ConversationRow({
   return (
     <div
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
+      className="flex cursor-pointer items-center gap-1 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
       {/* Name */}
-      <span className="w-28 shrink-0 truncate font-medium text-muted-foreground">
-        {displayName}
-      </span>
+      <div className="w-28 shrink-0 truncate">
+        <UserName pubkey={otherPubkey} className="text-xs font-medium" />
+      </div>
 
       {/* Message preview */}
       <span className="min-w-0 flex-1 truncate text-muted-foreground/70">

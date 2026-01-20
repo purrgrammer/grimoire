@@ -24,6 +24,7 @@ import eventStore from "@/services/event-store";
 import accountManager from "@/services/accounts";
 import { publishEventToRelays } from "@/services/hub";
 import type { UnsealedDM } from "@/services/db";
+import { isNip05, resolveNip05 } from "@/lib/nip05";
 
 /**
  * NIP-17 Adapter - Private Direct Messages
@@ -38,13 +39,35 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   readonly type = "dm" as const;
 
   /**
-   * Parse identifier - accepts npub, nprofile, or hex pubkey
+   * Parse identifier - accepts $me, NIP-05, npub, nprofile, or hex pubkey
    * Examples:
+   *   - $me (DM with yourself)
+   *   - alice@example.com (NIP-05 identifier)
    *   - npub1abc... (public key)
    *   - nprofile1xyz... (profile with relay hints)
    *   - 1a2b3c... (hex pubkey)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
+    // Handle $me alias (DM with yourself)
+    if (input === "$me") {
+      const activePubkey = accountManager.active$.value?.pubkey;
+      if (!activePubkey) {
+        throw new Error("No active account. Log in to use $me.");
+      }
+      return {
+        type: "dm-recipient",
+        value: activePubkey,
+      };
+    }
+
+    // Try NIP-05 format (user@domain.com)
+    if (isNip05(input)) {
+      return {
+        type: "chat-partner-nip05",
+        value: input,
+      };
+    }
+
     // Try npub format
     if (input.startsWith("npub1")) {
       try {
@@ -89,17 +112,30 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
   /**
    * Resolve conversation from DM identifier
+   * Handles both direct pubkeys and NIP-05 identifiers
    */
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
-    if (identifier.type !== "dm-recipient") {
+    let recipientPubkey: string;
+
+    // Resolve NIP-05 identifier to pubkey
+    if (identifier.type === "chat-partner-nip05") {
+      const resolvedPubkey = await resolveNip05(identifier.value);
+      if (!resolvedPubkey) {
+        throw new Error(
+          `Failed to resolve NIP-05 identifier: ${identifier.value}`,
+        );
+      }
+      recipientPubkey = resolvedPubkey;
+    } else if (identifier.type === "dm-recipient") {
+      recipientPubkey = identifier.value;
+    } else {
       throw new Error(
         `NIP-17 adapter cannot handle identifier type: ${identifier.type}`,
       );
     }
 
-    const recipientPubkey = identifier.value;
     const activePubkey = accountManager.active$.value?.pubkey;
 
     if (!activePubkey) {

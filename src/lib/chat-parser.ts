@@ -91,8 +91,10 @@ Currently supported formats:
     Examples:
       chat nevent1qqsxyz... (thread with relay hints)
       chat note1abc... (thread with event ID only)
-  - npub1.../nprofile1.../hex (NIP-17 private DMs)
+  - $me/NIP-05/npub1.../nprofile1.../hex (NIP-17 private DMs)
     Examples:
+      chat $me (DM with yourself)
+      chat alice@example.com (NIP-05 identifier)
       chat npub1abc... (DM with pubkey)
       chat nprofile1xyz... (DM with relay hints)
       chat 1a2b3c... (DM with hex pubkey)
