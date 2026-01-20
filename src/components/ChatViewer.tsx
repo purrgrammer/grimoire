@@ -12,6 +12,7 @@ import {
   Copy,
   CopyCheck,
   FileText,
+  Lock,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
@@ -26,6 +27,7 @@ import type {
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -38,6 +40,7 @@ import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
+import { InboxRelaysDropdown } from "./chat/InboxRelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
@@ -745,6 +748,8 @@ export function ChatViewer({
   const handleNipClick = useCallback(() => {
     if (conversation?.protocol === "nip-10") {
       addWindow("nip", { number: 10 });
+    } else if (conversation?.protocol === "nip-17") {
+      addWindow("nip", { number: 17 });
     } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
@@ -861,6 +866,15 @@ export function ChatViewer({
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
             {headerPrefix}
+            {/* Show lock icon for encrypted conversations */}
+            {protocol === "nip-17" && (
+              <div
+                className="text-muted-foreground flex-shrink-0"
+                title="End-to-end encrypted"
+              >
+                <Lock className="size-3" />
+              </div>
+            )}
             <TooltipProvider>
               <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
@@ -868,7 +882,33 @@ export function ChatViewer({
                     className="text-sm font-semibold truncate cursor-help text-left"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {customTitle ||
+                      (() => {
+                        // For NIP-17, show "Saved Messages" or participant name
+                        if (
+                          protocol === "nip-17" &&
+                          conversation.participants.length === 2
+                        ) {
+                          const [p1, p2] = conversation.participants;
+                          const isSelfConversation = p1.pubkey === p2.pubkey;
+
+                          if (isSelfConversation) {
+                            return "Saved Messages";
+                          }
+
+                          // Show the other participant's name
+                          const otherPubkey =
+                            p1.pubkey === pubkey ? p2.pubkey : p1.pubkey;
+                          return (
+                            <UserName
+                              pubkey={otherPubkey}
+                              className="text-sm font-semibold"
+                            />
+                          );
+                        }
+
+                        return conversation.title;
+                      })()}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -900,6 +940,28 @@ export function ChatViewer({
                         {conversation.metadata.description}
                       </p>
                     )}
+                    {/* Participants for NIP-17 group DMs */}
+                    {protocol === "nip-17" &&
+                      conversation.participants.length > 2 && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-primary-foreground/80">
+                            Participants:
+                          </span>
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            {[
+                              ...new Set(
+                                conversation.participants.map((p) => p.pubkey),
+                              ),
+                            ].map((participantPubkey) => (
+                              <UserName
+                                key={participantPubkey}
+                                pubkey={participantPubkey}
+                                className="text-xs text-primary-foreground"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
                       {(conversation.type === "group" ||
@@ -971,17 +1033,25 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={derivedParticipants} />
-            <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
-              <button
-                onClick={handleNipClick}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
-              >
-                {conversation.protocol.toUpperCase()}
-              </button>
+            {/* Hide member list for self-conversations (Saved Messages) */}
+            {!(
+              protocol === "nip-17" &&
+              conversation.participants.length === 2 &&
+              conversation.participants[0].pubkey ===
+                conversation.participants[1].pubkey
+            ) && <MembersDropdown participants={derivedParticipants} />}
+            {/* Show inbox relays for NIP-17, regular relays for other protocols */}
+            {protocol === "nip-17" ? (
+              <InboxRelaysDropdown conversation={conversation} />
+            ) : (
+              <RelaysDropdown conversation={conversation} />
             )}
+            <button
+              onClick={handleNipClick}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
+            >
+              {conversation.protocol.toUpperCase()}
+            </button>
           </div>
         </div>
       </div>
@@ -999,7 +1069,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-17" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -1138,21 +1209,24 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
- * Other protocols will be enabled in future phases
+ * Currently supported:
+ * - NIP-10 (thread chat)
+ * - NIP-17 (encrypted DMs with gift wrap)
+ * - NIP-29 (relay-based groups)
+ * - NIP-53 (live activity chat)
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
-    case "nip-29":
-      return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
+    case "nip-29":
+      return new Nip29Adapter();
     case "nip-53":
       return new Nip53Adapter();
     default:

@@ -1,11 +1,11 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
+import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
 // Import other adapters as they're implemented
-// import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
 
 /**
@@ -65,10 +65,10 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   // Try each adapter in priority order
   const adapters = [
     new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note)
-    // new Nip17Adapter(),  // Phase 2
+    new Nip17Adapter(), // NIP-17 - Private DMs (gift wrap)
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
+    new Nip29Adapter(), // NIP-29 - Relay groups
+    new Nip53Adapter(), // NIP-53 - Live activity chat
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
@@ -91,6 +91,13 @@ Currently supported formats:
     Examples:
       chat nevent1qqsxyz... (thread with relay hints)
       chat note1abc... (thread with event ID only)
+  - $me/NIP-05/npub1.../nprofile1.../hex (NIP-17 private DMs)
+    Examples:
+      chat $me (DM with yourself)
+      chat alice@example.com (NIP-05 identifier)
+      chat npub1abc... (DM with pubkey)
+      chat nprofile1xyz... (DM with relay hints)
+      chat 1a2b3c... (DM with hex pubkey)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
@@ -103,9 +110,6 @@ Currently supported formats:
       chat naddr1... (live stream address)
   - naddr1... (Multi-room group list, kind 10009)
     Example:
-      chat naddr1... (group list address)
-
-More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)`,
+      chat naddr1... (group list address)`,
   );
 }

@@ -108,6 +108,40 @@ export interface GrimoireZap {
   comment?: string; // Optional zap comment/message
 }
 
+/**
+ * Gift wrap decryption tracking (NIP-59/NIP-17)
+ * Tracks which gift wraps we've attempted to decrypt
+ */
+export interface GiftWrapDecryption {
+  giftWrapId: string; // Primary key - kind 1059 event ID
+  recipientPubkey: string; // Our pubkey (indexed for filtering)
+  decryptionState: "pending" | "success" | "failed"; // Current state
+  sealEventId?: string; // Kind 13 seal event ID (if successfully decrypted)
+  rumorEventId?: string; // Kind 14/15 rumor event ID (if successfully unsealed)
+  errorMessage?: string; // Error details if failed
+  lastAttempt: number; // Unix timestamp of last decryption attempt
+  attempts: number; // Number of decryption attempts
+}
+
+/**
+ * Unsealed DM events (NIP-17)
+ * Stores decrypted kind 14/15 rumor events with conversation metadata
+ */
+export interface UnsealedDM {
+  id: string; // Primary key - rumor event ID (generated, not from Nostr)
+  giftWrapId: string; // Reference to kind 1059 event (indexed)
+  sealId: string; // Reference to kind 13 seal event
+  senderPubkey: string; // Author of the message (indexed)
+  recipientPubkey: string; // Recipient pubkey (indexed)
+  conversationKey: string; // Composite key for grouping: `${sender}:${recipient}` (sorted) (indexed)
+  kind: number; // Kind of the rumor (14 = message, 15 = file)
+  content: string; // Decrypted message content
+  tags: string[][]; // Tags from the rumor
+  createdAt: number; // Original created_at from rumor (indexed)
+  receivedAt: number; // When we decrypted it (indexed)
+  deleted?: boolean; // Soft delete flag
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -121,6 +155,8 @@ class GrimoireDb extends Dexie {
   spellbooks!: Table<LocalSpellbook>;
   lnurlCache!: Table<LnurlCache>;
   grimoireZaps!: Table<GrimoireZap>;
+  giftWrapDecryptions!: Table<GiftWrapDecryption>;
+  unsealedDMs!: Table<UnsealedDM>;
 
   constructor(name: string) {
     super(name);
@@ -387,6 +423,27 @@ class GrimoireDb extends Dexie {
       lnurlCache: "&address, fetchedAt",
       grimoireZaps:
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+    });
+
+    // Version 18: Add NIP-17 gift wrap and DM storage
+    this.version(18).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      giftWrapDecryptions:
+        "&giftWrapId, recipientPubkey, decryptionState, lastAttempt",
+      unsealedDMs:
+        "&id, giftWrapId, senderPubkey, recipientPubkey, conversationKey, createdAt, receivedAt",
     });
   }
 }

@@ -6,16 +6,18 @@ import { addressLoader } from "@/services/loaders";
 import type { RelayInfo } from "@/types/app";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { getServersFromEvent } from "@/services/blossom";
+import giftWrapManager from "@/services/gift-wrap";
 
 /**
  * Hook that syncs active account with Grimoire state and fetches relay lists and blossom servers
  */
 export function useAccountSync() {
+  const grimoire = useGrimoire();
   const {
     setActiveAccount,
     setActiveAccountRelays,
     setActiveAccountBlossomServers,
-  } = useGrimoire();
+  } = grimoire;
   const eventStore = useEventStore();
 
   // Watch active account from accounts service
@@ -125,4 +127,30 @@ export function useAccountSync() {
       storeSubscription.unsubscribe();
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountBlossomServers]);
+
+  // Start gift wrap sync (NIP-17) when account changes
+  useEffect(() => {
+    const syncEnabled = grimoire.state.giftWrapSettings?.syncEnabled ?? false;
+    const autoDecrypt = grimoire.state.giftWrapSettings?.autoDecrypt ?? false;
+
+    if (!activeAccount?.pubkey || !syncEnabled) {
+      // Stop sync when no account is active or sync is disabled
+      giftWrapManager.stopSync();
+      return;
+    }
+
+    // Start syncing gift wraps for this account
+    giftWrapManager.startSync(autoDecrypt).catch((error) => {
+      console.error("[useAccountSync] Failed to start gift wrap sync:", error);
+    });
+
+    // Cleanup on unmount or account change
+    return () => {
+      giftWrapManager.stopSync();
+    };
+  }, [
+    activeAccount?.pubkey,
+    grimoire.state.giftWrapSettings?.syncEnabled,
+    grimoire.state.giftWrapSettings?.autoDecrypt,
+  ]);
 }

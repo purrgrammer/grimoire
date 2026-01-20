@@ -602,3 +602,21 @@ export const toggleWalletBalancesBlur = (
     walletBalancesBlurred: !state.walletBalancesBlurred,
   };
 };
+
+/**
+ * Updates gift wrap settings (NIP-17 DM sync and decryption)
+ */
+export const updateGiftWrapSettings = (
+  state: GrimoireState,
+  settings: Partial<{ syncEnabled: boolean; autoDecrypt: boolean }>,
+): GrimoireState => {
+  return {
+    ...state,
+    giftWrapSettings: {
+      syncEnabled:
+        settings.syncEnabled ?? state.giftWrapSettings?.syncEnabled ?? false,
+      autoDecrypt:
+        settings.autoDecrypt ?? state.giftWrapSettings?.autoDecrypt ?? false,
+    },
+  };
+};
