@@ -543,13 +543,46 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
 
     handleSubmitRef.current = handleSubmit;
 
+    // Extract and memoize individual suggestion configs to avoid unnecessary recalculations
+    const mentionConfig = useMemo(
+      () => suggestions.find((s) => s.char === "@"),
+      [suggestions],
+    );
+    const emojiConfig = useMemo(
+      () => suggestions.find((s) => s.char === ":"),
+      [suggestions],
+    );
+    const slashConfig = useMemo(
+      () => suggestions.find((s) => s.char === "/"),
+      [suggestions],
+    );
+
+    // Memoize TipTap suggestion configs separately to ensure stable references
+    // This is critical - TipTap compares these by reference and reinitializes if they change
+    const tipTapMentionConfig = useMemo(
+      () =>
+        mentionConfig
+          ? createSuggestionConfig(mentionConfig, handleSubmitRef)
+          : null,
+      [mentionConfig],
+    );
+    const tipTapEmojiConfig = useMemo(
+      () =>
+        emojiConfig
+          ? createSuggestionConfig(emojiConfig, handleSubmitRef)
+          : null,
+      [emojiConfig],
+    );
+    const tipTapSlashConfig = useMemo(
+      () =>
+        slashConfig
+          ? createSuggestionConfig(slashConfig, handleSubmitRef)
+          : null,
+      [slashConfig],
+    );
+
     // Build extensions array
     const extensions = useMemo(() => {
-      // Find suggestion configs inside useMemo to avoid recreating extensions on every render
-      const mentionConfig = suggestions.find((s) => s.char === "@");
-      const emojiConfig = suggestions.find((s) => s.char === ":");
-      const slashConfig = suggestions.find((s) => s.char === "/");
-
       const isMobile = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
       // Custom extension for keyboard shortcuts
@@ -592,12 +625,12 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       ];
 
       // Add mention extension for @ mentions
-      if (mentionConfig) {
+      if (tipTapMentionConfig && mentionConfig) {
         exts.push(
           Mention.configure({
             HTMLAttributes: { class: "mention" },
             suggestion: {
-              ...createSuggestionConfig(mentionConfig, handleSubmitRef),
+              ...tipTapMentionConfig,
               command: ({
                 editor,
                 range,
@@ -635,12 +668,12 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       }
 
       // Add emoji extension
-      if (emojiConfig) {
+      if (tipTapEmojiConfig && emojiConfig) {
         exts.push(
           EmojiMention.configure({
             HTMLAttributes: { class: "emoji" },
             suggestion: {
-              ...createSuggestionConfig(emojiConfig, handleSubmitRef),
+              ...tipTapEmojiConfig,
               command: ({
                 editor,
                 range,
@@ -675,13 +708,13 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       }
 
       // Add slash command extension
-      if (slashConfig) {
+      if (tipTapSlashConfig && slashConfig) {
         const SlashCommand = Mention.extend({ name: "slashCommand" });
         exts.push(
           SlashCommand.configure({
             HTMLAttributes: { class: "slash-command" },
             suggestion: {
-              ...createSuggestionConfig(slashConfig, handleSubmitRef),
+              ...tipTapSlashConfig,
               command: ({
                 editor,
                 props,
@@ -711,7 +744,17 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       }
 
       return exts;
-    }, [submitBehavior, placeholder, blobPreview, suggestions]);
+    }, [
+      submitBehavior,
+      placeholder,
+      blobPreview,
+      mentionConfig,
+      emojiConfig,
+      slashConfig,
+      tipTapMentionConfig,
+      tipTapEmojiConfig,
+      tipTapSlashConfig,
+    ]);
 
     const editor = useEditor({
       extensions,
