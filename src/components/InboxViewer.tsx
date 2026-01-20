@@ -154,6 +154,18 @@ export function InboxViewer(_props: InboxViewerProps) {
     _conversationKey: string,
     otherPubkeys: string[],
   ) => {
+    // Handle self-conversation (saved messages)
+    if (otherPubkeys.length === 0) {
+      addWindow("chat", {
+        protocol: "nip-17",
+        identifier: {
+          type: "dm-recipient",
+          value: pubkey!, // Use current user's pubkey for self-chat
+        },
+      });
+      return;
+    }
+
     // Open chat window with the other participant(s) using NIP-17
     // For group DMs, join pubkeys with commas
     const recipientValue =

@@ -866,6 +866,15 @@ export function ChatViewer({
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
             {headerPrefix}
+            {/* Show lock icon for encrypted conversations */}
+            {protocol === "nip-17" && (
+              <div
+                className="text-muted-foreground flex-shrink-0"
+                title="End-to-end encrypted"
+              >
+                <Lock className="size-3" />
+              </div>
+            )}
             <TooltipProvider>
               <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
@@ -1014,15 +1023,6 @@ export function ChatViewer({
               <InboxRelaysDropdown conversation={conversation} />
             ) : (
               <RelaysDropdown conversation={conversation} />
-            )}
-            {/* Show lock icon for encrypted conversations */}
-            {protocol === "nip-17" && (
-              <div
-                className="text-muted-foreground"
-                title="End-to-end encrypted"
-              >
-                <Lock className="size-3" />
-              </div>
             )}
             <button
               onClick={handleNipClick}

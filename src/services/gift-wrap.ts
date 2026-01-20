@@ -11,6 +11,7 @@ import db from "./db";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
 import accountManager from "./accounts";
+import relayStateManager from "./relay-state-manager";
 
 /**
  * Statistics about gift wrap processing
@@ -29,7 +30,7 @@ export interface GiftWrapStats {
  */
 const GIFT_WRAP_CONFIG = {
   INITIAL_LIMIT: 500, // Max gift wraps to fetch on initial sync
-  PAGINATION_SIZE: 200, // Batch size for loading older gift wraps
+  PAGINATION_SIZE: 500, // Batch size for loading older gift wraps
   MAX_STORAGE_DAYS: 90, // Keep gift wraps for 90 days
   AUTH_TIMEOUT_MS: 10000, // Wait 10s for auth before proceeding
 };
@@ -120,6 +121,11 @@ class GiftWrapManager {
         `[GiftWrap] Syncing from ${dmRelays.length} relays:`,
         dmRelays,
       );
+
+      // Ensure relay state manager is monitoring these relays
+      dmRelays.forEach((relay) => {
+        relayStateManager.ensureRelayMonitored(relay);
+      });
 
       // Step 1: Authenticate with relays using dummy REQ
       // This triggers NIP-42 AUTH which is required for relays to serve kind 1059
@@ -386,6 +392,11 @@ class GiftWrapManager {
       console.warn("[GiftWrap] No DM relays found");
       return 0;
     }
+
+    // Ensure relay state manager is monitoring these relays
+    dmRelays.forEach((relay) => {
+      relayStateManager.ensureRelayMonitored(relay);
+    });
 
     // Fetch older gift wraps
     const filter: Filter = {
@@ -819,10 +830,9 @@ class GiftWrapManager {
       throw new Error(`Failed to parse rumor JSON: ${error}`);
     }
 
-    // Verify it's a kind 14 (message) or kind 15 (file)
-    if (rumor.kind !== 14 && rumor.kind !== 15) {
-      throw new Error(`Expected kind 14 or 15 rumor, got kind ${rumor.kind}`);
-    }
+    // Accept any kind of private event sent via gift wrap
+    // This includes kind 14 (DMs), kind 15 (files), kind 7 (reactions),
+    // kind 25050 (private DM relays), and any other private events
 
     // Verify the rumor's pubkey matches the seal's pubkey (prevent spoofing)
     if (rumor.pubkey !== seal.pubkey) {
