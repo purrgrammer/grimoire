@@ -775,9 +775,22 @@ class GiftWrapManager {
       throw new Error(`Failed to unlock gift wrap: ${error}`);
     }
 
-    // Use applesauce helper to get the conversation identifier
-    // This properly handles all participants including group DMs
-    const conversationKey = getConversationIdentifierFromMessage(rumor);
+    // Generate conversation key based on rumor kind
+    // For kind 14 (DMs), use applesauce helper which handles groups properly
+    // For other kinds (reactions, etc.), extract participants from p-tags
+    let conversationKey: string;
+    if (rumor.kind === 14) {
+      // Use applesauce helper for DMs - it properly handles group DMs
+      conversationKey = getConversationIdentifierFromMessage(rumor);
+    } else {
+      // For non-DM events (reactions, private relays, etc.),
+      // create conversation key from sender + all p-tags
+      const recipientPubkeys = rumor.tags
+        .filter((t: string[]) => t[0] === "p" && t[1])
+        .map((t: string[]) => t[1]);
+      const allParticipants = [rumor.pubkey, ...recipientPubkeys];
+      conversationKey = [...new Set(allParticipants)].sort().join(":");
+    }
 
     // Get seal ID from gift wrap tags (applesauce stores it there)
     const sealId = rumor.id.split(":")[1] || giftWrap.id;

@@ -940,6 +940,28 @@ export function ChatViewer({
                         {conversation.metadata.description}
                       </p>
                     )}
+                    {/* Participants for NIP-17 group DMs */}
+                    {protocol === "nip-17" &&
+                      conversation.participants.length > 2 && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-primary-foreground/80">
+                            Participants:
+                          </span>
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            {[
+                              ...new Set(
+                                conversation.participants.map((p) => p.pubkey),
+                              ),
+                            ].map((participantPubkey) => (
+                              <UserName
+                                key={participantPubkey}
+                                pubkey={participantPubkey}
+                                className="text-xs text-primary-foreground"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
                       {(conversation.type === "group" ||

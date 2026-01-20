@@ -462,8 +462,9 @@ export class Nip17Adapter extends ChatProtocolAdapter {
    * Helper: Get conversation key from conversation
    */
   private getConversationKey(conversation: Conversation): string {
-    const pubkeys = conversation.participants.map((p) => p.pubkey).sort();
-    return pubkeys.join(":");
+    const pubkeys = conversation.participants.map((p) => p.pubkey);
+    // Deduplicate and sort for consistency with gift wrap storage
+    return [...new Set(pubkeys)].sort().join(":");
   }
 
   /**
