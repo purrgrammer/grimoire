@@ -843,4 +843,16 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     defaultProps: {},
   },
+  post: {
+    name: "post",
+    section: "1",
+    synopsis: "post",
+    description:
+      "Open a post composer to create and publish a short text note (kind 1). Features profile @mentions autocomplete, custom emoji support, and media attachments via Blossom. Requires a signing-capable account.",
+    examples: ["post    Open post composer"],
+    seeAlso: ["req", "profile"],
+    appId: "post",
+    category: "Nostr",
+    defaultProps: {},
+  },
 };

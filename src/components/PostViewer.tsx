@@ -1,10 +1,4 @@
 import { useRef, useMemo, useState, useCallback, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NostrEditor, type NostrEditorHandle } from "./editor/NostrEditor";
 import { createNostrSuggestions } from "./editor/suggestions";
@@ -12,7 +6,7 @@ import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { useAccount } from "@/hooks/useAccount";
-import { Loader2, Paperclip } from "lucide-react";
+import { Loader2, Paperclip, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { hub } from "@/services/hub";
 import { NoteBlueprint } from "applesauce-common/blueprints";
@@ -21,11 +15,6 @@ import { lastValueFrom } from "rxjs";
 import type { ActionContext } from "applesauce-actions";
 import { useEventStore } from "applesauce-react/hooks";
 import { addressLoader, profileLoader } from "@/services/loaders";
-
-interface PostDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
 
 // Action builder for creating a short text note
 function CreateNoteAction(content: SerializedContent) {
@@ -52,17 +41,18 @@ function CreateNoteAction(content: SerializedContent) {
   };
 }
 
-export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
+export function PostViewer() {
   const { pubkey, canSign } = useAccount();
   const eventStore = useEventStore();
   const { searchProfiles, service: profileService } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const editorRef = useRef<NostrEditorHandle>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
 
-  // Load contacts and their profiles when dialog opens
+  // Load contacts and their profiles
   useEffect(() => {
-    if (!open || !pubkey) return;
+    if (!pubkey) return;
 
     // Load contacts list (kind 3)
     const contactsSubscription = addressLoader({
@@ -101,7 +91,7 @@ export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
       contactsSubscription.unsubscribe();
       storeSubscription.unsubscribe();
     };
-  }, [open, pubkey, eventStore, profileService]);
+  }, [pubkey, eventStore, profileService]);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -150,10 +140,10 @@ export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
         await lastValueFrom(hub.exec(CreateNoteAction, content));
 
         toast.success("Post published!");
+        setIsPublished(true);
         editorRef.current?.clear();
-        onOpenChange(false);
       } catch (error) {
-        console.error("[PostDialog] Failed to publish:", error);
+        console.error("[PostViewer] Failed to publish:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to publish post",
         );
@@ -161,7 +151,7 @@ export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
         setIsPublishing(false);
       }
     },
-    [canSign, pubkey, onOpenChange],
+    [canSign, pubkey],
   );
 
   // Handle submit button click
@@ -172,58 +162,82 @@ export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
     }
   }, [handlePublish]);
 
+  // Reset published state when user starts typing again
+  const handleChange = useCallback(() => {
+    if (isPublished) {
+      setIsPublished(false);
+    }
+  }, [isPublished]);
+
+  if (!canSign) {
+    return (
+      <div className="h-full flex items-center justify-center p-4">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium">Sign in to post</p>
+          <p className="text-sm mt-1">
+            You need to be signed in with a signing-capable account to create
+            posts.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Post</DialogTitle>
-          </DialogHeader>
+    <div className="h-full flex flex-col p-4">
+      <div className="flex-1 min-h-0">
+        <NostrEditor
+          ref={editorRef}
+          placeholder="What's on your mind?"
+          variant="full"
+          submitBehavior="button-only"
+          blobPreview="gallery"
+          minLines={10}
+          suggestions={suggestions}
+          onChange={handleChange}
+          autoFocus
+        />
+      </div>
 
-          <div className="space-y-4">
-            <NostrEditor
-              ref={editorRef}
-              placeholder="What's on your mind?"
-              variant="full"
-              submitBehavior="button-only"
-              blobPreview="gallery"
-              minLines={8}
-              suggestions={suggestions}
-              autoFocus
-            />
+      <div className="flex items-center justify-between pt-4 border-t mt-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={openUpload}
+          disabled={isPublishing}
+        >
+          <Paperclip className="size-4 mr-1" />
+          Attach
+        </Button>
 
-            <div className="flex items-center justify-between">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={openUpload}
-                disabled={isPublishing}
-              >
-                <Paperclip className="size-4 mr-1" />
-                Attach
-              </Button>
-
-              <Button
-                type="button"
-                onClick={handleSubmitClick}
-                disabled={isPublishing || !canSign}
-              >
-                {isPublishing ? (
-                  <>
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                    Publishing...
-                  </>
-                ) : (
-                  "Post"
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <div className="flex items-center gap-2">
+          {isPublished && (
+            <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+              <CheckCircle2 className="size-4" />
+              Published
+            </span>
+          )}
+          <Button
+            type="button"
+            onClick={handleSubmitClick}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <>
+                <Loader2 className="size-4 mr-2 animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              "Post"
+            )}
+          </Button>
+        </div>
+      </div>
 
       {uploadDialog}
-    </>
+    </div>
   );
 }
+
+export default PostViewer;
