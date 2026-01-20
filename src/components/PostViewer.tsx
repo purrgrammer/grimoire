@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { Paperclip, Send, Loader2, Check, X } from "lucide-react";
+import { Paperclip, Send, Loader2, Check, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -10,6 +10,7 @@ import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
+import { Kind1Renderer } from "./nostr/kinds";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -42,6 +43,7 @@ export function PostViewer() {
   const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
+  const [showPublishedPreview, setShowPublishedPreview] = useState(false);
 
   // Get active account's write relays from Grimoire state
   const writeRelays = useMemo(() => {
@@ -357,16 +359,14 @@ export function PostViewer() {
         // Add to event store for immediate local availability
         eventStore.add(event);
 
-        // Clear editor on success
-        editorRef.current?.clear();
-
         // Clear draft from localStorage
         if (pubkey) {
           const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
           localStorage.removeItem(draftKey);
         }
 
-        // Don't clear lastPublishedEvent here - keep it for potential retries
+        // Show published preview
+        setShowPublishedPreview(true);
 
         toast.success(
           `Published to ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
@@ -399,6 +399,15 @@ export function PostViewer() {
     [openUpload],
   );
 
+  // Reset form to compose another post
+  const handleReset = useCallback(() => {
+    setShowPublishedPreview(false);
+    setLastPublishedEvent(null);
+    updateRelayStates();
+    editorRef.current?.clear();
+    editorRef.current?.focus();
+  }, [updateRelayStates]);
+
   // Show login prompt if not logged in
   if (!canSign) {
     return (
@@ -417,51 +426,74 @@ export function PostViewer() {
 
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
-      {/* Editor */}
-      <div>
-        <RichEditor
-          ref={editorRef}
-          placeholder="What's on your mind?"
-          onSubmit={handlePublish}
-          searchProfiles={searchProfiles}
-          searchEmojis={searchEmojis}
-          onFilePaste={handleFilePaste}
-          autoFocus
-          minHeight={150}
-          maxHeight={400}
-        />
-      </div>
+      {!showPublishedPreview ? (
+        <>
+          {/* Editor */}
+          <div>
+            <RichEditor
+              ref={editorRef}
+              placeholder="What's on your mind?"
+              onSubmit={handlePublish}
+              searchProfiles={searchProfiles}
+              searchEmojis={searchEmojis}
+              onFilePaste={handleFilePaste}
+              autoFocus
+              minHeight={150}
+              maxHeight={400}
+            />
+          </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => openUpload()}
-          disabled={isPublishing}
-          title="Upload image/video"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => openUpload()}
+              disabled={isPublishing}
+              title="Upload image/video"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
 
-        <Button
-          onClick={() => editorRef.current?.submit()}
-          disabled={isPublishing || selectedRelays.size === 0 || isEditorEmpty}
-          className="gap-2 flex-1"
-        >
-          {isPublishing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Publishing...
-            </>
-          ) : (
-            <>
-              <Send className="h-4 w-4" />
-              Publish
-            </>
+            <Button
+              onClick={() => editorRef.current?.submit()}
+              disabled={
+                isPublishing || selectedRelays.size === 0 || isEditorEmpty
+              }
+              className="gap-2 flex-1"
+            >
+              {isPublishing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Publish
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Published event preview */}
+          {lastPublishedEvent && (
+            <div className="rounded-lg border border-border bg-muted/10 p-4">
+              <Kind1Renderer event={lastPublishedEvent} depth={0} />
+            </div>
           )}
-        </Button>
-      </div>
+
+          {/* Reset button */}
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={handleReset} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Compose Another Post
+            </Button>
+          </div>
+        </>
+      )}
 
       {/* Relay selection */}
       <div className="space-y-2">
