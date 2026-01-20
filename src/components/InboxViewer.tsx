@@ -21,13 +21,10 @@ import eventStore from "@/services/event-store";
 import {
   Settings,
   MessageSquare,
-  Radio,
+  Wifi,
   ShieldCheck,
   ShieldAlert,
   Loader2,
-  Plug,
-  PlugZap,
-  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
@@ -35,6 +32,9 @@ import relayStateManager from "@/services/relay-state-manager";
 import type { GlobalRelayState } from "@/types/relay-state";
 import { RelayLink } from "@/components/nostr/RelayLink";
 import { UserName } from "@/components/nostr/UserName";
+import { RichText } from "@/components/nostr/RichText";
+import Timestamp from "@/components/Timestamp";
+import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -223,31 +223,41 @@ export function InboxViewer(_props: InboxViewerProps) {
       {/* Compact Header - Like req viewer */}
       <div className="border-b px-4 py-2 font-mono text-xs flex items-center justify-between">
         {/* Left: Status */}
-        <div className="flex items-center gap-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1.5 cursor-help">
-                {syncEnabled ? (
-                  <ShieldCheck className="size-3 text-green-600/70" />
-                ) : (
-                  <ShieldAlert className="size-3 text-muted-foreground/50" />
-                )}
-                <span className="text-muted-foreground">
-                  {syncEnabled ? "SYNC" : "OFF"}
-                </span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-2 cursor-help">
+              {syncEnabled ? (
+                <ShieldCheck className="size-3 text-green-600/70" />
+              ) : (
+                <ShieldAlert className="size-3 text-muted-foreground/50" />
+              )}
+              <span className="text-muted-foreground font-semibold">
+                {syncEnabled ? "SYNC" : "OFF"}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <div className="space-y-1">
+              <p className="font-semibold">
                 {syncEnabled
-                  ? "Gift wrap sync enabled"
-                  : "Gift wrap sync disabled"}
+                  ? "Gift Wrap Sync Active"
+                  : "Gift Wrap Sync Disabled"}
               </p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
+              {syncEnabled && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Total: {stats.totalGiftWraps} gift wraps
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-decrypt: {autoDecrypt ? "ON" : "OFF"}
+                  </p>
+                </>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
 
-        {/* Right: Stats + Controls */}
+        {/* Center: Stats */}
         <div className="flex items-center gap-3">
           {/* Stats - Compact numbers only */}
           <Tooltip>
@@ -291,77 +301,71 @@ export function InboxViewer(_props: InboxViewerProps) {
               <p>Pending decryptions</p>
             </TooltipContent>
           </Tooltip>
+        </div>
 
-          {/* Relay Dropdown (no chevron) */}
+        {/* Right: Relay + Settings */}
+        <div className="flex items-center gap-3">
+          {/* Relay Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 text-muted-foreground/80 hover:text-foreground transition-colors">
-                <Radio className="size-3" />
+              <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                <Wifi className="size-3" />
                 <span>
                   {connectedRelayCount}/{dmRelays.length}
                 </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>DM Relays</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="max-h-64 overflow-y-auto space-y-1 p-2">
+            <DropdownMenuContent
+              align="end"
+              className="w-96 max-h-96 overflow-y-auto"
+            >
+              <div className="px-3 py-2 border-b border-border">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  DM Relays ({dmRelays.length})
+                </div>
+              </div>
+              <div className="p-2">
                 {dmRelays.length > 0 ? (
-                  dmRelays.map((relay) => {
-                    const state = relayState?.relays[relay];
-                    const isConnected = state?.connectionState === "connected";
-                    const isAuth = state?.authStatus === "authenticated";
+                  <div className="space-y-1">
+                    {dmRelays.map((relay) => {
+                      const state = relayState?.relays[relay];
+                      const connIcon = getConnectionIcon(state);
+                      const authIcon = getAuthIcon(state);
 
-                    return (
-                      <div
-                        key={relay}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <RelayLink
-                            key={relay}
-                            url={relay}
-                            showInboxOutbox={false}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {/* Connection status */}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="cursor-help">
-                                {isConnected ? (
-                                  <Plug className="size-3 text-green-600/70" />
-                                ) : (
-                                  <PlugZap className="size-3 text-muted-foreground/50" />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {isConnected
-                                  ? "Connected"
-                                  : state?.connectionState || "Disconnected"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          {/* Auth status */}
-                          {isAuth && (
+                      return (
+                        <div
+                          key={relay}
+                          className="flex items-center justify-between gap-2 p-1.5 rounded hover:bg-muted/50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <RelayLink url={relay} showInboxOutbox={false} />
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div className="cursor-help">
-                                  <Lock className="size-3 text-blue-600/70" />
+                                  {connIcon.icon}
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Authenticated</p>
+                                <p>{connIcon.label}</p>
                               </TooltipContent>
                             </Tooltip>
-                          )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  {authIcon.icon}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{authIcon.label}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground p-2">
                     No DM relays configured. Using general relays from kind
@@ -528,43 +532,27 @@ function ConversationRow({
   latestMessage,
   onClick,
 }: ConversationRowProps) {
-  // Format timestamp
-  const timestamp = new Date(latestMessage.createdAt * 1000);
-  const now = new Date();
-  const isToday = timestamp.toDateString() === now.toDateString();
-  const timeStr = isToday
-    ? timestamp.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : timestamp.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      });
-
-  // Truncate content preview - show more text
-  const preview = latestMessage.content.slice(0, 100);
-  const truncated = latestMessage.content.length > 100;
-
   return (
     <div
       onClick={onClick}
       className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
       {/* Name */}
-      <div className="w-28 shrink-0 truncate">
-        <UserName pubkey={otherPubkey} className="text-xs font-medium" />
+      <div className="w-28 shrink-0">
+        <UserName
+          pubkey={otherPubkey}
+          className="text-xs font-medium truncate"
+        />
       </div>
 
-      {/* Message preview - no flex-1 to avoid big gap */}
-      <span className="truncate text-muted-foreground/70">
-        {preview}
-        {truncated && "..."}
-      </span>
+      {/* Message preview - use CSS truncation and RichText */}
+      <div className="flex-1 min-w-0 truncate text-muted-foreground/70">
+        <RichText content={latestMessage.content} className="line-clamp-1" />
+      </div>
 
-      {/* Timestamp - push to end with ml-auto */}
-      <span className="shrink-0 ml-auto text-muted-foreground/50">
-        {timeStr}
+      {/* Timestamp */}
+      <span className="shrink-0 text-muted-foreground/50">
+        <Timestamp timestamp={latestMessage.createdAt} />
       </span>
     </div>
   );

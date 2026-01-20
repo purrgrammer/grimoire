@@ -286,11 +286,12 @@ class GiftWrapManager {
 
     const { pubkey } = account;
 
-    // Get oldest gift wrap timestamp, or use lastSyncTimestamp if no gift wraps yet
+    // Get oldest gift wrap timestamp from actual gift wrap events, not decryption attempts
+    // Get all gift wrap IDs for this user
     const decryptions = await db.giftWrapDecryptions
       .where("recipientPubkey")
       .equals(pubkey)
-      .sortBy("lastAttempt");
+      .toArray();
 
     let oldestTimestamp: number;
     if (decryptions.length === 0) {
@@ -306,7 +307,24 @@ class GiftWrapManager {
         console.log("[GiftWrap] No gift wraps yet, starting from 90 days ago");
       }
     } else {
-      oldestTimestamp = decryptions[0].lastAttempt;
+      // Find the oldest gift wrap event by looking up events in the event store
+      let oldest = Infinity;
+      for (const decryption of decryptions) {
+        const event = eventStore.getEvent(decryption.giftWrapId);
+        if (event && event.created_at < oldest) {
+          oldest = event.created_at;
+        }
+      }
+
+      if (oldest === Infinity) {
+        // Fallback if no events found in store
+        const now = Math.floor(Date.now() / 1000);
+        oldestTimestamp =
+          now - GIFT_WRAP_CONFIG.MAX_STORAGE_DAYS * 24 * 60 * 60;
+        console.log("[GiftWrap] No gift wraps in event store, using fallback");
+      } else {
+        oldestTimestamp = oldest;
+      }
     }
 
     const cutoff = oldestTimestamp - 30 * 24 * 60 * 60; // 30 days before oldest
