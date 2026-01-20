@@ -1,5 +1,6 @@
 import type { NostrEvent } from "@/types/nostr";
-import { getTagValue, getTagValues } from "@/lib/nostr-utils";
+import { getTagValues } from "@/lib/nostr-utils";
+import { getTagValue } from "applesauce-core/helpers";
 import { BaseEventContainer, ClickableEventTitle } from "./BaseEventRenderer";
 import { useGrimoire } from "@/core/state";
 import { MessageSquare, Server } from "lucide-react";
@@ -37,11 +38,7 @@ export function CommunikeyRenderer({ event }: CommunikeyRendererProps) {
   const handleOpenChat = () => {
     if (!relays.length) return;
 
-    // Use relay'pubkey format for compatibility with NIP-29 parser
-    const primaryRelay = relays[0].replace(/^wss?:\/\//, "");
-    const identifier = `${primaryRelay}'${communityPubkey}`;
-
-    // Open chat command - parser will detect it's a Communikey
+    // Open chat with Communikey protocol
     addWindow("chat", {
       protocol: "communikey",
       identifier: {

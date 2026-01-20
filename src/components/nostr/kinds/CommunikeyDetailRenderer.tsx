@@ -1,5 +1,6 @@
 import type { NostrEvent } from "@/types/nostr";
-import { getTagValue, getTagValues } from "@/lib/nostr-utils";
+import { getTagValues } from "@/lib/nostr-utils";
+import { getTagValue } from "applesauce-core/helpers";
 import { useProfile } from "@/hooks/useProfile";
 import { UserName } from "../UserName";
 import { Label } from "@/components/ui/label";
@@ -164,7 +165,7 @@ export function CommunikeyDetailRenderer({
                     {section.kinds.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {section.kinds.map((kind) => (
-                          <Label key={kind} size="xs">
+                          <Label key={kind} size="sm">
                             kind {kind}
                           </Label>
                         ))}
