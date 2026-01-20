@@ -1126,7 +1126,7 @@ export function ChatViewer({
           >
             Sign in
           </button>{" "}
-          to send messages
+          to post
         </div>
       )}
 
