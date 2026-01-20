@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -275,6 +276,234 @@ function formatBlobSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
+
+// Create nostr event preview node for nevent/naddr/note/npub/nprofile
+const NostrEventPreview = Node.create({
+  name: "nostrEventPreview",
+  group: "inline",
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      type: { default: null }, // 'npub' | 'note' | 'nevent' | 'naddr' | 'nprofile'
+      data: { default: null }, // Decoded bech32 data (varies by type)
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-nostr-preview="true"]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-nostr-preview": "true" }),
+    ];
+  },
+
+  renderText({ node }) {
+    // Serialize back to nostr: URI for plain text export
+    const { type, data } = node.attrs;
+    try {
+      if (type === "npub") {
+        return `nostr:${nip19.npubEncode(data)}`;
+      } else if (type === "note") {
+        return `nostr:${nip19.noteEncode(data)}`;
+      } else if (type === "nevent") {
+        return `nostr:${nip19.neventEncode(data)}`;
+      } else if (type === "naddr") {
+        return `nostr:${nip19.naddrEncode(data)}`;
+      } else if (type === "nprofile") {
+        return `nostr:${nip19.nprofileEncode(data)}`;
+      }
+    } catch (err) {
+      console.error("[NostrEventPreview] Failed to encode:", err);
+    }
+    return "";
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { type, data } = node.attrs;
+
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className =
+        "nostr-event-preview inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs align-middle";
+      dom.contentEditable = "false";
+
+      // Icon based on type
+      const icon = document.createElement("span");
+      icon.className = "text-primary flex-shrink-0";
+      if (type === "npub" || type === "nprofile") {
+        icon.textContent = "👤";
+      } else if (type === "note" || type === "nevent") {
+        icon.textContent = "📝";
+      } else if (type === "naddr") {
+        icon.textContent = "📄";
+      } else {
+        icon.textContent = "🔗";
+      }
+      dom.appendChild(icon);
+
+      // Type label
+      const typeLabel = document.createElement("span");
+      typeLabel.className = "text-primary font-mono font-medium";
+      typeLabel.textContent = type.toUpperCase();
+      dom.appendChild(typeLabel);
+
+      // ID preview (truncated)
+      const idLabel = document.createElement("span");
+      idLabel.className = "text-muted-foreground truncate max-w-[80px]";
+      if (type === "npub") {
+        idLabel.textContent = `${data.slice(0, 8)}...`;
+      } else if (type === "note") {
+        idLabel.textContent = `${data.slice(0, 8)}...`;
+      } else if (type === "nevent") {
+        idLabel.textContent = `${data.id.slice(0, 8)}...`;
+      } else if (type === "naddr") {
+        idLabel.textContent = data.identifier
+          ? `${data.identifier.slice(0, 12)}...`
+          : `kind:${data.kind}`;
+      } else if (type === "nprofile") {
+        idLabel.textContent = `${data.pubkey.slice(0, 8)}...`;
+      }
+      dom.appendChild(idLabel);
+
+      return { dom };
+    };
+  },
+});
+
+// Paste handler extension to transform bech32 strings into preview nodes
+const NostrPasteHandler = Extension.create({
+  name: "nostrPasteHandler",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("nostrPasteHandler"),
+
+        props: {
+          handlePaste: (view, event) => {
+            const text = event.clipboardData?.getData("text/plain");
+            if (!text) return false;
+
+            // Regex to detect nostr bech32 strings (with or without nostr: prefix)
+            const bech32Regex =
+              /(?:nostr:)?(npub1[\w]{58,}|note1[\w]{58,}|nevent1[\w]+|naddr1[\w]+|nprofile1[\w]+)/g;
+            const matches = Array.from(text.matchAll(bech32Regex));
+
+            if (matches.length === 0) return false; // No bech32 found, use default paste
+
+            // Build content with text and preview nodes
+            const nodes: any[] = [];
+            let lastIndex = 0;
+
+            for (const match of matches) {
+              const matchedText = match[0];
+              const matchIndex = match.index!;
+              const bech32 = match[1]; // The bech32 without nostr: prefix
+
+              // Add text before this match
+              if (lastIndex < matchIndex) {
+                const textBefore = text.slice(lastIndex, matchIndex);
+                if (textBefore) {
+                  nodes.push(view.state.schema.text(textBefore));
+                }
+              }
+
+              // Try to decode bech32 and create preview node
+              try {
+                const decoded = nip19.decode(bech32);
+
+                // Create preview node based on type
+                if (decoded.type === "npub") {
+                  nodes.push(
+                    view.state.schema.nodes.nostrEventPreview.create({
+                      type: "npub",
+                      data: decoded.data,
+                    }),
+                  );
+                } else if (decoded.type === "note") {
+                  nodes.push(
+                    view.state.schema.nodes.nostrEventPreview.create({
+                      type: "note",
+                      data: decoded.data,
+                    }),
+                  );
+                } else if (decoded.type === "nevent") {
+                  nodes.push(
+                    view.state.schema.nodes.nostrEventPreview.create({
+                      type: "nevent",
+                      data: decoded.data,
+                    }),
+                  );
+                } else if (decoded.type === "naddr") {
+                  nodes.push(
+                    view.state.schema.nodes.nostrEventPreview.create({
+                      type: "naddr",
+                      data: decoded.data,
+                    }),
+                  );
+                } else if (decoded.type === "nprofile") {
+                  nodes.push(
+                    view.state.schema.nodes.nostrEventPreview.create({
+                      type: "nprofile",
+                      data: decoded.data,
+                    }),
+                  );
+                }
+
+                // Add space after preview node
+                nodes.push(view.state.schema.text(" "));
+              } catch (err) {
+                // Invalid bech32, insert as plain text
+                console.warn(
+                  "[NostrPasteHandler] Failed to decode:",
+                  bech32,
+                  err,
+                );
+                nodes.push(view.state.schema.text(matchedText));
+              }
+
+              lastIndex = matchIndex + matchedText.length;
+            }
+
+            // Add remaining text after last match
+            if (lastIndex < text.length) {
+              const textAfter = text.slice(lastIndex);
+              if (textAfter) {
+                nodes.push(view.state.schema.text(textAfter));
+              }
+            }
+
+            // Insert all nodes at cursor position
+            if (nodes.length > 0) {
+              const { tr } = view.state;
+              const { from } = view.state.selection;
+
+              // Insert content
+              nodes.forEach((node, index) => {
+                tr.insert(from + index, node);
+              });
+
+              view.dispatch(tr);
+              return true; // Prevent default paste
+            }
+
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+});
 
 export const MentionEditor = forwardRef<
   MentionEditorHandle,
@@ -632,6 +861,27 @@ export const MentionEditor = forwardRef<
                     });
                   }
                 }
+              } else if (child.type === "nostrEventPreview") {
+                // Nostr event preview - serialize back to nostr: URI
+                const { type, data } = child.attrs;
+                try {
+                  if (type === "npub") {
+                    text += `nostr:${nip19.npubEncode(data)}`;
+                  } else if (type === "note") {
+                    text += `nostr:${nip19.noteEncode(data)}`;
+                  } else if (type === "nevent") {
+                    text += `nostr:${nip19.neventEncode(data)}`;
+                  } else if (type === "naddr") {
+                    text += `nostr:${nip19.naddrEncode(data)}`;
+                  } else if (type === "nprofile") {
+                    text += `nostr:${nip19.nprofileEncode(data)}`;
+                  }
+                } catch (err) {
+                  console.error(
+                    "[MentionEditor] Failed to serialize nostr preview:",
+                    err,
+                  );
+                }
               }
             });
             text += "\n";
@@ -736,6 +986,10 @@ export const MentionEditor = forwardRef<
         }),
         // Add blob attachment extension for media previews
         BlobAttachmentNode,
+        // Add nostr event preview extension for bech32 links
+        NostrEventPreview,
+        // Add paste handler to transform bech32 strings into previews
+        NostrPasteHandler,
       ];
 
       // Add emoji extension if search is provided
