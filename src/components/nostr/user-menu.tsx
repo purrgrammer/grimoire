@@ -445,9 +445,13 @@ export default function UserMenu() {
                     Relays
                   </DropdownMenuLabel>
                   {relays.map((relay) => (
-                    <DropdownMenuItem key={relay.url} className="p-0" asChild>
+                    <DropdownMenuItem
+                      key={relay.url}
+                      className="p-0 cursor-crosshair"
+                      onClick={() => addWindow("relay", { url: relay.url })}
+                    >
                       <RelayLink
-                        className="px-2 py-1.5 w-full"
+                        className="px-2 py-1.5 w-full pointer-events-none"
                         urlClassname="text-sm"
                         iconClassname="size-4"
                         url={relay.url}
