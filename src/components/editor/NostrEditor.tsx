@@ -318,20 +318,31 @@ function createSuggestionConfig<T>(
   config: SuggestionConfig<T>,
   handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
 ): Omit<SuggestionOptions<T>, "editor"> {
+  // Track session for debugging
+  let sessionId = 0;
+
   return {
     char: config.char,
     allowSpaces: config.allowSpaces ?? false,
     allow: config.allow,
     items: async ({ query }) => {
-      return await config.search(query);
+      const results = await config.search(query);
+      console.log(
+        `[Suggestion ${config.char}] items called: query="${query}" results=${results.length} session=${sessionId}`,
+      );
+      return results;
     },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle>;
       let popup: TippyInstance[];
       let editorRef: unknown;
+      const currentSession = ++sessionId;
 
       return {
         onStart: (props) => {
+          console.log(
+            `[Suggestion ${config.char}] onStart: session=${currentSession} items=${props.items?.length}`,
+          );
           editorRef = props.editor;
           component = new ReactRenderer(config.component as never, {
             props: {
@@ -357,6 +368,9 @@ function createSuggestionConfig<T>(
         },
 
         onUpdate(props) {
+          console.log(
+            `[Suggestion ${config.char}] onUpdate: session=${currentSession} items=${props.items?.length}`,
+          );
           component.updateProps({
             items: props.items,
             command: props.command,
@@ -389,6 +403,9 @@ function createSuggestionConfig<T>(
         },
 
         onExit() {
+          console.log(
+            `[Suggestion ${config.char}] onExit: session=${currentSession}`,
+          );
           popup[0]?.destroy();
           component.destroy();
         },
