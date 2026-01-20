@@ -23,6 +23,7 @@ export type AppId =
   | "blossom"
   | "wallet"
   | "zap"
+  | "community"
   | "win";
 
 export interface WindowInstance {

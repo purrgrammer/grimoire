@@ -47,6 +47,9 @@ const ZapWindow = lazy(() =>
   import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const CommunityViewer = lazy(() =>
+  import("./CommunityViewer").then((m) => ({ default: m.CommunityViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -238,6 +241,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             customTags={window.props.customTags}
             relays={window.props.relays}
             onClose={onClose}
+          />
+        );
+        break;
+      case "community":
+        content = (
+          <CommunityViewer
+            pubkey={window.props.pubkey}
+            relays={window.props.relays}
           />
         );
         break;

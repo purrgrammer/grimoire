@@ -9,6 +9,7 @@ import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
 import { parseZapCommand } from "@/lib/zap-parser";
+import { parseCommunityCommand } from "@/lib/community-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -842,5 +843,32 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "wallet",
     category: "Nostr",
     defaultProps: {},
+  },
+  community: {
+    name: "community",
+    section: "1",
+    synopsis: "community <identifier>",
+    description:
+      "View a Communikeys community (kind 10222). Communikeys are decentralized communities on Nostr that use existing keypairs and relays. Communities define content sections with badge-based access control, allowing any existing npub to become a community and any publication to be targeted at communities. Unlike NIP-29 groups, Communikeys work on any standard Nostr relay with client-side access control.",
+    options: [
+      {
+        flag: "<identifier>",
+        description:
+          "Community identifier: npub, nprofile, ncommunity://... format, hex pubkey, or NIP-05 (user@domain.com)",
+      },
+    ],
+    examples: [
+      "community npub1...                           View community by npub",
+      "community nprofile1...                       View community with relay hints",
+      "community ncommunity://<pubkey>?relay=...    View using ncommunity format",
+      "community community@domain.com               View community by NIP-05",
+      "community $me                                View your own community (if exists)",
+    ],
+    seeAlso: ["profile", "chat", "open"],
+    appId: "community",
+    category: "Nostr",
+    argParser: async (args: string[], activeAccountPubkey?: string) => {
+      return await parseCommunityCommand(args, activeAccountPubkey);
+    },
   },
 };
