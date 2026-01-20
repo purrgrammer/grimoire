@@ -1,10 +1,12 @@
-import { Terminal } from "lucide-react";
+import { Terminal, Trophy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { Progress } from "./ui/progress";
-import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import supportersService, { MONTHLY_GOAL_SATS } from "@/services/supporters";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
+import { useProfile } from "@/hooks/useProfile";
+import { getDisplayName } from "@/lib/nostr-utils";
 
 interface GrimoireWelcomeProps {
   onLaunchCommand: () => void;
@@ -28,6 +30,36 @@ const EXAMPLE_COMMANDS = [
   { command: "req -k 1 -l 20", description: "Query recent notes" },
 ];
 
+function TopContributor({
+  pubkey,
+  amount,
+}: {
+  pubkey: string;
+  amount: number;
+}) {
+  const profile = useProfile(pubkey);
+  const displayName = getDisplayName(pubkey, profile);
+
+  function formatNumber(sats: number): string {
+    if (sats >= 1_000_000) {
+      return `${(sats / 1_000_000).toFixed(1)}M`;
+    } else if (sats >= 1_000) {
+      return `${Math.floor(sats / 1_000)}k`;
+    }
+    return sats.toString();
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-border/30">
+      <Trophy className="size-3 text-yellow-500" />
+      <span className="text-[10px] text-muted-foreground flex-1 truncate">
+        {displayName}
+      </span>
+      <span className="text-[10px] font-medium">{formatNumber(amount)}</span>
+    </div>
+  );
+}
+
 export function GrimoireWelcome({
   onLaunchCommand,
   onExecuteCommand,
@@ -45,6 +77,12 @@ export function GrimoireWelcome({
         });
       return total;
     }, []) ?? 0;
+
+  // Get top monthly contributor reactively
+  const topContributor = useLiveQuery(
+    async () => supportersService.getTopMonthlyContributor(),
+    [],
+  );
 
   // Calculate progress
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
@@ -145,6 +183,12 @@ export function GrimoireWelcome({
                     </span>
                   </div>
                   <Progress value={goalProgress} className="h-1" />
+                  {topContributor && (
+                    <TopContributor
+                      pubkey={topContributor.pubkey}
+                      amount={topContributor.totalSats}
+                    />
+                  )}
                 </div>
               )}
             </button>
