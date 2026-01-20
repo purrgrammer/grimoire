@@ -41,6 +41,9 @@ export interface RichEditorProps {
     content: string,
     emojiTags: EmojiTag[],
     blobAttachments: BlobAttachment[],
+    mentions: string[],
+    eventRefs: string[],
+    addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
   ) => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
@@ -155,13 +158,21 @@ const EmojiMention = Mention.extend({
 function serializeContent(editor: any): SerializedContent {
   const emojiTags: EmojiTag[] = [];
   const blobAttachments: BlobAttachment[] = [];
+  const mentions = new Set<string>();
+  const eventRefs = new Set<string>();
+  const addressRefs: Array<{
+    kind: number;
+    pubkey: string;
+    identifier: string;
+  }> = [];
   const seenEmojis = new Set<string>();
   const seenBlobs = new Set<string>();
+  const seenAddrs = new Set<string>();
 
   // Get plain text representation
   const text = editor.getText();
 
-  // Walk the document to collect emoji and blob data
+  // Walk the document to collect emoji, blob, mention, and event data
   editor.state.doc.descendants((node: any) => {
     if (node.type.name === "emoji") {
       const { id, url, source } = node.attrs;
@@ -177,10 +188,41 @@ function serializeContent(editor: any): SerializedContent {
         seenBlobs.add(sha256);
         blobAttachments.push({ url, sha256, mimeType, size, server });
       }
+    } else if (node.type.name === "mention") {
+      // Extract pubkey from @mentions for p tags
+      const { id } = node.attrs;
+      if (id) {
+        mentions.add(id);
+      }
+    } else if (node.type.name === "nostrEventPreview") {
+      // Extract event/address references for e/a tags
+      const { type, data } = node.attrs;
+      if (type === "note" && data) {
+        eventRefs.add(data);
+      } else if (type === "nevent" && data?.id) {
+        eventRefs.add(data.id);
+      } else if (type === "naddr" && data) {
+        const addrKey = `${data.kind}:${data.pubkey}:${data.identifier || ""}`;
+        if (!seenAddrs.has(addrKey)) {
+          seenAddrs.add(addrKey);
+          addressRefs.push({
+            kind: data.kind,
+            pubkey: data.pubkey,
+            identifier: data.identifier || "",
+          });
+        }
+      }
     }
   });
 
-  return { text, emojiTags, blobAttachments };
+  return {
+    text,
+    emojiTags,
+    blobAttachments,
+    mentions: Array.from(mentions),
+    eventRefs: Array.from(eventRefs),
+    addressRefs,
+  };
 }
 
 export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
@@ -353,6 +395,9 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             serialized.text,
             serialized.emojiTags,
             serialized.blobAttachments,
+            serialized.mentions,
+            serialized.eventRefs,
+            serialized.addressRefs,
           );
           editorInstance.commands.clearContent();
         }
@@ -486,7 +531,15 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         clear: () => editor?.commands.clearContent(),
         getContent: () => editor?.getText() || "",
         getSerializedContent: () => {
-          if (!editor) return { text: "", emojiTags: [], blobAttachments: [] };
+          if (!editor)
+            return {
+              text: "",
+              emojiTags: [],
+              blobAttachments: [],
+              mentions: [],
+              eventRefs: [],
+              addressRefs: [],
+            };
           return serializeContent(editor);
         },
         isEmpty: () => editor?.isEmpty ?? true,

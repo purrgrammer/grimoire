@@ -40,6 +40,7 @@ export function PostViewer() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [relayStates, setRelayStates] = useState<RelayPublishState[]>([]);
   const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
+  const [isEditorEmpty, setIsEditorEmpty] = useState(true);
 
   // Get active account's write relays from Grimoire state
   const writeRelays = useMemo(() => {
@@ -126,7 +127,13 @@ export function PostViewer() {
 
   // Debounced draft save (save every 2 seconds of inactivity)
   useEffect(() => {
-    const timer = setInterval(saveDraft, 2000);
+    const timer = setInterval(() => {
+      saveDraft();
+      // Update empty state
+      if (editorRef.current) {
+        setIsEditorEmpty(editorRef.current.isEmpty());
+      }
+    }, 2000);
     return () => clearInterval(timer);
   }, [saveDraft]);
 
@@ -161,12 +168,119 @@ export function PostViewer() {
     });
   }, []);
 
+  // Retry publishing to a specific relay
+  const retryRelay = useCallback(
+    async (relayUrl: string) => {
+      if (!editorRef.current) return;
+
+      const serialized = editorRef.current.getSerializedContent();
+      if (!serialized.text.trim()) return;
+
+      // Create the event again
+      if (!canSign || !signer) return;
+
+      try {
+        const factory = new EventFactory();
+        factory.setSigner(signer);
+
+        // Build tags array
+        const tags: string[][] = [];
+
+        // Add p tags for mentions
+        for (const pubkey of serialized.mentions) {
+          tags.push(["p", pubkey]);
+        }
+
+        // Add e tags for event references
+        for (const eventId of serialized.eventRefs) {
+          tags.push(["e", eventId]);
+        }
+
+        // Add a tags for address references
+        for (const addr of serialized.addressRefs) {
+          tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
+        }
+
+        // Add emoji tags
+        for (const emoji of serialized.emojiTags) {
+          tags.push(["emoji", emoji.shortcode, emoji.url]);
+        }
+
+        // Add blob attachment tags (imeta)
+        for (const blob of serialized.blobAttachments) {
+          const imetaTag = [
+            "imeta",
+            `url ${blob.url}`,
+            `m ${blob.mimeType}`,
+            `x ${blob.sha256}`,
+            `size ${blob.size}`,
+          ];
+          if (blob.server) {
+            imetaTag.push(`server ${blob.server}`);
+          }
+          tags.push(imetaTag);
+        }
+
+        const draft = await factory.build({
+          kind: 1,
+          content: serialized.text,
+          tags,
+        });
+        const event = await factory.sign(draft);
+
+        // Update status to publishing
+        setRelayStates((prev) =>
+          prev.map((r) =>
+            r.url === relayUrl
+              ? { ...r, status: "publishing" as RelayStatus }
+              : r,
+          ),
+        );
+
+        // Try to publish
+        await pool.publish([relayUrl], event);
+
+        // Update status to success
+        setRelayStates((prev) =>
+          prev.map((r) =>
+            r.url === relayUrl
+              ? { ...r, status: "success" as RelayStatus, error: undefined }
+              : r,
+          ),
+        );
+
+        toast.success(`Published to ${relayUrl.replace(/^wss?:\/\//, "")}`);
+      } catch (error) {
+        console.error(`Failed to retry publish to ${relayUrl}:`, error);
+        setRelayStates((prev) =>
+          prev.map((r) =>
+            r.url === relayUrl
+              ? {
+                  ...r,
+                  status: "error" as RelayStatus,
+                  error:
+                    error instanceof Error ? error.message : "Unknown error",
+                }
+              : r,
+          ),
+        );
+        toast.error(
+          `Failed to publish to ${relayUrl.replace(/^wss?:\/\//, "")}`,
+        );
+      }
+    },
+    [canSign, signer],
+  );
+
   // Publish to selected relays with per-relay status tracking
   const handlePublish = useCallback(
     async (
       content: string,
       emojiTags: EmojiTag[],
       blobAttachments: BlobAttachment[],
+      mentions: string[],
+      eventRefs: string[],
+      addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
     ) => {
       if (!canSign || !signer || !pubkey) {
         toast.error("Please log in to publish");
@@ -193,6 +307,21 @@ export function PostViewer() {
 
         // Build tags array
         const tags: string[][] = [];
+
+        // Add p tags for mentions
+        for (const pubkey of mentions) {
+          tags.push(["p", pubkey]);
+        }
+
+        // Add e tags for event references
+        for (const eventId of eventRefs) {
+          tags.push(["e", eventId]);
+        }
+
+        // Add a tags for address references
+        for (const addr of addressRefs) {
+          tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
+        }
 
         // Add emoji tags
         for (const emoji of emojiTags) {
@@ -354,7 +483,7 @@ export function PostViewer() {
 
         <Button
           onClick={() => editorRef.current?.submit()}
-          disabled={isPublishing || selectedRelays.size === 0}
+          disabled={isPublishing || selectedRelays.size === 0 || isEditorEmpty}
           className="gap-2 flex-1"
         >
           {isPublishing ? (
@@ -433,9 +562,14 @@ export function PostViewer() {
                     <Check className="h-4 w-4 text-green-500" />
                   )}
                   {relay.status === "error" && (
-                    <div title={relay.error || "Failed to publish"}>
+                    <button
+                      onClick={() => retryRelay(relay.url)}
+                      disabled={isPublishing}
+                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                      title={`${relay.error || "Failed to publish"}. Click to retry.`}
+                    >
                       <X className="h-4 w-4 text-red-500" />
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>

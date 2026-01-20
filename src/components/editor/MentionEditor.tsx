@@ -68,6 +68,12 @@ export interface SerializedContent {
   emojiTags: EmojiTag[];
   /** Blob attachments for imeta tags (NIP-92) */
   blobAttachments: BlobAttachment[];
+  /** Mentioned pubkeys for p tags */
+  mentions: string[];
+  /** Referenced event IDs for e tags (from note/nevent) */
+  eventRefs: string[];
+  /** Referenced addresses for a tags (from naddr) */
+  addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>;
 }
 
 export interface MentionEditorProps {
@@ -746,6 +752,9 @@ export const MentionEditor = forwardRef<
           text: text.trim(),
           emojiTags,
           blobAttachments,
+          mentions: [],
+          eventRefs: [],
+          addressRefs: [],
         };
       },
       [],
@@ -947,7 +956,15 @@ export const MentionEditor = forwardRef<
         clear: () => editor?.commands.clearContent(),
         getContent: () => editor?.getText() || "",
         getSerializedContent: () => {
-          if (!editor) return { text: "", emojiTags: [], blobAttachments: [] };
+          if (!editor)
+            return {
+              text: "",
+              emojiTags: [],
+              blobAttachments: [],
+              mentions: [],
+              eventRefs: [],
+              addressRefs: [],
+            };
           return serializeContent(editor);
         },
         isEmpty: () => editor?.isEmpty ?? true,
