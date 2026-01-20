@@ -16,7 +16,6 @@ import {
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
-import type { SuggestionOptions } from "@tiptap/suggestion";
 import tippy from "tippy.js";
 import type { Instance as TippyInstance } from "tippy.js";
 import "tippy.js/dist/tippy.css";
@@ -311,103 +310,6 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
   });
 }
 
-/**
- * Create a TipTap suggestion configuration from our SuggestionConfig
- *
- * This creates a proper TipTap suggestion config that handles async search
- * correctly by using the built-in items() function.
- */
-function createSuggestionConfig<T>(
-  config: SuggestionConfig<T>,
-  handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
-): Omit<SuggestionOptions<T>, "editor"> {
-  return {
-    char: config.char,
-    allowSpaces: config.allowSpaces ?? false,
-    allow: config.allow,
-    // Use async items() for search - TipTap handles this correctly
-    items: async ({ query }) => {
-      return await config.search(query);
-    },
-    render: () => {
-      let component: ReactRenderer<SuggestionListHandle> | null = null;
-      let popup: TippyInstance[] | null = null;
-      let editorRef: unknown = null;
-
-      return {
-        onStart: (props) => {
-          editorRef = props.editor;
-
-          component = new ReactRenderer(config.component as never, {
-            props: {
-              items: props.items,
-              command: props.command,
-              onClose: () => popup?.[0]?.hide(),
-            },
-            editor: props.editor,
-          });
-
-          if (!props.clientRect) return;
-
-          popup = tippy("body", {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: "manual",
-            placement: config.placement ?? "bottom-start",
-            zIndex: 100,
-          });
-        },
-
-        onUpdate(props) {
-          // Update component with new items and command
-          if (component) {
-            component.updateProps({
-              items: props.items,
-              command: props.command,
-            });
-          }
-
-          // Update popup position
-          if (props.clientRect && popup?.[0]) {
-            popup[0].setProps({
-              getReferenceClientRect: props.clientRect as () => DOMRect,
-            });
-          }
-        },
-
-        onKeyDown(props) {
-          if (props.event.key === "Escape") {
-            popup?.[0]?.hide();
-            return true;
-          }
-
-          // Ctrl/Cmd+Enter always submits
-          if (
-            props.event.key === "Enter" &&
-            (props.event.ctrlKey || props.event.metaKey)
-          ) {
-            popup?.[0]?.hide();
-            handleSubmitRef.current(editorRef);
-            return true;
-          }
-
-          return component?.ref?.onKeyDown(props.event) ?? false;
-        },
-
-        onExit() {
-          popup?.[0]?.destroy();
-          component?.destroy();
-          component = null;
-          popup = null;
-        },
-      };
-    },
-  };
-}
-
 export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
   (
     {
@@ -557,29 +459,289 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       [suggestions],
     );
 
-    // Memoize TipTap suggestion configs separately to ensure stable references
-    // This is critical - TipTap compares these by reference and reinitializes if they change
-    const tipTapMentionConfig = useMemo(
-      () =>
-        mentionConfig
-          ? createSuggestionConfig(mentionConfig, handleSubmitRef)
-          : null,
-      [mentionConfig],
-    );
-    const tipTapEmojiConfig = useMemo(
-      () =>
-        emojiConfig
-          ? createSuggestionConfig(emojiConfig, handleSubmitRef)
-          : null,
-      [emojiConfig],
-    );
-    const tipTapSlashConfig = useMemo(
-      () =>
-        slashConfig
-          ? createSuggestionConfig(slashConfig, handleSubmitRef)
-          : null,
-      [slashConfig],
-    );
+    // Create TipTap suggestion configs directly inline (matching main branch pattern)
+    // This ensures stable function references for items() and render()
+    const tipTapMentionConfig = useMemo(() => {
+      if (!mentionConfig) return null;
+
+      return {
+        char: mentionConfig.char,
+        allowSpaces: mentionConfig.allowSpaces ?? false,
+        allow: mentionConfig.allow,
+        items: async ({ query }: { query: string }) => {
+          return await mentionConfig.search(query);
+        },
+        render: () => {
+          let component: ReactRenderer<SuggestionListHandle> | null = null;
+          let popup: TippyInstance[] | null = null;
+          let editorRef: unknown = null;
+
+          return {
+            onStart: (props: {
+              editor: unknown;
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) => {
+              editorRef = props.editor;
+              component = new ReactRenderer(mentionConfig.component as never, {
+                props: {
+                  items: props.items,
+                  command: props.command,
+                  onClose: () => popup?.[0]?.hide(),
+                },
+                editor: props.editor,
+              });
+
+              if (!props.clientRect) return;
+
+              popup = tippy("body", {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: "manual",
+                placement: mentionConfig.placement ?? "bottom-start",
+                zIndex: 100,
+              });
+            },
+
+            onUpdate(props: {
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) {
+              if (component) {
+                component.updateProps({
+                  items: props.items,
+                  command: props.command,
+                });
+              }
+
+              if (props.clientRect && popup?.[0]) {
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              }
+            },
+
+            onKeyDown(props: { event: KeyboardEvent }) {
+              if (props.event.key === "Escape") {
+                popup?.[0]?.hide();
+                return true;
+              }
+
+              if (
+                props.event.key === "Enter" &&
+                (props.event.ctrlKey || props.event.metaKey)
+              ) {
+                popup?.[0]?.hide();
+                handleSubmitRef.current(editorRef);
+                return true;
+              }
+
+              return component?.ref?.onKeyDown(props.event) ?? false;
+            },
+
+            onExit() {
+              popup?.[0]?.destroy();
+              component?.destroy();
+              component = null;
+              popup = null;
+            },
+          };
+        },
+      };
+    }, [mentionConfig]);
+
+    const tipTapEmojiConfig = useMemo(() => {
+      if (!emojiConfig) return null;
+
+      return {
+        char: emojiConfig.char,
+        allowSpaces: emojiConfig.allowSpaces ?? false,
+        allow: emojiConfig.allow,
+        items: async ({ query }: { query: string }) => {
+          return await emojiConfig.search(query);
+        },
+        render: () => {
+          let component: ReactRenderer<SuggestionListHandle> | null = null;
+          let popup: TippyInstance[] | null = null;
+          let editorRef: unknown = null;
+
+          return {
+            onStart: (props: {
+              editor: unknown;
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) => {
+              editorRef = props.editor;
+              component = new ReactRenderer(emojiConfig.component as never, {
+                props: {
+                  items: props.items,
+                  command: props.command,
+                  onClose: () => popup?.[0]?.hide(),
+                },
+                editor: props.editor,
+              });
+
+              if (!props.clientRect) return;
+
+              popup = tippy("body", {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: "manual",
+                placement: emojiConfig.placement ?? "bottom-start",
+                zIndex: 100,
+              });
+            },
+
+            onUpdate(props: {
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) {
+              if (component) {
+                component.updateProps({
+                  items: props.items,
+                  command: props.command,
+                });
+              }
+
+              if (props.clientRect && popup?.[0]) {
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              }
+            },
+
+            onKeyDown(props: { event: KeyboardEvent }) {
+              if (props.event.key === "Escape") {
+                popup?.[0]?.hide();
+                return true;
+              }
+
+              if (
+                props.event.key === "Enter" &&
+                (props.event.ctrlKey || props.event.metaKey)
+              ) {
+                popup?.[0]?.hide();
+                handleSubmitRef.current(editorRef);
+                return true;
+              }
+
+              return component?.ref?.onKeyDown(props.event) ?? false;
+            },
+
+            onExit() {
+              popup?.[0]?.destroy();
+              component?.destroy();
+              component = null;
+              popup = null;
+            },
+          };
+        },
+      };
+    }, [emojiConfig]);
+
+    const tipTapSlashConfig = useMemo(() => {
+      if (!slashConfig) return null;
+
+      return {
+        char: slashConfig.char,
+        allowSpaces: slashConfig.allowSpaces ?? false,
+        allow: slashConfig.allow,
+        items: async ({ query }: { query: string }) => {
+          return await slashConfig.search(query);
+        },
+        render: () => {
+          let component: ReactRenderer<SuggestionListHandle> | null = null;
+          let popup: TippyInstance[] | null = null;
+          let editorRef: unknown = null;
+
+          return {
+            onStart: (props: {
+              editor: unknown;
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) => {
+              editorRef = props.editor;
+              component = new ReactRenderer(slashConfig.component as never, {
+                props: {
+                  items: props.items,
+                  command: props.command,
+                  onClose: () => popup?.[0]?.hide(),
+                },
+                editor: props.editor,
+              });
+
+              if (!props.clientRect) return;
+
+              popup = tippy("body", {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: "manual",
+                placement: slashConfig.placement ?? "top-start",
+                zIndex: 100,
+              });
+            },
+
+            onUpdate(props: {
+              items: unknown[];
+              command: unknown;
+              clientRect?: () => DOMRect;
+            }) {
+              if (component) {
+                component.updateProps({
+                  items: props.items,
+                  command: props.command,
+                });
+              }
+
+              if (props.clientRect && popup?.[0]) {
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              }
+            },
+
+            onKeyDown(props: { event: KeyboardEvent }) {
+              if (props.event.key === "Escape") {
+                popup?.[0]?.hide();
+                return true;
+              }
+
+              if (
+                props.event.key === "Enter" &&
+                (props.event.ctrlKey || props.event.metaKey)
+              ) {
+                popup?.[0]?.hide();
+                handleSubmitRef.current(editorRef);
+                return true;
+              }
+
+              return component?.ref?.onKeyDown(props.event) ?? false;
+            },
+
+            onExit() {
+              popup?.[0]?.destroy();
+              component?.destroy();
+              component = null;
+              popup = null;
+            },
+          };
+        },
+      };
+    }, [slashConfig]);
 
     // Build extensions array
     const extensions = useMemo(() => {
