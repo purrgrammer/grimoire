@@ -3,7 +3,7 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   getMonitorFrequency,
   getMonitorChecks,
@@ -43,13 +43,9 @@ export function Kind10166Renderer({ event }: BaseEventProps) {
         {checks.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {checks.map((check) => (
-              <Badge
-                key={check}
-                variant="secondary"
-                className="h-5 px-2 text-xs"
-              >
+              <Label key={check} className="text-xs text-muted-foreground">
                 {getCheckTypeName(check)}
-              </Badge>
+              </Label>
             ))}
           </div>
         )}
