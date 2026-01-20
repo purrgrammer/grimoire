@@ -224,13 +224,19 @@ export function EventMenu({ event }: { event: NostrEvent }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          <div className="flex flex-row items-center gap-4">
-            <KindBadge kind={event.kind} variant="compact" />
+          <div className="flex flex-row items-center gap-2 text-xs text-muted-foreground">
+            <KindBadge
+              kind={event.kind}
+              variant="compact"
+              iconClassname="text-muted-foreground/60"
+              className="opacity-60"
+            />
             <KindBadge
               kind={event.kind}
               showName
               showKindNumber
               showIcon={false}
+              className="opacity-60"
             />
           </div>
         </DropdownMenuLabel>
