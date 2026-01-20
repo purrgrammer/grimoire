@@ -83,7 +83,7 @@ export interface MentionEditorProps {
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
   onCommandExecute?: (action: ChatAction) => Promise<void>;
-  onFileDrop?: (files: File[]) => void;
+  onFilePaste?: (files: File[]) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -520,55 +520,20 @@ const NostrPasteHandler = Extension.create({
   },
 });
 
-// File drop handler extension to intercept file drops and trigger upload
-const FileDropHandler = Extension.create({
-  name: "fileDropHandler",
+// File paste handler extension to intercept file pastes and trigger upload
+const FilePasteHandler = Extension.create({
+  name: "filePasteHandler",
 
   addProseMirrorPlugins() {
-    const onFileDrop = this.options.onFileDrop;
+    const onFilePaste = this.options.onFilePaste;
 
     return [
       new Plugin({
-        key: new PluginKey("fileDropHandler"),
+        key: new PluginKey("filePasteHandler"),
 
         props: {
-          handleDOMEvents: {
-            // Need to handle dragover to allow drops
-            dragover: (_view, event) => {
-              // Check if files are being dragged
-              if (event.dataTransfer?.types.includes("Files")) {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "copy";
-                return true;
-              }
-              return false;
-            },
-          },
-
-          handleDrop: (_view, event) => {
-            // Check if this is a file drop
-            const files = event.dataTransfer?.files;
-            if (!files || files.length === 0) return false;
-
-            // Check if files are images, videos, or audio (same as upload dialog accepts)
-            const validFiles = Array.from(files).filter((file) =>
-              file.type.match(/^(image|video|audio)\//),
-            );
-
-            if (validFiles.length === 0) return false;
-
-            // Trigger the file drop callback
-            if (onFileDrop) {
-              onFileDrop(validFiles);
-              event.preventDefault();
-              return true; // Prevent default drop behavior
-            }
-
-            return false;
-          },
-
           handlePaste: (_view, event) => {
-            // Also handle paste events with files (e.g., pasting images from clipboard)
+            // Handle paste events with files (e.g., pasting images from clipboard)
             const files = event.clipboardData?.files;
             if (!files || files.length === 0) return false;
 
@@ -579,9 +544,9 @@ const FileDropHandler = Extension.create({
 
             if (validFiles.length === 0) return false;
 
-            // Trigger the file drop callback
-            if (onFileDrop) {
-              onFileDrop(validFiles);
+            // Trigger the file paste callback
+            if (onFilePaste) {
+              onFilePaste(validFiles);
               event.preventDefault();
               return true; // Prevent default paste behavior
             }
@@ -595,7 +560,7 @@ const FileDropHandler = Extension.create({
 
   addOptions() {
     return {
-      onFileDrop: undefined,
+      onFilePaste: undefined,
     };
   },
 });
@@ -612,7 +577,7 @@ export const MentionEditor = forwardRef<
       searchEmojis,
       searchCommands,
       onCommandExecute,
-      onFileDrop,
+      onFilePaste,
       autoFocus = false,
       className = "",
     },
@@ -1082,9 +1047,9 @@ export const MentionEditor = forwardRef<
         NostrEventPreview,
         // Add paste handler to transform bech32 strings into previews
         NostrPasteHandler,
-        // Add file drop handler for drag-and-drop file uploads
-        FileDropHandler.configure({
-          onFileDrop,
+        // Add file paste handler for clipboard file uploads
+        FilePasteHandler.configure({
+          onFilePaste,
         }),
       ];
 
@@ -1163,7 +1128,7 @@ export const MentionEditor = forwardRef<
       emojiSuggestion,
       slashCommandSuggestion,
       onCommandExecute,
-      onFileDrop,
+      onFilePaste,
       placeholder,
     ]);
 

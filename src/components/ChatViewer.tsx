@@ -1096,8 +1096,8 @@ export function ChatViewer({
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}
-              onFileDrop={(files) => {
-                // Open upload dialog with dropped files
+              onFilePaste={(files) => {
+                // Open upload dialog with pasted files
                 openUpload(files);
               }}
               onSubmit={(content, emojiTags, blobAttachments) => {
