@@ -12,6 +12,7 @@ import {
   Copy,
   CopyCheck,
   FileText,
+  Lock,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { getZapRequest } from "applesauce-common/helpers/zap";
@@ -39,6 +40,7 @@ import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
+import { InboxRelaysDropdown } from "./chat/InboxRelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
 import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
@@ -871,7 +873,33 @@ export function ChatViewer({
                     className="text-sm font-semibold truncate cursor-help text-left"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {customTitle ||
+                      (() => {
+                        // For NIP-17, show "Saved Messages" or participant name
+                        if (
+                          protocol === "nip-17" &&
+                          conversation.participants.length === 2
+                        ) {
+                          const [p1, p2] = conversation.participants;
+                          const isSelfConversation = p1.pubkey === p2.pubkey;
+
+                          if (isSelfConversation) {
+                            return "Saved Messages";
+                          }
+
+                          // Show the other participant's name
+                          const otherPubkey =
+                            p1.pubkey === pubkey ? p2.pubkey : p1.pubkey;
+                          return (
+                            <UserName
+                              pubkey={otherPubkey}
+                              className="text-sm font-semibold"
+                            />
+                          );
+                        }
+
+                        return conversation.title;
+                      })()}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -974,8 +1002,28 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            <MembersDropdown participants={derivedParticipants} />
-            <RelaysDropdown conversation={conversation} />
+            {/* Hide member list for self-conversations (Saved Messages) */}
+            {!(
+              protocol === "nip-17" &&
+              conversation.participants.length === 2 &&
+              conversation.participants[0].pubkey ===
+                conversation.participants[1].pubkey
+            ) && <MembersDropdown participants={derivedParticipants} />}
+            {/* Show inbox relays for NIP-17, regular relays for other protocols */}
+            {protocol === "nip-17" ? (
+              <InboxRelaysDropdown conversation={conversation} />
+            ) : (
+              <RelaysDropdown conversation={conversation} />
+            )}
+            {/* Show lock icon for encrypted conversations */}
+            {protocol === "nip-17" && (
+              <div
+                className="text-muted-foreground"
+                title="End-to-end encrypted"
+              >
+                <Lock className="size-3" />
+              </div>
+            )}
             <button
               onClick={handleNipClick}
               className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
@@ -999,7 +1047,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-17" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}

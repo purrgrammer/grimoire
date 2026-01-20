@@ -54,7 +54,7 @@ type InboxViewerProps = Record<string, never>;
 const CONVERSATIONS_PAGE_SIZE = 50;
 
 export function InboxViewer(_props: InboxViewerProps) {
-  const { state, updateGiftWrapSettings } = useGrimoire();
+  const { state, updateGiftWrapSettings, addWindow } = useGrimoire();
   const { pubkey } = useAccount();
   const stats = useGiftWrapStats();
   const conversations = useGiftWrapConversations();
@@ -149,13 +149,14 @@ export function InboxViewer(_props: InboxViewerProps) {
     _conversationKey: string,
     otherPubkey: string,
   ) => {
-    // Open chat window with the other participant
-    const npub = nip19.npubEncode(otherPubkey);
-    window.dispatchEvent(
-      new CustomEvent("grimoire:execute-command", {
-        detail: `chat ${npub}`,
-      }),
-    );
+    // Open chat window with the other participant using NIP-17
+    addWindow("chat", {
+      protocol: "nip-17",
+      identifier: {
+        type: "dm-recipient",
+        value: otherPubkey,
+      },
+    });
   };
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
