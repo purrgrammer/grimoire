@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { Paperclip, Send, Loader2, Check, X, RefreshCw } from "lucide-react";
+import { Paperclip, Send, Loader2, Check, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -10,6 +10,7 @@ import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
+import { RelayLink } from "./nostr/RelayLink";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -23,6 +24,9 @@ interface RelayPublishState {
   status: RelayStatus;
   error?: string;
 }
+
+// Draft persistence key
+const DRAFT_STORAGE_KEY = "grimoire-post-draft";
 
 export function PostViewer() {
   const { pubkey, canSign, signer } = useAccount();
@@ -61,6 +65,63 @@ export function PostViewer() {
       updateRelayStates();
     }
   }, [writeRelays, updateRelayStates]);
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    if (!pubkey) return;
+
+    const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+    const savedDraft = localStorage.getItem(draftKey);
+
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        // We'll set content via editor commands after editor is ready
+        // Store in ref for initial load
+        if (editorRef.current && draft.content) {
+          // Use setTimeout to ensure editor is fully mounted
+          setTimeout(() => {
+            if (editorRef.current) {
+              editorRef.current.insertText(draft.content);
+            }
+          }, 100);
+        }
+      } catch (err) {
+        console.error("Failed to load draft:", err);
+      }
+    }
+  }, [pubkey]);
+
+  // Save draft to localStorage on content change
+  const saveDraft = useCallback(() => {
+    if (!pubkey || !editorRef.current) return;
+
+    const content = editorRef.current.getContent();
+    if (!content.trim()) {
+      // Clear draft if empty
+      const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+    const draft = {
+      content,
+      timestamp: Date.now(),
+    };
+
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+    }
+  }, [pubkey]);
+
+  // Debounced draft save (save every 2 seconds of inactivity)
+  useEffect(() => {
+    const timer = setInterval(saveDraft, 2000);
+    return () => clearInterval(timer);
+  }, [saveDraft]);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -201,6 +262,12 @@ export function PostViewer() {
         // Clear editor on success
         editorRef.current?.clear();
 
+        // Clear draft from localStorage
+        if (pubkey) {
+          const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+          localStorage.removeItem(draftKey);
+        }
+
         toast.success(
           `Published to ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
         );
@@ -305,13 +372,13 @@ export function PostViewer() {
           {writeRelays.length > 0 && (
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={updateRelayStates}
               disabled={isPublishing}
-              className="h-6 text-xs"
+              className="h-6 w-6"
+              title="Reset relay selection"
             >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Reset
+              <RotateCcw className="h-3 w-3" />
             </Button>
           )}
         </div>
@@ -322,11 +389,11 @@ export function PostViewer() {
             settings.
           </p>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="space-y-1 max-h-64 overflow-y-auto">
             {relayStates.map((relay) => (
               <div
                 key={relay.url}
-                className="flex items-center justify-between gap-3 rounded-md border border-border bg-background p-2"
+                className="flex items-center justify-between gap-3 py-1"
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Checkbox
@@ -337,9 +404,15 @@ export function PostViewer() {
                   />
                   <label
                     htmlFor={relay.url}
-                    className="text-sm cursor-pointer truncate flex-1"
+                    className="cursor-pointer truncate flex-1"
+                    onClick={(e) => e.preventDefault()}
                   >
-                    {relay.url.replace(/^wss?:\/\//, "")}
+                    <RelayLink
+                      url={relay.url}
+                      write={true}
+                      showInboxOutbox={false}
+                      className="text-sm"
+                    />
                   </label>
                 </div>
 
