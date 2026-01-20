@@ -543,13 +543,13 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
 
     handleSubmitRef.current = handleSubmit;
 
-    // Find suggestion configs
-    const mentionConfig = suggestions.find((s) => s.char === "@");
-    const emojiConfig = suggestions.find((s) => s.char === ":");
-    const slashConfig = suggestions.find((s) => s.char === "/");
-
     // Build extensions array
     const extensions = useMemo(() => {
+      // Find suggestion configs inside useMemo to avoid recreating extensions on every render
+      const mentionConfig = suggestions.find((s) => s.char === "@");
+      const emojiConfig = suggestions.find((s) => s.char === ":");
+      const slashConfig = suggestions.find((s) => s.char === "/");
+
       const isMobile = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
       // Custom extension for keyboard shortcuts
@@ -711,14 +711,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       }
 
       return exts;
-    }, [
-      submitBehavior,
-      placeholder,
-      blobPreview,
-      mentionConfig,
-      emojiConfig,
-      slashConfig,
-    ]);
+    }, [submitBehavior, placeholder, blobPreview, suggestions]);
 
     const editor = useEditor({
       extensions,
