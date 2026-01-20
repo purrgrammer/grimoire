@@ -325,8 +325,17 @@ function createSuggestionConfig<T>(
     items: async ({ query }) => {
       // Always use the current config from ref to get fresh search function
       const config = configRef.current;
-      if (!config) return [];
-      return await config.search(query);
+      if (!config) {
+        console.warn(
+          `[NostrEditor] Suggestion config for '${triggerChar}' is undefined`,
+        );
+        return [];
+      }
+      const results = await config.search(query);
+      console.log(
+        `[NostrEditor] Search '${triggerChar}' query="${query}" results=${results.length}`,
+      );
+      return results;
     },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle>;
@@ -440,6 +449,16 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
     mentionConfigRef.current = suggestions.find((s) => s.char === "@");
     emojiConfigRef.current = suggestions.find((s) => s.char === ":");
     slashConfigRef.current = suggestions.find((s) => s.char === "/");
+
+    // Debug: log suggestion config status
+    if (process.env.NODE_ENV === "development") {
+      console.log("[NostrEditor] Suggestions updated:", {
+        mention: !!mentionConfigRef.current,
+        emoji: !!emojiConfigRef.current,
+        slash: !!slashConfigRef.current,
+        suggestionsCount: suggestions.length,
+      });
+    }
 
     // Helper function to serialize editor content
     const serializeContent = useCallback(

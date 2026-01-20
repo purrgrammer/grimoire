@@ -16,6 +16,9 @@ import type { ActionContext } from "applesauce-actions";
 import { useEventStore } from "applesauce-react/hooks";
 import { addressLoader, profileLoader } from "@/services/loaders";
 
+// Draft storage key prefix
+const DRAFT_STORAGE_PREFIX = "grimoire:post-draft:";
+
 // Action builder for creating a short text note
 function CreateNoteAction(content: SerializedContent) {
   return async ({ factory, sign, publish }: ActionContext) => {
@@ -49,6 +52,57 @@ export function PostViewer() {
   const editorRef = useRef<NostrEditorHandle>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
+
+  // Use pubkey as draft key - one draft per account, persists across reloads
+  const draftKey = pubkey ? `${DRAFT_STORAGE_PREFIX}${pubkey}` : null;
+
+  // Load draft from localStorage on mount
+  const [initialContent, setInitialContent] = useState<string | undefined>(
+    undefined,
+  );
+  const draftLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (draftLoadedRef.current || !draftKey) return;
+    draftLoadedRef.current = true;
+
+    try {
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        setInitialContent(savedDraft);
+      }
+    } catch (error) {
+      console.warn("[PostViewer] Failed to load draft:", error);
+    }
+  }, [draftKey]);
+
+  // Save draft to localStorage when content changes
+  const saveDraft = useCallback(
+    (content: SerializedContent) => {
+      if (!draftKey) return;
+      try {
+        if (content.text.trim()) {
+          localStorage.setItem(draftKey, content.text);
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      } catch (error) {
+        // localStorage might be full or disabled
+        console.warn("[PostViewer] Failed to save draft:", error);
+      }
+    },
+    [draftKey],
+  );
+
+  // Clear draft from localStorage
+  const clearDraft = useCallback(() => {
+    if (!draftKey) return;
+    try {
+      localStorage.removeItem(draftKey);
+    } catch (error) {
+      console.warn("[PostViewer] Failed to clear draft:", error);
+    }
+  }, [draftKey]);
 
   // Load contacts and their profiles
   useEffect(() => {
@@ -142,6 +196,7 @@ export function PostViewer() {
         toast.success("Post published!");
         setIsPublished(true);
         editorRef.current?.clear();
+        clearDraft(); // Clear draft after successful publish
       } catch (error) {
         console.error("[PostViewer] Failed to publish:", error);
         toast.error(
@@ -151,7 +206,7 @@ export function PostViewer() {
         setIsPublishing(false);
       }
     },
-    [canSign, pubkey],
+    [canSign, pubkey, clearDraft],
   );
 
   // Handle submit button click
@@ -162,12 +217,16 @@ export function PostViewer() {
     }
   }, [handlePublish]);
 
-  // Reset published state when user starts typing again
-  const handleChange = useCallback(() => {
-    if (isPublished) {
-      setIsPublished(false);
-    }
-  }, [isPublished]);
+  // Handle content change - save draft and reset published state
+  const handleChange = useCallback(
+    (content: SerializedContent) => {
+      if (isPublished) {
+        setIsPublished(false);
+      }
+      saveDraft(content);
+    },
+    [isPublished, saveDraft],
+  );
 
   if (!canSign) {
     return (
@@ -184,31 +243,30 @@ export function PostViewer() {
   }
 
   return (
-    <div className="h-full flex flex-col p-3">
-      <div className="flex-1 min-h-0">
-        <NostrEditor
-          ref={editorRef}
-          placeholder="What's on your mind?"
-          variant="full"
-          submitBehavior="button-only"
-          blobPreview="gallery"
-          minLines={6}
-          suggestions={suggestions}
-          onChange={handleChange}
-          autoFocus
-        />
-      </div>
+    <div className="h-full flex flex-col p-3 gap-2">
+      <NostrEditor
+        ref={editorRef}
+        placeholder="What's on your mind?"
+        variant="full"
+        submitBehavior="button-only"
+        blobPreview="gallery"
+        minLines={6}
+        suggestions={suggestions}
+        onChange={handleChange}
+        initialContent={initialContent}
+        autoFocus
+      />
 
-      <div className="flex items-center justify-between pt-2 border-t mt-2">
+      <div className="flex items-center justify-between">
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={openUpload}
           disabled={isPublishing}
+          title="Attach file"
         >
-          <Paperclip className="size-4 mr-1" />
-          Attach
+          <Paperclip className="size-4" />
         </Button>
 
         <div className="flex items-center gap-2">
