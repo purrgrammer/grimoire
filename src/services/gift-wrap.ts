@@ -12,6 +12,11 @@ import pool from "./relay-pool";
 import eventStore from "./event-store";
 import accountManager from "./accounts";
 import relayStateManager from "./relay-state-manager";
+import {
+  unlockGiftWrap,
+  type Rumor,
+} from "applesauce-common/helpers/gift-wrap";
+import { getConversationIdentifierFromMessage } from "applesauce-common/helpers/messages";
 
 /**
  * Statistics about gift wrap processing
@@ -34,17 +39,6 @@ const GIFT_WRAP_CONFIG = {
   MAX_STORAGE_DAYS: 90, // Keep gift wraps for 90 days
   AUTH_TIMEOUT_MS: 10000, // Wait 10s for auth before proceeding
 };
-
-/**
- * Rumor structure (unsigned event from NIP-59)
- */
-interface Rumor {
-  kind: number;
-  content: string;
-  tags: string[][];
-  created_at: number;
-  pubkey: string;
-}
 
 /**
  * Gift Wrap Manager
@@ -771,96 +765,29 @@ class GiftWrapManager {
       throw new Error("Gift wrap not addressed to this pubkey");
     }
 
-    // Helper to call NIP-44 decrypt (supports both signer patterns)
-    const nip44Decrypt = async (
-      pubkey: string,
-      ciphertext: string,
-    ): Promise<string> => {
-      // Try direct method (PasswordSigner, NostrConnectSigner, etc.)
-      if (typeof signer.nip44Decrypt === "function") {
-        return await signer.nip44Decrypt(pubkey, ciphertext);
-      }
-
-      // Try nip44 getter (ExtensionSigner)
-      if (signer.nip44 && typeof signer.nip44.decrypt === "function") {
-        return await signer.nip44.decrypt(pubkey, ciphertext);
-      }
-
-      throw new Error("Signer does not support NIP-44 decryption");
-    };
-
-    // Step 1: Decrypt the gift wrap to get the seal (kind 13)
-    // The gift wrap is encrypted with the conversation key between
-    // the random ephemeral key (giftWrap.pubkey) and our key (recipientPubkey)
-    let sealJSON: string;
-    try {
-      sealJSON = await nip44Decrypt(giftWrap.pubkey, giftWrap.content);
-    } catch (error) {
-      throw new Error(`Failed to decrypt gift wrap: ${error}`);
-    }
-
-    // Parse the seal event
-    let seal: NostrEvent;
-    try {
-      seal = JSON.parse(sealJSON);
-    } catch (error) {
-      throw new Error(`Failed to parse seal JSON: ${error}`);
-    }
-
-    // Verify it's a kind 13 seal
-    if (seal.kind !== 13) {
-      throw new Error(`Expected kind 13 seal, got kind ${seal.kind}`);
-    }
-
-    // Step 2: Decrypt the seal to get the rumor (kind 14 or 15)
-    // The seal is encrypted with the conversation key between
-    // the sender (seal.pubkey) and us (recipientPubkey)
-    let rumorJSON: string;
-    try {
-      rumorJSON = await nip44Decrypt(seal.pubkey, seal.content);
-    } catch (error) {
-      throw new Error(`Failed to decrypt seal: ${error}`);
-    }
-
-    // Parse the rumor event (unsigned)
+    // Use applesauce's unlockGiftWrap helper to decrypt and get the rumor
+    // This handles both NIP-44 decryption patterns automatically
+    // and stores the rumor in the internal gift wrap event store for quick lookups
     let rumor: Rumor;
     try {
-      rumor = JSON.parse(rumorJSON);
+      rumor = await unlockGiftWrap(giftWrap, signer);
     } catch (error) {
-      throw new Error(`Failed to parse rumor JSON: ${error}`);
+      throw new Error(`Failed to unlock gift wrap: ${error}`);
     }
 
-    // Accept any kind of private event sent via gift wrap
-    // This includes kind 14 (DMs), kind 15 (files), kind 7 (reactions),
-    // kind 25050 (private DM relays), and any other private events
+    // Use applesauce helper to get the conversation identifier
+    // This properly handles all participants including group DMs
+    const conversationKey = getConversationIdentifierFromMessage(rumor);
 
-    // Verify the rumor's pubkey matches the seal's pubkey (prevent spoofing)
-    if (rumor.pubkey !== seal.pubkey) {
-      throw new Error(
-        "Rumor pubkey does not match seal pubkey (spoofing attempt)",
-      );
-    }
-
-    // Generate a unique ID for this rumor (since it's unsigned)
-    // Use a combination of gift wrap ID + seal ID
-    const rumorId = `${giftWrap.id}:${seal.id}`;
-
-    // Create conversation key including ALL participants from p-tags (for group DMs)
-    // Extract all recipient pubkeys from p-tags
-    const recipientPubkeys = rumor.tags
-      .filter((t: string[]) => t[0] === "p" && t[1])
-      .map((t: string[]) => t[1]);
-
-    // Include sender + all recipients, deduplicate and sort for consistency
-    const allParticipants = [seal.pubkey, ...recipientPubkeys];
-    const conversationKey = [...new Set(allParticipants)].sort().join(":");
+    // Get seal ID from gift wrap tags (applesauce stores it there)
+    const sealId = rumor.id.split(":")[1] || giftWrap.id;
 
     // Create the unsealed DM record
     const unsealed: UnsealedDM = {
-      id: rumorId,
+      id: rumor.id, // Rumor already has an ID from applesauce
       giftWrapId: giftWrap.id,
-      sealId: seal.id,
-      senderPubkey: seal.pubkey,
+      sealId,
+      senderPubkey: rumor.pubkey,
       recipientPubkey,
       conversationKey,
       kind: rumor.kind,
