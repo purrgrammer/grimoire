@@ -130,7 +130,7 @@ export function useAccountSync() {
 
   // Start gift wrap sync (NIP-17) when account changes
   useEffect(() => {
-    const syncEnabled = grimoire.state.giftWrapSettings?.syncEnabled ?? true;
+    const syncEnabled = grimoire.state.giftWrapSettings?.syncEnabled ?? false;
 
     if (!activeAccount?.pubkey || !syncEnabled) {
       // Stop sync when no account is active or sync is disabled

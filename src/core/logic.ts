@@ -614,7 +614,7 @@ export const updateGiftWrapSettings = (
     ...state,
     giftWrapSettings: {
       syncEnabled:
-        settings.syncEnabled ?? state.giftWrapSettings?.syncEnabled ?? true,
+        settings.syncEnabled ?? state.giftWrapSettings?.syncEnabled ?? false,
       autoDecrypt:
         settings.autoDecrypt ?? state.giftWrapSettings?.autoDecrypt ?? true,
     },

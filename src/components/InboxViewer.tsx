@@ -20,14 +20,7 @@ import {
 import { useProfile } from "@/hooks/useProfile";
 import eventStore from "@/services/event-store";
 import { getDisplayName } from "@/lib/nostr-utils";
-import {
-  Copy,
-  Settings,
-  MessageSquare,
-  ChevronDown,
-  Radio,
-} from "lucide-react";
-import { useCopy } from "@/hooks/useCopy";
+import { Settings, MessageSquare, ChevronDown, Radio } from "lucide-react";
 import { toast } from "sonner";
 import giftWrapManager from "@/services/gift-wrap";
 import { RelayLink } from "@/components/nostr/RelayLink";
@@ -51,7 +44,7 @@ export function InboxViewer(_props: InboxViewerProps) {
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [relaysOpen, setRelaysOpen] = useState(false);
 
-  const syncEnabled = state.giftWrapSettings?.syncEnabled ?? true;
+  const syncEnabled = state.giftWrapSettings?.syncEnabled ?? false;
   const autoDecrypt = state.giftWrapSettings?.autoDecrypt ?? true;
 
   // Get DM relays (kind 10050)
@@ -168,29 +161,94 @@ export function InboxViewer(_props: InboxViewerProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      {/* Header */}
+      {/* Header - Single Row with Heading, Stats, Relays, Settings */}
       <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">NIP-17 DM Inbox</h2>
-            <p className="text-sm text-muted-foreground">
-              Encrypted direct messages with gift wrap privacy
-            </p>
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Heading */}
+          <h2 className="text-lg font-semibold">Inbox</h2>
+
+          {/* Center: Gift Wrap Stats */}
+          <div className="flex flex-1 items-center justify-center gap-6">
+            <div className="text-center">
+              <div className="text-lg font-bold">{stats.totalGiftWraps}</div>
+              <div className="text-xs text-muted-foreground">Total</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-green-600">
+                {stats.successfulDecryptions}
+              </div>
+              <div className="text-xs text-muted-foreground">Success</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-red-600">
+                {stats.failedDecryptions}
+              </div>
+              <div className="text-xs text-muted-foreground">Failed</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-yellow-600">
+                {stats.pendingDecryptions}
+              </div>
+              <div className="text-xs text-muted-foreground">Pending</div>
+            </div>
           </div>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="rounded p-2 hover:bg-muted"
-            title="Settings"
-          >
-            <Settings className="h-5 w-5" />
-          </button>
+
+          {/* Right: Relay dropdown + Settings */}
+          <div className="flex items-center gap-2">
+            {/* Relay Icon + Count Dropdown */}
+            <Collapsible open={relaysOpen} onOpenChange={setRelaysOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-muted"
+                  title="DM Relays"
+                >
+                  <Radio className="h-4 w-4" />
+                  <span className="text-sm font-medium">{dmRelays.length}</span>
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              </CollapsibleTrigger>
+              {relaysOpen && (
+                <div className="absolute right-16 top-14 z-10 w-72 rounded-md border bg-popover p-3 shadow-lg">
+                  <CollapsibleContent className="space-y-1.5">
+                    <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                      DM RELAYS
+                    </div>
+                    {dmRelays.length > 0 ? (
+                      dmRelays.map((relay) => (
+                        <RelayLink
+                          key={relay}
+                          url={relay}
+                          showInboxOutbox={false}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No DM relays configured. Using general relays from kind
+                        10002 or kind 3.
+                      </p>
+                    )}
+                  </CollapsibleContent>
+                </div>
+              )}
+            </Collapsible>
+
+            {/* Settings Icon */}
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="rounded p-2 hover:bg-muted"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Settings Panel */}
+      {/* Settings Panel (Collapsible) */}
       {showSettings && (
         <div className="border-b bg-muted/50 px-4 py-3">
-          <h3 className="mb-2 text-sm font-semibold">Settings</h3>
           <div className="space-y-2">
             <label className="flex items-center gap-2">
               <input
@@ -211,99 +269,21 @@ export function InboxViewer(_props: InboxViewerProps) {
               />
               <span className="text-sm">Auto-decrypt received gift wraps</span>
             </label>
+            <button
+              onClick={handleLoadOlderGiftWraps}
+              disabled={isLoadingOlder}
+              className="mt-2 w-full rounded px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+            >
+              {isLoadingOlder ? "Loading..." : "Load Older Gift Wraps"}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Stats Panel */}
-      <div className="border-b bg-muted/30 px-4 py-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Gift Wrap Statistics</h3>
-          <button
-            onClick={handleLoadOlderGiftWraps}
-            disabled={isLoadingOlder}
-            className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
-            title="Load older gift wraps from relays"
-          >
-            {isLoadingOlder ? "Loading..." : "Load Older"}
-          </button>
-        </div>
-        <div className="grid grid-cols-4 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold">{stats.totalGiftWraps}</div>
-            <div className="text-xs text-muted-foreground">Total</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.successfulDecryptions}
-            </div>
-            <div className="text-xs text-muted-foreground">Success</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.failedDecryptions}
-            </div>
-            <div className="text-xs text-muted-foreground">Failed</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-yellow-600">
-              {stats.pendingDecryptions}
-            </div>
-            <div className="text-xs text-muted-foreground">Pending</div>
-          </div>
-        </div>
-        {stats.oldestGiftWrap && stats.newestGiftWrap && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            Storage:{" "}
-            {new Date(stats.oldestGiftWrap * 1000).toLocaleDateString()} -{" "}
-            {new Date(stats.newestGiftWrap * 1000).toLocaleDateString()}
-          </div>
-        )}
-      </div>
-
-      {/* DM Relays Panel */}
-      <Collapsible
-        open={relaysOpen}
-        onOpenChange={setRelaysOpen}
-        className="border-b bg-muted/20"
-      >
-        <div className="px-4 py-3">
-          <CollapsibleTrigger className="flex w-full items-center justify-between hover:opacity-70">
-            <div className="flex items-center gap-2">
-              <Radio className="h-4 w-4" />
-              <h3 className="text-sm font-semibold">
-                DM Relays ({dmRelays.length})
-              </h3>
-            </div>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${relaysOpen ? "rotate-180" : ""}`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-3 space-y-1.5">
-            {dmRelays.length > 0 ? (
-              dmRelays.map((relay) => (
-                <RelayLink key={relay} url={relay} showInboxOutbox={false} />
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No DM relays configured. Using general relays from kind 10002 or
-                kind 3.
-              </p>
-            )}
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
-
       {/* Conversations List */}
       <div className="flex-1 overflow-auto">
-        <div className="px-4 py-3">
-          <h3 className="mb-2 text-sm font-semibold">
-            Conversations ({conversationsList.length}
-            {totalConversations > conversationsList.length &&
-              ` of ${totalConversations}`}
-            )
-          </h3>
-          {conversationsList.length === 0 ? (
+        {conversationsList.length === 0 ? (
+          <div className="px-4 py-3">
             <div className="py-8 text-center text-muted-foreground">
               <MessageSquare className="mx-auto mb-2 h-12 w-12 opacity-50" />
               {!pubkey ? (
@@ -352,38 +332,35 @@ export function InboxViewer(_props: InboxViewerProps) {
                 </>
               )}
             </div>
-          ) : (
-            <>
-              <div className="space-y-1">
-                {conversationsList.map(
-                  ({ key, latestMessage, otherPubkey }) => (
-                    <ConversationRow
-                      key={key}
-                      conversationKey={key}
-                      otherPubkey={otherPubkey}
-                      latestMessage={latestMessage}
-                      onClick={() => handleOpenConversation(key, otherPubkey)}
-                    />
-                  ),
-                )}
+          </div>
+        ) : (
+          <>
+            <div>
+              {conversationsList.map(({ key, latestMessage, otherPubkey }) => (
+                <ConversationRow
+                  key={key}
+                  conversationKey={key}
+                  otherPubkey={otherPubkey}
+                  latestMessage={latestMessage}
+                  onClick={() => handleOpenConversation(key, otherPubkey)}
+                />
+              ))}
+            </div>
+            {hasMoreConversations && (
+              <div className="border-t p-2 text-center">
+                <button
+                  onClick={handleLoadMoreConversations}
+                  disabled={isLoadingMore}
+                  className="w-full rounded px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                >
+                  {isLoadingMore
+                    ? "Loading..."
+                    : `Load More (${totalConversations - conversationsList.length} remaining)`}
+                </button>
               </div>
-              {hasMoreConversations && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={handleLoadMoreConversations}
-                    disabled={isLoadingMore}
-                    className="flex items-center gap-2 rounded border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                    {isLoadingMore
-                      ? "Loading..."
-                      : `Load More Conversations (${totalConversations - conversationsList.length} remaining)`}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -402,58 +379,47 @@ function ConversationRow({
   onClick,
 }: ConversationRowProps) {
   const profile = useProfile(otherPubkey);
-  const { copy } = useCopy();
   const displayName = getDisplayName(otherPubkey, profile);
-
-  const handleCopyPubkey = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    copy(otherPubkey);
-    toast.success("Pubkey copied");
-  };
 
   // Format timestamp
   const timestamp = new Date(latestMessage.createdAt * 1000);
-  const timeStr = timestamp.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const now = new Date();
+  const isToday = timestamp.toDateString() === now.toDateString();
+  const timeStr = isToday
+    ? timestamp.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : timestamp.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
 
   // Truncate content preview
-  const preview = latestMessage.content.slice(0, 60);
-  const truncated = latestMessage.content.length > 60;
+  const preview = latestMessage.content.slice(0, 50);
+  const truncated = latestMessage.content.length > 50;
 
   return (
     <div
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-3 rounded border p-3 hover:bg-muted/50"
+      className="flex cursor-pointer items-center gap-3 border-b px-4 py-2 hover:bg-muted/50 last:border-b-0"
     >
       {/* Avatar placeholder */}
-      <div className="h-10 w-10 shrink-0 rounded-full bg-primary/20" />
+      <div className="h-8 w-8 shrink-0 rounded-full bg-primary/20" />
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate font-semibold">{displayName}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {timeStr}
-          </span>
-        </div>
-        <p className="truncate text-sm text-muted-foreground">
-          {preview}
-          {truncated && "..."}
-        </p>
-      </div>
+      {/* Name */}
+      <span className="w-32 shrink-0 truncate font-medium text-sm">
+        {displayName}
+      </span>
 
-      {/* Actions */}
-      <button
-        onClick={handleCopyPubkey}
-        className="shrink-0 rounded p-1 hover:bg-muted"
-        title="Copy pubkey"
-      >
-        <Copy className="h-4 w-4" />
-      </button>
+      {/* Message preview */}
+      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+        {preview}
+        {truncated && "..."}
+      </span>
+
+      {/* Timestamp */}
+      <span className="shrink-0 text-xs text-muted-foreground">{timeStr}</span>
     </div>
   );
 }
