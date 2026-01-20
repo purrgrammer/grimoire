@@ -39,10 +39,7 @@ import type { Subscription } from "rxjs";
  * Well-known public Blossom servers that can be used as fallbacks
  * when the user doesn't have their own server list configured
  */
-const FALLBACK_SERVERS = [
-  "https://blossom.primal.net",
-  "https://nostr.download",
-];
+const FALLBACK_SERVERS = ["https://blossom.band/"];
 
 interface BlossomUploadDialogProps {
   /** Whether the dialog is open */
@@ -356,7 +353,7 @@ export function BlossomUploadDialog({
                     "size-12 text-muted-foreground",
                   )
                 )}
-                <p className="font-medium text-sm truncate max-w-full">
+                <p className="font-medium text-sm line-clamp-1 truncate w-full text-center">
                   {selectedFile.name}
                 </p>
                 <p className="text-xs text-muted-foreground">
