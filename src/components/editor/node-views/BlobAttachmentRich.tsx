@@ -33,7 +33,7 @@ export function BlobAttachmentRich({ node, deleteNode }: ReactNodeViewProps) {
             <img
               src={url}
               alt="attachment"
-              className="max-w-full h-auto"
+              className="max-w-full h-auto max-h-96 object-contain"
               draggable={false}
             />
             {deleteNode && (
@@ -53,7 +53,7 @@ export function BlobAttachmentRich({ node, deleteNode }: ReactNodeViewProps) {
             <video
               src={url}
               controls
-              className="max-w-full h-auto"
+              className="max-w-full h-auto max-h-96"
               preload="metadata"
             />
             {deleteNode && (

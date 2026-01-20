@@ -249,9 +249,9 @@ export function PostViewer() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full overflow-auto p-4 space-y-4">
       {/* Editor */}
-      <div className="flex-1 overflow-auto p-4">
+      <div>
         <RichEditor
           ref={editorRef}
           placeholder="What's on your mind?"
@@ -260,111 +260,107 @@ export function PostViewer() {
           searchEmojis={searchEmojis}
           onFilePaste={handleFilePaste}
           autoFocus
-          minHeight={200}
-          maxHeight={600}
+          minHeight={150}
+          maxHeight={400}
         />
       </div>
 
-      {/* Bottom section: Relay selection and publish button */}
-      <div className="border-t border-border bg-muted/30 p-4 space-y-4">
-        {/* Relay selection */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">
-              Relays ({selectedRelays.size} selected)
-            </Label>
-            {writeRelays.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={updateRelayStates}
-                disabled={isPublishing}
-                className="h-6 text-xs"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Reset
-              </Button>
-            )}
-          </div>
+      {/* Action buttons */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => openUpload()}
+          disabled={isPublishing}
+          title="Upload image/video"
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
 
-          {writeRelays.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No write relays configured. Please add relays in your profile
-              settings.
-            </p>
+        <Button
+          onClick={() => editorRef.current?.submit()}
+          disabled={isPublishing || selectedRelays.size === 0}
+          className="gap-2 flex-1"
+        >
+          {isPublishing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Publishing...
+            </>
           ) : (
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {relayStates.map((relay) => (
-                <div
-                  key={relay.url}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-background p-2"
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Checkbox
-                      id={relay.url}
-                      checked={selectedRelays.has(relay.url)}
-                      onCheckedChange={() => toggleRelay(relay.url)}
-                      disabled={isPublishing}
-                    />
-                    <label
-                      htmlFor={relay.url}
-                      className="text-sm cursor-pointer truncate flex-1"
-                    >
-                      {relay.url.replace(/^wss?:\/\//, "")}
-                    </label>
-                  </div>
+            <>
+              <Send className="h-4 w-4" />
+              Publish
+            </>
+          )}
+        </Button>
+      </div>
 
-                  {/* Status indicator */}
-                  <div className="flex-shrink-0">
-                    {relay.status === "publishing" && (
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                    )}
-                    {relay.status === "success" && (
-                      <Check className="h-4 w-4 text-green-500" />
-                    )}
-                    {relay.status === "error" && (
-                      <div title={relay.error || "Failed to publish"}>
-                        <X className="h-4 w-4 text-red-500" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Relay selection */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">
+            Relays ({selectedRelays.size} selected)
+          </Label>
+          {writeRelays.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={updateRelayStates}
+              disabled={isPublishing}
+              className="h-6 text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Reset
+            </Button>
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openUpload()}
-            disabled={isPublishing}
-            className="gap-2"
-          >
-            <Paperclip className="h-4 w-4" />
-            Upload
-          </Button>
+        {writeRelays.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No write relays configured. Please add relays in your profile
+            settings.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {relayStates.map((relay) => (
+              <div
+                key={relay.url}
+                className="flex items-center justify-between gap-3 rounded-md border border-border bg-background p-2"
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Checkbox
+                    id={relay.url}
+                    checked={selectedRelays.has(relay.url)}
+                    onCheckedChange={() => toggleRelay(relay.url)}
+                    disabled={isPublishing}
+                  />
+                  <label
+                    htmlFor={relay.url}
+                    className="text-sm cursor-pointer truncate flex-1"
+                  >
+                    {relay.url.replace(/^wss?:\/\//, "")}
+                  </label>
+                </div>
 
-          <Button
-            onClick={() => editorRef.current?.submit()}
-            disabled={isPublishing || selectedRelays.size === 0}
-            className="gap-2"
-          >
-            {isPublishing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Publishing...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                Publish
-              </>
-            )}
-          </Button>
-        </div>
+                {/* Status indicator */}
+                <div className="flex-shrink-0">
+                  {relay.status === "publishing" && (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  )}
+                  {relay.status === "success" && (
+                    <Check className="h-4 w-4 text-green-500" />
+                  )}
+                  {relay.status === "error" && (
+                    <div title={relay.error || "Failed to publish"}>
+                      <X className="h-4 w-4 text-red-500" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Upload dialog */}

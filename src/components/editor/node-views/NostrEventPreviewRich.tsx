@@ -2,7 +2,7 @@ import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { DetailKindRenderer } from "@/components/nostr/kinds";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-import { Loader2 } from "lucide-react";
+import { EventDetailSkeleton } from "@/components/ui/skeleton";
 
 /**
  * Rich preview component for Nostr events in the editor
@@ -41,12 +41,9 @@ export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
 
   return (
     <NodeViewWrapper className="my-2">
-      <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="rounded-lg border border-border bg-muted/30 p-3 pointer-events-none">
         {!event ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            <span>Loading event...</span>
-          </div>
+          <EventDetailSkeleton className="py-2" />
         ) : (
           <DetailKindRenderer event={event} />
         )}
