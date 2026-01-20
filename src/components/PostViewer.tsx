@@ -226,7 +226,7 @@ export function PostViewer() {
 
         const draft = await factory.build({
           kind: 1,
-          content: serialized.text,
+          content: serialized.text.trim(),
           tags,
         });
         const event = await factory.sign(draft);
@@ -350,7 +350,11 @@ export function PostViewer() {
         }
 
         // Create and sign event (kind 1 note)
-        const draft = await factory.build({ kind: 1, content, tags });
+        const draft = await factory.build({
+          kind: 1,
+          content: content.trim(),
+          tags,
+        });
         const event = await factory.sign(draft);
 
         // Update relay states - set selected to publishing, keep others as pending
