@@ -168,10 +168,26 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account or signer");
     }
 
-    // Check if signer supports NIP-44 encryption
-    if (!activeSigner.nip44Encrypt) {
+    // Helper to call NIP-44 encrypt (supports both signer patterns)
+    const nip44Encrypt = async (
+      pubkey: string,
+      plaintext: string,
+    ): Promise<string> => {
+      // Try direct method (PasswordSigner, NostrConnectSigner, etc.)
+      if (typeof activeSigner.nip44Encrypt === "function") {
+        return await activeSigner.nip44Encrypt(pubkey, plaintext);
+      }
+
+      // Try nip44 getter (ExtensionSigner)
+      if (
+        activeSigner.nip44 &&
+        typeof activeSigner.nip44.encrypt === "function"
+      ) {
+        return await activeSigner.nip44.encrypt(pubkey, plaintext);
+      }
+
       throw new Error("Signer does not support NIP-44 encryption");
-    }
+    };
 
     const recipientPubkey = conversation.participants.find(
       (p) => p.pubkey !== activePubkey,
@@ -230,10 +246,7 @@ export class Nip17Adapter extends ChatProtocolAdapter {
     // Step 2: Create the seal (kind 13)
     // Encrypt the rumor with conversation key (sender → recipient)
     const rumorJSON = JSON.stringify(rumor);
-    const encryptedRumor = await activeSigner.nip44Encrypt(
-      recipientPubkey,
-      rumorJSON,
-    );
+    const encryptedRumor = await nip44Encrypt(recipientPubkey, rumorJSON);
 
     // Sign the seal
     const sealDraft = {

@@ -568,17 +568,30 @@ class GiftWrapManager {
       throw new Error("Gift wrap not addressed to this pubkey");
     }
 
+    // Helper to call NIP-44 decrypt (supports both signer patterns)
+    const nip44Decrypt = async (
+      pubkey: string,
+      ciphertext: string,
+    ): Promise<string> => {
+      // Try direct method (PasswordSigner, NostrConnectSigner, etc.)
+      if (typeof signer.nip44Decrypt === "function") {
+        return await signer.nip44Decrypt(pubkey, ciphertext);
+      }
+
+      // Try nip44 getter (ExtensionSigner)
+      if (signer.nip44 && typeof signer.nip44.decrypt === "function") {
+        return await signer.nip44.decrypt(pubkey, ciphertext);
+      }
+
+      throw new Error("Signer does not support NIP-44 decryption");
+    };
+
     // Step 1: Decrypt the gift wrap to get the seal (kind 13)
     // The gift wrap is encrypted with the conversation key between
     // the random ephemeral key (giftWrap.pubkey) and our key (recipientPubkey)
     let sealJSON: string;
     try {
-      // Check if signer has nip44Decrypt capability
-      if (!signer.nip44Decrypt) {
-        throw new Error("Signer does not support NIP-44 decryption");
-      }
-
-      sealJSON = await signer.nip44Decrypt(giftWrap.pubkey, giftWrap.content);
+      sealJSON = await nip44Decrypt(giftWrap.pubkey, giftWrap.content);
     } catch (error) {
       throw new Error(`Failed to decrypt gift wrap: ${error}`);
     }
@@ -601,11 +614,7 @@ class GiftWrapManager {
     // the sender (seal.pubkey) and us (recipientPubkey)
     let rumorJSON: string;
     try {
-      if (!signer.nip44Decrypt) {
-        throw new Error("Signer does not support NIP-44 decryption");
-      }
-
-      rumorJSON = await signer.nip44Decrypt(seal.pubkey, seal.content);
+      rumorJSON = await nip44Decrypt(seal.pubkey, seal.content);
     } catch (error) {
       throw new Error(`Failed to decrypt seal: ${error}`);
     }
