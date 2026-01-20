@@ -4,6 +4,7 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
+import { Zap } from "lucide-react";
 import { useTimeline } from "@/hooks/useTimeline";
 import {
   getGoalAmount,
@@ -17,6 +18,7 @@ import { getZapAmount } from "applesauce-common/helpers/zap";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 /**
@@ -24,7 +26,7 @@ import { AGGREGATOR_RELAYS } from "@/services/loaders";
  * Shows goal title, description, and funding progress
  */
 export function GoalRenderer({ event }: BaseEventProps) {
-  const { locale } = useGrimoire();
+  const { locale, addWindow } = useGrimoire();
 
   // Get goal metadata
   const targetAmount = getGoalAmount(event);
@@ -76,6 +78,13 @@ export function GoalRenderer({ event }: BaseEventProps) {
   const deadlineText = closedAt
     ? formatTimestamp(closedAt, "absolute", locale.locale)
     : null;
+
+  const handleZap = () => {
+    addWindow("zap", {
+      recipientPubkey: event.pubkey,
+      eventPointer: { id: event.id },
+    });
+  };
 
   return (
     <BaseEventContainer event={event}>
@@ -129,6 +138,14 @@ export function GoalRenderer({ event }: BaseEventProps) {
               <span>Ends {deadlineText}</span>
             )}
           </div>
+        )}
+
+        {/* Zap Button */}
+        {!closed && (
+          <Button variant="outline" size="sm" onClick={handleZap}>
+            <Zap className="size-4 text-zap" />
+            Zap this Goal
+          </Button>
         )}
       </div>
     </BaseEventContainer>

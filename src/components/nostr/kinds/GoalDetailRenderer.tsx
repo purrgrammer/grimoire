@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
+import { Zap } from "lucide-react";
 import { useTimeline } from "@/hooks/useTimeline";
 import {
   getGoalAmount,
@@ -14,6 +15,7 @@ import { getZapAmount, getZapSender } from "applesauce-common/helpers/zap";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { UserName } from "../UserName";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
@@ -29,7 +31,7 @@ interface Contributor {
  * Shows full goal info with sorted contributor breakdown
  */
 export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
-  const { locale } = useGrimoire();
+  const { locale, addWindow } = useGrimoire();
 
   // Get goal metadata
   const targetAmount = getGoalAmount(event);
@@ -109,6 +111,13 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
     ? formatTimestamp(closedAt, "absolute", locale.locale)
     : null;
 
+  const handleZap = () => {
+    addWindow("zap", {
+      recipientPubkey: event.pubkey,
+      eventPointer: { id: event.id },
+    });
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6 max-w-2xl mx-auto">
       {/* Header */}
@@ -151,6 +160,14 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
             </span>
           </div>
         </div>
+      )}
+
+      {/* Zap Button */}
+      {!closed && (
+        <Button variant="outline" onClick={handleZap} className="w-fit">
+          <Zap className="size-4 text-zap" />
+          Zap this Goal
+        </Button>
       )}
 
       {/* Beneficiaries */}
