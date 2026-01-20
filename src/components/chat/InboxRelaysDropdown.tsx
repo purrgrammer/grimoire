@@ -4,6 +4,8 @@
  */
 
 import { useMemo } from "react";
+import { use$ } from "applesauce-react/hooks";
+import { combineLatest, of } from "rxjs";
 import { Inbox } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,13 +36,26 @@ export function InboxRelaysDropdown({
 }: InboxRelaysDropdownProps) {
   const { relays: relayStates } = useRelayState();
 
+  // Fetch inbox relay events for all participants reactively
+  const inboxRelayEvents = use$(() => {
+    const pubkeys = conversation.participants.map((p) => p.pubkey);
+    // Create observables for each participant's kind 10050 event
+    const observables = pubkeys.map((pubkey) =>
+      eventStore.replaceable(10050, pubkey, ""),
+    );
+    // Combine all observables into a single observable that emits an array
+    return observables.length > 0 ? combineLatest(observables) : of([]);
+  }, [conversation.participants]);
+
   // Extract relays from participants' kind 10050 events
   const participantRelays = useMemo(() => {
+    if (!inboxRelayEvents) return [];
+
     const results: Array<{ pubkey: string; relays: string[] }> = [];
 
-    for (const participant of conversation.participants) {
-      const event = eventStore.getReplaceable(10050, participant.pubkey, "");
-      if (!event) continue;
+    conversation.participants.forEach((participant, index) => {
+      const event = inboxRelayEvents[index];
+      if (!event) return;
 
       const relays = event.tags
         .filter((t: string[]) => t[0] === "relay" && t[1])
@@ -52,10 +67,10 @@ export function InboxRelaysDropdown({
           relays,
         });
       }
-    }
+    });
 
     return results;
-  }, [conversation.participants]);
+  }, [inboxRelayEvents, conversation.participants]);
 
   // Count total relays and connected relays
   const { totalRelays, connectedCount } = useMemo(() => {

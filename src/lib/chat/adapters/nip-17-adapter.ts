@@ -8,7 +8,7 @@
  * - Local storage of decrypted messages
  */
 
-import { Observable, from, map } from "rxjs";
+import { Observable, map } from "rxjs";
 import { nip19, nip44, generateSecretKey, finalizeEvent } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
@@ -39,15 +39,40 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   readonly type = "dm" as const;
 
   /**
-   * Parse identifier - accepts $me, NIP-05, npub, nprofile, or hex pubkey
+   * Parse identifier - accepts $me, NIP-05, npub, nprofile, hex pubkey, or comma-separated list
    * Examples:
    *   - $me (DM with yourself)
    *   - alice@example.com (NIP-05 identifier)
    *   - npub1abc... (public key)
    *   - nprofile1xyz... (profile with relay hints)
    *   - 1a2b3c... (hex pubkey)
+   *   - npub1abc...,npub1def... (group DM with multiple recipients)
    */
   parseIdentifier(input: string): ProtocolIdentifier | null {
+    // Check if this is a comma-separated list (group DM)
+    if (input.includes(",")) {
+      const parts = input.split(",").map((p) => p.trim());
+      const pubkeys: string[] = [];
+
+      for (const part of parts) {
+        // Try to parse each part as a pubkey
+        const parsed = this.parseIdentifier(part);
+        if (!parsed || parsed.type !== "dm-recipient") {
+          throw new Error(`Invalid pubkey in group: ${part}`);
+        }
+        pubkeys.push(parsed.value);
+      }
+
+      if (pubkeys.length < 1) {
+        throw new Error("Group DM requires at least one recipient");
+      }
+
+      return {
+        type: "dm-recipient",
+        value: pubkeys.join(","),
+      };
+    }
+
     // Handle $me alias (DM with yourself)
     if (input === "$me") {
       const activePubkey = accountManager.active$.value?.pubkey;
@@ -112,12 +137,12 @@ export class Nip17Adapter extends ChatProtocolAdapter {
 
   /**
    * Resolve conversation from DM identifier
-   * Handles both direct pubkeys and NIP-05 identifiers
+   * Handles both direct pubkeys, NIP-05 identifiers, and groups
    */
   async resolveConversation(
     identifier: ProtocolIdentifier,
   ): Promise<Conversation> {
-    let recipientPubkey: string;
+    let recipientPubkeys: string[];
 
     // Resolve NIP-05 identifier to pubkey
     if (identifier.type === "chat-partner-nip05") {
@@ -127,9 +152,10 @@ export class Nip17Adapter extends ChatProtocolAdapter {
           `Failed to resolve NIP-05 identifier: ${identifier.value}`,
         );
       }
-      recipientPubkey = resolvedPubkey;
+      recipientPubkeys = [resolvedPubkey];
     } else if (identifier.type === "dm-recipient") {
-      recipientPubkey = identifier.value;
+      // Split by comma to support groups
+      recipientPubkeys = identifier.value.split(",").map((p) => p.trim());
     } else {
       throw new Error(
         `NIP-17 adapter cannot handle identifier type: ${identifier.type}`,
@@ -142,15 +168,37 @@ export class Nip17Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    // Create conversation key (sorted pubkeys)
-    const conversationKey = [activePubkey, recipientPubkey].sort().join(":");
+    // Create conversation key (sorted pubkeys including active user)
+    const allPubkeys = [activePubkey, ...recipientPubkeys];
+    const conversationKey = [...new Set(allPubkeys)].sort().join(":");
+
+    // Determine conversation type
+    const isSelfConversation =
+      recipientPubkeys.length === 1 && recipientPubkeys[0] === activePubkey;
+    const isGroup = recipientPubkeys.length > 1;
+
+    // Create title
+    let title: string;
+    if (isSelfConversation) {
+      title = "Saved Messages";
+    } else if (isGroup) {
+      title = `Group (${recipientPubkeys.length + 1})`;
+    } else {
+      title = recipientPubkeys[0].slice(0, 8) + "...";
+    }
+
+    // Create participants array
+    const participants = [
+      { pubkey: activePubkey },
+      ...recipientPubkeys.map((pubkey) => ({ pubkey })),
+    ];
 
     return {
       id: `nip-17:${conversationKey}`,
       type: "dm",
       protocol: "nip-17",
-      title: recipientPubkey.slice(0, 8) + "...", // Will be replaced by profile name
-      participants: [{ pubkey: activePubkey }, { pubkey: recipientPubkey }],
+      title,
+      participants,
       metadata: {
         encrypted: true,
         giftWrapped: true,
@@ -169,11 +217,13 @@ export class Nip17Adapter extends ChatProtocolAdapter {
   ): Observable<Message[]> {
     const conversationKey = this.getConversationKey(conversation);
 
-    // Return observable from gift wrap manager
-    // This will update automatically as new messages are decrypted
-    return from(giftWrapManager.getConversationMessages(conversationKey)).pipe(
-      map((dms) => dms.map((dm) => this.dmToMessage(dm, conversation.id))),
-    );
+    // Return reactive observable from gift wrap manager
+    // This will emit initial messages and update automatically as new messages are decrypted
+    return giftWrapManager
+      .getConversationMessages$(conversationKey)
+      .pipe(
+        map((dms) => dms.map((dm) => this.dmToMessage(dm, conversation.id))),
+      );
   }
 
   /**

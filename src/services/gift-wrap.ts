@@ -57,6 +57,11 @@ class GiftWrapManager {
     failedDecryptions: 0,
     pendingDecryptions: 0,
   });
+  // Track conversation updates for reactive message loading
+  private conversationUpdates$ = new BehaviorSubject<{
+    conversationKey: string;
+    timestamp: number;
+  } | null>(null);
   private lastSyncTimestamp: number = 0; // Last sync time (for incremental updates)
   private isAuthenticating = false;
   private authenticated = new Set<string>(); // Track which relays are authenticated
@@ -704,6 +709,12 @@ class GiftWrapManager {
         // Store the unsealed DM
         await db.unsealedDMs.put(unsealed);
 
+        // Emit conversation update for reactive message loading
+        this.conversationUpdates$.next({
+          conversationKey: unsealed.conversationKey,
+          timestamp: Date.now(),
+        });
+
         console.log(
           `[GiftWrap] Successfully decrypted ${giftWrapId.slice(0, 8)}... from ${unsealed.senderPubkey.slice(0, 8)}...`,
         );
@@ -927,6 +938,49 @@ class GiftWrapManager {
       .equals(conversationKey)
       .and((dm) => !dm.deleted)
       .sortBy("createdAt");
+  }
+
+  /**
+   * Get reactive observable of conversation messages
+   * Emits initial messages and updates when new messages arrive
+   */
+  getConversationMessages$(conversationKey: string): Observable<UnsealedDM[]> {
+    return new Observable((observer) => {
+      // Load initial messages
+      this.getConversationMessages(conversationKey)
+        .then((messages) => {
+          observer.next(messages);
+        })
+        .catch((error) => {
+          console.error(
+            "[GiftWrap] Failed to load conversation messages:",
+            error,
+          );
+          observer.error(error);
+        });
+
+      // Subscribe to updates for this conversation
+      const updateSub = this.conversationUpdates$.subscribe((update) => {
+        if (update && update.conversationKey === conversationKey) {
+          // Reload messages when this conversation is updated
+          this.getConversationMessages(conversationKey)
+            .then((messages) => {
+              observer.next(messages);
+            })
+            .catch((error) => {
+              console.error(
+                "[GiftWrap] Failed to reload conversation messages:",
+                error,
+              );
+            });
+        }
+      });
+
+      // Cleanup subscription
+      return () => {
+        updateSub.unsubscribe();
+      };
+    });
   }
 
   /**

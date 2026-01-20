@@ -531,24 +531,31 @@ function ConversationRow({
   latestMessage,
   onClick,
 }: ConversationRowProps) {
+  // Detect self-conversation (saved messages)
+  const isSavedMessages = otherPubkeys.length === 0;
+
   return (
     <div
       onClick={onClick}
       className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
-      {/* Name(s) - no fixed width */}
+      {/* Name(s) or "Saved Messages" - no fixed width */}
       <div className="shrink-0 flex items-center gap-1">
-        {otherPubkeys.map((pubkey, index) => (
-          <span key={pubkey} className="flex items-center">
-            <UserName
-              pubkey={pubkey}
-              className="text-xs font-medium truncate"
-            />
-            {index < otherPubkeys.length - 1 && (
-              <span className="text-muted-foreground/50">,</span>
-            )}
-          </span>
-        ))}
+        {isSavedMessages ? (
+          <span className="text-xs font-medium">Saved Messages</span>
+        ) : (
+          otherPubkeys.map((pubkey, index) => (
+            <span key={pubkey} className="flex items-center">
+              <UserName
+                pubkey={pubkey}
+                className="text-xs font-medium truncate"
+              />
+              {index < otherPubkeys.length - 1 && (
+                <span className="text-muted-foreground/50">,</span>
+              )}
+            </span>
+          ))
+        )}
       </div>
 
       {/* Message preview - use CSS truncation and RichText with pointer-events-none */}
