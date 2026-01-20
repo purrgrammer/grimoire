@@ -26,6 +26,7 @@ import type {
 import { CHAT_KINDS } from "@/types/chat";
 // import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
+import { Nip17Adapter } from "@/lib/chat/adapters/nip-17-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -1138,21 +1139,24 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
- * Other protocols will be enabled in future phases
+ * Currently supported:
+ * - NIP-10 (thread chat)
+ * - NIP-17 (encrypted DMs with gift wrap)
+ * - NIP-29 (relay-based groups)
+ * - NIP-53 (live activity chat)
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
+    case "nip-17":
+      return new Nip17Adapter();
     // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
     //   return new NipC7Adapter();
-    case "nip-29":
-      return new Nip29Adapter();
-    // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
-    //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)
     //   return new Nip28Adapter();
+    case "nip-29":
+      return new Nip29Adapter();
     case "nip-53":
       return new Nip53Adapter();
     default:

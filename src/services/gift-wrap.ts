@@ -62,14 +62,26 @@ class GiftWrapManager {
   private authenticated = new Set<string>(); // Track which relays are authenticated
   private isSyncing = false; // Prevent concurrent sync attempts
   private statsUpdateTimer: NodeJS.Timeout | null = null; // Debounce stats updates
+  private statsInitialized = false; // Track if stats have been loaded from DB
+
+  /**
+   * Initialize stats from database
+   * Called automatically when stats are first accessed
+   */
+  private async initializeStats(): Promise<void> {
+    if (this.statsInitialized) return;
+    this.statsInitialized = true;
+    await this.updateStats();
+  }
 
   /**
    * Start syncing gift wraps for the active account
    * 1. Gets DM relays
    * 2. Authenticates with dummy REQ (triggers NIP-42 AUTH)
    * 3. Subscribes to gift wraps with pagination
+   * @param autoDecrypt - If false, stores gift wraps without decrypting
    */
-  async startSync(): Promise<void> {
+  async startSync(autoDecrypt = true): Promise<void> {
     // Prevent concurrent sync attempts
     if (this.isSyncing) {
       console.log("[GiftWrap] Sync already in progress, skipping");
@@ -150,12 +162,14 @@ class GiftWrapManager {
                 `[GiftWrap] Received gift wrap: ${response.id.slice(0, 8)}...`,
               );
               // Process gift wrap asynchronously
-              this.processGiftWrap(response, pubkey).catch((error) => {
-                console.error(
-                  `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
-                  error,
-                );
-              });
+              this.processGiftWrap(response, pubkey, autoDecrypt).catch(
+                (error) => {
+                  console.error(
+                    `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                    error,
+                  );
+                },
+              );
             }
           },
           error: (error) => {
@@ -166,7 +180,7 @@ class GiftWrapManager {
       this.subscriptions.set(pubkey, subscription);
 
       // Process any existing gift wraps in the event store (from previous sessions)
-      await this.processExistingGiftWraps(pubkey);
+      await this.processExistingGiftWraps(pubkey, autoDecrypt);
 
       // Update stats
       await this.updateStats();
@@ -261,8 +275,9 @@ class GiftWrapManager {
   /**
    * Load older gift wraps for pagination
    * Fetches gift wraps before the oldest currently loaded
+   * @param autoDecrypt - If false, stores gift wraps without decrypting
    */
-  async loadOlderGiftWraps(): Promise<number> {
+  async loadOlderGiftWraps(autoDecrypt = true): Promise<number> {
     const account = accountManager.active$.value;
     if (!account) {
       console.log("[GiftWrap] No active account");
@@ -331,12 +346,14 @@ class GiftWrapManager {
               resolve();
             } else {
               count++;
-              this.processGiftWrap(response, pubkey).catch((error) => {
-                console.error(
-                  `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
-                  error,
-                );
-              });
+              this.processGiftWrap(response, pubkey, autoDecrypt).catch(
+                (error) => {
+                  console.error(
+                    `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                    error,
+                  );
+                },
+              );
             }
           },
           error: () => {
@@ -525,7 +542,10 @@ class GiftWrapManager {
   /**
    * Process existing gift wraps from event store
    */
-  private async processExistingGiftWraps(pubkey: string): Promise<void> {
+  private async processExistingGiftWraps(
+    pubkey: string,
+    autoDecrypt = true,
+  ): Promise<void> {
     console.log("[GiftWrap] Processing existing gift wraps...");
 
     // Get all kind 1059 events addressed to us
@@ -539,7 +559,7 @@ class GiftWrapManager {
     // Process each gift wrap
     for (const giftWrap of giftWraps) {
       try {
-        await this.processGiftWrap(giftWrap, pubkey);
+        await this.processGiftWrap(giftWrap, pubkey, autoDecrypt);
       } catch (error) {
         console.error(
           `[GiftWrap] Error processing ${giftWrap.id.slice(0, 8)}:`,
@@ -551,10 +571,12 @@ class GiftWrapManager {
 
   /**
    * Process a single gift wrap event
+   * @param autoDecrypt - If false, only stores gift wrap without attempting decryption
    */
   private async processGiftWrap(
     giftWrap: NostrEvent,
     recipientPubkey: string,
+    autoDecrypt = true,
   ): Promise<void> {
     const giftWrapId = giftWrap.id;
 
@@ -569,6 +591,24 @@ class GiftWrapManager {
         // Failed too many times, don't retry
         return;
       }
+      // If autoDecrypt is false and we have a pending record, don't retry
+      if (!autoDecrypt && existing.decryptionState === "pending") {
+        return;
+      }
+    }
+
+    // If autoDecrypt is false, just store as pending without attempting decryption
+    if (!autoDecrypt) {
+      const decryption: GiftWrapDecryption = {
+        giftWrapId,
+        recipientPubkey,
+        decryptionState: "pending",
+        lastAttempt: Math.floor(Date.now() / 1000),
+        attempts: existing?.attempts || 0,
+      };
+      await db.giftWrapDecryptions.put(decryption);
+      this.debouncedUpdateStats();
+      return;
     }
 
     // Create or update decryption record
@@ -800,8 +840,11 @@ class GiftWrapManager {
 
   /**
    * Get statistics observable
+   * Initializes stats from database on first call
    */
   getStats(): Observable<GiftWrapStats> {
+    // Initialize stats from database on first access
+    this.initializeStats();
     return this.stats$.asObservable();
   }
 

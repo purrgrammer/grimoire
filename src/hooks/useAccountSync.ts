@@ -131,6 +131,7 @@ export function useAccountSync() {
   // Start gift wrap sync (NIP-17) when account changes
   useEffect(() => {
     const syncEnabled = grimoire.state.giftWrapSettings?.syncEnabled ?? false;
+    const autoDecrypt = grimoire.state.giftWrapSettings?.autoDecrypt ?? false;
 
     if (!activeAccount?.pubkey || !syncEnabled) {
       // Stop sync when no account is active or sync is disabled
@@ -139,7 +140,7 @@ export function useAccountSync() {
     }
 
     // Start syncing gift wraps for this account
-    giftWrapManager.startSync().catch((error) => {
+    giftWrapManager.startSync(autoDecrypt).catch((error) => {
       console.error("[useAccountSync] Failed to start gift wrap sync:", error);
     });
 
@@ -147,5 +148,9 @@ export function useAccountSync() {
     return () => {
       giftWrapManager.stopSync();
     };
-  }, [activeAccount?.pubkey, grimoire.state.giftWrapSettings?.syncEnabled]);
+  }, [
+    activeAccount?.pubkey,
+    grimoire.state.giftWrapSettings?.syncEnabled,
+    grimoire.state.giftWrapSettings?.autoDecrypt,
+  ]);
 }

@@ -173,7 +173,7 @@ export function InboxViewer(_props: InboxViewerProps) {
   const handleLoadOlderGiftWraps = async () => {
     setIsLoadingOlder(true);
     try {
-      const count = await giftWrapManager.loadOlderGiftWraps();
+      const count = await giftWrapManager.loadOlderGiftWraps(autoDecrypt);
       if (count > 0) {
         toast.success(`Loaded ${count} older gift wraps`);
       } else {
@@ -542,28 +542,30 @@ function ConversationRow({
         day: "numeric",
       });
 
-  // Truncate content preview
-  const preview = latestMessage.content.slice(0, 50);
-  const truncated = latestMessage.content.length > 50;
+  // Truncate content preview - show more text
+  const preview = latestMessage.content.slice(0, 100);
+  const truncated = latestMessage.content.length > 100;
 
   return (
     <div
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-1 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
+      className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
       {/* Name */}
       <div className="w-28 shrink-0 truncate">
         <UserName pubkey={otherPubkey} className="text-xs font-medium" />
       </div>
 
-      {/* Message preview */}
-      <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
+      {/* Message preview - no flex-1 to avoid big gap */}
+      <span className="truncate text-muted-foreground/70">
         {preview}
         {truncated && "..."}
       </span>
 
-      {/* Timestamp */}
-      <span className="shrink-0 text-muted-foreground/50">{timeStr}</span>
+      {/* Timestamp - push to end with ml-auto */}
+      <span className="shrink-0 ml-auto text-muted-foreground/50">
+        {timeStr}
+      </span>
     </div>
   );
 }
