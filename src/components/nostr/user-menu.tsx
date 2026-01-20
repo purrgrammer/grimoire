@@ -445,7 +445,7 @@ export default function UserMenu() {
                 <span className="text-muted-foreground">Monthly goal</span>
                 <span className="font-medium">
                   {formatSats(monthlyDonations)} /{" "}
-                  {formatSats(MONTHLY_GOAL_SATS)} sats
+                  {formatSats(MONTHLY_GOAL_SATS)}
                 </span>
               </div>
               <Progress value={goalProgress} className="h-1.5" />

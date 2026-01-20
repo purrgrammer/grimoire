@@ -148,7 +148,7 @@ export function GrimoireWelcome({
                     <span>Monthly goal</span>
                     <span>
                       {formatSats(monthlyDonations)} /{" "}
-                      {formatSats(MONTHLY_GOAL_SATS)} sats
+                      {formatSats(MONTHLY_GOAL_SATS)}
                     </span>
                   </div>
                   <Progress value={goalProgress} className="h-1" />

@@ -1,6 +1,5 @@
 import { Trophy } from "lucide-react";
-import { useProfile } from "@/hooks/useProfile";
-import { getDisplayName } from "@/lib/nostr-utils";
+import { UserName } from "./UserName";
 
 interface TopContributorProps {
   pubkey: string;
@@ -13,9 +12,6 @@ export function TopContributor({
   amount,
   variant = "default",
 }: TopContributorProps) {
-  const profile = useProfile(pubkey);
-  const displayName = getDisplayName(pubkey, profile);
-
   function formatNumber(sats: number): string {
     if (sats >= 1_000_000) {
       return `${(sats / 1_000_000).toFixed(1)}M`;
@@ -34,11 +30,11 @@ export function TopContributor({
       <Trophy
         className={`${isCompact ? "size-3" : "size-3.5"} text-yellow-500`}
       />
-      <span
+      <div
         className={`${isCompact ? "text-[10px]" : "text-xs"} text-muted-foreground flex-1 truncate`}
       >
-        {displayName}
-      </span>
+        <UserName pubkey={pubkey} />
+      </div>
       <span className={`${isCompact ? "text-[10px]" : "text-xs"} font-medium`}>
         {formatNumber(amount)}
         {!isCompact && " sats"}
