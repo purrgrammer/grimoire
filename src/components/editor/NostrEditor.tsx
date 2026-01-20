@@ -314,61 +314,53 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
 /**
  * Create a TipTap suggestion configuration from our SuggestionConfig
  *
- * Note: TipTap's suggestion plugin has a race condition with async items functions
- * where onUpdate receives stale/wrong results. We work around this by:
- * 1. Storing a ref to the component and current command
- * 2. Manually updating the component in the items function after getting results
- * 3. Using a query counter to discard stale results
+ * Design: TipTap's `items()` function has buggy async handling where results
+ * arrive out of order. We bypass this entirely by:
+ * - Using `items()` only as a sync no-op (returns empty array)
+ * - Doing all async search in `onUpdate` when query changes
+ * - Updating the component directly when results arrive
+ *
+ * This keeps all search logic in one place and avoids TipTap's race conditions.
  */
 function createSuggestionConfig<T>(
   config: SuggestionConfig<T>,
   handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
 ): Omit<SuggestionOptions<T>, "editor"> {
-  // Shared state between items() and render callbacks
-  // This allows items() to directly update the component, bypassing TipTap's buggy async handling
-  let componentRef: ReactRenderer<SuggestionListHandle> | null = null;
-  let currentCommand: ((item: T) => void) | null = null;
-  let queryCounter = 0;
-
   return {
     char: config.char,
     allowSpaces: config.allowSpaces ?? false,
     allow: config.allow,
-    items: async ({ query }) => {
-      // Increment counter to track this query
-      const thisQuery = ++queryCounter;
-      const results = await config.search(query);
-
-      // If a newer query was started, discard these results
-      if (thisQuery !== queryCounter) {
-        return results; // Return anyway for TipTap, but don't update component
-      }
-
-      // Directly update the component with fresh results
-      // This bypasses TipTap's buggy async result handling
-      if (componentRef && currentCommand) {
-        componentRef.updateProps({
-          items: results,
-          command: currentCommand,
-        });
-      }
-
-      return results;
-    },
+    // Don't use items() for async work - TipTap's async handling is buggy
+    // We do our own search in onUpdate instead
+    items: () => [],
     render: () => {
-      let popup: TippyInstance[];
-      let editorRef: unknown;
+      let component: ReactRenderer<SuggestionListHandle> | null = null;
+      let popup: TippyInstance[] | null = null;
+      let editorRef: unknown = null;
+      let currentQuery = "";
+      let searchCounter = 0;
+
+      // Async search with race condition protection
+      const doSearch = async (query: string) => {
+        const thisSearch = ++searchCounter;
+        const results = await config.search(query);
+
+        // Discard if a newer search was started
+        if (thisSearch !== searchCounter || !component) return;
+
+        component.updateProps({ items: results });
+      };
 
       return {
         onStart: (props) => {
           editorRef = props.editor;
-          currentCommand = props.command as (item: T) => void;
+          currentQuery = (props as { query?: string }).query ?? "";
 
-          componentRef = new ReactRenderer(config.component as never, {
+          component = new ReactRenderer(config.component as never, {
             props: {
-              items: props.items,
+              items: [],
               command: props.command,
-              onClose: () => popup[0]?.hide(),
+              onClose: () => popup?.[0]?.hide(),
             },
             editor: props.editor,
           });
@@ -378,32 +370,43 @@ function createSuggestionConfig<T>(
           popup = tippy("body", {
             getReferenceClientRect: props.clientRect as () => DOMRect,
             appendTo: () => document.body,
-            content: componentRef.element,
+            content: component.element,
             showOnCreate: true,
             interactive: true,
             trigger: "manual",
             placement: config.placement ?? "bottom-start",
             zIndex: 100,
           });
+
+          // Trigger initial search
+          doSearch(currentQuery);
         },
 
         onUpdate(props) {
-          // Update command reference (TipTap may change it)
-          currentCommand = props.command as (item: T) => void;
+          const newQuery = (props as { query?: string }).query ?? "";
 
-          // Note: We don't rely on props.items here because TipTap's async handling
-          // often provides stale/wrong results. The items() function updates directly.
+          // Search when query changes
+          if (newQuery !== currentQuery) {
+            currentQuery = newQuery;
+            doSearch(newQuery);
+          }
 
-          if (!props.clientRect) return;
+          // Update command (TipTap regenerates it)
+          if (component) {
+            component.updateProps({ command: props.command });
+          }
 
-          popup[0]?.setProps({
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-          });
+          // Update popup position
+          if (props.clientRect && popup?.[0]) {
+            popup[0].setProps({
+              getReferenceClientRect: props.clientRect as () => DOMRect,
+            });
+          }
         },
 
         onKeyDown(props) {
           if (props.event.key === "Escape") {
-            popup[0]?.hide();
+            popup?.[0]?.hide();
             return true;
           }
 
@@ -412,19 +415,21 @@ function createSuggestionConfig<T>(
             props.event.key === "Enter" &&
             (props.event.ctrlKey || props.event.metaKey)
           ) {
-            popup[0]?.hide();
+            popup?.[0]?.hide();
             handleSubmitRef.current(editorRef);
             return true;
           }
 
-          return componentRef?.ref?.onKeyDown(props.event) ?? false;
+          return component?.ref?.onKeyDown(props.event) ?? false;
         },
 
         onExit() {
-          popup[0]?.destroy();
-          componentRef?.destroy();
-          componentRef = null;
-          currentCommand = null;
+          popup?.[0]?.destroy();
+          component?.destroy();
+          component = null;
+          popup = null;
+          currentQuery = "";
+          searchCounter = 0;
         },
       };
     },
