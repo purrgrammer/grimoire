@@ -10,7 +10,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
-import { nip19 } from "nostr-tools";
 import { useGrimoire } from "@/core/state";
 import { useAccount } from "@/hooks/useAccount";
 import {

@@ -4,7 +4,6 @@
  */
 
 import { useMemo } from "react";
-import { use$ } from "applesauce-react/hooks";
 import { Inbox } from "lucide-react";
 import {
   DropdownMenu,
@@ -35,42 +34,28 @@ export function InboxRelaysDropdown({
 }: InboxRelaysDropdownProps) {
   const { relays: relayStates } = useRelayState();
 
-  // Get all participant pubkeys
-  const participantPubkeys = useMemo(() => {
-    return conversation.participants.map((p) => p.pubkey);
-  }, [conversation.participants]);
-
-  // Fetch kind 10050 events for all participants
-  const inboxRelayEvents = use$(() => {
-    const observables = participantPubkeys.map((pubkey) =>
-      eventStore.replaceable(10050, pubkey, ""),
-    );
-    return observables;
-  }, [participantPubkeys]);
-
-  // Extract relays from events
+  // Extract relays from participants' kind 10050 events
   const participantRelays = useMemo(() => {
-    if (!inboxRelayEvents) return [];
+    const results: Array<{ pubkey: string; relays: string[] }> = [];
 
-    return participantPubkeys
-      .map((pubkey, index) => {
-        const event = inboxRelayEvents[index];
-        if (!event) return null;
+    for (const participant of conversation.participants) {
+      const event = eventStore.getReplaceable(10050, participant.pubkey, "");
+      if (!event) continue;
 
-        const relays = event.tags
-          .filter((t: string[]) => t[0] === "relay" && t[1])
-          .map((t: string[]) => t[1]);
+      const relays = event.tags
+        .filter((t: string[]) => t[0] === "relay" && t[1])
+        .map((t: string[]) => t[1]);
 
-        return {
-          pubkey,
+      if (relays.length > 0) {
+        results.push({
+          pubkey: participant.pubkey,
           relays,
-        };
-      })
-      .filter(
-        (p): p is { pubkey: string; relays: string[] } =>
-          p !== null && p.relays.length > 0,
-      );
-  }, [inboxRelayEvents, participantPubkeys]);
+        });
+      }
+    }
+
+    return results;
+  }, [conversation.participants]);
 
   // Count total relays and connected relays
   const { totalRelays, connectedCount } = useMemo(() => {
