@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   Zap,
+  PenSquare,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -143,6 +144,10 @@ export default function UserMenu() {
       { pubkey: account.pubkey },
       `Profile ${account.pubkey.slice(0, 8)}...`,
     );
+  }
+
+  function openPost() {
+    addWindow("post", {}, "New Post");
   }
 
   function openWallet() {
@@ -379,6 +384,13 @@ export default function UserMenu() {
                 >
                   <UserLabel pubkey={account.pubkey} />
                 </DropdownMenuLabel>
+                <DropdownMenuItem
+                  className="cursor-crosshair"
+                  onClick={openPost}
+                >
+                  <PenSquare className="size-4 mr-2" />
+                  New Post
+                </DropdownMenuItem>
               </DropdownMenuGroup>
 
               <DropdownMenuSeparator />

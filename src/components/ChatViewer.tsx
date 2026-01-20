@@ -44,12 +44,9 @@ import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { useGrimoire } from "@/core/state";
 import { Button } from "./ui/button";
 import LoginDialog from "./nostr/LoginDialog";
-import {
-  MentionEditor,
-  type MentionEditorHandle,
-  type EmojiTag,
-  type BlobAttachment,
-} from "./editor/MentionEditor";
+import { NostrEditor, type NostrEditorHandle } from "./editor/NostrEditor";
+import type { EmojiTag, BlobAttachment } from "./editor/types";
+import { createNostrSuggestions } from "./editor/suggestions";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
@@ -459,8 +456,8 @@ export function ChatViewer({
   // Copy chat identifier to clipboard
   const { copy: copyChatId, copied: chatIdCopied } = useCopy();
 
-  // Ref to MentionEditor for programmatic submission
-  const editorRef = useRef<MentionEditorHandle>(null);
+  // Ref to NostrEditor for programmatic submission
+  const editorRef = useRef<NostrEditorHandle>(null);
 
   // Blossom upload hook for file attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -686,6 +683,18 @@ export function ChatViewer({
       }
     },
     [conversation, canSign, isSending, adapter, pubkey, signer],
+  );
+
+  // Create suggestions configuration for NostrEditor
+  const suggestions = useMemo(
+    () =>
+      createNostrSuggestions({
+        searchProfiles,
+        searchEmojis,
+        searchCommands,
+        onCommandExecute: handleCommandExecute,
+      }),
+    [searchProfiles, searchEmojis, searchCommands, handleCommandExecute],
   );
 
   // Handle reply button click
@@ -1089,16 +1098,21 @@ export function ChatViewer({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <MentionEditor
+            <NostrEditor
               ref={editorRef}
               placeholder="Type a message..."
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              searchCommands={searchCommands}
-              onCommandExecute={handleCommandExecute}
-              onSubmit={(content, emojiTags, blobAttachments) => {
-                if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags, blobAttachments);
+              suggestions={suggestions}
+              submitBehavior="enter"
+              variant="inline"
+              blobPreview="compact"
+              onSubmit={(content) => {
+                if (content.text.trim()) {
+                  handleSend(
+                    content.text,
+                    replyTo,
+                    content.emojiTags,
+                    content.blobAttachments,
+                  );
                 }
               }}
               className="flex-1 min-w-0"
