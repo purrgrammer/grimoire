@@ -34,32 +34,6 @@ import type {
   SuggestionListHandle,
 } from "./types";
 
-/**
- * Refs container for suggestion functions
- * Allows updating search/select functions without recreating extensions
- */
-interface SuggestionRefs {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mentionSearch: (query: string) => Promise<any[]>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mentionOnSelect: (item: any) => {
-    type: string;
-    attrs: Record<string, unknown>;
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  emojiSearch: (query: string) => Promise<any[]>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  emojiOnSelect: (item: any) => {
-    type: string;
-    attrs: Record<string, unknown>;
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  slashSearch: (query: string) => Promise<any[]>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  slashOnExecute?: (item: any) => Promise<void>;
-  handleSubmit: (editor: unknown) => void;
-}
-
 // Re-export handle type for consumers
 export type { NostrEditorHandle };
 
@@ -339,20 +313,17 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
 
 /**
  * Create a TipTap suggestion configuration from our SuggestionConfig
- * Uses a refs object to access the latest functions without recreating extensions
  */
-function createMentionSuggestionConfig(
-  config: SuggestionConfig<unknown>,
-  refsObj: React.MutableRefObject<SuggestionRefs>,
-): Omit<SuggestionOptions<unknown>, "editor"> {
+function createSuggestionConfig<T>(
+  config: SuggestionConfig<T>,
+  handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
+): Omit<SuggestionOptions<T>, "editor"> {
   return {
     char: config.char,
     allowSpaces: config.allowSpaces ?? false,
     allow: config.allow,
     items: async ({ query }) => {
-      // Always use the current search function from refs
-      const searchFn = refsObj.current.mentionSearch;
-      return await searchFn(query);
+      return await config.search(query);
     },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle>;
@@ -404,167 +375,13 @@ function createMentionSuggestionConfig(
             return true;
           }
 
+          // Ctrl/Cmd+Enter always submits
           if (
             props.event.key === "Enter" &&
             (props.event.ctrlKey || props.event.metaKey)
           ) {
             popup[0]?.hide();
-            refsObj.current.handleSubmit(editorRef);
-            return true;
-          }
-
-          return component.ref?.onKeyDown(props.event) ?? false;
-        },
-
-        onExit() {
-          popup[0]?.destroy();
-          component.destroy();
-        },
-      };
-    },
-  };
-}
-
-function createEmojiSuggestionConfig(
-  config: SuggestionConfig<unknown>,
-  refsObj: React.MutableRefObject<SuggestionRefs>,
-): Omit<SuggestionOptions<unknown>, "editor"> {
-  return {
-    char: config.char,
-    allowSpaces: config.allowSpaces ?? false,
-    allow: config.allow,
-    items: async ({ query }) => {
-      const searchFn = refsObj.current.emojiSearch;
-      return await searchFn(query);
-    },
-    render: () => {
-      let component: ReactRenderer<SuggestionListHandle>;
-      let popup: TippyInstance[];
-      let editorRef: unknown;
-
-      return {
-        onStart: (props) => {
-          editorRef = props.editor;
-          component = new ReactRenderer(config.component as never, {
-            props: {
-              items: props.items,
-              command: props.command,
-              onClose: () => popup[0]?.hide(),
-            },
-            editor: props.editor,
-          });
-
-          if (!props.clientRect) return;
-
-          popup = tippy("body", {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: "manual",
-            placement: config.placement ?? "bottom-start",
-            zIndex: 100,
-          });
-        },
-
-        onUpdate(props) {
-          component.updateProps({
-            items: props.items,
-            command: props.command,
-          });
-
-          if (!props.clientRect) return;
-
-          popup[0]?.setProps({
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-          });
-        },
-
-        onKeyDown(props) {
-          if (props.event.key === "Escape") {
-            popup[0]?.hide();
-            return true;
-          }
-
-          if (
-            props.event.key === "Enter" &&
-            (props.event.ctrlKey || props.event.metaKey)
-          ) {
-            popup[0]?.hide();
-            refsObj.current.handleSubmit(editorRef);
-            return true;
-          }
-
-          return component.ref?.onKeyDown(props.event) ?? false;
-        },
-
-        onExit() {
-          popup[0]?.destroy();
-          component.destroy();
-        },
-      };
-    },
-  };
-}
-
-function createSlashSuggestionConfig(
-  config: SuggestionConfig<unknown>,
-  refsObj: React.MutableRefObject<SuggestionRefs>,
-): Omit<SuggestionOptions<unknown>, "editor"> {
-  return {
-    char: config.char,
-    allowSpaces: config.allowSpaces ?? false,
-    allow: config.allow,
-    items: async ({ query }) => {
-      const searchFn = refsObj.current.slashSearch;
-      return await searchFn(query);
-    },
-    render: () => {
-      let component: ReactRenderer<SuggestionListHandle>;
-      let popup: TippyInstance[];
-
-      return {
-        onStart: (props) => {
-          component = new ReactRenderer(config.component as never, {
-            props: {
-              items: props.items,
-              command: props.command,
-              onClose: () => popup[0]?.hide(),
-            },
-            editor: props.editor,
-          });
-
-          if (!props.clientRect) return;
-
-          popup = tippy("body", {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: "manual",
-            placement: config.placement ?? "top-start",
-            zIndex: 100,
-          });
-        },
-
-        onUpdate(props) {
-          component.updateProps({
-            items: props.items,
-            command: props.command,
-          });
-
-          if (!props.clientRect) return;
-
-          popup[0]?.setProps({
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-          });
-        },
-
-        onKeyDown(props) {
-          if (props.event.key === "Escape") {
-            popup[0]?.hide();
+            handleSubmitRef.current(editorRef);
             return true;
           }
 
@@ -599,36 +416,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
     },
     ref,
   ) => {
-    // Find suggestion configs
-    const mentionConfig = suggestions.find((s) => s.char === "@");
-    const emojiConfig = suggestions.find((s) => s.char === ":");
-    const slashConfig = suggestions.find((s) => s.char === "/");
-
-    // Single refs object for all suggestion functions - updated on every render
-    const suggestionRefsObj = useRef<SuggestionRefs>({
-      mentionSearch: async () => [],
-      mentionOnSelect: () => ({ type: "mention", attrs: {} }),
-      emojiSearch: async () => [],
-      emojiOnSelect: () => ({ type: "emoji", attrs: {} }),
-      slashSearch: async () => [],
-      slashOnExecute: undefined,
-      handleSubmit: () => {},
-    });
-
-    // Update refs object with current search functions on every render
-    // This ensures TipTap extensions always call the latest functions
-    if (mentionConfig) {
-      suggestionRefsObj.current.mentionSearch = mentionConfig.search;
-      suggestionRefsObj.current.mentionOnSelect = mentionConfig.onSelect;
-    }
-    if (emojiConfig) {
-      suggestionRefsObj.current.emojiSearch = emojiConfig.search;
-      suggestionRefsObj.current.emojiOnSelect = emojiConfig.onSelect;
-    }
-    if (slashConfig) {
-      suggestionRefsObj.current.slashSearch = slashConfig.search;
-      suggestionRefsObj.current.slashOnExecute = slashConfig.onExecute;
-    }
+    const handleSubmitRef = useRef<(editor: unknown) => void>(() => {});
 
     // Helper function to serialize editor content
     const serializeContent = useCallback(
@@ -742,8 +530,12 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       [onSubmit, serializeContent],
     );
 
-    // Update handleSubmit in refs object
-    suggestionRefsObj.current.handleSubmit = handleSubmit;
+    handleSubmitRef.current = handleSubmit;
+
+    // Find suggestion configs
+    const mentionConfig = suggestions.find((s) => s.char === "@");
+    const emojiConfig = suggestions.find((s) => s.char === ":");
+    const slashConfig = suggestions.find((s) => s.char === "/");
 
     // Build extensions array
     const extensions = useMemo(() => {
@@ -755,7 +547,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         addKeyboardShortcuts() {
           return {
             "Mod-Enter": ({ editor }) => {
-              suggestionRefsObj.current.handleSubmit(editor);
+              handleSubmitRef.current(editor);
               return true;
             },
             Enter: ({ editor }) => {
@@ -770,7 +562,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 if (isMobile) {
                   return editor.commands.setHardBreak();
                 } else {
-                  suggestionRefsObj.current.handleSubmit(editor);
+                  handleSubmitRef.current(editor);
                   return true;
                 }
               }
@@ -794,10 +586,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
           Mention.configure({
             HTMLAttributes: { class: "mention" },
             suggestion: {
-              ...createMentionSuggestionConfig(
-                mentionConfig,
-                suggestionRefsObj,
-              ),
+              ...createSuggestionConfig(mentionConfig, handleSubmitRef),
               command: ({
                 editor,
                 range,
@@ -807,10 +596,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 range: unknown;
                 props: unknown;
               }) => {
-                // Use refs to get latest onSelect function
-                const result = suggestionRefsObj.current.mentionOnSelect(
-                  props as never,
-                );
+                const result = mentionConfig.onSelect(props as never);
                 const ed = editor as {
                   chain: () => {
                     focus: () => {
@@ -843,7 +629,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
           EmojiMention.configure({
             HTMLAttributes: { class: "emoji" },
             suggestion: {
-              ...createEmojiSuggestionConfig(emojiConfig, suggestionRefsObj),
+              ...createSuggestionConfig(emojiConfig, handleSubmitRef),
               command: ({
                 editor,
                 range,
@@ -853,10 +639,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 range: unknown;
                 props: unknown;
               }) => {
-                // Use refs to get latest onSelect function
-                const result = suggestionRefsObj.current.emojiOnSelect(
-                  props as never,
-                );
+                const result = emojiConfig.onSelect(props as never);
                 const ed = editor as {
                   chain: () => {
                     focus: () => {
@@ -887,7 +670,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
           SlashCommand.configure({
             HTMLAttributes: { class: "slash-command" },
             suggestion: {
-              ...createSlashSuggestionConfig(slashConfig, suggestionRefsObj),
+              ...createSuggestionConfig(slashConfig, handleSubmitRef),
               command: ({
                 editor,
                 props,
@@ -899,10 +682,8 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
                 if (slashConfig.clearOnSelect !== false) {
                   ed.commands.clearContent();
                 }
-                // Use refs to get latest onExecute function
-                const onExecute = suggestionRefsObj.current.slashOnExecute;
-                if (onExecute) {
-                  onExecute(props as never).catch((error) => {
+                if (slashConfig.onExecute) {
+                  slashConfig.onExecute(props as never).catch((error) => {
                     console.error(
                       "[NostrEditor] Command execution failed:",
                       error,
@@ -919,14 +700,13 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       }
 
       return exts;
-      // Depend on whether configs exist (for extension creation) but not search functions (refs handle updates)
     }, [
       submitBehavior,
       placeholder,
       blobPreview,
-      !!mentionConfig,
-      !!emojiConfig,
-      !!slashConfig,
+      mentionConfig,
+      emojiConfig,
+      slashConfig,
     ]);
 
     const editor = useEditor({
