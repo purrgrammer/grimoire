@@ -352,11 +352,7 @@ function createMentionSuggestionConfig(
     items: async ({ query }) => {
       // Always use the current search function from refs
       const searchFn = refsObj.current.mentionSearch;
-      const results = await searchFn(query);
-      console.log(
-        `[NostrEditor] Mention items() query="${query}" results=${results.length}`,
-      );
-      return results;
+      return await searchFn(query);
     },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle>;
@@ -365,9 +361,6 @@ function createMentionSuggestionConfig(
 
       return {
         onStart: (props) => {
-          console.log(
-            `[NostrEditor] Mention onStart items=${props.items?.length}`,
-          );
           editorRef = props.editor;
           component = new ReactRenderer(config.component as never, {
             props: {
@@ -393,9 +386,6 @@ function createMentionSuggestionConfig(
         },
 
         onUpdate(props) {
-          console.log(
-            `[NostrEditor] Mention onUpdate items=${props.items?.length}`,
-          );
           component.updateProps({
             items: props.items,
             command: props.command,
