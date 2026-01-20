@@ -32,6 +32,9 @@ import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
+import eventStore from "@/services/event-store";
+import { getProfileContent } from "applesauce-core/helpers";
+import { getDisplayName } from "@/lib/nostr-utils";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -361,6 +364,33 @@ const NostrEventPreview = Node.create({
   },
 });
 
+// Helper to get display name for a pubkey (synchronous lookup from cache)
+function getDisplayNameForPubkey(pubkey: string): string {
+  try {
+    // Try to get profile from event store (check if it's a BehaviorSubject with .value)
+    const profile$ = eventStore.replaceable(0, pubkey) as any;
+    if (profile$ && profile$.value) {
+      const profileEvent = profile$.value;
+      if (profileEvent) {
+        const content = getProfileContent(profileEvent);
+        if (content) {
+          // Use the Grimoire helper which handles fallbacks
+          return getDisplayName(pubkey, content);
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore errors, fall through to default
+    console.debug(
+      "[NostrPasteHandler] Could not get profile for",
+      pubkey.slice(0, 8),
+      err,
+    );
+  }
+  // Fallback to short pubkey
+  return pubkey.slice(0, 8);
+}
+
 // Paste handler extension to transform bech32 strings into preview nodes
 const NostrPasteHandler = Extension.create({
   name: "nostrPasteHandler",
@@ -406,18 +436,20 @@ const NostrPasteHandler = Extension.create({
                 // For npub/nprofile, create regular mention nodes (reuse existing infrastructure)
                 if (decoded.type === "npub") {
                   const pubkey = decoded.data as string;
+                  const displayName = getDisplayNameForPubkey(pubkey);
                   nodes.push(
                     view.state.schema.nodes.mention.create({
                       id: pubkey,
-                      label: pubkey.slice(0, 8), // Will be updated with profile name if available
+                      label: displayName,
                     }),
                   );
                 } else if (decoded.type === "nprofile") {
                   const pubkey = (decoded.data as any).pubkey;
+                  const displayName = getDisplayNameForPubkey(pubkey);
                   nodes.push(
                     view.state.schema.nodes.mention.create({
                       id: pubkey,
-                      label: pubkey.slice(0, 8), // Will be updated with profile name if available
+                      label: displayName,
                     }),
                   );
                 } else if (decoded.type === "note") {
