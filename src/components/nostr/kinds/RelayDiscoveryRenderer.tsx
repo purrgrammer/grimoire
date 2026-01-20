@@ -1,5 +1,8 @@
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
-import { RelayLink } from "../RelayLink";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { Badge } from "@/components/ui/badge";
 import {
   getRelayUrl,
@@ -57,14 +60,14 @@ export function Kind30166Renderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Relay URL and Health Score */}
+        {/* Clickable Title and Health Score */}
         <div className="flex items-center justify-between gap-2">
-          <RelayLink
-            url={relayUrl}
-            className="py-0.5 hover:bg-none flex-1 min-w-0"
-            iconClassname="size-4"
-            urlClassname="underline decoration-dotted"
-          />
+          <ClickableEventTitle
+            event={event}
+            className="text-base font-semibold truncate flex-1 min-w-0"
+          >
+            {relayUrl}
+          </ClickableEventTitle>
           <div className="flex items-center gap-1 text-xs shrink-0">
             <Activity className={cn("size-3", healthColor)} />
             <span className={cn("font-medium", healthColor)}>{health}%</span>
