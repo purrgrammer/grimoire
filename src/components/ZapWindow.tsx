@@ -46,7 +46,7 @@ import {
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import LoginDialog from "./nostr/LoginDialog";
-import { validateZapSupport } from "@/lib/lnurl";
+import { validateZapSupport, verifyPayment } from "@/lib/lnurl";
 import {
   createZapRequest,
   serializeZapRequest,
@@ -129,6 +129,47 @@ export function ZapWindow({
     }
   }, [wallet, getInfo]);
 
+  // Poll for payment completion via LNURL verify endpoint
+  const PAYMENT_CHECK_INTERVAL = 30000; // Check every 30 seconds
+  useEffect(() => {
+    if (!verifyUrl || !showQrDialog || isPaid) return;
+
+    const checkPayment = async () => {
+      setCheckingPayment(true);
+      try {
+        const result = await verifyPayment(verifyUrl);
+
+        // If payment is settled, mark as paid and show success
+        if (result.status === "OK" && result.settled) {
+          setIsPaid(true);
+          setShowQrDialog(false);
+          const amount = selectedAmount || parseInt(customAmount);
+          toast.success(
+            `⚡ Payment received! Zapped ${amount} sats to ${recipientName}!`,
+          );
+        }
+      } catch (error) {
+        // Silently ignore errors - will retry on next interval
+        console.debug("Payment verification check failed:", error);
+      } finally {
+        setCheckingPayment(false);
+      }
+    };
+
+    // Check immediately on mount, then every 30 seconds
+    checkPayment();
+    const intervalId = setInterval(checkPayment, PAYMENT_CHECK_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [
+    verifyUrl,
+    showQrDialog,
+    isPaid,
+    selectedAmount,
+    customAmount,
+    recipientName,
+  ]);
+
   // Cache LNURL data for recipient's Lightning address
   const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
 
@@ -143,6 +184,8 @@ export function ZapWindow({
   const [showLogin, setShowLogin] = useState(false);
   const [paymentTimedOut, setPaymentTimedOut] = useState(false);
   const [zapAnonymously, setZapAnonymously] = useState(false);
+  const [verifyUrl, setVerifyUrl] = useState<string>("");
+  const [checkingPayment, setCheckingPayment] = useState(false);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -398,6 +441,11 @@ export function ZapWindow({
       setQrCodeUrl(qrUrl);
       setInvoice(invoiceText);
 
+      // Store verify URL if available for payment polling
+      if (invoiceResponse.verify) {
+        setVerifyUrl(invoiceResponse.verify);
+      }
+
       // Step 5: Pay or show QR code
       if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
         // Pay with NWC wallet with timeout
@@ -530,6 +578,20 @@ export function ZapWindow({
                     alt="Lightning Invoice QR Code"
                     className="w-64 h-64"
                   />
+                </div>
+              )}
+
+              {/* Payment Verification Status */}
+              {verifyUrl && (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  {checkingPayment && (
+                    <Loader2 className="size-3 animate-spin" />
+                  )}
+                  <span>
+                    {checkingPayment
+                      ? "Checking for payment..."
+                      : "Waiting for payment (auto-checking every 30s)"}
+                  </span>
                 </div>
               )}
 

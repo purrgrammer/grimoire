@@ -20,6 +20,14 @@ export interface LnUrlCallbackResponse {
     message?: string;
   };
   routes?: any[];
+  verify?: string; // Optional URL to poll for payment verification
+}
+
+export interface LnUrlVerifyResponse {
+  status: "OK" | "ERROR";
+  settled: boolean;
+  preimage?: string;
+  pr?: string;
 }
 
 /**
@@ -162,5 +170,46 @@ export function validateZapSupport(lnurlData: LnUrlPayResponse): void {
   // Validate pubkey format (64 hex chars)
   if (!/^[0-9a-f]{64}$/i.test(lnurlData.nostrPubkey)) {
     throw new Error("Invalid nostrPubkey format in LNURL response");
+  }
+}
+
+/**
+ * Check payment status via LNURL verify endpoint
+ * @param verifyUrl - The verify URL from LNURL callback response
+ * @returns Promise resolving to verification response
+ */
+export async function verifyPayment(
+  verifyUrl: string,
+): Promise<LnUrlVerifyResponse> {
+  try {
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    const response = await fetch(verifyUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to verify payment: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const data = (await response.json()) as LnUrlVerifyResponse;
+
+    // Validate response format
+    if (data.status !== "OK" && data.status !== "ERROR") {
+      throw new Error("Invalid verify response: missing or invalid status");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        throw new Error("Payment verification timed out. Please try again.");
+      }
+      throw error;
+    }
+    throw new Error(`Failed to verify payment: ${error}`);
   }
 }
