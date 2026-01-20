@@ -56,26 +56,37 @@ export function PostViewer() {
   // Use pubkey as draft key - one draft per account, persists across reloads
   const draftKey = pubkey ? `${DRAFT_STORAGE_PREFIX}${pubkey}` : null;
 
-  // Load draft from localStorage on mount (stores full TipTap JSON for rich content)
-  const [initialContent, setInitialContent] = useState<object | undefined>(
-    undefined,
-  );
+  // Track if editor is mounted and draft is loaded
+  const [editorReady, setEditorReady] = useState(false);
   const draftLoadedRef = useRef(false);
 
+  // Callback when editor mounts - triggers draft loading
+  const handleEditorReady = useCallback(() => {
+    setEditorReady(true);
+  }, []);
+
+  // Load draft from localStorage after editor is ready
   useEffect(() => {
-    if (draftLoadedRef.current || !draftKey) return;
+    if (
+      draftLoadedRef.current ||
+      !draftKey ||
+      !editorReady ||
+      !editorRef.current
+    )
+      return;
     draftLoadedRef.current = true;
 
     try {
       const savedDraft = localStorage.getItem(draftKey);
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft);
-        setInitialContent(parsed);
+        // Use setContent to load draft after editor is mounted
+        editorRef.current.setContent(parsed);
       }
     } catch (error) {
       console.warn("[PostViewer] Failed to load draft:", error);
     }
-  }, [draftKey]);
+  }, [draftKey, editorReady]);
 
   // Save draft to localStorage when content changes (uses full TipTap JSON)
   const saveDraft = useCallback(() => {
@@ -250,7 +261,7 @@ export function PostViewer() {
         minLines={6}
         suggestions={suggestions}
         onChange={handleChange}
-        initialContent={initialContent}
+        onReady={handleEditorReady}
         autoFocus
       />
 

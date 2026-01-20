@@ -66,12 +66,14 @@ export type { NostrEditorHandle };
 export interface NostrEditorProps {
   /** Placeholder text when editor is empty */
   placeholder?: string;
-  /** Initial content (plain text) */
+  /** Initial content (plain text or TipTap JSON) */
   initialContent?: string | object;
   /** Called when content is submitted */
   onSubmit?: (content: SerializedContent) => void;
   /** Called when content changes */
   onChange?: (content: SerializedContent) => void;
+  /** Called when editor is ready (mounted and initialized) */
+  onReady?: () => void;
   /** Submit behavior: 'enter' (chat), 'ctrl-enter' (post), 'button-only' (external button) */
   submitBehavior?: SubmitBehavior;
   /** Layout variant: 'inline' (chat), 'multiline' (auto-expand), 'full' (fixed height) */
@@ -350,7 +352,11 @@ function createMentionSuggestionConfig(
     items: async ({ query }) => {
       // Always use the current search function from refs
       const searchFn = refsObj.current.mentionSearch;
-      return await searchFn(query);
+      const results = await searchFn(query);
+      console.log(
+        `[NostrEditor] Mention items() query="${query}" results=${results.length}`,
+      );
+      return results;
     },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle>;
@@ -359,6 +365,9 @@ function createMentionSuggestionConfig(
 
       return {
         onStart: (props) => {
+          console.log(
+            `[NostrEditor] Mention onStart items=${props.items?.length}`,
+          );
           editorRef = props.editor;
           component = new ReactRenderer(config.component as never, {
             props: {
@@ -384,6 +393,9 @@ function createMentionSuggestionConfig(
         },
 
         onUpdate(props) {
+          console.log(
+            `[NostrEditor] Mention onUpdate items=${props.items?.length}`,
+          );
           component.updateProps({
             items: props.items,
             command: props.command,
@@ -585,6 +597,7 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
       initialContent,
       onSubmit,
       onChange,
+      onReady,
       submitBehavior = "enter",
       variant = "inline",
       minLines = 1,
@@ -935,6 +948,10 @@ export const NostrEditor = forwardRef<NostrEditorHandle, NostrEditorProps>(
         },
       },
       autofocus: autoFocus,
+      onCreate: () => {
+        // Notify parent that editor is ready for operations like loading drafts
+        onReady?.();
+      },
       onUpdate: ({ editor }) => {
         if (onChange) {
           onChange(serializeContent(editor));
