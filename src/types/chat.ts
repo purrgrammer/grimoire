@@ -19,6 +19,7 @@ export type ChatProtocol =
   | "nip-17"
   | "nip-28"
   | "nip-29"
+  | "communikey"
   | "nip-53"
   | "nip-10";
 
@@ -70,6 +71,11 @@ export interface ConversationMetadata {
   relayUrl?: string; // Relay URL for single-relay protocols
   description?: string; // Group/thread description
   icon?: string; // Group icon/picture URL
+
+  // Communikey
+  communikeyPubkey?: string; // Community pubkey (admin)
+  communikeyDefinition?: NostrEvent; // kind 10222 event
+  communikeyRelays?: string[]; // Main + backup relays from r-tags
 
   // NIP-53 live chat
   activityAddress?: {
@@ -235,6 +241,18 @@ export interface ThreadIdentifier {
 }
 
 /**
+ * Communikey identifier (NIP-29 group fallback)
+ * Used when group ID is a valid pubkey with kind 10222 community definition
+ */
+export interface CommunikeyIdentifier {
+  type: "communikey";
+  /** Community pubkey (hex) */
+  value: string;
+  /** Relay URLs from kind 10222 r-tags (main + backups) */
+  relays: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -245,7 +263,8 @@ export type ProtocolIdentifier =
   | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier
-  | ThreadIdentifier;
+  | ThreadIdentifier
+  | CommunikeyIdentifier;
 
 /**
  * Chat command parsing result

@@ -67,6 +67,8 @@ import { ZapstoreAppSetDetailRenderer } from "./ZapstoreAppSetDetailRenderer";
 import { ZapstoreReleaseRenderer } from "./ZapstoreReleaseRenderer";
 import { ZapstoreReleaseDetailRenderer } from "./ZapstoreReleaseDetailRenderer";
 import { GroupMetadataRenderer } from "./GroupMetadataRenderer";
+import { CommunikeyRenderer } from "./CommunikeyRenderer";
+import { CommunikeyDetailRenderer } from "./CommunikeyDetailRenderer";
 import {
   RelayMembersRenderer,
   RelayMembersDetailRenderer,
@@ -198,6 +200,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
   10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
+  10222: CommunikeyRenderer, // Communikey Community Definition (kind 10222)
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
   13534: RelayMembersRenderer, // Relay Members (NIP-43)
   30000: FollowSetRenderer, // Follow Sets (NIP-51)
@@ -296,6 +299,7 @@ const detailRenderers: Record<
   10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
   10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)
   10102: WikiRelaysDetailRenderer, // Good Wiki Relays Detail (NIP-51)
+  10222: CommunikeyDetailRenderer, // Communikey Community Definition Detail (kind 10222)
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   13534: RelayMembersDetailRenderer, // Relay Members Detail (NIP-43)
   30000: FollowSetDetailRenderer, // Follow Sets Detail (NIP-51)

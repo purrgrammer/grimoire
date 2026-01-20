@@ -3,10 +3,79 @@ import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
+import { CommunikeyAdapter } from "./chat/adapters/communikey-adapter";
 import { nip19 } from "nostr-tools";
+import type { Filter } from "nostr-tools";
+import pool from "@/services/relay-pool";
+import eventStore from "@/services/event-store";
+import { firstValueFrom } from "rxjs";
+import { toArray } from "rxjs/operators";
 // Import other adapters as they're implemented
 // import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 // import { Nip28Adapter } from "./chat/adapters/nip-28-adapter";
+
+/**
+ * Check if a string is a valid hex pubkey (64 hex characters)
+ */
+function isValidPubkey(str: string): boolean {
+  return /^[0-9a-f]{64}$/i.test(str);
+}
+
+/**
+ * Try to detect if a group ID is actually a Communikey (kind 10222)
+ * Returns true if kind 10222 event found, false otherwise
+ */
+async function isCommunikey(
+  pubkey: string,
+  relayHints: string[],
+): Promise<boolean> {
+  if (!isValidPubkey(pubkey)) {
+    return false;
+  }
+
+  console.log(
+    `[Chat Parser] Checking if ${pubkey.slice(0, 8)}... is a Communikey...`,
+  );
+
+  const filter: Filter = {
+    kinds: [10222],
+    authors: [pubkey.toLowerCase()],
+    limit: 1,
+  };
+
+  try {
+    // Use available relays for detection (relay hints + some connected relays)
+    const relays = [
+      ...relayHints,
+      ...Array.from(pool.connectedRelays.keys()).slice(0, 3),
+    ].filter((r) => r);
+
+    if (relays.length === 0) {
+      console.log("[Chat Parser] No relays available for Communikey detection");
+      return false;
+    }
+
+    // Quick check with 2 second timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Timeout")), 2000);
+    });
+
+    const fetchPromise = firstValueFrom(
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    const events = await Promise.race([fetchPromise, timeoutPromise]);
+
+    const hasCommunikey = events.length > 0;
+    console.log(
+      `[Chat Parser] Communikey detection: ${hasCommunikey ? "found" : "not found"}`,
+    );
+    return hasCommunikey;
+  } catch (err) {
+    console.log("[Chat Parser] Communikey detection failed:", err);
+    return false;
+  }
+}
 
 /**
  * Parse a chat command identifier and auto-detect the protocol
@@ -16,6 +85,7 @@ import { nip19 } from "nostr-tools";
  * 2. NIP-17 (encrypted DMs) - prioritized for privacy
  * 3. NIP-28 (channels) - specific event format (kind 40)
  * 4. NIP-29 (groups) - specific group ID format
+ *    - Communikey fallback: if group ID is valid pubkey with kind 10222
  * 5. NIP-53 (live chat) - specific addressable format (kind 30311)
  * 6. NIP-C7 (simple chat) - fallback for generic pubkeys
  *
@@ -23,7 +93,9 @@ import { nip19 } from "nostr-tools";
  * @returns Parsed result with protocol and identifier
  * @throws Error if no adapter can parse the identifier
  */
-export function parseChatCommand(args: string[]): ChatCommandResult {
+export async function parseChatCommand(
+  args: string[],
+): Promise<ChatCommandResult> {
   if (args.length === 0) {
     throw new Error("Chat identifier required. Usage: chat <identifier>");
   }
@@ -75,6 +147,28 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   for (const adapter of adapters) {
     const parsed = adapter.parseIdentifier(identifier);
     if (parsed) {
+      // Special case: NIP-29 group fallback to Communikey
+      if (parsed.type === "group" && adapter.protocol === "nip-29") {
+        const groupId = parsed.value;
+        const relays = parsed.relays || [];
+
+        // Check if group ID is a valid pubkey with kind 10222
+        if (await isCommunikey(groupId, relays)) {
+          console.log("[Chat Parser] Using Communikey adapter for", groupId);
+          const communikeyAdapter = new CommunikeyAdapter();
+          return {
+            protocol: "communikey",
+            identifier: {
+              type: "communikey",
+              value: groupId.toLowerCase(),
+              relays, // Use relays from NIP-29 format as hints
+            },
+            adapter: communikeyAdapter,
+          };
+        }
+      }
+
+      // Return the original adapter result
       return {
         protocol: adapter.protocol,
         identifier: parsed,
@@ -95,6 +189,9 @@ Currently supported formats:
     Examples:
       chat relay.example.com'bitcoin-dev
       chat wss://relay.example.com'nostr-dev
+  - relay.com'pubkey (Communikey fallback, if pubkey has kind 10222)
+    Examples:
+      chat relay.example.com'<64-char-hex-pubkey>
   - naddr1... (NIP-29 group metadata, kind 39000)
     Example:
       chat naddr1qqxnzdesxqmnxvpexqmny...
