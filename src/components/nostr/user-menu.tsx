@@ -1,6 +1,5 @@
 import {
   User,
-  HardDrive,
   Palette,
   Wallet,
   X,
@@ -461,9 +460,8 @@ export default function UserMenu() {
 
               {blossomServers && blossomServers.length > 0 && (
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                    <HardDrive className="size-3.5" />
-                    <span>Blossom Servers</span>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Blossom Servers
                   </DropdownMenuLabel>
                   {blossomServers.map((server) => (
                     <DropdownMenuItem
@@ -477,7 +475,6 @@ export default function UserMenu() {
                         );
                       }}
                     >
-                      <HardDrive className="size-4 text-muted-foreground mr-2" />
                       <span className="text-sm truncate">{server}</span>
                     </DropdownMenuItem>
                   ))}
@@ -490,7 +487,7 @@ export default function UserMenu() {
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-crosshair">
-              <Palette className="size-4 mr-2" />
+              <Palette className="size-4 text-muted-foreground mr-2" />
               Theme
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
