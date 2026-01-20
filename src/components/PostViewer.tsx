@@ -3,7 +3,6 @@ import { Paperclip, Send, Loader2, Check, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
-import { Label } from "./ui/label";
 import { useAccount } from "@/hooks/useAccount";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
@@ -76,15 +75,20 @@ export function PostViewer() {
     if (savedDraft) {
       try {
         const draft = JSON.parse(savedDraft);
-        // We'll set content via editor commands after editor is ready
-        // Store in ref for initial load
-        if (editorRef.current && draft.content) {
+
+        // Restore editor content
+        if (editorRef.current && draft.editorState) {
           // Use setTimeout to ensure editor is fully mounted
           setTimeout(() => {
-            if (editorRef.current) {
-              editorRef.current.insertText(draft.content);
+            if (editorRef.current && draft.editorState) {
+              editorRef.current.setContent(draft.editorState);
             }
           }, 100);
+        }
+
+        // Restore selected relays
+        if (draft.selectedRelays && Array.isArray(draft.selectedRelays)) {
+          setSelectedRelays(new Set(draft.selectedRelays));
         }
       } catch (err) {
         console.error("Failed to load draft:", err);
@@ -97,6 +101,8 @@ export function PostViewer() {
     if (!pubkey || !editorRef.current) return;
 
     const content = editorRef.current.getContent();
+    const editorState = editorRef.current.getJSON();
+
     if (!content.trim()) {
       // Clear draft if empty
       const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
@@ -106,7 +112,8 @@ export function PostViewer() {
 
     const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
     const draft = {
-      content,
+      editorState, // Full editor JSON state (preserves blobs, emojis, formatting)
+      selectedRelays: Array.from(selectedRelays), // Selected relay URLs
       timestamp: Date.now(),
     };
 
@@ -115,7 +122,7 @@ export function PostViewer() {
     } catch (err) {
       console.error("Failed to save draft:", err);
     }
-  }, [pubkey]);
+  }, [pubkey, selectedRelays]);
 
   // Debounced draft save (save every 2 seconds of inactivity)
   useEffect(() => {
@@ -211,12 +218,13 @@ export function PostViewer() {
         const draft = await factory.build({ kind: 1, content, tags });
         const event = await factory.sign(draft);
 
-        // Initialize relay states
-        setRelayStates(
-          selected.map((url) => ({
-            url,
-            status: "publishing" as RelayStatus,
-          })),
+        // Update relay states - set selected to publishing, keep others as pending
+        setRelayStates((prev) =>
+          prev.map((r) =>
+            selected.includes(r.url)
+              ? { ...r, status: "publishing" as RelayStatus }
+              : r,
+          ),
         );
 
         // Publish to each relay individually to track status
@@ -366,9 +374,9 @@ export function PostViewer() {
       {/* Relay selection */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">
+          <span className="text-sm text-muted-foreground">
             Relays ({selectedRelays.size} selected)
-          </Label>
+          </span>
           {writeRelays.length > 0 && (
             <Button
               variant="ghost"

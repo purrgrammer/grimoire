@@ -64,6 +64,10 @@ export interface RichEditorHandle {
   insertText: (text: string) => void;
   /** Insert a blob attachment with rich preview */
   insertBlob: (blob: BlobAttachment) => void;
+  /** Get editor state as JSON (for persistence) */
+  getJSON: () => any;
+  /** Set editor content from JSON (for restoration) */
+  setContent: (json: any) => void;
 }
 
 // Create emoji extension by extending Mention with a different name and custom node view
@@ -499,6 +503,14 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             type: "blobAttachment",
             attrs: blob,
           });
+        },
+        getJSON: () => {
+          return editor?.getJSON() || null;
+        },
+        setContent: (json: any) => {
+          if (editor && json) {
+            editor.commands.setContent(json);
+          }
         },
       }),
       [editor, handleSubmit],
