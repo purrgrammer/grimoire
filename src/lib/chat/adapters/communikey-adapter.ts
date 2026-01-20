@@ -88,15 +88,14 @@ export class CommunikeyAdapter extends ChatProtocolAdapter {
 
     // Use user's outbox/general relays for fetching
     // TODO: Could use more sophisticated relay selection
+    const fallbackRelays =
+      identifier.relays.length > 0
+        ? identifier.relays
+        : Array.from(pool.relays.keys()).slice(0, 5);
+
     const definitionEvents = await firstValueFrom(
       pool
-        .request(
-          identifier.relays.length > 0
-            ? identifier.relays
-            : Array.from(pool.connectedRelays.keys()).slice(0, 5),
-          [definitionFilter],
-          { eventStore },
-        )
+        .request(fallbackRelays, [definitionFilter], { eventStore })
         .pipe(toArray()),
     );
 
@@ -441,7 +440,7 @@ export class CommunikeyAdapter extends ChatProtocolAdapter {
    * Get available actions for Communikey groups
    * Currently only bookmark/unbookmark (no join/leave - open participation)
    */
-  getActions(options?: GetActionsOptions): ChatAction[] {
+  getActions(_options?: GetActionsOptions): ChatAction[] {
     const actions: ChatAction[] = [];
 
     // Bookmark/unbookmark actions (same as NIP-29)

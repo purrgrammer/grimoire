@@ -17,15 +17,16 @@ import { toArray } from "rxjs/operators";
 /**
  * Check if a string is a valid hex pubkey (64 hex characters)
  */
-function isValidPubkey(str: string): boolean {
+export function isValidPubkey(str: string): boolean {
   return /^[0-9a-f]{64}$/i.test(str);
 }
 
 /**
  * Try to detect if a group ID is actually a Communikey (kind 10222)
  * Returns true if kind 10222 event found, false otherwise
+ * Exported for use by GroupLink and other components
  */
-async function isCommunikey(
+export async function isCommunikey(
   pubkey: string,
   relayHints: string[],
 ): Promise<boolean> {
@@ -45,10 +46,10 @@ async function isCommunikey(
 
   try {
     // Use available relays for detection (relay hints + some connected relays)
-    const relays = [
-      ...relayHints,
-      ...Array.from(pool.connectedRelays.keys()).slice(0, 3),
-    ].filter((r) => r);
+    const connectedRelays = Array.from(pool.relays.keys()).slice(0, 3);
+    const relays = [...relayHints, ...connectedRelays].filter(
+      (r): r is string => !!r,
+    );
 
     if (relays.length === 0) {
       console.log("[Chat Parser] No relays available for Communikey detection");

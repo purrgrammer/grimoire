@@ -2,6 +2,7 @@ import { MessageSquare } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import { getTagValue } from "applesauce-core/helpers";
+import { isCommunikey } from "@/lib/chat-parser";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -56,16 +57,29 @@ export function GroupLink({
       ? getTagValue(metadata, "picture")
       : undefined;
 
-  const handleClick = () => {
-    // Open chat with properly structured ProtocolIdentifier
-    addWindow("chat", {
-      protocol: "nip-29",
-      identifier: {
-        type: "group",
-        value: groupId,
-        relays: [relayUrl],
-      },
-    });
+  const handleClick = async () => {
+    // Check if this is a Communikey (group ID is pubkey with kind 10222)
+    if (await isCommunikey(groupId, [relayUrl])) {
+      console.log(`[GroupLink] Detected Communikey: ${groupId.slice(0, 8)}...`);
+      addWindow("chat", {
+        protocol: "communikey",
+        identifier: {
+          type: "communikey",
+          value: groupId,
+          relays: [relayUrl],
+        },
+      });
+    } else {
+      // Standard NIP-29 group
+      addWindow("chat", {
+        protocol: "nip-29",
+        identifier: {
+          type: "group",
+          value: groupId,
+          relays: [relayUrl],
+        },
+      });
+    }
   };
 
   return (
