@@ -430,7 +430,7 @@ export default function UserMenu() {
               className="px-2 py-2 cursor-crosshair hover:bg-accent/50 transition-colors"
               onClick={openDonate}
             >
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-3">
                 <Zap className="size-4 text-yellow-500" />
                 <span className="text-sm font-medium">Support Grimoire</span>
               </div>

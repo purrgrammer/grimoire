@@ -57,7 +57,6 @@ export function GoalRenderer({ event }: BaseEventProps) {
     `goal-zaps-${event.id}`,
     zapFilter,
     relays,
-    { limit: 1000 },
   );
 
   // Calculate total raised

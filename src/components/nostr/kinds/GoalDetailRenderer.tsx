@@ -63,7 +63,6 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
     `goal-zaps-detail-${event.id}`,
     zapFilter,
     relays,
-    { limit: 1000 },
   );
 
   // Calculate total raised and build contributor list
