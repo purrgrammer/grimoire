@@ -313,38 +313,58 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
 
 /**
  * Create a TipTap suggestion configuration from our SuggestionConfig
+ *
+ * Note: TipTap's suggestion plugin has a race condition with async items functions
+ * where onUpdate receives stale/wrong results. We work around this by:
+ * 1. Storing a ref to the component and current command
+ * 2. Manually updating the component in the items function after getting results
+ * 3. Using a query counter to discard stale results
  */
 function createSuggestionConfig<T>(
   config: SuggestionConfig<T>,
   handleSubmitRef: React.MutableRefObject<(editor: unknown) => void>,
 ): Omit<SuggestionOptions<T>, "editor"> {
-  // Track session for debugging
-  let sessionId = 0;
+  // Shared state between items() and render callbacks
+  // This allows items() to directly update the component, bypassing TipTap's buggy async handling
+  let componentRef: ReactRenderer<SuggestionListHandle> | null = null;
+  let currentCommand: ((item: T) => void) | null = null;
+  let queryCounter = 0;
 
   return {
     char: config.char,
     allowSpaces: config.allowSpaces ?? false,
     allow: config.allow,
     items: async ({ query }) => {
+      // Increment counter to track this query
+      const thisQuery = ++queryCounter;
       const results = await config.search(query);
-      console.log(
-        `[Suggestion ${config.char}] items called: query="${query}" results=${results.length} session=${sessionId}`,
-      );
+
+      // If a newer query was started, discard these results
+      if (thisQuery !== queryCounter) {
+        return results; // Return anyway for TipTap, but don't update component
+      }
+
+      // Directly update the component with fresh results
+      // This bypasses TipTap's buggy async result handling
+      if (componentRef && currentCommand) {
+        componentRef.updateProps({
+          items: results,
+          command: currentCommand,
+        });
+      }
+
       return results;
     },
     render: () => {
-      let component: ReactRenderer<SuggestionListHandle>;
       let popup: TippyInstance[];
       let editorRef: unknown;
-      const currentSession = ++sessionId;
 
       return {
         onStart: (props) => {
-          console.log(
-            `[Suggestion ${config.char}] onStart: session=${currentSession} items=${props.items?.length}`,
-          );
           editorRef = props.editor;
-          component = new ReactRenderer(config.component as never, {
+          currentCommand = props.command as (item: T) => void;
+
+          componentRef = new ReactRenderer(config.component as never, {
             props: {
               items: props.items,
               command: props.command,
@@ -358,7 +378,7 @@ function createSuggestionConfig<T>(
           popup = tippy("body", {
             getReferenceClientRect: props.clientRect as () => DOMRect,
             appendTo: () => document.body,
-            content: component.element,
+            content: componentRef.element,
             showOnCreate: true,
             interactive: true,
             trigger: "manual",
@@ -368,13 +388,11 @@ function createSuggestionConfig<T>(
         },
 
         onUpdate(props) {
-          console.log(
-            `[Suggestion ${config.char}] onUpdate: session=${currentSession} items=${props.items?.length}`,
-          );
-          component.updateProps({
-            items: props.items,
-            command: props.command,
-          });
+          // Update command reference (TipTap may change it)
+          currentCommand = props.command as (item: T) => void;
+
+          // Note: We don't rely on props.items here because TipTap's async handling
+          // often provides stale/wrong results. The items() function updates directly.
 
           if (!props.clientRect) return;
 
@@ -399,15 +417,14 @@ function createSuggestionConfig<T>(
             return true;
           }
 
-          return component.ref?.onKeyDown(props.event) ?? false;
+          return componentRef?.ref?.onKeyDown(props.event) ?? false;
         },
 
         onExit() {
-          console.log(
-            `[Suggestion ${config.char}] onExit: session=${currentSession}`,
-          );
           popup[0]?.destroy();
-          component.destroy();
+          componentRef?.destroy();
+          componentRef = null;
+          currentCommand = null;
         },
       };
     },
