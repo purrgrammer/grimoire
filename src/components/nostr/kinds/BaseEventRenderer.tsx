@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
-import { KindBadge } from "@/components/KindBadge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Menu,
   Copy,
@@ -223,24 +228,6 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-row items-center gap-2 text-xs text-muted-foreground">
-            <KindBadge
-              kind={event.kind}
-              variant="compact"
-              iconClassname="text-muted-foreground/60"
-              className="opacity-60"
-            />
-            <KindBadge
-              kind={event.kind}
-              showName
-              showKindNumber
-              showIcon={false}
-              className="opacity-60"
-            />
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={openEventDetail}>
           <ExternalLink className="size-4 mr-2" />
           Open
@@ -276,6 +263,164 @@ export function EventMenu({ event }: { event: NostrEvent }) {
         title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
       />
     </DropdownMenu>
+  );
+}
+
+/**
+ * Event context menu - same actions as EventMenu but triggered by right-click
+ * Used for generic event renderers that don't have a built-in menu button
+ */
+export function EventContextMenu({
+  event,
+  children,
+}: {
+  event: NostrEvent;
+  children: React.ReactNode;
+}) {
+  const { addWindow } = useGrimoire();
+  const { copy, copied } = useCopy();
+  const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
+
+  const openEventDetail = () => {
+    let pointer;
+    // For replaceable/parameterized replaceable events, use AddressPointer
+    if (isAddressableKind(event.kind)) {
+      // Find d-tag for identifier
+      const dTag = getTagValue(event, "d") || "";
+      pointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      // For regular events, use EventPointer
+      pointer = {
+        id: event.id,
+      };
+    }
+
+    addWindow("open", { pointer });
+  };
+
+  const copyEventId = () => {
+    // Get relay hints from where the event has been seen
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+    // For replaceable/parameterized replaceable events, encode as naddr
+    if (isAddressableKind(event.kind)) {
+      // Find d-tag for identifier
+      const dTag = getTagValue(event, "d") || "";
+      const naddr = nip19.naddrEncode({
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+        relays: relays,
+      });
+      copy(naddr);
+    } else {
+      // For regular events, encode as nevent
+      const nevent = nip19.neventEncode({
+        id: event.id,
+        author: event.pubkey,
+        relays: relays,
+      });
+      copy(nevent);
+    }
+  };
+
+  const viewEventJson = () => {
+    setJsonDialogOpen(true);
+  };
+
+  const zapEvent = () => {
+    // Create event pointer for the zap
+    let eventPointer;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      eventPointer = {
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      };
+    } else {
+      eventPointer = {
+        id: event.id,
+      };
+    }
+
+    // Get semantic author (e.g., zapper for zaps, host for streams)
+    const recipientPubkey = getSemanticAuthor(event);
+
+    // Open zap window with event context
+    addWindow("zap", {
+      recipientPubkey,
+      eventPointer,
+    });
+  };
+
+  const openChatWindow = () => {
+    // Only kind 1 notes support NIP-10 thread chat
+    if (event.kind === 1) {
+      const seenRelaysSet = getSeenRelays(event);
+      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+      // Open chat with NIP-10 thread protocol
+      addWindow("chat", {
+        protocol: "nip-10",
+        identifier: {
+          type: "thread",
+          value: {
+            id: event.id,
+            relays,
+            author: event.pubkey,
+            kind: event.kind,
+          },
+          relays,
+        },
+      });
+    }
+  };
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuItem onClick={openEventDetail}>
+          <ExternalLink className="size-4 mr-2" />
+          Open
+        </ContextMenuItem>
+        <ContextMenuItem onClick={zapEvent}>
+          <Zap className="size-4 mr-2 text-yellow-500" />
+          Zap
+        </ContextMenuItem>
+        {event.kind === 1 && (
+          <ContextMenuItem onClick={openChatWindow}>
+            <MessageSquare className="size-4 mr-2" />
+            Chat
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={copyEventId}>
+          {copied ? (
+            <Check className="size-4 mr-2 text-green-500" />
+          ) : (
+            <Copy className="size-4 mr-2" />
+          )}
+          {copied ? "Copied!" : "Copy ID"}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={viewEventJson}>
+          <FileJson className="size-4 mr-2" />
+          View JSON
+        </ContextMenuItem>
+      </ContextMenuContent>
+      <JsonViewer
+        data={event}
+        open={jsonDialogOpen}
+        onOpenChange={setJsonDialogOpen}
+        title={`Event ${event.id.slice(0, 8)}... - Raw JSON`}
+      />
+    </ContextMenu>
   );
 }
 
