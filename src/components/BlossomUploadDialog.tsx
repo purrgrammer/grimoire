@@ -353,7 +353,7 @@ export function BlossomUploadDialog({
                     "size-12 text-muted-foreground",
                   )
                 )}
-                <p className="font-medium text-sm line-clamp-1 truncate w-full text-center">
+                <p className="font-medium text-sm truncate max-w-xs text-center">
                   {selectedFile.name}
                 </p>
                 <p className="text-xs text-muted-foreground">
