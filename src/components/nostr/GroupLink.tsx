@@ -2,6 +2,7 @@ import { MessageSquare } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import { getTagValue } from "applesauce-core/helpers";
+import { isCommunikey } from "@/lib/chat-parser";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -15,15 +16,15 @@ function formatRelayForDisplay(url: string): string {
 export interface GroupLinkProps {
   groupId: string;
   relayUrl: string;
-  metadata?: NostrEvent; // Optional pre-loaded metadata
+  metadata?: NostrEvent; // Optional pre-loaded metadata (kind 39000 for NIP-29, kind 0 for Communikey)
   className?: string;
   iconClassname?: string;
 }
 
 /**
- * GroupLink - Clickable NIP-29 group component
- * Displays group name (from kind 39000 metadata) or group ID
- * Opens chat window on click
+ * GroupLink - Clickable group component for NIP-29 and Communikey
+ * Displays group name from metadata (kind 39000 for NIP-29, kind 0 for Communikey) or group ID
+ * Opens chat window on click with automatic protocol detection
  *
  * Special case: "_" group ID represents the unmanaged relay top-level group
  */
@@ -41,31 +42,55 @@ export function GroupLink({
 
   // Extract group name from metadata if available
   let groupName: string;
+  let groupIcon: string | undefined;
+
   if (isUnmanagedGroup) {
     // For "_" groups, show the relay name
     groupName = formatRelayForDisplay(relayUrl);
-  } else if (metadata && metadata.kind === 39000) {
-    groupName = getTagValue(metadata, "name") || groupId;
+  } else if (metadata) {
+    if (metadata.kind === 39000) {
+      // NIP-29 group metadata
+      groupName = getTagValue(metadata, "name") || groupId;
+      groupIcon = getTagValue(metadata, "picture");
+    } else if (metadata.kind === 0) {
+      // Communikey profile metadata
+      try {
+        const profile = JSON.parse(metadata.content);
+        groupName = profile.name || groupId;
+        groupIcon = profile.picture;
+      } catch {
+        groupName = groupId;
+      }
+    } else {
+      groupName = groupId;
+    }
   } else {
     groupName = groupId;
   }
 
-  // Extract group icon if available (not applicable for "_" groups)
-  const groupIcon =
-    !isUnmanagedGroup && metadata && metadata.kind === 39000
-      ? getTagValue(metadata, "picture")
-      : undefined;
-
-  const handleClick = () => {
-    // Open chat with properly structured ProtocolIdentifier
-    addWindow("chat", {
-      protocol: "nip-29",
-      identifier: {
-        type: "group",
-        value: groupId,
-        relays: [relayUrl],
-      },
-    });
+  const handleClick = async () => {
+    // Check if this is a Communikey (group ID is pubkey with kind 10222)
+    if (await isCommunikey(groupId, [relayUrl])) {
+      console.log(`[GroupLink] Detected Communikey: ${groupId.slice(0, 8)}...`);
+      addWindow("chat", {
+        protocol: "communikey",
+        identifier: {
+          type: "communikey",
+          value: groupId,
+          relays: [relayUrl],
+        },
+      });
+    } else {
+      // Standard NIP-29 group
+      addWindow("chat", {
+        protocol: "nip-29",
+        identifier: {
+          type: "group",
+          value: groupId,
+          relays: [relayUrl],
+        },
+      });
+    }
   };
 
   return (

@@ -28,6 +28,7 @@ import { CHAT_KINDS } from "@/types/chat";
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
+import { CommunikeyAdapter } from "@/lib/chat/adapters/communikey-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import type { ChatAction } from "@/types/chat-actions";
@@ -1138,7 +1139,7 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
+ * Currently NIP-10 (thread chat), NIP-29 (relay-based groups), Communikey, and NIP-53 (live activity chat) are supported
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
@@ -1149,6 +1150,8 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     //   return new NipC7Adapter();
     case "nip-29":
       return new Nip29Adapter();
+    case "communikey":
+      return new CommunikeyAdapter();
     // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)
     //   return new Nip17Adapter();
     // case "nip-28":  // Phase 3 - Public channels (coming soon)

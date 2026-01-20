@@ -580,7 +580,7 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "chat",
     category: "Nostr",
     argParser: async (args: string[]) => {
-      const result = parseChatCommand(args);
+      const result = await parseChatCommand(args);
       return {
         protocol: result.protocol,
         identifier: result.identifier,
