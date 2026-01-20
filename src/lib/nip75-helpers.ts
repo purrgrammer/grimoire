@@ -103,24 +103,14 @@ export function isGoalClosed(event: NostrEvent): boolean {
 
 /**
  * Get a display title for the goal
- * Falls back to summary, then content truncated, then "Untitled Goal"
+ * Content is the goal title per NIP-75
  * @param event Goal event (kind 9041)
  * @returns Display title string
  */
 export function getGoalTitle(event: NostrEvent): string {
-  // First try summary tag
-  const summary = getGoalSummary(event);
-  if (summary) return summary;
-
-  // Fall back to content (first line, truncated)
   const content = event.content?.trim();
   if (content) {
-    const firstLine = content.split("\n")[0];
-    if (firstLine.length > 80) {
-      return firstLine.slice(0, 77) + "...";
-    }
-    return firstLine;
+    return content;
   }
-
   return "Untitled Goal";
 }

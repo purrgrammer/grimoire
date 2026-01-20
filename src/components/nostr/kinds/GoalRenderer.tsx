@@ -4,13 +4,13 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { Target, Clock } from "lucide-react";
 import { useTimeline } from "@/hooks/useTimeline";
 import {
   getGoalAmount,
   getGoalRelays,
   getGoalClosedAt,
   getGoalTitle,
+  getGoalSummary,
   isGoalClosed,
 } from "@/lib/nip75-helpers";
 import { getZapAmount } from "applesauce-common/helpers/zap";
@@ -31,6 +31,7 @@ export function GoalRenderer({ event }: BaseEventProps) {
   const goalRelays = getGoalRelays(event);
   const closedAt = getGoalClosedAt(event);
   const title = getGoalTitle(event);
+  const summary = getGoalSummary(event);
   const closed = isGoalClosed(event);
 
   // Fetch zaps for this goal from specified relays
@@ -80,20 +81,17 @@ export function GoalRenderer({ event }: BaseEventProps) {
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
         {/* Title */}
-        <div className="flex items-start gap-2">
-          <Target className="size-5 text-primary mt-0.5 shrink-0" />
-          <ClickableEventTitle
-            event={event}
-            className="text-base font-semibold text-foreground leading-tight"
-          >
-            {title}
-          </ClickableEventTitle>
-        </div>
+        <ClickableEventTitle
+          event={event}
+          className="text-base font-semibold text-foreground leading-tight"
+        >
+          {title}
+        </ClickableEventTitle>
 
-        {/* Description (full content if different from title) */}
-        {event.content && event.content.trim() !== title && (
+        {/* Description (summary tag only) */}
+        {summary && (
           <p className="text-sm text-muted-foreground line-clamp-2">
-            {event.content}
+            {summary}
           </p>
         )}
 
@@ -111,7 +109,7 @@ export function GoalRenderer({ event }: BaseEventProps) {
                       {raisedSats.toLocaleString()}
                     </span>
                     {" / "}
-                    {targetSats.toLocaleString()} sats
+                    {targetSats.toLocaleString()}
                   </>
                 )}
               </span>
@@ -124,10 +122,9 @@ export function GoalRenderer({ event }: BaseEventProps) {
 
         {/* Deadline */}
         {closedAt && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="size-3" />
+          <div className="text-xs text-muted-foreground">
             {closed ? (
-              <span className="text-destructive">Closed</span>
+              <span>Closed on {deadlineText}</span>
             ) : (
               <span>Ends {deadlineText}</span>
             )}

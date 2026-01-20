@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
-import { Target, Clock, Users } from "lucide-react";
 import { useTimeline } from "@/hooks/useTimeline";
 import {
   getGoalAmount,
   getGoalRelays,
   getGoalClosedAt,
   getGoalTitle,
+  getGoalSummary,
   isGoalClosed,
   getGoalBeneficiaries,
 } from "@/lib/nip75-helpers";
@@ -36,6 +36,7 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
   const goalRelays = getGoalRelays(event);
   const closedAt = getGoalClosedAt(event);
   const title = getGoalTitle(event);
+  const summary = getGoalSummary(event);
   const closed = isGoalClosed(event);
   const beneficiaries = getGoalBeneficiaries(event);
 
@@ -112,28 +113,20 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
     <div className="flex flex-col gap-6 p-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-start gap-3">
-          <Target className="size-8 text-primary mt-1 shrink-0" />
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
 
-        {/* Description */}
-        {event.content && (
-          <p className="text-muted-foreground whitespace-pre-wrap">
-            {event.content}
-          </p>
+        {/* Description (summary tag only) */}
+        {summary && (
+          <p className="text-muted-foreground whitespace-pre-wrap">{summary}</p>
         )}
 
         {/* Deadline */}
         {closedAt && (
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="size-4" />
+          <div className="text-sm text-muted-foreground">
             {closed ? (
-              <span className="text-destructive font-medium">
-                Goal closed on {deadlineText}
-              </span>
+              <span>Closed on {deadlineText}</span>
             ) : (
-              <span className="text-muted-foreground">Ends {deadlineText}</span>
+              <span>Ends {deadlineText}</span>
             )}
           </div>
         )}
@@ -147,7 +140,7 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
               {raisedSats.toLocaleString()}
             </span>
             <span className="text-muted-foreground">
-              of {targetSats.toLocaleString()} sats
+              of {targetSats.toLocaleString()}
             </span>
           </div>
           <Progress value={progress} className="h-3" />
@@ -178,12 +171,9 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
 
       {/* Contributors */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Users className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Contributors
-          </h2>
-        </div>
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+          Contributors
+        </h2>
 
         {loading && contributors.length === 0 ? (
           <div className="flex flex-col gap-2">
@@ -219,7 +209,7 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
                     )}
                   </div>
                   <span className="font-mono text-sm font-medium">
-                    {amountSats.toLocaleString()} sats
+                    {amountSats.toLocaleString()}
                   </span>
                 </div>
               );
