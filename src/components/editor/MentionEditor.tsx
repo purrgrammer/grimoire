@@ -8,7 +8,6 @@ import {
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -32,9 +31,8 @@ import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
-import eventStore from "@/services/event-store";
-import { getProfileContent } from "applesauce-core/helpers";
-import { getDisplayName } from "@/lib/nostr-utils";
+import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
+import { FilePasteHandler } from "./extensions/file-paste-handler";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -360,207 +358,6 @@ const NostrEventPreview = Node.create({
       dom.appendChild(contentLabel);
 
       return { dom };
-    };
-  },
-});
-
-// Helper to get display name for a pubkey (synchronous lookup from cache)
-function getDisplayNameForPubkey(pubkey: string): string {
-  try {
-    // Try to get profile from event store (check if it's a BehaviorSubject with .value)
-    const profile$ = eventStore.replaceable(0, pubkey) as any;
-    if (profile$ && profile$.value) {
-      const profileEvent = profile$.value;
-      if (profileEvent) {
-        const content = getProfileContent(profileEvent);
-        if (content) {
-          // Use the Grimoire helper which handles fallbacks
-          return getDisplayName(pubkey, content);
-        }
-      }
-    }
-  } catch (err) {
-    // Ignore errors, fall through to default
-    console.debug(
-      "[NostrPasteHandler] Could not get profile for",
-      pubkey.slice(0, 8),
-      err,
-    );
-  }
-  // Fallback to short pubkey
-  return pubkey.slice(0, 8);
-}
-
-// Paste handler extension to transform bech32 strings into preview nodes
-const NostrPasteHandler = Extension.create({
-  name: "nostrPasteHandler",
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey("nostrPasteHandler"),
-
-        props: {
-          handlePaste: (view, event) => {
-            const text = event.clipboardData?.getData("text/plain");
-            if (!text) return false;
-
-            // Regex to detect nostr bech32 strings (with or without nostr: prefix)
-            const bech32Regex =
-              /(?:nostr:)?(npub1[\w]{58,}|note1[\w]{58,}|nevent1[\w]+|naddr1[\w]+|nprofile1[\w]+)/g;
-            const matches = Array.from(text.matchAll(bech32Regex));
-
-            if (matches.length === 0) return false; // No bech32 found, use default paste
-
-            // Build content with text and preview nodes
-            const nodes: any[] = [];
-            let lastIndex = 0;
-
-            for (const match of matches) {
-              const matchedText = match[0];
-              const matchIndex = match.index!;
-              const bech32 = match[1]; // The bech32 without nostr: prefix
-
-              // Add text before this match
-              if (lastIndex < matchIndex) {
-                const textBefore = text.slice(lastIndex, matchIndex);
-                if (textBefore) {
-                  nodes.push(view.state.schema.text(textBefore));
-                }
-              }
-
-              // Try to decode bech32 and create preview node
-              try {
-                const decoded = nip19.decode(bech32);
-
-                // For npub/nprofile, create regular mention nodes (reuse existing infrastructure)
-                if (decoded.type === "npub") {
-                  const pubkey = decoded.data as string;
-                  const displayName = getDisplayNameForPubkey(pubkey);
-                  nodes.push(
-                    view.state.schema.nodes.mention.create({
-                      id: pubkey,
-                      label: displayName,
-                    }),
-                  );
-                } else if (decoded.type === "nprofile") {
-                  const pubkey = (decoded.data as any).pubkey;
-                  const displayName = getDisplayNameForPubkey(pubkey);
-                  nodes.push(
-                    view.state.schema.nodes.mention.create({
-                      id: pubkey,
-                      label: displayName,
-                    }),
-                  );
-                } else if (decoded.type === "note") {
-                  nodes.push(
-                    view.state.schema.nodes.nostrEventPreview.create({
-                      type: "note",
-                      data: decoded.data,
-                    }),
-                  );
-                } else if (decoded.type === "nevent") {
-                  nodes.push(
-                    view.state.schema.nodes.nostrEventPreview.create({
-                      type: "nevent",
-                      data: decoded.data,
-                    }),
-                  );
-                } else if (decoded.type === "naddr") {
-                  nodes.push(
-                    view.state.schema.nodes.nostrEventPreview.create({
-                      type: "naddr",
-                      data: decoded.data,
-                    }),
-                  );
-                }
-
-                // Add space after preview node
-                nodes.push(view.state.schema.text(" "));
-              } catch (err) {
-                // Invalid bech32, insert as plain text
-                console.warn(
-                  "[NostrPasteHandler] Failed to decode:",
-                  bech32,
-                  err,
-                );
-                nodes.push(view.state.schema.text(matchedText));
-              }
-
-              lastIndex = matchIndex + matchedText.length;
-            }
-
-            // Add remaining text after last match
-            if (lastIndex < text.length) {
-              const textAfter = text.slice(lastIndex);
-              if (textAfter) {
-                nodes.push(view.state.schema.text(textAfter));
-              }
-            }
-
-            // Insert all nodes at cursor position
-            if (nodes.length > 0) {
-              const { tr } = view.state;
-              const { from } = view.state.selection;
-
-              // Insert content
-              nodes.forEach((node, index) => {
-                tr.insert(from + index, node);
-              });
-
-              view.dispatch(tr);
-              return true; // Prevent default paste
-            }
-
-            return false;
-          },
-        },
-      }),
-    ];
-  },
-});
-
-// File paste handler extension to intercept file pastes and trigger upload
-const FilePasteHandler = Extension.create({
-  name: "filePasteHandler",
-
-  addProseMirrorPlugins() {
-    const onFilePaste = this.options.onFilePaste;
-
-    return [
-      new Plugin({
-        key: new PluginKey("filePasteHandler"),
-
-        props: {
-          handlePaste: (_view, event) => {
-            // Handle paste events with files (e.g., pasting images from clipboard)
-            const files = event.clipboardData?.files;
-            if (!files || files.length === 0) return false;
-
-            // Check if files are images, videos, or audio
-            const validFiles = Array.from(files).filter((file) =>
-              file.type.match(/^(image|video|audio)\//),
-            );
-
-            if (validFiles.length === 0) return false;
-
-            // Trigger the file paste callback
-            if (onFilePaste) {
-              onFilePaste(validFiles);
-              event.preventDefault();
-              return true; // Prevent default paste behavior
-            }
-
-            return false;
-          },
-        },
-      }),
-    ];
-  },
-
-  addOptions() {
-    return {
-      onFilePaste: undefined,
     };
   },
 });
