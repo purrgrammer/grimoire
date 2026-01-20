@@ -189,83 +189,123 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     console.log(`[NIP-29] Group title: ${title}`);
 
-    // Fetch admins (kind 39001) and members (kind 39002)
+    // Fetch admins (kind 39001) and members (kind 39002) in parallel
     // Both use d tag (addressable events signed by relay)
-    const participantsFilter: Filter = {
-      kinds: [39001, 39002],
+    const adminsFilter: Filter = {
+      kinds: [39001],
       "#d": [groupId],
-      limit: 10, // Should be 1 of each kind, but allow for duplicates
+      limit: 5, // Should be 1, but allow for duplicates
     };
 
-    const participantEvents: NostrEvent[] = [];
-    const participantsObs = pool.subscription(
-      [relayUrl],
-      [participantsFilter],
-      {
-        eventStore,
-      },
-    );
+    const membersFilter: Filter = {
+      kinds: [39002],
+      "#d": [groupId],
+      limit: 5, // Should be 1, but allow for duplicates
+    };
 
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        console.log("[NIP-29] Participants fetch timeout");
-        resolve();
-      }, 5000);
+    // Fetch admins and members in parallel
+    const adminEvents: NostrEvent[] = [];
+    const memberEvents: NostrEvent[] = [];
 
-      const sub = participantsObs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            console.log(
-              `[NIP-29] Got ${participantEvents.length} participant events`,
-            );
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            participantEvents.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error("[NIP-29] Participants fetch error:", err);
-          sub.unsubscribe();
-          reject(err);
-        },
-      });
+    const adminsObs = pool.subscription([relayUrl], [adminsFilter], {
+      eventStore,
     });
 
+    const membersObs = pool.subscription([relayUrl], [membersFilter], {
+      eventStore,
+    });
+
+    // Wait for both subscriptions to complete in parallel
+    await Promise.all([
+      new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.log("[NIP-29] Admins fetch timeout");
+          resolve();
+        }, 5000);
+
+        const sub = adminsObs.subscribe({
+          next: (response) => {
+            if (typeof response === "string") {
+              // EOSE received
+              clearTimeout(timeout);
+              console.log(`[NIP-29] Got ${adminEvents.length} admin events`);
+              sub.unsubscribe();
+              resolve();
+            } else {
+              // Event received
+              adminEvents.push(response);
+            }
+          },
+          error: (err) => {
+            clearTimeout(timeout);
+            console.error("[NIP-29] Admins fetch error:", err);
+            sub.unsubscribe();
+            reject(err);
+          },
+        });
+      }),
+      new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.log("[NIP-29] Members fetch timeout");
+          resolve();
+        }, 5000);
+
+        const sub = membersObs.subscribe({
+          next: (response) => {
+            if (typeof response === "string") {
+              // EOSE received
+              clearTimeout(timeout);
+              console.log(`[NIP-29] Got ${memberEvents.length} member events`);
+              sub.unsubscribe();
+              resolve();
+            } else {
+              // Event received
+              memberEvents.push(response);
+            }
+          },
+          error: (err) => {
+            clearTimeout(timeout);
+            console.error("[NIP-29] Members fetch error:", err);
+            sub.unsubscribe();
+            reject(err);
+          },
+        });
+      }),
+    ]);
+
     // Helper to validate and normalize role names
-    const normalizeRole = (role: string | undefined): ParticipantRole => {
-      if (!role) return "member";
+    const normalizeRole = (
+      role: string | undefined,
+      defaultRole: ParticipantRole,
+    ): ParticipantRole => {
+      if (!role) return defaultRole;
       const lower = role.toLowerCase();
       if (lower === "admin") return "admin";
       if (lower === "moderator") return "moderator";
       if (lower === "host") return "host";
-      // Default to member for unknown roles
-      return "member";
+      // Default to provided default for unknown roles
+      return defaultRole;
     };
 
     // Extract participants from both admins and members events
     const participantsMap = new Map<string, Participant>();
 
     // Process kind:39001 (admins with roles)
-    const adminEvents = participantEvents.filter((e) => e.kind === 39001);
+    // Users in kind 39001 are admins by default
     for (const event of adminEvents) {
       // Each p tag: ["p", "<pubkey>", "<role1>", "<role2>", ...]
       for (const tag of event.tags) {
         if (tag[0] === "p" && tag[1]) {
           const pubkey = tag[1];
           const roles = tag.slice(2).filter((r) => r); // Get all roles after pubkey
-          const primaryRole = normalizeRole(roles[0]); // Use first role as primary
+          const primaryRole = normalizeRole(roles[0], "admin"); // Default to "admin" for kind 39001
           participantsMap.set(pubkey, { pubkey, role: primaryRole });
         }
       }
     }
 
     // Process kind:39002 (members without roles)
-    const memberEvents = participantEvents.filter((e) => e.kind === 39002);
+    // Users in kind 39002 are regular members
     for (const event of memberEvents) {
       // Each p tag: ["p", "<pubkey>"]
       for (const tag of event.tags) {
