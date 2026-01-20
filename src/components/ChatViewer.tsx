@@ -1078,7 +1078,7 @@ export function ChatViewer({
                     variant="ghost"
                     size="icon"
                     className="flex-shrink-0 size-7 text-muted-foreground hover:text-foreground"
-                    onClick={openUpload}
+                    onClick={() => openUpload()}
                     disabled={isSending}
                   >
                     <Paperclip className="size-4" />
@@ -1096,6 +1096,10 @@ export function ChatViewer({
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}
+              onFileDrop={(files) => {
+                // Open upload dialog with dropped files
+                openUpload(files);
+              }}
               onSubmit={(content, emojiTags, blobAttachments) => {
                 if (content.trim()) {
                   handleSend(content, replyTo, emojiTags, blobAttachments);

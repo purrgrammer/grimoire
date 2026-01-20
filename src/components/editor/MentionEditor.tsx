@@ -80,6 +80,7 @@ export interface MentionEditorProps {
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
   onCommandExecute?: (action: ChatAction) => Promise<void>;
+  onFileDrop?: (files: File[]) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -487,6 +488,73 @@ const NostrPasteHandler = Extension.create({
   },
 });
 
+// File drop handler extension to intercept file drops and trigger upload
+const FileDropHandler = Extension.create({
+  name: "fileDropHandler",
+
+  addProseMirrorPlugins() {
+    const onFileDrop = this.options.onFileDrop;
+
+    return [
+      new Plugin({
+        key: new PluginKey("fileDropHandler"),
+
+        props: {
+          handleDrop: (_view, event) => {
+            // Check if this is a file drop
+            const files = event.dataTransfer?.files;
+            if (!files || files.length === 0) return false;
+
+            // Check if files are images, videos, or audio (same as upload dialog accepts)
+            const validFiles = Array.from(files).filter((file) =>
+              file.type.match(/^(image|video|audio)\//),
+            );
+
+            if (validFiles.length === 0) return false;
+
+            // Trigger the file drop callback
+            if (onFileDrop) {
+              onFileDrop(validFiles);
+              event.preventDefault();
+              return true; // Prevent default drop behavior
+            }
+
+            return false;
+          },
+
+          handlePaste: (_view, event) => {
+            // Also handle paste events with files (e.g., pasting images from clipboard)
+            const files = event.clipboardData?.files;
+            if (!files || files.length === 0) return false;
+
+            // Check if files are images, videos, or audio
+            const validFiles = Array.from(files).filter((file) =>
+              file.type.match(/^(image|video|audio)\//),
+            );
+
+            if (validFiles.length === 0) return false;
+
+            // Trigger the file drop callback
+            if (onFileDrop) {
+              onFileDrop(validFiles);
+              event.preventDefault();
+              return true; // Prevent default paste behavior
+            }
+
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+
+  addOptions() {
+    return {
+      onFileDrop: undefined,
+    };
+  },
+});
+
 export const MentionEditor = forwardRef<
   MentionEditorHandle,
   MentionEditorProps
@@ -499,6 +567,7 @@ export const MentionEditor = forwardRef<
       searchEmojis,
       searchCommands,
       onCommandExecute,
+      onFileDrop,
       autoFocus = false,
       className = "",
     },
@@ -968,6 +1037,10 @@ export const MentionEditor = forwardRef<
         NostrEventPreview,
         // Add paste handler to transform bech32 strings into previews
         NostrPasteHandler,
+        // Add file drop handler for drag-and-drop file uploads
+        FileDropHandler.configure({
+          onFileDrop,
+        }),
       ];
 
       // Add emoji extension if search is provided
@@ -1045,6 +1118,7 @@ export const MentionEditor = forwardRef<
       emojiSuggestion,
       slashCommandSuggestion,
       onCommandExecute,
+      onFileDrop,
       placeholder,
     ]);
 
