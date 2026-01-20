@@ -139,11 +139,7 @@ import {
   MediaStarterPackDetailRenderer,
 } from "./StarterPackRenderer";
 import { NostrEvent } from "@/types/nostr";
-import {
-  BaseEventContainer,
-  EventContextMenu,
-  type BaseEventProps,
-} from "./BaseEventRenderer";
+import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { P2pOrderRenderer } from "./P2pOrderRenderer";
 import { P2pOrderDetailRenderer } from "./P2pOrderDetailRenderer";
 import { BadgeDefinitionRenderer } from "./BadgeDefinitionRenderer";
@@ -240,19 +236,17 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
 /**
  * Default renderer for kinds without custom implementations
  * Shows basic event info with raw content
- * Right-click to access event menu
+ * Right-click or tap menu button to access event menu
  */
 function DefaultKindRenderer({ event }: BaseEventProps) {
   return (
-    <EventContextMenu event={event}>
-      <BaseEventContainer event={event}>
-        <div className="text-sm text-muted-foreground">
-          <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
-            {event.content || "(empty content)"}
-          </pre>
-        </div>
-      </BaseEventContainer>
-    </EventContextMenu>
+    <BaseEventContainer event={event}>
+      <div className="text-sm text-muted-foreground">
+        <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
+          {event.content || "(empty content)"}
+        </pre>
+      </div>
+    </BaseEventContainer>
   );
 }
 

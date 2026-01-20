@@ -520,21 +520,23 @@ export function BaseEventContainer({
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
   return (
-    <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
-      <div className="flex flex-row justify-between items-center">
-        <div className="flex flex-row gap-2 items-baseline">
-          <EventAuthor pubkey={displayPubkey} />
-          <span
-            className="text-xs text-muted-foreground cursor-help"
-            title={absoluteTime}
-          >
-            {relativeTime}
-          </span>
+    <EventContextMenu event={event}>
+      <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
+        <div className="flex flex-row justify-between items-center">
+          <div className="flex flex-row gap-2 items-baseline">
+            <EventAuthor pubkey={displayPubkey} />
+            <span
+              className="text-xs text-muted-foreground cursor-help"
+              title={absoluteTime}
+            >
+              {relativeTime}
+            </span>
+          </div>
+          <EventMenu event={event} />
         </div>
-        <EventMenu event={event} />
+        {children}
+        <EventFooter event={event} />
       </div>
-      {children}
-      <EventFooter event={event} />
-    </div>
+    </EventContextMenu>
   );
 }
