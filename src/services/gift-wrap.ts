@@ -845,8 +845,15 @@ class GiftWrapManager {
     // Use a combination of gift wrap ID + seal ID
     const rumorId = `${giftWrap.id}:${seal.id}`;
 
-    // Create conversation key (sorted pubkeys for consistency)
-    const conversationKey = [seal.pubkey, recipientPubkey].sort().join(":");
+    // Create conversation key including ALL participants from p-tags (for group DMs)
+    // Extract all recipient pubkeys from p-tags
+    const recipientPubkeys = rumor.tags
+      .filter((t: string[]) => t[0] === "p" && t[1])
+      .map((t: string[]) => t[1]);
+
+    // Include sender + all recipients, deduplicate and sort for consistency
+    const allParticipants = [seal.pubkey, ...recipientPubkeys];
+    const conversationKey = [...new Set(allParticipants)].sort().join(":");
 
     // Create the unsealed DM record
     const unsealed: UnsealedDM = {
