@@ -41,6 +41,7 @@ export function PostViewer() {
   const [relayStates, setRelayStates] = useState<RelayPublishState[]>([]);
   const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
+  const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
 
   // Get active account's write relays from Grimoire state
   const writeRelays = useMemo(() => {
@@ -171,66 +172,13 @@ export function PostViewer() {
   // Retry publishing to a specific relay
   const retryRelay = useCallback(
     async (relayUrl: string) => {
-      if (!editorRef.current) return;
-
-      const serialized = editorRef.current.getSerializedContent();
-      if (!serialized.text.trim()) return;
-
-      // Create the event again
-      if (!canSign || !signer) return;
+      // Reuse the last published event instead of recreating it
+      if (!lastPublishedEvent) {
+        toast.error("No event to retry");
+        return;
+      }
 
       try {
-        const factory = new EventFactory();
-        factory.setSigner(signer);
-
-        // Build tags array
-        const tags: string[][] = [];
-
-        // Add p tags for mentions
-        for (const pubkey of serialized.mentions) {
-          tags.push(["p", pubkey]);
-        }
-
-        // Add e tags for event references
-        for (const eventId of serialized.eventRefs) {
-          tags.push(["e", eventId]);
-        }
-
-        // Add a tags for address references
-        for (const addr of serialized.addressRefs) {
-          tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
-        }
-
-        // Add client tag
-        tags.push(["client", "grimoire"]);
-
-        // Add emoji tags
-        for (const emoji of serialized.emojiTags) {
-          tags.push(["emoji", emoji.shortcode, emoji.url]);
-        }
-
-        // Add blob attachment tags (imeta)
-        for (const blob of serialized.blobAttachments) {
-          const imetaTag = [
-            "imeta",
-            `url ${blob.url}`,
-            `m ${blob.mimeType}`,
-            `x ${blob.sha256}`,
-            `size ${blob.size}`,
-          ];
-          if (blob.server) {
-            imetaTag.push(`server ${blob.server}`);
-          }
-          tags.push(imetaTag);
-        }
-
-        const draft = await factory.build({
-          kind: 1,
-          content: serialized.text.trim(),
-          tags,
-        });
-        const event = await factory.sign(draft);
-
         // Update status to publishing
         setRelayStates((prev) =>
           prev.map((r) =>
@@ -240,8 +188,8 @@ export function PostViewer() {
           ),
         );
 
-        // Try to publish
-        await pool.publish([relayUrl], event);
+        // Republish the same signed event
+        await pool.publish([relayUrl], lastPublishedEvent);
 
         // Update status to success
         setRelayStates((prev) =>
@@ -272,7 +220,7 @@ export function PostViewer() {
         );
       }
     },
-    [canSign, signer],
+    [lastPublishedEvent],
   );
 
   // Publish to selected relays with per-relay status tracking
@@ -357,6 +305,9 @@ export function PostViewer() {
         });
         const event = await factory.sign(draft);
 
+        // Store the signed event for potential retries
+        setLastPublishedEvent(event);
+
         // Update relay states - set selected to publishing, keep others as pending
         setRelayStates((prev) =>
           prev.map((r) =>
@@ -414,6 +365,8 @@ export function PostViewer() {
           const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
           localStorage.removeItem(draftKey);
         }
+
+        // Don't clear lastPublishedEvent here - keep it for potential retries
 
         toast.success(
           `Published to ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
