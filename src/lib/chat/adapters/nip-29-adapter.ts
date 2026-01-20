@@ -194,13 +194,13 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const adminsFilter: Filter = {
       kinds: [39001],
       "#d": [groupId],
-      limit: 5, // Should be 1, but allow for duplicates
+      limit: 1,
     };
 
     const membersFilter: Filter = {
       kinds: [39002],
       "#d": [groupId],
-      limit: 5, // Should be 1, but allow for duplicates
+      limit: 1,
     };
 
     // Use pool.request with both filters to fetch and auto-close on EOSE
