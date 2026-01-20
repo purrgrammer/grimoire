@@ -445,15 +445,16 @@ export default function UserMenu() {
                     Relays
                   </DropdownMenuLabel>
                   {relays.map((relay) => (
-                    <RelayLink
-                      className="px-2 py-1"
-                      urlClassname="text-sm"
-                      iconClassname="size-4"
-                      key={relay.url}
-                      url={relay.url}
-                      read={relay.read}
-                      write={relay.write}
-                    />
+                    <DropdownMenuItem key={relay.url} className="p-0" asChild>
+                      <RelayLink
+                        className="px-2 py-1.5 w-full"
+                        urlClassname="text-sm"
+                        iconClassname="size-4"
+                        url={relay.url}
+                        read={relay.read}
+                        write={relay.write}
+                      />
+                    </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
               )}
@@ -512,8 +513,8 @@ export default function UserMenu() {
 
           {/* Support Grimoire */}
           <DropdownMenuSeparator />
-          <div
-            className="px-2 py-2 cursor-crosshair hover:bg-accent/50 transition-colors"
+          <DropdownMenuItem
+            className="cursor-crosshair flex-col items-stretch p-2"
             onClick={openDonate}
           >
             <div className="flex items-center gap-2 mb-3">
@@ -533,7 +534,7 @@ export default function UserMenu() {
                 {goalProgress.toFixed(0)}%
               </span>
             </div>
-          </div>
+          </DropdownMenuItem>
 
           {/* Logout at bottom for logged in users */}
           {account && (
