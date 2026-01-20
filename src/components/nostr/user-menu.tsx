@@ -434,14 +434,19 @@ export default function UserMenu() {
                 <Zap className="size-4 text-yellow-500" />
                 <span className="text-sm font-medium">Support Grimoire</span>
               </div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-muted-foreground">Monthly goal</span>
-                <span className="font-medium">
-                  {formatSats(monthlyDonations)} /{" "}
-                  {formatSats(MONTHLY_GOAL_SATS)} sats
+              <Progress value={goalProgress} className="h-1.5 mb-1" />
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  <span className="text-foreground font-medium">
+                    {formatSats(monthlyDonations)}
+                  </span>
+                  {" / "}
+                  {formatSats(MONTHLY_GOAL_SATS)}
+                </span>
+                <span className="text-muted-foreground">
+                  {goalProgress.toFixed(0)}%
                 </span>
               </div>
-              <Progress value={goalProgress} className="h-1.5" />
             </div>
           </DropdownMenuGroup>
 

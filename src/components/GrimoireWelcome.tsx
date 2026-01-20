@@ -136,15 +136,20 @@ export function GrimoireWelcome({
                 {description}
               </div>
               {showProgress && (
-                <div className="mt-2 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span>Monthly goal</span>
-                    <span>
-                      {formatSats(monthlyDonations)} /{" "}
-                      {formatSats(MONTHLY_GOAL_SATS)} sats
+                <div className="mt-2 flex flex-col gap-1">
+                  <Progress value={goalProgress} className="h-1" />
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-muted-foreground">
+                      <span className="text-foreground font-medium">
+                        {formatSats(monthlyDonations)}
+                      </span>
+                      {" / "}
+                      {formatSats(MONTHLY_GOAL_SATS)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {goalProgress.toFixed(0)}%
                     </span>
                   </div>
-                  <Progress value={goalProgress} className="h-1" />
                 </div>
               )}
             </button>

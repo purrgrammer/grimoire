@@ -164,8 +164,8 @@ export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
 
       {/* Zap Button */}
       {!closed && (
-        <Button variant="outline" onClick={handleZap} className="w-fit">
-          <Zap className="size-4 text-zap" />
+        <Button onClick={handleZap} className="w-full">
+          <Zap className="size-4" />
           Zap this Goal
         </Button>
       )}

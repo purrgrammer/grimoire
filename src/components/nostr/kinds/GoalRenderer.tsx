@@ -142,8 +142,8 @@ export function GoalRenderer({ event }: BaseEventProps) {
 
         {/* Zap Button */}
         {!closed && (
-          <Button variant="outline" size="sm" onClick={handleZap}>
-            <Zap className="size-4 text-zap" />
+          <Button onClick={handleZap} className="w-full">
+            <Zap className="size-4" />
             Zap this Goal
           </Button>
         )}
