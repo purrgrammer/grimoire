@@ -455,50 +455,60 @@ export default function UserMenu() {
               {relays && relays.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                      Relays
-                    </DropdownMenuLabel>
-                    {relays.map((relay) => (
-                      <RelayLink
-                        className="px-2 py-1"
-                        urlClassname="text-sm"
-                        iconClassname="size-4"
-                        key={relay.url}
-                        url={relay.url}
-                        read={relay.read}
-                        write={relay.write}
-                      />
-                    ))}
-                  </DropdownMenuGroup>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-crosshair">
+                      <span className="text-sm">Relays</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {relays.length}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                      {relays.map((relay) => (
+                        <RelayLink
+                          className="px-2 py-1"
+                          urlClassname="text-sm"
+                          iconClassname="size-4"
+                          key={relay.url}
+                          url={relay.url}
+                          read={relay.read}
+                          write={relay.write}
+                        />
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </>
               )}
 
               {blossomServers && blossomServers.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                      <HardDrive className="size-3.5" />
-                      <span>Blossom Servers</span>
-                    </DropdownMenuLabel>
-                    {blossomServers.map((server) => (
-                      <DropdownMenuItem
-                        key={server}
-                        className="cursor-crosshair"
-                        onClick={() => {
-                          addWindow(
-                            "blossom",
-                            { subcommand: "list", serverUrl: server },
-                            `Files on ${server}`,
-                          );
-                        }}
-                      >
-                        <HardDrive className="size-4 text-muted-foreground mr-2" />
-                        <span className="text-sm truncate">{server}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-crosshair">
+                      <HardDrive className="size-4 mr-2" />
+                      <span className="text-sm">Blossom Servers</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {blossomServers.length}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                      {blossomServers.map((server) => (
+                        <DropdownMenuItem
+                          key={server}
+                          className="cursor-crosshair"
+                          onClick={() => {
+                            addWindow(
+                              "blossom",
+                              { subcommand: "list", serverUrl: server },
+                              `Files on ${server}`,
+                            );
+                          }}
+                        >
+                          <HardDrive className="size-4 text-muted-foreground mr-2" />
+                          <span className="text-sm truncate">{server}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </>
               )}
 
