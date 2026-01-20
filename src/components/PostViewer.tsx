@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { Paperclip, Send, Loader2, Check, X, RotateCcw } from "lucide-react";
+import { Paperclip, Send, Loader2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -201,6 +201,9 @@ export function PostViewer() {
           tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
         }
 
+        // Add client tag
+        tags.push(["client", "grimoire"]);
+
         // Add emoji tags
         for (const emoji of serialized.emojiTags) {
           tags.push(["emoji", emoji.shortcode, emoji.url]);
@@ -322,6 +325,9 @@ export function PostViewer() {
         for (const addr of addressRefs) {
           tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
         }
+
+        // Add client tag
+        tags.push(["client", "grimoire"]);
 
         // Add emoji tags
         for (const emoji of emojiTags) {
@@ -506,18 +512,6 @@ export function PostViewer() {
           <span className="text-sm text-muted-foreground">
             Relays ({selectedRelays.size} selected)
           </span>
-          {writeRelays.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={updateRelayStates}
-              disabled={isPublishing}
-              className="h-6 w-6"
-              title="Reset relay selection"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </Button>
-          )}
         </div>
 
         {writeRelays.length === 0 ? (
