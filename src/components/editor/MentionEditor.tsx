@@ -500,6 +500,19 @@ const FileDropHandler = Extension.create({
         key: new PluginKey("fileDropHandler"),
 
         props: {
+          handleDOMEvents: {
+            // Need to handle dragover to allow drops
+            dragover: (_view, event) => {
+              // Check if files are being dragged
+              if (event.dataTransfer?.types.includes("Files")) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                return true;
+              }
+              return false;
+            },
+          },
+
           handleDrop: (_view, event) => {
             // Check if this is a file drop
             const files = event.dataTransfer?.files;
