@@ -1,30 +1,12 @@
-import { useMemo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { Zap } from "lucide-react";
-import { useTimeline } from "@/hooks/useTimeline";
-import {
-  getGoalAmount,
-  getGoalRelays,
-  getGoalClosedAt,
-  getGoalTitle,
-  getGoalSummary,
-  isGoalClosed,
-  getGoalBeneficiaries,
-} from "@/lib/nip75-helpers";
-import { getZapAmount, getZapSender } from "applesauce-common/helpers/zap";
+import { useGoalProgress } from "@/hooks/useGoalProgress";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { UserName } from "../UserName";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-interface Contributor {
-  pubkey: string;
-  totalAmount: number;
-  zapCount: number;
-}
 
 /**
  * Detail renderer for Kind 9041 - Zap Goals (NIP-75)
@@ -32,80 +14,19 @@ interface Contributor {
  */
 export function GoalDetailRenderer({ event }: { event: NostrEvent }) {
   const { locale, addWindow } = useGrimoire();
+  const {
+    title,
+    summary,
+    closedAt,
+    closed,
+    beneficiaries,
+    targetSats,
+    raisedSats,
+    progress,
+    contributors,
+    loading,
+  } = useGoalProgress(event);
 
-  // Get goal metadata
-  const targetAmount = getGoalAmount(event);
-  const goalRelays = getGoalRelays(event);
-  const closedAt = getGoalClosedAt(event);
-  const title = getGoalTitle(event);
-  const summary = getGoalSummary(event);
-  const closed = isGoalClosed(event);
-  const beneficiaries = getGoalBeneficiaries(event);
-
-  // Fetch zaps for this goal from specified relays
-  const zapFilter = useMemo(
-    () => ({
-      kinds: [9735],
-      "#e": [event.id],
-    }),
-    [event.id],
-  );
-
-  const relays = useMemo(
-    () =>
-      goalRelays.length > 0
-        ? [...goalRelays, ...AGGREGATOR_RELAYS]
-        : AGGREGATOR_RELAYS,
-    [goalRelays],
-  );
-
-  const { events: zaps, loading } = useTimeline(
-    `goal-zaps-detail-${event.id}`,
-    zapFilter,
-    relays,
-  );
-
-  // Calculate total raised and build contributor list
-  const { totalRaised, contributors } = useMemo(() => {
-    const contributorMap = new Map<string, Contributor>();
-    let total = 0;
-
-    for (const zap of zaps) {
-      const amount = getZapAmount(zap) || 0;
-      const sender = getZapSender(zap);
-
-      total += amount;
-
-      if (sender) {
-        const existing = contributorMap.get(sender);
-        if (existing) {
-          existing.totalAmount += amount;
-          existing.zapCount += 1;
-        } else {
-          contributorMap.set(sender, {
-            pubkey: sender,
-            totalAmount: amount,
-            zapCount: 1,
-          });
-        }
-      }
-    }
-
-    // Sort by amount descending
-    const sortedContributors = Array.from(contributorMap.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount,
-    );
-
-    return { totalRaised: total, contributors: sortedContributors };
-  }, [zaps]);
-
-  // Convert to sats for display
-  const targetSats = targetAmount ? Math.floor(targetAmount / 1000) : 0;
-  const raisedSats = Math.floor(totalRaised / 1000);
-  const progress =
-    targetSats > 0 ? Math.min((raisedSats / targetSats) * 100, 100) : 0;
-
-  // Format deadline
   const deadlineText = closedAt
     ? formatTimestamp(closedAt, "absolute", locale.locale)
     : null;

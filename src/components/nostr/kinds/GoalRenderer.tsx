@@ -1,25 +1,14 @@
-import { useMemo } from "react";
 import {
   BaseEventProps,
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
 import { Zap } from "lucide-react";
-import { useTimeline } from "@/hooks/useTimeline";
-import {
-  getGoalAmount,
-  getGoalRelays,
-  getGoalClosedAt,
-  getGoalTitle,
-  getGoalSummary,
-  isGoalClosed,
-} from "@/lib/nip75-helpers";
-import { getZapAmount } from "applesauce-common/helpers/zap";
+import { useGoalProgress } from "@/hooks/useGoalProgress";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 /**
  * Renderer for Kind 9041 - Zap Goals (NIP-75)
@@ -27,53 +16,18 @@ import { AGGREGATOR_RELAYS } from "@/services/loaders";
  */
 export function GoalRenderer({ event }: BaseEventProps) {
   const { locale, addWindow } = useGrimoire();
+  const {
+    title,
+    summary,
+    closedAt,
+    closed,
+    targetSats,
+    raisedSats,
+    progress,
+    loading,
+    zaps,
+  } = useGoalProgress(event);
 
-  // Get goal metadata
-  const targetAmount = getGoalAmount(event);
-  const goalRelays = getGoalRelays(event);
-  const closedAt = getGoalClosedAt(event);
-  const title = getGoalTitle(event);
-  const summary = getGoalSummary(event);
-  const closed = isGoalClosed(event);
-
-  // Fetch zaps for this goal from specified relays
-  const zapFilter = useMemo(
-    () => ({
-      kinds: [9735],
-      "#e": [event.id],
-    }),
-    [event.id],
-  );
-
-  const relays = useMemo(
-    () =>
-      goalRelays.length > 0
-        ? [...goalRelays, ...AGGREGATOR_RELAYS]
-        : AGGREGATOR_RELAYS,
-    [goalRelays],
-  );
-
-  const { events: zaps, loading } = useTimeline(
-    `goal-zaps-${event.id}`,
-    zapFilter,
-    relays,
-  );
-
-  // Calculate total raised
-  const totalRaised = useMemo(() => {
-    return zaps.reduce((sum, zap) => {
-      const amount = getZapAmount(zap);
-      return sum + (amount || 0);
-    }, 0);
-  }, [zaps]);
-
-  // Convert to sats for display
-  const targetSats = targetAmount ? Math.floor(targetAmount / 1000) : 0;
-  const raisedSats = Math.floor(totalRaised / 1000);
-  const progress =
-    targetSats > 0 ? Math.min((raisedSats / targetSats) * 100, 100) : 0;
-
-  // Format deadline
   const deadlineText = closedAt
     ? formatTimestamp(closedAt, "absolute", locale.locale)
     : null;
