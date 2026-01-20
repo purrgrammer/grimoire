@@ -314,13 +314,8 @@ function createBlobAttachmentNode(previewStyle: BlobPreviewStyle) {
 /**
  * Create a TipTap suggestion configuration from our SuggestionConfig
  *
- * Design: TipTap's `items()` function has buggy async handling where results
- * arrive out of order. We bypass this entirely by:
- * - Using `items()` only as a sync no-op (returns empty array)
- * - Doing all async search in `onUpdate` when query changes
- * - Updating the component directly when results arrive
- *
- * This keeps all search logic in one place and avoids TipTap's race conditions.
+ * This creates a proper TipTap suggestion config that handles async search
+ * correctly by using the built-in items() function.
  */
 function createSuggestionConfig<T>(
   config: SuggestionConfig<T>,
@@ -330,35 +325,22 @@ function createSuggestionConfig<T>(
     char: config.char,
     allowSpaces: config.allowSpaces ?? false,
     allow: config.allow,
-    // Don't use items() for async work - TipTap's async handling is buggy
-    // We do our own search in onUpdate instead
-    items: () => [],
+    // Use async items() for search - TipTap handles this correctly
+    items: async ({ query }) => {
+      return await config.search(query);
+    },
     render: () => {
       let component: ReactRenderer<SuggestionListHandle> | null = null;
       let popup: TippyInstance[] | null = null;
       let editorRef: unknown = null;
-      let currentQuery = "";
-      let searchCounter = 0;
-
-      // Async search with race condition protection
-      const doSearch = async (query: string) => {
-        const thisSearch = ++searchCounter;
-        const results = await config.search(query);
-
-        // Discard if a newer search was started
-        if (thisSearch !== searchCounter || !component) return;
-
-        component.updateProps({ items: results });
-      };
 
       return {
         onStart: (props) => {
           editorRef = props.editor;
-          currentQuery = (props as { query?: string }).query ?? "";
 
           component = new ReactRenderer(config.component as never, {
             props: {
-              items: [],
+              items: props.items,
               command: props.command,
               onClose: () => popup?.[0]?.hide(),
             },
@@ -377,23 +359,15 @@ function createSuggestionConfig<T>(
             placement: config.placement ?? "bottom-start",
             zIndex: 100,
           });
-
-          // Trigger initial search
-          doSearch(currentQuery);
         },
 
         onUpdate(props) {
-          const newQuery = (props as { query?: string }).query ?? "";
-
-          // Search when query changes
-          if (newQuery !== currentQuery) {
-            currentQuery = newQuery;
-            doSearch(newQuery);
-          }
-
-          // Update command (TipTap regenerates it)
+          // Update component with new items and command
           if (component) {
-            component.updateProps({ command: props.command });
+            component.updateProps({
+              items: props.items,
+              command: props.command,
+            });
           }
 
           // Update popup position
@@ -428,8 +402,6 @@ function createSuggestionConfig<T>(
           component?.destroy();
           component = null;
           popup = null;
-          currentQuery = "";
-          searchCounter = 0;
         },
       };
     },
