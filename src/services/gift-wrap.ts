@@ -139,27 +139,69 @@ class GiftWrapManager {
         );
       }
 
-      // Step 3: Subscribe to gift wraps with pagination
-      const filter: Filter = {
+      // Step 3: Subscribe to historical gift wraps (if initial sync)
+      if (isInitialSync) {
+        const historicalFilter: Filter = {
+          kinds: [1059],
+          "#p": [pubkey],
+          since,
+          until: now,
+          limit: GIFT_WRAP_CONFIG.INITIAL_LIMIT,
+        };
+
+        await new Promise<void>((resolve) => {
+          const historicalSub = pool
+            .subscription(dmRelays, [historicalFilter], {
+              eventStore,
+            })
+            .subscribe({
+              next: (response) => {
+                if (typeof response === "string") {
+                  console.log("[GiftWrap] Historical EOSE received");
+                  historicalSub.unsubscribe();
+                  resolve();
+                } else {
+                  console.log(
+                    `[GiftWrap] Historical gift wrap: ${response.id.slice(0, 8)}...`,
+                  );
+                  this.processGiftWrap(response, pubkey, autoDecrypt).catch(
+                    (error) => {
+                      console.error(
+                        `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                        error,
+                      );
+                    },
+                  );
+                }
+              },
+              error: () => {
+                historicalSub.unsubscribe();
+                resolve();
+              },
+            });
+        });
+      }
+
+      // Step 4: Create live subscription for new gift wraps
+      // This subscription stays open and listens for new events
+      const liveFilter: Filter = {
         kinds: [1059],
         "#p": [pubkey],
-        since,
-        limit: isInitialSync ? GIFT_WRAP_CONFIG.INITIAL_LIMIT : undefined,
+        since: now, // Only new events from now onwards
       };
 
-      const subscription = pool
-        .subscription(dmRelays, [filter], {
-          eventStore, // Automatically add to event store
+      const liveSubscription = pool
+        .subscription(dmRelays, [liveFilter], {
+          eventStore,
         })
         .subscribe({
           next: (response) => {
             if (typeof response === "string") {
-              console.log("[GiftWrap] EOSE received");
-              // Update last sync timestamp after EOSE
+              console.log("[GiftWrap] Live subscription EOSE received");
               this.lastSyncTimestamp = now;
             } else {
               console.log(
-                `[GiftWrap] Received gift wrap: ${response.id.slice(0, 8)}...`,
+                `[GiftWrap] New gift wrap: ${response.id.slice(0, 8)}...`,
               );
               // Process gift wrap asynchronously
               this.processGiftWrap(response, pubkey, autoDecrypt).catch(
@@ -173,11 +215,11 @@ class GiftWrapManager {
             }
           },
           error: (error) => {
-            console.error("[GiftWrap] Subscription error:", error);
+            console.error("[GiftWrap] Live subscription error:", error);
           },
         });
 
-      this.subscriptions.set(pubkey, subscription);
+      this.subscriptions.set(pubkey, liveSubscription);
 
       // Process any existing gift wraps in the event store (from previous sessions)
       await this.processExistingGiftWraps(pubkey, autoDecrypt);
@@ -350,6 +392,7 @@ class GiftWrapManager {
     };
 
     let count = 0;
+    const processingPromises: Promise<void>[] = [];
 
     await new Promise<void>((resolve) => {
       const subscription = pool
@@ -364,14 +407,18 @@ class GiftWrapManager {
               resolve();
             } else {
               count++;
-              this.processGiftWrap(response, pubkey, autoDecrypt).catch(
-                (error) => {
-                  console.error(
-                    `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
-                    error,
-                  );
-                },
-              );
+              // Collect all processing promises to await them later
+              const promise = this.processGiftWrap(
+                response,
+                pubkey,
+                autoDecrypt,
+              ).catch((error) => {
+                console.error(
+                  `[GiftWrap] Error processing ${response.id.slice(0, 8)}:`,
+                  error,
+                );
+              });
+              processingPromises.push(promise);
             }
           },
           error: () => {
@@ -380,6 +427,9 @@ class GiftWrapManager {
           },
         });
     });
+
+    // Wait for all gift wraps to be processed before updating stats
+    await Promise.all(processingPromises);
 
     // Update stats
     await this.updateStats();

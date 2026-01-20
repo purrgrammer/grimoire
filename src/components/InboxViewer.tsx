@@ -111,14 +111,20 @@ export function InboxViewer(_props: InboxViewerProps) {
         };
 
       const allConversations = Array.from(conversations.entries())
-        .map(([key, latestMessage]) => ({
-          key,
-          latestMessage,
-          otherPubkey:
-            latestMessage.senderPubkey === pubkey
-              ? latestMessage.recipientPubkey
-              : latestMessage.senderPubkey,
-        }))
+        .map(([key, latestMessage]) => {
+          // Parse conversation key to get all participants
+          // Key format: "pubkey1:pubkey2:..." (sorted)
+          const participants = key.split(":");
+
+          // Filter out current user to get other participants
+          const otherPubkeys = participants.filter((p) => p !== pubkey);
+
+          return {
+            key,
+            latestMessage,
+            otherPubkeys,
+          };
+        })
         .sort((a, b) => b.latestMessage.createdAt - a.latestMessage.createdAt);
 
       const pageSize = CONVERSATIONS_PAGE_SIZE * conversationsPage;
@@ -147,14 +153,18 @@ export function InboxViewer(_props: InboxViewerProps) {
 
   const handleOpenConversation = (
     _conversationKey: string,
-    otherPubkey: string,
+    otherPubkeys: string[],
   ) => {
-    // Open chat window with the other participant using NIP-17
+    // Open chat window with the other participant(s) using NIP-17
+    // For group DMs, join pubkeys with commas
+    const recipientValue =
+      otherPubkeys.length === 1 ? otherPubkeys[0] : otherPubkeys.join(",");
+
     addWindow("chat", {
       protocol: "nip-17",
       identifier: {
         type: "dm-recipient",
-        value: otherPubkey,
+        value: recipientValue,
       },
     });
   };
@@ -261,17 +271,6 @@ export function InboxViewer(_props: InboxViewerProps) {
         {/* Center: Stats */}
         <div className="flex items-center gap-3">
           {/* Stats - Compact numbers only */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-muted-foreground/80">
-                {stats.totalGiftWraps}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Total gift wraps</p>
-            </TooltipContent>
-          </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-green-600/70">
@@ -491,13 +490,13 @@ export function InboxViewer(_props: InboxViewerProps) {
         ) : (
           <>
             <div>
-              {conversationsList.map(({ key, latestMessage, otherPubkey }) => (
+              {conversationsList.map(({ key, latestMessage, otherPubkeys }) => (
                 <ConversationRow
                   key={key}
                   conversationKey={key}
-                  otherPubkey={otherPubkey}
+                  otherPubkeys={otherPubkeys}
                   latestMessage={latestMessage}
-                  onClick={() => handleOpenConversation(key, otherPubkey)}
+                  onClick={() => handleOpenConversation(key, otherPubkeys)}
                 />
               ))}
             </div>
@@ -523,13 +522,13 @@ export function InboxViewer(_props: InboxViewerProps) {
 
 interface ConversationRowProps {
   conversationKey: string;
-  otherPubkey: string;
+  otherPubkeys: string[];
   latestMessage: any;
   onClick: () => void;
 }
 
 function ConversationRow({
-  otherPubkey,
+  otherPubkeys,
   latestMessage,
   onClick,
 }: ConversationRowProps) {
@@ -538,12 +537,19 @@ function ConversationRow({
       onClick={onClick}
       className="flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 hover:bg-muted/30 last:border-b-0 font-mono text-xs"
     >
-      {/* Name - no fixed width */}
-      <div className="shrink-0">
-        <UserName
-          pubkey={otherPubkey}
-          className="text-xs font-medium truncate"
-        />
+      {/* Name(s) - no fixed width */}
+      <div className="shrink-0 flex items-center gap-1">
+        {otherPubkeys.map((pubkey, index) => (
+          <span key={pubkey} className="flex items-center">
+            <UserName
+              pubkey={pubkey}
+              className="text-xs font-medium truncate"
+            />
+            {index < otherPubkeys.length - 1 && (
+              <span className="text-muted-foreground/50">,</span>
+            )}
+          </span>
+        ))}
       </div>
 
       {/* Message preview - use CSS truncation and RichText with pointer-events-none */}
