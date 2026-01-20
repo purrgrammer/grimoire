@@ -8,6 +8,8 @@ import {
   Eye,
   EyeOff,
   Zap,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -370,6 +372,17 @@ export default function UserMenu() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80" align="start">
+          {/* Login first for logged out users */}
+          {!account && (
+            <>
+              <DropdownMenuItem onClick={() => setShowLogin(true)}>
+                <LogIn className="size-4 text-muted-foreground mr-2" />
+                <span className="text-sm">Log in</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           {/* User Profile - Identity section */}
           {account && (
             <>
@@ -428,57 +441,47 @@ export default function UserMenu() {
           {account && (
             <>
               {relays && relays.length > 0 && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="cursor-crosshair">
-                    <span className="text-sm">Relays</span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {relays.length}
-                    </span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                    {relays.map((relay) => (
-                      <RelayLink
-                        className="px-2 py-1"
-                        urlClassname="text-sm"
-                        iconClassname="size-4"
-                        key={relay.url}
-                        url={relay.url}
-                        read={relay.read}
-                        write={relay.write}
-                      />
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Relays
+                  </DropdownMenuLabel>
+                  {relays.map((relay) => (
+                    <RelayLink
+                      className="px-2 py-1"
+                      urlClassname="text-sm"
+                      iconClassname="size-4"
+                      key={relay.url}
+                      url={relay.url}
+                      read={relay.read}
+                      write={relay.write}
+                    />
+                  ))}
+                </DropdownMenuGroup>
               )}
 
               {blossomServers && blossomServers.length > 0 && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="cursor-crosshair">
-                    <HardDrive className="size-4 mr-2" />
-                    <span className="text-sm">Blossom Servers</span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {blossomServers.length}
-                    </span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                    {blossomServers.map((server) => (
-                      <DropdownMenuItem
-                        key={server}
-                        className="cursor-crosshair"
-                        onClick={() => {
-                          addWindow(
-                            "blossom",
-                            { subcommand: "list", serverUrl: server },
-                            `Files on ${server}`,
-                          );
-                        }}
-                      >
-                        <HardDrive className="size-4 text-muted-foreground mr-2" />
-                        <span className="text-sm truncate">{server}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
+                    <HardDrive className="size-3.5" />
+                    <span>Blossom Servers</span>
+                  </DropdownMenuLabel>
+                  {blossomServers.map((server) => (
+                    <DropdownMenuItem
+                      key={server}
+                      className="cursor-crosshair"
+                      onClick={() => {
+                        addWindow(
+                          "blossom",
+                          { subcommand: "list", serverUrl: server },
+                          `Files on ${server}`,
+                        );
+                      }}
+                    >
+                      <HardDrive className="size-4 text-muted-foreground mr-2" />
+                      <span className="text-sm truncate">{server}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               )}
             </>
           )}
@@ -535,16 +538,15 @@ export default function UserMenu() {
             </div>
           </div>
 
-          {/* Session Actions - Login/Logout at bottom */}
-          <DropdownMenuSeparator />
-          {account ? (
-            <DropdownMenuItem onClick={logout} className="cursor-crosshair">
-              Log out
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={() => setShowLogin(true)}>
-              Log in
-            </DropdownMenuItem>
+          {/* Logout at bottom for logged in users */}
+          {account && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="cursor-crosshair">
+                <LogOut className="size-4 text-muted-foreground mr-2" />
+                <span className="text-sm">Log out</span>
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
