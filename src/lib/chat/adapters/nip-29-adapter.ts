@@ -203,75 +203,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 5, // Should be 1, but allow for duplicates
     };
 
-    // Fetch admins and members in parallel
-    const adminEvents: NostrEvent[] = [];
-    const memberEvents: NostrEvent[] = [];
+    // Use pool.request with both filters to fetch and auto-close on EOSE
+    const participantEvents = await firstValueFrom(
+      pool
+        .request([relayUrl], [adminsFilter, membersFilter], { eventStore })
+        .pipe(toArray()),
+    );
 
-    const adminsObs = pool.subscription([relayUrl], [adminsFilter], {
-      eventStore,
-    });
+    console.log(`[NIP-29] Got ${participantEvents.length} participant events`);
 
-    const membersObs = pool.subscription([relayUrl], [membersFilter], {
-      eventStore,
-    });
-
-    // Wait for both subscriptions to complete in parallel
-    await Promise.all([
-      new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          console.log("[NIP-29] Admins fetch timeout");
-          resolve();
-        }, 5000);
-
-        const sub = adminsObs.subscribe({
-          next: (response) => {
-            if (typeof response === "string") {
-              // EOSE received
-              clearTimeout(timeout);
-              console.log(`[NIP-29] Got ${adminEvents.length} admin events`);
-              sub.unsubscribe();
-              resolve();
-            } else {
-              // Event received
-              adminEvents.push(response);
-            }
-          },
-          error: (err) => {
-            clearTimeout(timeout);
-            console.error("[NIP-29] Admins fetch error:", err);
-            sub.unsubscribe();
-            reject(err);
-          },
-        });
-      }),
-      new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          console.log("[NIP-29] Members fetch timeout");
-          resolve();
-        }, 5000);
-
-        const sub = membersObs.subscribe({
-          next: (response) => {
-            if (typeof response === "string") {
-              // EOSE received
-              clearTimeout(timeout);
-              console.log(`[NIP-29] Got ${memberEvents.length} member events`);
-              sub.unsubscribe();
-              resolve();
-            } else {
-              // Event received
-              memberEvents.push(response);
-            }
-          },
-          error: (err) => {
-            clearTimeout(timeout);
-            console.error("[NIP-29] Members fetch error:", err);
-            sub.unsubscribe();
-            reject(err);
-          },
-        });
-      }),
-    ]);
+    const adminEvents = participantEvents.filter((e) => e.kind === 39001);
+    const memberEvents = participantEvents.filter((e) => e.kind === 39002);
 
     // Helper to validate and normalize role names
     const normalizeRole = (
