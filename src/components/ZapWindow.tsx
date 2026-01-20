@@ -133,7 +133,7 @@ export function ZapWindow({
   // Poll for payment completion via LNURL verify endpoint
   const PAYMENT_CHECK_INTERVAL = 30000; // Check every 30 seconds
   useEffect(() => {
-    if (!verifyUrl || !showQrDialog || isPaid) return;
+    if (!verifyUrl || !showQrDialog || isPaid || !isOnline) return;
 
     const checkPayment = async () => {
       // Check if invoice has expired
@@ -148,6 +148,7 @@ export function ZapWindow({
       setCheckingPayment(true);
       try {
         const result = await verifyPayment(verifyUrl);
+        setLastChecked(Math.floor(Date.now() / 1000));
 
         // If payment is settled, mark as paid and show success
         if (result.status === "OK" && result.settled) {
@@ -161,6 +162,7 @@ export function ZapWindow({
       } catch (error) {
         // Silently ignore errors - will retry on next interval
         console.debug("Payment verification check failed:", error);
+        setLastChecked(Math.floor(Date.now() / 1000));
       } finally {
         setCheckingPayment(false);
       }
@@ -176,10 +178,44 @@ export function ZapWindow({
     showQrDialog,
     isPaid,
     invoiceExpiry,
+    isOnline,
     selectedAmount,
     customAmount,
     recipientName,
   ]);
+
+  // Network online/offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Countdown timer for invoice expiry
+  useEffect(() => {
+    if (!invoiceExpiry || !showQrDialog) return;
+
+    const updateCountdown = () => {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const remaining = invoiceExpiry - nowSeconds;
+      setTimeRemaining(remaining > 0 ? remaining : 0);
+    };
+
+    // Update immediately
+    updateCountdown();
+
+    // Update every second
+    const intervalId = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [invoiceExpiry, showQrDialog]);
 
   // Cache LNURL data for recipient's Lightning address
   const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
@@ -198,6 +234,9 @@ export function ZapWindow({
   const [verifyUrl, setVerifyUrl] = useState<string>("");
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [invoiceExpiry, setInvoiceExpiry] = useState<number | null>(null); // Unix timestamp when invoice expires
+  const [lastChecked, setLastChecked] = useState<number | null>(null); // Unix timestamp of last check
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null); // Seconds until expiry
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
@@ -553,6 +592,52 @@ export function ZapWindow({
     setShowLogin(true);
   };
 
+  // Manual payment verification check
+  const handleManualCheck = async () => {
+    if (!verifyUrl || checkingPayment || isInvoiceExpired) return;
+
+    setCheckingPayment(true);
+    try {
+      const result = await verifyPayment(verifyUrl);
+      setLastChecked(Math.floor(Date.now() / 1000));
+
+      if (result.status === "OK" && result.settled) {
+        setIsPaid(true);
+        setShowQrDialog(false);
+        const amount = selectedAmount || parseInt(customAmount);
+        toast.success(
+          `⚡ Payment received! Zapped ${amount} sats to ${recipientName}!`,
+        );
+      } else {
+        toast.info("Payment not yet received");
+      }
+    } catch (error) {
+      console.error("Manual payment check failed:", error);
+      toast.error("Failed to check payment status");
+      setLastChecked(Math.floor(Date.now() / 1000));
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
+
+  // Format time remaining as MM:SS
+  const formatTimeRemaining = (seconds: number): string => {
+    if (seconds <= 0) return "Expired";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Format last checked timestamp
+  const formatLastChecked = (timestamp: number | null): string => {
+    if (!timestamp) return "";
+    const secondsAgo = Math.floor(Date.now() / 1000) - timestamp;
+    if (secondsAgo < 5) return "just now";
+    if (secondsAgo < 60) return `${secondsAgo}s ago`;
+    const minsAgo = Math.floor(secondsAgo / 60);
+    return `${minsAgo}m ago`;
+  };
+
   // Retry wallet payment
   const handleRetryWallet = async () => {
     if (!invoice || !wallet) return;
@@ -612,7 +697,7 @@ export function ZapWindow({
               {/* QR Code */}
               {qrCodeUrl && (
                 <div
-                  className={`flex justify-center p-4 bg-white rounded-lg transition-all ${
+                  className={`relative flex justify-center p-4 bg-white rounded-lg transition-all ${
                     isInvoiceExpired ? "grayscale opacity-50" : ""
                   }`}
                 >
@@ -621,8 +706,56 @@ export function ZapWindow({
                     alt="Lightning Invoice QR Code"
                     className="w-64 h-64"
                   />
+                  {/* Checking animation - subtle pulse on QR border */}
+                  {checkingPayment && verifyUrl && !isInvoiceExpired && (
+                    <div className="absolute inset-0 rounded-lg border-2 border-yellow-500 animate-pulse pointer-events-none" />
+                  )}
                 </div>
               )}
+
+              {/* Status indicators */}
+              <div className="space-y-1">
+                {/* Expiry countdown */}
+                {timeRemaining !== null && (
+                  <div
+                    className={`text-center text-sm ${
+                      isInvoiceExpired
+                        ? "text-destructive font-semibold"
+                        : timeRemaining < 300
+                          ? "text-yellow-600 dark:text-yellow-500 font-medium"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {isInvoiceExpired
+                      ? "⏰ Invoice expired"
+                      : `Expires in ${formatTimeRemaining(timeRemaining)}`}
+                  </div>
+                )}
+
+                {/* Verification status */}
+                {verifyUrl && !isInvoiceExpired && (
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    {!isOnline ? (
+                      <>
+                        <span className="size-2 rounded-full bg-gray-400" />
+                        <span>Offline - verification paused</span>
+                      </>
+                    ) : checkingPayment ? (
+                      <>
+                        <Loader2 className="size-3 animate-spin" />
+                        <span>Checking...</span>
+                      </>
+                    ) : lastChecked ? (
+                      <>
+                        <span className="size-2 rounded-full bg-green-500" />
+                        <span>
+                          Last checked {formatLastChecked(lastChecked)}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+              </div>
 
               {/* Amount Preview */}
               {(selectedAmount || customAmount) && (
@@ -681,11 +814,34 @@ export function ZapWindow({
                     </Button>
                   )}
 
+                {/* Manual check button if verify URL available */}
+                {verifyUrl && !isInvoiceExpired && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleManualCheck}
+                    disabled={checkingPayment}
+                  >
+                    {checkingPayment ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="size-4 mr-2" />
+                        Check Payment Now
+                      </>
+                    )}
+                  </Button>
+                )}
+
                 {/* Always show option to open in external wallet */}
                 <Button
-                  variant={paymentTimedOut ? "outline" : "default"}
+                  variant={paymentTimedOut || verifyUrl ? "outline" : "default"}
                   className="w-full"
                   onClick={() => openInWallet(invoice)}
+                  disabled={isInvoiceExpired}
                 >
                   <ExternalLink className="size-4 mr-2" />
                   Open in External Wallet
