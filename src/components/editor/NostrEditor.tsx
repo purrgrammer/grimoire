@@ -350,6 +350,8 @@ function createSuggestionConfig<T>(
             interactive: true,
             trigger: "manual",
             placement: config.placement ?? "bottom-start",
+            // Ensure popup appears above dialogs (which use z-50)
+            zIndex: 100,
           });
         },
 

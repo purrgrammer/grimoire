@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useCallback } from "react";
+import { useRef, useMemo, useState, useCallback, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ import { NoteBlueprint } from "applesauce-common/blueprints";
 import type { SerializedContent } from "./editor/types";
 import { lastValueFrom } from "rxjs";
 import type { ActionContext } from "applesauce-actions";
+import { useEventStore } from "applesauce-react/hooks";
+import { addressLoader, profileLoader } from "@/services/loaders";
 
 interface PostDialogProps {
   open: boolean;
@@ -52,10 +54,54 @@ function CreateNoteAction(content: SerializedContent) {
 
 export default function PostDialog({ open, onOpenChange }: PostDialogProps) {
   const { pubkey, canSign } = useAccount();
-  const { searchProfiles } = useProfileSearch();
+  const eventStore = useEventStore();
+  const { searchProfiles, service: profileService } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const editorRef = useRef<NostrEditorHandle>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+
+  // Load contacts and their profiles when dialog opens
+  useEffect(() => {
+    if (!open || !pubkey) return;
+
+    // Load contacts list (kind 3)
+    const contactsSubscription = addressLoader({
+      kind: 3,
+      pubkey,
+      identifier: "",
+    }).subscribe();
+
+    // Watch for contacts event and load profiles
+    const storeSubscription = eventStore
+      .replaceable(3, pubkey, "")
+      .subscribe((contactsEvent) => {
+        if (!contactsEvent) return;
+
+        // Extract pubkeys from p tags
+        const contactPubkeys = contactsEvent.tags
+          .filter((tag) => tag[0] === "p" && tag[1])
+          .map((tag) => tag[1]);
+
+        // Load profiles for all contacts (batched by profileLoader)
+        for (const contactPubkey of contactPubkeys) {
+          profileLoader({
+            kind: 0,
+            pubkey: contactPubkey,
+            identifier: "",
+          }).subscribe({
+            next: (event) => {
+              // Add loaded profile to search service
+              profileService.addProfiles([event]);
+            },
+          });
+        }
+      });
+
+    return () => {
+      contactsSubscription.unsubscribe();
+      storeSubscription.unsubscribe();
+    };
+  }, [open, pubkey, eventStore, profileService]);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
