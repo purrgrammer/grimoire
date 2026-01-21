@@ -805,7 +805,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                       <Circle className="h-4 w-4 text-muted-foreground" />
                     )}
                     {relay.status === "publishing" && (
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                     {relay.status === "success" && (
                       <Check className="h-4 w-4 text-green-500" />
