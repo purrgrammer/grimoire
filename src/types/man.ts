@@ -127,8 +127,20 @@ export const manPages: Record<string, ManPageEntry> = {
     description:
       "Display the current application state for debugging purposes. Shows windows, workspaces, active account, and other internal state in a formatted view.",
     examples: ["debug    View current application state"],
-    seeAlso: ["help"],
+    seeAlso: ["help", "log"],
     appId: "debug",
+    category: "System",
+    defaultProps: {},
+  },
+  log: {
+    name: "log",
+    section: "1",
+    synopsis: "log",
+    description:
+      "View publishing history and activity log. Shows all sign and publish requests with per-relay status tracking. Useful for debugging publishing issues and verifying event delivery.",
+    examples: ["log    View recent publishing activity"],
+    seeAlso: ["debug", "post"],
+    appId: "log",
     category: "System",
     defaultProps: {},
   },

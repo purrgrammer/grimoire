@@ -24,7 +24,8 @@ export type AppId =
   | "wallet"
   | "zap"
   | "post"
-  | "win";
+  | "win"
+  | "log";
 
 export interface WindowInstance {
   id: string;

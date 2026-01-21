@@ -5,7 +5,7 @@ import type { UnsignedEvent } from "nostr-tools/pure";
 // Mock dependencies before importing the service
 vi.mock("./relay-pool", () => ({
   default: {
-    publish: vi.fn().mockResolvedValue(undefined),
+    publish: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -97,6 +97,7 @@ function createMockUnsignedEvent(
   overrides: Partial<UnsignedEvent> = {},
 ): UnsignedEvent {
   return {
+    pubkey: "test-pubkey",
     kind: 1,
     created_at: Math.floor(Date.now() / 1000),
     tags: [],
@@ -153,10 +154,11 @@ describe("PublishingService", () => {
     });
 
     it("should handle relay failures gracefully", async () => {
-      vi.mocked(pool.publish).mockImplementation(async (relays) => {
-        if (relays.includes("wss://relay1.com/")) {
+      vi.mocked(pool.publish).mockImplementation(async (relays: any) => {
+        if (Array.isArray(relays) && relays.includes("wss://relay1.com/")) {
           throw new Error("Connection failed");
         }
+        return [];
       });
 
       const { publishingService } = await import("./publishing");

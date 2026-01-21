@@ -31,8 +31,7 @@ import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
 import pool from "@/services/relay-pool";
-import eventStore from "@/services/event-store";
-import { EventFactory } from "applesauce-core/event-factory";
+import { publishingService } from "@/services/publishing";
 import { useGrimoire } from "@/core/state";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
@@ -66,7 +65,7 @@ interface PostViewerProps {
 }
 
 export function PostViewer({ windowId }: PostViewerProps = {}) {
-  const { pubkey, canSign, signer } = useAccount();
+  const { pubkey, canSign } = useAccount();
   const { searchProfiles } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const { state } = useGrimoire();
@@ -293,39 +292,65 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         return;
       }
 
-      try {
-        // Update status to publishing
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? { ...r, status: "publishing" as RelayStatus }
-              : r,
-          ),
-        );
+      // Update status to publishing
+      setRelayStates((prev) =>
+        prev.map((r) =>
+          r.url === relayUrl
+            ? { ...r, status: "publishing" as RelayStatus }
+            : r,
+        ),
+      );
 
-        // Republish the same signed event
-        await pool.publish([relayUrl], lastPublishedEvent);
+      // Republish using PublishingService
+      const result = await publishingService.publish(
+        lastPublishedEvent,
+        { mode: "explicit", relays: [relayUrl] },
+        {
+          onRelayStatus: (relay, relayResult) => {
+            if (relayResult.status === "success") {
+              setRelayStates((prev) =>
+                prev.map((r) =>
+                  r.url === relay
+                    ? {
+                        ...r,
+                        status: "success" as RelayStatus,
+                        error: undefined,
+                      }
+                    : r,
+                ),
+              );
+              toast.success(
+                `Published to ${relayUrl.replace(/^wss?:\/\//, "")}`,
+              );
+            } else if (relayResult.status === "failed") {
+              setRelayStates((prev) =>
+                prev.map((r) =>
+                  r.url === relay
+                    ? {
+                        ...r,
+                        status: "error" as RelayStatus,
+                        error: relayResult.error || "Unknown error",
+                      }
+                    : r,
+                ),
+              );
+              toast.error(
+                `Failed to publish to ${relayUrl.replace(/^wss?:\/\//, "")}`,
+              );
+            }
+          },
+        },
+      );
 
-        // Update status to success
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? { ...r, status: "success" as RelayStatus, error: undefined }
-              : r,
-          ),
-        );
-
-        toast.success(`Published to ${relayUrl.replace(/^wss?:\/\//, "")}`);
-      } catch (error) {
-        console.error(`Failed to retry publish to ${relayUrl}:`, error);
+      // If relay resolver returned no relays (shouldn't happen with explicit mode)
+      if (result.status === "failed" && result.resolvedRelays.length === 0) {
         setRelayStates((prev) =>
           prev.map((r) =>
             r.url === relayUrl
               ? {
                   ...r,
                   status: "error" as RelayStatus,
-                  error:
-                    error instanceof Error ? error.message : "Unknown error",
+                  error: "Failed to resolve relay",
                 }
               : r,
           ),
@@ -348,7 +373,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       eventRefs: string[],
       addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
     ) => {
-      if (!canSign || !signer || !pubkey) {
+      if (!canSign || !pubkey) {
         toast.error("Please log in to publish");
         return;
       }
@@ -366,184 +391,160 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
       setIsPublishing(true);
 
-      // Create and sign event first
-      let event;
-      try {
-        // Create event factory with signer
-        const factory = new EventFactory();
-        factory.setSigner(signer);
+      // Build tags array
+      const tags: string[][] = [];
 
-        // Build tags array
-        const tags: string[][] = [];
+      // Add p tags for mentions
+      for (const mentionPubkey of mentions) {
+        tags.push(["p", mentionPubkey]);
+      }
 
-        // Add p tags for mentions
-        for (const pubkey of mentions) {
-          tags.push(["p", pubkey]);
+      // Add e tags for event references
+      for (const eventId of eventRefs) {
+        tags.push(["e", eventId]);
+      }
+
+      // Add a tags for address references
+      for (const addr of addressRefs) {
+        tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
+      }
+
+      // Add client tag (if enabled)
+      if (settings.includeClientTag) {
+        tags.push(GRIMOIRE_CLIENT_TAG);
+      }
+
+      // Add emoji tags
+      for (const emoji of emojiTags) {
+        tags.push(["emoji", emoji.shortcode, emoji.url]);
+      }
+
+      // Add blob attachment tags (imeta)
+      for (const blob of blobAttachments) {
+        const imetaTag = [
+          "imeta",
+          `url ${blob.url}`,
+          `m ${blob.mimeType}`,
+          `x ${blob.sha256}`,
+          `size ${blob.size}`,
+        ];
+        if (blob.server) {
+          imetaTag.push(`server ${blob.server}`);
         }
+        tags.push(imetaTag);
+      }
 
-        // Add e tags for event references
-        for (const eventId of eventRefs) {
-          tags.push(["e", eventId]);
-        }
+      // Create unsigned event (kind 1 note)
+      const unsignedEvent = {
+        kind: 1,
+        content: content.trim(),
+        tags,
+        pubkey,
+        created_at: Math.floor(Date.now() / 1000),
+      };
 
-        // Add a tags for address references
-        for (const addr of addressRefs) {
-          tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
-        }
+      // Update relay states - set selected to publishing, keep others as pending
+      setRelayStates((prev) =>
+        prev.map((r) =>
+          selected.includes(r.url)
+            ? { ...r, status: "publishing" as RelayStatus }
+            : r,
+        ),
+      );
 
-        // Add client tag (if enabled)
-        if (settings.includeClientTag) {
-          tags.push(GRIMOIRE_CLIENT_TAG);
-        }
+      // Use PublishingService for sign and publish with per-relay tracking
+      const result = await publishingService.signAndPublish(
+        unsignedEvent,
+        { mode: "explicit", relays: selected },
+        {
+          onRelayStatus: (relay, relayResult) => {
+            if (relayResult.status === "success") {
+              setRelayStates((prev) =>
+                prev.map((r) =>
+                  r.url === relay
+                    ? {
+                        ...r,
+                        status: "success" as RelayStatus,
+                        error: undefined,
+                      }
+                    : r,
+                ),
+              );
+            } else if (relayResult.status === "failed") {
+              setRelayStates((prev) =>
+                prev.map((r) =>
+                  r.url === relay
+                    ? {
+                        ...r,
+                        status: "error" as RelayStatus,
+                        error: relayResult.error || "Unknown error",
+                      }
+                    : r,
+                ),
+              );
+            }
+          },
+        },
+      );
 
-        // Add emoji tags
-        for (const emoji of emojiTags) {
-          tags.push(["emoji", emoji.shortcode, emoji.url]);
-        }
-
-        // Add blob attachment tags (imeta)
-        for (const blob of blobAttachments) {
-          const imetaTag = [
-            "imeta",
-            `url ${blob.url}`,
-            `m ${blob.mimeType}`,
-            `x ${blob.sha256}`,
-            `size ${blob.size}`,
-          ];
-          if (blob.server) {
-            imetaTag.push(`server ${blob.server}`);
-          }
-          tags.push(imetaTag);
-        }
-
-        // Create and sign event (kind 1 note)
-        const draft = await factory.build({
-          kind: 1,
-          content: content.trim(),
-          tags,
-        });
-        event = await factory.sign(draft);
-      } catch (error) {
-        // Signing failed - user might have rejected it
-        console.error("Failed to sign event:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to sign note",
-        );
+      // Check signing result
+      const { signRequest } = result;
+      if (!signRequest || signRequest.status === "failed") {
+        console.error("Failed to sign event:", signRequest?.error);
+        toast.error(signRequest?.error || "Failed to sign note");
         setIsPublishing(false);
+        // Reset relay states to pending
+        setRelayStates((prev) =>
+          prev.map((r) => ({ ...r, status: "pending" as RelayStatus })),
+        );
         return; // Don't destroy the post, let user try again
       }
 
-      // Signing succeeded, now publish to relays
-      try {
-        // Store the signed event for potential retries
-        setLastPublishedEvent(event);
+      // Store the signed event for potential retries
+      const signedEvent = signRequest.signedEvent!;
+      setLastPublishedEvent(signedEvent);
 
-        // Update relay states - set selected to publishing, keep others as pending
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            selected.includes(r.url)
-              ? { ...r, status: "publishing" as RelayStatus }
-              : r,
-          ),
-        );
+      // Check publish results
+      const publishRequest = result.publishRequest;
+      const successCount = Object.values(publishRequest.relayResults).filter(
+        (r) => r.status === "success",
+      ).length;
 
-        // Publish to each relay individually to track status
-        const publishPromises = selected.map(async (relayUrl) => {
-          try {
-            await pool.publish([relayUrl], event);
+      if (successCount > 0) {
+        // Clear draft from localStorage
+        if (pubkey) {
+          const draftKey = windowId
+            ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+            : `${DRAFT_STORAGE_KEY}-${pubkey}`;
+          localStorage.removeItem(draftKey);
+        }
 
-            // Update status to success
-            setRelayStates((prev) =>
-              prev.map((r) =>
-                r.url === relayUrl
-                  ? { ...r, status: "success" as RelayStatus }
-                  : r,
-              ),
-            );
-            return { success: true, relayUrl };
-          } catch (error) {
-            console.error(`Failed to publish to ${relayUrl}:`, error);
+        // Clear editor content
+        editorRef.current?.clear();
 
-            // Update status to error
-            setRelayStates((prev) =>
-              prev.map((r) =>
-                r.url === relayUrl
-                  ? {
-                      ...r,
-                      status: "error" as RelayStatus,
-                      error:
-                        error instanceof Error
-                          ? error.message
-                          : "Unknown error",
-                    }
-                  : r,
-              ),
-            );
-            return { success: false, relayUrl };
-          }
-        });
+        // Show published preview
+        setShowPublishedPreview(true);
 
-        // Wait for all publishes to complete (settled = all finished, regardless of success/failure)
-        const results = await Promise.allSettled(publishPromises);
-
-        // Check how many relays succeeded
-        const successCount = results.filter(
-          (r) => r.status === "fulfilled" && r.value.success,
-        ).length;
-
-        if (successCount > 0) {
-          // At least one relay succeeded - add to event store
-          eventStore.add(event);
-
-          // Clear draft from localStorage
-          if (pubkey) {
-            const draftKey = windowId
-              ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-              : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-            localStorage.removeItem(draftKey);
-          }
-
-          // Clear editor content
-          editorRef.current?.clear();
-
-          // Show published preview
-          setShowPublishedPreview(true);
-
-          // Show success toast
-          if (successCount === selected.length) {
-            toast.success(
-              `Published to all ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
-            );
-          } else {
-            toast.warning(
-              `Published to ${successCount} of ${selected.length} relays`,
-            );
-          }
+        // Show success toast
+        if (successCount === selected.length) {
+          toast.success(
+            `Published to all ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
+          );
         } else {
-          // All relays failed - keep the editor visible with content
-          toast.error(
-            "Failed to publish to any relay. Please check your relay connections and try again.",
+          toast.warning(
+            `Published to ${successCount} of ${selected.length} relays`,
           );
         }
-      } catch (error) {
-        console.error("Failed to publish:", error);
+      } else {
+        // All relays failed - keep the editor visible with content
         toast.error(
-          error instanceof Error ? error.message : "Failed to publish note",
+          "Failed to publish to any relay. Please check your relay connections and try again.",
         );
-
-        // Reset relay states to pending on publishing error
-        setRelayStates((prev) =>
-          prev.map((r) => ({
-            ...r,
-            status: "error" as RelayStatus,
-            error: error instanceof Error ? error.message : "Unknown error",
-          })),
-        );
-      } finally {
-        setIsPublishing(false);
       }
+
+      setIsPublishing(false);
     },
-    [canSign, signer, pubkey, selectedRelays, settings],
+    [canSign, pubkey, selectedRelays, settings, windowId],
   );
 
   // Handle file paste

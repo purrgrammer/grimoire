@@ -50,6 +50,11 @@ const CountViewer = lazy(() => import("./CountViewer"));
 const PostViewer = lazy(() =>
   import("./PostViewer").then((m) => ({ default: m.PostViewer })),
 );
+const PublishHistoryViewer = lazy(() =>
+  import("./PublishHistoryViewer").then((m) => ({
+    default: m.PublishHistoryViewer,
+  })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -193,6 +198,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "debug":
         content = <DebugViewer />;
+        break;
+      case "log":
+        content = <PublishHistoryViewer />;
         break;
       case "conn":
         content = <ConnViewer />;

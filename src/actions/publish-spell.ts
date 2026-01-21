@@ -1,6 +1,5 @@
 import { LocalSpell } from "@/services/db";
 import accountManager from "@/services/accounts";
-import pool from "@/services/relay-pool";
 import { encodeSpell } from "@/lib/spell-conversion";
 import { markSpellPublished } from "@/services/spell-storage";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -8,7 +7,7 @@ import { SpellEvent } from "@/types/spell";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
-import eventStore from "@/services/event-store";
+import { publishingService } from "@/services/publishing";
 
 export class PublishSpellAction {
   type = "publish-spell";
@@ -68,13 +67,17 @@ export class PublishSpellAction {
       );
     }
 
-    // Publish to all target relays
+    // Publish to all target relays using PublishingService
+    const result = await publishingService.publish(event, {
+      mode: "explicit",
+      relays,
+    });
 
-    await pool.publish(relays, event);
-
-    // Add to event store for immediate availability
-    eventStore.add(event);
-
-    await markSpellPublished(spell.id, event);
+    // Only mark as published if at least one relay succeeded
+    if (result.status !== "failed") {
+      await markSpellPublished(spell.id, event);
+    } else {
+      throw new Error("Failed to publish spell to any relay");
+    }
   }
 }

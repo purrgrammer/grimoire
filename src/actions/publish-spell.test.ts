@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PublishSpellAction } from "./publish-spell";
 import accountManager from "@/services/accounts";
-import pool from "@/services/relay-pool";
+import { publishingService } from "@/services/publishing";
 import * as spellStorage from "@/services/spell-storage";
 import { LocalSpell } from "@/services/db";
 
@@ -15,9 +15,12 @@ vi.mock("@/services/accounts", () => ({
   },
 }));
 
-vi.mock("@/services/relay-pool", () => ({
-  default: {
-    publish: vi.fn(),
+vi.mock("@/services/publishing", () => ({
+  publishingService: {
+    publish: vi.fn().mockResolvedValue({
+      status: "success",
+      relayResults: {},
+    }),
   },
 }));
 
@@ -28,12 +31,6 @@ vi.mock("@/services/spell-storage", () => ({
 vi.mock("@/services/relay-list-cache", () => ({
   relayListCache: {
     getOutboxRelays: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-vi.mock("@/services/event-store", () => ({
-  default: {
-    add: vi.fn(),
   },
 }));
 
@@ -92,8 +89,8 @@ describe("PublishSpellAction", () => {
     // Check if signer was called
     expect(mockSigner.signEvent).toHaveBeenCalled();
 
-    // Check if published to pool
-    expect(pool.publish).toHaveBeenCalled();
+    // Check if published via PublishingService
+    expect(publishingService.publish).toHaveBeenCalled();
 
     // Check if storage updated
     expect(spellStorage.markSpellPublished).toHaveBeenCalledWith(

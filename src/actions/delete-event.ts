@@ -1,5 +1,4 @@
 import accountManager from "@/services/accounts";
-import pool from "@/services/relay-pool";
 import { EventFactory } from "applesauce-core/event-factory";
 import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
@@ -7,6 +6,7 @@ import { mergeRelaySets } from "applesauce-core/helpers";
 import { grimoireStateAtom } from "@/core/state";
 import { getDefaultStore } from "jotai";
 import { NostrEvent } from "@/types/nostr";
+import { publishingService } from "@/services/publishing";
 
 export class DeleteEventAction {
   type = "delete-event";
@@ -46,7 +46,14 @@ export class DeleteEventAction {
       AGGREGATOR_RELAYS,
     );
 
-    // Publish to all target relays
-    await pool.publish(writeRelays, event);
+    // Publish to all target relays using PublishingService
+    const result = await publishingService.publish(event, {
+      mode: "explicit",
+      relays: writeRelays,
+    });
+
+    if (result.status === "failed") {
+      throw new Error("Failed to publish deletion event to any relay");
+    }
   }
 }
