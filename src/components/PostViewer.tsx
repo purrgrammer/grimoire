@@ -38,6 +38,7 @@ import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { use$ } from "applesauce-react/hooks";
 import { getAuthIcon } from "@/lib/relay-status-utils";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 // Per-relay publish status
 type RelayStatus = "pending" | "publishing" | "success" | "error";
@@ -392,7 +393,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
         // Add client tag (if enabled)
         if (settings.includeClientTag) {
-          tags.push(["client", "grimoire"]);
+          tags.push(GRIMOIRE_CLIENT_TAG);
         }
 
         // Add emoji tags
