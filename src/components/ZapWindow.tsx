@@ -70,6 +70,8 @@ export interface ZapWindowProps {
   customTags?: string[][];
   /** Relays where the zap receipt should be published */
   relays?: string[];
+  /** Optional default amount in sats to pre-select */
+  defaultAmount?: number;
 }
 
 // Default preset amounts in sats
@@ -99,6 +101,7 @@ export function ZapWindow({
   onClose,
   customTags,
   relays: propsRelays,
+  defaultAmount,
 }: ZapWindowProps) {
   // Load event if we have a pointer - supports both EventPointer and AddressPointer
   const event = useNostrEvent(eventPointer || addressPointer);
@@ -133,7 +136,9 @@ export function ZapWindow({
   // Cache LNURL data for recipient's Lightning address
   const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
 
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(
+    defaultAmount || null,
+  );
   const [customAmount, setCustomAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPayingWithWallet, setIsPayingWithWallet] = useState(false);

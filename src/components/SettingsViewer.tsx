@@ -9,7 +9,18 @@ import {
 import { Switch } from "./ui/switch";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/themes";
-import { Palette, FileEdit, Heart, Trophy } from "lucide-react";
+import {
+  Palette,
+  FileEdit,
+  Heart,
+  HeartCrack,
+  Trophy,
+  Coffee,
+  Pizza,
+  Gift,
+  Star,
+  Crown,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -61,14 +72,22 @@ export function SettingsViewer() {
     return amount.toLocaleString();
   }
 
-  // Contribution tiers
-  const contributionTiers = [210, 2100, 21000, 42000, 210000];
+  // Contribution tiers with icons
+  const contributionTiers = [
+    { amount: 210, icon: Coffee },
+    { amount: 2100, icon: Pizza },
+    { amount: 21000, icon: Gift },
+    { amount: 42000, icon: Heart },
+    { amount: 210000, icon: Star },
+    { amount: 1000000, icon: Crown },
+  ];
 
-  function openSupportWindow() {
+  function openSupportWindow(amount: number) {
     addWindow(
       "zap",
       {
         recipientPubkey: GRIMOIRE_DONATE_PUBKEY,
+        defaultAmount: amount,
       },
       "Support Grimoire",
     );
@@ -88,7 +107,11 @@ export function SettingsViewer() {
               Post
             </TabsTrigger>
             <TabsTrigger value="support" className="gap-2">
-              <Heart className="h-4 w-4" />
+              {settings?.appearance?.showMonthlyGoal ? (
+                <Heart className="h-4 w-4" />
+              ) : (
+                <HeartCrack className="h-4 w-4" />
+              )}
               Support
             </TabsTrigger>
           </TabsList>
@@ -189,12 +212,36 @@ export function SettingsViewer() {
             <div>
               <h3 className="text-lg font-semibold mb-1">Support Grimoire</h3>
               <p className="text-sm text-muted-foreground">
-                Help support development
+                Fund grimoire development
               </p>
             </div>
 
+            {/* Show Monthly Goal Toggle */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <label
+                  htmlFor="show-monthly-goal"
+                  className="text-base font-medium cursor-pointer"
+                >
+                  Show monthly goal
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Display donation progress in UI
+                </p>
+              </div>
+              <Switch
+                id="show-monthly-goal"
+                checked={settings?.appearance?.showMonthlyGoal ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  updateSetting("appearance", "showMonthlyGoal", checked)
+                }
+              />
+            </div>
+
             {/* Monthly Goal Progress */}
-            <div className="space-y-3">
+            <div
+              className={`space-y-3 ${!settings?.appearance?.showMonthlyGoal ? "blur-sm pointer-events-none" : ""}`}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Monthly Goal</span>
                 <span className="text-sm text-muted-foreground">
@@ -219,14 +266,18 @@ export function SettingsViewer() {
             <div className="space-y-3">
               <h4 className="text-sm font-medium">Contribute</h4>
               <div className="grid grid-cols-3 gap-2">
-                {contributionTiers.map((amount) => (
+                {contributionTiers.map(({ amount, icon: Icon }) => (
                   <Button
                     key={amount}
                     variant="outline"
-                    size="sm"
-                    onClick={openSupportWindow}
+                    size="default"
+                    onClick={() => openSupportWindow(amount)}
+                    className="flex-col h-auto py-3 gap-1"
                   >
-                    {formatAmount(amount)}
+                    <Icon className="h-5 w-5" />
+                    <span className="text-sm font-semibold">
+                      {formatAmount(amount)}
+                    </span>
                   </Button>
                 ))}
               </div>
