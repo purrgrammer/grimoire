@@ -1,6 +1,5 @@
 import {
   User,
-  Palette,
   Wallet,
   X,
   RefreshCw,
@@ -27,9 +26,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -45,7 +41,6 @@ import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
 import { useState } from "react";
-import { useTheme } from "@/lib/themes";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/useWallet";
 import { Progress } from "@/components/ui/progress";
@@ -95,7 +90,6 @@ export default function UserMenu() {
   const [showLogin, setShowLogin] = useState(false);
   const [showConnectWallet, setShowConnectWallet] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
-  const { themeId, setTheme, availableThemes } = useTheme();
 
   // Calculate monthly donations reactively from DB (last 30 days)
   const monthlyDonations =
@@ -489,34 +483,8 @@ export default function UserMenu() {
             </>
           )}
 
-          {/* App Preferences - Theme */}
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="cursor-crosshair">
-              <Palette className="size-4 text-muted-foreground mr-2" />
-              Theme
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {availableThemes.map((theme) => (
-                <DropdownMenuItem
-                  key={theme.id}
-                  className="cursor-crosshair"
-                  onClick={() => setTheme(theme.id)}
-                >
-                  <span
-                    className={`size-2 rounded-full mr-2 ${
-                      themeId === theme.id
-                        ? "bg-primary"
-                        : "bg-muted-foreground/30"
-                    }`}
-                  />
-                  {theme.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-
           {/* Settings */}
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             className="cursor-crosshair"
             onClick={() => addWindow("settings", {}, "Settings")}
