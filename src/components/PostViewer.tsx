@@ -429,139 +429,139 @@ export function PostViewer() {
   }
 
   return (
-    <div className="h-full flex flex-col p-4 gap-4">
-      {!showPublishedPreview ? (
-        <>
-          {/* Editor */}
-          <div className="flex-1 min-h-0">
-            <RichEditor
-              ref={editorRef}
-              placeholder="What's on your mind?"
-              onSubmit={handlePublish}
-              searchProfiles={searchProfiles}
-              searchEmojis={searchEmojis}
-              onFilePaste={handleFilePaste}
-              autoFocus
-              minHeight={150}
-              maxHeight={400}
-            />
-          </div>
+    <div className="h-full overflow-y-auto">
+      <div className="space-y-4 p-4">
+        {!showPublishedPreview ? (
+          <>
+            {/* Editor */}
+            <div>
+              <RichEditor
+                ref={editorRef}
+                placeholder="What's on your mind?"
+                onSubmit={handlePublish}
+                searchProfiles={searchProfiles}
+                searchEmojis={searchEmojis}
+                onFilePaste={handleFilePaste}
+                autoFocus
+                minHeight={150}
+                maxHeight={400}
+              />
+            </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => openUpload()}
-              disabled={isPublishing}
-              title="Upload image/video"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+            {/* Action buttons */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => openUpload()}
+                disabled={isPublishing}
+                title="Upload image/video"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
 
-            <Button
-              onClick={() => editorRef.current?.submit()}
-              disabled={
-                isPublishing || selectedRelays.size === 0 || isEditorEmpty
-              }
-              className="gap-2 flex-1"
-            >
-              {isPublishing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Publishing...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Publish
-                </>
-              )}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Published event preview */}
-          {lastPublishedEvent && (
-            <div className="flex-1 min-h-0 overflow-y-auto">
+              <Button
+                onClick={() => editorRef.current?.submit()}
+                disabled={
+                  isPublishing || selectedRelays.size === 0 || isEditorEmpty
+                }
+                className="gap-2 flex-1"
+              >
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Publish
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Published event preview */}
+            {lastPublishedEvent && (
               <div className="rounded-lg border border-border bg-muted/10 p-4">
                 <Kind1Renderer event={lastPublishedEvent} depth={0} />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Reset button */}
-          <div className="flex justify-center flex-shrink-0">
-            <Button variant="outline" onClick={handleReset} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              Compose Another Post
-            </Button>
+            {/* Reset button */}
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={handleReset} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Compose Another Post
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* Relay selection */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              Relays ({selectedRelays.size} selected)
+            </span>
           </div>
-        </>
-      )}
 
-      {/* Relay selection */}
-      <div className="space-y-2 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Relays ({selectedRelays.size} selected)
-          </span>
-        </div>
-
-        <div className="space-y-1 max-h-64 overflow-y-auto">
-          {relayStates.map((relay) => (
-            <div
-              key={relay.url}
-              className="flex items-center justify-between gap-3 py-1"
-            >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Checkbox
-                  id={relay.url}
-                  checked={selectedRelays.has(relay.url)}
-                  onCheckedChange={() => toggleRelay(relay.url)}
-                  disabled={isPublishing || showPublishedPreview}
-                />
-                <label
-                  htmlFor={relay.url}
-                  className="cursor-pointer truncate flex-1"
-                  onClick={(e) => e.preventDefault()}
-                >
-                  <RelayLink
-                    url={relay.url}
-                    write={true}
-                    showInboxOutbox={false}
-                    className="text-sm"
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {relayStates.map((relay) => (
+              <div
+                key={relay.url}
+                className="flex items-center justify-between gap-3 py-1"
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Checkbox
+                    id={relay.url}
+                    checked={selectedRelays.has(relay.url)}
+                    onCheckedChange={() => toggleRelay(relay.url)}
+                    disabled={isPublishing || showPublishedPreview}
                   />
-                </label>
-              </div>
-
-              {/* Status indicator */}
-              <div className="flex-shrink-0">
-                {relay.status === "publishing" && (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                )}
-                {relay.status === "success" && (
-                  <Check className="h-4 w-4 text-green-500" />
-                )}
-                {relay.status === "error" && (
-                  <button
-                    onClick={() => retryRelay(relay.url)}
-                    disabled={isPublishing}
-                    className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                    title={`${relay.error || "Failed to publish"}. Click to retry.`}
+                  <label
+                    htmlFor={relay.url}
+                    className="cursor-pointer truncate flex-1"
+                    onClick={(e) => e.preventDefault()}
                   >
-                    <X className="h-4 w-4 text-red-500" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+                    <RelayLink
+                      url={relay.url}
+                      write={true}
+                      showInboxOutbox={false}
+                      className="text-sm"
+                    />
+                  </label>
+                </div>
 
-      {/* Upload dialog */}
-      {uploadDialog}
+                {/* Status indicator */}
+                <div className="flex-shrink-0">
+                  {relay.status === "publishing" && (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  )}
+                  {relay.status === "success" && (
+                    <Check className="h-4 w-4 text-green-500" />
+                  )}
+                  {relay.status === "error" && (
+                    <button
+                      onClick={() => retryRelay(relay.url)}
+                      disabled={isPublishing}
+                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                      title={`${relay.error || "Failed to publish"}. Click to retry.`}
+                    >
+                      <X className="h-4 w-4 text-red-500" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Upload dialog */}
+        {uploadDialog}
+      </div>
     </div>
   );
 }
