@@ -30,6 +30,7 @@ import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
+import { parseAddressPointer } from "@/lib/nip89-helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
@@ -496,7 +497,7 @@ export function BaseEventContainer({
     label?: string;
   };
 }) {
-  const { locale } = useGrimoire();
+  const { locale, addWindow } = useGrimoire();
 
   // Format relative time for display
   const relativeTime = formatTimestamp(
@@ -515,6 +516,23 @@ export function BaseEventContainer({
   // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
+  // Get client tag if present: ["client", "<name>", "<31990:pubkey:d-tag>"]
+  const clientTag = event.tags.find((t) => t[0] === "client");
+  const clientName = clientTag?.[1];
+  const clientAddress = clientTag?.[2];
+  const parsedClientAddress = clientAddress
+    ? parseAddressPointer(clientAddress)
+    : null;
+  const clientAppPointer =
+    parsedClientAddress?.kind === 31990 ? parsedClientAddress : null;
+
+  const handleClientClick = (e: React.MouseEvent) => {
+    if (clientAppPointer) {
+      e.stopPropagation();
+      addWindow("open", { pointer: clientAppPointer });
+    }
+  };
+
   return (
     <EventContextMenu event={event}>
       <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
@@ -527,6 +545,21 @@ export function BaseEventContainer({
             >
               {relativeTime}
             </span>
+            {clientName && (
+              <span className="text-[10px] text-muted-foreground/70">
+                via{" "}
+                {clientAppPointer ? (
+                  <button
+                    onClick={handleClientClick}
+                    className="hover:underline hover:text-foreground cursor-crosshair"
+                  >
+                    {clientName}
+                  </button>
+                ) : (
+                  clientName
+                )}
+              </span>
+            )}
           </div>
           <EventMenu event={event} />
         </div>

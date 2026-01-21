@@ -7,6 +7,7 @@ import {
 } from "./spellbook-manager";
 import { GrimoireState, WindowInstance, Workspace } from "@/types/app";
 import { SPELLBOOK_KIND, SpellbookEvent } from "@/types/spell";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 // Mock Data
 const mockWindow1: WindowInstance = {
@@ -138,7 +139,7 @@ describe("Spellbook Manager", () => {
         "description",
         "Test description",
       ]);
-      expect(eventProps.tags).toContainEqual(["client", "grimoire"]);
+      expect(eventProps.tags).toContainEqual(GRIMOIRE_CLIENT_TAG);
 
       // Check referenced spells (e tags)
       expect(referencedSpells).toContain("spell-1");

@@ -6,6 +6,7 @@ import type {
   SpellEvent,
 } from "@/types/spell";
 import type { NostrFilter } from "@/types/nostr";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 /**
  * Simple tokenization that doesn't expand shell variables
@@ -116,7 +117,7 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
   // Start with required tags
   const tags: [string, string, ...string[]][] = [
     ["cmd", cmdType],
-    ["client", "grimoire"],
+    GRIMOIRE_CLIENT_TAG,
   ];
 
   // Add name tag if provided
