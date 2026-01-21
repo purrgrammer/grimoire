@@ -549,3 +549,69 @@ export async function selectRelaysForFilter(
     isOptimized: true,
   };
 }
+
+/** Maximum number of relays for interactions */
+const MAX_INTERACTION_RELAYS = 10;
+
+/** Minimum relays per party for redundancy */
+const MIN_RELAYS_PER_PARTY = 3;
+
+/**
+ * Selects optimal relays for publishing an interaction event (reaction, reply, etc.)
+ *
+ * Strategy per NIP-65:
+ * - Author's outbox relays: where we publish our content
+ * - Target's inbox relays: where the target reads mentions/interactions
+ * - Fallback aggregators if neither has preferences
+ *
+ * @param authorPubkey - Pubkey of the interaction author (person reacting/replying)
+ * @param targetPubkey - Pubkey of the target (person being reacted to/replied to)
+ * @returns Promise resolving to array of relay URLs
+ */
+export async function selectRelaysForInteraction(
+  authorPubkey: string,
+  targetPubkey: string,
+): Promise<string[]> {
+  // Fetch relays in parallel
+  const [authorOutbox, targetInbox] = await Promise.all([
+    relayListCache.getOutboxRelays(authorPubkey),
+    relayListCache.getInboxRelays(targetPubkey),
+  ]);
+
+  // Build relay list with priority ordering
+  const relaySet = new Set<string>();
+
+  // Priority 1: Author's outbox relays (where we publish)
+  const outboxRelays = authorOutbox || [];
+  for (const relay of outboxRelays.slice(0, MIN_RELAYS_PER_PARTY)) {
+    relaySet.add(relay);
+  }
+
+  // Priority 2: Target's inbox relays (so they see it)
+  const inboxRelays = targetInbox || [];
+  for (const relay of inboxRelays.slice(0, MIN_RELAYS_PER_PARTY)) {
+    relaySet.add(relay);
+  }
+
+  // Add remaining author outbox relays
+  for (const relay of outboxRelays.slice(MIN_RELAYS_PER_PARTY)) {
+    if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
+    relaySet.add(relay);
+  }
+
+  // Add remaining target inbox relays
+  for (const relay of inboxRelays.slice(MIN_RELAYS_PER_PARTY)) {
+    if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
+    relaySet.add(relay);
+  }
+
+  // Fallback to aggregator relays if we don't have any
+  if (relaySet.size === 0) {
+    for (const relay of AGGREGATOR_RELAYS) {
+      if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
+      relaySet.add(relay);
+    }
+  }
+
+  return Array.from(relaySet);
+}
