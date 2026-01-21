@@ -63,6 +63,10 @@ export const plan9Theme: Theme = {
 
     // UI highlight (dark for contrast on pale yellow)
     highlight: "25 85% 30%", // Dark brown/amber
+
+    // Tooltip colors (strong contrast against pale yellow background)
+    tooltip: "220 50% 25%", // Dark blue (darker than primary for tooltips)
+    tooltipForeground: "60 100% 97%", // Very pale yellow (matches popover)
   },
 
   syntax: {

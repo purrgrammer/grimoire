@@ -49,6 +49,10 @@ export const lightTheme: Theme = {
 
     // UI highlight (darker for light background)
     highlight: "25 90% 35%", // Dark amber/brown
+
+    // Tooltip colors (dark tooltip for visibility on light background)
+    tooltip: "222.2 47.4% 11.2%", // Very dark blue-gray (same as primary)
+    tooltipForeground: "210 40% 98%", // Light text
   },
 
   syntax: {

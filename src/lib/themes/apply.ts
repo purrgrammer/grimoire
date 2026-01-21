@@ -60,6 +60,13 @@ export function applyTheme(theme: Theme): void {
   // UI highlight color
   root.style.setProperty("--highlight", theme.colors.highlight);
 
+  // Tooltip colors
+  root.style.setProperty("--tooltip", theme.colors.tooltip);
+  root.style.setProperty(
+    "--tooltip-foreground",
+    theme.colors.tooltipForeground,
+  );
+
   // Syntax highlighting
   root.style.setProperty("--syntax-comment", theme.syntax.comment);
   root.style.setProperty("--syntax-punctuation", theme.syntax.punctuation);
@@ -125,6 +132,9 @@ export function getThemeVariables(): string[] {
     "--live",
     // UI highlight
     "--highlight",
+    // Tooltip
+    "--tooltip",
+    "--tooltip-foreground",
     // Syntax
     "--syntax-comment",
     "--syntax-punctuation",

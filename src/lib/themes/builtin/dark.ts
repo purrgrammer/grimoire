@@ -49,6 +49,10 @@ export const darkTheme: Theme = {
 
     // UI highlight (active user, self-references)
     highlight: "27 96% 61%", // orange-400 (original color)
+
+    // Tooltip colors (high contrast for visibility)
+    tooltip: "217.2 32.6% 17.5%", // Dark blue-gray (same as secondary)
+    tooltipForeground: "210 40% 98%", // Light (high contrast with dark tooltip)
   },
 
   syntax: {

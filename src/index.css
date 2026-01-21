@@ -65,6 +65,10 @@
     /* UI highlight (active user, self-references) */
     --highlight: 25 90% 35%;
 
+    /* Tooltip colors */
+    --tooltip: 222.2 47.4% 11.2%;
+    --tooltip-foreground: 210 40% 98%;
+
     /* Syntax highlighting */
     --syntax-comment: 215.4 16.3% 46.9%;
     --syntax-punctuation: 222.2 84% 30%;
@@ -128,6 +132,10 @@
 
     /* UI highlight (active user, self-references) */
     --highlight: 27 96% 61%;
+
+    /* Tooltip colors */
+    --tooltip: 217.2 32.6% 17.5%;
+    --tooltip-foreground: 210 40% 98%;
 
     /* Syntax highlighting */
     --syntax-comment: 215 20.2% 70%;

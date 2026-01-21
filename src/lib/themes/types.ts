@@ -66,6 +66,10 @@ export interface ThemeColors {
 
   // UI highlight color (for active user, self-references, etc.)
   highlight: HSLValue;
+
+  // Tooltip colors (for proper contrast across all themes)
+  tooltip: HSLValue;
+  tooltipForeground: HSLValue;
 }
 
 /** Syntax highlighting colors for code blocks */

@@ -74,6 +74,11 @@ export default {
         live: "hsl(var(--live))",
         // UI highlight (active user, self-references)
         highlight: "hsl(var(--highlight))",
+        // Tooltip colors
+        tooltip: {
+          DEFAULT: "hsl(var(--tooltip))",
+          foreground: "hsl(var(--tooltip-foreground))",
+        },
       },
     },
   },
