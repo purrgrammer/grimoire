@@ -41,10 +41,20 @@ export function SettingsViewer() {
             </div>
 
             <div className="space-y-6">
-              <div className="space-y-3">
-                <label className="text-sm font-medium">Theme</label>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label
+                    htmlFor="theme"
+                    className="text-base font-medium cursor-pointer"
+                  >
+                    Theme
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Choose your color scheme
+                  </p>
+                </div>
                 <Select value={themeId} onValueChange={setTheme}>
-                  <SelectTrigger className="w-48">
+                  <SelectTrigger id="theme" className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
