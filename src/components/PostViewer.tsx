@@ -10,6 +10,7 @@ import {
   Server,
   ServerOff,
   Plus,
+  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -809,9 +810,12 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   </div>
 
                   {/* Status indicator */}
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 w-6 flex items-center justify-center">
+                    {relay.status === "pending" && (
+                      <Circle className="h-4 w-4 text-muted-foreground" />
+                    )}
                     {relay.status === "publishing" && (
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                     {relay.status === "success" && (
                       <Check className="h-4 w-4 text-green-500" />
