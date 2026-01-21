@@ -1,8 +1,22 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { Paperclip, Send, Loader2, Check, X, RotateCcw } from "lucide-react";
+import {
+  Paperclip,
+  Send,
+  Loader2,
+  Check,
+  X,
+  RotateCcw,
+  Settings,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+} from "./ui/dropdown-menu";
 import { useAccount } from "@/hooks/useAccount";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
@@ -45,6 +59,7 @@ export function PostViewer() {
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
+  const [includeClientTag, setIncludeClientTag] = useState(true);
 
   // Get active account's write relays from Grimoire state, fallback to aggregators
   const writeRelays = useMemo(() => {
@@ -280,8 +295,10 @@ export function PostViewer() {
           tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
         }
 
-        // Add client tag
-        tags.push(["client", "grimoire"]);
+        // Add client tag (if enabled)
+        if (includeClientTag) {
+          tags.push(["client", "grimoire"]);
+        }
 
         // Add emoji tags
         for (const emoji of emojiTags) {
@@ -389,7 +406,7 @@ export function PostViewer() {
         setIsPublishing(false);
       }
     },
-    [canSign, signer, pubkey, selectedRelays],
+    [canSign, signer, pubkey, selectedRelays, includeClientTag],
   );
 
   // Handle file paste
@@ -411,6 +428,16 @@ export function PostViewer() {
     editorRef.current?.clear();
     editorRef.current?.focus();
   }, [updateRelayStates]);
+
+  // Discard draft and clear editor
+  const handleDiscard = useCallback(() => {
+    editorRef.current?.clear();
+    if (pubkey) {
+      const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+      localStorage.removeItem(draftKey);
+    }
+    editorRef.current?.focus();
+  }, [pubkey]);
 
   // Show login prompt if not logged in
   if (!canSign) {
@@ -450,6 +477,7 @@ export function PostViewer() {
 
             {/* Action buttons */}
             <div className="flex items-center gap-2">
+              {/* Upload button */}
               <Button
                 variant="outline"
                 size="icon"
@@ -460,12 +488,47 @@ export function PostViewer() {
                 <Paperclip className="h-4 w-4" />
               </Button>
 
+              {/* Settings dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={isPublishing}
+                    title="Post settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuCheckboxItem
+                    checked={includeClientTag}
+                    onCheckedChange={setIncludeClientTag}
+                  >
+                    Include client tag
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {/* Discard button */}
+              <Button
+                variant="outline"
+                onClick={handleDiscard}
+                disabled={isPublishing || isEditorEmpty}
+              >
+                Discard
+              </Button>
+
+              {/* Publish button */}
               <Button
                 onClick={() => editorRef.current?.submit()}
                 disabled={
                   isPublishing || selectedRelays.size === 0 || isEditorEmpty
                 }
-                className="gap-2 flex-1"
+                className="gap-2 w-32"
               >
                 {isPublishing ? (
                   <>
