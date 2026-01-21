@@ -347,6 +347,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       mentions: string[],
       eventRefs: string[],
       addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
+      hashtags: string[],
     ) => {
       if (!canSign || !signer || !pubkey) {
         toast.error("Please log in to publish");
@@ -389,6 +390,11 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         // Add a tags for address references
         for (const addr of addressRefs) {
           tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
+        }
+
+        // Add t tags for hashtags
+        for (const hashtag of hashtags) {
+          tags.push(["t", hashtag]);
         }
 
         // Add client tag (if enabled)

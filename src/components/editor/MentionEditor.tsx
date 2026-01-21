@@ -74,6 +74,8 @@ export interface SerializedContent {
   eventRefs: string[];
   /** Referenced addresses for a tags (from naddr) */
   addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>;
+  /** Hashtags for t tags */
+  hashtags: string[];
 }
 
 export interface MentionEditorProps {
@@ -755,6 +757,7 @@ export const MentionEditor = forwardRef<
           mentions: [],
           eventRefs: [],
           addressRefs: [],
+          hashtags: [],
         };
       },
       [],
@@ -964,6 +967,7 @@ export const MentionEditor = forwardRef<
               mentions: [],
               eventRefs: [],
               addressRefs: [],
+              hashtags: [],
             };
           return serializeContent(editor);
         },

@@ -45,6 +45,7 @@ export interface RichEditorProps {
     mentions: string[],
     eventRefs: string[],
     addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
+    hashtags: string[],
   ) => void;
   onChange?: () => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
@@ -217,6 +218,16 @@ function serializeContent(editor: any): SerializedContent {
     }
   });
 
+  // Extract hashtags from the plain text
+  // Match #word where word is alphanumeric (Unicode-aware)
+  const hashtagRegex = /#(\w+)/gu;
+  const hashtags = new Set<string>();
+  let match;
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    // Store hashtag without the # prefix, in lowercase
+    hashtags.add(match[1].toLowerCase());
+  }
+
   return {
     text,
     emojiTags,
@@ -224,6 +235,7 @@ function serializeContent(editor: any): SerializedContent {
     mentions: Array.from(mentions),
     eventRefs: Array.from(eventRefs),
     addressRefs,
+    hashtags: Array.from(hashtags),
   };
 }
 
@@ -401,6 +413,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             serialized.mentions,
             serialized.eventRefs,
             serialized.addressRefs,
+            serialized.hashtags,
           );
           // Don't clear content here - let the parent component decide when to clear
         }
@@ -555,6 +568,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
               mentions: [],
               eventRefs: [],
               addressRefs: [],
+              hashtags: [],
             };
           return serializeContent(editor);
         },
