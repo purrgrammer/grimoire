@@ -60,6 +60,8 @@ export interface BlobAttachment {
 
 /**
  * Result of serializing editor content
+ * Note: mentions, event quotes, and hashtags are extracted automatically by applesauce
+ * from the text content (nostr: URIs and #hashtags), so we don't need to extract them here.
  */
 export interface SerializedContent {
   /** The text content with mentions as nostr: URIs and emoji as :shortcode: */
@@ -68,14 +70,8 @@ export interface SerializedContent {
   emojiTags: EmojiTag[];
   /** Blob attachments for imeta tags (NIP-92) */
   blobAttachments: BlobAttachment[];
-  /** Mentioned pubkeys for p tags */
-  mentions: string[];
-  /** Referenced event IDs for e tags (from note/nevent) */
-  eventRefs: string[];
-  /** Referenced addresses for a tags (from naddr) */
+  /** Referenced addresses for a tags (from naddr - not yet handled by applesauce) */
   addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>;
-  /** Hashtags for t tags */
-  hashtags: string[];
 }
 
 export interface MentionEditorProps {
@@ -670,8 +666,14 @@ export const MentionEditor = forwardRef<
         let text = "";
         const emojiTags: EmojiTag[] = [];
         const blobAttachments: BlobAttachment[] = [];
+        const addressRefs: Array<{
+          kind: number;
+          pubkey: string;
+          identifier: string;
+        }> = [];
         const seenEmojis = new Set<string>();
         const seenBlobs = new Set<string>();
+        const seenAddrs = new Set<string>();
         const json = editorInstance.getJSON();
 
         json.content?.forEach((node: any) => {
@@ -737,6 +739,16 @@ export const MentionEditor = forwardRef<
                     text += `nostr:${nip19.neventEncode(data)}`;
                   } else if (type === "naddr") {
                     text += `nostr:${nip19.naddrEncode(data)}`;
+                    // Extract addressRefs for manual a tags (applesauce doesn't handle naddr yet)
+                    const addrKey = `${data.kind}:${data.pubkey}:${data.identifier || ""}`;
+                    if (!seenAddrs.has(addrKey)) {
+                      seenAddrs.add(addrKey);
+                      addressRefs.push({
+                        kind: data.kind,
+                        pubkey: data.pubkey,
+                        identifier: data.identifier || "",
+                      });
+                    }
                   }
                 } catch (err) {
                   console.error(
@@ -754,10 +766,7 @@ export const MentionEditor = forwardRef<
           text: text.trim(),
           emojiTags,
           blobAttachments,
-          mentions: [],
-          eventRefs: [],
-          addressRefs: [],
-          hashtags: [],
+          addressRefs,
         };
       },
       [],
@@ -964,10 +973,7 @@ export const MentionEditor = forwardRef<
               text: "",
               emojiTags: [],
               blobAttachments: [],
-              mentions: [],
-              eventRefs: [],
               addressRefs: [],
-              hashtags: [],
             };
           return serializeContent(editor);
         },

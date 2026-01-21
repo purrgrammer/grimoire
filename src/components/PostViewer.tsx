@@ -33,6 +33,7 @@ import { Kind1Renderer } from "./nostr/kinds";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
+import { NoteBlueprint } from "applesauce-common/blueprints";
 import { useGrimoire } from "@/core/state";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
@@ -344,10 +345,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       content: string,
       emojiTags: EmojiTag[],
       blobAttachments: BlobAttachment[],
-      mentions: string[],
-      eventRefs: string[],
       addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
-      hashtags: string[],
     ) => {
       if (!canSign || !signer || !pubkey) {
         toast.error("Please log in to publish");
@@ -374,40 +372,31 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         const factory = new EventFactory();
         factory.setSigner(signer);
 
-        // Build tags array
-        const tags: string[][] = [];
+        // Use NoteBlueprint - it auto-extracts hashtags, mentions, and quotes from content!
+        const draft = await factory.create(NoteBlueprint, content.trim(), {
+          emojis: emojiTags.map((e) => ({
+            shortcode: e.shortcode,
+            url: e.url,
+          })),
+        });
 
-        // Add p tags for mentions
-        for (const pubkey of mentions) {
-          tags.push(["p", pubkey]);
-        }
+        // Add tags that applesauce doesn't handle yet
+        const additionalTags: string[][] = [];
 
-        // Add e tags for event references
-        for (const eventId of eventRefs) {
-          tags.push(["e", eventId]);
-        }
-
-        // Add a tags for address references
+        // Add a tags for address references (naddr - not yet supported by applesauce)
         for (const addr of addressRefs) {
-          tags.push(["a", `${addr.kind}:${addr.pubkey}:${addr.identifier}`]);
-        }
-
-        // Add t tags for hashtags
-        for (const hashtag of hashtags) {
-          tags.push(["t", hashtag]);
+          additionalTags.push([
+            "a",
+            `${addr.kind}:${addr.pubkey}:${addr.identifier}`,
+          ]);
         }
 
         // Add client tag (if enabled)
         if (settings.includeClientTag) {
-          tags.push(GRIMOIRE_CLIENT_TAG);
+          additionalTags.push(GRIMOIRE_CLIENT_TAG);
         }
 
-        // Add emoji tags
-        for (const emoji of emojiTags) {
-          tags.push(["emoji", emoji.shortcode, emoji.url]);
-        }
-
-        // Add blob attachment tags (imeta)
+        // Add imeta tags for blob attachments (NIP-92)
         for (const blob of blobAttachments) {
           const imetaTag = [
             "imeta",
@@ -419,15 +408,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           if (blob.server) {
             imetaTag.push(`server ${blob.server}`);
           }
-          tags.push(imetaTag);
+          additionalTags.push(imetaTag);
         }
 
-        // Create and sign event (kind 1 note)
-        const draft = await factory.build({
-          kind: 1,
-          content: content.trim(),
-          tags,
-        });
+        // Merge additional tags with blueprint tags
+        draft.tags.push(...additionalTags);
+
+        // Sign the event
         event = await factory.sign(draft);
       } catch (error) {
         // Signing failed - user might have rejected it
