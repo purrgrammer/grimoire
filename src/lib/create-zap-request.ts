@@ -8,8 +8,6 @@ import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "./open-parser";
 import accountManager from "@/services/accounts";
 import { selectZapRelays } from "./zap-relay-selection";
-import { settingsManager } from "@/services/settings";
-import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 export interface EmojiTag {
   shortcode: string;
@@ -128,11 +126,6 @@ export async function createZapRequest(
     for (const emoji of params.emojiTags) {
       tags.push(["emoji", emoji.shortcode, emoji.url]);
     }
-  }
-
-  // Add client tag if enabled in settings
-  if (settingsManager.getSetting("includeClientTag")) {
-    tags.push(GRIMOIRE_CLIENT_TAG);
   }
 
   // Create event template

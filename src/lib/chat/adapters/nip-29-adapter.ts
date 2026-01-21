@@ -25,8 +25,6 @@ import {
   GroupMessageBlueprint,
   ReactionBlueprint,
 } from "applesauce-common/blueprints";
-import { settingsManager } from "@/services/settings";
-import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -473,11 +471,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
     // Sign the event
     const event = await factory.sign(draft);
 
@@ -534,11 +527,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // Add h-tag for group context (NIP-29 specific)
     draft.tags.push(["h", groupId]);
-
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
-    }
 
     // Sign the event
     const event = await factory.sign(draft);
@@ -880,11 +868,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       ["relay", relayUrl],
     ];
 
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
     const draft = await factory.build({
       kind: 9021,
       content: "",
@@ -920,11 +903,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       ["h", groupId],
       ["relay", relayUrl],
     ];
-
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      tags.push(GRIMOIRE_CLIENT_TAG);
-    }
 
     const draft = await factory.build({
       kind: 9022,
@@ -1006,11 +984,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     // Add the new group tag (use normalized URL for consistency)
     tags.push(["group", groupId, normalizedRelayUrl]);
 
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
     // Create and publish the updated event
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
@@ -1065,11 +1038,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     if (tags.length === originalLength) {
       throw new Error("Group is not in your list");
-    }
-
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
-      tags.push(GRIMOIRE_CLIENT_TAG);
     }
 
     // Create and publish the updated event
