@@ -7,10 +7,14 @@ import {
   X,
   RotateCcw,
   Settings,
+  Server,
+  ServerOff,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
+import { Input } from "./ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +34,8 @@ import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
 import { useGrimoire } from "@/core/state";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { normalizeRelayURL } from "@/lib/relay-url";
+import { use$ } from "applesauce-react/hooks";
 
 // Per-relay publish status
 type RelayStatus = "pending" | "publishing" | "success" | "error";
@@ -60,6 +66,10 @@ export function PostViewer() {
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [includeClientTag, setIncludeClientTag] = useState(true);
+  const [newRelayInput, setNewRelayInput] = useState("");
+
+  // Get relay pool state for connection status
+  const relayPoolMap = use$(pool.relays$);
 
   // Get active account's write relays from Grimoire state, fallback to aggregators
   const writeRelays = useMemo(() => {
@@ -439,6 +449,54 @@ export function PostViewer() {
     editorRef.current?.focus();
   }, [pubkey]);
 
+  // Check if input looks like a valid relay URL
+  const isValidRelayInput = useCallback((input: string): boolean => {
+    const trimmed = input.trim();
+    if (!trimmed) return false;
+
+    // Allow relay URLs with or without protocol
+    // Must have at least a domain part (e.g., "relay.com" or "wss://relay.com")
+    const urlPattern =
+      /^(wss?:\/\/)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}(:[0-9]{1,5})?(\/.*)?$/;
+
+    return urlPattern.test(trimmed);
+  }, []);
+
+  // Add new relay to the list
+  const handleAddRelay = useCallback(() => {
+    const trimmed = newRelayInput.trim();
+    if (!trimmed || !isValidRelayInput(trimmed)) return;
+
+    try {
+      // Normalize the URL (adds wss:// if needed)
+      const normalizedUrl = normalizeRelayURL(trimmed);
+
+      // Check if already in list
+      const alreadyExists = relayStates.some((r) => r.url === normalizedUrl);
+      if (alreadyExists) {
+        toast.error("Relay already in list");
+        return;
+      }
+
+      // Add to relay states
+      setRelayStates((prev) => [
+        ...prev,
+        { url: normalizedUrl, status: "pending" as RelayStatus },
+      ]);
+
+      // Select the new relay
+      setSelectedRelays((prev) => new Set([...prev, normalizedUrl]));
+
+      // Clear input
+      setNewRelayInput("");
+
+      toast.success(`Added ${normalizedUrl.replace(/^wss?:\/\//, "")}`);
+    } catch (error) {
+      console.error("Failed to add relay:", error);
+      toast.error(error instanceof Error ? error.message : "Invalid relay URL");
+    }
+  }, [newRelayInput, isValidRelayInput, relayStates]);
+
   // Show login prompt if not logged in
   if (!canSign) {
     return (
@@ -572,54 +630,94 @@ export function PostViewer() {
           </div>
 
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {relayStates.map((relay) => (
-              <div
-                key={relay.url}
-                className="flex items-center justify-between gap-3 py-1"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Checkbox
-                    id={relay.url}
-                    checked={selectedRelays.has(relay.url)}
-                    onCheckedChange={() => toggleRelay(relay.url)}
-                    disabled={isPublishing || showPublishedPreview}
-                  />
-                  <label
-                    htmlFor={relay.url}
-                    className="cursor-pointer truncate flex-1"
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    <RelayLink
-                      url={relay.url}
-                      write={true}
-                      showInboxOutbox={false}
-                      className="text-sm"
-                    />
-                  </label>
-                </div>
+            {relayStates.map((relay) => {
+              // Get relay connection state from pool
+              const poolRelay = relayPoolMap?.get(relay.url);
+              const isConnected = poolRelay?.connected ?? false;
 
-                {/* Status indicator */}
-                <div className="flex-shrink-0">
-                  {relay.status === "publishing" && (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                  )}
-                  {relay.status === "success" && (
-                    <Check className="h-4 w-4 text-green-500" />
-                  )}
-                  {relay.status === "error" && (
-                    <button
-                      onClick={() => retryRelay(relay.url)}
-                      disabled={isPublishing}
-                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                      title={`${relay.error || "Failed to publish"}. Click to retry.`}
+              return (
+                <div
+                  key={relay.url}
+                  className="flex items-center justify-between gap-3 py-1"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Checkbox
+                      id={relay.url}
+                      checked={selectedRelays.has(relay.url)}
+                      onCheckedChange={() => toggleRelay(relay.url)}
+                      disabled={isPublishing || showPublishedPreview}
+                    />
+                    {/* Connectivity status icon */}
+                    {isConnected ? (
+                      <Server className="h-3 w-3 text-green-500 flex-shrink-0" />
+                    ) : (
+                      <ServerOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    )}
+                    <label
+                      htmlFor={relay.url}
+                      className="cursor-pointer truncate flex-1"
+                      onClick={(e) => e.preventDefault()}
                     >
-                      <X className="h-4 w-4 text-red-500" />
-                    </button>
-                  )}
+                      <RelayLink
+                        url={relay.url}
+                        write={true}
+                        showInboxOutbox={false}
+                        className="text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Status indicator */}
+                  <div className="flex-shrink-0">
+                    {relay.status === "publishing" && (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    )}
+                    {relay.status === "success" && (
+                      <Check className="h-4 w-4 text-green-500" />
+                    )}
+                    {relay.status === "error" && (
+                      <button
+                        onClick={() => retryRelay(relay.url)}
+                        disabled={isPublishing}
+                        className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                        title={`${relay.error || "Failed to publish"}. Click to retry.`}
+                      >
+                        <X className="h-4 w-4 text-red-500" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {/* Add relay input */}
+          {!showPublishedPreview && (
+            <div className="flex items-center gap-2 pt-2">
+              <Input
+                type="text"
+                placeholder="relay.example.com"
+                value={newRelayInput}
+                onChange={(e) => setNewRelayInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && isValidRelayInput(newRelayInput)) {
+                    handleAddRelay();
+                  }
+                }}
+                disabled={isPublishing}
+                className="flex-1 text-sm"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleAddRelay}
+                disabled={isPublishing || !isValidRelayInput(newRelayInput)}
+                title="Add relay"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Upload dialog */}
