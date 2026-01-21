@@ -9,7 +9,7 @@ import {
 import { Switch } from "./ui/switch";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/themes";
-import { Palette, FileEdit, Heart, Zap } from "lucide-react";
+import { Palette, FileEdit, Heart, Trophy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -51,17 +51,20 @@ export function SettingsViewer() {
   // Calculate monthly donation progress
   const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
 
-  // Format sats for display
-  function formatSats(sats: number): string {
-    if (sats >= 1_000_000) {
-      return `${(sats / 1_000_000).toFixed(1)}M`;
-    } else if (sats >= 1_000) {
-      return `${Math.floor(sats / 1_000)}k`;
+  // Format amount for display
+  function formatAmount(amount: number): string {
+    if (amount >= 1_000_000) {
+      return `${(amount / 1_000_000).toFixed(1)}M`;
+    } else if (amount >= 1_000) {
+      return `${Math.floor(amount / 1_000)}k`;
     }
-    return sats.toLocaleString();
+    return amount.toLocaleString();
   }
 
-  function openZapWindow() {
+  // Contribution tiers
+  const contributionTiers = [210, 2100, 21000, 42000, 210000];
+
+  function openSupportWindow() {
     addWindow(
       "zap",
       {
@@ -186,7 +189,7 @@ export function SettingsViewer() {
             <div>
               <h3 className="text-lg font-semibold mb-1">Support Grimoire</h3>
               <p className="text-sm text-muted-foreground">
-                Help support development with Lightning zaps
+                Help support development
               </p>
             </div>
 
@@ -202,57 +205,61 @@ export function SettingsViewer() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
                   <span className="text-foreground font-semibold">
-                    {formatSats(monthlyDonations)} sats
+                    {formatAmount(monthlyDonations)}
                   </span>
                   {" raised"}
                 </span>
                 <span className="text-muted-foreground">
-                  {formatSats(MONTHLY_GOAL_SATS)} sats
+                  {formatAmount(MONTHLY_GOAL_SATS)}
                 </span>
               </div>
             </div>
 
-            {/* Top Donors This Month */}
+            {/* Contribution Tiers */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Contribute</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {contributionTiers.map((amount) => (
+                  <Button
+                    key={amount}
+                    variant="outline"
+                    size="sm"
+                    onClick={openSupportWindow}
+                  >
+                    {formatAmount(amount)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Top Contributors This Month */}
             {topDonors && topDonors.length > 0 && (
               <div className="space-y-3">
-                <h4 className="text-sm font-medium">Top Donors This Month</h4>
+                <h4 className="text-sm font-medium">Top Contributors</h4>
                 <div className="space-y-2">
                   {topDonors.map((donor, index) => (
                     <div
                       key={donor.pubkey}
-                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30"
+                      className="flex items-center justify-between py-2"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-lg font-bold text-muted-foreground w-6">
-                          #{index + 1}
-                        </span>
+                        {index === 0 ? (
+                          <Trophy className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                        ) : (
+                          <span className="text-base font-bold text-muted-foreground w-5 text-center">
+                            {index + 1}
+                          </span>
+                        )}
                         <UserName pubkey={donor.pubkey} />
                       </div>
-                      <span className="text-sm font-semibold text-yellow-500">
-                        {formatSats(donor.sats)} sats
+                      <span className="text-lg font-bold text-primary">
+                        {formatAmount(donor.sats)}
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Quick Zap Button */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Send Lightning Zap</h4>
-              <p className="text-xs text-muted-foreground">
-                Support Grimoire development with Bitcoin over Lightning
-              </p>
-              <Button
-                variant="default"
-                size="lg"
-                className="w-full gap-2"
-                onClick={openZapWindow}
-              >
-                <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                Send Zap
-              </Button>
-            </div>
           </TabsContent>
         </div>
       </Tabs>
