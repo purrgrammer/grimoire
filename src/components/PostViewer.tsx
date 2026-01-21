@@ -752,7 +752,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             </span>
           </div>
 
-          <div className="space-y-1 max-h-64 overflow-y-auto">
+          <div className="space-y-1 max-h-64 overflow-y-scroll">
             {relayStates.map((relay) => {
               // Get relay connection state from pool
               const poolRelay = relayPoolMap?.get(relay.url);
@@ -799,7 +799,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   </div>
 
                   {/* Status indicator */}
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 w-6 flex items-center justify-center">
                     {relay.status === "publishing" && (
                       <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
                     )}
