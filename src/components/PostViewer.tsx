@@ -30,6 +30,7 @@ import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
+import { CopyableJsonViewer } from "./JsonViewer";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -48,8 +49,19 @@ interface RelayPublishState {
   error?: string;
 }
 
-// Draft persistence key
+// Storage keys
 const DRAFT_STORAGE_KEY = "grimoire-post-draft";
+const SETTINGS_STORAGE_KEY = "grimoire-post-settings";
+
+interface PostSettings {
+  includeClientTag: boolean;
+  showEventJson: boolean;
+}
+
+const DEFAULT_SETTINGS: PostSettings = {
+  includeClientTag: true,
+  showEventJson: false,
+};
 
 interface PostViewerProps {
   windowId?: string;
@@ -72,11 +84,38 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
-  const [includeClientTag, setIncludeClientTag] = useState(true);
   const [newRelayInput, setNewRelayInput] = useState("");
+  const [previewEvent, setPreviewEvent] = useState<any>(null);
+
+  // Load settings from localStorage
+  const [settings, setSettings] = useState<PostSettings>(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
 
   // Get relay pool state for connection status
   const relayPoolMap = use$(pool.relays$);
+
+  // Persist settings to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (err) {
+      console.error("Failed to save post settings:", err);
+    }
+  }, [settings]);
+
+  // Update a single setting
+  const updateSetting = useCallback(
+    <K extends keyof PostSettings>(key: K, value: PostSettings[K]) => {
+      setSettings((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   // Get active account's write relays from Grimoire state, fallback to aggregators
   const writeRelays = useMemo(() => {
@@ -132,11 +171,25 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         if (draft.selectedRelays && Array.isArray(draft.selectedRelays)) {
           setSelectedRelays(new Set(draft.selectedRelays));
         }
+
+        // Restore added relays (relays not in writeRelays)
+        if (draft.addedRelays && Array.isArray(draft.addedRelays)) {
+          const currentRelayUrls = new Set(relayStates.map((r) => r.url));
+          const newRelays = draft.addedRelays
+            .filter((url: string) => !currentRelayUrls.has(url))
+            .map((url: string) => ({
+              url,
+              status: "pending" as RelayStatus,
+            }));
+          if (newRelays.length > 0) {
+            setRelayStates((prev) => [...prev, ...newRelays]);
+          }
+        }
       } catch (err) {
         console.error("Failed to load draft:", err);
       }
     }
-  }, [pubkey, windowId]);
+  }, [pubkey, windowId, relayStates]);
 
   // Save draft to localStorage on content change
   const saveDraft = useCallback(() => {
@@ -155,9 +208,15 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       return;
     }
 
+    // Identify added relays (those not in writeRelays)
+    const addedRelays = relayStates
+      .filter((r) => !writeRelays.includes(r.url))
+      .map((r) => r.url);
+
     const draft = {
       editorState, // Full editor JSON state (preserves blobs, emojis, formatting)
       selectedRelays: Array.from(selectedRelays), // Selected relay URLs
+      addedRelays, // Custom relays added by user
       timestamp: Date.now(),
     };
 
@@ -166,7 +225,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     } catch (err) {
       console.error("Failed to save draft:", err);
     }
-  }, [pubkey, windowId, selectedRelays]);
+  }, [pubkey, windowId, selectedRelays, relayStates, writeRelays]);
 
   // Debounced draft save (save every 2 seconds of inactivity)
   useEffect(() => {
@@ -317,7 +376,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         }
 
         // Add client tag (if enabled)
-        if (includeClientTag) {
+        if (settings.includeClientTag) {
           tags.push(["client", "grimoire"]);
         }
 
@@ -347,7 +406,14 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           content: content.trim(),
           tags,
         });
+
+        // Set preview event (unsigned)
+        setPreviewEvent(draft);
+
         const event = await factory.sign(draft);
+
+        // Update preview event (signed)
+        setPreviewEvent(event);
 
         // Store the signed event for potential retries
         setLastPublishedEvent(event);
@@ -429,7 +495,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         setIsPublishing(false);
       }
     },
-    [canSign, signer, pubkey, selectedRelays, includeClientTag],
+    [canSign, signer, pubkey, selectedRelays, settings],
   );
 
   // Handle file paste
@@ -573,10 +639,20 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuCheckboxItem
-                    checked={includeClientTag}
-                    onCheckedChange={setIncludeClientTag}
+                    checked={settings.includeClientTag}
+                    onCheckedChange={(checked) =>
+                      updateSetting("includeClientTag", checked)
+                    }
                   >
                     Include client tag
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={settings.showEventJson}
+                    onCheckedChange={(checked) =>
+                      updateSetting("showEventJson", checked)
+                    }
+                  >
+                    Show event JSON
                   </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -614,6 +690,20 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 )}
               </Button>
             </div>
+
+            {/* Event JSON Preview */}
+            {settings.showEventJson && previewEvent && (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  Event JSON {previewEvent.sig ? "(Signed)" : "(Unsigned)"}
+                </div>
+                <div className="max-h-64">
+                  <CopyableJsonViewer
+                    json={JSON.stringify(previewEvent, null, 2)}
+                  />
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>
