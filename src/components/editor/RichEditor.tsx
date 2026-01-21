@@ -402,7 +402,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             serialized.eventRefs,
             serialized.addressRefs,
           );
-          editorInstance.commands.clearContent();
+          // Don't clear content here - let the parent component decide when to clear
         }
       },
       [onSubmit],

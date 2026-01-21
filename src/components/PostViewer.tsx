@@ -503,6 +503,9 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             localStorage.removeItem(draftKey);
           }
 
+          // Clear editor content
+          editorRef.current?.clear();
+
           // Show published preview
           setShowPublishedPreview(true);
 
