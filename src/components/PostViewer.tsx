@@ -85,7 +85,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [newRelayInput, setNewRelayInput] = useState("");
-  const [previewEvent, setPreviewEvent] = useState<any>(null);
+  const [draftEventJson, setDraftEventJson] = useState<any>(null);
 
   // Load settings from localStorage
   const [settings, setSettings] = useState<PostSettings>(() => {
@@ -227,6 +227,79 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     }
   }, [pubkey, windowId, selectedRelays, relayStates, writeRelays]);
 
+  // Generate draft event JSON for preview
+  const generateDraftEventJson = useCallback(() => {
+    if (!pubkey || !editorRef.current) {
+      setDraftEventJson(null);
+      return;
+    }
+
+    const serialized = editorRef.current.getSerializedContent();
+    const content = serialized.text.trim();
+
+    if (!content) {
+      setDraftEventJson(null);
+      return;
+    }
+
+    // Build tags array
+    const tags: string[][] = [];
+
+    // Add p tags for mentions
+    for (const mention of serialized.mentions) {
+      tags.push(["p", mention]);
+    }
+
+    // Add e tags for event references
+    for (const eventRef of serialized.eventRefs) {
+      tags.push(["e", eventRef]);
+    }
+
+    // Add a tags for address references
+    for (const addrRef of serialized.addressRefs) {
+      tags.push([
+        "a",
+        `${addrRef.kind}:${addrRef.pubkey}:${addrRef.identifier}`,
+      ]);
+    }
+
+    // Add client tag (if enabled)
+    if (settings.includeClientTag) {
+      tags.push(["client", "grimoire"]);
+    }
+
+    // Add emoji tags
+    for (const emoji of serialized.emojiTags) {
+      tags.push(["emoji", emoji.shortcode, emoji.url]);
+    }
+
+    // Add blob attachment tags (imeta)
+    for (const blob of serialized.blobAttachments) {
+      const imetaTag = [
+        "imeta",
+        `url ${blob.url}`,
+        `m ${blob.mimeType}`,
+        `x ${blob.sha256}`,
+        `size ${blob.size}`,
+      ];
+      if (blob.server) {
+        imetaTag.push(`server ${blob.server}`);
+      }
+      tags.push(imetaTag);
+    }
+
+    // Create draft event structure (unsigned)
+    const draftEvent = {
+      kind: 1,
+      pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      content,
+    };
+
+    setDraftEventJson(draftEvent);
+  }, [pubkey, settings.includeClientTag]);
+
   // Debounced draft save (save every 2 seconds of inactivity)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -235,9 +308,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       if (editorRef.current) {
         setIsEditorEmpty(editorRef.current.isEmpty());
       }
+      // Update draft event JSON preview
+      if (settings.showEventJson) {
+        generateDraftEventJson();
+      }
     }, 2000);
     return () => clearInterval(timer);
-  }, [saveDraft]);
+  }, [saveDraft, settings.showEventJson, generateDraftEventJson]);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -406,14 +483,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           content: content.trim(),
           tags,
         });
-
-        // Set preview event (unsigned)
-        setPreviewEvent(draft);
-
         const event = await factory.sign(draft);
-
-        // Update preview event (signed)
-        setPreviewEvent(event);
 
         // Store the signed event for potential retries
         setLastPublishedEvent(event);
@@ -648,9 +718,12 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem
                     checked={settings.showEventJson}
-                    onCheckedChange={(checked) =>
-                      updateSetting("showEventJson", checked)
-                    }
+                    onCheckedChange={(checked) => {
+                      updateSetting("showEventJson", checked);
+                      if (checked) {
+                        generateDraftEventJson();
+                      }
+                    }}
                   >
                     Show event JSON
                   </DropdownMenuCheckboxItem>
@@ -692,14 +765,14 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             </div>
 
             {/* Event JSON Preview */}
-            {settings.showEventJson && previewEvent && (
+            {settings.showEventJson && draftEventJson && (
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  Event JSON {previewEvent.sig ? "(Signed)" : "(Unsigned)"}
+                  Event JSON (Draft - Unsigned)
                 </div>
                 <div className="max-h-64">
                   <CopyableJsonViewer
-                    json={JSON.stringify(previewEvent, null, 2)}
+                    json={JSON.stringify(draftEventJson, null, 2)}
                   />
                 </div>
               </div>
