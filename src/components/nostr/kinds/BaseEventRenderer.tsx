@@ -172,29 +172,27 @@ export function EventMenu({ event }: { event: NostrEvent }) {
   };
 
   const zapEvent = () => {
-    // Create event pointer for the zap
-    let eventPointer;
-    if (isAddressableKind(event.kind)) {
-      const dTag = getTagValue(event, "d") || "";
-      eventPointer = {
-        kind: event.kind,
-        pubkey: event.pubkey,
-        identifier: dTag,
-      };
-    } else {
-      eventPointer = {
-        id: event.id,
-      };
-    }
-
     // Get semantic author (e.g., zapper for zaps, host for streams)
     const recipientPubkey = getSemanticAuthor(event);
 
-    // Open zap window with event context
-    addWindow("zap", {
-      recipientPubkey,
-      eventPointer,
-    });
+    // For addressable events, use addressPointer; for regular events, use eventPointer
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      addWindow("zap", {
+        recipientPubkey,
+        eventPointer: { id: event.id },
+        addressPointer: {
+          kind: event.kind,
+          pubkey: event.pubkey,
+          identifier: dTag,
+        },
+      });
+    } else {
+      addWindow("zap", {
+        recipientPubkey,
+        eventPointer: { id: event.id },
+      });
+    }
   };
 
   const openChatWindow = () => {
@@ -334,29 +332,27 @@ export function EventContextMenu({
   };
 
   const zapEvent = () => {
-    // Create event pointer for the zap
-    let eventPointer;
-    if (isAddressableKind(event.kind)) {
-      const dTag = getTagValue(event, "d") || "";
-      eventPointer = {
-        kind: event.kind,
-        pubkey: event.pubkey,
-        identifier: dTag,
-      };
-    } else {
-      eventPointer = {
-        id: event.id,
-      };
-    }
-
     // Get semantic author (e.g., zapper for zaps, host for streams)
     const recipientPubkey = getSemanticAuthor(event);
 
-    // Open zap window with event context
-    addWindow("zap", {
-      recipientPubkey,
-      eventPointer,
-    });
+    // For addressable events, use addressPointer; for regular events, use eventPointer
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      addWindow("zap", {
+        recipientPubkey,
+        eventPointer: { id: event.id },
+        addressPointer: {
+          kind: event.kind,
+          pubkey: event.pubkey,
+          identifier: dTag,
+        },
+      });
+    } else {
+      addWindow("zap", {
+        recipientPubkey,
+        eventPointer: { id: event.id },
+      });
+    }
   };
 
   const openChatWindow = () => {
