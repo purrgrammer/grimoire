@@ -460,6 +460,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   : r,
               ),
             );
+            return { success: true, relayUrl };
           } catch (error) {
             console.error(`Failed to publish to ${relayUrl}:`, error);
 
@@ -478,29 +479,49 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   : r,
               ),
             );
+            return { success: false, relayUrl };
           }
         });
 
         // Wait for all publishes to complete (settled = all finished, regardless of success/failure)
-        await Promise.allSettled(publishPromises);
+        const results = await Promise.allSettled(publishPromises);
 
-        // Add to event store for immediate local availability
-        eventStore.add(event);
+        // Check how many relays succeeded
+        const successCount = results.filter(
+          (r) => r.status === "fulfilled" && r.value.success,
+        ).length;
 
-        // Clear draft from localStorage
-        if (pubkey) {
-          const draftKey = windowId
-            ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-            : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-          localStorage.removeItem(draftKey);
+        if (successCount > 0) {
+          // At least one relay succeeded - add to event store
+          eventStore.add(event);
+
+          // Clear draft from localStorage
+          if (pubkey) {
+            const draftKey = windowId
+              ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+              : `${DRAFT_STORAGE_KEY}-${pubkey}`;
+            localStorage.removeItem(draftKey);
+          }
+
+          // Show published preview
+          setShowPublishedPreview(true);
+
+          // Show success toast
+          if (successCount === selected.length) {
+            toast.success(
+              `Published to all ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
+            );
+          } else {
+            toast.warning(
+              `Published to ${successCount} of ${selected.length} relays`,
+            );
+          }
+        } else {
+          // All relays failed - keep the editor visible with content
+          toast.error(
+            "Failed to publish to any relay. Please check your relay connections and try again.",
+          );
         }
-
-        // Show published preview
-        setShowPublishedPreview(true);
-
-        toast.success(
-          `Published to ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
-        );
       } catch (error) {
         console.error("Failed to publish:", error);
         toast.error(
