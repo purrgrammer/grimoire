@@ -31,8 +31,7 @@ import { PrivateKeySigner } from "applesauce-signers";
 import { generateSecretKey } from "nostr-tools";
 import QRCode from "qrcode";
 import { useProfile } from "@/hooks/useProfile";
-import { use$ } from "applesauce-react/hooks";
-import eventStore from "@/services/event-store";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useWallet } from "@/hooks/useWallet";
 import { getDisplayName } from "@/lib/nostr-utils";
 import { KindRenderer } from "./nostr/kinds";
@@ -101,16 +100,18 @@ export function ZapWindow({
   customTags,
   relays: propsRelays,
 }: ZapWindowProps) {
-  // Load event if we have an eventPointer and no recipient pubkey (derive from event author)
-  const event = use$(() => {
-    if (!eventPointer) return undefined;
-    return eventStore.event(eventPointer.id);
-  }, [eventPointer]);
+  // Load event if we have a pointer - supports both EventPointer and AddressPointer
+  const event = useNostrEvent(eventPointer || addressPointer);
 
-  // Resolve recipient: use provided pubkey or derive from semantic author
-  // For zaps, this returns the zapper; for streams, returns the host; etc.
+  // Resolve recipient pubkey:
+  // 1. Use provided pubkey if available
+  // 2. Otherwise derive from event's semantic author (zapper, host, etc.)
+  // 3. Fall back to addressPointer.pubkey for addressable events
   const recipientPubkey =
-    initialRecipientPubkey || (event ? getSemanticAuthor(event) : "");
+    initialRecipientPubkey ||
+    (event ? getSemanticAuthor(event) : "") ||
+    addressPointer?.pubkey ||
+    "";
 
   const recipientProfile = useProfile(recipientPubkey);
 
