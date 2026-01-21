@@ -447,6 +447,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       { id: groupId, relay: relayUrl },
       content,
       {
+        previous: [], // No threading for now
         emojis: options?.emojiTags?.map((e) => ({
           shortcode: e.shortcode,
           url: e.url,
