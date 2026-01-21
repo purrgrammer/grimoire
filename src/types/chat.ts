@@ -6,6 +6,7 @@ import type { NostrEvent } from "./nostr";
  */
 export const CHAT_KINDS = [
   9, // NIP-29: Group chat messages
+  1111, // NIP-22: Comments
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
   1311, // NIP-53: Live chat messages
   9735, // NIP-57: Zap receipts (part of chat context)
@@ -16,11 +17,12 @@ export const CHAT_KINDS = [
  */
 export type ChatProtocol =
   | "nip-c7"
+  | "nip-10"
   | "nip-17"
+  | "nip-22"
   | "nip-28"
   | "nip-29"
-  | "nip-53"
-  | "nip-10";
+  | "nip-53";
 
 /**
  * Conversation type
@@ -88,6 +90,10 @@ export interface ConversationMetadata {
   providedEventId?: string; // Original event from nevent (may be reply)
   threadDepth?: number; // Approximate depth of thread
   relays?: string[]; // Relays for this conversation
+
+  // NIP-22 comment thread
+  rootEventKind?: number; // Kind of root event being commented on
+  commentCount?: number; // Number of comments (updated reactively)
 }
 
 /**
@@ -119,6 +125,8 @@ export interface MessageMetadata {
   zapRecipient?: string; // Pubkey of zap recipient
   // NIP-61 nutzap-specific metadata
   nutzapUnit?: string; // Unit for nutzap amount (sat, usd, eur, etc.)
+  // NIP-22 comment thread metadata
+  isRootMessage?: boolean; // If true, this is the root event being commented on
 }
 
 /**
@@ -235,6 +243,26 @@ export interface ThreadIdentifier {
 }
 
 /**
+ * NIP-22 comment thread identifier (any event with kind 1111 comments)
+ */
+export interface CommentThreadIdentifier {
+  type: "comment-thread";
+  /** Event or address pointer to the root event being commented on */
+  value: {
+    // For regular events (note1, nevent1)
+    id?: string;
+    relays?: string[];
+    author?: string;
+    kind?: number;
+    // For addressable events (naddr1)
+    pubkey?: string;
+    identifier?: string;
+  };
+  /** Relay hints from encoding */
+  relays?: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -245,7 +273,8 @@ export type ProtocolIdentifier =
   | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier
-  | ThreadIdentifier;
+  | ThreadIdentifier
+  | CommentThreadIdentifier;
 
 /**
  * Chat command parsing result
@@ -281,9 +310,11 @@ export interface CreateConversationParams {
 export interface ChatCapabilities {
   supportsEncryption: boolean;
   supportsThreading: boolean;
+  supportsReactions?: boolean;
+  supportsZaps?: boolean;
   supportsModeration: boolean;
   supportsRoles: boolean;
   supportsGroupManagement: boolean;
-  canCreateConversations: boolean;
+  canCreateConversations?: boolean;
   requiresRelay: boolean;
 }

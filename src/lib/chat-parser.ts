@@ -1,6 +1,7 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 // import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "./chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
@@ -57,18 +58,20 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
           adapter: null, // No adapter needed for group list view
         };
       }
-    } catch (e) {
+    } catch (_e) {
       // Not a valid naddr, continue to adapter parsing
     }
   }
 
   // Try each adapter in priority order
+  // More specific adapters first, NIP-22 last as fallback
   const adapters = [
-    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note)
+    new Nip10Adapter(), // NIP-10 - Thread chat (kind 1 notes only)
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
-    new Nip29Adapter(), // Phase 4 - Relay groups
-    new Nip53Adapter(), // Phase 5 - Live activity chat
+    new Nip29Adapter(), // Phase 4 - Relay groups (kind 39000)
+    new Nip53Adapter(), // Phase 5 - Live activity chat (kind 30311)
+    new Nip22Adapter(), // NIP-22 - Comment threads (fallback for all other kinds)
     // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
@@ -87,10 +90,15 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
-  - nevent1.../note1... (NIP-10 thread chat, kind 1 notes)
+  - nevent1.../note1... (NIP-10 thread chat, kind 1 notes only)
     Examples:
       chat nevent1qqsxyz... (thread with relay hints)
       chat note1abc... (thread with event ID only)
+  - nevent1.../note1.../naddr1... (NIP-22 comment threads, any kind except kind 1)
+    Examples:
+      chat nevent1... (article, live stream, or other event with comments)
+      chat note1... (any non-kind-1 event)
+      chat naddr1... (addressable event like 30023 article)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
