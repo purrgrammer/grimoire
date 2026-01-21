@@ -172,8 +172,9 @@ function serializeContent(editor: any): SerializedContent {
   const seenBlobs = new Set<string>();
   const seenAddrs = new Set<string>();
 
-  // Get plain text representation
-  const text = editor.getText();
+  // Get plain text representation with single newline between blocks
+  // (TipTap's default is double newline which adds extra blank lines)
+  const text = editor.getText({ blockSeparator: "\n" });
 
   // Walk the document to collect emoji, blob, and address reference data
   editor.state.doc.descendants((node: any) => {
@@ -533,7 +534,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
       () => ({
         focus: () => editor?.commands.focus(),
         clear: () => editor?.commands.clearContent(),
-        getContent: () => editor?.getText() || "",
+        getContent: () => editor?.getText({ blockSeparator: "\n" }) || "",
         getSerializedContent: () => {
           if (!editor)
             return {

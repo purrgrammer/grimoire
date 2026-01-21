@@ -966,7 +966,7 @@ export const MentionEditor = forwardRef<
       () => ({
         focus: () => editor?.commands.focus(),
         clear: () => editor?.commands.clearContent(),
-        getContent: () => editor?.getText() || "",
+        getContent: () => editor?.getText({ blockSeparator: "\n" }) || "",
         getSerializedContent: () => {
           if (!editor)
             return {
