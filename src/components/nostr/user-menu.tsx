@@ -487,7 +487,7 @@ export default function UserMenu() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="cursor-crosshair"
-            onClick={() => addWindow("settings", {}, "Settings")}
+            onClick={() => addWindow("settings", {}, "settings")}
           >
             <Settings className="size-4 text-muted-foreground mr-2" />
             <span className="text-sm">Settings</span>
