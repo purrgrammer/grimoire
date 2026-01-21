@@ -47,6 +47,9 @@ const ZapWindow = lazy(() =>
   import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
 );
 const CountViewer = lazy(() => import("./CountViewer"));
+const PostViewer = lazy(() =>
+  import("./PostViewer").then((m) => ({ default: m.PostViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -240,6 +243,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             onClose={onClose}
           />
         );
+        break;
+      case "post":
+        content = <PostViewer windowId={window.id} />;
         break;
       default:
         content = (
