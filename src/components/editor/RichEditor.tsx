@@ -45,6 +45,7 @@ export interface RichEditorProps {
     eventRefs: string[],
     addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
   ) => void;
+  onChange?: () => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   onFilePaste?: (files: File[]) => void;
@@ -230,6 +231,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     {
       placeholder = "Write your note...",
       onSubmit,
+      onChange,
       searchProfiles,
       searchEmojis,
       onFilePaste,
@@ -521,6 +523,9 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         },
       },
       autofocus: autoFocus,
+      onUpdate: () => {
+        onChange?.();
+      },
     });
 
     // Expose editor methods

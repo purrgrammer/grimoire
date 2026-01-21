@@ -300,27 +300,50 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     setDraftEventJson(draftEvent);
   }, [pubkey, settings.includeClientTag]);
 
-  // Debounced draft save (save every 2 seconds of inactivity)
-  useEffect(() => {
-    const timer = setInterval(() => {
+  // Debounced handlers for editor changes
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const jsonUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const handleEditorChange = useCallback(() => {
+    // Update empty state immediately
+    if (editorRef.current) {
+      setIsEditorEmpty(editorRef.current.isEmpty());
+    }
+
+    // Debounce draft save (2 seconds)
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+    draftSaveTimeoutRef.current = setTimeout(() => {
       saveDraft();
-      // Update empty state
-      if (editorRef.current) {
-        setIsEditorEmpty(editorRef.current.isEmpty());
-      }
     }, 2000);
-    return () => clearInterval(timer);
-  }, [saveDraft]);
 
-  // Update JSON preview more frequently for responsive UI
+    // Debounce JSON update (200ms for responsive feel)
+    if (settings.showEventJson) {
+      if (jsonUpdateTimeoutRef.current) {
+        clearTimeout(jsonUpdateTimeoutRef.current);
+      }
+      jsonUpdateTimeoutRef.current = setTimeout(() => {
+        generateDraftEventJson();
+      }, 200);
+    }
+  }, [saveDraft, settings.showEventJson, generateDraftEventJson]);
+
+  // Cleanup timeouts on unmount
   useEffect(() => {
-    if (!settings.showEventJson) return;
-
-    const timer = setInterval(() => {
-      generateDraftEventJson();
-    }, 200);
-    return () => clearInterval(timer);
-  }, [settings.showEventJson, generateDraftEventJson]);
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+      if (jsonUpdateTimeoutRef.current) {
+        clearTimeout(jsonUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -679,6 +702,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 ref={editorRef}
                 placeholder="What's on your mind?"
                 onSubmit={handlePublish}
+                onChange={handleEditorChange}
                 searchProfiles={searchProfiles}
                 searchEmojis={searchEmojis}
                 onFilePaste={handleFilePaste}
@@ -897,17 +921,31 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         </div>
 
         {/* Event JSON Preview */}
-        {!showPublishedPreview && settings.showEventJson && draftEventJson && (
-          <div className="rounded-lg border border-border overflow-hidden">
-            <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-              Event JSON (Draft - Unsigned)
-            </div>
-            <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
-              <CopyableJsonViewer
-                json={JSON.stringify(draftEventJson, null, 2)}
-              />
-            </div>
-          </div>
+        {settings.showEventJson && (
+          <>
+            {showPublishedPreview && lastPublishedEvent ? (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
+                  <CopyableJsonViewer
+                    json={JSON.stringify(lastPublishedEvent, null, 2)}
+                  />
+                </div>
+              </div>
+            ) : (
+              draftEventJson && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div
+                    className="overflow-y-auto"
+                    style={{ maxHeight: "400px" }}
+                  >
+                    <CopyableJsonViewer
+                      json={JSON.stringify(draftEventJson, null, 2)}
+                    />
+                  </div>
+                </div>
+              )
+            )}
+          </>
         )}
 
         {/* Upload dialog */}
