@@ -1,17 +1,17 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { nip19 } from "nostr-tools";
-import profileCache from "@/services/profile-cache";
+import profileSearch from "@/services/profile-search";
 import { getDisplayName } from "@/lib/nostr-utils";
 
 /**
  * Helper to get display name for a pubkey (synchronous lookup from cache)
  */
 function getDisplayNameForPubkey(pubkey: string): string {
-  // Check profile cache first (includes Dexie + EventStore profiles)
-  const cachedProfile = profileCache.get(pubkey);
+  // Check profile search cache (includes Dexie + EventStore profiles)
+  const cachedProfile = profileSearch.getByPubkey(pubkey);
   if (cachedProfile) {
-    return getDisplayName(pubkey, cachedProfile);
+    return cachedProfile.displayName;
   }
 
   // Fallback to placeholder format
