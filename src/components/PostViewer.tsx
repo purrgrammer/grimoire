@@ -308,13 +308,19 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       if (editorRef.current) {
         setIsEditorEmpty(editorRef.current.isEmpty());
       }
-      // Update draft event JSON preview
-      if (settings.showEventJson) {
-        generateDraftEventJson();
-      }
     }, 2000);
     return () => clearInterval(timer);
-  }, [saveDraft, settings.showEventJson, generateDraftEventJson]);
+  }, [saveDraft]);
+
+  // Update JSON preview more frequently for responsive UI
+  useEffect(() => {
+    if (!settings.showEventJson) return;
+
+    const timer = setInterval(() => {
+      generateDraftEventJson();
+    }, 200);
+    return () => clearInterval(timer);
+  }, [settings.showEventJson, generateDraftEventJson]);
 
   // Blossom upload for attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -763,20 +769,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 )}
               </Button>
             </div>
-
-            {/* Event JSON Preview */}
-            {settings.showEventJson && draftEventJson && (
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  Event JSON (Draft - Unsigned)
-                </div>
-                <div className="max-h-64">
-                  <CopyableJsonViewer
-                    json={JSON.stringify(draftEventJson, null, 2)}
-                  />
-                </div>
-              </div>
-            )}
           </>
         ) : (
           <>
@@ -903,6 +895,20 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             </div>
           )}
         </div>
+
+        {/* Event JSON Preview */}
+        {!showPublishedPreview && settings.showEventJson && draftEventJson && (
+          <div className="rounded-lg border border-border overflow-hidden">
+            <div className="bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+              Event JSON (Draft - Unsigned)
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
+              <CopyableJsonViewer
+                json={JSON.stringify(draftEventJson, null, 2)}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Upload dialog */}
         {uploadDialog}
