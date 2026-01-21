@@ -534,6 +534,9 @@ export function ChatViewer({
 
   // Cleanup subscriptions when conversation changes or component unmounts
   useEffect(() => {
+    // Reset first batch flag when conversation changes
+    setHasLoadedFirstBatch(false);
+
     return () => {
       if (conversation) {
         adapter.cleanup(conversation.id);
@@ -546,6 +549,13 @@ export function ChatViewer({
     () => (conversation ? adapter.loadMessages(conversation) : undefined),
     [adapter, conversation],
   );
+
+  // Track when first batch of messages has loaded
+  useEffect(() => {
+    if (messages && messages.length > 0 && !hasLoadedFirstBatch) {
+      setHasLoadedFirstBatch(true);
+    }
+  }, [messages, hasLoadedFirstBatch]);
 
   // Process messages to include day markers
   const messagesWithMarkers = useMemo(() => {
@@ -588,6 +598,7 @@ export function ChatViewer({
   // State for loading older messages
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [hasLoadedFirstBatch, setHasLoadedFirstBatch] = useState(false);
 
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -998,6 +1009,7 @@ export function ChatViewer({
             components={{
               Header: () =>
                 hasMore &&
+                hasLoadedFirstBatch &&
                 conversationResult.status === "success" &&
                 protocol !== "nip-10" ? (
                   <div className="flex justify-center py-2">
