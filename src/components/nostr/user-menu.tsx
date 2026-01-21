@@ -9,6 +9,7 @@ import {
   Zap,
   LogIn,
   LogOut,
+  Settings,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -514,6 +515,15 @@ export default function UserMenu() {
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+
+          {/* Settings */}
+          <DropdownMenuItem
+            className="cursor-crosshair"
+            onClick={() => addWindow("settings", {}, "Settings")}
+          >
+            <Settings className="size-4 text-muted-foreground mr-2" />
+            <span className="text-sm">Settings</span>
+          </DropdownMenuItem>
 
           {/* Support Grimoire */}
           <DropdownMenuSeparator />

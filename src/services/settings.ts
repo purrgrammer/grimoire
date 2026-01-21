@@ -27,6 +27,8 @@ export interface PostSettings {
 export interface AppearanceSettings {
   /** Theme mode (light, dark, or system) */
   theme: "light" | "dark" | "system";
+  /** Show client tags in event UI */
+  showClientTags: boolean;
   /** Event kinds to render in compact mode */
   compactModeKinds: number[];
   /** Font size multiplier (0.8 = 80%, 1.0 = 100%, 1.2 = 120%) */
@@ -146,6 +148,7 @@ const DEFAULT_POST_SETTINGS: PostSettings = {
 
 const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   theme: "dark",
+  showClientTags: true,
   compactModeKinds: [6, 7, 16, 9735], // reactions, reposts, zaps
   fontSizeMultiplier: 1.0,
   animationsEnabled: true,

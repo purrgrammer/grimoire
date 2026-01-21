@@ -28,6 +28,7 @@ import {
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { useAccount } from "@/hooks/useAccount";
+import { useSettings } from "@/hooks/useSettings";
 import { JsonViewer } from "@/components/JsonViewer";
 import { EmojiPickerDialog } from "@/components/chat/EmojiPickerDialog";
 import { formatTimestamp } from "@/hooks/useLocale";
@@ -531,6 +532,7 @@ export function BaseEventContainer({
 }) {
   const { locale, addWindow } = useGrimoire();
   const { canSign, signer, pubkey } = useAccount();
+  const { settings } = useSettings();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const handleReactClick = () => {
@@ -612,7 +614,7 @@ export function BaseEventContainer({
               >
                 {relativeTime}
               </span>
-              {clientName && (
+              {settings?.appearance?.showClientTags && clientName && (
                 <span className="text-[10px] text-muted-foreground/70">
                   via{" "}
                   {clientAppPointer ? (

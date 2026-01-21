@@ -24,6 +24,7 @@ export type AppId =
   | "wallet"
   | "zap"
   | "post"
+  | "settings"
   | "win";
 
 export interface WindowInstance {

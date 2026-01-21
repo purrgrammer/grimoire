@@ -855,4 +855,16 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     defaultProps: {},
   },
+  settings: {
+    name: "settings",
+    section: "1",
+    synopsis: "settings",
+    description:
+      "Configure Grimoire application settings. Includes post composition settings (client tag), appearance settings (theme, show client tags), and more. Settings are persisted to localStorage and synchronized across all windows.",
+    examples: ["settings    Open settings panel"],
+    seeAlso: ["post", "help"],
+    appId: "settings",
+    category: "System",
+    defaultProps: {},
+  },
 };

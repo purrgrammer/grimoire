@@ -50,6 +50,9 @@ const CountViewer = lazy(() => import("./CountViewer"));
 const PostViewer = lazy(() =>
   import("./PostViewer").then((m) => ({ default: m.PostViewer })),
 );
+const SettingsViewer = lazy(() =>
+  import("./SettingsViewer").then((m) => ({ default: m.SettingsViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -246,6 +249,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "post":
         content = <PostViewer windowId={window.id} />;
+        break;
+      case "settings":
+        content = <SettingsViewer />;
         break;
       default:
         content = (
