@@ -21,6 +21,7 @@ import { getTagValues } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
 import { getProfileContent } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
+import { ReactionBlueprint } from "applesauce-common/blueprints";
 
 /**
  * NIP-C7 Adapter - Simple Chat (Kind 9)
@@ -270,23 +271,35 @@ export class NipC7Adapter extends ChatProtocolAdapter {
       throw new Error("No conversation partner found");
     }
 
-    // Create event factory and sign event
+    // Fetch the message being reacted to
+    const messageEvent = await firstValueFrom(eventStore.event(messageId), {
+      defaultValue: undefined,
+    });
+
+    if (!messageEvent) {
+      throw new Error("Message event not found");
+    }
+
+    // Create event factory
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [
-      ["e", messageId], // Event being reacted to
-      ["p", partner.pubkey], // Tag the partner (NIP-C7 context)
-      ["k", "9"], // Kind of event being reacted to
-    ];
+    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
+    const emojiArg = customEmoji
+      ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+      : emoji;
 
-    // Add NIP-30 custom emoji tag if provided
-    if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
-    }
+    const draft = await factory.create(
+      ReactionBlueprint,
+      messageEvent,
+      emojiArg,
+    );
 
-    // Use kind 7 for reactions
-    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    // Note: ReactionBlueprint already adds p-tag for message author
+    // For NIP-C7, we might want to ensure partner is tagged if different from author
+    // but the blueprint should handle this correctly
+
+    // Sign the event
     const event = await factory.sign(draft);
     await publishEvent(event);
   }

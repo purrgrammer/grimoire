@@ -23,7 +23,10 @@ import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeURL } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
-import { NoteReplyBlueprint } from "applesauce-common/blueprints";
+import {
+  NoteReplyBlueprint,
+  ReactionBlueprint,
+} from "applesauce-common/blueprints";
 import { getNip10References } from "applesauce-common/helpers";
 import {
   getZapAmount,
@@ -429,19 +432,18 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [
-      ["e", messageId], // Event being reacted to
-      ["k", "1"], // Kind of event being reacted to
-      ["p", messageEvent.pubkey], // Author of message
-    ];
+    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
+    const emojiArg = customEmoji
+      ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+      : emoji;
 
-    // Add NIP-30 custom emoji tag if provided
-    if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
-    }
+    const draft = await factory.create(
+      ReactionBlueprint,
+      messageEvent,
+      emojiArg,
+    );
 
-    // Create and sign kind 7 event
-    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish to conversation relays
