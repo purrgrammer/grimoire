@@ -29,7 +29,7 @@ import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
-import { getTagValue } from "applesauce-core/helpers";
+import { getTagValue, parseCoordinate } from "applesauce-core/helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
@@ -496,7 +496,7 @@ export function BaseEventContainer({
     label?: string;
   };
 }) {
-  const { locale } = useGrimoire();
+  const { locale, addWindow } = useGrimoire();
 
   // Format relative time for display
   const relativeTime = formatTimestamp(
@@ -515,8 +515,22 @@ export function BaseEventContainer({
   // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
-  // Get client tag if present
-  const clientName = getTagValue(event, "client");
+  // Get client tag if present: ["client", "<name>", "<31990:pubkey:d-tag>"]
+  const clientTag = event.tags.find((t) => t[0] === "client");
+  const clientName = clientTag?.[1];
+  const clientAddress = clientTag?.[2];
+  const parsedClientAddress = clientAddress
+    ? parseCoordinate(clientAddress)
+    : null;
+  const clientAppPointer =
+    parsedClientAddress?.kind === 31990 ? parsedClientAddress : null;
+
+  const handleClientClick = (e: React.MouseEvent) => {
+    if (clientAppPointer) {
+      e.stopPropagation();
+      addWindow("open", { pointer: clientAppPointer });
+    }
+  };
 
   return (
     <EventContextMenu event={event}>
@@ -532,7 +546,17 @@ export function BaseEventContainer({
             </span>
             {clientName && (
               <span className="text-[10px] text-muted-foreground/70">
-                via {clientName}
+                via{" "}
+                {clientAppPointer ? (
+                  <button
+                    onClick={handleClientClick}
+                    className="hover:underline hover:text-foreground cursor-crosshair"
+                  >
+                    {clientName}
+                  </button>
+                ) : (
+                  clientName
+                )}
               </span>
             )}
           </div>
