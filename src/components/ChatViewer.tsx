@@ -896,7 +896,7 @@ export function ChatViewer({
                     </div>
                     {/* Description */}
                     {conversation.metadata?.description && (
-                      <p className="text-xs text-primary-foreground/90">
+                      <p className="text-xs opacity-90">
                         {conversation.metadata.description}
                       </p>
                     )}
@@ -909,22 +909,22 @@ export function ChatViewer({
                             e.stopPropagation();
                             handleNipClick();
                           }}
-                          className="rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono hover:bg-primary-foreground/30 transition-colors cursor-pointer text-primary-foreground"
+                          className="rounded bg-tooltip-foreground/20 px-1.5 py-0.5 font-mono hover:bg-tooltip-foreground/30 transition-colors cursor-pointer"
                         >
                           {conversation.protocol.toUpperCase()}
                         </button>
                       )}
                       {(conversation.type === "group" ||
                         conversation.type === "live-chat") && (
-                        <span className="text-primary-foreground/60">•</span>
+                        <span className="opacity-60">•</span>
                       )}
                       {conversation.protocol === "nip-10" ? (
-                        <span className="flex items-center gap-1 text-primary-foreground/80">
+                        <span className="flex items-center gap-1 opacity-80">
                           <FileText className="size-3" />
                           Thread
                         </span>
                       ) : (
-                        <span className="capitalize text-primary-foreground/80">
+                        <span className="capitalize opacity-80">
                           {conversation.type}
                         </span>
                       )}
@@ -932,19 +932,17 @@ export function ChatViewer({
                     {/* Live Activity Status */}
                     {liveActivity?.status && (
                       <div className="flex items-center gap-1.5 text-xs">
-                        <span className="text-primary-foreground/80">
-                          Status:
-                        </span>
+                        <span className="opacity-80">Status:</span>
                         <StatusBadge status={liveActivity.status} size="xs" />
                       </div>
                     )}
                     {/* Host Info */}
                     {liveActivity?.hostPubkey && (
-                      <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
+                      <div className="flex items-center gap-1.5 text-xs opacity-80">
                         <span>Host:</span>
                         <UserName
                           pubkey={liveActivity.hostPubkey}
-                          className="text-xs text-primary-foreground"
+                          className="text-xs"
                         />
                       </div>
                     )}
