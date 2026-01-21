@@ -468,6 +468,212 @@ Grimoire provides a tiling window manager interface where every Nostr concept is
 
 ---
 
+## Value Propositions by User Archetype
+
+### Relay Operator
+
+**Pain Points**: Monitoring what's published to my relay, debugging client issues, understanding traffic patterns, verifying NIP compliance
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| `req` command with relay targeting | Query your specific relay to see exactly what's stored |
+| `count` command (NIP-45) | Get event counts by kind, author, time range on your relay |
+| `conn` monitor | Watch real-time connection states and relay notices |
+| `relay` command | Verify your NIP-11 document is correct |
+| Kind browser | See all 92 event types that might hit your relay |
+| Filter builder | Test complex filter queries before optimizing |
+
+**Killer Feature**: Open multiple windows targeting your relay vs aggregators to compare what you have vs what's "out there"
+
+**Example Workflow**:
+```
+req -k 1 -l 100 wss://my-relay.com    # Recent notes on my relay
+count wss://my-relay.com -k 0         # How many profiles cached?
+relay wss://my-relay.com              # Verify NIP-11 config
+```
+
+---
+
+### Relay Developer
+
+**Pain Points**: Testing NIP implementations, debugging protocol edge cases, verifying filter behavior, comparing against reference implementations
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| `nip` viewer | Read NIP specs directly in-app while coding |
+| `kind` explorer | Understand event structure for any kind |
+| REQ state machine | See exactly how subscriptions flow (EOSE, errors) |
+| Multi-relay windows | Compare your relay's behavior vs established relays |
+| `decode`/`encode` | Debug bech32 encoding issues |
+| Event detail view | Inspect raw JSON, tags, signatures |
+
+**Killer Feature**: Side-by-side windows showing same query on your dev relay vs production relay to spot behavioral differences
+
+**Example Workflow**:
+```
+nip 45                                # Read COUNT spec
+req -k 1 -l 10 ws://localhost:7777    # Test local relay
+req -k 1 -l 10 wss://relay.damus.io   # Compare to reference
+```
+
+---
+
+### Client Developer
+
+**Pain Points**: Understanding protocol nuances, testing event rendering, debugging relay interactions, learning NIPs quickly
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| 92 event renderers | Reference implementations for every major kind |
+| `kinds` browser | See all registered kinds with rendering status |
+| `nips` browser | Quick NIP reference without leaving context |
+| Event detail views | See how events should be parsed and displayed |
+| Spells system | Save test queries for regression testing |
+| Raw event JSON | Always accessible for debugging |
+
+**Killer Feature**: The renderer registry pattern - see exactly how to handle kind 30023 articles, kind 9735 zaps, kind 1063 files, etc.
+
+**Example Workflow**:
+```
+kind 30023                            # How do articles work?
+req -k 30023 -l 5                     # See real examples
+open naddr1...                        # Deep dive on one article
+```
+
+**Code Reference**: `src/components/nostr/kinds/` contains 92 renderer implementations as reference
+
+---
+
+### Nostr Enthusiast / Researcher
+
+**Pain Points**: Understanding the full protocol, exploring beyond social features, discovering new NIPs and event types, sharing discoveries
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| Complete NIP coverage | Explore 56+ NIPs in one interface |
+| Event kind diversity | See git repos, code snippets, calendar events, badges |
+| Spellbooks | Save and share your exploration setups |
+| Protocol-first design | Every Nostr concept is first-class |
+| Multi-window research | Compare events, follow references, deep dive |
+
+**Killer Feature**: Spellbooks let you create "research stations" - a saved layout for exploring NIP-34 git events, another for NIP-53 live activities, share them with the community
+
+**Example Workflow**:
+```
+kinds                                 # Browse all 92+ supported kinds
+nip 34                                # Read about git on Nostr
+req -k 30617 -l 20                    # Find repositories
+open naddr1...                        # Explore one repo
+```
+
+---
+
+### Content Creator
+
+**Pain Points**: Managing content across types (articles, videos, streams), understanding reach, organizing published work
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| Multi-kind support | Long-form (30023), video (21), pictures (20), code (1337) |
+| `blossom` command | Upload and manage media files |
+| Profile deep-dive | See all your events organized by kind |
+| `zap` command | Tip other creators easily |
+| NIP-53 live chat | Participate in live streams |
+
+**Killer Feature**: Query your own content across all kinds in one view - see your articles, videos, and notes together
+
+**Example Workflow**:
+```
+profile $me                           # See my profile
+req -a $me -k 30023                   # My articles
+req -a $me -k 20,21,22                # My media
+blossom list                          # My uploaded files
+```
+
+**Current Limitation**: Grimoire is read-heavy; publishing features are basic. Best paired with a dedicated publishing client.
+
+---
+
+### Investor / Ecosystem Evaluator
+
+**Pain Points**: Understanding Nostr's capabilities, evaluating protocol maturity, assessing ecosystem health, due diligence on projects
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| NIP browser | See full protocol specification landscape |
+| Kind diversity | Understand Nostr isn't just "Twitter clone" |
+| Relay info viewer | Evaluate relay infrastructure |
+| App handlers (NIP-89) | See the application ecosystem |
+| Git events (NIP-34) | Nostr as development platform |
+| Wallet integration | See Lightning/Nostr synergy |
+
+**Killer Feature**: In 10 minutes, demonstrate that Nostr supports: social, git, marketplace, streaming, calendar, badges, wallets, file storage - all interoperable
+
+**Example Workflow**:
+```
+nips                                  # 100+ NIPs defined
+kinds                                 # 92+ kinds supported
+req -k 30617 -l 10                    # Git repositories
+req -k 30311 -l 10                    # Live streams
+req -k 31990 -l 10                    # Application handlers
+wallet                                # Lightning integration
+```
+
+---
+
+### Regular Nostr User
+
+**Pain Points**: Want more than basic clients offer, curious about protocol, power-user needs
+
+**Grimoire Value**:
+| Feature | Benefit |
+|---------|---------|
+| Multi-window | Follow multiple conversations/topics simultaneously |
+| Saved queries (Spells) | Quick access to favorite feeds |
+| Advanced filtering | Find exactly what you want |
+| `$contacts` alias | Query only people you follow |
+| Chat support | NIP-29 groups, NIP-53 live chat |
+| Wallet | NWC integration for payments |
+
+**Killer Feature**: Workspaces - set up a "Morning" workspace with news feeds, a "Dev" workspace with git repos and code, a "Social" workspace with DMs and mentions
+
+**Example Workflow**:
+```
+req -a $contacts -k 1 --since 1d      # What did my follows post today?
+chat nos.lol'welcome                  # Join a group
+zap npub1...                          # Tip someone
+spells                                # My saved queries
+```
+
+**Honest Assessment**: For casual browsing, Primal/Damus are simpler. Grimoire shines when you want **depth** and **control**.
+
+---
+
+### Summary Matrix
+
+| Archetype | Primary Value | Key Commands | Fit Score |
+|-----------|--------------|--------------|-----------|
+| Relay Operator | Monitor & debug relay | `req`, `count`, `conn`, `relay` | ★★★★★ |
+| Relay Developer | Test NIP compliance | `nip`, `req`, `decode` | ★★★★★ |
+| Client Developer | Reference implementations | `kind`, `nips`, renderers | ★★★★★ |
+| Enthusiast/Researcher | Protocol exploration | `nips`, `kinds`, spellbooks | ★★★★★ |
+| Content Creator | Multi-kind management | `blossom`, `profile`, `req` | ★★★☆☆ |
+| Investor | Ecosystem evaluation | `nips`, `kinds`, diversity | ★★★★☆ |
+| Regular User | Power-user features | `req`, workspaces, spells | ★★★☆☆ |
+
+**Target Audience Priority**:
+1. **Primary**: Relay operators, relay devs, client devs (★★★★★)
+2. **Secondary**: Enthusiasts, researchers, investors (★★★★☆)
+3. **Tertiary**: Content creators, regular users (★★★☆☆)
+
+---
+
 ## Appendix: Technical Architecture
 
 ### State Flow Diagram
