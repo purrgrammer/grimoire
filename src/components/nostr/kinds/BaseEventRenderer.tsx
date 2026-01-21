@@ -515,6 +515,9 @@ export function BaseEventContainer({
   // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
+  // Get client tag if present
+  const clientName = getTagValue(event, "client");
+
   return (
     <EventContextMenu event={event}>
       <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
@@ -527,6 +530,11 @@ export function BaseEventContainer({
             >
               {relativeTime}
             </span>
+            {clientName && (
+              <span className="text-[10px] text-muted-foreground/70">
+                via {clientName}
+              </span>
+            )}
           </div>
           <EventMenu event={event} />
         </div>
