@@ -54,7 +54,7 @@ export function SettingsViewer() {
                   </p>
                 </div>
                 <Select value={themeId} onValueChange={setTheme}>
-                  <SelectTrigger id="theme" className="w-48">
+                  <SelectTrigger id="theme" className="w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
