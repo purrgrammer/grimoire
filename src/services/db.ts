@@ -8,6 +8,10 @@ import type {
   SpellbookContent,
   SpellbookEvent,
 } from "@/types/spell";
+import type {
+  StoredSignRequest,
+  StoredPublishRequest,
+} from "@/types/publishing";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -121,6 +125,8 @@ class GrimoireDb extends Dexie {
   spellbooks!: Table<LocalSpellbook>;
   lnurlCache!: Table<LnurlCache>;
   grimoireZaps!: Table<GrimoireZap>;
+  signHistory!: Table<StoredSignRequest>;
+  publishHistory!: Table<StoredPublishRequest>;
 
   constructor(name: string) {
     super(name);
@@ -387,6 +393,27 @@ class GrimoireDb extends Dexie {
       lnurlCache: "&address, fetchedAt",
       grimoireZaps:
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+    });
+
+    // Version 18: Add sign/publish history for unified publishing system
+    this.version(18).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      // Sign history: track all signing operations
+      signHistory: "&id, timestamp, status, eventKind",
+      // Publish history: track all publish operations
+      publishHistory: "&id, eventId, timestamp, status, eventKind",
     });
   }
 }
