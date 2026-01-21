@@ -23,10 +23,13 @@ import {
   ExternalLink,
   Zap,
   MessageSquare,
+  SmilePlus,
 } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
+import { useAccount } from "@/hooks/useAccount";
 import { JsonViewer } from "@/components/JsonViewer";
+import { EmojiPickerDialog } from "@/components/chat/EmojiPickerDialog";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
@@ -36,6 +39,11 @@ import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
 import { getSemanticAuthor } from "@/lib/semantic-author";
+import { EventFactory } from "applesauce-core/event-factory";
+import { ReactionBlueprint } from "applesauce-common/blueprints";
+import { publishEventToRelays } from "@/services/hub";
+import { selectRelaysForInteraction } from "@/services/relay-selection";
+import type { EmojiTag } from "@/lib/emoji-helpers";
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -115,7 +123,15 @@ function ReplyPreview({
 /**
  * Event menu - universal actions for any event
  */
-export function EventMenu({ event }: { event: NostrEvent }) {
+export function EventMenu({
+  event,
+  onReactClick,
+  canSign,
+}: {
+  event: NostrEvent;
+  onReactClick?: () => void;
+  canSign?: boolean;
+}) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
@@ -241,6 +257,12 @@ export function EventMenu({ event }: { event: NostrEvent }) {
             Chat
           </DropdownMenuItem>
         )}
+        {canSign && onReactClick && (
+          <DropdownMenuItem onClick={onReactClick}>
+            <SmilePlus className="size-4 mr-2" />
+            React
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (
@@ -272,9 +294,13 @@ export function EventMenu({ event }: { event: NostrEvent }) {
 export function EventContextMenu({
   event,
   children,
+  onReactClick,
+  canSign,
 }: {
   event: NostrEvent;
   children: React.ReactNode;
+  onReactClick?: () => void;
+  canSign?: boolean;
 }) {
   const { addWindow } = useGrimoire();
   const { copy, copied } = useCopy();
@@ -397,6 +423,12 @@ export function EventContextMenu({
             Chat
           </ContextMenuItem>
         )}
+        {canSign && onReactClick && (
+          <ContextMenuItem onClick={onReactClick}>
+            <SmilePlus className="size-4 mr-2" />
+            React
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={copyEventId}>
           {copied ? (
@@ -498,6 +530,36 @@ export function BaseEventContainer({
   };
 }) {
   const { locale, addWindow } = useGrimoire();
+  const { canSign, signer, pubkey } = useAccount();
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const handleReactClick = () => {
+    setEmojiPickerOpen(true);
+  };
+
+  const handleEmojiSelect = async (emoji: string, customEmoji?: EmojiTag) => {
+    if (!signer || !pubkey) return;
+
+    try {
+      const factory = new EventFactory();
+      factory.setSigner(signer);
+
+      const emojiArg = customEmoji
+        ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+        : emoji;
+
+      const draft = await factory.create(ReactionBlueprint, event, emojiArg);
+      const signed = await factory.sign(draft);
+
+      // Select relays per NIP-65: author's outbox + target's inbox
+      // Use semantic author (e.g., zapper for zaps, host for streams)
+      const targetPubkey = getSemanticAuthor(event);
+      const relays = await selectRelaysForInteraction(pubkey, targetPubkey);
+      await publishEventToRelays(signed, relays);
+    } catch (err) {
+      console.error("[BaseEventContainer] Failed to send reaction:", err);
+    }
+  };
 
   // Format relative time for display
   const relativeTime = formatTimestamp(
@@ -534,38 +596,53 @@ export function BaseEventContainer({
   };
 
   return (
-    <EventContextMenu event={event}>
-      <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
-        <div className="flex flex-row justify-between items-center">
-          <div className="flex flex-row gap-2 items-baseline">
-            <EventAuthor pubkey={displayPubkey} />
-            <span
-              className="text-xs text-muted-foreground cursor-help"
-              title={absoluteTime}
-            >
-              {relativeTime}
-            </span>
-            {clientName && (
-              <span className="text-[10px] text-muted-foreground/70">
-                via{" "}
-                {clientAppPointer ? (
-                  <button
-                    onClick={handleClientClick}
-                    className="hover:underline hover:text-foreground cursor-crosshair"
-                  >
-                    {clientName}
-                  </button>
-                ) : (
-                  clientName
-                )}
+    <>
+      <EventContextMenu
+        event={event}
+        onReactClick={handleReactClick}
+        canSign={canSign}
+      >
+        <div className="flex flex-col gap-2 p-3 border-b border-border/50 last:border-0">
+          <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-row gap-2 items-baseline">
+              <EventAuthor pubkey={displayPubkey} />
+              <span
+                className="text-xs text-muted-foreground cursor-help"
+                title={absoluteTime}
+              >
+                {relativeTime}
               </span>
-            )}
+              {clientName && (
+                <span className="text-[10px] text-muted-foreground/70">
+                  via{" "}
+                  {clientAppPointer ? (
+                    <button
+                      onClick={handleClientClick}
+                      className="hover:underline hover:text-foreground cursor-crosshair"
+                    >
+                      {clientName}
+                    </button>
+                  ) : (
+                    clientName
+                  )}
+                </span>
+              )}
+            </div>
+            <EventMenu
+              event={event}
+              onReactClick={handleReactClick}
+              canSign={canSign}
+            />
           </div>
-          <EventMenu event={event} />
+          {children}
+          <EventFooter event={event} />
         </div>
-        {children}
-        <EventFooter event={event} />
-      </div>
-    </EventContextMenu>
+      </EventContextMenu>
+      <EmojiPickerDialog
+        open={emojiPickerOpen}
+        onOpenChange={setEmojiPickerOpen}
+        onEmojiSelect={handleEmojiSelect}
+      />
+    </>
   );
 }
