@@ -13,7 +13,7 @@ export { SPELL_KIND, SPELLBOOK_KIND };
  * - ["cmd", "REQ"] - Command type
  *
  * METADATA:
- * - ["client", "grimoire"] - Client identifier
+ * - ["client", "grimoire", "<31990:pubkey:d-tag>"] - Client identifier with NIP-89 app address
  * - ["alt", "description"] - NIP-31 human-readable description
  * - ["name", "My Spell"] - Optional spell name (metadata only, not unique identifier)
  * - ["t", "bitcoin"], ["t", "news"] - Topic tags for categorization

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { encodeSpell, decodeSpell } from "./spell-conversion";
 import type { SpellEvent } from "@/types/spell";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 describe("Spell Conversion", () => {
   describe("encodeSpell", () => {
@@ -11,7 +12,7 @@ describe("Spell Conversion", () => {
       });
 
       expect(result.tags).toContainEqual(["cmd", "REQ"]);
-      expect(result.tags).toContainEqual(["client", "grimoire"]);
+      expect(result.tags).toContainEqual(GRIMOIRE_CLIENT_TAG);
       expect(result.tags).toContainEqual(["k", "1"]);
       expect(result.tags).toContainEqual(["k", "3"]);
       expect(result.tags).toContainEqual(["k", "7"]);
@@ -253,12 +254,7 @@ describe("Spell Conversion", () => {
         pubkey: "test-pubkey",
         created_at: 1234567890,
         kind: 777,
-        tags: [
-          ["cmd", "REQ"],
-          ["client", "grimoire"],
-          ["k", "1"],
-          ["k", "3"],
-        ],
+        tags: [["cmd", "REQ"], GRIMOIRE_CLIENT_TAG, ["k", "1"], ["k", "3"]],
         content: "Test spell",
         sig: "test-sig",
       };
@@ -360,7 +356,7 @@ describe("Spell Conversion", () => {
         kind: 777,
         tags: [
           ["cmd", "REQ"],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
           ["k", "1"],
           ["authors", "abc123", "def456"],
         ],
@@ -382,7 +378,7 @@ describe("Spell Conversion", () => {
         kind: 777,
         tags: [
           ["cmd", "REQ"],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
           ["k", "1"],
           ["tag", "t", "bitcoin", "nostr"],
           ["tag", "p", "abc123"],
@@ -410,7 +406,7 @@ describe("Spell Conversion", () => {
         kind: 777,
         tags: [
           ["cmd", "REQ"],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
           ["k", "1"],
           ["since", "7d"],
           ["until", "now"],
@@ -433,7 +429,7 @@ describe("Spell Conversion", () => {
         kind: 777,
         tags: [
           ["cmd", "REQ"],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
           ["k", "1"],
           ["t", "bitcoin"],
           ["t", "news"],
@@ -456,7 +452,7 @@ describe("Spell Conversion", () => {
         kind: 777,
         tags: [
           ["cmd", "REQ"],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
           ["k", "1"],
           ["e", "abc123def456"],
         ],
