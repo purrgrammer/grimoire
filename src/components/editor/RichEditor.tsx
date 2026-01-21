@@ -564,7 +564,8 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           return editor?.getJSON() || null;
         },
         setContent: (json: any) => {
-          if (editor && json) {
+          // Check editor and view are ready before setting content
+          if (editor?.view?.dom && json) {
             editor.commands.setContent(json);
           }
         },
@@ -574,7 +575,8 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
 
     // Handle submit on Ctrl/Cmd+Enter
     useEffect(() => {
-      if (!editor) return;
+      // Check both editor and editor.view exist (view may not be ready immediately)
+      if (!editor?.view?.dom) return;
 
       const handleKeyDown = (event: KeyboardEvent) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -585,7 +587,8 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
 
       editor.view.dom.addEventListener("keydown", handleKeyDown);
       return () => {
-        editor.view.dom.removeEventListener("keydown", handleKeyDown);
+        // Also check view.dom exists in cleanup (editor might be destroyed)
+        editor.view?.dom?.removeEventListener("keydown", handleKeyDown);
       };
     }, [editor, handleSubmit]);
 

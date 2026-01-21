@@ -142,9 +142,12 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     }
   }, [writeRelays, updateRelayStates]);
 
+  // Track if draft has been loaded to prevent re-runs
+  const draftLoadedRef = useRef(false);
+
   // Load draft from localStorage on mount
   useEffect(() => {
-    if (!pubkey) return;
+    if (!pubkey || draftLoadedRef.current) return;
 
     const draftKey = windowId
       ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
@@ -154,15 +157,20 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     if (savedDraft) {
       try {
         const draft = JSON.parse(savedDraft);
+        draftLoadedRef.current = true;
 
-        // Restore editor content
-        if (editorRef.current && draft.editorState) {
-          // Use setTimeout to ensure editor is fully mounted
-          setTimeout(() => {
-            if (editorRef.current && draft.editorState) {
+        // Restore editor content with retry logic for editor readiness
+        if (draft.editorState) {
+          const trySetContent = (attempts = 0) => {
+            if (editorRef.current) {
               editorRef.current.setContent(draft.editorState);
+            } else if (attempts < 10) {
+              // Retry up to 10 times with 50ms intervals (500ms total)
+              setTimeout(() => trySetContent(attempts + 1), 50);
             }
-          }, 100);
+          };
+          // Start trying after a short delay to let editor mount
+          setTimeout(() => trySetContent(), 50);
         }
 
         // Restore selected relays
@@ -172,22 +180,24 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
         // Restore added relays (relays not in writeRelays)
         if (draft.addedRelays && Array.isArray(draft.addedRelays)) {
-          const currentRelayUrls = new Set(relayStates.map((r) => r.url));
-          const newRelays = draft.addedRelays
-            .filter((url: string) => !currentRelayUrls.has(url))
-            .map((url: string) => ({
-              url,
-              status: "pending" as RelayStatus,
-            }));
-          if (newRelays.length > 0) {
-            setRelayStates((prev) => [...prev, ...newRelays]);
-          }
+          setRelayStates((prev) => {
+            const currentRelayUrls = new Set(prev.map((r) => r.url));
+            const newRelays = draft.addedRelays
+              .filter((url: string) => !currentRelayUrls.has(url))
+              .map((url: string) => ({
+                url,
+                status: "pending" as RelayStatus,
+              }));
+            return newRelays.length > 0 ? [...prev, ...newRelays] : prev;
+          });
         }
       } catch (err) {
         console.error("Failed to load draft:", err);
       }
+    } else {
+      draftLoadedRef.current = true;
     }
-  }, [pubkey, windowId, relayStates]);
+  }, [pubkey, windowId]);
 
   // Save draft to localStorage on content change
   const saveDraft = useCallback(() => {
