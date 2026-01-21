@@ -29,7 +29,8 @@ import { useCopy } from "@/hooks/useCopy";
 import { JsonViewer } from "@/components/JsonViewer";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
-import { getTagValue, parseCoordinate } from "applesauce-core/helpers";
+import { getTagValue } from "applesauce-core/helpers";
+import { parseAddressPointer } from "@/lib/nip89-helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
@@ -520,7 +521,7 @@ export function BaseEventContainer({
   const clientName = clientTag?.[1];
   const clientAddress = clientTag?.[2];
   const parsedClientAddress = clientAddress
-    ? parseCoordinate(clientAddress)
+    ? parseAddressPointer(clientAddress)
     : null;
   const clientAppPointer =
     parsedClientAddress?.kind === 31990 ? parsedClientAddress : null;
