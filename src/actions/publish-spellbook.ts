@@ -2,6 +2,7 @@ import { createSpellbook, slugify } from "@/lib/spellbook-manager";
 import { SpellbookEvent } from "@/types/spell";
 import { GrimoireState } from "@/types/app";
 import { SpellbookContent } from "@/types/spell";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 import accountManager from "@/services/accounts";
 import type { ActionContext } from "applesauce-actions";
 
@@ -74,7 +75,7 @@ export function PublishSpellbook(options: PublishSpellbookOptions) {
         tags: [
           ["d", slugify(title)],
           ["title", title],
-          ["client", "grimoire"],
+          GRIMOIRE_CLIENT_TAG,
         ] as [string, string, ...string[]][],
       };
       if (description) {

@@ -23,6 +23,10 @@ import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeURL } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
+import {
+  NoteReplyBlueprint,
+  ReactionBlueprint,
+} from "applesauce-common/blueprints";
 import { getNip10References } from "applesauce-common/helpers";
 import {
   getZapAmount,
@@ -350,102 +354,47 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       throw new Error("Root event ID required");
     }
 
-    // Fetch root event for building tags
-    const rootEvent = await firstValueFrom(eventStore.event(rootEventId), {
+    // Determine parent: either replyTo or root
+    const parentEventId = options?.replyTo || rootEventId;
+    const parentEvent = await firstValueFrom(eventStore.event(parentEventId), {
       defaultValue: undefined,
     });
-    if (!rootEvent) {
-      throw new Error("Root event not found in store");
+
+    if (!parentEvent) {
+      throw new Error(
+        `${parentEventId === rootEventId ? "Root" : "Parent"} event not found in store`,
+      );
     }
 
     // Create event factory
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    // Build NIP-10 tags
-    const tags: string[][] = [];
+    // Use NoteReplyBlueprint - automatically handles NIP-10 tags and p-tag copying!
+    const draft = await factory.create(
+      NoteReplyBlueprint,
+      parentEvent,
+      content,
+      {
+        emojis: options?.emojiTags?.map((e) => ({
+          shortcode: e.shortcode,
+          url: e.url,
+        })),
+      },
+    );
 
-    // Determine if we're replying to root or to another reply
-    if (options?.replyTo && options.replyTo !== rootEventId) {
-      // Replying to another reply
-      const parentEvent = await firstValueFrom(
-        eventStore.event(options.replyTo),
-        { defaultValue: undefined },
-      );
-
-      if (!parentEvent) {
-        throw new Error("Parent event not found");
-      }
-
-      // Add root marker (always first)
-      tags.push(["e", rootEventId, relays[0] || "", "root", rootEvent.pubkey]);
-
-      // Add reply marker (the direct parent)
-      tags.push([
-        "e",
-        options.replyTo,
-        relays[0] || "",
-        "reply",
-        parentEvent.pubkey,
-      ]);
-
-      // Add p-tag for root author
-      tags.push(["p", rootEvent.pubkey]);
-
-      // Add p-tag for parent author (if different)
-      if (parentEvent.pubkey !== rootEvent.pubkey) {
-        tags.push(["p", parentEvent.pubkey]);
-      }
-
-      // Add p-tags from parent event (all mentioned users)
-      for (const tag of parentEvent.tags) {
-        if (tag[0] === "p" && tag[1]) {
-          const pubkey = tag[1];
-          // Don't duplicate tags
-          if (!tags.some((t) => t[0] === "p" && t[1] === pubkey)) {
-            tags.push(["p", pubkey]);
-          }
-        }
-      }
-    } else {
-      // Replying directly to root
-      tags.push(["e", rootEventId, relays[0] || "", "root", rootEvent.pubkey]);
-
-      // Add p-tag for root author
-      tags.push(["p", rootEvent.pubkey]);
-
-      // Add p-tags from root event
-      for (const tag of rootEvent.tags) {
-        if (tag[0] === "p" && tag[1]) {
-          const pubkey = tag[1];
-          // Don't duplicate tags
-          if (!tags.some((t) => t[0] === "p" && t[1] === pubkey)) {
-            tags.push(["p", pubkey]);
-          }
-        }
-      }
-    }
-
-    // Add NIP-30 emoji tags
-    if (options?.emojiTags) {
-      for (const emoji of options.emojiTags) {
-        tags.push(["emoji", emoji.shortcode, emoji.url]);
-      }
-    }
-
-    // Add NIP-92 imeta tags for blob attachments
+    // Add NIP-92 imeta tags for blob attachments (not yet handled by applesauce)
     if (options?.blobAttachments) {
       for (const blob of options.blobAttachments) {
         const imetaParts = [`url ${blob.url}`];
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
-        tags.push(["imeta", ...imetaParts]);
+        draft.tags.push(["imeta", ...imetaParts]);
       }
     }
 
-    // Create and sign kind 1 event
-    const draft = await factory.build({ kind: 1, content, tags });
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish to conversation relays
@@ -483,19 +432,18 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [
-      ["e", messageId], // Event being reacted to
-      ["k", "1"], // Kind of event being reacted to
-      ["p", messageEvent.pubkey], // Author of message
-    ];
+    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
+    const emojiArg = customEmoji
+      ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+      : emoji;
 
-    // Add NIP-30 custom emoji tag if provided
-    if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
-    }
+    const draft = await factory.create(
+      ReactionBlueprint,
+      messageEvent,
+      emojiArg,
+    );
 
-    // Create and sign kind 7 event
-    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish to conversation relays

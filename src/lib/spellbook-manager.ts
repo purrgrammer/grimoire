@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { MosaicNode } from "react-mosaic-component";
 import type { GrimoireState, WindowInstance, Workspace } from "@/types/app";
 import { SPELLBOOK_KIND } from "@/constants/kinds";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 import {
   type SpellbookContent,
   type SpellbookEvent,
@@ -127,7 +128,7 @@ export function createSpellbook(
   const tags: [string, string, ...string[]][] = [
     ["d", slugify(title)],
     ["title", title],
-    ["client", "grimoire"],
+    GRIMOIRE_CLIENT_TAG,
   ];
 
   if (description) {

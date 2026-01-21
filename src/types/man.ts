@@ -843,4 +843,16 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     defaultProps: {},
   },
+  post: {
+    name: "post",
+    section: "1",
+    synopsis: "post",
+    description:
+      "Compose and publish a Nostr note (kind 1). Features a rich text editor with @mentions, :emoji: autocomplete, and image/video attachments. Select which relays to publish to, with write relays pre-selected by default. Track per-relay publish status (loading/success/error).",
+    examples: ["post    Open post composer"],
+    seeAlso: ["req", "profile", "blossom"],
+    appId: "post",
+    category: "Nostr",
+    defaultProps: {},
+  },
 };

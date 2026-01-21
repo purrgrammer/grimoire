@@ -1,6 +1,5 @@
 import {
   User,
-  HardDrive,
   Palette,
   Wallet,
   X,
@@ -8,6 +7,8 @@ import {
   Eye,
   EyeOff,
   Zap,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
@@ -370,6 +371,18 @@ export default function UserMenu() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80" align="start">
+          {/* Login first for logged out users */}
+          {!account && (
+            <>
+              <DropdownMenuItem onClick={() => setShowLogin(true)}>
+                <LogIn className="size-4 text-muted-foreground mr-2" />
+                <span className="text-sm">Log in</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          {/* User Profile - Identity section */}
           {account && (
             <>
               <DropdownMenuGroup>
@@ -385,7 +398,7 @@ export default function UserMenu() {
             </>
           )}
 
-          {/* Wallet Section - Always show */}
+          {/* Wallet Section */}
           {nwcConnection ? (
             <DropdownMenuItem
               className="cursor-crosshair flex items-center justify-between"
@@ -423,101 +436,63 @@ export default function UserMenu() {
             </DropdownMenuItem>
           )}
 
-          {/* Support Grimoire Section */}
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <div
-              className="px-2 py-2 cursor-crosshair hover:bg-accent/50 transition-colors"
-              onClick={openDonate}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <Zap className="size-4 text-yellow-500" />
-                <span className="text-sm font-medium">Support Grimoire</span>
-              </div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-muted-foreground">Monthly goal</span>
-                <span className="font-medium">
-                  {formatSats(monthlyDonations)} /{" "}
-                  {formatSats(MONTHLY_GOAL_SATS)} sats
-                </span>
-              </div>
-              <Progress value={goalProgress} className="h-1.5" />
-            </div>
-          </DropdownMenuGroup>
-
+          {/* Account Configuration - Relays & Blossom */}
           {account && (
             <>
               {relays && relays.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                      Relays
-                    </DropdownMenuLabel>
-                    {relays.map((relay) => (
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Relays
+                  </DropdownMenuLabel>
+                  {relays.map((relay) => (
+                    <DropdownMenuItem
+                      key={relay.url}
+                      className="p-0 cursor-crosshair"
+                      onClick={() => addWindow("relay", { url: relay.url })}
+                    >
                       <RelayLink
-                        className="px-2 py-1"
+                        className="px-2 py-1.5 w-full pointer-events-none"
                         urlClassname="text-sm"
                         iconClassname="size-4"
-                        key={relay.url}
                         url={relay.url}
                         read={relay.read}
                         write={relay.write}
                       />
-                    ))}
-                  </DropdownMenuGroup>
-                </>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               )}
 
               {blossomServers && blossomServers.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                      <HardDrive className="size-3.5" />
-                      <span>Blossom Servers</span>
-                    </DropdownMenuLabel>
-                    {blossomServers.map((server) => (
-                      <DropdownMenuItem
-                        key={server}
-                        className="cursor-crosshair"
-                        onClick={() => {
-                          addWindow(
-                            "blossom",
-                            { subcommand: "list", serverUrl: server },
-                            `Files on ${server}`,
-                          );
-                        }}
-                      >
-                        <HardDrive className="size-4 text-muted-foreground mr-2" />
-                        <span className="text-sm truncate">{server}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
-                </>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Blossom Servers
+                  </DropdownMenuLabel>
+                  {blossomServers.map((server) => (
+                    <DropdownMenuItem
+                      key={server}
+                      className="cursor-crosshair"
+                      onClick={() => {
+                        addWindow(
+                          "blossom",
+                          { subcommand: "list", serverUrl: server },
+                          `Files on ${server}`,
+                        );
+                      }}
+                    >
+                      <span className="text-sm truncate">{server}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               )}
-
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="cursor-crosshair">
-                Log out
-              </DropdownMenuItem>
             </>
           )}
 
-          {!account && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowLogin(true)}>
-                Log in
-              </DropdownMenuItem>
-            </>
-          )}
-
-          {/* Theme Section - Always show */}
+          {/* App Preferences - Theme */}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-crosshair">
-              <Palette className="size-4 mr-2" />
+              <Palette className="size-4 text-muted-foreground mr-2" />
               Theme
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -539,6 +514,42 @@ export default function UserMenu() {
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+
+          {/* Support Grimoire */}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="cursor-crosshair flex-col items-stretch p-2"
+            onClick={openDonate}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="size-4 text-yellow-500" />
+              <span className="text-sm font-medium">Support Grimoire</span>
+            </div>
+            <Progress value={goalProgress} className="h-1.5 mb-1" />
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                <span className="text-foreground font-medium">
+                  {formatSats(monthlyDonations)}
+                </span>
+                {" / "}
+                {formatSats(MONTHLY_GOAL_SATS)}
+              </span>
+              <span className="text-muted-foreground">
+                {goalProgress.toFixed(0)}%
+              </span>
+            </div>
+          </DropdownMenuItem>
+
+          {/* Logout at bottom for logged in users */}
+          {account && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="cursor-crosshair">
+                <LogOut className="size-4 text-muted-foreground mr-2" />
+                <span className="text-sm">Log out</span>
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

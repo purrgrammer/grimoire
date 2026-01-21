@@ -39,10 +39,7 @@ import type { Subscription } from "rxjs";
  * Well-known public Blossom servers that can be used as fallbacks
  * when the user doesn't have their own server list configured
  */
-const FALLBACK_SERVERS = [
-  "https://blossom.primal.net",
-  "https://nostr.download",
-];
+const FALLBACK_SERVERS = ["https://blossom.band/"];
 
 interface BlossomUploadDialogProps {
   /** Whether the dialog is open */
@@ -57,6 +54,8 @@ interface BlossomUploadDialogProps {
   onError?: (error: Error) => void;
   /** File types to accept (e.g., "image/*,video/*,audio/*") */
   accept?: string;
+  /** Optional initial files to pre-select (e.g., from drag-and-drop) */
+  initialFiles?: File[];
 }
 
 /**
@@ -75,6 +74,7 @@ export function BlossomUploadDialog({
   onCancel,
   onError,
   accept = "image/*,video/*,audio/*",
+  initialFiles,
 }: BlossomUploadDialogProps) {
   const eventStore = useEventStore();
   const activeAccount = use$(accountManager.active$);
@@ -99,14 +99,29 @@ export function BlossomUploadDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setSelectedFile(null);
-      setPreviewUrl(null);
+      // If initial files provided, set the first one
+      if (initialFiles && initialFiles.length > 0) {
+        const file = initialFiles[0];
+        setSelectedFile(file);
+
+        // Create preview URL for images/video
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+          const url = URL.createObjectURL(file);
+          setPreviewUrl(url);
+        } else {
+          setPreviewUrl(null);
+        }
+      } else {
+        setSelectedFile(null);
+        setPreviewUrl(null);
+      }
+
       setUploadResults([]);
       setUploadErrors([]);
       setUploading(false);
       setUsingFallback(false);
     }
-  }, [open]);
+  }, [open, initialFiles]);
 
   // Helper to set fallback servers
   const applyFallbackServers = useCallback(() => {
@@ -356,7 +371,7 @@ export function BlossomUploadDialog({
                     "size-12 text-muted-foreground",
                   )
                 )}
-                <p className="font-medium text-sm truncate max-w-full">
+                <p className="font-medium text-sm truncate max-w-xs text-center">
                   {selectedFile.name}
                 </p>
                 <p className="text-xs text-muted-foreground">

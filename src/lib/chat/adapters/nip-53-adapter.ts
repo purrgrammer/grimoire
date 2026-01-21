@@ -34,6 +34,7 @@ import {
   isValidZap,
 } from "applesauce-common/helpers/zap";
 import { EventFactory } from "applesauce-core/event-factory";
+import { ReactionBlueprint } from "applesauce-common/blueprints";
 
 /**
  * NIP-53 Adapter - Live Activity Chat
@@ -517,23 +518,34 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("No relays available for sending reaction");
     }
 
-    // Create event factory and sign event
+    // Fetch the message being reacted to
+    const messageEvent = await firstValueFrom(eventStore.event(messageId), {
+      defaultValue: undefined,
+    });
+
+    if (!messageEvent) {
+      throw new Error("Message event not found");
+    }
+
+    // Create event factory
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [
-      ["e", messageId], // Event being reacted to
-      ["a", aTagValue, relays[0] || ""], // Activity context (NIP-53 specific)
-      ["k", "1311"], // Kind of event being reacted to (live chat message)
-    ];
+    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
+    const emojiArg = customEmoji
+      ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+      : emoji;
 
-    // Add NIP-30 custom emoji tag if provided
-    if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
-    }
+    const draft = await factory.create(
+      ReactionBlueprint,
+      messageEvent,
+      emojiArg,
+    );
 
-    // Use kind 7 for reactions
-    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    // Add a-tag for activity context (NIP-53 specific)
+    draft.tags.push(["a", aTagValue, relays[0] || ""]);
+
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish to all activity relays

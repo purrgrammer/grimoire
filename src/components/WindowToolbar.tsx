@@ -103,8 +103,6 @@ export function WindowToolbar({
 
     // Open in a new window/tab
     globalThis.window.open(popOutUrl, "_blank");
-
-    toast.success("Window popped out");
   };
 
   // Copy functionality for NIPs

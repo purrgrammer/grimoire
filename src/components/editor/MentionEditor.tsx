@@ -31,6 +31,8 @@ import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
 import type { ChatAction } from "@/types/chat-actions";
 import { nip19 } from "nostr-tools";
+import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
+import { FilePasteHandler } from "./extensions/file-paste-handler";
 
 /**
  * Represents an emoji tag for NIP-30
@@ -58,6 +60,8 @@ export interface BlobAttachment {
 
 /**
  * Result of serializing editor content
+ * Note: mentions, event quotes, and hashtags are extracted automatically by applesauce
+ * from the text content (nostr: URIs and #hashtags), so we don't need to extract them here.
  */
 export interface SerializedContent {
   /** The text content with mentions as nostr: URIs and emoji as :shortcode: */
@@ -66,6 +70,8 @@ export interface SerializedContent {
   emojiTags: EmojiTag[];
   /** Blob attachments for imeta tags (NIP-92) */
   blobAttachments: BlobAttachment[];
+  /** Referenced addresses for a tags (from naddr - not yet handled by applesauce) */
+  addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>;
 }
 
 export interface MentionEditorProps {
@@ -79,6 +85,7 @@ export interface MentionEditorProps {
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
   onCommandExecute?: (action: ChatAction) => Promise<void>;
+  onFilePaste?: (files: File[]) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -276,6 +283,89 @@ function formatBlobSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+// Create nostr event preview node for nevent/naddr/note/npub/nprofile
+const NostrEventPreview = Node.create({
+  name: "nostrEventPreview",
+  group: "inline",
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      type: { default: null }, // 'note' | 'nevent' | 'naddr'
+      data: { default: null }, // Decoded bech32 data (varies by type)
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-nostr-preview="true"]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-nostr-preview": "true" }),
+    ];
+  },
+
+  renderText({ node }) {
+    // Serialize back to nostr: URI for plain text export
+    const { type, data } = node.attrs;
+    try {
+      if (type === "note") {
+        return `nostr:${nip19.noteEncode(data)}`;
+      } else if (type === "nevent") {
+        return `nostr:${nip19.neventEncode(data)}`;
+      } else if (type === "naddr") {
+        return `nostr:${nip19.naddrEncode(data)}`;
+      }
+    } catch (err) {
+      console.error("[NostrEventPreview] Failed to encode:", err);
+    }
+    return "";
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { type, data } = node.attrs;
+
+      // Create wrapper span
+      const dom = document.createElement("span");
+      dom.className =
+        "nostr-event-preview inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs align-middle";
+      dom.contentEditable = "false";
+
+      // Type label
+      const typeLabel = document.createElement("span");
+      typeLabel.className = "text-primary font-medium";
+
+      // Content label
+      const contentLabel = document.createElement("span");
+      contentLabel.className = "text-muted-foreground truncate max-w-[140px]";
+
+      if (type === "note" || type === "nevent") {
+        // event + short ID
+        typeLabel.textContent = "event";
+        contentLabel.textContent =
+          type === "note" ? data.slice(0, 8) : data.id.slice(0, 8);
+      } else if (type === "naddr") {
+        // address + d identifier (or short pubkey if no identifier)
+        typeLabel.textContent = "address";
+        contentLabel.textContent = data.identifier || data.pubkey.slice(0, 8);
+      }
+
+      dom.appendChild(typeLabel);
+      dom.appendChild(contentLabel);
+
+      return { dom };
+    };
+  },
+});
+
 export const MentionEditor = forwardRef<
   MentionEditorHandle,
   MentionEditorProps
@@ -288,6 +378,7 @@ export const MentionEditor = forwardRef<
       searchEmojis,
       searchCommands,
       onCommandExecute,
+      onFilePaste,
       autoFocus = false,
       className = "",
     },
@@ -575,8 +666,14 @@ export const MentionEditor = forwardRef<
         let text = "";
         const emojiTags: EmojiTag[] = [];
         const blobAttachments: BlobAttachment[] = [];
+        const addressRefs: Array<{
+          kind: number;
+          pubkey: string;
+          identifier: string;
+        }> = [];
         const seenEmojis = new Set<string>();
         const seenBlobs = new Set<string>();
+        const seenAddrs = new Set<string>();
         const json = editorInstance.getJSON();
 
         json.content?.forEach((node: any) => {
@@ -632,6 +729,33 @@ export const MentionEditor = forwardRef<
                     });
                   }
                 }
+              } else if (child.type === "nostrEventPreview") {
+                // Nostr event preview - serialize back to nostr: URI
+                const { type, data } = child.attrs;
+                try {
+                  if (type === "note") {
+                    text += `nostr:${nip19.noteEncode(data)}`;
+                  } else if (type === "nevent") {
+                    text += `nostr:${nip19.neventEncode(data)}`;
+                  } else if (type === "naddr") {
+                    text += `nostr:${nip19.naddrEncode(data)}`;
+                    // Extract addressRefs for manual a tags (applesauce doesn't handle naddr yet)
+                    const addrKey = `${data.kind}:${data.pubkey}:${data.identifier || ""}`;
+                    if (!seenAddrs.has(addrKey)) {
+                      seenAddrs.add(addrKey);
+                      addressRefs.push({
+                        kind: data.kind,
+                        pubkey: data.pubkey,
+                        identifier: data.identifier || "",
+                      });
+                    }
+                  }
+                } catch (err) {
+                  console.error(
+                    "[MentionEditor] Failed to serialize nostr preview:",
+                    err,
+                  );
+                }
               }
             });
             text += "\n";
@@ -642,6 +766,7 @@ export const MentionEditor = forwardRef<
           text: text.trim(),
           emojiTags,
           blobAttachments,
+          addressRefs,
         };
       },
       [],
@@ -736,6 +861,14 @@ export const MentionEditor = forwardRef<
         }),
         // Add blob attachment extension for media previews
         BlobAttachmentNode,
+        // Add nostr event preview extension for bech32 links
+        NostrEventPreview,
+        // Add paste handler to transform bech32 strings into previews
+        NostrPasteHandler,
+        // Add file paste handler for clipboard file uploads
+        FilePasteHandler.configure({
+          onFilePaste,
+        }),
       ];
 
       // Add emoji extension if search is provided
@@ -813,6 +946,7 @@ export const MentionEditor = forwardRef<
       emojiSuggestion,
       slashCommandSuggestion,
       onCommandExecute,
+      onFilePaste,
       placeholder,
     ]);
 
@@ -832,9 +966,15 @@ export const MentionEditor = forwardRef<
       () => ({
         focus: () => editor?.commands.focus(),
         clear: () => editor?.commands.clearContent(),
-        getContent: () => editor?.getText() || "",
+        getContent: () => editor?.getText({ blockSeparator: "\n" }) || "",
         getSerializedContent: () => {
-          if (!editor) return { text: "", emojiTags: [], blobAttachments: [] };
+          if (!editor)
+            return {
+              text: "",
+              emojiTags: [],
+              blobAttachments: [],
+              addressRefs: [],
+            };
           return serializeContent(editor);
         },
         isEmpty: () => editor?.isEmpty ?? true,

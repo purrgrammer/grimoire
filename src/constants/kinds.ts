@@ -843,6 +843,20 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "96",
     icon: Cloud,
   },
+  10101: {
+    kind: 10101,
+    name: "Wiki Authors",
+    description: "Good wiki authors",
+    nip: "54",
+    icon: Users,
+  },
+  10102: {
+    kind: 10102,
+    name: "Wiki Relays",
+    description: "Good wiki relays",
+    nip: "54",
+    icon: Radio,
+  },
   10166: {
     kind: 10166,
     name: "Relay Monitor",

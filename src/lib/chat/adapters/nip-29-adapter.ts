@@ -21,6 +21,10 @@ import accountManager from "@/services/accounts";
 import { getTagValues } from "@/lib/nostr-utils";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
+import {
+  GroupMessageBlueprint,
+  ReactionBlueprint,
+} from "applesauce-common/blueprints";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -433,37 +437,41 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
-    // Create event factory and sign event
+    // Create event factory
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [["h", groupId]];
+    // Use GroupMessageBlueprint - auto-handles h-tag, hashtags, mentions, emojis
+    const draft = await factory.create(
+      GroupMessageBlueprint,
+      { id: groupId, relay: relayUrl },
+      content,
+      {
+        previous: [], // No threading for now
+        emojis: options?.emojiTags?.map((e) => ({
+          shortcode: e.shortcode,
+          url: e.url,
+        })),
+      },
+    );
 
+    // Add q-tag for replies (NIP-29 specific, not in blueprint yet)
     if (options?.replyTo) {
-      // NIP-29 uses q-tag for replies (same as NIP-C7)
-      tags.push(["q", options.replyTo]);
+      draft.tags.push(["q", options.replyTo]);
     }
 
-    // Add NIP-30 emoji tags
-    if (options?.emojiTags) {
-      for (const emoji of options.emojiTags) {
-        tags.push(["emoji", emoji.shortcode, emoji.url]);
-      }
-    }
-
-    // Add NIP-92 imeta tags for blob attachments
+    // Add NIP-92 imeta tags for blob attachments (not yet handled by applesauce)
     if (options?.blobAttachments) {
       for (const blob of options.blobAttachments) {
         const imetaParts = [`url ${blob.url}`];
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
-        tags.push(["imeta", ...imetaParts]);
+        draft.tags.push(["imeta", ...imetaParts]);
       }
     }
 
-    // Use kind 9 for group chat messages
-    const draft = await factory.build({ kind: 9, content, tags });
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish only to the group relay
@@ -493,23 +501,34 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
-    // Create event factory and sign event
+    // Fetch the message being reacted to
+    const messageEvent = await firstValueFrom(eventStore.event(messageId), {
+      defaultValue: undefined,
+    });
+
+    if (!messageEvent) {
+      throw new Error("Message event not found");
+    }
+
+    // Create event factory
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    const tags: string[][] = [
-      ["e", messageId], // Event being reacted to
-      ["h", groupId], // Group context (NIP-29 specific)
-      ["k", "9"], // Kind of event being reacted to (group chat message)
-    ];
+    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
+    const emojiArg = customEmoji
+      ? { shortcode: customEmoji.shortcode, url: customEmoji.url }
+      : emoji;
 
-    // Add NIP-30 custom emoji tag if provided
-    if (customEmoji) {
-      tags.push(["emoji", customEmoji.shortcode, customEmoji.url]);
-    }
+    const draft = await factory.create(
+      ReactionBlueprint,
+      messageEvent,
+      emojiArg,
+    );
 
-    // Use kind 7 for reactions
-    const draft = await factory.build({ kind: 7, content: emoji, tags });
+    // Add h-tag for group context (NIP-29 specific)
+    draft.tags.push(["h", groupId]);
+
+    // Sign the event
     const event = await factory.sign(draft);
 
     // Publish only to the group relay

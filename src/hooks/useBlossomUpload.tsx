@@ -14,8 +14,8 @@ export interface UseBlossomUploadOptions {
 }
 
 export interface UseBlossomUploadReturn {
-  /** Open the upload dialog */
-  open: () => void;
+  /** Open the upload dialog, optionally with pre-selected files */
+  open: (files?: File[]) => void;
   /** Close the upload dialog */
   close: () => void;
   /** Whether the dialog is currently open */
@@ -50,9 +50,20 @@ export function useBlossomUpload(
   options: UseBlossomUploadOptions = {},
 ): UseBlossomUploadReturn {
   const [isOpen, setIsOpen] = useState(false);
+  const [initialFiles, setInitialFiles] = useState<File[] | undefined>(
+    undefined,
+  );
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
+  const open = useCallback((files?: File[]) => {
+    setInitialFiles(files);
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    // Clear initial files when closing
+    setInitialFiles(undefined);
+  }, []);
 
   const handleSuccess = useCallback(
     (results: UploadResult[]) => {
@@ -84,9 +95,17 @@ export function useBlossomUpload(
         onCancel={handleCancel}
         onError={handleError}
         accept={options.accept}
+        initialFiles={initialFiles}
       />
     ),
-    [isOpen, handleSuccess, handleCancel, handleError, options.accept],
+    [
+      isOpen,
+      handleSuccess,
+      handleCancel,
+      handleError,
+      options.accept,
+      initialFiles,
+    ],
   );
 
   return { open, close, isOpen, dialog };

@@ -152,6 +152,8 @@ import { Kind10166Renderer } from "./MonitorAnnouncementRenderer";
 import { Kind10166DetailRenderer } from "./MonitorAnnouncementDetailRenderer";
 import { Kind30166Renderer } from "./RelayDiscoveryRenderer";
 import { Kind30166DetailRenderer } from "./RelayDiscoveryDetailRenderer";
+import { GoalRenderer } from "./GoalRenderer";
+import { GoalDetailRenderer } from "./GoalDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -180,6 +182,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
   1621: IssueRenderer, // Issue (NIP-34)
+  9041: GoalRenderer, // Zap Goal (NIP-75)
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
   8000: AddUserRenderer, // Add User (NIP-43)
@@ -287,6 +290,7 @@ const detailRenderers: Record<
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
+  9041: GoalDetailRenderer, // Zap Goal Detail (NIP-75)
   9802: Kind9802DetailRenderer, // Highlight Detail
   8000: AddUserDetailRenderer, // Add User Detail (NIP-43)
   8001: RemoveUserDetailRenderer, // Remove User Detail (NIP-43)

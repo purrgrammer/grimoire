@@ -3,6 +3,7 @@ import { PublishSpellbook } from "./publish-spellbook";
 import type { ActionContext } from "applesauce-actions";
 import type { GrimoireState } from "@/types/app";
 import type { NostrEvent } from "nostr-tools/core";
+import { GRIMOIRE_APP_ADDRESS } from "@/constants/app";
 
 // Mock accountManager
 vi.mock("@/services/accounts", () => ({
@@ -192,6 +193,7 @@ describe("PublishSpellbook action", () => {
       expect(descTag?.[1]).toBe("Test description");
       expect(clientTag).toBeDefined();
       expect(clientTag?.[1]).toBe("grimoire");
+      expect(clientTag?.[2]).toBe(GRIMOIRE_APP_ADDRESS);
       expect(altTag).toBeDefined();
       expect(altTag?.[1]).toBe("Grimoire Spellbook: Test Spellbook");
     });
