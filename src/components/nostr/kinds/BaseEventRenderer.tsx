@@ -552,7 +552,9 @@ export function BaseEventContainer({
       const signed = await factory.sign(draft);
 
       // Select relays per NIP-65: author's outbox + target's inbox
-      const relays = await selectRelaysForInteraction(pubkey, event.pubkey);
+      // Use semantic author (e.g., zapper for zaps, host for streams)
+      const targetPubkey = getSemanticAuthor(event);
+      const relays = await selectRelaysForInteraction(pubkey, targetPubkey);
       await publishEventToRelays(signed, relays);
     } catch (err) {
       console.error("[BaseEventContainer] Failed to send reaction:", err);
