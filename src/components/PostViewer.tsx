@@ -234,13 +234,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       setIsEditorEmpty(editorRef.current.isEmpty());
     }
 
-    // Debounce draft save (2 seconds)
+    // Debounce draft save (500ms)
     if (draftSaveTimeoutRef.current) {
       clearTimeout(draftSaveTimeoutRef.current);
     }
     draftSaveTimeoutRef.current = setTimeout(() => {
       saveDraft();
-    }, 2000);
+    }, 500);
   }, [saveDraft]);
 
   // Cleanup timeout on unmount
