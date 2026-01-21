@@ -9,25 +9,46 @@ import { settingsManager, type AppSettings } from "@/services/settings";
 export function useSettings() {
   const settings = use$(settingsManager.stream$);
 
-  const updateSetting = useCallback(
-    <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-      settingsManager.updateSetting(key, value);
+  const updateSection = useCallback(
+    <K extends keyof Omit<AppSettings, "__version">>(
+      section: K,
+      updates: Partial<AppSettings[K]>,
+    ) => {
+      settingsManager.updateSection(section, updates);
     },
     [],
   );
 
-  const updateSettings = useCallback((updates: Partial<AppSettings>) => {
-    settingsManager.updateSettings(updates);
-  }, []);
+  const updateSetting = useCallback(
+    <
+      S extends keyof Omit<AppSettings, "__version">,
+      K extends keyof AppSettings[S],
+    >(
+      section: S,
+      key: K,
+      value: AppSettings[S][K],
+    ) => {
+      settingsManager.updateSetting(section, key, value);
+    },
+    [],
+  );
 
   const reset = useCallback(() => {
     settingsManager.reset();
   }, []);
 
+  const resetSection = useCallback(
+    <K extends keyof Omit<AppSettings, "__version">>(section: K) => {
+      settingsManager.resetSection(section);
+    },
+    [],
+  );
+
   return {
     settings,
+    updateSection,
     updateSetting,
-    updateSettings,
     reset,
+    resetSection,
   };
 }

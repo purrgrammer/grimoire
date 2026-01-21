@@ -31,7 +31,7 @@ export class DeleteEventAction {
     const draft = await factory.delete([item.event], reason);
 
     // Add client tag if enabled in settings
-    if (settingsManager.getSetting("includeClientTag")) {
+    if (settingsManager.getSetting("post", "includeClientTag")) {
       draft.tags.push(GRIMOIRE_CLIENT_TAG);
     }
 

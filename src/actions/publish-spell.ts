@@ -44,7 +44,7 @@ export class PublishSpellAction {
 
       // Add client tag if enabled in settings
       const tags = [...encoded.tags];
-      if (settingsManager.getSetting("includeClientTag")) {
+      if (settingsManager.getSetting("post", "includeClientTag")) {
         tags.push(GRIMOIRE_CLIENT_TAG);
       }
 

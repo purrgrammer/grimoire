@@ -369,7 +369,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         }
 
         // Add client tag (if enabled)
-        if (settings?.includeClientTag) {
+        if (settings?.post?.includeClientTag) {
           additionalTags.push(GRIMOIRE_CLIENT_TAG);
         }
 
@@ -658,9 +658,9 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuCheckboxItem
-                    checked={settings?.includeClientTag ?? true}
+                    checked={settings?.post?.includeClientTag ?? true}
                     onCheckedChange={(checked) =>
-                      updateSetting("includeClientTag", checked)
+                      updateSetting("post", "includeClientTag", checked)
                     }
                   >
                     Include client tag
