@@ -1,4 +1,5 @@
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
+import { X } from "lucide-react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "@/components/nostr/kinds";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -9,7 +10,10 @@ import { EventCardSkeleton } from "@/components/ui/skeleton";
  *
  * Uses the feed KindRenderer to show event content inline
  */
-export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
+export function NostrEventPreviewRich({
+  node,
+  deleteNode,
+}: ReactNodeViewProps) {
   const { type, data } = node.attrs as {
     type: "note" | "nevent" | "naddr";
     data: any;
@@ -40,7 +44,7 @@ export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
   const event = useNostrEvent(pointer || undefined);
 
   return (
-    <NodeViewWrapper className="my-2">
+    <NodeViewWrapper className="my-2 relative group">
       <div className="rounded-lg border border-border bg-muted/30 p-3 pointer-events-none">
         {!event ? (
           <EventCardSkeleton className="py-2" />
@@ -48,6 +52,15 @@ export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
           <KindRenderer event={event} depth={0} />
         )}
       </div>
+      {deleteNode && (
+        <button
+          onClick={deleteNode}
+          className="absolute top-2 right-2 p-1.5 rounded-full bg-background/90 hover:bg-background border border-border opacity-0 group-hover:opacity-100 transition-opacity"
+          contentEditable={false}
+        >
+          <X className="size-4" />
+        </button>
+      )}
     </NodeViewWrapper>
   );
 }

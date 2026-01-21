@@ -1,5 +1,5 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { nip19 } from "nostr-tools";
 import eventStore from "@/services/event-store";
 import { getProfileContent } from "applesauce-core/helpers";
@@ -152,10 +152,15 @@ export const NostrPasteHandler = Extension.create({
               const { tr } = view.state;
               const { from } = view.state.selection;
 
-              // Insert content
-              nodes.forEach((node, index) => {
-                tr.insert(from + index, node);
+              // Insert content and track position
+              let insertPos = from;
+              nodes.forEach((node) => {
+                tr.insert(insertPos, node);
+                insertPos += node.nodeSize;
               });
+
+              // Move cursor to end of inserted content
+              tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos)));
 
               view.dispatch(tr);
               return true; // Prevent default paste
