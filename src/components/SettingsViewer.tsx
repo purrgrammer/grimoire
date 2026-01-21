@@ -1,8 +1,15 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Switch } from "./ui/switch";
-import { Button } from "./ui/button";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/themes";
+import { Palette, FileEdit } from "lucide-react";
 
 export function SettingsViewer() {
   const { settings, updateSetting } = useSettings();
@@ -13,8 +20,14 @@ export function SettingsViewer() {
       <Tabs defaultValue="appearance" className="flex-1 flex flex-col">
         <div className="border-b px-6 py-3">
           <TabsList>
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            <TabsTrigger value="post">Post</TabsTrigger>
+            <TabsTrigger value="appearance" className="gap-2">
+              <Palette className="h-4 w-4" />
+              Appearance
+            </TabsTrigger>
+            <TabsTrigger value="post" className="gap-2">
+              <FileEdit className="h-4 w-4" />
+              Post
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -29,31 +42,30 @@ export function SettingsViewer() {
 
             <div className="space-y-6">
               <div className="space-y-3">
-                <label className="text-sm">Theme</label>
-                <div className="flex gap-2">
-                  {availableThemes.map((theme) => (
-                    <Button
-                      key={theme.id}
-                      variant={themeId === theme.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTheme(theme.id)}
-                      className="capitalize"
-                    >
-                      {theme.name}
-                    </Button>
-                  ))}
-                </div>
+                <label className="text-sm font-medium">Theme</label>
+                <Select value={themeId} onValueChange={setTheme}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableThemes.map((theme) => (
+                      <SelectItem key={theme.id} value={theme.id}>
+                        {theme.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <label
                     htmlFor="show-client-tags"
-                    className="text-sm font-medium cursor-pointer"
+                    className="text-base font-medium cursor-pointer"
                   >
                     Show client tags
                   </label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Display client identifiers in events
                   </p>
                 </div>
@@ -77,15 +89,15 @@ export function SettingsViewer() {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <label
                     htmlFor="include-client-tag"
-                    className="text-sm font-medium cursor-pointer"
+                    className="text-base font-medium cursor-pointer"
                   >
                     Include client tag
                   </label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Add Grimoire tag to published events
                   </p>
                 </div>
