@@ -41,7 +41,8 @@ import { isAddressableKind } from "@/lib/nostr-kinds";
 import { getSemanticAuthor } from "@/lib/semantic-author";
 import { EventFactory } from "applesauce-core/event-factory";
 import { ReactionBlueprint } from "applesauce-common/blueprints";
-import { publishEvent } from "@/services/hub";
+import { publishEventToRelays } from "@/services/hub";
+import { getInteractionRelays } from "@/lib/interaction-relay-selection";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 
 /**
@@ -529,7 +530,7 @@ export function BaseEventContainer({
   };
 }) {
   const { locale, addWindow } = useGrimoire();
-  const { canSign, signer } = useAccount();
+  const { canSign, signer, pubkey } = useAccount();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const handleReactClick = () => {
@@ -537,7 +538,7 @@ export function BaseEventContainer({
   };
 
   const handleEmojiSelect = async (emoji: string, customEmoji?: EmojiTag) => {
-    if (!signer) return;
+    if (!signer || !pubkey) return;
 
     try {
       const factory = new EventFactory();
@@ -549,7 +550,10 @@ export function BaseEventContainer({
 
       const draft = await factory.create(ReactionBlueprint, event, emojiArg);
       const signed = await factory.sign(draft);
-      await publishEvent(signed);
+
+      // Select relays per NIP-65: author's outbox + target's inbox
+      const relays = await getInteractionRelays(pubkey, event.pubkey);
+      await publishEventToRelays(signed, relays);
     } catch (err) {
       console.error("[BaseEventContainer] Failed to send reaction:", err);
     }
