@@ -27,6 +27,7 @@ import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { useRelayState } from "@/hooks/useRelayState";
+import { useSettings } from "@/hooks/useSettings";
 import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
@@ -53,15 +54,6 @@ interface RelayPublishState {
 
 // Storage keys
 const DRAFT_STORAGE_KEY = "grimoire-post-draft";
-const SETTINGS_STORAGE_KEY = "grimoire-post-settings";
-
-interface PostSettings {
-  includeClientTag: boolean;
-}
-
-const DEFAULT_SETTINGS: PostSettings = {
-  includeClientTag: true,
-};
 
 interface PostViewerProps {
   windowId?: string;
@@ -73,6 +65,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const { searchEmojis } = useEmojiSearch();
   const { state } = useGrimoire();
   const { getRelay } = useRelayState();
+  const { settings, updateSetting } = useSettings();
 
   // Editor ref for programmatic control
   const editorRef = useRef<RichEditorHandle>(null);
@@ -86,35 +79,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [newRelayInput, setNewRelayInput] = useState("");
 
-  // Load settings from localStorage
-  const [settings, setSettings] = useState<PostSettings>(() => {
-    try {
-      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_SETTINGS;
-    } catch {
-      return DEFAULT_SETTINGS;
-    }
-  });
-
   // Get relay pool state for connection status
   const relayPoolMap = use$(pool.relays$);
-
-  // Persist settings to localStorage when they change
-  useEffect(() => {
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-    } catch (err) {
-      console.error("Failed to save post settings:", err);
-    }
-  }, [settings]);
-
-  // Update a single setting
-  const updateSetting = useCallback(
-    <K extends keyof PostSettings>(key: K, value: PostSettings[K]) => {
-      setSettings((prev) => ({ ...prev, [key]: value }));
-    },
-    [],
-  );
 
   // Get active account's write relays from Grimoire state, fallback to aggregators
   const writeRelays = useMemo(() => {
@@ -403,7 +369,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         }
 
         // Add client tag (if enabled)
-        if (settings.includeClientTag) {
+        if (settings?.includeClientTag) {
           additionalTags.push(GRIMOIRE_CLIENT_TAG);
         }
 
@@ -692,7 +658,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuCheckboxItem
-                    checked={settings.includeClientTag}
+                    checked={settings?.includeClientTag ?? true}
                     onCheckedChange={(checked) =>
                       updateSetting("includeClientTag", checked)
                     }

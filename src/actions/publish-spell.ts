@@ -9,6 +9,8 @@ import { relayListCache } from "@/services/relay-list-cache";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import eventStore from "@/services/event-store";
+import { settingsManager } from "@/services/settings";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 export class PublishSpellAction {
   type = "publish-spell";
@@ -40,12 +42,18 @@ export class PublishSpellAction {
 
       const factory = new EventFactory({ signer });
 
+      // Add client tag if enabled in settings
+      const tags = [...encoded.tags];
+      if (settingsManager.getSetting("includeClientTag")) {
+        tags.push(GRIMOIRE_CLIENT_TAG);
+      }
+
       const draft = await factory.build({
         kind: 777,
 
         content: encoded.content,
 
-        tags: encoded.tags,
+        tags,
       });
 
       event = (await factory.sign(draft)) as SpellEvent;

@@ -7,6 +7,8 @@ import { mergeRelaySets } from "applesauce-core/helpers";
 import { grimoireStateAtom } from "@/core/state";
 import { getDefaultStore } from "jotai";
 import { NostrEvent } from "@/types/nostr";
+import { settingsManager } from "@/services/settings";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 export class DeleteEventAction {
   type = "delete-event";
@@ -27,6 +29,12 @@ export class DeleteEventAction {
     const factory = new EventFactory({ signer });
 
     const draft = await factory.delete([item.event], reason);
+
+    // Add client tag if enabled in settings
+    if (settingsManager.getSetting("includeClientTag")) {
+      draft.tags.push(GRIMOIRE_CLIENT_TAG);
+    }
+
     const event = await factory.sign(draft);
 
     // Get write relays from cache and state
