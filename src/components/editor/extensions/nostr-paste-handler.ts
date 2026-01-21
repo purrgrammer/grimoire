@@ -1,37 +1,21 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { nip19 } from "nostr-tools";
-import eventStore from "@/services/event-store";
-import { getProfileContent } from "applesauce-core/helpers";
+import profileCache from "@/services/profile-cache";
 import { getDisplayName } from "@/lib/nostr-utils";
 
 /**
  * Helper to get display name for a pubkey (synchronous lookup from cache)
  */
 function getDisplayNameForPubkey(pubkey: string): string {
-  try {
-    // Try to get profile from event store (check if it's a BehaviorSubject with .value)
-    const profile$ = eventStore.replaceable(0, pubkey) as any;
-    if (profile$ && profile$.value) {
-      const profileEvent = profile$.value;
-      if (profileEvent) {
-        const content = getProfileContent(profileEvent);
-        if (content) {
-          // Use the Grimoire helper which handles fallbacks
-          return getDisplayName(pubkey, content);
-        }
-      }
-    }
-  } catch (err) {
-    // Ignore errors, fall through to default
-    console.debug(
-      "[NostrPasteHandler] Could not get profile for",
-      pubkey.slice(0, 8),
-      err,
-    );
+  // Check profile cache first (includes Dexie + EventStore profiles)
+  const cachedProfile = profileCache.get(pubkey);
+  if (cachedProfile) {
+    return getDisplayName(pubkey, cachedProfile);
   }
-  // Fallback to short pubkey
-  return pubkey.slice(0, 8);
+
+  // Fallback to placeholder format
+  return getDisplayName(pubkey, undefined);
 }
 
 /**
