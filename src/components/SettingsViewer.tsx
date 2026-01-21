@@ -9,11 +9,67 @@ import {
 import { Switch } from "./ui/switch";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/themes";
-import { Palette, FileEdit } from "lucide-react";
+import { Palette, FileEdit, Heart, Zap } from "lucide-react";
+import { Button } from "./ui/button";
+import { Progress } from "./ui/progress";
+import { useLiveQuery } from "dexie-react-hooks";
+import db from "@/services/db";
+import { useGrimoire } from "@/core/state";
+import { GRIMOIRE_DONATE_PUBKEY } from "@/lib/grimoire-members";
+import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import supportersService from "@/services/supporters";
+import { UserName } from "./nostr/UserName";
 
 export function SettingsViewer() {
   const { settings, updateSetting } = useSettings();
   const { themeId, setTheme, availableThemes } = useTheme();
+  const { addWindow } = useGrimoire();
+
+  // Calculate monthly donations using supporters service
+  const monthlyDonations =
+    useLiveQuery(() => supportersService.getMonthlyDonations(), []) ?? 0;
+
+  // Get top 3 donors of the month
+  const topDonors = useLiveQuery(async () => {
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+    const donorMap = new Map<string, number>();
+
+    await db.grimoireZaps
+      .where("timestamp")
+      .aboveOrEqual(thirtyDaysAgo)
+      .each((zap) => {
+        const current = donorMap.get(zap.senderPubkey) || 0;
+        donorMap.set(zap.senderPubkey, current + zap.amountSats);
+      });
+
+    return Array.from(donorMap.entries())
+      .map(([pubkey, sats]) => ({ pubkey, sats }))
+      .sort((a, b) => b.sats - a.sats)
+      .slice(0, 3);
+  }, []);
+
+  // Calculate monthly donation progress
+  const goalProgress = (monthlyDonations / MONTHLY_GOAL_SATS) * 100;
+
+  // Format sats for display
+  function formatSats(sats: number): string {
+    if (sats >= 1_000_000) {
+      return `${(sats / 1_000_000).toFixed(1)}M`;
+    } else if (sats >= 1_000) {
+      return `${Math.floor(sats / 1_000)}k`;
+    }
+    return sats.toLocaleString();
+  }
+
+  function openZapWindow() {
+    addWindow(
+      "zap",
+      {
+        recipientPubkey: GRIMOIRE_DONATE_PUBKEY,
+      },
+      "Support Grimoire",
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -27,6 +83,10 @@ export function SettingsViewer() {
             <TabsTrigger value="post" className="gap-2">
               <FileEdit className="h-4 w-4" />
               Post
+            </TabsTrigger>
+            <TabsTrigger value="support" className="gap-2">
+              <Heart className="h-4 w-4" />
+              Support
             </TabsTrigger>
           </TabsList>
         </div>
@@ -119,6 +179,79 @@ export function SettingsViewer() {
                   }
                 />
               </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="support" className="m-0 p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Support Grimoire</h3>
+              <p className="text-sm text-muted-foreground">
+                Help support development with Lightning zaps
+              </p>
+            </div>
+
+            {/* Monthly Goal Progress */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Monthly Goal</span>
+                <span className="text-sm text-muted-foreground">
+                  {goalProgress.toFixed(0)}%
+                </span>
+              </div>
+              <Progress value={goalProgress} className="h-2" />
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  <span className="text-foreground font-semibold">
+                    {formatSats(monthlyDonations)} sats
+                  </span>
+                  {" raised"}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatSats(MONTHLY_GOAL_SATS)} sats
+                </span>
+              </div>
+            </div>
+
+            {/* Top Donors This Month */}
+            {topDonors && topDonors.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Top Donors This Month</h4>
+                <div className="space-y-2">
+                  {topDonors.map((donor, index) => (
+                    <div
+                      key={donor.pubkey}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-bold text-muted-foreground w-6">
+                          #{index + 1}
+                        </span>
+                        <UserName pubkey={donor.pubkey} />
+                      </div>
+                      <span className="text-sm font-semibold text-yellow-500">
+                        {formatSats(donor.sats)} sats
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Zap Button */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Send Lightning Zap</h4>
+              <p className="text-xs text-muted-foreground">
+                Support Grimoire development with Bitcoin over Lightning
+              </p>
+              <Button
+                variant="default"
+                size="lg"
+                className="w-full gap-2"
+                onClick={openZapWindow}
+              >
+                <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                Send Zap
+              </Button>
             </div>
           </TabsContent>
         </div>
