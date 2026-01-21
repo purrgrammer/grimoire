@@ -30,7 +30,6 @@ import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
-import { CopyableJsonViewer } from "./JsonViewer";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -55,12 +54,10 @@ const SETTINGS_STORAGE_KEY = "grimoire-post-settings";
 
 interface PostSettings {
   includeClientTag: boolean;
-  showEventJson: boolean;
 }
 
 const DEFAULT_SETTINGS: PostSettings = {
   includeClientTag: true,
-  showEventJson: false,
 };
 
 interface PostViewerProps {
@@ -85,7 +82,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [newRelayInput, setNewRelayInput] = useState("");
-  const [draftEventJson, setDraftEventJson] = useState<any>(null);
 
   // Load settings from localStorage
   const [settings, setSettings] = useState<PostSettings>(() => {
@@ -227,84 +223,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     }
   }, [pubkey, windowId, selectedRelays, relayStates, writeRelays]);
 
-  // Generate draft event JSON for preview
-  const generateDraftEventJson = useCallback(() => {
-    if (!pubkey || !editorRef.current) {
-      setDraftEventJson(null);
-      return;
-    }
-
-    const serialized = editorRef.current.getSerializedContent();
-    const content = serialized.text.trim();
-
-    if (!content) {
-      setDraftEventJson(null);
-      return;
-    }
-
-    // Build tags array
-    const tags: string[][] = [];
-
-    // Add p tags for mentions
-    for (const mention of serialized.mentions) {
-      tags.push(["p", mention]);
-    }
-
-    // Add e tags for event references
-    for (const eventRef of serialized.eventRefs) {
-      tags.push(["e", eventRef]);
-    }
-
-    // Add a tags for address references
-    for (const addrRef of serialized.addressRefs) {
-      tags.push([
-        "a",
-        `${addrRef.kind}:${addrRef.pubkey}:${addrRef.identifier}`,
-      ]);
-    }
-
-    // Add client tag (if enabled)
-    if (settings.includeClientTag) {
-      tags.push(["client", "grimoire"]);
-    }
-
-    // Add emoji tags
-    for (const emoji of serialized.emojiTags) {
-      tags.push(["emoji", emoji.shortcode, emoji.url]);
-    }
-
-    // Add blob attachment tags (imeta)
-    for (const blob of serialized.blobAttachments) {
-      const imetaTag = [
-        "imeta",
-        `url ${blob.url}`,
-        `m ${blob.mimeType}`,
-        `x ${blob.sha256}`,
-        `size ${blob.size}`,
-      ];
-      if (blob.server) {
-        imetaTag.push(`server ${blob.server}`);
-      }
-      tags.push(imetaTag);
-    }
-
-    // Create draft event structure (unsigned)
-    const draftEvent = {
-      kind: 1,
-      pubkey,
-      created_at: Math.floor(Date.now() / 1000),
-      tags,
-      content,
-    };
-
-    setDraftEventJson(draftEvent);
-  }, [pubkey, settings.includeClientTag]);
-
-  // Debounced handlers for editor changes
+  // Debounced draft save on editor changes
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const jsonUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
@@ -321,26 +241,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     draftSaveTimeoutRef.current = setTimeout(() => {
       saveDraft();
     }, 2000);
+  }, [saveDraft]);
 
-    // Debounce JSON update (200ms for responsive feel)
-    if (settings.showEventJson) {
-      if (jsonUpdateTimeoutRef.current) {
-        clearTimeout(jsonUpdateTimeoutRef.current);
-      }
-      jsonUpdateTimeoutRef.current = setTimeout(() => {
-        generateDraftEventJson();
-      }, 200);
-    }
-  }, [saveDraft, settings.showEventJson, generateDraftEventJson]);
-
-  // Cleanup timeouts on unmount
+  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (draftSaveTimeoutRef.current) {
         clearTimeout(draftSaveTimeoutRef.current);
-      }
-      if (jsonUpdateTimeoutRef.current) {
-        clearTimeout(jsonUpdateTimeoutRef.current);
       }
     };
   }, []);
@@ -746,17 +653,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   >
                     Include client tag
                   </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={settings.showEventJson}
-                    onCheckedChange={(checked) => {
-                      updateSetting("showEventJson", checked);
-                      if (checked) {
-                        generateDraftEventJson();
-                      }
-                    }}
-                  >
-                    Show event JSON
-                  </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -919,34 +815,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             </div>
           )}
         </div>
-
-        {/* Event JSON Preview */}
-        {settings.showEventJson && (
-          <>
-            {showPublishedPreview && lastPublishedEvent ? (
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
-                  <CopyableJsonViewer
-                    json={JSON.stringify(lastPublishedEvent, null, 2)}
-                  />
-                </div>
-              </div>
-            ) : (
-              draftEventJson && (
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <div
-                    className="overflow-y-auto"
-                    style={{ maxHeight: "400px" }}
-                  >
-                    <CopyableJsonViewer
-                      json={JSON.stringify(draftEventJson, null, 2)}
-                    />
-                  </div>
-                </div>
-              )
-            )}
-          </>
-        )}
 
         {/* Upload dialog */}
         {uploadDialog}

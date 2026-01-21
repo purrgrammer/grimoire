@@ -38,6 +38,11 @@ export const BlobAttachmentRichNode = Node.create({
     ];
   },
 
+  renderText({ node }) {
+    // Serialize to URL for plain text export
+    return node.attrs.url || "";
+  },
+
   addNodeView() {
     return ReactNodeViewRenderer(BlobAttachmentRich);
   },

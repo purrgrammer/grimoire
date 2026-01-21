@@ -25,6 +25,7 @@ import {
 } from "./EmojiSuggestionList";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import { nip19 } from "nostr-tools";
 import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
 import { FilePasteHandler } from "./extensions/file-paste-handler";
 import { BlobAttachmentRichNode } from "./extensions/blob-attachment-rich";
@@ -435,7 +436,17 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             keepMarks: false,
           },
         }),
-        Mention.configure({
+        Mention.extend({
+          renderText({ node }) {
+            // Serialize to nostr: URI for plain text export
+            try {
+              return `nostr:${nip19.npubEncode(node.attrs.id)}`;
+            } catch (err) {
+              console.error("[Mention] Failed to encode pubkey:", err);
+              return `@${node.attrs.label}`;
+            }
+          },
+        }).configure({
           HTMLAttributes: {
             class: "mention",
           },
