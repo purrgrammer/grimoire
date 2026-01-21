@@ -15,6 +15,7 @@ import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
 import { EventFactory } from "applesauce-core/event-factory";
 import { useGrimoire } from "@/core/state";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 // Per-relay publish status
 type RelayStatus = "pending" | "publishing" | "success" | "error";
@@ -45,10 +46,13 @@ export function PostViewer() {
   const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
 
-  // Get active account's write relays from Grimoire state
+  // Get active account's write relays from Grimoire state, fallback to aggregators
   const writeRelays = useMemo(() => {
-    if (!state.activeAccount?.relays) return [];
-    return state.activeAccount.relays.filter((r) => r.write).map((r) => r.url);
+    if (!state.activeAccount?.relays) return AGGREGATOR_RELAYS;
+    const userWriteRelays = state.activeAccount.relays
+      .filter((r) => r.write)
+      .map((r) => r.url);
+    return userWriteRelays.length > 0 ? userWriteRelays : AGGREGATOR_RELAYS;
   }, [state.activeAccount?.relays]);
 
   // Update relay states when write relays change
@@ -425,11 +429,11 @@ export function PostViewer() {
   }
 
   return (
-    <div className="h-full overflow-auto p-4 space-y-4">
+    <div className="h-full flex flex-col p-4 gap-4">
       {!showPublishedPreview ? (
         <>
           {/* Editor */}
-          <div>
+          <div className="flex-1 min-h-0">
             <RichEditor
               ref={editorRef}
               placeholder="What's on your mind?"
@@ -444,7 +448,7 @@ export function PostViewer() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button
               variant="outline"
               size="icon"
@@ -480,13 +484,15 @@ export function PostViewer() {
         <>
           {/* Published event preview */}
           {lastPublishedEvent && (
-            <div className="rounded-lg border border-border bg-muted/10 p-4">
-              <Kind1Renderer event={lastPublishedEvent} depth={0} />
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="rounded-lg border border-border bg-muted/10 p-4">
+                <Kind1Renderer event={lastPublishedEvent} depth={0} />
+              </div>
             </div>
           )}
 
           {/* Reset button */}
-          <div className="flex justify-center">
+          <div className="flex justify-center flex-shrink-0">
             <Button variant="outline" onClick={handleReset} className="gap-2">
               <RotateCcw className="h-4 w-4" />
               Compose Another Post
@@ -496,69 +502,62 @@ export function PostViewer() {
       )}
 
       {/* Relay selection */}
-      <div className="space-y-2">
+      <div className="space-y-2 flex-shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
             Relays ({selectedRelays.size} selected)
           </span>
         </div>
 
-        {writeRelays.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No write relays configured. Please add relays in your profile
-            settings.
-          </p>
-        ) : (
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {relayStates.map((relay) => (
-              <div
-                key={relay.url}
-                className="flex items-center justify-between gap-3 py-1"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Checkbox
-                    id={relay.url}
-                    checked={selectedRelays.has(relay.url)}
-                    onCheckedChange={() => toggleRelay(relay.url)}
-                    disabled={isPublishing}
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {relayStates.map((relay) => (
+            <div
+              key={relay.url}
+              className="flex items-center justify-between gap-3 py-1"
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Checkbox
+                  id={relay.url}
+                  checked={selectedRelays.has(relay.url)}
+                  onCheckedChange={() => toggleRelay(relay.url)}
+                  disabled={isPublishing || showPublishedPreview}
+                />
+                <label
+                  htmlFor={relay.url}
+                  className="cursor-pointer truncate flex-1"
+                  onClick={(e) => e.preventDefault()}
+                >
+                  <RelayLink
+                    url={relay.url}
+                    write={true}
+                    showInboxOutbox={false}
+                    className="text-sm"
                   />
-                  <label
-                    htmlFor={relay.url}
-                    className="cursor-pointer truncate flex-1"
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    <RelayLink
-                      url={relay.url}
-                      write={true}
-                      showInboxOutbox={false}
-                      className="text-sm"
-                    />
-                  </label>
-                </div>
-
-                {/* Status indicator */}
-                <div className="flex-shrink-0">
-                  {relay.status === "publishing" && (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                  )}
-                  {relay.status === "success" && (
-                    <Check className="h-4 w-4 text-green-500" />
-                  )}
-                  {relay.status === "error" && (
-                    <button
-                      onClick={() => retryRelay(relay.url)}
-                      disabled={isPublishing}
-                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                      title={`${relay.error || "Failed to publish"}. Click to retry.`}
-                    >
-                      <X className="h-4 w-4 text-red-500" />
-                    </button>
-                  )}
-                </div>
+                </label>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Status indicator */}
+              <div className="flex-shrink-0">
+                {relay.status === "publishing" && (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                )}
+                {relay.status === "success" && (
+                  <Check className="h-4 w-4 text-green-500" />
+                )}
+                {relay.status === "error" && (
+                  <button
+                    onClick={() => retryRelay(relay.url)}
+                    disabled={isPublishing}
+                    className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                    title={`${relay.error || "Failed to publish"}. Click to retry.`}
+                  >
+                    <X className="h-4 w-4 text-red-500" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Upload dialog */}
