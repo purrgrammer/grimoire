@@ -619,6 +619,137 @@ const options = useMemo(
 );
 ```
 
+## EventFactory
+
+### Overview
+
+The `EventFactory` class (moved to `applesauce-core/event-factory` in v5) provides a unified API for creating and signing Nostr events using blueprints.
+
+```typescript
+import { EventFactory } from 'applesauce-core/event-factory';
+
+// Create factory
+const factory = new EventFactory();
+
+// Set signer (required for signing)
+factory.setSigner(signer);
+
+// Optional context
+factory.setClient({ name: 'grimoire', address: { pubkey, identifier } });
+```
+
+### Creating Events with Blueprints
+
+Blueprints are templates for event creation. See the **applesauce-common** skill for detailed blueprint documentation.
+
+```typescript
+import { NoteBlueprint, NoteReplyBlueprint } from 'applesauce-common/blueprints';
+
+// Create a note
+const draft = await factory.create(
+  NoteBlueprint,
+  'Hello #nostr!',
+  { emojis: [{ shortcode: 'wave', url: 'https://...' }] }
+);
+
+// Sign the draft
+const event = await factory.sign(draft);
+
+// Or combine: create and sign
+const event = await factory.sign(
+  await factory.create(NoteBlueprint, content, options)
+);
+```
+
+### Factory Methods
+
+```typescript
+// Create from blueprint
+const draft = await factory.create(Blueprint, ...args);
+
+// Sign event template
+const event = await factory.sign(draft);
+
+// Stamp (add pubkey without signing)
+const unsigned = await factory.stamp(draft);
+
+// Build with operations
+const draft = await factory.build(template, ...operations);
+
+// Modify existing event
+const modified = await factory.modify(event, ...operations);
+```
+
+### Using with Actions
+
+EventFactory integrates seamlessly with the action system:
+
+```typescript
+import accountManager from '@/services/accounts';
+import { EventFactory } from 'applesauce-core/event-factory';
+import { NoteBlueprint } from 'applesauce-common/blueprints';
+
+const account = accountManager.active;
+const signer = account.signer;
+
+const factory = new EventFactory();
+factory.setSigner(signer);
+
+// Create and sign
+const draft = await factory.create(NoteBlueprint, content, options);
+const event = await factory.sign(draft);
+
+// Publish
+await pool.publish(relays, event);
+```
+
+### Common Patterns
+
+**Creating with custom tags:**
+```typescript
+// Let blueprint handle automatic extraction
+const draft = await factory.create(NoteBlueprint, content, { emojis });
+
+// Add custom tags afterward
+draft.tags.push(['client', 'grimoire', '31990:...']);
+draft.tags.push(['imeta', `url ${blob.url}`, `x ${blob.sha256}`]);
+
+// Sign
+const event = await factory.sign(draft);
+```
+
+**Error handling:**
+```typescript
+try {
+  const draft = await factory.create(NoteBlueprint, content, options);
+  const event = await factory.sign(draft);
+  await pool.publish(relays, event);
+} catch (error) {
+  if (error.message.includes('User rejected')) {
+    // Handle rejection
+  } else {
+    // Handle other errors
+  }
+}
+```
+
+**Optimistic updates:**
+```typescript
+// Create and sign
+const event = await factory.sign(
+  await factory.create(NoteBlueprint, content, options)
+);
+
+// Add to local store immediately
+eventStore.add(event);
+
+// Publish in background
+pool.publish(relays, event).catch(err => {
+  // Remove from store on failure
+  eventStore.remove(event.id);
+});
+```
+
 ## NIP Helpers
 
 ### NIP-05 Verification
