@@ -42,7 +42,7 @@ import { getSemanticAuthor } from "@/lib/semantic-author";
 import { EventFactory } from "applesauce-core/event-factory";
 import { ReactionBlueprint } from "applesauce-common/blueprints";
 import { publishEventToRelays } from "@/services/hub";
-import { getInteractionRelays } from "@/lib/interaction-relay-selection";
+import { selectRelaysForInteraction } from "@/services/relay-selection";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 
 /**
@@ -552,7 +552,7 @@ export function BaseEventContainer({
       const signed = await factory.sign(draft);
 
       // Select relays per NIP-65: author's outbox + target's inbox
-      const relays = await getInteractionRelays(pubkey, event.pubkey);
+      const relays = await selectRelaysForInteraction(pubkey, event.pubkey);
       await publishEventToRelays(signed, relays);
     } catch (err) {
       console.error("[BaseEventContainer] Failed to send reaction:", err);
