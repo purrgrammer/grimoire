@@ -365,6 +365,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
       setIsPublishing(true);
 
+      // Create and sign event first
+      let event;
       try {
         // Create event factory with signer
         const factory = new EventFactory();
@@ -419,8 +421,19 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           content: content.trim(),
           tags,
         });
-        const event = await factory.sign(draft);
+        event = await factory.sign(draft);
+      } catch (error) {
+        // Signing failed - user might have rejected it
+        console.error("Failed to sign event:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to sign note",
+        );
+        setIsPublishing(false);
+        return; // Don't destroy the post, let user try again
+      }
 
+      // Signing succeeded, now publish to relays
+      try {
         // Store the signed event for potential retries
         setLastPublishedEvent(event);
 
@@ -493,9 +506,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           error instanceof Error ? error.message : "Failed to publish note",
         );
 
-        // Reset relay states to pending on error
+        // Reset relay states to pending on publishing error
         setRelayStates((prev) =>
-          prev.map((r) => ({ ...r, status: "error" as RelayStatus })),
+          prev.map((r) => ({
+            ...r,
+            status: "error" as RelayStatus,
+            error: error instanceof Error ? error.message : "Unknown error",
+          })),
         );
       } finally {
         setIsPublishing(false);
