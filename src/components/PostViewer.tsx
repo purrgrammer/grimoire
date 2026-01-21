@@ -480,8 +480,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           }
         });
 
-        // Wait for all publishes to complete
-        await Promise.all(publishPromises);
+        // Wait for all publishes to complete (settled = all finished, regardless of success/failure)
+        await Promise.allSettled(publishPromises);
 
         // Add to event store for immediate local availability
         eventStore.add(event);
