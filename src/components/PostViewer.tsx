@@ -430,7 +430,7 @@ export function PostViewer() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="space-y-4 p-4">
+      <div className="max-w-2xl mx-auto space-y-4 p-4">
         {!showPublishedPreview ? (
           <>
             {/* Editor */}
