@@ -195,7 +195,9 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     // Build filter for all thread events:
     // - kind 1: replies to root
+    // - kind 6: reposts (legacy)
     // - kind 7: reactions
+    // - kind 16: generic reposts
     // - kind 9735: zap receipts
     const filters: Filter[] = [
       // Replies: kind 1 events with e-tag pointing to root
@@ -209,6 +211,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         kinds: [7],
         "#e": [rootEventId],
         limit: 200, // Reactions are small, fetch more
+      },
+      // Reposts: kind 6 and 16 events with e-tag pointing to root or replies
+      {
+        kinds: [6, 16],
+        "#e": [rootEventId],
+        limit: 100,
       },
       // Zaps: kind 9735 receipts with e-tag pointing to root or replies
       {
@@ -245,7 +253,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // Combine root event with replies
     const rootEvent$ = eventStore.event(rootEventId);
     const replies$ = eventStore.timeline({
-      kinds: [1, 7, 9735],
+      kinds: [1, 6, 7, 16, 9735],
       "#e": [rootEventId],
     });
 
@@ -307,6 +315,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         "#e": [rootEventId],
         until: before,
         limit: 100,
+      },
+      {
+        kinds: [6, 16],
+        "#e": [rootEventId],
+        until: before,
+        limit: 50,
       },
       {
         kinds: [9735],
@@ -802,6 +816,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       return this.zapToMessage(event, conversationId);
     }
 
+    // Handle reposts (kind 6, 16) - simple system messages
+    // Ignore reposts with content (quotes)
+    if ((event.kind === 6 || event.kind === 16) && !event.content.trim()) {
+      return this.repostToMessage(event, conversationId);
+    }
+
     // Handle reactions (kind 7) - skip for now, handled via MessageReactions
     if (event.kind === 7) {
       return null;
@@ -890,6 +910,31 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         zapRecipient: recipient,
       },
       event: zapReceipt,
+    };
+  }
+
+  /**
+   * Convert repost event to system Message object
+   */
+  private repostToMessage(
+    repostEvent: NostrEvent,
+    conversationId: string,
+  ): Message {
+    // Find what event is being reposted (e-tag)
+    const eTag = repostEvent.tags.find((t) => t[0] === "e");
+    const replyTo = eTag?.[1];
+
+    return {
+      id: repostEvent.id,
+      conversationId,
+      author: repostEvent.pubkey,
+      content: "reposted",
+      timestamp: repostEvent.created_at,
+      type: "system",
+      replyTo,
+      protocol: "nip-10",
+      metadata: {},
+      event: repostEvent,
     };
   }
 }
