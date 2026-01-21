@@ -25,6 +25,7 @@ import { useAccount } from "@/hooks/useAccount";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import { useRelayState } from "@/hooks/useRelayState";
 import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
 import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
@@ -36,6 +37,7 @@ import { useGrimoire } from "@/core/state";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { use$ } from "applesauce-react/hooks";
+import { getAuthIcon } from "@/lib/relay-status-utils";
 
 // Per-relay publish status
 type RelayStatus = "pending" | "publishing" | "success" | "error";
@@ -49,11 +51,16 @@ interface RelayPublishState {
 // Draft persistence key
 const DRAFT_STORAGE_KEY = "grimoire-post-draft";
 
-export function PostViewer() {
+interface PostViewerProps {
+  windowId?: string;
+}
+
+export function PostViewer({ windowId }: PostViewerProps = {}) {
   const { pubkey, canSign, signer } = useAccount();
   const { searchProfiles } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const { state } = useGrimoire();
+  const { getRelay } = useRelayState();
 
   // Editor ref for programmatic control
   const editorRef = useRef<RichEditorHandle>(null);
@@ -102,7 +109,9 @@ export function PostViewer() {
   useEffect(() => {
     if (!pubkey) return;
 
-    const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+    const draftKey = windowId
+      ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+      : `${DRAFT_STORAGE_KEY}-${pubkey}`;
     const savedDraft = localStorage.getItem(draftKey);
 
     if (savedDraft) {
@@ -127,7 +136,7 @@ export function PostViewer() {
         console.error("Failed to load draft:", err);
       }
     }
-  }, [pubkey]);
+  }, [pubkey, windowId]);
 
   // Save draft to localStorage on content change
   const saveDraft = useCallback(() => {
@@ -136,14 +145,16 @@ export function PostViewer() {
     const content = editorRef.current.getContent();
     const editorState = editorRef.current.getJSON();
 
+    const draftKey = windowId
+      ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+      : `${DRAFT_STORAGE_KEY}-${pubkey}`;
+
     if (!content.trim()) {
       // Clear draft if empty
-      const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
       localStorage.removeItem(draftKey);
       return;
     }
 
-    const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
     const draft = {
       editorState, // Full editor JSON state (preserves blobs, emojis, formatting)
       selectedRelays: Array.from(selectedRelays), // Selected relay URLs
@@ -155,7 +166,7 @@ export function PostViewer() {
     } catch (err) {
       console.error("Failed to save draft:", err);
     }
-  }, [pubkey, selectedRelays]);
+  }, [pubkey, windowId, selectedRelays]);
 
   // Debounced draft save (save every 2 seconds of inactivity)
   useEffect(() => {
@@ -392,7 +403,9 @@ export function PostViewer() {
 
         // Clear draft from localStorage
         if (pubkey) {
-          const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+          const draftKey = windowId
+            ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+            : `${DRAFT_STORAGE_KEY}-${pubkey}`;
           localStorage.removeItem(draftKey);
         }
 
@@ -443,11 +456,13 @@ export function PostViewer() {
   const handleDiscard = useCallback(() => {
     editorRef.current?.clear();
     if (pubkey) {
-      const draftKey = `${DRAFT_STORAGE_KEY}-${pubkey}`;
+      const draftKey = windowId
+        ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
+        : `${DRAFT_STORAGE_KEY}-${pubkey}`;
       localStorage.removeItem(draftKey);
     }
     editorRef.current?.focus();
-  }, [pubkey]);
+  }, [pubkey, windowId]);
 
   // Check if input looks like a valid relay URL
   const isValidRelayInput = useCallback((input: string): boolean => {
@@ -489,8 +504,6 @@ export function PostViewer() {
 
       // Clear input
       setNewRelayInput("");
-
-      toast.success(`Added ${normalizedUrl.replace(/^wss?:\/\//, "")}`);
     } catch (error) {
       console.error("Failed to add relay:", error);
       toast.error(error instanceof Error ? error.message : "Invalid relay URL");
@@ -635,6 +648,10 @@ export function PostViewer() {
               const poolRelay = relayPoolMap?.get(relay.url);
               const isConnected = poolRelay?.connected ?? false;
 
+              // Get relay state for auth status
+              const relayState = getRelay(relay.url);
+              const authIcon = getAuthIcon(relayState);
+
               return (
                 <div
                   key={relay.url}
@@ -653,6 +670,10 @@ export function PostViewer() {
                     ) : (
                       <ServerOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                     )}
+                    {/* Auth status icon */}
+                    <div className="flex-shrink-0" title={authIcon.label}>
+                      {authIcon.icon}
+                    </div>
                     <label
                       htmlFor={relay.url}
                       className="cursor-pointer truncate flex-1"

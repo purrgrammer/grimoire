@@ -245,7 +245,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         );
         break;
       case "post":
-        content = <PostViewer />;
+        content = <PostViewer windowId={window.id} />;
         break;
       default:
         content = (
