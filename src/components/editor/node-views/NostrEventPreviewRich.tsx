@@ -1,13 +1,13 @@
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { DetailKindRenderer } from "@/components/nostr/kinds";
+import { KindRenderer } from "@/components/nostr/kinds";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-import { EventDetailSkeleton } from "@/components/ui/skeleton";
+import { EventCardSkeleton } from "@/components/ui/skeleton";
 
 /**
  * Rich preview component for Nostr events in the editor
  *
- * Uses the full DetailKindRenderer to show event content
+ * Uses the feed KindRenderer to show event content inline
  */
 export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
   const { type, data } = node.attrs as {
@@ -43,9 +43,9 @@ export function NostrEventPreviewRich({ node }: ReactNodeViewProps) {
     <NodeViewWrapper className="my-2">
       <div className="rounded-lg border border-border bg-muted/30 p-3 pointer-events-none">
         {!event ? (
-          <EventDetailSkeleton className="py-2" />
+          <EventCardSkeleton className="py-2" />
         ) : (
-          <DetailKindRenderer event={event} />
+          <KindRenderer event={event} depth={0} />
         )}
       </div>
     </NodeViewWrapper>
