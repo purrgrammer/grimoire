@@ -42,6 +42,7 @@ import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
 import { parseReqCommand } from "@/lib/req-parser";
 import { useOutboxRelays } from "@/hooks/useOutboxRelays";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { KindBadge } from "./KindBadge";
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -615,7 +616,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
       </div>
 
       {/* Profile Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="overflow-y-auto p-4">
         {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
 
         {!profile && profileEvent && (
@@ -713,16 +714,44 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
             defaultValue={pubkeySpells[0]?.id}
             className="flex flex-col h-full"
           >
-            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0">
-              {pubkeySpells.map((spell) => (
-                <TabsTrigger
-                  key={spell.id}
-                  value={spell.id}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-                >
-                  {spell.name || spell.alias || "Untitled Spell"}
-                </TabsTrigger>
-              ))}
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden">
+              {pubkeySpells.map((spell) => {
+                // Extract kinds from spell for display
+                const spellKinds = (() => {
+                  try {
+                    if (spell.event) {
+                      const decoded = decodeSpell(spell.event);
+                      return decoded.filter.kinds?.slice(0, 3) || [];
+                    }
+                    // For local spells, parse command
+                    const commandWithoutPrefix = spell.command
+                      .replace(/^\s*(req|count)\s+/i, "")
+                      .trim();
+                    const tokens = commandWithoutPrefix.split(/\s+/);
+                    const parsed = parseReqCommand(tokens);
+                    return parsed.filter.kinds?.slice(0, 3) || [];
+                  } catch {
+                    return [];
+                  }
+                })();
+
+                return (
+                  <TabsTrigger
+                    key={spell.id}
+                    value={spell.id}
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {spellKinds.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {spellKinds.map((kind) => (
+                          <KindBadge key={kind} kind={kind} variant="compact" />
+                        ))}
+                      </div>
+                    )}
+                    <span>{spell.name || spell.alias || "Untitled Spell"}</span>
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
 
             {/* Spell Tab Contents */}
