@@ -1,4 +1,4 @@
-import { parseReqCommand } from "./req-parser";
+import { parseReqCommand, parseTimestamp } from "./req-parser";
 import type {
   CreateSpellOptions,
   EncodedSpell,
@@ -358,24 +358,17 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
 
   const since = tagMap.get("since")?.[0];
   if (since) {
-    // Check if it's a relative time or unix timestamp
-    if (/^\d{10}$/.test(since)) {
-      filter.since = parseInt(since, 10);
-    } else {
-      // It's a relative time format - preserve it as a comment
-      // For actual filtering, we'd need to resolve it at runtime
-      // For now, skip adding to filter (will be resolved at execution)
+    const timestamp = parseTimestamp(since);
+    if (timestamp) {
+      filter.since = timestamp;
     }
   }
 
   const until = tagMap.get("until")?.[0];
   if (until) {
-    // Check if it's a relative time or unix timestamp
-    if (/^\d{10}$/.test(until)) {
-      filter.until = parseInt(until, 10);
-    } else {
-      // It's a relative time format - preserve it as a comment
-      // For now, skip adding to filter (will be resolved at execution)
+    const timestamp = parseTimestamp(until);
+    if (timestamp) {
+      filter.until = timestamp;
     }
   }
 

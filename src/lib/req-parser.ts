@@ -520,7 +520,7 @@ function isRelayDomain(value: string): boolean {
 /**
  * Parse timestamp - supports unix timestamp, relative time (1s, 30m, 2h, 7d, 2w, 3mo, 1y), or "now"
  */
-function parseTimestamp(value: string): number | null {
+export function parseTimestamp(value: string): number | null {
   if (!value) return null;
 
   // Special keyword: "now" - current timestamp
