@@ -528,15 +528,31 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
       },
     });
 
+    // Helper to check if editor view is ready (prevents "view not available" errors)
+    const isEditorReady = useCallback(() => {
+      return editor && editor.view && editor.view.dom;
+    }, [editor]);
+
     // Expose editor methods
     useImperativeHandle(
       ref,
       () => ({
-        focus: () => editor?.commands.focus(),
-        clear: () => editor?.commands.clearContent(),
-        getContent: () => editor?.getText({ blockSeparator: "\n" }) || "",
+        focus: () => {
+          if (isEditorReady()) {
+            editor?.commands.focus();
+          }
+        },
+        clear: () => {
+          if (isEditorReady()) {
+            editor?.commands.clearContent();
+          }
+        },
+        getContent: () => {
+          if (!isEditorReady()) return "";
+          return editor?.getText({ blockSeparator: "\n" }) || "";
+        },
         getSerializedContent: () => {
-          if (!editor)
+          if (!isEditorReady() || !editor)
             return {
               text: "",
               emojiTags: [],
@@ -545,32 +561,40 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             };
           return serializeContent(editor);
         },
-        isEmpty: () => editor?.isEmpty ?? true,
+        isEmpty: () => {
+          if (!isEditorReady()) return true;
+          return editor?.isEmpty ?? true;
+        },
         submit: () => {
-          if (editor) {
+          if (isEditorReady() && editor) {
             handleSubmit(editor);
           }
         },
         insertText: (text: string) => {
-          editor?.commands.insertContent(text);
+          if (isEditorReady()) {
+            editor?.commands.insertContent(text);
+          }
         },
         insertBlob: (blob: BlobAttachment) => {
-          editor?.commands.insertContent({
-            type: "blobAttachment",
-            attrs: blob,
-          });
+          if (isEditorReady()) {
+            editor?.commands.insertContent({
+              type: "blobAttachment",
+              attrs: blob,
+            });
+          }
         },
         getJSON: () => {
+          if (!isEditorReady()) return null;
           return editor?.getJSON() || null;
         },
         setContent: (json: any) => {
           // Check editor and view are ready before setting content
-          if (editor?.view?.dom && json) {
-            editor.commands.setContent(json);
+          if (isEditorReady() && json) {
+            editor?.commands.setContent(json);
           }
         },
       }),
-      [editor, handleSubmit],
+      [editor, handleSubmit, isEditorReady],
     );
 
     // Handle submit on Ctrl/Cmd+Enter
