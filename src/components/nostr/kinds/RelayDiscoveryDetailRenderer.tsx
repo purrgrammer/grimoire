@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { JsonViewer } from "@/components/JsonViewer";
 import { UserName } from "../UserName";
 import { NIPBadge } from "@/components/NIPBadge";
+import { RelayKindsDisplay } from "../RelayKindsDisplay";
 import {
   getRelayUrl,
   getRttMetrics,
@@ -28,7 +29,6 @@ import {
   MapPin,
   Shield,
   Tag,
-  Filter,
   Clock,
   CheckCircle,
   XCircle,
@@ -240,43 +240,8 @@ export function RelayDiscoveryDetailRenderer({ event }: { event: NostrEvent }) {
         </div>
       )}
 
-      {/* Accepted Kinds */}
-      {kinds.accepted.length > 0 && (
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-muted-foreground">
-            <Filter className="size-4" />
-            Accepted Kinds ({kinds.accepted.length})
-          </Label>
-          <div className="flex flex-wrap gap-1.5">
-            {kinds.accepted.map((kind) => (
-              <Badge key={kind} variant="outline" className="font-mono text-xs">
-                {kind}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Rejected Kinds */}
-      {kinds.rejected.length > 0 && (
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-muted-foreground">
-            <XCircle className="size-4" />
-            Rejected Kinds ({kinds.rejected.length})
-          </Label>
-          <div className="flex flex-wrap gap-1.5">
-            {kinds.rejected.map((kind) => (
-              <Badge
-                key={kind}
-                variant="outline"
-                className="font-mono text-xs text-red-600 border-red-600/30"
-              >
-                !{kind}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Relay Kinds */}
+      <RelayKindsDisplay accepted={kinds.accepted} rejected={kinds.rejected} />
 
       {/* Topics */}
       {topics.length > 0 && (
