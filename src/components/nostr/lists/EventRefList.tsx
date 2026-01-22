@@ -137,7 +137,7 @@ export function EventRefListFull({
           {eventPointers.map((pointer) => (
             <EmbeddedEvent
               key={pointer.id}
-              eventId={pointer.id}
+              eventPointer={pointer}
               className="border border-muted rounded overflow-hidden"
             />
           ))}

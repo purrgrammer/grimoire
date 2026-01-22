@@ -122,7 +122,7 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
             Highlighted From
           </div>
           <EmbeddedEvent
-            eventId={eventPointer?.id}
+            eventPointer={eventPointer}
             addressPointer={addressPointer}
             onOpen={(pointer) => {
               if (typeof pointer === "string") {

@@ -57,9 +57,10 @@ function NostrMention({ href }: { href: string }) {
           </span>
         );
       case "note":
+        // note is just an event ID, wrap in EventPointer
         return (
           <EmbeddedEvent
-            eventId={parsed.data}
+            eventPointer={{ id: parsed.data }}
             onOpen={(id) => {
               addWindow(
                 "open",
@@ -70,9 +71,10 @@ function NostrMention({ href }: { href: string }) {
           />
         );
       case "nevent":
+        // nevent includes full EventPointer with relay hints
         return (
           <EmbeddedEvent
-            eventId={parsed.data.id}
+            eventPointer={parsed.data}
             onOpen={(id) => {
               addWindow(
                 "open",

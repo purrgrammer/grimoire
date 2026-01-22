@@ -1,4 +1,5 @@
 import { Repeat2 } from "lucide-react";
+import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { useGrimoire } from "@/core/state";
@@ -13,9 +14,9 @@ import { useGrimoire } from "@/core/state";
 export function RepostRenderer({ event }: BaseEventProps) {
   const { addWindow } = useGrimoire();
 
-  // Get the event being reposted (e tag)
+  // Get the event being reposted (e tag) with relay hints
   const eTag = event.tags.find((tag) => tag[0] === "e");
-  const repostedEventId = eTag?.[1];
+  const repostedEventPointer = eTag ? getEventPointerFromETag(eTag) : null;
 
   return (
     <BaseEventContainer event={event}>
@@ -24,9 +25,9 @@ export function RepostRenderer({ event }: BaseEventProps) {
           <Repeat2 className="size-4" />
           <span>reposted</span>
         </div>
-        {repostedEventId && (
+        {repostedEventPointer && (
           <EmbeddedEvent
-            eventId={repostedEventId}
+            eventPointer={repostedEventPointer}
             onOpen={(id) => {
               addWindow(
                 "open",

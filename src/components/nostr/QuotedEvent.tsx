@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { KindRenderer } from "./kinds";
 import { UserName } from "./UserName";
@@ -7,14 +8,12 @@ import { cn } from "@/lib/utils";
 import { CompactQuoteSkeleton } from "@/components/ui/skeleton";
 
 interface QuotedEventProps {
-  /** Event ID string for regular events */
-  eventId?: string;
-  /** AddressPointer for addressable/replaceable events */
-  addressPointer?: { kind: number; pubkey: string; identifier: string };
+  /** EventPointer with optional relay hints for regular events */
+  eventPointer?: EventPointer;
+  /** AddressPointer for addressable/replaceable events (includes relay hints) */
+  addressPointer?: AddressPointer;
   /** Callback when user clicks to open the event in new window */
-  onOpen?: (
-    id: string | { kind: number; pubkey: string; identifier: string },
-  ) => void;
+  onOpen?: (id: string | AddressPointer) => void;
   /** Depth level for nesting (0 = root, 1 = first quote, 2+ = nested) */
   depth?: number;
   /** Optional className for container */
@@ -27,7 +26,7 @@ interface QuotedEventProps {
  * - depth 2+: Show expandable preview only
  */
 export function QuotedEvent({
-  eventId,
+  eventPointer,
   addressPointer,
   onOpen,
   depth = 1,
@@ -35,21 +34,20 @@ export function QuotedEvent({
 }: QuotedEventProps) {
   const [isExpanded, setIsExpanded] = useState(depth < 2);
 
-  // Determine pointer to use
-  const pointer = eventId || addressPointer;
+  // Determine pointer to use - full pointer preserves relay hints
+  const pointer = eventPointer || addressPointer;
 
-  // Load the event
+  // Load the event - passes full pointer with relay hints to useNostrEvent
   const event = useNostrEvent(pointer);
 
   // Loading state
   if (!event) {
     if (onOpen && pointer) {
-      const displayText =
-        typeof eventId === "string"
-          ? `@${eventId.slice(0, 8)}...`
-          : addressPointer
-            ? `@${addressPointer.identifier || addressPointer.kind}`
-            : "@event";
+      const displayText = eventPointer
+        ? `@${eventPointer.id.slice(0, 8)}...`
+        : addressPointer
+          ? `@${addressPointer.identifier || addressPointer.kind}`
+          : "@event";
 
       return (
         <a
@@ -57,7 +55,7 @@ export function QuotedEvent({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onOpen(pointer);
+            onOpen(eventPointer?.id || addressPointer!);
           }}
           className="inline-flex items-center gap-1 text-accent underline decoration-dotted break-all"
         >
