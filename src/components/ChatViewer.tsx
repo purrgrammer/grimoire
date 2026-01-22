@@ -32,6 +32,11 @@ import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import type { ChatAction } from "@/types/chat-actions";
 import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
+import {
+  groupSystemMessages,
+  isGroupedSystemMessage,
+  type GroupedSystemMessage,
+} from "@/lib/chat/group-system-messages";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
@@ -248,6 +253,58 @@ const ComposerReplyPreview = memo(function ComposerReplyPreview({
       >
         ✕
       </button>
+    </div>
+  );
+});
+
+/**
+ * GroupedSystemMessageItem - Renders multiple users performing the same action
+ * Example: "alice, bob and 3 others reposted"
+ */
+const GroupedSystemMessageItem = memo(function GroupedSystemMessageItem({
+  grouped,
+}: {
+  grouped: GroupedSystemMessage;
+}) {
+  const { authors, content } = grouped;
+
+  // Format the authors list based on count
+  const formatAuthors = () => {
+    if (authors.length === 1) {
+      return <UserName pubkey={authors[0]} className="text-xs" />;
+    } else if (authors.length === 2) {
+      return (
+        <>
+          <UserName pubkey={authors[0]} className="text-xs" /> and{" "}
+          <UserName pubkey={authors[1]} className="text-xs" />
+        </>
+      );
+    } else if (authors.length === 3) {
+      return (
+        <>
+          <UserName pubkey={authors[0]} className="text-xs" />,{" "}
+          <UserName pubkey={authors[1]} className="text-xs" /> and{" "}
+          <UserName pubkey={authors[2]} className="text-xs" />
+        </>
+      );
+    } else {
+      // 4 or more: show first 2 and "X others"
+      const othersCount = authors.length - 2;
+      return (
+        <>
+          <UserName pubkey={authors[0]} className="text-xs" />,{" "}
+          <UserName pubkey={authors[1]} className="text-xs" /> and {othersCount}{" "}
+          {othersCount === 1 ? "other" : "others"}
+        </>
+      );
+    }
+  };
+
+  return (
+    <div className="flex items-center px-3 py-1">
+      <span className="text-xs text-muted-foreground">
+        * {formatAuthors()} {content}
+      </span>
     </div>
   );
 });
@@ -547,36 +604,51 @@ export function ChatViewer({
     [adapter, conversation],
   );
 
-  // Process messages to include day markers
+  // Process messages to include day markers and group system messages
   const messagesWithMarkers = useMemo(() => {
     if (!messages || messages.length === 0) return [];
 
+    // First, group consecutive system messages
+    const groupedMessages = groupSystemMessages(messages);
+
     const items: Array<
       | { type: "message"; data: Message }
+      | { type: "grouped-system"; data: GroupedSystemMessage }
       | { type: "day-marker"; data: string; timestamp: number }
     > = [];
 
-    messages.forEach((message, index) => {
+    groupedMessages.forEach((item, index) => {
+      const timestamp = isGroupedSystemMessage(item)
+        ? item.timestamp
+        : item.timestamp;
+
       // Add day marker if this is the first message or if day changed
       if (index === 0) {
         items.push({
           type: "day-marker",
-          data: formatDayMarker(message.timestamp),
-          timestamp: message.timestamp,
+          data: formatDayMarker(timestamp),
+          timestamp,
         });
       } else {
-        const prevMessage = messages[index - 1];
-        if (isDifferentDay(prevMessage.timestamp, message.timestamp)) {
+        const prevItem = groupedMessages[index - 1];
+        const prevTimestamp = isGroupedSystemMessage(prevItem)
+          ? prevItem.timestamp
+          : prevItem.timestamp;
+        if (isDifferentDay(prevTimestamp, timestamp)) {
           items.push({
             type: "day-marker",
-            data: formatDayMarker(message.timestamp),
-            timestamp: message.timestamp,
+            data: formatDayMarker(timestamp),
+            timestamp,
           });
         }
       }
 
-      // Add the message itself
-      items.push({ type: "message", data: message });
+      // Add the message or grouped system message
+      if (isGroupedSystemMessage(item)) {
+        items.push({ type: "grouped-system", data: item });
+      } else {
+        items.push({ type: "message", data: item });
+      }
     });
 
     return items;
@@ -700,9 +772,12 @@ export function ChatViewer({
   const handleScrollToMessage = useCallback(
     (messageId: string) => {
       if (!messagesWithMarkers) return;
-      // Find index in the rendered array (which includes day markers)
+      // Find index in the rendered array (which includes day markers and grouped messages)
       const index = messagesWithMarkers.findIndex(
-        (item) => item.type === "message" && item.data.id === messageId,
+        (item) =>
+          (item.type === "message" && item.data.id === messageId) ||
+          (item.type === "grouped-system" &&
+            item.data.messageIds.includes(messageId)),
       );
       if (index !== -1 && virtuosoRef.current) {
         virtuosoRef.current.scrollToIndex({
@@ -1031,6 +1106,16 @@ export function ChatViewer({
                   </div>
                 );
               }
+
+              if (item.type === "grouped-system") {
+                return (
+                  <GroupedSystemMessageItem
+                    key={item.data.messageIds.join("-")}
+                    grouped={item.data}
+                  />
+                );
+              }
+
               // For NIP-10 threads, check if this is the root message
               const isRootMessage =
                 protocol === "nip-10" &&
