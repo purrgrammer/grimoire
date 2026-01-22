@@ -88,8 +88,32 @@ export function useParameterizedSpells(
   const stableAuthor = useStableValue(author);
   const stableRelays = useStableValue(relays);
 
-  // Query local spells with parameterType
+  // Query local spells with parameterType or convertible spells
   const localSpells = useLiveQuery(async () => {
+    // For $pubkey type, also include non-parameterized spells with $me or $contacts
+    if (stableType === "$pubkey") {
+      // Get all spells (parameterized and non-parameterized)
+      const allSpells = await db.spells.toArray();
+
+      return allSpells.filter((spell) => {
+        // Skip soft-deleted
+        if (spell.deletedAt) return false;
+
+        // Include explicitly parameterized $pubkey spells
+        if (spell.parameterType === "$pubkey") return true;
+
+        // Include spells with $me or $contacts that could be parameterized
+        if (!spell.parameterType) {
+          const cmd = spell.command.toLowerCase();
+          // Check if command uses $me or $contacts (single arg that can become $pubkey)
+          return cmd.includes("$me") || cmd.includes("$contacts");
+        }
+
+        return false;
+      });
+    }
+
+    // For other types or no type filter, use the original indexed query
     let query = db.spells.where("parameterType").notEqual(undefined as any);
 
     // Filter by type if specified
@@ -114,8 +138,9 @@ export function useParameterizedSpells(
       filter.authors = [stableAuthor];
     }
 
-    // Add tag filter for parameter type if specified
-    if (stableType) {
+    // For $pubkey type, load all spells (will filter in merge logic)
+    // For other types, filter by parameter tag
+    if (stableType && stableType !== "$pubkey") {
       filter["#l"] = [stableType];
     }
 
@@ -151,7 +176,9 @@ export function useParameterizedSpells(
       filter.authors = [stableAuthor];
     }
 
-    if (stableType) {
+    // For $pubkey type, load all spells (will filter in merge logic)
+    // For other types, filter by parameter tag
+    if (stableType && stableType !== "$pubkey") {
       filter["#l"] = [stableType];
     }
 
@@ -164,26 +191,55 @@ export function useParameterizedSpells(
 
     // Add local spells
     for (const localSpell of localSpells || []) {
-      // Skip if no parameter type (should be filtered by query, but double-check)
-      if (!localSpell.parameterType) continue;
+      // Handle explicitly parameterized spells
+      if (localSpell.parameterType) {
+        // Skip if type filter doesn't match
+        if (stableType && localSpell.parameterType !== stableType) continue;
 
-      // Skip if type filter doesn't match
-      if (stableType && localSpell.parameterType !== stableType) continue;
+        spellsMap.set(localSpell.id, {
+          id: localSpell.id,
+          name: localSpell.name,
+          alias: localSpell.alias,
+          command: localSpell.command,
+          description: localSpell.description,
+          parameterType: localSpell.parameterType,
+          parameterDefault: localSpell.parameterDefault,
+          isPublished: localSpell.isPublished,
+          eventId: localSpell.eventId,
+          event: localSpell.event,
+          createdAt: localSpell.createdAt,
+          source: "local" as const,
+        });
+        continue;
+      }
 
-      spellsMap.set(localSpell.id, {
-        id: localSpell.id,
-        name: localSpell.name,
-        alias: localSpell.alias,
-        command: localSpell.command,
-        description: localSpell.description,
-        parameterType: localSpell.parameterType,
-        parameterDefault: localSpell.parameterDefault,
-        isPublished: localSpell.isPublished,
-        eventId: localSpell.eventId,
-        event: localSpell.event,
-        createdAt: localSpell.createdAt,
-        source: "local" as const,
-      });
+      // Handle non-parameterized spells with $me or $contacts (treat as $pubkey)
+      if (stableType === "$pubkey") {
+        const cmd = localSpell.command.toLowerCase();
+        if (cmd.includes("$me") || cmd.includes("$contacts")) {
+          // Detect default value from command
+          const defaultValue = cmd.includes("$me")
+            ? ["$me"]
+            : cmd.includes("$contacts")
+              ? ["$contacts"]
+              : undefined;
+
+          spellsMap.set(localSpell.id, {
+            id: localSpell.id,
+            name: localSpell.name,
+            alias: localSpell.alias,
+            command: localSpell.command,
+            description: localSpell.description,
+            parameterType: "$pubkey" as const,
+            parameterDefault: defaultValue,
+            isPublished: localSpell.isPublished,
+            eventId: localSpell.eventId,
+            event: localSpell.event,
+            createdAt: localSpell.createdAt,
+            source: "local" as const,
+          });
+        }
+      }
     }
 
     // Add network spells (skip if already in local)
@@ -194,29 +250,58 @@ export function useParameterizedSpells(
       try {
         const parsed = decodeSpell(event as SpellEvent);
 
-        // Skip if not parameterized
-        if (!parsed.parameter) continue;
-
-        // Skip if type filter doesn't match
-        if (stableType && parsed.parameter.type !== stableType) continue;
-
         // Skip if author filter doesn't match
         if (stableAuthor && event.pubkey !== stableAuthor) continue;
 
-        spellsMap.set(event.id, {
-          id: event.id,
-          name: parsed.name,
-          command: parsed.command,
-          description: parsed.description,
-          parameterType: parsed.parameter.type,
-          parameterDefault: parsed.parameter.default,
-          isPublished: true,
-          eventId: event.id,
-          event: event as SpellEvent,
-          parsed,
-          createdAt: event.created_at * 1000,
-          source: "network" as const,
-        });
+        // Handle explicitly parameterized spells
+        if (parsed.parameter) {
+          // Skip if type filter doesn't match
+          if (stableType && parsed.parameter.type !== stableType) continue;
+
+          spellsMap.set(event.id, {
+            id: event.id,
+            name: parsed.name,
+            command: parsed.command,
+            description: parsed.description,
+            parameterType: parsed.parameter.type,
+            parameterDefault: parsed.parameter.default,
+            isPublished: true,
+            eventId: event.id,
+            event: event as SpellEvent,
+            parsed,
+            createdAt: event.created_at * 1000,
+            source: "network" as const,
+          });
+          continue;
+        }
+
+        // Handle non-parameterized spells with $me or $contacts (treat as $pubkey)
+        if (stableType === "$pubkey") {
+          const cmd = parsed.command.toLowerCase();
+          if (cmd.includes("$me") || cmd.includes("$contacts")) {
+            // Detect default value from command
+            const defaultValue = cmd.includes("$me")
+              ? ["$me"]
+              : cmd.includes("$contacts")
+                ? ["$contacts"]
+                : undefined;
+
+            spellsMap.set(event.id, {
+              id: event.id,
+              name: parsed.name,
+              command: parsed.command,
+              description: parsed.description,
+              parameterType: "$pubkey" as const,
+              parameterDefault: defaultValue,
+              isPublished: true,
+              eventId: event.id,
+              event: event as SpellEvent,
+              parsed,
+              createdAt: event.created_at * 1000,
+              source: "network" as const,
+            });
+          }
+        }
       } catch (e) {
         console.warn("Failed to decode network spell", event.id, e);
       }

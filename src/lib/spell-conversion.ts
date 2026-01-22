@@ -522,7 +522,34 @@ export function applySpellParameters(
   args: string[] = [],
 ): NostrFilter {
   if (!parsed.parameter) {
-    // Not a parameterized spell, return filter as-is
+    // Not an explicitly parameterized spell
+    // Check if we have args and the filter uses $me or $contacts (implicit parameterization)
+    if (args.length > 0) {
+      const filter: NostrFilter = { ...parsed.filter };
+
+      // Substitute $me and $contacts with provided pubkey(s)
+      if (filter.authors) {
+        filter.authors = filter.authors.flatMap((author) =>
+          author === "$me" || author === "$contacts" ? args : [author],
+        );
+      }
+
+      if (filter["#p"]) {
+        filter["#p"] = filter["#p"].flatMap((p) =>
+          p === "$me" || p === "$contacts" ? args : [p],
+        );
+      }
+
+      if (filter["#P"]) {
+        filter["#P"] = filter["#P"].flatMap((p) =>
+          p === "$me" || p === "$contacts" ? args : [p],
+        );
+      }
+
+      return filter;
+    }
+
+    // No parameter and no args, return filter as-is
     return parsed.filter;
   }
 
