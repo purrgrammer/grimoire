@@ -363,6 +363,93 @@ describe("parseReqCommand", () => {
       });
     });
 
+    describe("raw coordinate support (kind:pubkey:d)", () => {
+      it("should parse raw coordinate and populate filter['#a']", () => {
+        const pubkey = "a".repeat(64);
+        const coordinate = `30023:${pubkey}:my-article`;
+        const result = parseReqCommand(["-e", coordinate]);
+
+        expect(result.filter["#a"]).toBeDefined();
+        expect(result.filter["#a"]).toHaveLength(1);
+        expect(result.filter["#a"]).toEqual([coordinate]);
+        expect(result.filter["#e"]).toBeUndefined();
+      });
+
+      it("should normalize pubkey to lowercase", () => {
+        const pubkey = "A".repeat(64);
+        const coordinate = `30023:${pubkey}:my-article`;
+        const result = parseReqCommand(["-e", coordinate]);
+
+        expect(result.filter["#a"]).toEqual([
+          `30023:${"a".repeat(64)}:my-article`,
+        ]);
+      });
+
+      it("should handle empty d-tag identifier", () => {
+        const pubkey = "a".repeat(64);
+        const coordinate = `30023:${pubkey}:`;
+        const result = parseReqCommand(["-e", coordinate]);
+
+        expect(result.filter["#a"]).toEqual([coordinate]);
+      });
+
+      it("should handle d-tag with special characters", () => {
+        const pubkey = "a".repeat(64);
+        const coordinate = `30023:${pubkey}:my-article/with:special-chars`;
+        const result = parseReqCommand(["-e", coordinate]);
+
+        expect(result.filter["#a"]).toEqual([coordinate]);
+      });
+
+      it("should handle different kind numbers", () => {
+        const pubkey = "a".repeat(64);
+        const result = parseReqCommand([
+          "-e",
+          `0:${pubkey}:,30000:${pubkey}:list,30023:${pubkey}:article`,
+        ]);
+
+        expect(result.filter["#a"]).toHaveLength(3);
+        expect(result.filter["#a"]).toContain(`0:${pubkey}:`);
+        expect(result.filter["#a"]).toContain(`30000:${pubkey}:list`);
+        expect(result.filter["#a"]).toContain(`30023:${pubkey}:article`);
+      });
+
+      it("should combine with naddr coordinates", () => {
+        const pubkey = "a".repeat(64);
+        const rawCoord = `30023:${pubkey}:raw-article`;
+        const naddr = nip19.naddrEncode({
+          kind: 30023,
+          pubkey: pubkey,
+          identifier: "encoded-article",
+        });
+
+        const result = parseReqCommand(["-e", `${rawCoord},${naddr}`]);
+
+        expect(result.filter["#a"]).toHaveLength(2);
+        expect(result.filter["#a"]).toContain(rawCoord);
+        expect(result.filter["#a"]).toContain(
+          `30023:${pubkey}:encoded-article`,
+        );
+      });
+
+      it("should ignore invalid coordinate formats", () => {
+        // Missing parts
+        const result1 = parseReqCommand(["-e", "30023:abc"]);
+        expect(result1.filter["#a"]).toBeUndefined();
+
+        // Invalid pubkey (not 64 hex chars)
+        const result2 = parseReqCommand(["-e", "30023:abc123:article"]);
+        expect(result2.filter["#a"]).toBeUndefined();
+
+        // Invalid kind (not a number)
+        const result3 = parseReqCommand([
+          "-e",
+          `abc:${"a".repeat(64)}:article`,
+        ]);
+        expect(result3.filter["#a"]).toBeUndefined();
+      });
+    });
+
     describe("mixed format support", () => {
       it("should handle comma-separated mix of all formats (all to tags)", () => {
         const hex = "a".repeat(64);

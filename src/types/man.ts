@@ -181,9 +181,9 @@ export const manPages: Record<string, ManPageEntry> = {
           "Direct event lookup by ID (filter.ids). Fetch specific events by their ID. Supports note1, nevent1 (with relay hints), or raw hex. Comma-separated values supported: -i note1...,nevent1...,abc123...",
       },
       {
-        flag: "-e <note|nevent|naddr|hex>",
+        flag: "-e <note|nevent|naddr|coordinate|hex>",
         description:
-          "Tag-based filtering (#e/#a tags). Find events that reference the specified events or addresses. Supports note1, nevent1, naddr1, or raw hex. Comma-separated values supported: -e note1...,naddr1...",
+          "Tag-based filtering (#e/#a tags). Find events that reference the specified events or addresses. Supports note1, nevent1, naddr1, raw coordinates (kind:pubkey:d-tag), or hex. Comma-separated values supported: -e note1...,30023:pubkey:article",
       },
       {
         flag: "-p <npub|hex|nip05|$me|$contacts>",
@@ -264,6 +264,7 @@ export const manPages: Record<string, ManPageEntry> = {
       "req -i note1abc123...                                                                        Direct lookup: fetch event by ID",
       "req -i nevent1...                                                                            Direct lookup: fetch event by nevent (uses relay hints)",
       "req -e note1abc123... -k 1                                                                   Tag filtering: find notes that reply to or reference event",
+      "req -e 30023:pubkey...:article-name -k 1,7                                                   Tag filtering: find events referencing addressable event",
       "req -t nostr,grimoire,bitcoin -l 50                                                          Get 50 events tagged #nostr, #grimoire, or #bitcoin",
       "req --tag a 30023:7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194:grimoire  Get events referencing addressable event (#a tag)",
       "req -T r grimoire.rocks              							    Get events referencing URL (#r tag)",

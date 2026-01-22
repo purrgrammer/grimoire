@@ -679,6 +679,20 @@ function parseEventIdentifier(value: string): ParsedEventIdentifier | null {
     };
   }
 
+  // Raw coordinate: kind:pubkey:identifier → #a tag
+  // Format: <kind>:<pubkey>:<d-tag> (e.g., 30023:abc123...:article-name)
+  const coordinateMatch = value.match(/^(\d+):([a-fA-F0-9]{64}):(.*)$/);
+  if (coordinateMatch) {
+    const [, kindStr, pubkey, identifier] = coordinateMatch;
+    const kind = parseInt(kindStr, 10);
+    if (!isNaN(kind)) {
+      return {
+        type: "tag-address",
+        value: `${kind}:${pubkey.toLowerCase()}:${identifier}`,
+      };
+    }
+  }
+
   return null;
 }
 
