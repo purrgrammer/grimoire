@@ -102,13 +102,13 @@ export function useParameterizedSpells(
         // Include explicitly parameterized $pubkey spells
         if (spell.parameterType === "$pubkey") return true;
 
-        // Include spells with $me or $contacts that could be parameterized
+        // Include spells with $me (but not $contacts) that could be parameterized
         if (!spell.parameterType) {
           const cmd = spell.command.toLowerCase();
-          // Just check if command uses $me or $contacts - we'll resolve them at runtime
-          const hasMeOrContacts =
-            cmd.includes("$me") || cmd.includes("$contacts");
-          return hasMeOrContacts;
+          // Only show spells with $me (not $contacts) for profile context
+          const hasMe = cmd.includes("$me");
+          const hasContacts = cmd.includes("$contacts");
+          return hasMe && !hasContacts;
         }
 
         return false;
@@ -215,17 +215,13 @@ export function useParameterizedSpells(
         continue;
       }
 
-      // Handle non-parameterized spells with $me or $contacts (treat as $pubkey)
+      // Handle non-parameterized spells with $me (but not $contacts) (treat as $pubkey)
       if (stableType === "$pubkey") {
         const cmd = localSpell.command.toLowerCase();
-        if (cmd.includes("$me") || cmd.includes("$contacts")) {
-          // Detect default value from command
-          const defaultValue = cmd.includes("$me")
-            ? ["$me"]
-            : cmd.includes("$contacts")
-              ? ["$contacts"]
-              : undefined;
+        const hasMe = cmd.includes("$me");
+        const hasContacts = cmd.includes("$contacts");
 
+        if (hasMe && !hasContacts) {
           spellsMap.set(localSpell.id, {
             id: localSpell.id,
             name: localSpell.name,
@@ -233,7 +229,7 @@ export function useParameterizedSpells(
             command: localSpell.command,
             description: localSpell.description,
             parameterType: "$pubkey" as const,
-            parameterDefault: defaultValue,
+            parameterDefault: ["$me"],
             isPublished: localSpell.isPublished,
             eventId: localSpell.eventId,
             event: localSpell.event,
@@ -277,24 +273,20 @@ export function useParameterizedSpells(
           continue;
         }
 
-        // Handle non-parameterized spells with $me or $contacts (treat as $pubkey)
+        // Handle non-parameterized spells with $me (but not $contacts) (treat as $pubkey)
         if (stableType === "$pubkey") {
           const cmd = parsed.command.toLowerCase();
-          if (cmd.includes("$me") || cmd.includes("$contacts")) {
-            // Detect default value from command
-            const defaultValue = cmd.includes("$me")
-              ? ["$me"]
-              : cmd.includes("$contacts")
-                ? ["$contacts"]
-                : undefined;
+          const hasMe = cmd.includes("$me");
+          const hasContacts = cmd.includes("$contacts");
 
+          if (hasMe && !hasContacts) {
             spellsMap.set(event.id, {
               id: event.id,
               name: parsed.name,
               command: parsed.command,
               description: parsed.description,
               parameterType: "$pubkey" as const,
-              parameterDefault: defaultValue,
+              parameterDefault: ["$me"],
               isPublished: true,
               eventId: event.id,
               event: event as SpellEvent,
