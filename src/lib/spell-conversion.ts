@@ -97,6 +97,28 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
 
   const parsed = parseReqCommand(tokens);
 
+  // If this is a parameterized spell, convert special aliases to parameter placeholders
+  if (parameter) {
+    if (parameter.type === "$pubkey") {
+      // Convert $me/$contacts to $pubkey placeholder in authors and tag filters
+      if (parsed.filter.authors) {
+        parsed.filter.authors = parsed.filter.authors.map((a) =>
+          a === "$me" || a === "$contacts" ? "$pubkey" : a,
+        );
+      }
+      if (parsed.filter["#p"]) {
+        parsed.filter["#p"] = parsed.filter["#p"].map((p) =>
+          p === "$me" || p === "$contacts" ? "$pubkey" : p,
+        );
+      }
+      if (parsed.filter["#P"]) {
+        parsed.filter["#P"] = parsed.filter["#P"].map((p) =>
+          p === "$me" || p === "$contacts" ? "$pubkey" : p,
+        );
+      }
+    }
+  }
+
   // Validate that parsing produced a useful filter
   // A filter must have at least one constraint
   const hasConstraints =
@@ -409,7 +431,7 @@ export function reconstructCommand(
     parts.push(`-k ${filter.kinds.join(",")}`);
   }
 
-  // Authors
+  // Authors (preserve $pubkey placeholder if present)
   if (filter.authors && filter.authors.length > 0) {
     parts.push(`-a ${filter.authors.join(",")}`);
   }

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { encodeSpell, decodeSpell } from "./spell-conversion";
+import {
+  encodeSpell,
+  decodeSpell,
+  applySpellParameters,
+} from "./spell-conversion";
 import type { SpellEvent } from "@/types/spell";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
@@ -759,6 +763,567 @@ describe("Spell Conversion", () => {
       // Parser normalizes to lowercase
       const authorsTag = result.tags.find((t) => t[0] === "authors");
       expect(authorsTag).toEqual(["authors", "$me", "$contacts"]);
+    });
+  });
+
+  describe("Parameterized spells (lenses)", () => {
+    describe("Encoding with parameters", () => {
+      it("should encode $pubkey parameter with default", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -a $pubkey",
+          name: "Notes",
+          description: "Notes by author",
+          parameter: {
+            type: "$pubkey",
+            default: ["$me"],
+          },
+        });
+
+        expect(result.tags).toContainEqual(["l", "$pubkey", "$me"]);
+        expect(result.tags).toContainEqual(["name", "Notes"]);
+      });
+
+      it("should encode $pubkey parameter without default", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -a $pubkey",
+          parameter: {
+            type: "$pubkey",
+          },
+        });
+
+        const lTag = result.tags.find((t) => t[0] === "l");
+        expect(lTag).toEqual(["l", "$pubkey"]);
+      });
+
+      it("should encode $event parameter", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -e $event",
+          parameter: {
+            type: "$event",
+          },
+        });
+
+        expect(result.tags).toContainEqual(["l", "$event"]);
+      });
+
+      it("should encode $relay parameter", () => {
+        const result = encodeSpell({
+          command: "req -k 1",
+          parameter: {
+            type: "$relay",
+          },
+        });
+
+        expect(result.tags).toContainEqual(["l", "$relay"]);
+      });
+
+      it("should encode parameter with multiple defaults", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = encodeSpell({
+          command: "req -k 1 -a $pubkey",
+          parameter: {
+            type: "$pubkey",
+            default: [hex1, hex2],
+          },
+        });
+
+        expect(result.tags).toContainEqual(["l", "$pubkey", hex1, hex2]);
+      });
+
+      it("should work without parameter (regular spell)", () => {
+        const result = encodeSpell({
+          command: "req -k 1",
+        });
+
+        const lTag = result.tags.find((t) => t[0] === "l");
+        expect(lTag).toBeUndefined();
+      });
+
+      it("should convert $me to $pubkey placeholder when parameterized", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -a $me",
+          parameter: { type: "$pubkey" as const },
+        });
+
+        expect(result.filter.authors).toEqual(["$pubkey"]);
+        const authorsTag = result.tags.find((t) => t[0] === "authors");
+        expect(authorsTag).toEqual(["authors", "$pubkey"]);
+      });
+
+      it("should convert $contacts to $pubkey placeholder when parameterized", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -a $contacts",
+          parameter: { type: "$pubkey" as const },
+        });
+
+        expect(result.filter.authors).toEqual(["$pubkey"]);
+      });
+
+      it("should preserve $me when not parameterized", () => {
+        const result = encodeSpell({
+          command: "req -k 1 -a $me",
+        });
+
+        expect(result.filter.authors).toEqual(["$me"]);
+      });
+    });
+
+    describe("Decoding parameters", () => {
+      it("should decode $pubkey parameter with default", () => {
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["l", "$pubkey", "$me"],
+            ["k", "1"],
+            ["authors", "$pubkey"],
+          ],
+          content: "Notes by author",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toEqual({
+          type: "$pubkey",
+          default: ["$me"],
+        });
+      });
+
+      it("should decode $event parameter without default", () => {
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["l", "$event"],
+            ["k", "1"],
+          ],
+          content: "Replies",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toEqual({
+          type: "$event",
+          default: undefined,
+        });
+      });
+
+      it("should decode $relay parameter", () => {
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["l", "$relay"],
+            ["k", "1"],
+          ],
+          content: "Popular posts",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toEqual({
+          type: "$relay",
+          default: undefined,
+        });
+      });
+
+      it("should decode parameter with multiple defaults", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["l", "$pubkey", hex1, hex2],
+            ["k", "1"],
+          ],
+          content: "Test",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toEqual({
+          type: "$pubkey",
+          default: [hex1, hex2],
+        });
+      });
+
+      it("should ignore invalid parameter types", () => {
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["l", "$invalid"],
+            ["k", "1"],
+          ],
+          content: "Test",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toBeUndefined();
+      });
+
+      it("should handle missing l tag (regular spell)", () => {
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: [
+            ["cmd", "REQ"],
+            ["k", "1"],
+          ],
+          content: "Test",
+          sig: "test-sig",
+        };
+
+        const parsed = decodeSpell(event);
+
+        expect(parsed.parameter).toBeUndefined();
+      });
+    });
+
+    describe("applySpellParameters", () => {
+      describe("$pubkey parameters", () => {
+        it("should substitute $pubkey in authors array", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "a".repeat(64);
+          const result = applySpellParameters(parsed, [hex]);
+
+          expect(result.authors).toEqual([hex]);
+        });
+
+        it("should substitute $pubkey with multiple values", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex1 = "a".repeat(64);
+          const hex2 = "b".repeat(64);
+          const result = applySpellParameters(parsed, [hex1, hex2]);
+
+          expect(result.authors).toEqual([hex1, hex2]);
+        });
+
+        it("should substitute $pubkey in #p tag filters", () => {
+          const parsed = {
+            filter: { kinds: [1], "#p": ["$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "c".repeat(64);
+          const result = applySpellParameters(parsed, [hex]);
+
+          expect(result["#p"]).toEqual([hex]);
+        });
+
+        it("should substitute $pubkey in #P tag filters", () => {
+          const parsed = {
+            filter: { kinds: [9735], "#P": ["$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "d".repeat(64);
+          const result = applySpellParameters(parsed, [hex]);
+
+          expect(result["#P"]).toEqual([hex]);
+        });
+
+        it("should preserve non-$pubkey values when substituting", () => {
+          const hex1 = "a".repeat(64);
+          const hex2 = "b".repeat(64);
+          const parsed = {
+            filter: { kinds: [1], authors: [hex1, "$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const result = applySpellParameters(parsed, [hex2]);
+
+          expect(result.authors).toEqual([hex1, hex2]);
+        });
+
+        it("should use default values when no args provided", () => {
+          const hex = "a".repeat(64);
+          const parsed = {
+            filter: { kinds: [1], authors: ["$pubkey"] },
+            parameter: { type: "$pubkey" as const, default: [hex] },
+          } as any;
+
+          const result = applySpellParameters(parsed, []);
+
+          expect(result.authors).toEqual([hex]);
+        });
+      });
+
+      describe("$event parameters", () => {
+        it("should substitute $event in #e tag filters", () => {
+          const parsed = {
+            filter: { kinds: [1], "#e": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const result = applySpellParameters(parsed, [eventId]);
+
+          expect(result["#e"]).toEqual([eventId]);
+        });
+
+        it("should substitute $event in #a tag filters", () => {
+          const parsed = {
+            filter: { kinds: [1], "#a": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const addr = "30023:pubkey:article";
+          const result = applySpellParameters(parsed, [addr]);
+
+          expect(result["#a"]).toEqual([addr]);
+        });
+
+        it("should substitute $event in ids array", () => {
+          const parsed = {
+            filter: { kinds: [1], ids: ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const result = applySpellParameters(parsed, [eventId]);
+
+          expect(result.ids).toEqual([eventId]);
+        });
+
+        it("should substitute $event with multiple values", () => {
+          const parsed = {
+            filter: { kinds: [1], "#e": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const event1 = "abc123";
+          const event2 = "def456";
+          const result = applySpellParameters(parsed, [event1, event2]);
+
+          expect(result["#e"]).toEqual([event1, event2]);
+        });
+      });
+
+      describe("$relay parameters", () => {
+        it("should substitute $relay in #r tag filters", () => {
+          const parsed = {
+            filter: { kinds: [1], "#r": ["$relay"] },
+            parameter: { type: "$relay" as const },
+          } as any;
+
+          const relay = "wss://relay.example.com/";
+          const result = applySpellParameters(parsed, [relay]);
+
+          expect(result["#r"]).toEqual([relay]);
+        });
+
+        it("should substitute $relay with multiple values", () => {
+          const parsed = {
+            filter: { kinds: [1], "#r": ["$relay"] },
+            parameter: { type: "$relay" as const },
+          } as any;
+
+          const relay1 = "wss://relay1.com/";
+          const relay2 = "wss://relay2.com/";
+          const result = applySpellParameters(parsed, [relay1, relay2]);
+
+          expect(result["#r"]).toEqual([relay1, relay2]);
+        });
+      });
+
+      describe("Edge cases", () => {
+        it("should return filter as-is for non-parameterized spell", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["abc123"] },
+          } as any;
+
+          const result = applySpellParameters(parsed, ["def456"]);
+
+          expect(result).toEqual({ kinds: [1], authors: ["abc123"] });
+        });
+
+        it("should throw error when no args and no defaults", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$pubkey"] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          expect(() => applySpellParameters(parsed, [])).toThrow(
+            "Parameterized spell requires $pubkey argument(s)",
+          );
+        });
+
+        it("should not modify original filter object", () => {
+          const original = { kinds: [1], authors: ["$pubkey"] };
+          const parsed = {
+            filter: original,
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "a".repeat(64);
+          applySpellParameters(parsed, [hex]);
+
+          // Original should be unchanged
+          expect(original.authors).toEqual(["$pubkey"]);
+        });
+
+        it("should handle empty filter arrays gracefully", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: [] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "a".repeat(64);
+          const result = applySpellParameters(parsed, [hex]);
+
+          expect(result.authors).toEqual([]);
+        });
+
+        it("should handle missing filter fields gracefully", () => {
+          const parsed = {
+            filter: { kinds: [1] },
+            parameter: { type: "$pubkey" as const },
+          } as any;
+
+          const hex = "a".repeat(64);
+          const result = applySpellParameters(parsed, [hex]);
+
+          expect(result.authors).toBeUndefined();
+          expect(result.kinds).toEqual([1]);
+        });
+      });
+    });
+
+    describe("Round-trip with parameters", () => {
+      it("should preserve parameter configuration through encode → decode", () => {
+        const original = {
+          command: "req -k 1 -a $pubkey",
+          name: "Notes",
+          description: "Notes by author",
+          parameter: {
+            type: "$pubkey" as const,
+            default: ["$me"],
+          },
+        };
+
+        const encoded = encodeSpell(original);
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: encoded.tags,
+          content: encoded.content,
+          sig: "test-sig",
+        };
+
+        const decoded = decodeSpell(event);
+
+        expect(decoded.parameter).toEqual({
+          type: "$pubkey",
+          default: ["$me"],
+        });
+        expect(decoded.name).toBe("Notes");
+        expect(decoded.description).toBe("Notes by author");
+      });
+
+      it("should work end-to-end: encode → decode → apply", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+
+        // Create parameterized spell using $me as placeholder
+        // Encoding will convert $me to $pubkey automatically
+        const encoded = encodeSpell({
+          command: "req -k 1 -a $me",
+          parameter: { type: "$pubkey" as const },
+        });
+
+        // Publish
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: encoded.tags,
+          content: encoded.content,
+          sig: "test-sig",
+        };
+
+        // Retrieve and decode
+        const decoded = decodeSpell(event);
+
+        // Filter should now have $pubkey placeholder
+        expect(decoded.filter.authors).toEqual(["$pubkey"]);
+
+        // Apply with arguments
+        const filter = applySpellParameters(decoded, [hex1, hex2]);
+
+        expect(filter.kinds).toEqual([1]);
+        expect(filter.authors).toEqual([hex1, hex2]);
+      });
+
+      it("should handle complex parameterized spell", () => {
+        const encoded = encodeSpell({
+          command: "req -k 1,30023 -a $me -t bitcoin -l 50 --since 7d",
+          name: "User Content",
+          description: "All content from a user about Bitcoin",
+          parameter: { type: "$pubkey" as const, default: ["$me"] },
+          topics: ["bitcoin"],
+        });
+
+        const event: SpellEvent = {
+          id: "test-id",
+          pubkey: "test-pubkey",
+          created_at: 1234567890,
+          kind: 777,
+          tags: encoded.tags,
+          content: encoded.content,
+          sig: "test-sig",
+        };
+
+        const decoded = decodeSpell(event);
+
+        // Filter should have $pubkey placeholder
+        expect(decoded.filter.authors).toEqual(["$pubkey"]);
+
+        const hex = "c".repeat(64);
+        const filter = applySpellParameters(decoded, [hex]);
+
+        expect(filter.kinds).toEqual([1, 30023]);
+        expect(filter.authors).toEqual([hex]);
+        expect(filter["#t"]).toEqual(["bitcoin"]);
+        expect(filter.limit).toBe(50);
+        expect(decoded.topics).toEqual(["bitcoin"]);
+      });
     });
   });
 });
