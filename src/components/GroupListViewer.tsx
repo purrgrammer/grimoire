@@ -6,7 +6,6 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { ChatViewer } from "./ChatViewer";
-import { getTagValue } from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
 import type { ProtocolIdentifier, GroupListIdentifier } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -16,6 +15,10 @@ import { RichText } from "./nostr/RichText";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import {
+  resolveGroupMetadata,
+  type ResolvedGroupMetadata,
+} from "@/lib/chat/group-metadata-helpers";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -40,6 +43,7 @@ interface GroupInfo {
   relayUrl: string;
   metadata?: NostrEvent;
   lastMessage?: NostrEvent;
+  resolvedMetadata?: ResolvedGroupMetadata;
 }
 
 /**
@@ -61,16 +65,11 @@ const GroupListItem = memo(function GroupListItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  // Extract group name from metadata
+  // Extract group name from resolved metadata (includes profile fallback)
   const isUnmanagedGroup = group.groupId === "_";
-  let groupName: string;
-  if (isUnmanagedGroup) {
-    groupName = formatRelayForDisplay(group.relayUrl);
-  } else if (group.metadata && group.metadata.kind === 39000) {
-    groupName = getTagValue(group.metadata, "name") || group.groupId;
-  } else {
-    groupName = group.groupId;
-  }
+  const groupName = isUnmanagedGroup
+    ? formatRelayForDisplay(group.relayUrl)
+    : group.resolvedMetadata?.name || group.groupId;
 
   // Get last message author and content
   const lastMessageAuthor = group.lastMessage?.pubkey;
@@ -342,6 +341,40 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }, [groups]);
 
+  // Resolve metadata with profile fallback for groups without NIP-29 metadata
+  const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
+    Map<string, ResolvedGroupMetadata>
+  >(new Map());
+
+  useEffect(() => {
+    if (groups.length === 0) return;
+
+    const resolveAllMetadata = async () => {
+      const newResolvedMap = new Map<string, ResolvedGroupMetadata>();
+
+      // Resolve metadata for each group
+      await Promise.all(
+        groups.map(async (group) => {
+          // Skip unmanaged groups
+          if (group.groupId === "_") return;
+
+          const existingMetadata = groupMetadataMap?.get(group.groupId);
+          const resolved = await resolveGroupMetadata(
+            group.groupId,
+            group.relayUrl,
+            existingMetadata,
+          );
+
+          newResolvedMap.set(`${group.relayUrl}'${group.groupId}`, resolved);
+        }),
+      );
+
+      setResolvedMetadataMap(newResolvedMap);
+    };
+
+    resolveAllMetadata();
+  }, [groups, groupMetadataMap]);
+
   // Subscribe to latest messages (kind 9) for all groups to get recency
   // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
   useEffect(() => {
@@ -397,12 +430,16 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
           }
 
           // Merge with groups
-          const groupsWithInfo: GroupInfo[] = groups.map((g) => ({
-            groupId: g.groupId,
-            relayUrl: g.relayUrl,
-            metadata: groupMetadataMap?.get(g.groupId),
-            lastMessage: messageMap.get(g.groupId),
-          }));
+          const groupsWithInfo: GroupInfo[] = groups.map((g) => {
+            const groupKey = `${g.relayUrl}'${g.groupId}`;
+            return {
+              groupId: g.groupId,
+              relayUrl: g.relayUrl,
+              metadata: groupMetadataMap?.get(g.groupId),
+              lastMessage: messageMap.get(g.groupId),
+              resolvedMetadata: resolvedMetadataMap.get(groupKey),
+            };
+          });
 
           // Sort by recency (most recent first)
           groupsWithInfo.sort((a, b) => {
@@ -414,7 +451,7 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
           return groupsWithInfo;
         }),
       );
-  }, [groups, groupMetadataMap]);
+  }, [groups, groupMetadataMap, resolvedMetadataMap]);
 
   // Only require sign-in if no identifier is provided (viewing own groups)
   if (!targetPubkey) {
