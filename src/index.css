@@ -392,6 +392,11 @@ body.animating-layout
   top: 0;
 }
 
+/* Disable link navigation in editor - allow editing instead of clicking */
+.ProseMirror a {
+  pointer-events: none;
+}
+
 /* Mention styles */
 .ProseMirror .mention {
   color: hsl(var(--primary));

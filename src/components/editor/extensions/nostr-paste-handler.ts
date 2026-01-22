@@ -39,8 +39,11 @@ export const NostrPasteHandler = Extension.create({
             if (!text) return false;
 
             // Regex to detect nostr bech32 strings (with or without nostr: prefix)
+            // Only match entities surrounded by whitespace or at string boundaries
+            // to avoid matching entities within URLs (e.g., https://njump.me/npub1...)
+            // Note: Using (^|\s) capture group instead of lookbehind for Safari compatibility
             const bech32Regex =
-              /(?:nostr:)?(npub1[\w]{58,}|note1[\w]{58,}|nevent1[\w]+|naddr1[\w]+|nprofile1[\w]+)/g;
+              /(^|\s)(?:nostr:)?(npub1[\w]{58,}|note1[\w]{58,}|nevent1[\w]+|naddr1[\w]+|nprofile1[\w]+)(?=$|\s)/g;
             const matches = Array.from(text.matchAll(bech32Regex));
 
             if (matches.length === 0) return false; // No bech32 found, use default paste
@@ -50,13 +53,15 @@ export const NostrPasteHandler = Extension.create({
             let lastIndex = 0;
 
             for (const match of matches) {
-              const matchedText = match[0];
+              const fullMatch = match[0];
+              const boundary = match[1]; // Leading whitespace or empty (start of string)
+              const bech32 = match[2]; // The bech32 without nostr: prefix
               const matchIndex = match.index!;
-              const bech32 = match[1]; // The bech32 without nostr: prefix
 
-              // Add text before this match
-              if (lastIndex < matchIndex) {
-                const textBefore = text.slice(lastIndex, matchIndex);
+              // Add text before this match (including the boundary whitespace)
+              const textBeforeEnd = matchIndex + boundary.length;
+              if (lastIndex < textBeforeEnd) {
+                const textBefore = text.slice(lastIndex, textBeforeEnd);
                 if (textBefore) {
                   nodes.push(view.state.schema.text(textBefore));
                 }
@@ -111,16 +116,17 @@ export const NostrPasteHandler = Extension.create({
                 // Add space after preview node
                 nodes.push(view.state.schema.text(" "));
               } catch (err) {
-                // Invalid bech32, insert as plain text
+                // Invalid bech32, insert as plain text (entity portion without boundary)
                 console.warn(
                   "[NostrPasteHandler] Failed to decode:",
                   bech32,
                   err,
                 );
-                nodes.push(view.state.schema.text(matchedText));
+                const entityText = fullMatch.slice(boundary.length);
+                nodes.push(view.state.schema.text(entityText));
               }
 
-              lastIndex = matchIndex + matchedText.length;
+              lastIndex = matchIndex + fullMatch.length;
             }
 
             // Add remaining text after last match
