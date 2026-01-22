@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { JsonViewer } from "@/components/JsonViewer";
 import { UserName } from "../UserName";
-import { NIPBadge } from "@/components/NIPBadge";
 import { RelayKindsDisplay } from "../RelayKindsDisplay";
+import { RelaySupportedNips } from "../RelaySupportedNips";
 import {
   getRelayUrl,
   getRttMetrics,
@@ -221,24 +221,7 @@ export function RelayDiscoveryDetailRenderer({ event }: { event: NostrEvent }) {
       )}
 
       {/* Supported NIPs */}
-      {nips.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-muted-foreground">
-            Supported NIPs ({nips.length})
-          </Label>
-          <div className="flex flex-wrap gap-1.5">
-            {nips.map((nip) => (
-              <NIPBadge
-                key={nip}
-                nipNumber={nip.toString().padStart(2, "0")}
-                showName={false}
-                showNIPPrefix={false}
-                className="text-xs"
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <RelaySupportedNips nips={nips} />
 
       {/* Relay Kinds */}
       <RelayKindsDisplay accepted={kinds.accepted} rejected={kinds.rejected} />
