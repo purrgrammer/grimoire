@@ -13,10 +13,10 @@ import {
 import { Clock } from "lucide-react";
 
 /**
- * Kind 10166 Renderer - NIP-66 Relay Monitor Announcement (Feed View)
- * Displays monitor announcement with frequency and check types
+ * Monitor Announcement Renderer - NIP-66 Relay Monitor Announcement (Feed View)
+ * Kind 10166 - Displays monitor announcement with frequency and check types
  */
-export function Kind10166Renderer({ event }: BaseEventProps) {
+export function MonitorAnnouncementRenderer({ event }: BaseEventProps) {
   const frequency = getMonitorFrequency(event);
   const checks = getMonitorChecks(event);
 

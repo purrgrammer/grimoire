@@ -148,10 +148,10 @@ import { BadgeAwardRenderer } from "./BadgeAwardRenderer";
 import { BadgeAwardDetailRenderer } from "./BadgeAwardDetailRenderer";
 import { ProfileBadgesRenderer } from "./ProfileBadgesRenderer";
 import { ProfileBadgesDetailRenderer } from "./ProfileBadgesDetailRenderer";
-import { Kind10166Renderer } from "./MonitorAnnouncementRenderer";
-import { Kind10166DetailRenderer } from "./MonitorAnnouncementDetailRenderer";
-import { Kind30166Renderer } from "./RelayDiscoveryRenderer";
-import { Kind30166DetailRenderer } from "./RelayDiscoveryDetailRenderer";
+import { MonitorAnnouncementRenderer } from "./MonitorAnnouncementRenderer";
+import { MonitorAnnouncementDetailRenderer } from "./MonitorAnnouncementDetailRenderer";
+import { RelayDiscoveryRenderer } from "./RelayDiscoveryRenderer";
+import { RelayDiscoveryDetailRenderer } from "./RelayDiscoveryDetailRenderer";
 import { GoalRenderer } from "./GoalRenderer";
 import { GoalDetailRenderer } from "./GoalDetailRenderer";
 
@@ -205,7 +205,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
   10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
-  10166: Kind10166Renderer, // Relay Monitor Announcement (NIP-66)
+  10166: MonitorAnnouncementRenderer, // Relay Monitor Announcement (NIP-66)
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
   13534: RelayMembersRenderer, // Relay Members (NIP-43)
   30000: FollowSetRenderer, // Follow Sets (NIP-51)
@@ -221,7 +221,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30023: Kind30023Renderer, // Long-form Article
   30030: EmojiSetRenderer, // Emoji Sets (NIP-30)
   30063: ZapstoreReleaseRenderer, // Zapstore App Release
-  30166: Kind30166Renderer, // Relay Discovery (NIP-66)
+  30166: RelayDiscoveryRenderer, // Relay Discovery (NIP-66)
   30267: ZapstoreAppSetRenderer, // Zapstore App Collection
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
   34235: Kind21Renderer, // Horizontal Video (NIP-71 legacy)
@@ -306,7 +306,7 @@ const detailRenderers: Record<
   10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
   10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)
   10102: WikiRelaysDetailRenderer, // Good Wiki Relays Detail (NIP-51)
-  10166: Kind10166DetailRenderer, // Relay Monitor Announcement Detail (NIP-66)
+  10166: MonitorAnnouncementDetailRenderer, // Relay Monitor Announcement Detail (NIP-66)
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   13534: RelayMembersDetailRenderer, // Relay Members Detail (NIP-43)
   30000: FollowSetDetailRenderer, // Follow Sets Detail (NIP-51)
@@ -321,7 +321,7 @@ const detailRenderers: Record<
   30023: Kind30023DetailRenderer, // Long-form Article Detail
   30030: EmojiSetDetailRenderer, // Emoji Sets Detail (NIP-30)
   30063: ZapstoreReleaseDetailRenderer, // Zapstore App Release Detail
-  30166: Kind30166DetailRenderer, // Relay Discovery Detail (NIP-66)
+  30166: RelayDiscoveryDetailRenderer, // Relay Discovery Detail (NIP-66)
   30267: ZapstoreAppSetDetailRenderer, // Zapstore App Collection Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)

@@ -14,10 +14,14 @@ import {
 import { Activity, Clock, MapPin, Timer } from "lucide-react";
 
 /**
- * Kind 10166 Detail Renderer - NIP-66 Relay Monitor Announcement (Detail View)
- * Shows comprehensive monitor configuration including frequency, timeouts, and checks
+ * Monitor Announcement Detail Renderer - NIP-66 Relay Monitor Announcement (Detail View)
+ * Kind 10166 - Shows comprehensive monitor configuration including frequency, timeouts, and checks
  */
-export function Kind10166DetailRenderer({ event }: { event: NostrEvent }) {
+export function MonitorAnnouncementDetailRenderer({
+  event,
+}: {
+  event: NostrEvent;
+}) {
   const frequency = getMonitorFrequency(event);
   const timeouts = getMonitorTimeouts(event);
   const checks = getMonitorChecks(event);

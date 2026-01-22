@@ -38,10 +38,10 @@ import { formatTimestamp } from "@/hooks/useLocale";
 import { useState } from "react";
 
 /**
- * Kind 30166 Detail Renderer - NIP-66 Relay Discovery (Detail View)
- * Shows comprehensive relay information with all metrics and capabilities
+ * Relay Discovery Detail Renderer - NIP-66 Relay Discovery (Detail View)
+ * Kind 30166 - Shows comprehensive relay information with all metrics and capabilities
  */
-export function Kind30166DetailRenderer({ event }: { event: NostrEvent }) {
+export function RelayDiscoveryDetailRenderer({ event }: { event: NostrEvent }) {
   const [showNip11, setShowNip11] = useState(false);
 
   const relayUrl = getRelayUrl(event);

@@ -23,10 +23,10 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Kind 30166 Renderer - NIP-66 Relay Discovery (Feed View)
- * Displays relay information with health metrics, network type, and capabilities
+ * Relay Discovery Renderer - NIP-66 Relay Discovery (Feed View)
+ * Kind 30166 - Displays relay information with health metrics, network type, and capabilities
  */
-export function Kind30166Renderer({ event }: BaseEventProps) {
+export function RelayDiscoveryRenderer({ event }: BaseEventProps) {
   const relayUrl = getRelayUrl(event);
   const rtt = getRttMetrics(event);
   const networkType = getNetworkType(event);
