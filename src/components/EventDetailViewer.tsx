@@ -263,45 +263,44 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
         </div>
       </div>
 
-      {/* Rendered Content with Tabs */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <Tabs defaultValue="detail" className="flex flex-col h-full">
-          <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto">
-            <TabsTrigger
-              value="detail"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-            >
-              Detail
-            </TabsTrigger>
-            {eventSpells.map((spell) => (
-              <TabsTrigger
-                key={spell.id}
-                value={spell.id}
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-              >
-                {spell.name || spell.alias || "Untitled Spell"}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {/* Detail Tab Content */}
-          <TabsContent value="detail" className="flex-1 overflow-y-auto m-0">
-            <EventErrorBoundary event={event}>
-              <DetailKindRenderer event={event} />
-            </EventErrorBoundary>
-          </TabsContent>
-
-          {/* Spell Tab Contents */}
-          {eventSpells.map((spell) => (
-            <SpellTabContent
-              key={spell.id}
-              spellId={spell.id}
-              spell={spell}
-              targetEventId={event.id}
-            />
-          ))}
-        </Tabs>
+      {/* Rendered Content */}
+      <div className="flex-1 overflow-y-auto">
+        <EventErrorBoundary event={event}>
+          <DetailKindRenderer event={event} />
+        </EventErrorBoundary>
       </div>
+
+      {/* Spell Tabs */}
+      {eventSpells.length > 0 && (
+        <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
+          <Tabs
+            defaultValue={eventSpells[0]?.id}
+            className="flex flex-col h-full"
+          >
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0">
+              {eventSpells.map((spell) => (
+                <TabsTrigger
+                  key={spell.id}
+                  value={spell.id}
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                >
+                  {spell.name || spell.alias || "Untitled Spell"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* Spell Tab Contents */}
+            {eventSpells.map((spell) => (
+              <SpellTabContent
+                key={spell.id}
+                spellId={spell.id}
+                spell={spell}
+                targetEventId={event.id}
+              />
+            ))}
+          </Tabs>
+        </div>
+      )}
 
       {/* JSON Viewer Dialog */}
       <JsonViewer

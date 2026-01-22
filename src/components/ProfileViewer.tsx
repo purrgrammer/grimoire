@@ -469,135 +469,129 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         </div>
       </div>
 
-      {/* Profile Content with Tabs */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <Tabs defaultValue="profile" className="flex flex-col h-full">
-          <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto">
-            <TabsTrigger
-              value="profile"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-            >
-              Profile
-            </TabsTrigger>
-            {pubkeySpells.map((spell) => (
-              <TabsTrigger
-                key={spell.id}
-                value={spell.id}
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-              >
-                {spell.name || spell.alias || "Untitled Spell"}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {/* Profile Content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
 
-          {/* Profile Tab Content */}
-          <TabsContent
-            value="profile"
-            className="flex-1 overflow-y-auto p-4 m-0"
-          >
-            {!profile && !profileEvent && (
-              <ProfileCardSkeleton variant="full" />
-            )}
+        {!profile && profileEvent && (
+          <div className="text-center text-muted-foreground text-sm">
+            No profile metadata found
+          </div>
+        )}
 
-            {!profile && profileEvent && (
-              <div className="text-center text-muted-foreground text-sm">
-                No profile metadata found
-              </div>
-            )}
-
-            {profile && (
-              <div className="flex flex-col gap-4 max-w-2xl">
-                <div className="flex flex-col gap-0">
-                  {/* Display Name */}
-                  <UserName
-                    pubkey={pubkey}
-                    className="text-2xl font-bold pointer-events-none"
-                  />
-                  {/* NIP-05 */}
-                  {profile.nip05 && (
-                    <div className="text-xs">
-                      <Nip05 pubkey={pubkey} profile={profile} />
-                    </div>
-                  )}
+        {profile && (
+          <div className="flex flex-col gap-4 max-w-2xl">
+            <div className="flex flex-col gap-0">
+              {/* Display Name */}
+              <UserName
+                pubkey={pubkey}
+                className="text-2xl font-bold pointer-events-none"
+              />
+              {/* NIP-05 */}
+              {profile.nip05 && (
+                <div className="text-xs">
+                  <Nip05 pubkey={pubkey} profile={profile} />
                 </div>
+              )}
+            </div>
 
-                {/* About/Bio */}
-                {profile.about && (
-                  <div className="flex flex-col gap-1">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                      About
-                    </div>
-                    <RichText
-                      className="text-sm whitespace-pre-wrap break-words"
-                      content={profile.about}
-                    />
-                  </div>
-                )}
-
-                {/* Website */}
-                {profile.website && (
-                  <div className="flex flex-col gap-1">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                      Website
-                    </div>
-                    <a
-                      href={profile.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-accent underline decoration-dotted"
-                    >
-                      {profile.website}
-                    </a>
-                  </div>
-                )}
-
-                {/* Lightning Address */}
-                {profile.lud16 && (
-                  <div className="flex flex-col gap-1">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                      Lightning Address
-                    </div>
-                    <button
-                      onClick={() =>
-                        addWindow("zap", { recipientPubkey: resolvedPubkey })
-                      }
-                      className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
-                      title="Send zap"
-                    >
-                      <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
-                      <code className="text-sm font-mono flex-1 min-w-0 truncate">
-                        {profile.lud16}
-                      </code>
-                    </button>
-                  </div>
-                )}
-
-                {/* LUD06 (LNURL) */}
-                {profile.lud06 && (
-                  <div className="flex flex-col gap-1">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                      LNURL
-                    </div>
-                    <code className="text-sm font-mono break-all">
-                      {profile.lud06}
-                    </code>
-                  </div>
-                )}
+            {/* About/Bio */}
+            {profile.about && (
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  About
+                </div>
+                <RichText
+                  className="text-sm whitespace-pre-wrap break-words"
+                  content={profile.about}
+                />
               </div>
             )}
-          </TabsContent>
 
-          {/* Spell Tab Contents */}
-          {pubkeySpells.map((spell) => (
-            <SpellTabContent
-              key={spell.id}
-              spellId={spell.id}
-              spell={spell}
-              targetPubkey={resolvedPubkey}
-            />
-          ))}
-        </Tabs>
+            {/* Website */}
+            {profile.website && (
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Website
+                </div>
+                <a
+                  href={profile.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-accent underline decoration-dotted"
+                >
+                  {profile.website}
+                </a>
+              </div>
+            )}
+
+            {/* Lightning Address */}
+            {profile.lud16 && (
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Lightning Address
+                </div>
+                <button
+                  onClick={() =>
+                    addWindow("zap", { recipientPubkey: resolvedPubkey })
+                  }
+                  className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
+                  title="Send zap"
+                >
+                  <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
+                  <code className="text-sm font-mono flex-1 min-w-0 truncate">
+                    {profile.lud16}
+                  </code>
+                </button>
+              </div>
+            )}
+
+            {/* LUD06 (LNURL) */}
+            {profile.lud06 && (
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  LNURL
+                </div>
+                <code className="text-sm font-mono break-all">
+                  {profile.lud06}
+                </code>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Spell Tabs */}
+      {pubkeySpells.length > 0 && (
+        <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
+          <Tabs
+            defaultValue={pubkeySpells[0]?.id}
+            className="flex flex-col h-full"
+          >
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0">
+              {pubkeySpells.map((spell) => (
+                <TabsTrigger
+                  key={spell.id}
+                  value={spell.id}
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                >
+                  {spell.name || spell.alias || "Untitled Spell"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* Spell Tab Contents */}
+            {pubkeySpells.map((spell) => (
+              <SpellTabContent
+                key={spell.id}
+                spellId={spell.id}
+                spell={spell}
+                targetPubkey={resolvedPubkey}
+              />
+            ))}
+          </Tabs>
+        </div>
+      )}
     </div>
   );
 }

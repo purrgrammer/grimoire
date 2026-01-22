@@ -147,109 +147,108 @@ export function RelayViewer({ url }: RelayViewerProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Tabs defaultValue="info" className="flex flex-col h-full">
-        <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto">
-          <TabsTrigger
-            value="info"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-          >
-            Info
-          </TabsTrigger>
-          {relaySpells.map((spell) => (
-            <TabsTrigger
-              key={spell.id}
-              value={spell.id}
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-            >
-              {spell.name || spell.alias || "Untitled Spell"}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* Relay Info Content */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold">
+              {info?.name || "Unknown Relay"}
+            </h2>
+            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+              {url}
+              <Button
+                variant="link"
+                size="icon"
+                className="size-4 text-muted-foreground"
+                onClick={() => copy(url)}
+              >
+                {copied ? (
+                  <CopyCheck className="size-3" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+              </Button>
+            </div>
+            {info?.description && (
+              <p className="text-sm mt-2">{info.description}</p>
+            )}
+          </div>
+        </div>
 
-        {/* Info Tab Content */}
-        <TabsContent
-          value="info"
-          className="flex-1 overflow-y-auto p-4 m-0 flex flex-col gap-6"
-        >
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold">
-                {info?.name || "Unknown Relay"}
-              </h2>
-              <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                {url}
-                <Button
-                  variant="link"
-                  size="icon"
-                  className="size-4 text-muted-foreground"
-                  onClick={() => copy(url)}
-                >
-                  {copied ? (
-                    <CopyCheck className="size-3" />
-                  ) : (
-                    <Copy className="size-3" />
-                  )}
-                </Button>
-              </div>
-              {info?.description && (
-                <p className="text-sm mt-2">{info.description}</p>
+        {/* Operator */}
+        {(info?.contact || info?.pubkey) && (
+          <div>
+            <h3 className="mb-2 font-semibold text-sm">Operator</h3>
+            <div className="space-y-2 text-sm text-accent">
+              {info.contact && info.contact.length == 64 && (
+                <UserName pubkey={info.contact} />
+              )}
+              {info.pubkey && info.pubkey.length === 64 && (
+                <UserName pubkey={info.pubkey} />
               )}
             </div>
           </div>
+        )}
 
-          {/* Operator */}
-          {(info?.contact || info?.pubkey) && (
-            <div>
-              <h3 className="mb-2 font-semibold text-sm">Operator</h3>
-              <div className="space-y-2 text-sm text-accent">
-                {info.contact && info.contact.length == 64 && (
-                  <UserName pubkey={info.contact} />
-                )}
-                {info.pubkey && info.pubkey.length === 64 && (
-                  <UserName pubkey={info.pubkey} />
-                )}
-              </div>
+        {/* Software */}
+        {(info?.software || info?.version) && (
+          <div>
+            <h3 className="mb-2 font-semibold text-sm">Software</h3>
+            <span className="text-sm text-muted-foreground">
+              {info.software || info.version}
+            </span>
+          </div>
+        )}
+
+        {/* Supported NIPs */}
+        {info?.supported_nips && info.supported_nips.length > 0 && (
+          <div>
+            <h3 className="mb-3 font-semibold text-sm">Supported NIPs</h3>
+            <div className="flex flex-wrap gap-2">
+              {info.supported_nips.map((num: number) => (
+                <NIPBadge
+                  key={num}
+                  nipNumber={String(num).padStart(2, "0")}
+                  showName={true}
+                />
+              ))}
             </div>
-          )}
+          </div>
+        )}
+      </div>
 
-          {/* Software */}
-          {(info?.software || info?.version) && (
-            <div>
-              <h3 className="mb-2 font-semibold text-sm">Software</h3>
-              <span className="text-sm text-muted-foreground">
-                {info.software || info.version}
-              </span>
-            </div>
-          )}
+      {/* Spell Tabs */}
+      {relaySpells.length > 0 && (
+        <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
+          <Tabs
+            defaultValue={relaySpells[0]?.id}
+            className="flex flex-col h-full"
+          >
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0">
+              {relaySpells.map((spell) => (
+                <TabsTrigger
+                  key={spell.id}
+                  value={spell.id}
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                >
+                  {spell.name || spell.alias || "Untitled Spell"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-          {/* Supported NIPs */}
-          {info?.supported_nips && info.supported_nips.length > 0 && (
-            <div>
-              <h3 className="mb-3 font-semibold text-sm">Supported NIPs</h3>
-              <div className="flex flex-wrap gap-2">
-                {info.supported_nips.map((num: number) => (
-                  <NIPBadge
-                    key={num}
-                    nipNumber={String(num).padStart(2, "0")}
-                    showName={true}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Spell Tab Contents */}
-        {relaySpells.map((spell) => (
-          <SpellTabContent
-            key={spell.id}
-            spellId={spell.id}
-            spell={spell}
-            targetRelay={url}
-          />
-        ))}
-      </Tabs>
+            {/* Spell Tab Contents */}
+            {relaySpells.map((spell) => (
+              <SpellTabContent
+                key={spell.id}
+                spellId={spell.id}
+                spell={spell}
+                targetRelay={url}
+              />
+            ))}
+          </Tabs>
+        </div>
+      )}
     </div>
   );
 }
