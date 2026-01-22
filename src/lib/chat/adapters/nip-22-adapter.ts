@@ -29,7 +29,10 @@ import {
   parseReplaceableAddress,
 } from "applesauce-core/helpers/pointers";
 import { EventFactory } from "applesauce-core/event-factory";
-import { ReactionBlueprint } from "applesauce-common/blueprints";
+import {
+  ReactionBlueprint,
+  CommentBlueprint,
+} from "applesauce-common/blueprints";
 import { getCommentReplyPointer } from "applesauce-common/helpers";
 import {
   getZapAmount,
@@ -257,41 +260,53 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       throw new Error("Root event ID required");
     }
 
-    // Build A-tag value for filter
-    // For addressable events, use coordinate; for regular events, use kind:id format
-    const aTagValue = rootCoordinate || rootEventId;
+    // Unified identifier for conversation ID
+    const conversationRef = rootCoordinate || rootEventId;
 
-    // Build filter for all thread events:
-    // - kind 1111: comments (NIP-22)
-    // - kind 7: reactions
-    // - kind 16: generic reposts (not kind 6 which is for kind 1 only)
-    // - kind 9735: zap receipts
-    const filters: Filter[] = [
-      // Comments: kind 1111 with A-tag pointing to root
-      {
-        kinds: [1111],
-        "#a": [aTagValue],
-        limit: options?.limit || 100,
-      },
-      // Reactions: kind 7 with A-tag pointing to root
-      {
-        kinds: [7],
-        "#a": [aTagValue],
-        limit: 200, // Reactions are small, fetch more
-      },
-      // Generic reposts: kind 16 with A-tag pointing to root
-      {
-        kinds: [16],
-        "#a": [aTagValue],
-        limit: 100,
-      },
-      // Zaps: kind 9735 receipts with A-tag pointing to root
-      {
-        kinds: [9735],
-        "#a": [aTagValue],
-        limit: 100,
-      },
-    ];
+    // Build filters based on event type:
+    // - Addressable events: use #a filter with coordinate
+    // - Regular events: use #E filter with event ID (uppercase E per NIP-22)
+    const filters: Filter[] = [];
+
+    if (rootCoordinate) {
+      // Addressable event - use #a filter
+      filters.push(
+        {
+          kinds: [1111],
+          "#a": [rootCoordinate],
+          limit: options?.limit || 100,
+        },
+        {
+          kinds: [16],
+          "#a": [rootCoordinate],
+          limit: 100,
+        },
+        {
+          kinds: [9735],
+          "#a": [rootCoordinate],
+          limit: 100,
+        },
+      );
+    } else {
+      // Regular event - use #E filter (uppercase E per NIP-22)
+      filters.push(
+        {
+          kinds: [1111],
+          "#E": [rootEventId],
+          limit: options?.limit || 100,
+        },
+        {
+          kinds: [16],
+          "#E": [rootEventId],
+          limit: 100,
+        },
+        {
+          kinds: [9735],
+          "#E": [rootEventId],
+          limit: 100,
+        },
+      );
+    }
 
     if (options?.before) {
       filters[0].until = options.before;
@@ -301,7 +316,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     }
 
     // Clean up any existing subscription
-    const conversationId = `nip-22:${aTagValue}`;
+    const conversationId = `nip-22:${conversationRef}`;
     this.cleanup(conversationId);
 
     // Start persistent subscription
@@ -319,10 +334,13 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     // Return observable from EventStore
     // Combine root event with comments
     const rootEvent$ = eventStore.event(rootEventId);
-    const comments$ = eventStore.timeline({
-      kinds: [1111, 7, 16, 9735],
-      "#a": [aTagValue],
-    });
+
+    // Build timeline filter based on event type
+    const timelineFilter = rootCoordinate
+      ? { kinds: [1111, 16, 9735], "#a": [rootCoordinate] }
+      : { kinds: [1111, 16, 9735], "#E": [rootEventId] };
+
+    const comments$ = eventStore.timeline(timelineFilter);
 
     return combineLatest([rootEvent$, comments$]).pipe(
       map(([rootEvent, commentEvents]) => {
@@ -333,7 +351,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
           const rootMessage = this.rootEventToMessage(
             rootEvent,
             conversationId,
-            aTagValue,
+            conversationRef,
           );
           if (rootMessage) {
             messages.push(rootMessage);
@@ -342,7 +360,9 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
         // Convert comments to messages
         const commentMessages = commentEvents
-          .map((event) => this.eventToMessage(event, conversationId, aTagValue))
+          .map((event) =>
+            this.eventToMessage(event, conversationId, conversationRef),
+          )
           .filter((msg): msg is Message => msg !== null);
 
         messages.push(...commentMessages);
@@ -368,46 +388,69 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       throw new Error("Root event ID required");
     }
 
-    const aTagValue = rootCoordinate || rootEventId;
+    const conversationRef = rootCoordinate || rootEventId;
 
-    // Same filters as loadMessages but with until for pagination
-    const filters: Filter[] = [
-      {
-        kinds: [1111],
-        "#a": [aTagValue],
-        until: before,
-        limit: 50,
-      },
-      {
-        kinds: [7],
-        "#a": [aTagValue],
-        until: before,
-        limit: 100,
-      },
-      {
-        kinds: [16],
-        "#a": [aTagValue],
-        until: before,
-        limit: 50,
-      },
-      {
-        kinds: [9735],
-        "#a": [aTagValue],
-        until: before,
-        limit: 50,
-      },
-    ];
+    // Build filters based on event type (same logic as loadMessages)
+    const filters: Filter[] = [];
+
+    if (rootCoordinate) {
+      // Addressable event - use #a filter
+      filters.push(
+        {
+          kinds: [1111],
+          "#a": [rootCoordinate],
+          until: before,
+          limit: 50,
+        },
+        {
+          kinds: [16],
+          "#a": [rootCoordinate],
+          until: before,
+          limit: 50,
+        },
+        {
+          kinds: [9735],
+          "#a": [rootCoordinate],
+          until: before,
+          limit: 50,
+        },
+      );
+    } else {
+      // Regular event - use #E filter
+      filters.push(
+        {
+          kinds: [1111],
+          "#E": [rootEventId],
+          until: before,
+          limit: 50,
+        },
+        {
+          kinds: [16],
+          "#E": [rootEventId],
+          until: before,
+          limit: 50,
+        },
+        {
+          kinds: [9735],
+          "#E": [rootEventId],
+          until: before,
+          limit: 50,
+        },
+      );
+    }
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
       pool.request(relays, filters, { eventStore }).pipe(toArray()),
     );
 
-    const conversationId = `nip-22:${aTagValue}`;
+    const conversationId = `nip-22:${conversationRef}`;
 
     // Convert events to messages
     const messages = events
-      .map((event) => this.eventToMessage(event, conversationId, aTagValue))
+      .map((event) =>
+        this.eventToMessage(event, conversationId, conversationRef),
+      )
       .filter((msg): msg is Message => msg !== null);
 
     // Reverse for ascending chronological order
@@ -430,7 +473,6 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     }
 
     const rootEventId = conversation.metadata?.rootEventId;
-    const rootCoordinate = conversation.metadata?.rootCoordinate;
     const relays = conversation.metadata?.relays || [];
 
     if (!rootEventId) {
@@ -450,55 +492,43 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     const factory = new EventFactory();
     factory.setSigner(activeSigner);
 
-    // Build kind 1111 comment
-    const tags: string[][] = [];
-
-    // Add A-tag for root reference
-    const aTagValue = rootCoordinate || `${rootEvent.kind}:${rootEvent.id}`;
-    tags.push(["a", aTagValue]);
-
-    // Add E-tag for root event (relay hint)
-    const rootRelayHint = relays[0] || "";
-    tags.push(["e", rootEvent.id, rootRelayHint]);
-
-    // Add P-tag for root author
-    tags.push(["p", rootEvent.pubkey]);
-
-    // Add K-tag for root event kind
-    tags.push(["k", rootEvent.kind.toString()]);
-
-    // If replying to a comment, add reply tags
+    // Determine parent for the comment
+    // If replying to a comment, parent is that comment; otherwise parent is root event
+    let parent: NostrEvent;
     if (options?.replyTo) {
       const parentEvent = await firstValueFrom(
         eventStore.event(options.replyTo),
         { defaultValue: undefined },
       );
-      if (parentEvent) {
-        tags.push(["e", parentEvent.id, rootRelayHint, "reply"]);
-        tags.push(["p", parentEvent.pubkey]);
+      if (!parentEvent) {
+        throw new Error("Reply parent event not found");
       }
+      parent = parentEvent;
+    } else {
+      parent = rootEvent;
     }
 
-    // Add NIP-30 emoji tags
+    // Build comment using CommentBlueprint
+    const blueprintOptions: any = {};
     if (options?.emojiTags) {
-      for (const emoji of options.emojiTags) {
-        tags.push(["emoji", emoji.shortcode, emoji.url]);
-      }
+      blueprintOptions.emoji = options.emojiTags;
     }
-
-    // Add NIP-92 imeta tags for blob attachments
     if (options?.blobAttachments) {
-      for (const blob of options.blobAttachments) {
-        const imetaParts = [`url ${blob.url}`];
-        if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
-        if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
-        if (blob.size) imetaParts.push(`size ${blob.size}`);
-        tags.push(["imeta", ...imetaParts]);
-      }
+      blueprintOptions.imeta = options.blobAttachments.map((blob) => ({
+        url: blob.url,
+        x: blob.sha256,
+        m: blob.mimeType,
+        size: blob.size?.toString(),
+      }));
     }
 
-    // Build draft
-    const draft = await factory.build({ kind: 1111, content, tags });
+    // Create draft using blueprint
+    const draft = await factory.create(
+      CommentBlueprint,
+      parent,
+      content,
+      blueprintOptions,
+    );
 
     // Sign the event
     const event = await factory.sign(draft);
