@@ -386,7 +386,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
             defaultValue={eventSpells[0]?.id}
             className="flex flex-col h-full"
           >
-            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden">
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
               {eventSpells.map((spell) => {
                 // Extract kinds from spell for display
                 const spellKinds = (() => {
