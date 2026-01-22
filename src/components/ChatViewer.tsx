@@ -595,6 +595,13 @@ export function ChatViewer({
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
 
+  // Virtuoso firstItemIndex for scroll preservation when prepending older messages
+  // Start at a high number so we have room to prepend items by decreasing the index
+  const START_INDEX = 100000;
+  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
+  const prevOldestIdRef = useRef<string | undefined>(undefined);
+  const prevLengthRef = useRef<number>(0);
+
   // State for tooltip open (for mobile tap support)
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
@@ -740,6 +747,38 @@ export function ChatViewer({
       setIsLoadingOlder(false);
     }
   }, [conversation, messages, adapter, isLoadingOlder]);
+
+  // Detect when older messages are prepended and adjust firstItemIndex to preserve scroll position
+  useEffect(() => {
+    if (!messagesWithMarkers || messagesWithMarkers.length === 0) {
+      prevOldestIdRef.current = undefined;
+      prevLengthRef.current = 0;
+      return;
+    }
+
+    // Find the first actual message (not day marker)
+    const firstMessage = messagesWithMarkers.find(
+      (item) => item.type === "message",
+    );
+    const newOldestId = firstMessage?.data.id;
+    const newLength = messagesWithMarkers.length;
+
+    // If we had a previous oldest ID and it changed, messages were prepended
+    if (
+      prevOldestIdRef.current &&
+      newOldestId &&
+      prevOldestIdRef.current !== newOldestId
+    ) {
+      // Calculate how many items were prepended
+      const addedCount = newLength - prevLengthRef.current;
+      if (addedCount > 0) {
+        setFirstItemIndex((prev) => prev - addedCount);
+      }
+    }
+
+    prevOldestIdRef.current = newOldestId;
+    prevLengthRef.current = newLength;
+  }, [messagesWithMarkers]);
 
   // Handle NIP badge click
   const handleNipClick = useCallback(() => {
@@ -990,6 +1029,7 @@ export function ChatViewer({
           <Virtuoso
             ref={virtuosoRef}
             data={messagesWithMarkers}
+            firstItemIndex={firstItemIndex}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput="smooth"
             alignToBottom
