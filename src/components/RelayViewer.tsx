@@ -3,7 +3,7 @@ import { useRelayInfo } from "../hooks/useRelayInfo";
 import { useCopy } from "../hooks/useCopy";
 import { Button } from "./ui/button";
 import { UserName } from "./nostr/UserName";
-import { NIPBadge } from "./NIPBadge";
+import { RelaySupportedNips } from "./nostr/RelaySupportedNips";
 
 export interface RelayViewerProps {
   url: string;
@@ -68,19 +68,8 @@ export function RelayViewer({ url }: RelayViewerProps) {
       )}
 
       {/* Supported NIPs */}
-      {info?.supported_nips && info.supported_nips.length > 0 && (
-        <div>
-          <h3 className="mb-3 font-semibold text-sm">Supported NIPs</h3>
-          <div className="flex flex-wrap gap-2">
-            {info.supported_nips.map((num: number) => (
-              <NIPBadge
-                key={num}
-                nipNumber={String(num).padStart(2, "0")}
-                showName={true}
-              />
-            ))}
-          </div>
-        </div>
+      {info?.supported_nips && (
+        <RelaySupportedNips nips={info.supported_nips} />
       )}
     </div>
   );
