@@ -2,11 +2,14 @@ import { useMemo } from "react";
 import type { EventPointer } from "nostr-tools/nip19";
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
 import { Vote } from "lucide-react";
+import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { QuotedEvent } from "../QuotedEvent";
 import {
   getPollEventId,
   getPollRelayHint,
   getSelectedOptions,
+  getPollOptions,
+  getPollType,
 } from "@/lib/nip88-helpers";
 
 /**
@@ -27,10 +30,28 @@ export function PollResponseRenderer({ event, depth = 0 }: BaseEventProps) {
     };
   }, [pollEventId, relayHint]);
 
-  // Display selected options (show first for single choice, all for multi)
-  // We show all options here since we don't have the poll type until it loads
+  // Fetch the poll event to resolve option labels
+  const pollEvent = useNostrEvent(pollPointer);
+
+  // Get poll type and resolve option IDs to labels
+  const pollType = pollEvent ? getPollType(pollEvent) : "singlechoice";
+
+  const displayedLabels = useMemo(() => {
+    const pollOptions = pollEvent ? getPollOptions(pollEvent) : [];
+    const labels =
+      pollOptions.length === 0
+        ? selectedOptions // Fall back to raw IDs if poll not loaded
+        : selectedOptions.map((optionId) => {
+            const option = pollOptions.find((o) => o.id === optionId);
+            return option ? option.label : optionId;
+          });
+
+    // For singlechoice polls, only show the first vote
+    return pollType === "singlechoice" ? labels.slice(0, 1) : labels;
+  }, [selectedOptions, pollEvent, pollType]);
+
   const displayText =
-    selectedOptions.length > 0 ? selectedOptions.join(", ") : "unknown option";
+    displayedLabels.length > 0 ? displayedLabels.join(", ") : "unknown option";
 
   return (
     <BaseEventContainer event={event}>
@@ -40,7 +61,7 @@ export function PollResponseRenderer({ event, depth = 0 }: BaseEventProps) {
           <Vote className="size-4" />
           <span className="text-sm">
             Voted for:{" "}
-            {selectedOptions.length > 0 ? (
+            {displayedLabels.length > 0 ? (
               <span className="text-foreground font-medium">{displayText}</span>
             ) : (
               <span className="italic">unknown option</span>
