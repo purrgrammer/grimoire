@@ -49,6 +49,7 @@ import {
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
 import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import { useSettings } from "@/hooks/useSettings";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -83,6 +84,7 @@ export default function UserMenu() {
   const account = use$(accounts.active$);
   const { state, addWindow, disconnectNWC, toggleWalletBalancesBlur } =
     useGrimoire();
+  const { settings } = useSettings();
   const relays = state.activeAccount?.relays;
   const blossomServers = state.activeAccount?.blossomServers;
   const nwcConnection = state.nwcConnection;
@@ -494,29 +496,33 @@ export default function UserMenu() {
           </DropdownMenuItem>
 
           {/* Support Grimoire */}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="cursor-crosshair flex-col items-stretch p-2"
-            onClick={openDonate}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="size-4 text-yellow-500" />
-              <span className="text-sm font-medium">Support Grimoire</span>
-            </div>
-            <Progress value={goalProgress} className="h-1.5 mb-1" />
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                <span className="text-foreground font-medium">
-                  {formatSats(monthlyDonations)}
-                </span>
-                {" / "}
-                {formatSats(MONTHLY_GOAL_SATS)}
-              </span>
-              <span className="text-muted-foreground">
-                {goalProgress.toFixed(0)}%
-              </span>
-            </div>
-          </DropdownMenuItem>
+          {settings?.appearance?.showMonthlyGoal && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-crosshair flex-col items-stretch p-2"
+                onClick={openDonate}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="size-4 text-yellow-500" />
+                  <span className="text-sm font-medium">Support Grimoire</span>
+                </div>
+                <Progress value={goalProgress} className="h-1.5 mb-1" />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    <span className="text-foreground font-medium">
+                      {formatSats(monthlyDonations)}
+                    </span>
+                    {" / "}
+                    {formatSats(MONTHLY_GOAL_SATS)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {goalProgress.toFixed(0)}%
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            </>
+          )}
 
           {/* Logout at bottom for logged in users */}
           {account && (

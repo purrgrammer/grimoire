@@ -22,6 +22,8 @@ export interface ParsedZapCommand {
   customTags?: string[][];
   /** Relays where the zap receipt should be published */
   relays?: string[];
+  /** Optional default amount in sats to pre-select */
+  defaultAmount?: number;
 }
 
 /**
@@ -33,6 +35,7 @@ export interface ParsedZapCommand {
  * - `zap <profile> <event>` - Zap a specific person for a specific event
  *
  * Options:
+ * - `-a, --amount <sats>` - Pre-select amount in sats
  * - `-T, --tag <type> <value> [relay]` - Add custom tag (can be repeated)
  * - `-r, --relay <url>` - Add relay for zap receipt publication (can be repeated)
  *
@@ -53,12 +56,29 @@ export async function parseZapCommand(
   const positionalArgs: string[] = [];
   const customTags: string[][] = [];
   const relays: string[] = [];
+  let defaultAmount: number | undefined;
 
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
 
-    if (arg === "-T" || arg === "--tag") {
+    if (arg === "-a" || arg === "--amount") {
+      // Parse amount: -a <sats>
+      const amountStr = args[i + 1];
+      if (!amountStr) {
+        throw new Error("Amount option requires a value: -a <sats>");
+      }
+
+      const amount = parseInt(amountStr, 10);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error(
+          `Invalid amount: ${amountStr}. Must be a positive number.`,
+        );
+      }
+
+      defaultAmount = amount;
+      i += 2;
+    } else if (arg === "-T" || arg === "--tag") {
       // Parse tag: -T <type> <value> [relay-hint]
       // Minimum 2 values after -T (type and value), optional relay hint
       const tagType = args[i + 1];
@@ -122,7 +142,7 @@ export async function parseZapCommand(
   const firstArg = positionalArgs[0];
   const secondArg = positionalArgs[1];
 
-  // Build result with optional custom tags and relays
+  // Build result with optional custom tags, relays, and amount
   const buildResult = (
     recipientPubkey: string,
     pointer?: EventPointer | AddressPointer,
@@ -138,6 +158,7 @@ export async function parseZapCommand(
     }
     if (customTags.length > 0) result.customTags = customTags;
     if (relays.length > 0) result.relays = relays;
+    if (defaultAmount !== undefined) result.defaultAmount = defaultAmount;
     return result;
   };
 

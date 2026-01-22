@@ -37,6 +37,8 @@ export interface AppearanceSettings {
   animationsEnabled: boolean;
   /** Accent color (hue value 0-360) */
   accentHue: number;
+  /** Show monthly donation goal in UI (user menu, welcome page, settings) */
+  showMonthlyGoal: boolean;
 }
 
 /**
@@ -153,6 +155,7 @@ const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   fontSizeMultiplier: 1.0,
   animationsEnabled: true,
   accentHue: 280, // Purple
+  showMonthlyGoal: true,
 };
 
 const DEFAULT_RELAY_SETTINGS: RelaySettings = {

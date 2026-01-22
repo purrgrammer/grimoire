@@ -5,6 +5,7 @@ import { Progress } from "./ui/progress";
 import { MONTHLY_GOAL_SATS } from "@/services/supporters";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
+import { useSettings } from "@/hooks/useSettings";
 
 interface GrimoireWelcomeProps {
   onLaunchCommand: () => void;
@@ -32,6 +33,8 @@ export function GrimoireWelcome({
   onLaunchCommand,
   onExecuteCommand,
 }: GrimoireWelcomeProps) {
+  const { settings } = useSettings();
+
   // Calculate monthly donations reactively from DB (last 30 days)
   const monthlyDonations =
     useLiveQuery(async () => {
@@ -135,7 +138,7 @@ export function GrimoireWelcome({
               <div className="text-xs text-muted-foreground mt-0.5">
                 {description}
               </div>
-              {showProgress && (
+              {showProgress && settings?.appearance?.showMonthlyGoal && (
                 <div className="mt-2 flex flex-col gap-1">
                   <Progress value={goalProgress} className="h-1" />
                   <div className="flex items-center justify-between text-[10px]">
