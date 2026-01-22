@@ -30,6 +30,16 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
   const zappedByAddress = useNostrEvent(addressPointer || undefined);
   const zappedEvent = zappedByAddress || zappedByEvent;
 
+  // If zapped event is a zap receipt (kind 9735), extract its zap request
+  // The actual content with emoji tags is in the zap request, not the receipt
+  const zappedEventForPreview = useMemo(() => {
+    if (zappedEvent?.kind === 9735) {
+      const innerZapRequest = getZapRequest(zappedEvent);
+      return innerZapRequest || zappedEvent;
+    }
+    return zappedEvent;
+  }, [zappedEvent]);
+
   // Convert from msats to sats
   const amountInSats = useMemo(() => {
     if (!zapAmount) return 0;
@@ -52,10 +62,10 @@ export function ZapCompactPreview({ event }: { event: NostrEvent }) {
           />
         </span>
       )}
-      {zappedEvent && (
+      {zappedEventForPreview && (
         <span className="text-muted-foreground truncate line-clamp-1">
           <RichText
-            event={zappedEvent}
+            event={zappedEventForPreview}
             className="inline text-sm leading-none"
             options={{ showMedia: false, showEventEmbeds: false }}
           />
