@@ -10,9 +10,8 @@ import { EventFeed } from "./nostr/EventFeed";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
 import { parseReqCommand } from "@/lib/req-parser";
-import { useMemo, useState } from "react";
-import { KindBadge } from "./KindBadge";
-import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
+import { useMemo } from "react";
+import { NIPBadge } from "./NIPBadge";
 import { SpellHeader } from "./timeline/SpellHeader";
 
 export interface RelayViewerProps {
@@ -42,32 +41,119 @@ function SpellTabContent({
 }: SpellTabContentProps) {
   const { addWindow } = useGrimoire();
 
-  // Decode spell and apply parameters
-  const { appliedFilter, relays } = useMemo(() => {
-    if (!targetRelay || !spell.event) {
-      return { appliedFilter: null, relays: [] };
+  // Parse spell and get filter - handle both published (with event) and local (command-only) spells
+  const parsed = useMemo(() => {
+    if (!targetRelay) {
+      console.log(`[RelaySpell:${spell.name || spellId}] No target relay`);
+      return null;
     }
 
     try {
-      const parsed = decodeSpell(spell.event);
-      const applied = applySpellParameters(parsed, [targetRelay]);
-      return {
-        appliedFilter: applied,
-        relays: parsed.relays || [],
+      console.log(`[RelaySpell:${spell.name || spellId}] Parsing spell:`, {
+        hasEvent: !!spell.event,
+        command: spell.command,
+        parameterType: spell.parameterType,
+      });
+
+      // If we have a published event, decode it
+      if (spell.event) {
+        const decoded = decodeSpell(spell.event);
+        console.log(
+          `[RelaySpell:${spell.name || spellId}] Decoded from event:`,
+          {
+            filter: decoded.filter,
+            relays: decoded.relays,
+            parameter: decoded.parameter,
+          },
+        );
+        return decoded;
+      }
+
+      // For local spells, parse the command directly
+      console.log(
+        `[RelaySpell:${spell.name || spellId}] Parsing local spell command`,
+      );
+      const commandWithoutPrefix = spell.command
+        .replace(/^\s*(req|count)\s+/i, "")
+        .trim();
+      const tokens = commandWithoutPrefix.split(/\s+/);
+      const commandParsed = parseReqCommand(tokens);
+
+      // Create a ParsedSpell-like object for local spells
+      const localParsed = {
+        command: spell.command,
+        filter: commandParsed.filter,
+        relays: commandParsed.relays,
+        closeOnEose: commandParsed.closeOnEose,
+        parameter: spell.parameterType
+          ? {
+              type: spell.parameterType,
+              default: spell.parameterDefault,
+            }
+          : undefined,
       };
+
+      console.log(`[RelaySpell:${spell.name || spellId}] Parsed local spell:`, {
+        filter: localParsed.filter,
+        relays: localParsed.relays,
+        parameter: localParsed.parameter,
+      });
+
+      return localParsed;
     } catch (error) {
-      console.error("Failed to apply spell parameters:", error);
-      return { appliedFilter: null, relays: [] };
+      console.error(
+        `[RelaySpell:${spell.name || spellId}] Failed to parse spell:`,
+        error,
+      );
+      return null;
     }
-  }, [spell.event, targetRelay]);
+  }, [spell, targetRelay, spellId]);
+
+  // Apply parameters to get final filter
+  const appliedFilter = useMemo(() => {
+    if (!parsed || !targetRelay) return null;
+
+    try {
+      const applied = applySpellParameters(parsed, [targetRelay]);
+      console.log(`[RelaySpell:${spell.name || spellId}] Applied parameters:`, {
+        input: targetRelay,
+        result: applied,
+      });
+      return applied;
+    } catch (error) {
+      console.error(
+        `[RelaySpell:${spell.name || spellId}] Failed to apply parameters:`,
+        error,
+      );
+      return null;
+    }
+  }, [parsed, targetRelay, spell.name, spellId]);
+
+  // Resolve relays - for $relay spells, we query FROM the target relay itself
+  const finalRelays = useMemo(() => {
+    // Use explicit relays from spell if provided
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[RelaySpell:${spell.name || spellId}] Using explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
+    // For $relay spells, query FROM the target relay
+    console.log(`[RelaySpell:${spell.name || spellId}] Using target relay:`, [
+      targetRelay,
+    ]);
+    return [targetRelay];
+  }, [parsed?.relays, targetRelay, spell.name, spellId]);
 
   // Fetch events using the applied filter
   const { events, loading, eoseReceived, relayStates, overallState } =
-    appliedFilter
+    appliedFilter && finalRelays.length > 0
       ? useReqTimelineEnhanced(
           `spell-${spellId}-${targetRelay}`,
           appliedFilter,
-          relays,
+          finalRelays,
           { limit: appliedFilter.limit || 50, stream: true },
         )
       : {
@@ -90,6 +176,14 @@ function SpellTabContent({
     return map;
   }, [relayStates]);
 
+  console.log(`[RelaySpell:${spell.name || spellId}] Render state:`, {
+    hasFilter: !!appliedFilter,
+    relayCount: finalRelays.length,
+    eventCount: events.length,
+    loading,
+    eoseReceived,
+  });
+
   return (
     <TabsContent
       value={spellId}
@@ -99,6 +193,7 @@ function SpellTabContent({
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
           <div>
             <p className="text-sm">Unable to apply spell to this relay</p>
+            <p className="text-xs mt-2">Check console for details</p>
           </div>
         </div>
       ) : (
@@ -109,7 +204,7 @@ function SpellTabContent({
             loading={loading}
             overallState={overallState}
             events={events}
-            relays={relays}
+            relays={finalRelays}
             filter={appliedFilter}
             spellEvent={spell.event}
             reqRelayStates={reqRelayStatesMap}

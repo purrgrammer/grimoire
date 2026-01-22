@@ -105,8 +105,22 @@ export function useParameterizedSpells(
         // Include spells with $me or $contacts that could be parameterized
         if (!spell.parameterType) {
           const cmd = spell.command.toLowerCase();
-          // Check if command uses $me or $contacts (single arg that can become $pubkey)
-          return cmd.includes("$me") || cmd.includes("$contacts");
+          // Check if command uses ONLY $me or ONLY $contacts (not both, not mixed with other pubkeys)
+          const hasMeOrContacts =
+            cmd.includes("$me") || cmd.includes("$contacts");
+          if (!hasMeOrContacts) return false;
+
+          // Make sure it doesn't use multiple different variables
+          const hasBothMeAndContacts =
+            cmd.includes("$me") && cmd.includes("$contacts");
+          if (hasBothMeAndContacts) return false; // Can't have both
+
+          // Check if it has hex pubkeys mixed with $me/$contacts
+          // This is a rough check - looking for hex strings in -a or #p tags
+          const hasHexPubkey = /(?:-a|#p)\s+[a-f0-9]{64}/.test(cmd);
+          if (hasHexPubkey) return false; // Mixed pubkeys, not eligible
+
+          return true;
         }
 
         return false;

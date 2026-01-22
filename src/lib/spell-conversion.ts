@@ -518,7 +518,7 @@ export function reconstructCommand(
  * @returns Filter with parameters applied
  */
 export function applySpellParameters(
-  parsed: ParsedSpell,
+  parsed: Pick<ParsedSpell, "filter" | "parameter">,
   args: string[] = [],
 ): NostrFilter {
   if (!parsed.parameter) {

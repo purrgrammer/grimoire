@@ -26,6 +26,8 @@ import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
 import { EventFeed } from "./nostr/EventFeed";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
+import { parseReqCommand } from "@/lib/req-parser";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 export interface EventDetailViewerProps {
   pointer: EventPointer | AddressPointer;
@@ -51,39 +53,149 @@ function SpellTabContent({
   spellId,
   spell,
   targetEventId,
-}: SpellTabContentProps) {
-  // Decode spell and apply parameters
-  const { appliedFilter, relays } = useMemo(() => {
-    if (!targetEventId || !spell.event) {
-      return { appliedFilter: null, relays: [] };
+  targetEvent,
+}: SpellTabContentProps & { targetEvent: any }) {
+  // Parse spell and get filter - handle both published (with event) and local (command-only) spells
+  const parsed = useMemo(() => {
+    if (!targetEventId) {
+      console.log(`[EventSpell:${spell.name || spellId}] No target event ID`);
+      return null;
     }
 
     try {
-      const parsed = decodeSpell(spell.event);
-      const applied = applySpellParameters(parsed, [targetEventId]);
-      return {
-        appliedFilter: applied,
-        relays: parsed.relays || [],
+      console.log(`[EventSpell:${spell.name || spellId}] Parsing spell:`, {
+        hasEvent: !!spell.event,
+        command: spell.command,
+        parameterType: spell.parameterType,
+      });
+
+      // If we have a published event, decode it
+      if (spell.event) {
+        const decoded = decodeSpell(spell.event);
+        console.log(
+          `[EventSpell:${spell.name || spellId}] Decoded from event:`,
+          {
+            filter: decoded.filter,
+            relays: decoded.relays,
+            parameter: decoded.parameter,
+          },
+        );
+        return decoded;
+      }
+
+      // For local spells, parse the command directly
+      console.log(
+        `[EventSpell:${spell.name || spellId}] Parsing local spell command`,
+      );
+      const commandWithoutPrefix = spell.command
+        .replace(/^\s*(req|count)\s+/i, "")
+        .trim();
+      const tokens = commandWithoutPrefix.split(/\s+/);
+      const commandParsed = parseReqCommand(tokens);
+
+      // Create a ParsedSpell-like object for local spells
+      const localParsed = {
+        command: spell.command,
+        filter: commandParsed.filter,
+        relays: commandParsed.relays,
+        closeOnEose: commandParsed.closeOnEose,
+        parameter: spell.parameterType
+          ? {
+              type: spell.parameterType,
+              default: spell.parameterDefault,
+            }
+          : undefined,
       };
+
+      console.log(`[EventSpell:${spell.name || spellId}] Parsed local spell:`, {
+        filter: localParsed.filter,
+        relays: localParsed.relays,
+        parameter: localParsed.parameter,
+      });
+
+      return localParsed;
     } catch (error) {
-      console.error("Failed to apply spell parameters:", error);
-      return { appliedFilter: null, relays: [] };
+      console.error(
+        `[EventSpell:${spell.name || spellId}] Failed to parse spell:`,
+        error,
+      );
+      return null;
     }
-  }, [spell.event, targetEventId]);
+  }, [spell, targetEventId, spellId]);
+
+  // Apply parameters to get final filter
+  const appliedFilter = useMemo(() => {
+    if (!parsed || !targetEventId) return null;
+
+    try {
+      const applied = applySpellParameters(parsed, [targetEventId]);
+      console.log(`[EventSpell:${spell.name || spellId}] Applied parameters:`, {
+        input: targetEventId,
+        result: applied,
+      });
+      return applied;
+    } catch (error) {
+      console.error(
+        `[EventSpell:${spell.name || spellId}] Failed to apply parameters:`,
+        error,
+      );
+      return null;
+    }
+  }, [parsed, targetEventId, spell.name, spellId]);
+
+  // Resolve relays - use explicit relays from spell, or use relay hints from target event
+  const finalRelays = useMemo(() => {
+    // Use explicit relays from spell if provided
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[EventSpell:${spell.name || spellId}] Using explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
+    // Use relay hints from the target event
+    if (targetEvent) {
+      const seenRelaysSet = getSeenRelays(targetEvent);
+      if (seenRelaysSet && seenRelaysSet.size > 0) {
+        const eventRelays = Array.from(seenRelaysSet);
+        console.log(
+          `[EventSpell:${spell.name || spellId}] Using target event relays:`,
+          eventRelays,
+        );
+        return eventRelays;
+      }
+    }
+
+    // Fallback to aggregator relays
+    console.log(
+      `[EventSpell:${spell.name || spellId}] Using fallback AGGREGATOR_RELAYS`,
+    );
+    return AGGREGATOR_RELAYS;
+  }, [parsed?.relays, targetEvent, spell.name, spellId]);
 
   // Fetch events using the applied filter
-  const { events, loading, eoseReceived } = appliedFilter
-    ? useReqTimelineEnhanced(
-        `spell-${spellId}-${targetEventId}`,
-        appliedFilter,
-        relays,
-        { limit: appliedFilter.limit || 50, stream: true },
-      )
-    : {
-        events: [],
-        loading: false,
-        eoseReceived: false,
-      };
+  const { events, loading, eoseReceived } =
+    appliedFilter && finalRelays.length > 0
+      ? useReqTimelineEnhanced(
+          `spell-${spellId}-${targetEventId}`,
+          appliedFilter,
+          finalRelays,
+          { limit: appliedFilter.limit || 50, stream: true },
+        )
+      : {
+          events: [],
+          loading: false,
+          eoseReceived: false,
+        };
+
+  console.log(`[EventSpell:${spell.name || spellId}] Render state:`, {
+    hasFilter: !!appliedFilter,
+    relayCount: finalRelays.length,
+    eventCount: events.length,
+    loading,
+    eoseReceived,
+  });
 
   return (
     <TabsContent value={spellId} className="flex-1 overflow-hidden m-0">
@@ -91,6 +203,7 @@ function SpellTabContent({
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
           <div>
             <p className="text-sm">Unable to apply spell to this event</p>
+            <p className="text-xs mt-2">Check console for details</p>
           </div>
         </div>
       ) : (
@@ -296,6 +409,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
                 spellId={spell.id}
                 spell={spell}
                 targetEventId={event.id}
+                targetEvent={event}
               />
             ))}
           </Tabs>

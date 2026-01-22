@@ -39,6 +39,9 @@ import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
 import { EventFeed } from "./nostr/EventFeed";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
+import { parseReqCommand } from "@/lib/req-parser";
+import { useOutboxRelays } from "@/hooks/useOutboxRelays";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 export interface ProfileViewerProps {
   pubkey: string;
@@ -65,38 +68,178 @@ function SpellTabContent({
   spell,
   targetPubkey,
 }: SpellTabContentProps) {
-  // Decode spell and apply parameters
-  const { appliedFilter, relays } = useMemo(() => {
-    if (!targetPubkey || !spell.event) {
-      return { appliedFilter: null, relays: [] };
+  const { state } = useGrimoire();
+
+  // Parse spell and get filter - handle both published (with event) and local (command-only) spells
+  const parsed = useMemo(() => {
+    if (!targetPubkey) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] No target pubkey`,
+      );
+      return null;
     }
 
     try {
-      const parsed = decodeSpell(spell.event);
-      const applied = applySpellParameters(parsed, [targetPubkey]);
-      return {
-        appliedFilter: applied,
-        relays: parsed.relays || [],
+      console.log(`[SpellTabContent:${spell.name || spellId}] Parsing spell:`, {
+        hasEvent: !!spell.event,
+        command: spell.command,
+        parameterType: spell.parameterType,
+      });
+
+      // If we have a published event, decode it
+      if (spell.event) {
+        const decoded = decodeSpell(spell.event);
+        console.log(
+          `[SpellTabContent:${spell.name || spellId}] Decoded from event:`,
+          {
+            filter: decoded.filter,
+            relays: decoded.relays,
+            parameter: decoded.parameter,
+          },
+        );
+        return decoded;
+      }
+
+      // For local spells, parse the command directly
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Parsing local spell command`,
+      );
+      const commandWithoutPrefix = spell.command
+        .replace(/^\s*(req|count)\s+/i, "")
+        .trim();
+      const tokens = commandWithoutPrefix.split(/\s+/);
+      const commandParsed = parseReqCommand(tokens);
+
+      // Create a ParsedSpell-like object for local spells
+      const localParsed = {
+        command: spell.command,
+        filter: commandParsed.filter,
+        relays: commandParsed.relays,
+        closeOnEose: commandParsed.closeOnEose,
+        parameter: spell.parameterType
+          ? {
+              type: spell.parameterType,
+              default: spell.parameterDefault,
+            }
+          : undefined,
       };
+
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Parsed local spell:`,
+        {
+          filter: localParsed.filter,
+          relays: localParsed.relays,
+          parameter: localParsed.parameter,
+        },
+      );
+
+      return localParsed;
     } catch (error) {
-      console.error("Failed to apply spell parameters:", error);
-      return { appliedFilter: null, relays: [] };
+      console.error(
+        `[SpellTabContent:${spell.name || spellId}] Failed to parse spell:`,
+        error,
+      );
+      return null;
     }
-  }, [spell.event, targetPubkey]);
+  }, [spell, targetPubkey, spellId]);
+
+  // Apply parameters to get final filter
+  const appliedFilter = useMemo(() => {
+    if (!parsed || !targetPubkey) return null;
+
+    try {
+      const applied = applySpellParameters(parsed, [targetPubkey]);
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Applied parameters:`,
+        {
+          input: targetPubkey,
+          result: applied,
+        },
+      );
+      return applied;
+    } catch (error) {
+      console.error(
+        `[SpellTabContent:${spell.name || spellId}] Failed to apply parameters:`,
+        error,
+      );
+      return null;
+    }
+  }, [parsed, targetPubkey, spell.name, spellId]);
+
+  // Resolve relays - use explicit relays from spell, or use NIP-65 outbox selection
+  const fallbackRelays = useMemo(
+    () =>
+      state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) ||
+      AGGREGATOR_RELAYS,
+    [state.activeAccount?.relays],
+  );
+
+  const outboxOptions = useMemo(
+    () => ({
+      fallbackRelays,
+      timeout: 1000,
+      maxRelays: 42,
+    }),
+    [fallbackRelays],
+  );
+
+  // Use outbox relay selection if no explicit relays provided in spell
+  const { relays: selectedRelays, phase: relaySelectionPhase } =
+    useOutboxRelays(appliedFilter || {}, outboxOptions);
+
+  const finalRelays = useMemo(() => {
+    // Use explicit relays from spell if provided
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Using explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
+    // Wait for outbox relay selection to complete
+    if (relaySelectionPhase !== "ready") {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Waiting for relay selection (phase: ${relaySelectionPhase})`,
+      );
+      return [];
+    }
+
+    console.log(
+      `[SpellTabContent:${spell.name || spellId}] Using outbox-selected relays:`,
+      selectedRelays,
+    );
+    return selectedRelays;
+  }, [
+    parsed?.relays,
+    relaySelectionPhase,
+    selectedRelays,
+    spell.name,
+    spellId,
+  ]);
 
   // Fetch events using the applied filter
-  const { events, loading, eoseReceived } = appliedFilter
-    ? useReqTimelineEnhanced(
-        `spell-${spellId}-${targetPubkey}`,
-        appliedFilter,
-        relays,
-        { limit: appliedFilter.limit || 50, stream: true },
-      )
-    : {
-        events: [],
-        loading: false,
-        eoseReceived: false,
-      };
+  const { events, loading, eoseReceived } =
+    appliedFilter && finalRelays.length > 0
+      ? useReqTimelineEnhanced(
+          `spell-${spellId}-${targetPubkey}`,
+          appliedFilter,
+          finalRelays,
+          { limit: appliedFilter.limit || 50, stream: true },
+        )
+      : {
+          events: [],
+          loading: false,
+          eoseReceived: false,
+        };
+
+  console.log(`[SpellTabContent:${spell.name || spellId}] Render state:`, {
+    hasFilter: !!appliedFilter,
+    relayCount: finalRelays.length,
+    eventCount: events.length,
+    loading,
+    eoseReceived,
+  });
 
   return (
     <TabsContent value={spellId} className="flex-1 overflow-hidden m-0">
@@ -104,6 +247,13 @@ function SpellTabContent({
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
           <div>
             <p className="text-sm">Unable to apply spell to this profile</p>
+            <p className="text-xs mt-2">Check console for details</p>
+          </div>
+        </div>
+      ) : finalRelays.length === 0 ? (
+        <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Selecting relays...</p>
           </div>
         </div>
       ) : (
