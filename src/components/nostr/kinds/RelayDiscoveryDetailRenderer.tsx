@@ -221,7 +221,12 @@ export function RelayDiscoveryDetailRenderer({ event }: { event: NostrEvent }) {
       )}
 
       {/* Supported NIPs */}
-      <RelaySupportedNips nips={nips} />
+      {nips.length > 0 && (
+        <RelaySupportedNips
+          nips={nips}
+          title={`Supported NIPs (${nips.length})`}
+        />
+      )}
 
       {/* Relay Kinds */}
       <RelayKindsDisplay accepted={kinds.accepted} rejected={kinds.rejected} />
