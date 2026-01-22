@@ -24,6 +24,7 @@ import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
+import { mergeRelaySets } from "applesauce-core/helpers";
 import {
   parseLiveActivity,
   getLiveStatus,
@@ -666,20 +667,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     // Get conversation relays
     const conversationRelays =
       liveActivity?.relays && liveActivity.relays.length > 0
-        ? [...liveActivity.relays]
+        ? liveActivity.relays
         : conversation.metadata?.relayUrl
           ? [conversation.metadata.relayUrl]
           : [];
 
-    // Add pointer relay hints (deduplicated)
-    const relays = [...conversationRelays];
-    if (pointer.relays) {
-      for (const relay of pointer.relays) {
-        if (!relays.includes(relay)) {
-          relays.push(relay);
-        }
-      }
-    }
+    // Merge conversation relays with pointer relay hints (deduplicated and normalized)
+    const relays = mergeRelaySets(conversationRelays, pointer.relays || []);
 
     if (relays.length === 0) {
       console.warn("[NIP-53] No relays for loading reply message");

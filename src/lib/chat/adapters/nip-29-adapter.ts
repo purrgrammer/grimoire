@@ -21,6 +21,7 @@ import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getTagValues, getQuotePointer } from "@/lib/nostr-utils";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
+import { mergeRelaySets } from "applesauce-core/helpers";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
 import {
@@ -803,20 +804,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       return cachedEvent;
     }
 
-    // Build relay list: group relay + pointer relay hints (deduplicated)
-    const relays: string[] = [];
+    // Build relay list: group relay + pointer relay hints (deduplicated and normalized)
     const groupRelayUrl = conversation.metadata?.relayUrl;
-    if (groupRelayUrl) {
-      relays.push(groupRelayUrl);
-    }
-    // Add relay hints from the pointer (q-tag relay hint)
-    if (pointer.relays) {
-      for (const relay of pointer.relays) {
-        if (!relays.includes(relay)) {
-          relays.push(relay);
-        }
-      }
-    }
+    const relays = mergeRelaySets(
+      groupRelayUrl ? [groupRelayUrl] : [],
+      pointer.relays || [],
+    );
 
     if (relays.length === 0) {
       console.warn("[NIP-29] No relays available for loading reply message");
