@@ -817,8 +817,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     }
 
     // Handle reposts (kind 6, 16) - simple system messages
-    // Ignore reposts with content (quotes)
-    if ((event.kind === 6 || event.kind === 16) && !event.content.trim()) {
+    // Content is ignored even if present (quotes)
+    if (event.kind === 6 || event.kind === 16) {
       return this.repostToMessage(event, conversationId);
     }
 
