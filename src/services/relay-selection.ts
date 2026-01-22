@@ -15,7 +15,11 @@ import type { ProfilePointer } from "nostr-tools/nip19";
 import { firstValueFrom, timeout as rxTimeout, of } from "rxjs";
 import { catchError } from "rxjs/operators";
 import type { IEventStore } from "applesauce-core/event-store";
-import { getInboxes, getOutboxes } from "applesauce-core/helpers";
+import {
+  getInboxes,
+  getOutboxes,
+  mergeRelaySets,
+} from "applesauce-core/helpers";
 import { selectOptimalRelays } from "applesauce-core/helpers";
 import { addressLoader, AGGREGATOR_RELAYS } from "./loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
@@ -529,10 +533,8 @@ export async function selectRelaysForFilter(
     );
   }
 
-  // Extract unique relays
-  const relays = Array.from(
-    new Set(selectedPointers.flatMap((p) => p.relays || [])),
-  );
+  // Extract unique relays (mergeRelaySets handles deduplication and normalization)
+  const relays = mergeRelaySets(...selectedPointers.map((p) => p.relays || []));
 
   console.debug(`[RelaySelection] Total: ${relays.length} unique relays`);
 
@@ -578,40 +580,23 @@ export async function selectRelaysForInteraction(
     relayListCache.getInboxRelays(targetPubkey),
   ]);
 
-  // Build relay list with priority ordering
-  const relaySet = new Set<string>();
-
-  // Priority 1: Author's outbox relays (where we publish)
   const outboxRelays = authorOutbox || [];
-  for (const relay of outboxRelays.slice(0, MIN_RELAYS_PER_PARTY)) {
-    relaySet.add(relay);
-  }
-
-  // Priority 2: Target's inbox relays (so they see it)
   const inboxRelays = targetInbox || [];
-  for (const relay of inboxRelays.slice(0, MIN_RELAYS_PER_PARTY)) {
-    relaySet.add(relay);
+
+  // Build relay list with priority ordering using mergeRelaySets
+  // Priority: first N from each party, then remaining from each
+  // mergeRelaySets handles deduplication and normalization
+  const relays = mergeRelaySets(
+    outboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
+    inboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
+    outboxRelays.slice(MIN_RELAYS_PER_PARTY),
+    inboxRelays.slice(MIN_RELAYS_PER_PARTY),
+  ).slice(0, MAX_INTERACTION_RELAYS);
+
+  // Fallback to aggregator relays if empty
+  if (relays.length === 0) {
+    return AGGREGATOR_RELAYS.slice(0, MAX_INTERACTION_RELAYS);
   }
 
-  // Add remaining author outbox relays
-  for (const relay of outboxRelays.slice(MIN_RELAYS_PER_PARTY)) {
-    if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
-    relaySet.add(relay);
-  }
-
-  // Add remaining target inbox relays
-  for (const relay of inboxRelays.slice(MIN_RELAYS_PER_PARTY)) {
-    if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
-    relaySet.add(relay);
-  }
-
-  // Fallback to aggregator relays if we don't have any
-  if (relaySet.size === 0) {
-    for (const relay of AGGREGATOR_RELAYS) {
-      if (relaySet.size >= MAX_INTERACTION_RELAYS) break;
-      relaySet.add(relay);
-    }
-  }
-
-  return Array.from(relaySet);
+  return relays;
 }
