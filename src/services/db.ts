@@ -72,6 +72,10 @@ export interface LocalSpell {
   eventId?: string; // Nostr event ID if published
   event?: SpellEvent; // Full signed event for rebroadcasting
   deletedAt?: number; // Timestamp when soft-deleted
+
+  // Parameter configuration for parameterized spells (lenses)
+  parameterType?: "$pubkey" | "$event" | "$relay"; // Type of parameter
+  parameterDefault?: string[]; // Default values (e.g., ["$me"])
 }
 
 export interface LocalSpellbook {

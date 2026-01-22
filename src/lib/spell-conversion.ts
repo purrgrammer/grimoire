@@ -4,6 +4,7 @@ import type {
   EncodedSpell,
   ParsedSpell,
   SpellEvent,
+  SpellParameter,
 } from "@/types/spell";
 import type { NostrFilter } from "@/types/nostr";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
@@ -72,7 +73,7 @@ export function detectCommandType(command: string): "REQ" | "COUNT" {
  * @throws Error if command is invalid or produces empty filter
  */
 export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
-  const { command, name, description, topics, forkedFrom } = options;
+  const { command, name, description, topics, forkedFrom, parameter } = options;
 
   // Validate command
   if (!command || command.trim().length === 0) {
@@ -130,6 +131,15 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
     ? `Grimoire ${cmdType} spell: ${description.substring(0, 100)}`
     : `Grimoire ${cmdType} spell`;
   tags.push(["alt", altText]);
+
+  // Add parameter tag if this is a parameterized spell (lens)
+  if (parameter) {
+    const paramTag: [string, string, ...string[]] = ["l", parameter.type];
+    if (parameter.default && parameter.default.length > 0) {
+      paramTag.push(...parameter.default);
+    }
+    tags.push(paramTag);
+  }
 
   // Add provenance if forked
   if (forkedFrom) {
@@ -275,6 +285,19 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
   const topics = tagMap.get("t") || [];
   const forkedFrom = tagMap.get("e")?.[0];
 
+  // Extract parameter configuration (lens support)
+  let parameter: ParsedSpell["parameter"];
+  const lTag = event.tags.find((t) => t[0] === "l");
+  if (lTag && lTag.length >= 2) {
+    const [, type, ...defaults] = lTag;
+    if (type === "$pubkey" || type === "$event" || type === "$relay") {
+      parameter = {
+        type,
+        default: defaults.length > 0 ? defaults : undefined,
+      };
+    }
+  }
+
   // Reconstruct filter from tags
   const filter: NostrFilter = {};
 
@@ -363,6 +386,7 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
     closeOnEose,
     topics,
     forkedFrom,
+    parameter,
     event,
   };
 }
@@ -462,4 +486,95 @@ export function reconstructCommand(
   }
 
   return parts.join(" ");
+}
+
+/**
+ * Apply parameter values to a parameterized spell
+ * Substitutes parameter placeholders with actual values
+ *
+ * @param parsed - Parsed spell (must have parameter configuration)
+ * @param args - Arguments to substitute (if empty, uses defaults)
+ * @returns Filter with parameters applied
+ */
+export function applySpellParameters(
+  parsed: ParsedSpell,
+  args: string[] = [],
+): NostrFilter {
+  if (!parsed.parameter) {
+    // Not a parameterized spell, return filter as-is
+    return parsed.filter;
+  }
+
+  // Use provided args or fall back to defaults
+  const values = args.length > 0 ? args : parsed.parameter.default || [];
+
+  if (values.length === 0) {
+    throw new Error(
+      `Parameterized spell requires ${parsed.parameter.type} argument(s)`,
+    );
+  }
+
+  // Clone the filter
+  const filter: NostrFilter = { ...parsed.filter };
+
+  // Apply substitution based on parameter type
+  switch (parsed.parameter.type) {
+    case "$pubkey":
+      // Substitute in authors array
+      if (filter.authors) {
+        filter.authors = filter.authors.flatMap((author) =>
+          author === "$pubkey" ? values : [author],
+        );
+      }
+
+      // Substitute in #p tag filters
+      if (filter["#p"]) {
+        filter["#p"] = filter["#p"].flatMap((p) =>
+          p === "$pubkey" ? values : [p],
+        );
+      }
+
+      // Substitute in #P tag filters
+      if (filter["#P"]) {
+        filter["#P"] = filter["#P"].flatMap((p) =>
+          p === "$pubkey" ? values : [p],
+        );
+      }
+      break;
+
+    case "$event":
+      // Substitute in #e tag filters
+      if (filter["#e"]) {
+        filter["#e"] = filter["#e"].flatMap((e) =>
+          e === "$event" ? values : [e],
+        );
+      }
+
+      // Substitute in #a tag filters
+      if (filter["#a"]) {
+        filter["#a"] = filter["#a"].flatMap((a) =>
+          a === "$event" ? values : [a],
+        );
+      }
+
+      // Substitute in ids array
+      if (filter.ids) {
+        filter.ids = filter.ids.flatMap((id) =>
+          id === "$event" ? values : [id],
+        );
+      }
+      break;
+
+    case "$relay":
+      // Relay parameters are handled differently
+      // They could affect relay hints or #r tag filters
+      if (filter["#r"]) {
+        filter["#r"] = filter["#r"].flatMap((r) =>
+          r === "$relay" ? values : [r],
+        );
+      }
+      break;
+  }
+
+  return filter;
 }
