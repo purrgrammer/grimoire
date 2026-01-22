@@ -1,28 +1,25 @@
 import { useMemo } from "react";
+import type { EventPointer } from "nostr-tools/nip19";
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
 import { Vote } from "lucide-react";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { KindRenderer } from "./index";
-import { EventCardSkeleton } from "@/components/ui/skeleton";
+import { QuotedEvent } from "../QuotedEvent";
 import {
   getPollEventId,
   getPollRelayHint,
   getSelectedOptions,
-  getPollOptions,
-  getPollType,
 } from "@/lib/nip88-helpers";
 
 /**
  * Renderer for Kind 1018 - Poll Response (NIP-88)
- * Displays the vote choice with the poll being voted on
+ * Displays the vote choice with the embedded poll
  */
-export function PollResponseRenderer({ event }: BaseEventProps) {
+export function PollResponseRenderer({ event, depth = 0 }: BaseEventProps) {
   const pollEventId = getPollEventId(event);
   const relayHint = getPollRelayHint(event);
   const selectedOptions = getSelectedOptions(event);
 
-  // Create event pointer for fetching the poll
-  const eventPointer = useMemo(() => {
+  // Create event pointer for the poll
+  const pollPointer: EventPointer | undefined = useMemo(() => {
     if (!pollEventId) return undefined;
     return {
       id: pollEventId,
@@ -30,26 +27,10 @@ export function PollResponseRenderer({ event }: BaseEventProps) {
     };
   }, [pollEventId, relayHint]);
 
-  // Fetch the poll event
-  const pollEvent = useNostrEvent(eventPointer);
-
-  // Get poll type from the poll event
-  const pollType = pollEvent ? getPollType(pollEvent) : "singlechoice";
-
-  // Map selected option IDs to labels
-  const displayedLabels = useMemo(() => {
-    const pollOptions = pollEvent ? getPollOptions(pollEvent) : [];
-    const labels =
-      pollOptions.length === 0
-        ? selectedOptions
-        : selectedOptions.map((optionId) => {
-            const option = pollOptions.find((o) => o.id === optionId);
-            return option ? option.label : optionId;
-          });
-
-    // For singlechoice polls, only show the first vote
-    return pollType === "singlechoice" ? labels.slice(0, 1) : labels;
-  }, [selectedOptions, pollEvent, pollType]);
+  // Display selected options (show first for single choice, all for multi)
+  // We show all options here since we don't have the poll type until it loads
+  const displayText =
+    selectedOptions.length > 0 ? selectedOptions.join(", ") : "unknown option";
 
   return (
     <BaseEventContainer event={event}>
@@ -59,28 +40,17 @@ export function PollResponseRenderer({ event }: BaseEventProps) {
           <Vote className="size-4" />
           <span className="text-sm">
             Voted for:{" "}
-            {displayedLabels.length > 0 ? (
-              <span className="text-foreground font-medium">
-                {displayedLabels.join(", ")}
-              </span>
+            {selectedOptions.length > 0 ? (
+              <span className="text-foreground font-medium">{displayText}</span>
             ) : (
               <span className="italic">unknown option</span>
             )}
           </span>
         </div>
 
-        {/* Embedded poll event (if loaded) */}
-        {pollEvent && (
-          <div className="border border-muted rounded">
-            <KindRenderer event={pollEvent} />
-          </div>
-        )}
-
-        {/* Loading state */}
-        {pollEventId && !pollEvent && (
-          <div className="border border-muted rounded p-2">
-            <EventCardSkeleton variant="compact" showActions={false} />
-          </div>
+        {/* Embedded poll using QuotedEvent */}
+        {pollPointer && (
+          <QuotedEvent eventPointer={pollPointer} depth={depth + 1} />
         )}
 
         {/* No poll reference */}
