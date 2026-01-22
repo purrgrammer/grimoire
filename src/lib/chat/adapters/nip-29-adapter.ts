@@ -28,6 +28,7 @@ import {
   GroupMessageBlueprint,
   ReactionBlueprint,
 } from "applesauce-common/blueprints";
+import { resolveGroupMetadata } from "@/lib/chat/group-metadata-helpers";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -183,18 +184,18 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       console.log(`[NIP-29] Metadata event tags:`, metadataEvent.tags);
     }
 
-    // Extract group info from metadata event
-    const title = metadataEvent
-      ? getTagValues(metadataEvent, "name")[0] || groupId
-      : groupId;
-    const description = metadataEvent
-      ? getTagValues(metadataEvent, "about")[0]
-      : undefined;
-    const icon = metadataEvent
-      ? getTagValues(metadataEvent, "picture")[0]
-      : undefined;
+    // Resolve group metadata with profile fallback
+    const resolved = await resolveGroupMetadata(
+      groupId,
+      relayUrl,
+      metadataEvent,
+    );
 
-    console.log(`[NIP-29] Group title: ${title}`);
+    const title = resolved.name || groupId;
+    const description = resolved.description;
+    const icon = resolved.icon;
+
+    console.log(`[NIP-29] Group title: ${title} (source: ${resolved.source})`);
 
     // Fetch admins (kind 39001) and members (kind 39002) in parallel
     // Both use d tag (addressable events signed by relay)
