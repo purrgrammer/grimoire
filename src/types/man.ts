@@ -176,9 +176,14 @@ export const manPages: Record<string, ManPageEntry> = {
         description: "Maximum number of events to return",
       },
       {
+        flag: "-i, --id <note|nevent|hex>",
+        description:
+          "Direct event lookup by ID (filter.ids). Fetch specific events by their ID. Supports note1, nevent1 (with relay hints), or raw hex. Comma-separated values supported: -i note1...,nevent1...,abc123...",
+      },
+      {
         flag: "-e <note|nevent|naddr|hex>",
         description:
-          "Filter by event ID or coordinate. Supports note1 (bare event ID), nevent1 (event with relay hints), naddr1 (addressable event coordinate), or raw hex. Comma-separated values supported: -e note1...,nevent1...,naddr1...",
+          "Tag-based filtering (#e/#a tags). Find events that reference the specified events or addresses. Supports note1, nevent1, naddr1, or raw hex. Comma-separated values supported: -e note1...,naddr1...",
       },
       {
         flag: "-p <npub|hex|nip05|$me|$contacts>",
@@ -256,6 +261,9 @@ export const manPages: Record<string, ManPageEntry> = {
       "req -k 1 --since 1h relay.damus.io                                                           Get notes from last hour (manual relay override)",
       "req -k 1 --since 7d --until now                                                              Get notes from last week up to now",
       "req -k 1 --close-on-eose                                                                     Get recent notes and close after EOSE",
+      "req -i note1abc123...                                                                        Direct lookup: fetch event by ID",
+      "req -i nevent1...                                                                            Direct lookup: fetch event by nevent (uses relay hints)",
+      "req -e note1abc123... -k 1                                                                   Tag filtering: find notes that reply to or reference event",
       "req -t nostr,grimoire,bitcoin -l 50                                                          Get 50 events tagged #nostr, #grimoire, or #bitcoin",
       "req --tag a 30023:7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194:grimoire  Get events referencing addressable event (#a tag)",
       "req -T r grimoire.rocks              							    Get events referencing URL (#r tag)",

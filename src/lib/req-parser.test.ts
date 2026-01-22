@@ -216,8 +216,8 @@ describe("parseReqCommand", () => {
   });
 
   describe("event ID flag (-e) with nevent/naddr support", () => {
-    describe("nevent support", () => {
-      it("should parse nevent and populate filter.ids", () => {
+    describe("nevent support (tag filtering)", () => {
+      it("should parse nevent and populate filter['#e'] (tag filtering)", () => {
         const eventId =
           "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
         const nevent = nip19.neventEncode({
@@ -225,10 +225,10 @@ describe("parseReqCommand", () => {
         });
         const result = parseReqCommand(["-e", nevent]);
 
-        expect(result.filter.ids).toBeDefined();
-        expect(result.filter.ids).toHaveLength(1);
-        expect(result.filter.ids).toEqual([eventId]);
-        expect(result.filter["#e"]).toBeUndefined();
+        expect(result.filter["#e"]).toBeDefined();
+        expect(result.filter["#e"]).toHaveLength(1);
+        expect(result.filter["#e"]).toEqual([eventId]);
+        expect(result.filter.ids).toBeUndefined();
       });
 
       it("should extract relay hints from nevent", () => {
@@ -267,7 +267,7 @@ describe("parseReqCommand", () => {
         });
         const result = parseReqCommand(["-e", nevent]);
 
-        expect(result.filter.ids).toHaveLength(1);
+        expect(result.filter["#e"]).toHaveLength(1);
         expect(result.relays).toBeUndefined();
       });
     });
@@ -364,7 +364,7 @@ describe("parseReqCommand", () => {
     });
 
     describe("mixed format support", () => {
-      it("should handle comma-separated mix of all formats", () => {
+      it("should handle comma-separated mix of all formats (all to tags)", () => {
         const hex = "a".repeat(64);
         const eventId =
           "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
@@ -383,14 +383,13 @@ describe("parseReqCommand", () => {
           `${hex},${note},${nevent},${naddr}`,
         ]);
 
-        // hex and note should go to filter["#e"]
+        // hex, note, and nevent all go to filter["#e"] (deduplicated: eventId appears twice)
         expect(result.filter["#e"]).toHaveLength(2);
         expect(result.filter["#e"]).toContain(hex);
         expect(result.filter["#e"]).toContain(eventId);
 
-        // nevent should go to filter.ids
-        expect(result.filter.ids).toHaveLength(1);
-        expect(result.filter.ids).toContain(eventId);
+        // No direct ID lookup for -e flag
+        expect(result.filter.ids).toBeUndefined();
 
         // naddr should go to filter["#a"]
         expect(result.filter["#a"]).toHaveLength(1);
@@ -408,8 +407,9 @@ describe("parseReqCommand", () => {
 
         const result = parseReqCommand(["-e", `${nevent1},${nevent2}`]);
 
-        // Both nevent decode to same event ID, should deduplicate
-        expect(result.filter.ids).toHaveLength(1);
+        // Both nevent decode to same event ID, should deduplicate in #e
+        expect(result.filter["#e"]).toHaveLength(1);
+        expect(result.filter.ids).toBeUndefined();
       });
 
       it("should collect relay hints from mixed formats", () => {
@@ -447,10 +447,12 @@ describe("parseReqCommand", () => {
 
         const result = parseReqCommand(["-e", `${nevent1},${hex}`]);
 
-        // nevent goes to filter.ids
-        expect(result.filter.ids).toHaveLength(1);
-        // hex goes to filter["#e"]
+        // Both nevent and hex go to filter["#e"]
+        expect(result.filter["#e"]).toHaveLength(2);
+        expect(result.filter["#e"]).toContain(eventId);
         expect(result.filter["#e"]).toContain(hex);
+        // No direct ID lookup for -e flag
+        expect(result.filter.ids).toBeUndefined();
         // relays extracted from nevent
         expect(result.relays).toBeDefined();
         expect(result.relays).toContain("wss://relay.damus.io/");
@@ -499,7 +501,8 @@ describe("parseReqCommand", () => {
         const result = parseReqCommand(["-k", "1", "-e", nevent]);
 
         expect(result.filter.kinds).toEqual([1]);
-        expect(result.filter.ids).toHaveLength(1);
+        expect(result.filter["#e"]).toHaveLength(1);
+        expect(result.filter.ids).toBeUndefined();
       });
 
       it("should work with explicit relays", () => {
@@ -539,9 +542,195 @@ describe("parseReqCommand", () => {
 
         expect(result.filter.kinds).toEqual([1]);
         expect(result.filter.authors).toEqual([hex]);
-        expect(result.filter.ids).toHaveLength(1);
+        expect(result.filter["#e"]).toHaveLength(1);
+        expect(result.filter.ids).toBeUndefined();
         expect(result.filter.since).toBeDefined();
         expect(result.filter.limit).toBe(50);
+      });
+    });
+  });
+
+  describe("direct ID lookup flag (-i, --id)", () => {
+    describe("basic parsing", () => {
+      it("should parse hex event ID to filter.ids", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-i", hex]);
+        expect(result.filter.ids).toEqual([hex]);
+      });
+
+      it("should parse note to filter.ids", () => {
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const note = nip19.noteEncode(eventId);
+        const result = parseReqCommand(["-i", note]);
+        expect(result.filter.ids).toEqual([eventId]);
+      });
+
+      it("should parse nevent to filter.ids", () => {
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const nevent = nip19.neventEncode({ id: eventId });
+        const result = parseReqCommand(["-i", nevent]);
+        expect(result.filter.ids).toEqual([eventId]);
+      });
+
+      it("should handle --id long form", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["--id", hex]);
+        expect(result.filter.ids).toEqual([hex]);
+      });
+    });
+
+    describe("comma-separated values", () => {
+      it("should parse comma-separated hex IDs", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-i", `${hex1},${hex2}`]);
+        expect(result.filter.ids).toEqual([hex1, hex2]);
+      });
+
+      it("should parse comma-separated mixed formats", () => {
+        const hex = "a".repeat(64);
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const note = nip19.noteEncode(eventId);
+        const nevent = nip19.neventEncode({ id: eventId });
+
+        const result = parseReqCommand(["-i", `${hex},${note},${nevent}`]);
+
+        // hex is unique, note and nevent decode to same eventId (deduplicated)
+        expect(result.filter.ids).toHaveLength(2);
+        expect(result.filter.ids).toContain(hex);
+        expect(result.filter.ids).toContain(eventId);
+      });
+
+      it("should deduplicate IDs", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-i", `${hex},${hex}`]);
+        expect(result.filter.ids).toEqual([hex]);
+      });
+    });
+
+    describe("relay hints", () => {
+      it("should extract relay hints from nevent", () => {
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const nevent = nip19.neventEncode({
+          id: eventId,
+          relays: ["wss://relay.damus.io"],
+        });
+        const result = parseReqCommand(["-i", nevent]);
+
+        expect(result.filter.ids).toEqual([eventId]);
+        expect(result.relays).toBeDefined();
+        expect(result.relays).toContain("wss://relay.damus.io/");
+      });
+
+      it("should normalize relay URLs from nevent", () => {
+        const eventId =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const nevent = nip19.neventEncode({
+          id: eventId,
+          relays: ["wss://relay.damus.io"],
+        });
+        const result = parseReqCommand(["-i", nevent]);
+
+        result.relays?.forEach((url) => {
+          expect(url).toMatch(/^wss?:\/\//);
+          expect(url).toMatch(/\/$/);
+        });
+      });
+
+      it("should collect relay hints from multiple nevents", () => {
+        const eventId1 =
+          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        const eventId2 = "b".repeat(64);
+        const nevent1 = nip19.neventEncode({
+          id: eventId1,
+          relays: ["wss://relay.damus.io"],
+        });
+        const nevent2 = nip19.neventEncode({
+          id: eventId2,
+          relays: ["wss://nos.lol"],
+        });
+
+        const result = parseReqCommand(["-i", `${nevent1},${nevent2}`]);
+
+        expect(result.relays).toBeDefined();
+        expect(result.relays).toContain("wss://relay.damus.io/");
+        expect(result.relays).toContain("wss://nos.lol/");
+      });
+    });
+
+    describe("error handling", () => {
+      it("should ignore invalid bech32", () => {
+        const result = parseReqCommand(["-i", "note1invalid"]);
+        expect(result.filter.ids).toBeUndefined();
+      });
+
+      it("should ignore invalid nevent", () => {
+        const result = parseReqCommand(["-i", "nevent1invalid"]);
+        expect(result.filter.ids).toBeUndefined();
+      });
+
+      it("should ignore naddr (not valid for direct ID lookup)", () => {
+        const pubkey = "b".repeat(64);
+        const naddr = nip19.naddrEncode({
+          kind: 30023,
+          pubkey: pubkey,
+          identifier: "test-article",
+        });
+        const result = parseReqCommand(["-i", naddr]);
+        expect(result.filter.ids).toBeUndefined();
+      });
+
+      it("should skip empty values", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-i", `${hex},,`]);
+        expect(result.filter.ids).toEqual([hex]);
+      });
+
+      it("should continue parsing after invalid values", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-i", `${hex1},invalid,${hex2}`]);
+        expect(result.filter.ids).toEqual([hex1, hex2]);
+      });
+    });
+
+    describe("integration with other flags", () => {
+      it("should work alongside -e flag (both IDs and tags)", () => {
+        const directId = "a".repeat(64);
+        const tagEventId = "b".repeat(64);
+
+        const result = parseReqCommand(["-i", directId, "-e", tagEventId]);
+
+        expect(result.filter.ids).toEqual([directId]);
+        expect(result.filter["#e"]).toEqual([tagEventId]);
+      });
+
+      it("should work with kind and limit", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-i", hex, "-k", "1", "-l", "10"]);
+
+        expect(result.filter.ids).toEqual([hex]);
+        expect(result.filter.kinds).toEqual([1]);
+        expect(result.filter.limit).toBe(10);
+      });
+
+      it("should work with relays", () => {
+        const hex = "a".repeat(64);
+        const result = parseReqCommand(["-i", hex, "wss://relay.example.com"]);
+
+        expect(result.filter.ids).toEqual([hex]);
+        expect(result.relays).toContain("wss://relay.example.com/");
+      });
+
+      it("should accumulate across multiple -i flags", () => {
+        const hex1 = "a".repeat(64);
+        const hex2 = "b".repeat(64);
+        const result = parseReqCommand(["-i", hex1, "-i", hex2]);
+        expect(result.filter.ids).toEqual([hex1, hex2]);
       });
     });
   });
