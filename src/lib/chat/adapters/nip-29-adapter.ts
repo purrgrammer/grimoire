@@ -1,7 +1,7 @@
 import { Observable, firstValueFrom } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
-import { nip19 } from "nostr-tools";
+import { nip19, kinds } from "nostr-tools";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
@@ -25,6 +25,15 @@ import {
   GroupMessageBlueprint,
   ReactionBlueprint,
 } from "applesauce-common/blueprints";
+import { profileLoader } from "@/services/loaders";
+import { getProfileContent } from "applesauce-core/helpers";
+
+/**
+ * Check if a string is a valid nostr pubkey (64 character hex string)
+ */
+function isValidPubkey(str: string): boolean {
+  return /^[0-9a-f]{64}$/i.test(str);
+}
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -181,15 +190,52 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Extract group info from metadata event
-    const title = metadataEvent
+    let title = metadataEvent
       ? getTagValues(metadataEvent, "name")[0] || groupId
       : groupId;
-    const description = metadataEvent
+    let description = metadataEvent
       ? getTagValues(metadataEvent, "about")[0]
       : undefined;
-    const icon = metadataEvent
+    let icon = metadataEvent
       ? getTagValues(metadataEvent, "picture")[0]
       : undefined;
+
+    // Fallback: If no metadata found and groupId is a valid pubkey, use profile metadata
+    if (!metadataEvent && isValidPubkey(groupId)) {
+      console.log(
+        `[NIP-29] No group metadata found, groupId is valid pubkey. Fetching profile for ${groupId.slice(0, 8)}...`,
+      );
+
+      try {
+        // Fetch profile metadata (kind 0) for the pubkey
+        const profileEvent = await firstValueFrom(
+          profileLoader({
+            kind: kinds.Metadata,
+            pubkey: groupId,
+            relays: [relayUrl], // Try the group relay first
+          }),
+          { defaultValue: undefined },
+        );
+
+        if (profileEvent) {
+          const profileContent = getProfileContent(profileEvent);
+          if (profileContent) {
+            console.log(
+              `[NIP-29] Using profile metadata as fallback for group ${groupId.slice(0, 8)}...`,
+            );
+            title = profileContent.display_name || profileContent.name || title;
+            description = profileContent.about || description;
+            icon = profileContent.picture || icon;
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `[NIP-29] Failed to fetch profile fallback for ${groupId.slice(0, 8)}:`,
+          error,
+        );
+        // Continue with default title (groupId) if profile fetch fails
+      }
+    }
 
     console.log(`[NIP-29] Group title: ${title}`);
 

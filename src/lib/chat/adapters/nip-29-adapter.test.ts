@@ -180,4 +180,77 @@ describe("Nip29Adapter", () => {
       expect(capabilities.requiresRelay).toBe(true);
     });
   });
+
+  describe("profile fallback for pubkey group IDs", () => {
+    it("should parse valid pubkey as group ID", () => {
+      const validPubkey =
+        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+      const result = adapter.parseIdentifier(
+        `wss://relay.example.com'${validPubkey}`,
+      );
+
+      expect(result).toEqual({
+        type: "group",
+        value: validPubkey,
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should parse uppercase pubkey as group ID", () => {
+      const validPubkey =
+        "3BF0C63FCB93463407AF97A5E5EE64FA883D107EF9E558472C4EB9AAAEFA459D";
+      const result = adapter.parseIdentifier(
+        `wss://relay.example.com'${validPubkey}`,
+      );
+
+      expect(result).toEqual({
+        type: "group",
+        value: validPubkey,
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should parse mixed case pubkey as group ID", () => {
+      const validPubkey =
+        "3bF0c63Fcb93463407aF97a5e5Ee64fA883d107eF9e558472c4eB9aaaEfa459D";
+      const result = adapter.parseIdentifier(
+        `wss://relay.example.com'${validPubkey}`,
+      );
+
+      expect(result).toEqual({
+        type: "group",
+        value: validPubkey,
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should not treat short hex strings as valid pubkeys", () => {
+      // Less than 64 characters should be treated as normal group IDs
+      const shortHex = "3bf0c63f";
+      const result = adapter.parseIdentifier(
+        `wss://relay.example.com'${shortHex}`,
+      );
+
+      expect(result).toEqual({
+        type: "group",
+        value: shortHex,
+        relays: ["wss://relay.example.com"],
+      });
+    });
+
+    it("should not treat non-hex strings as valid pubkeys", () => {
+      // 64 characters but contains non-hex characters
+      const nonHex =
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+      const result = adapter.parseIdentifier(
+        `wss://relay.example.com'${nonHex}`,
+      );
+
+      expect(result).toEqual({
+        type: "group",
+        value: nonHex,
+        relays: ["wss://relay.example.com"],
+      });
+    });
+  });
 });
