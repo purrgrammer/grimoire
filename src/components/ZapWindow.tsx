@@ -150,6 +150,13 @@ export function ZapWindow({
   const [paymentTimedOut, setPaymentTimedOut] = useState(false);
   const [zapAnonymously, setZapAnonymously] = useState(false);
 
+  // Update selected amount when defaultAmount prop changes
+  useEffect(() => {
+    if (defaultAmount) {
+      setSelectedAmount(defaultAmount);
+    }
+  }, [defaultAmount]);
+
   // Editor ref and search functions
   const editorRef = useRef<MentionEditorHandle>(null);
   const { searchProfiles } = useProfileSearch();

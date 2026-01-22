@@ -216,6 +216,27 @@ export function SettingsViewer() {
               </p>
             </div>
 
+            {/* Contribution Tiers */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Contribute</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {contributionTiers.map(({ amount, icon: Icon }) => (
+                  <Button
+                    key={amount}
+                    variant="outline"
+                    size="default"
+                    onClick={() => openSupportWindow(amount)}
+                    className="flex-col h-auto py-3 gap-1.5"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-base font-semibold">
+                      {formatAmount(amount)}
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             {/* Show Monthly Goal Toggle */}
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-0.5">
@@ -259,27 +280,6 @@ export function SettingsViewer() {
                 <span className="text-muted-foreground">
                   {formatAmount(MONTHLY_GOAL_SATS)}
                 </span>
-              </div>
-            </div>
-
-            {/* Contribution Tiers */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Contribute</h4>
-              <div className="grid grid-cols-3 gap-2">
-                {contributionTiers.map(({ amount, icon: Icon }) => (
-                  <Button
-                    key={amount}
-                    variant="outline"
-                    size="default"
-                    onClick={() => openSupportWindow(amount)}
-                    className="flex-col h-auto py-3 gap-1"
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-sm font-semibold">
-                      {formatAmount(amount)}
-                    </span>
-                  </Button>
-                ))}
               </div>
             </div>
 
