@@ -1,5 +1,4 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
-// import { NipC7Adapter } from "./chat/adapters/nip-c7-adapter";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
@@ -17,7 +16,6 @@ import { nip19 } from "nostr-tools";
  * 3. NIP-28 (channels) - specific event format (kind 40)
  * 4. NIP-29 (groups) - specific group ID format
  * 5. NIP-53 (live chat) - specific addressable format (kind 30311)
- * 6. NIP-C7 (simple chat) - fallback for generic pubkeys
  *
  * @param args - Command arguments (first arg is the identifier)
  * @returns Parsed result with protocol and identifier
@@ -69,7 +67,6 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     // new Nip28Adapter(),  // Phase 3
     new Nip29Adapter(), // Phase 4 - Relay groups
     new Nip53Adapter(), // Phase 5 - Live activity chat
-    // new NipC7Adapter(), // Phase 1 - Simple chat (disabled for now)
   ];
 
   for (const adapter of adapters) {
@@ -106,6 +103,6 @@ Currently supported formats:
       chat naddr1... (group list address)
 
 More formats coming soon:
-  - npub/nprofile/hex pubkey (NIP-C7/NIP-17 direct messages)`,
+  - npub/nprofile/hex pubkey (NIP-17 encrypted direct messages)`,
   );
 }
