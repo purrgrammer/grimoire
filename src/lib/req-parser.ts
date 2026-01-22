@@ -51,7 +51,7 @@ function parseCommaSeparated<T>(
 /**
  * Parse REQ command arguments into a Nostr filter
  * Supports:
- * - Filters: -k (kinds), -a (authors: hex/npub/nprofile/NIP-05), -l (limit), -e (note/nevent/naddr/hex), -p (#p: hex/npub/nprofile/NIP-05), -P (#P: hex/npub/nprofile/NIP-05), -t (#t), -d (#d), --tag/-T (any #tag)
+ * - Filters: -k (kinds), -a (authors: hex/npub/nprofile/NIP-05), -l (limit), -i/--id (direct event lookup), -e (tag filtering: #e/#a), -p (#p: hex/npub/nprofile/NIP-05), -P (#P: hex/npub/nprofile/NIP-05), -t (#t), -d (#d), --tag/-T (any #tag)
  * - Time: --since, --until
  * - Search: --search
  * - Relays: wss://relay.com or relay.com (auto-adds wss://), relay hints from nprofile/nevent/naddr are automatically extracted
@@ -183,8 +183,40 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           break;
         }
 
+        case "-i":
+        case "--id": {
+          // Direct event lookup via filter.ids
+          // Support comma-separated: -i note1...,nevent1...,hex
+          if (!nextArg) {
+            i++;
+            break;
+          }
+
+          let addedAny = false;
+          const values = nextArg.split(",").map((v) => v.trim());
+
+          for (const val of values) {
+            if (!val) continue;
+
+            const parsed = parseIdIdentifier(val);
+            if (parsed) {
+              ids.add(parsed.id);
+              addedAny = true;
+
+              // Collect relay hints from nevent
+              if (parsed.relays) {
+                relays.push(...parsed.relays);
+              }
+            }
+          }
+
+          i += addedAny ? 2 : 1;
+          break;
+        }
+
         case "-e": {
-          // Support comma-separated event identifiers: -e note1...,nevent1...,naddr1...,hex
+          // Tag-based filtering: -e note1...,nevent1...,naddr1...,hex
+          // Events go to #e tag, addresses go to #a tag
           if (!nextArg) {
             i++;
             break;
@@ -198,13 +230,11 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
             const parsed = parseEventIdentifier(val);
             if (parsed) {
-              // Route to appropriate filter field based on type
-              if (parsed.type === "direct-event") {
-                ids.add(parsed.value);
-              } else if (parsed.type === "direct-address") {
-                aTags.add(parsed.value);
-              } else if (parsed.type === "tag-event") {
+              // Route to appropriate tag filter based on type
+              if (parsed.type === "tag-event") {
                 eventIds.add(parsed.value);
+              } else if (parsed.type === "tag-address") {
+                aTags.add(parsed.value);
               }
 
               // Collect relay hints
@@ -564,24 +594,26 @@ function parseNpubOrHex(value: string): {
 }
 
 interface ParsedEventIdentifier {
-  type: "direct-event" | "direct-address" | "tag-event";
+  type: "tag-event" | "tag-address";
   value: string;
   relays?: string[];
 }
 
 /**
- * Parse event identifier - supports note, nevent, naddr, and hex event ID
+ * Parse event identifier for -e flag (tag filtering)
+ * All event IDs go to #e, addresses go to #a
+ * Supports: note, nevent, naddr, and hex event ID
  */
 function parseEventIdentifier(value: string): ParsedEventIdentifier | null {
   if (!value) return null;
 
-  // nevent: direct event lookup with relay hints
+  // nevent: decode and route to #e tag
   if (value.startsWith("nevent")) {
     try {
       const decoded = nip19.decode(value);
       if (decoded.type === "nevent") {
         return {
-          type: "direct-event",
+          type: "tag-event",
           value: decoded.data.id,
           relays: decoded.data.relays
             ?.map((url) => {
@@ -599,14 +631,14 @@ function parseEventIdentifier(value: string): ParsedEventIdentifier | null {
     }
   }
 
-  // naddr: coordinate-based lookup with relay hints
+  // naddr: coordinate-based lookup with relay hints → #a tag
   if (value.startsWith("naddr")) {
     try {
       const decoded = nip19.decode(value);
       if (decoded.type === "naddr") {
         const coordinate = `${decoded.data.kind}:${decoded.data.pubkey}:${decoded.data.identifier}`;
         return {
-          type: "direct-address",
+          type: "tag-address",
           value: coordinate,
           relays: decoded.data.relays
             ?.map((url) => {
@@ -624,7 +656,7 @@ function parseEventIdentifier(value: string): ParsedEventIdentifier | null {
     }
   }
 
-  // note1: tag-based filtering (existing behavior)
+  // note1: decode to event ID → #e tag
   if (value.startsWith("note")) {
     try {
       const decoded = nip19.decode(value);
@@ -639,11 +671,84 @@ function parseEventIdentifier(value: string): ParsedEventIdentifier | null {
     }
   }
 
-  // Hex: tag-based filtering (existing behavior)
+  // Hex: → #e tag
   if (isValidHexEventId(value)) {
     return {
       type: "tag-event",
       value: normalizeHex(value),
+    };
+  }
+
+  // Raw coordinate: kind:pubkey:identifier → #a tag
+  // Format: <kind>:<pubkey>:<d-tag> (e.g., 30023:abc123...:article-name)
+  const coordinateMatch = value.match(/^(\d+):([a-fA-F0-9]{64}):(.*)$/);
+  if (coordinateMatch) {
+    const [, kindStr, pubkey, identifier] = coordinateMatch;
+    const kind = parseInt(kindStr, 10);
+    if (!isNaN(kind)) {
+      return {
+        type: "tag-address",
+        value: `${kind}:${pubkey.toLowerCase()}:${identifier}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+interface ParsedIdIdentifier {
+  id: string;
+  relays?: string[];
+}
+
+/**
+ * Parse event identifier for -i/--id flag (direct ID lookup via filter.ids)
+ * Supports: note, nevent, and hex event ID
+ */
+function parseIdIdentifier(value: string): ParsedIdIdentifier | null {
+  if (!value) return null;
+
+  // nevent: decode and extract event ID
+  if (value.startsWith("nevent")) {
+    try {
+      const decoded = nip19.decode(value);
+      if (decoded.type === "nevent") {
+        return {
+          id: decoded.data.id,
+          relays: decoded.data.relays
+            ?.map((url) => {
+              try {
+                return normalizeRelayURL(url);
+              } catch {
+                return null;
+              }
+            })
+            .filter((url): url is string => url !== null),
+        };
+      }
+    } catch {
+      // Not valid nevent, continue
+    }
+  }
+
+  // note1: decode to event ID
+  if (value.startsWith("note")) {
+    try {
+      const decoded = nip19.decode(value);
+      if (decoded.type === "note") {
+        return {
+          id: decoded.data,
+        };
+      }
+    } catch {
+      // Not valid note, continue
+    }
+  }
+
+  // Hex event ID
+  if (isValidHexEventId(value)) {
+    return {
+      id: normalizeHex(value),
     };
   }
 
