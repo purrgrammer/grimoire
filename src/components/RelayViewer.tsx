@@ -148,21 +148,15 @@ function SpellTabContent({
   }, [parsed?.relays, targetRelay, spell.name, spellId]);
 
   // Fetch events using the applied filter
+  // Always call the hook unconditionally (React Rules of Hooks)
+  const shouldFetch = !!(appliedFilter && finalRelays.length > 0);
   const { events, loading, eoseReceived, relayStates, overallState } =
-    appliedFilter && finalRelays.length > 0
-      ? useReqTimelineEnhanced(
-          `spell-${spellId}-${targetRelay}`,
-          appliedFilter,
-          finalRelays,
-          { limit: appliedFilter.limit || 50, stream: true },
-        )
-      : {
-          events: [],
-          loading: false,
-          eoseReceived: false,
-          relayStates: new Map(),
-          overallState: undefined,
-        };
+    useReqTimelineEnhanced(
+      shouldFetch ? `spell-${spellId}-${targetRelay}` : `disabled-${spellId}`,
+      appliedFilter || {},
+      shouldFetch ? finalRelays : [],
+      { limit: appliedFilter?.limit || 50, stream: true },
+    );
 
   // Convert relay states to the format expected by SpellHeader
   const reqRelayStatesMap = useMemo(() => {

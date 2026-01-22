@@ -219,19 +219,14 @@ function SpellTabContent({
   ]);
 
   // Fetch events using the applied filter
-  const { events, loading, eoseReceived } =
-    appliedFilter && finalRelays.length > 0
-      ? useReqTimelineEnhanced(
-          `spell-${spellId}-${targetPubkey}`,
-          appliedFilter,
-          finalRelays,
-          { limit: appliedFilter.limit || 50, stream: true },
-        )
-      : {
-          events: [],
-          loading: false,
-          eoseReceived: false,
-        };
+  // Always call the hook unconditionally (React Rules of Hooks)
+  const shouldFetch = !!(appliedFilter && finalRelays.length > 0);
+  const { events, loading, eoseReceived } = useReqTimelineEnhanced(
+    shouldFetch ? `spell-${spellId}-${targetPubkey}` : `disabled-${spellId}`,
+    appliedFilter || {},
+    shouldFetch ? finalRelays : [],
+    { limit: appliedFilter?.limit || 50, stream: true },
+  );
 
   console.log(`[SpellTabContent:${spell.name || spellId}] Render state:`, {
     hasFilter: !!appliedFilter,
