@@ -1,4 +1,5 @@
 import type { NostrEvent } from "./nostr";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 
 /**
  * Event kinds that are considered chat messages across all protocols
@@ -137,7 +138,7 @@ export interface Message {
   content: string;
   timestamp: number;
   type?: MessageType; // Defaults to "user" if not specified
-  replyTo?: string; // Parent message ID
+  replyTo?: EventPointer | AddressPointer; // Parent message pointer with relay hints
   metadata?: MessageMetadata;
   protocol: ChatProtocol;
   event: NostrEvent; // Original Nostr event for verification

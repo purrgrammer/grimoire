@@ -1,4 +1,5 @@
 import type { Observable, Subscription } from "rxjs";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type {
   Conversation,
   Message,
@@ -177,13 +178,13 @@ export abstract class ChatProtocolAdapter {
   abstract getCapabilities(): ChatCapabilities;
 
   /**
-   * Load a replied-to message by ID
+   * Load a replied-to message by pointer (event ID with optional relay hints)
    * First checks EventStore, then fetches from protocol-specific relays if needed
    * Returns null if event cannot be loaded
    */
   abstract loadReplyMessage(
     conversation: Conversation,
-    eventId: string,
+    pointer: EventPointer | AddressPointer,
   ): Promise<NostrEvent | null>;
 
   /**

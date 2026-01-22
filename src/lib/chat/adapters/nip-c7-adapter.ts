@@ -2,6 +2,7 @@ import { Observable, firstValueFrom } from "rxjs";
 import { map, first } from "rxjs/operators";
 import { nip19 } from "nostr-tools";
 import type { Filter } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
@@ -16,8 +17,7 @@ import pool from "@/services/relay-pool";
 import { publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { isNip05, resolveNip05 } from "@/lib/nip05";
-import { getDisplayName } from "@/lib/nostr-utils";
-import { getTagValues } from "@/lib/nostr-utils";
+import { getDisplayName, getQuotePointer } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
 import { getProfileContent } from "applesauce-core/helpers";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -325,8 +325,18 @@ export class NipC7Adapter extends ChatProtocolAdapter {
    */
   async loadReplyMessage(
     _conversation: Conversation,
-    eventId: string,
+    pointer: EventPointer | AddressPointer,
   ): Promise<NostrEvent | null> {
+    // Extract event ID from pointer (EventPointer has 'id', AddressPointer doesn't)
+    const eventId = "id" in pointer ? pointer.id : null;
+
+    if (!eventId) {
+      console.warn(
+        "[NIP-C7] AddressPointer not supported for loadReplyMessage",
+      );
+      return null;
+    }
+
     // First check EventStore - might already be loaded
     const cachedEvent = await eventStore
       .event(eventId)
@@ -336,8 +346,11 @@ export class NipC7Adapter extends ChatProtocolAdapter {
       return cachedEvent;
     }
 
-    // Not in store, fetch from relay pool
-    console.log(`[NIP-C7] Fetching reply message ${eventId.slice(0, 8)}...`);
+    // Not in store, fetch from relay pool (use pointer relays if available)
+    const relays = pointer.relays || [];
+    console.log(
+      `[NIP-C7] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.length > 0 ? relays.join(", ") : "global pool"}`,
+    );
 
     const filter: Filter = {
       ids: [eventId],
@@ -345,7 +358,7 @@ export class NipC7Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription([], [filter], { eventStore }); // Empty relay list = use global pool
+    const obs = pool.subscription(relays, [filter], { eventStore });
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
@@ -383,7 +396,8 @@ export class NipC7Adapter extends ChatProtocolAdapter {
    * Helper: Convert Nostr event to Message
    */
   private eventToMessage(event: NostrEvent, conversationId: string): Message {
-    const quotedEventIds = getTagValues(event, "q");
+    // Use getQuotePointer to extract full EventPointer with relay hints
+    const replyTo = getQuotePointer(event);
 
     return {
       id: event.id,
@@ -391,7 +405,7 @@ export class NipC7Adapter extends ChatProtocolAdapter {
       author: event.pubkey,
       content: event.content,
       timestamp: event.created_at,
-      replyTo: quotedEventIds[0], // First q tag
+      replyTo: replyTo || undefined,
       protocol: "nip-c7",
       event,
     };

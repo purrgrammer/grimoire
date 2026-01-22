@@ -2,6 +2,7 @@ import { Observable, firstValueFrom, combineLatest } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import {
   ChatProtocolAdapter,
   type SendMessageOptions,
@@ -22,6 +23,7 @@ import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeURL } from "applesauce-core/helpers";
+import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { EventFactory } from "applesauce-core/event-factory";
 import {
   NoteReplyBlueprint,
@@ -489,12 +491,22 @@ export class Nip10Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Load a replied-to message by ID
+   * Load a replied-to message by pointer
    */
   async loadReplyMessage(
     conversation: Conversation,
-    eventId: string,
+    pointer: EventPointer | AddressPointer,
   ): Promise<NostrEvent | null> {
+    // Extract event ID from pointer (EventPointer has 'id', AddressPointer doesn't)
+    const eventId = "id" in pointer ? pointer.id : null;
+
+    if (!eventId) {
+      console.warn(
+        "[NIP-10] AddressPointer not supported for loadReplyMessage",
+      );
+      return null;
+    }
+
     // First check EventStore - might already be loaded
     const cachedEvent = await eventStore
       .event(eventId)
@@ -504,8 +516,17 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       return cachedEvent;
     }
 
-    // Not in store, fetch from conversation relays
-    const relays = conversation.metadata?.relays || [];
+    // Build relay list: conversation relays + pointer relay hints (deduplicated)
+    const conversationRelays = conversation.metadata?.relays || [];
+    const relays = [...conversationRelays];
+    if (pointer.relays) {
+      for (const relay of pointer.relays) {
+        if (!relays.includes(relay)) {
+          relays.push(relay);
+        }
+      }
+    }
+
     if (relays.length === 0) {
       console.warn("[NIP-10] No relays for loading reply message");
       return null;
@@ -831,18 +852,18 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     if (event.kind === 1) {
       const refs = getNip10References(event);
 
-      // Determine what this reply is responding to
-      let replyTo: string | undefined;
+      // Determine what this reply is responding to (as full EventPointer with relay hints)
+      let replyTo: EventPointer | undefined;
 
       if (refs.reply?.e) {
-        // Replying to another reply
-        replyTo = refs.reply.e.id;
+        // Replying to another reply - use the full EventPointer
+        replyTo = refs.reply.e;
       } else if (refs.root?.e) {
-        // Replying directly to root
-        replyTo = refs.root.e.id;
+        // Replying directly to root - use the full EventPointer
+        replyTo = refs.root.e;
       } else {
-        // Malformed or legacy reply - assume replying to root
-        replyTo = rootEventId;
+        // Malformed or legacy reply - assume replying to root (no relay hints)
+        replyTo = { id: rootEventId };
       }
 
       return {
@@ -880,9 +901,11 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // Convert from msats to sats
     const amountInSats = amount ? Math.floor(amount / 1000) : 0;
 
-    // Find what event is being zapped (e-tag in zap receipt)
+    // Find what event is being zapped (e-tag in zap receipt) - use full pointer with relay hints
     const eTag = zapReceipt.tags.find((t) => t[0] === "e");
-    const replyTo = eTag?.[1];
+    const replyTo = eTag
+      ? (getEventPointerFromETag(eTag) ?? undefined)
+      : undefined;
 
     // Get zap request event for comment
     const zapRequestTag = zapReceipt.tags.find((t) => t[0] === "description");

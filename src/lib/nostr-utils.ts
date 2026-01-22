@@ -62,6 +62,74 @@ export function getTagValues(event: NostrEvent, tagName: string): string[] {
     .map((tag) => tag[1]);
 }
 
+/**
+ * Parse a q-tag (quote tag) into an EventPointer with relay hints
+ * Q-tag format per NIP-18: ["q", eventId, relayUrl?, pubkey?]
+ * - tag[0]: "q"
+ * - tag[1]: event ID (64-char hex) or address coordinate (kind:pubkey:d-tag)
+ * - tag[2]: relay URL hint (optional)
+ * - tag[3]: pubkey of quoted event author (optional)
+ */
+export function getEventPointerFromQTag(
+  tag: string[],
+): EventPointer | AddressPointer | null {
+  if (!tag || tag[0] !== "q" || !tag[1]) {
+    return null;
+  }
+
+  const value = tag[1];
+  const relayHint = tag[2];
+  const authorHint = tag[3];
+
+  // Check if it's an address coordinate (contains colons: kind:pubkey:d-tag)
+  if (value.includes(":")) {
+    const parts = value.split(":");
+    if (parts.length >= 2) {
+      const kind = parseInt(parts[0], 10);
+      const pubkey = parts[1];
+      const identifier = parts.slice(2).join(":") || "";
+
+      if (!isNaN(kind) && pubkey) {
+        const pointer: AddressPointer = { kind, pubkey, identifier };
+        if (relayHint) {
+          pointer.relays = [relayHint];
+        }
+        return pointer;
+      }
+    }
+    return null;
+  }
+
+  // Validate as 64-char hex event ID
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    return null;
+  }
+
+  const pointer: EventPointer = { id: value };
+  if (relayHint) {
+    pointer.relays = [relayHint];
+  }
+  if (authorHint && /^[0-9a-f]{64}$/i.test(authorHint)) {
+    pointer.author = authorHint;
+  }
+
+  return pointer;
+}
+
+/**
+ * Find the first q-tag in an event and parse it into an EventPointer
+ * Returns null if no valid q-tag is found
+ */
+export function getQuotePointer(
+  event: NostrEvent,
+): EventPointer | AddressPointer | null {
+  const qTag = event.tags.find((tag) => tag[0] === "q" && tag[1]);
+  if (!qTag) {
+    return null;
+  }
+  return getEventPointerFromQTag(qTag);
+}
+
 export function getDisplayName(
   pubkey: string,
   metadata?: ProfileContent,

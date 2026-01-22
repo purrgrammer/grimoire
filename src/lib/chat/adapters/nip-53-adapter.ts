@@ -2,6 +2,7 @@ import { Observable, firstValueFrom } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import {
   ChatProtocolAdapter,
   type SendMessageOptions,
@@ -22,6 +23,7 @@ import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import {
   parseLiveActivity,
   getLiveStatus,
@@ -633,8 +635,18 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    */
   async loadReplyMessage(
     conversation: Conversation,
-    eventId: string,
+    pointer: EventPointer | AddressPointer,
   ): Promise<NostrEvent | null> {
+    // Extract event ID from pointer (EventPointer has 'id', AddressPointer doesn't)
+    const eventId = "id" in pointer ? pointer.id : null;
+
+    if (!eventId) {
+      console.warn(
+        "[NIP-53] AddressPointer not supported for loadReplyMessage",
+      );
+      return null;
+    }
+
     // First check EventStore
     const cachedEvent = await eventStore
       .event(eventId)
@@ -651,13 +663,23 @@ export class Nip53Adapter extends ChatProtocolAdapter {
         }
       | undefined;
 
-    // Get relays - use immutable pattern to avoid mutating metadata
-    const relays =
+    // Get conversation relays
+    const conversationRelays =
       liveActivity?.relays && liveActivity.relays.length > 0
-        ? liveActivity.relays
+        ? [...liveActivity.relays]
         : conversation.metadata?.relayUrl
           ? [conversation.metadata.relayUrl]
           : [];
+
+    // Add pointer relay hints (deduplicated)
+    const relays = [...conversationRelays];
+    if (pointer.relays) {
+      for (const relay of pointer.relays) {
+        if (!relays.includes(relay)) {
+          relays.push(relay);
+        }
+      }
+    }
 
     if (relays.length === 0) {
       console.warn("[NIP-53] No relays for loading reply message");
@@ -751,13 +773,16 @@ export class Nip53Adapter extends ChatProtocolAdapter {
    * Helper: Convert Nostr event to Message
    */
   private eventToMessage(event: NostrEvent, conversationId: string): Message {
-    // Look for reply e-tags (NIP-10 style)
+    // Look for reply e-tags (NIP-10 style) and extract full pointer with relay hints
     const eTags = event.tags.filter((t) => t[0] === "e");
     // Find the reply tag (has "reply" marker or is the last e-tag without marker)
     const replyTag =
       eTags.find((t) => t[3] === "reply") ||
       eTags.find((t) => !t[3] && eTags.length === 1);
-    const replyTo = replyTag?.[1];
+    // Use getEventPointerFromETag to get full pointer with relay hints
+    const replyTo = replyTag
+      ? (getEventPointerFromETag(replyTag) ?? undefined)
+      : undefined;
 
     return {
       id: event.id,

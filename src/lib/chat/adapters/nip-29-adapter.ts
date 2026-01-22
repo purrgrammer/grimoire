@@ -2,6 +2,7 @@ import { Observable, firstValueFrom } from "rxjs";
 import { map, first, toArray } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
 import type {
   Conversation,
@@ -18,7 +19,8 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
-import { getTagValues } from "@/lib/nostr-utils";
+import { getTagValues, getQuotePointer } from "@/lib/nostr-utils";
+import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { EventFactory } from "applesauce-core/event-factory";
 import {
@@ -775,12 +777,23 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
   /**
    * Load a replied-to message
-   * First checks EventStore, then fetches from group relay if needed
+   * First checks EventStore, then fetches from group relay and pointer relay hints
    */
   async loadReplyMessage(
     conversation: Conversation,
-    eventId: string,
+    pointer: EventPointer | AddressPointer,
   ): Promise<NostrEvent | null> {
+    // Extract event ID from pointer (EventPointer has 'id', AddressPointer doesn't)
+    const eventId = "id" in pointer ? pointer.id : null;
+
+    if (!eventId) {
+      // AddressPointer - not supported for loadReplyMessage (would need different logic)
+      console.warn(
+        "[NIP-29] AddressPointer not supported for loadReplyMessage",
+      );
+      return null;
+    }
+
     // First check EventStore - might already be loaded
     const cachedEvent = await eventStore
       .event(eventId)
@@ -790,15 +803,28 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       return cachedEvent;
     }
 
-    // Not in store, fetch from group relay
-    const relayUrl = conversation.metadata?.relayUrl;
-    if (!relayUrl) {
-      console.warn("[NIP-29] No relay URL for loading reply message");
+    // Build relay list: group relay + pointer relay hints (deduplicated)
+    const relays: string[] = [];
+    const groupRelayUrl = conversation.metadata?.relayUrl;
+    if (groupRelayUrl) {
+      relays.push(groupRelayUrl);
+    }
+    // Add relay hints from the pointer (q-tag relay hint)
+    if (pointer.relays) {
+      for (const relay of pointer.relays) {
+        if (!relays.includes(relay)) {
+          relays.push(relay);
+        }
+      }
+    }
+
+    if (relays.length === 0) {
+      console.warn("[NIP-29] No relays available for loading reply message");
       return null;
     }
 
     console.log(
-      `[NIP-29] Fetching reply message ${eventId.slice(0, 8)}... from ${relayUrl}`,
+      `[NIP-29] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.join(", ")}`,
     );
 
     const filter: Filter = {
@@ -807,7 +833,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription([relayUrl], [filter], { eventStore });
+    const obs = pool.subscription(relays, [filter], { eventStore });
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
@@ -1089,8 +1115,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // Regular chat message (kind 9)
     // Look for reply q-tags (NIP-29 uses q-tags like NIP-C7)
-    const qTags = getTagValues(event, "q");
-    const replyTo = qTags[0]; // First q-tag is the reply target
+    // Use getQuotePointer to extract full EventPointer with relay hints
+    const replyTo = getQuotePointer(event);
 
     return {
       id: event.id,
@@ -1099,7 +1125,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       content: event.content,
       timestamp: event.created_at,
       type: "user",
-      replyTo,
+      replyTo: replyTo || undefined,
       protocol: "nip-29",
       metadata: {
         encrypted: false, // kind 9 messages are always public
@@ -1121,8 +1147,11 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const recipient = pTag?.[1] || "";
 
     // Reply target is the e-tag (the event being nutzapped)
+    // Use getEventPointerFromETag to extract full pointer with relay hints
     const eTag = event.tags.find((t) => t[0] === "e");
-    const replyTo = eTag?.[1];
+    const replyTo = eTag
+      ? (getEventPointerFromETag(eTag) ?? undefined)
+      : undefined;
 
     // Amount is sum of proof amounts from all proof tags
     // NIP-61 allows multiple proof tags, each containing a JSON-encoded Cashu proof

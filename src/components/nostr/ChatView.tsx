@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { kinds } from "nostr-tools";
@@ -6,10 +5,10 @@ import { UserName } from "./UserName";
 import { RichText } from "./RichText";
 import { Zap, CornerDownRight, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getTagValue } from "applesauce-core/helpers";
 import { getZapAmount, getZapSender } from "applesauce-common/helpers/zap";
 import { getNip10References } from "applesauce-common/helpers/threading";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { getQuotePointer } from "@/lib/nostr-utils";
 
 interface ChatViewProps {
   events: NostrEvent[];
@@ -91,12 +90,13 @@ function ChatMessage({ event }: { event: NostrEvent }) {
   // Both helpers cache internally, no useMemo needed
   const threadRefs = getNip10References(event);
   const replyToId = threadRefs.reply?.e?.id;
-  const qTagValue = getTagValue(event, "q");
+  // Use getQuotePointer to extract full pointer with relay hints
+  const quotePointer = getQuotePointer(event);
 
   return (
     <div className="flex flex-col gap-0.5">
       {replyToId && <ReplyIndicator eventId={replyToId} />}
-      {qTagValue && <QuoteIndicator qValue={qTagValue} />}
+      {quotePointer && <QuoteIndicator pointer={quotePointer} />}
       <RichText
         className="text-xs leading-tight text-foreground/90"
         event={event}
@@ -130,38 +130,13 @@ function ReplyIndicator({ eventId }: { eventId: string }) {
   );
 }
 
-/**
- * Parse q-tag value into EventPointer or AddressPointer
- * Format can be:
- * - Event ID: "abc123..." (64-char hex)
- * - Address: "kind:pubkey:d-tag"
- */
-function parseQTag(qValue: string): EventPointer | AddressPointer | null {
-  // Check if it's an address (contains colons)
-  if (qValue.includes(":")) {
-    const parts = qValue.split(":");
-    if (parts.length >= 2) {
-      const kind = parseInt(parts[0], 10);
-      const pubkey = parts[1];
-      const identifier = parts.slice(2).join(":") || "";
-
-      if (!isNaN(kind) && pubkey) {
-        return { kind, pubkey, identifier };
-      }
-    }
-  }
-
-  // Assume it's an event ID (hex string)
-  if (/^[0-9a-f]{64}$/i.test(qValue)) {
-    return { id: qValue };
-  }
-
-  return null;
-}
-
-function QuoteIndicator({ qValue }: { qValue: string }) {
-  const pointer = useMemo(() => parseQTag(qValue), [qValue]);
-  const quotedEvent = useNostrEvent(pointer || undefined);
+function QuoteIndicator({
+  pointer,
+}: {
+  pointer: EventPointer | AddressPointer;
+}) {
+  // Pass the full pointer with relay hints to useNostrEvent
+  const quotedEvent = useNostrEvent(pointer);
 
   if (!quotedEvent) {
     return null;

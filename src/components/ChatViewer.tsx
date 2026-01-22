@@ -14,7 +14,9 @@ import {
   FileText,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { getZapRequest } from "applesauce-common/helpers/zap";
+import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { toast } from "sonner";
 import eventStore from "@/services/event-store";
 import type {
@@ -351,23 +353,32 @@ const MessageItem = memo(function MessageItem({
   if (message.type === "zap") {
     const zapRequest = message.event ? getZapRequest(message.event) : null;
     // For NIP-57 zaps, reply target is in the zap request's e-tag
-    // For NIP-61 nutzaps, reply target is already in message.replyTo
-    const zapReplyTo =
+    // For NIP-61 nutzaps, reply target is already in message.replyTo (as EventPointer)
+    // Convert zap request e-tag to EventPointer for consistent handling
+    const zapRequestETag = zapRequest?.tags.find((t) => t[0] === "e");
+    const zapReplyPointer: EventPointer | AddressPointer | undefined =
       message.replyTo ||
-      zapRequest?.tags.find((t) => t[0] === "e")?.[1] ||
-      undefined;
+      (zapRequestETag
+        ? (getEventPointerFromETag(zapRequestETag) ?? undefined)
+        : undefined);
+
+    // Extract event ID from pointer for EventStore lookup
+    const zapReplyEventId =
+      zapReplyPointer && "id" in zapReplyPointer
+        ? zapReplyPointer.id
+        : undefined;
 
     // Check if the replied-to event exists and is a chat kind
     const replyEvent = use$(
-      () => (zapReplyTo ? eventStore.event(zapReplyTo) : undefined),
-      [zapReplyTo],
+      () => (zapReplyEventId ? eventStore.event(zapReplyEventId) : undefined),
+      [zapReplyEventId],
     );
 
     // Only show reply preview if:
     // 1. The event exists in our store
     // 2. The event is a chat kind (includes messages, nutzaps, live chat, and zap receipts)
     const shouldShowReplyPreview =
-      zapReplyTo &&
+      zapReplyPointer &&
       replyEvent &&
       (CHAT_KINDS as readonly number[]).includes(replyEvent.kind);
 
@@ -404,9 +415,9 @@ const MessageItem = memo(function MessageItem({
               {/* Reactions display - inline after timestamp */}
               <MessageReactions messageId={message.id} relays={relays} />
             </div>
-            {shouldShowReplyPreview && (
+            {shouldShowReplyPreview && zapReplyPointer && (
               <ReplyPreview
-                replyToId={zapReplyTo}
+                replyTo={zapReplyPointer}
                 adapter={adapter}
                 conversation={conversation}
                 onScrollToMessage={onScrollToMessage}
@@ -451,7 +462,7 @@ const MessageItem = memo(function MessageItem({
             <RichText className="text-sm leading-tight" event={message.event}>
               {message.replyTo && (
                 <ReplyPreview
-                  replyToId={message.replyTo}
+                  replyTo={message.replyTo}
                   adapter={adapter}
                   conversation={conversation}
                   onScrollToMessage={onScrollToMessage}
