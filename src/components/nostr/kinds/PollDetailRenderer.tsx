@@ -26,6 +26,7 @@ import {
   countVotes,
   getUniqueVoterCount,
 } from "@/lib/nip88-helpers";
+import { RichText } from "../RichText";
 
 /**
  * Detail renderer for Kind 1068 - Poll (NIP-88)
@@ -105,9 +106,9 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
         {/* Poll Type Badge */}
         <div className="flex items-center gap-2 text-muted-foreground">
           {pollType === "multiplechoice" ? (
-            <ListChecks className="size-5" />
+            <ListChecks className="size-5 shrink-0 flex-shrink-0" />
           ) : (
-            <ListCheck className="size-5" />
+            <ListCheck className="size-5 shrink-0 flex-shrink-0" />
           )}
           <span className="text-sm uppercase tracking-wide">
             {pollType === "multiplechoice"
@@ -124,7 +125,11 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
 
         {/* Question */}
         <h1 className="text-2xl font-bold text-foreground">
-          {question || "Poll"}
+          <RichText
+            content={question || "Poll"}
+            event={event}
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
         </h1>
 
         {/* Author */}
@@ -137,7 +142,7 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
       {/* Stats */}
       <div className="flex items-center gap-6 py-3 border-y border-border">
         <div className="flex items-center gap-2">
-          <Users className="size-4 text-muted-foreground" />
+          <Users className="size-4 shrink-0 flex-shrink-0 text-muted-foreground" />
           <span className="font-medium">{voterCount}</span>
           <span className="text-muted-foreground">
             {voterCount === 1 ? "voter" : "voters"}
@@ -145,7 +150,7 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
         </div>
         {endsAt && (
           <div className="flex items-center gap-2">
-            <Clock className="size-4 text-muted-foreground" />
+            <Clock className="size-4 shrink-0 flex-shrink-0 text-muted-foreground" />
             <span className="text-muted-foreground">
               {ended ? "Ended" : "Ends"} {endTimeText}
             </span>
@@ -187,23 +192,27 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     {pollType === "multiplechoice" ? (
                       <CheckCircle2
-                        className={`size-4 ${isWinner ? "text-primary" : "text-muted-foreground"}`}
+                        className={`size-4 shrink-0 flex-shrink-0 ${isWinner ? "text-primary" : "text-muted-foreground"}`}
                       />
                     ) : (
                       <CircleDot
-                        className={`size-4 ${isWinner ? "text-primary" : "text-muted-foreground"}`}
+                        className={`size-4 shrink-0 flex-shrink-0 ${isWinner ? "text-primary" : "text-muted-foreground"}`}
                       />
                     )}
-                    <span
-                      className={`font-medium ${isWinner ? "text-foreground" : ""}`}
+                    <div
+                      className={`font-medium min-w-0 flex-1 ${isWinner ? "text-foreground" : ""}`}
                     >
-                      {option.label}
-                    </span>
+                      <RichText
+                        content={option.label}
+                        event={event}
+                        options={{ showMedia: false, showEventEmbeds: false }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 text-sm shrink-0">
                     <span
                       className={`font-mono ${isWinner ? "font-bold" : "text-muted-foreground"}`}
                     >

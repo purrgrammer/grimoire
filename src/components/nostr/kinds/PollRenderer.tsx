@@ -19,6 +19,7 @@ import {
   getPollEndsAt,
   isPollEnded,
 } from "@/lib/nip88-helpers";
+import { RichText } from "../RichText";
 
 /**
  * Renderer for Kind 1068 - Poll (NIP-88)
@@ -43,9 +44,9 @@ export function PollRenderer({ event }: BaseEventProps) {
         {/* Poll Header */}
         <div className="flex items-center gap-2 text-muted-foreground">
           {pollType === "multiplechoice" ? (
-            <ListChecks className="size-4" />
+            <ListChecks className="size-4 shrink-0 flex-shrink-0" />
           ) : (
-            <ListCheck className="size-4" />
+            <ListCheck className="size-4 shrink-0 flex-shrink-0" />
           )}
           <span className="text-xs uppercase tracking-wide">
             {pollType === "multiplechoice"
@@ -60,7 +61,11 @@ export function PollRenderer({ event }: BaseEventProps) {
           event={event}
           className="text-base font-semibold text-foreground leading-tight"
         >
-          {question || "Poll"}
+          <RichText
+            content={question || "Poll"}
+            event={event}
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
         </ClickableEventTitle>
 
         {/* Options Preview */}
@@ -72,11 +77,18 @@ export function PollRenderer({ event }: BaseEventProps) {
                 className="flex items-center gap-2 text-sm text-muted-foreground"
               >
                 {pollType === "multiplechoice" ? (
-                  <CheckCircle2 className="size-3.5 shrink-0" />
+                  <CheckCircle2 className="size-3.5 shrink-0 flex-shrink-0" />
                 ) : (
-                  <CircleDot className="size-3.5 shrink-0" />
+                  <CircleDot className="size-3.5 shrink-0 flex-shrink-0" />
                 )}
-                <span className="truncate">{option.label}</span>
+                <div className="truncate min-w-0 flex-1">
+                  <RichText
+                    content={option.label}
+                    event={event}
+                    options={{ showMedia: false, showEventEmbeds: false }}
+                    className="truncate"
+                  />
+                </div>
               </div>
             ))}
             {options.length > 4 && (
@@ -90,7 +102,7 @@ export function PollRenderer({ event }: BaseEventProps) {
         {/* Deadline */}
         {endsAt && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="size-3" />
+            <Clock className="size-3 shrink-0 flex-shrink-0" />
             {ended ? (
               <span>Ended {endTimeText}</span>
             ) : (

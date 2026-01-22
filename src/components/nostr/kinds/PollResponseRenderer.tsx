@@ -11,6 +11,7 @@ import {
   getPollOptions,
   getPollType,
 } from "@/lib/nip88-helpers";
+import { RichText } from "../RichText";
 
 /**
  * Renderer for Kind 1018 - Poll Response (NIP-88)
@@ -50,19 +51,28 @@ export function PollResponseRenderer({ event, depth = 0 }: BaseEventProps) {
     return pollType === "singlechoice" ? labels.slice(0, 1) : labels;
   }, [selectedOptions, pollEvent, pollType]);
 
-  const displayText =
-    displayedLabels.length > 0 ? displayedLabels.join(", ") : "unknown option";
-
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
         {/* Vote indicator */}
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Vote className="size-4" />
+          <Vote className="size-4 shrink-0 flex-shrink-0" />
           <span className="text-sm">
             Voted for:{" "}
             {displayedLabels.length > 0 ? (
-              <span className="text-foreground font-medium">{displayText}</span>
+              <span className="text-foreground font-medium">
+                {displayedLabels.map((label, idx) => (
+                  <span key={idx}>
+                    <RichText
+                      content={label}
+                      event={pollEvent || event}
+                      options={{ showMedia: false, showEventEmbeds: false }}
+                      className="inline"
+                    />
+                    {idx < displayedLabels.length - 1 && ", "}
+                  </span>
+                ))}
+              </span>
             ) : (
               <span className="italic">unknown option</span>
             )}
