@@ -25,18 +25,99 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { USER_SERVER_LIST_KIND, getServersFromEvent } from "@/services/blossom";
 import blossomServerCache from "@/services/blossom-server-cache";
+import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
+import { EventFeed } from "./nostr/EventFeed";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
+import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
 
 export interface ProfileViewerProps {
   pubkey: string;
+}
+
+interface SpellTabContentProps {
+  spellId: string;
+  spell: {
+    id: string;
+    name?: string;
+    command: string;
+    parameterType: "$pubkey" | "$event" | "$relay";
+    parameterDefault?: string[];
+    event?: any;
+  };
+  targetPubkey: string | undefined;
+}
+
+/**
+ * SpellTabContent - Renders a parameterized spell applied to a specific target
+ */
+function SpellTabContent({
+  spellId,
+  spell,
+  targetPubkey,
+}: SpellTabContentProps) {
+  // Decode spell and apply parameters
+  const { appliedFilter, relays } = useMemo(() => {
+    if (!targetPubkey || !spell.event) {
+      return { appliedFilter: null, relays: [] };
+    }
+
+    try {
+      const parsed = decodeSpell(spell.event);
+      const applied = applySpellParameters(parsed, [targetPubkey]);
+      return {
+        appliedFilter: applied,
+        relays: parsed.relays || [],
+      };
+    } catch (error) {
+      console.error("Failed to apply spell parameters:", error);
+      return { appliedFilter: null, relays: [] };
+    }
+  }, [spell.event, targetPubkey]);
+
+  // Fetch events using the applied filter
+  const { events, loading, eoseReceived } = appliedFilter
+    ? useReqTimelineEnhanced(
+        `spell-${spellId}-${targetPubkey}`,
+        appliedFilter,
+        relays,
+        { limit: appliedFilter.limit || 50, stream: true },
+      )
+    : {
+        events: [],
+        loading: false,
+        eoseReceived: false,
+      };
+
+  return (
+    <TabsContent value={spellId} className="flex-1 overflow-hidden m-0">
+      {!appliedFilter ? (
+        <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Unable to apply spell to this profile</p>
+          </div>
+        </div>
+      ) : (
+        <EventFeed
+          events={events}
+          view="list"
+          loading={loading}
+          eoseReceived={eoseReceived}
+          stream={true}
+          enableFreeze={true}
+        />
+      )}
+    </TabsContent>
+  );
 }
 
 /**
@@ -54,6 +135,15 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const eventStore = useEventStore();
   const { copy, copied } = useCopy();
   const { relays: relayStates } = useRelayState();
+
+  // Get user's parameterized spells for $pubkey
+  const userRelays =
+    state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) || [];
+  const { spells: pubkeySpells } = useUserParameterizedSpells(
+    accountPubkey,
+    "$pubkey",
+    userRelays,
+  );
 
   // Fetch fresh relay list from network only if not cached or stale
   useEffect(() => {
@@ -379,96 +469,134 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         </div>
       </div>
 
-      {/* Profile Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
+      {/* Profile Content with Tabs */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <Tabs defaultValue="profile" className="flex flex-col h-full">
+          <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto">
+            <TabsTrigger
+              value="profile"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+            >
+              Profile
+            </TabsTrigger>
+            {pubkeySpells.map((spell) => (
+              <TabsTrigger
+                key={spell.id}
+                value={spell.id}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                {spell.name || spell.alias || "Untitled Spell"}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        {!profile && profileEvent && (
-          <div className="text-center text-muted-foreground text-sm">
-            No profile metadata found
-          </div>
-        )}
+          {/* Profile Tab Content */}
+          <TabsContent
+            value="profile"
+            className="flex-1 overflow-y-auto p-4 m-0"
+          >
+            {!profile && !profileEvent && (
+              <ProfileCardSkeleton variant="full" />
+            )}
 
-        {profile && (
-          <div className="flex flex-col gap-4 max-w-2xl">
-            <div className="flex flex-col gap-0">
-              {/* Display Name */}
-              <UserName
-                pubkey={pubkey}
-                className="text-2xl font-bold pointer-events-none"
-              />
-              {/* NIP-05 */}
-              {profile.nip05 && (
-                <div className="text-xs">
-                  <Nip05 pubkey={pubkey} profile={profile} />
-                </div>
-              )}
-            </div>
-
-            {/* About/Bio */}
-            {profile.about && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  About
-                </div>
-                <RichText
-                  className="text-sm whitespace-pre-wrap break-words"
-                  content={profile.about}
-                />
+            {!profile && profileEvent && (
+              <div className="text-center text-muted-foreground text-sm">
+                No profile metadata found
               </div>
             )}
 
-            {/* Website */}
-            {profile.website && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Website
+            {profile && (
+              <div className="flex flex-col gap-4 max-w-2xl">
+                <div className="flex flex-col gap-0">
+                  {/* Display Name */}
+                  <UserName
+                    pubkey={pubkey}
+                    className="text-2xl font-bold pointer-events-none"
+                  />
+                  {/* NIP-05 */}
+                  {profile.nip05 && (
+                    <div className="text-xs">
+                      <Nip05 pubkey={pubkey} profile={profile} />
+                    </div>
+                  )}
                 </div>
-                <a
-                  href={profile.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-accent underline decoration-dotted"
-                >
-                  {profile.website}
-                </a>
-              </div>
-            )}
 
-            {/* Lightning Address */}
-            {profile.lud16 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Lightning Address
-                </div>
-                <button
-                  onClick={() =>
-                    addWindow("zap", { recipientPubkey: resolvedPubkey })
-                  }
-                  className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
-                  title="Send zap"
-                >
-                  <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
-                  <code className="text-sm font-mono flex-1 min-w-0 truncate">
-                    {profile.lud16}
-                  </code>
-                </button>
-              </div>
-            )}
+                {/* About/Bio */}
+                {profile.about && (
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                      About
+                    </div>
+                    <RichText
+                      className="text-sm whitespace-pre-wrap break-words"
+                      content={profile.about}
+                    />
+                  </div>
+                )}
 
-            {/* LUD06 (LNURL) */}
-            {profile.lud06 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  LNURL
-                </div>
-                <code className="text-sm font-mono break-all">
-                  {profile.lud06}
-                </code>
+                {/* Website */}
+                {profile.website && (
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Website
+                    </div>
+                    <a
+                      href={profile.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-accent underline decoration-dotted"
+                    >
+                      {profile.website}
+                    </a>
+                  </div>
+                )}
+
+                {/* Lightning Address */}
+                {profile.lud16 && (
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Lightning Address
+                    </div>
+                    <button
+                      onClick={() =>
+                        addWindow("zap", { recipientPubkey: resolvedPubkey })
+                      }
+                      className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
+                      title="Send zap"
+                    >
+                      <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
+                      <code className="text-sm font-mono flex-1 min-w-0 truncate">
+                        {profile.lud16}
+                      </code>
+                    </button>
+                  </div>
+                )}
+
+                {/* LUD06 (LNURL) */}
+                {profile.lud06 && (
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                      LNURL
+                    </div>
+                    <code className="text-sm font-mono break-all">
+                      {profile.lud06}
+                    </code>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+
+          {/* Spell Tab Contents */}
+          {pubkeySpells.map((spell) => (
+            <SpellTabContent
+              key={spell.id}
+              spellId={spell.id}
+              spell={spell}
+              targetPubkey={resolvedPubkey}
+            />
+          ))}
+        </Tabs>
       </div>
     </div>
   );

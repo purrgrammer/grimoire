@@ -4,7 +4,6 @@ import type {
   EncodedSpell,
   ParsedSpell,
   SpellEvent,
-  SpellParameter,
 } from "@/types/spell";
 import type { NostrFilter } from "@/types/nostr";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";

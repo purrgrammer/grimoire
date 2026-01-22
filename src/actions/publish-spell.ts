@@ -34,10 +34,14 @@ export class PublishSpellAction {
 
       const encoded = encodeSpell({
         command: spell.command,
-
         name: spell.name,
-
         description: spell.description,
+        parameter: spell.parameterType
+          ? {
+              type: spell.parameterType,
+              default: spell.parameterDefault,
+            }
+          : undefined,
       });
 
       const factory = new EventFactory({ signer });

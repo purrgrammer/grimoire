@@ -10,11 +10,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { parseReqCommand } from "@/lib/req-parser";
 import { reconstructCommand, detectCommandType } from "@/lib/spell-conversion";
 import type { ParsedSpell, SpellEvent } from "@/types/spell";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { saveSpell } from "@/services/spell-storage";
 import { LocalSpell } from "@/services/db";
 import { PublishSpellAction } from "@/actions/publish-spell";
@@ -53,6 +54,36 @@ function filterSpellCommand(command: string): string {
   }
 }
 
+/**
+ * Detect if command contains values that suggest parameterization
+ * Returns suggested parameter type if detected
+ */
+function detectParameterSuggestion(
+  command: string,
+): "$pubkey" | "$event" | "$relay" | null {
+  if (!command) return null;
+
+  // Check for $me or $contacts (suggests $pubkey parameter)
+  if (command.includes("$me") || command.includes("$contacts")) {
+    return "$pubkey";
+  }
+
+  // Check for single author hex that's not $me/$contacts
+  // (user might want to make it reusable)
+  const authorMatch = command.match(/-a\s+([a-f0-9]{64})/);
+  if (authorMatch) {
+    return "$pubkey";
+  }
+
+  // Check for event ID or naddr (suggests $event parameter)
+  const eventMatch = command.match(/-e\s+([a-f0-9]{64}|naddr1[a-z0-9]+)/);
+  if (eventMatch) {
+    return "$event";
+  }
+
+  return null;
+}
+
 interface SpellDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,12 +109,19 @@ export function SpellDialog({
   existingSpell,
   onSuccess,
 }: SpellDialogProps) {
-  const { canSign } = useAccount();
+  const { canSign, pubkey } = useAccount();
 
   // Form state
   const [alias, setAlias] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  // Parameter configuration
+  const [parameterEnabled, setParameterEnabled] = useState(false);
+  const [parameterType, setParameterType] = useState<
+    "$pubkey" | "$event" | "$relay"
+  >("$pubkey");
+  const [parameterDefault, setParameterDefault] = useState<string>("$me");
 
   // Publishing/saving state
   const [publishingState, setPublishingState] =
@@ -96,13 +134,35 @@ export function SpellDialog({
       setAlias("alias" in existingSpell ? existingSpell.alias || "" : "");
       setName(existingSpell.name || "");
       setDescription(existingSpell.description || "");
+
+      // Load parameter configuration from existing spell
+      if ("parameterType" in existingSpell && existingSpell.parameterType) {
+        setParameterEnabled(true);
+        setParameterType(existingSpell.parameterType);
+        setParameterDefault(existingSpell.parameterDefault?.[0] || "$me");
+      } else if ("parameter" in existingSpell && existingSpell.parameter) {
+        setParameterEnabled(true);
+        setParameterType(existingSpell.parameter.type);
+        setParameterDefault(existingSpell.parameter.default?.[0] || "$me");
+      } else {
+        setParameterEnabled(false);
+      }
     } else if (mode === "create") {
       // Reset form for create mode
       setAlias("");
       setName("");
       setDescription("");
+
+      // Auto-detect parameter suggestion
+      const command = initialCommand || "";
+      const suggestion = detectParameterSuggestion(command);
+      if (suggestion) {
+        setParameterType(suggestion);
+        // Don't auto-enable, let user decide
+        setParameterEnabled(false);
+      }
     }
-  }, [mode, existingSpell, open]);
+  }, [mode, existingSpell, open, initialCommand]);
 
   // Form is always valid (all fields optional)
   const isFormValid = true;
@@ -148,6 +208,8 @@ export function SpellDialog({
         command,
         description: description.trim() || undefined,
         isPublished: false,
+        parameterType: parameterEnabled ? parameterType : undefined,
+        parameterDefault: parameterEnabled ? [parameterDefault] : undefined,
       });
 
       // Success!
@@ -216,6 +278,8 @@ export function SpellDialog({
         command,
         description: description.trim() || undefined,
         isPublished: false,
+        parameterType: parameterEnabled ? parameterType : undefined,
+        parameterDefault: parameterEnabled ? [parameterDefault] : undefined,
       });
 
       // 2. Use PublishSpellAction to handle signing and publishing
@@ -341,6 +405,136 @@ export function SpellDialog({
               disabled={isBusy}
               rows={3}
             />
+          </div>
+
+          {/* Parameter configuration */}
+          <div className="rounded-lg border border-border/50 p-4 space-y-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="parameter-enabled"
+                checked={parameterEnabled}
+                onCheckedChange={(checked) =>
+                  setParameterEnabled(checked as boolean)
+                }
+                disabled={isBusy}
+              />
+              <label
+                htmlFor="parameter-enabled"
+                className="text-sm font-medium flex items-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                Cast on any{" "}
+                {parameterType === "$pubkey"
+                  ? "profile"
+                  : parameterType === "$event"
+                    ? "event"
+                    : "relay"}
+              </label>
+            </div>
+
+            {parameterEnabled && (
+              <div className="grid gap-3 pl-6">
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="parameter-type"
+                    className="text-sm font-medium"
+                  >
+                    Target type
+                  </label>
+                  <div className="flex gap-4">
+                    {(
+                      [
+                        ["$pubkey", "Profile"],
+                        ["$event", "Event"],
+                        ["$relay", "Relay"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label
+                        key={value}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="parameter-type"
+                          value={value}
+                          checked={parameterType === value}
+                          onChange={(e) =>
+                            setParameterType(
+                              e.target.value as "$pubkey" | "$event" | "$relay",
+                            )
+                          }
+                          disabled={isBusy}
+                          className="cursor-pointer"
+                        />
+                        <span className="text-sm">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    {parameterType === "$pubkey" &&
+                      "Apply this spell to any user's profile"}
+                    {parameterType === "$event" &&
+                      "Apply this spell to any event"}
+                    {parameterType === "$relay" &&
+                      "Apply this spell to any relay"}
+                  </p>
+                </div>
+
+                {parameterType === "$pubkey" && (
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="parameter-default"
+                      className="text-sm font-medium"
+                    >
+                      Default value{" "}
+                      <span className="text-muted-foreground text-xs">
+                        (optional)
+                      </span>
+                    </label>
+                    <select
+                      id="parameter-default"
+                      value={parameterDefault}
+                      onChange={(e) => setParameterDefault(e.target.value)}
+                      disabled={isBusy}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="$me">Current user ($me)</option>
+                      {pubkey && (
+                        <option value={pubkey}>
+                          My pubkey ({pubkey.slice(0, 8)}...)
+                        </option>
+                      )}
+                    </select>
+                    <p className="text-muted-foreground text-xs">
+                      Value used when no argument provided
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!parameterEnabled &&
+              detectParameterSuggestion(
+                mode === "edit" && existingSpell
+                  ? existingSpell.command
+                  : initialCommand || "",
+              ) && (
+                <p className="text-muted-foreground text-xs pl-6">
+                  💡 This command uses{" "}
+                  {parameterType === "$pubkey"
+                    ? "a user"
+                    : parameterType === "$event"
+                      ? "an event"
+                      : "a relay"}
+                  . Enable this to make it work with any{" "}
+                  {parameterType === "$pubkey"
+                    ? "profile"
+                    : parameterType === "$event"
+                      ? "event"
+                      : "relay"}
+                  .
+                </p>
+              )}
           </div>
 
           {/* Command display (read-only, filtered to show only spell parts) */}

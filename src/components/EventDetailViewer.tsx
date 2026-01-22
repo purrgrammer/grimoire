@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { DetailKindRenderer } from "./nostr/kinds";
@@ -14,15 +14,97 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { nip19 } from "nostr-tools";
 import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { getTagValue } from "applesauce-core/helpers";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import { useGrimoire } from "@/core/state";
+import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
+import { EventFeed } from "./nostr/EventFeed";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
+import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
 
 export interface EventDetailViewerProps {
   pointer: EventPointer | AddressPointer;
+}
+
+interface SpellTabContentProps {
+  spellId: string;
+  spell: {
+    id: string;
+    name?: string;
+    command: string;
+    parameterType: "$pubkey" | "$event" | "$relay";
+    parameterDefault?: string[];
+    event?: any;
+  };
+  targetEventId: string;
+}
+
+/**
+ * SpellTabContent - Renders a parameterized spell applied to a specific event
+ */
+function SpellTabContent({
+  spellId,
+  spell,
+  targetEventId,
+}: SpellTabContentProps) {
+  // Decode spell and apply parameters
+  const { appliedFilter, relays } = useMemo(() => {
+    if (!targetEventId || !spell.event) {
+      return { appliedFilter: null, relays: [] };
+    }
+
+    try {
+      const parsed = decodeSpell(spell.event);
+      const applied = applySpellParameters(parsed, [targetEventId]);
+      return {
+        appliedFilter: applied,
+        relays: parsed.relays || [],
+      };
+    } catch (error) {
+      console.error("Failed to apply spell parameters:", error);
+      return { appliedFilter: null, relays: [] };
+    }
+  }, [spell.event, targetEventId]);
+
+  // Fetch events using the applied filter
+  const { events, loading, eoseReceived } = appliedFilter
+    ? useReqTimelineEnhanced(
+        `spell-${spellId}-${targetEventId}`,
+        appliedFilter,
+        relays,
+        { limit: appliedFilter.limit || 50, stream: true },
+      )
+    : {
+        events: [],
+        loading: false,
+        eoseReceived: false,
+      };
+
+  return (
+    <TabsContent value={spellId} className="flex-1 overflow-hidden m-0">
+      {!appliedFilter ? (
+        <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Unable to apply spell to this event</p>
+          </div>
+        </div>
+      ) : (
+        <EventFeed
+          events={events}
+          view="list"
+          loading={loading}
+          eoseReceived={eoseReceived}
+          stream={true}
+          enableFreeze={true}
+        />
+      )}
+    </TabsContent>
+  );
 }
 
 /**
@@ -34,6 +116,17 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
   const [showJson, setShowJson] = useState(false);
   const { copy: copyBech32, copied: copiedBech32 } = useCopy();
   const { relays: relayStates } = useRelayState();
+  const { state } = useGrimoire();
+
+  // Get user's parameterized spells for $event
+  const accountPubkey = state.activeAccount?.pubkey;
+  const userRelays =
+    state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) || [];
+  const { spells: eventSpells } = useUserParameterizedSpells(
+    accountPubkey,
+    "$event",
+    userRelays,
+  );
 
   // Loading state
   if (!event) {
@@ -170,11 +263,44 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
         </div>
       </div>
 
-      {/* Rendered Content - Focus Here */}
-      <div className="flex-1 overflow-y-auto">
-        <EventErrorBoundary event={event}>
-          <DetailKindRenderer event={event} />
-        </EventErrorBoundary>
+      {/* Rendered Content with Tabs */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <Tabs defaultValue="detail" className="flex flex-col h-full">
+          <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto">
+            <TabsTrigger
+              value="detail"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+            >
+              Detail
+            </TabsTrigger>
+            {eventSpells.map((spell) => (
+              <TabsTrigger
+                key={spell.id}
+                value={spell.id}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                {spell.name || spell.alias || "Untitled Spell"}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {/* Detail Tab Content */}
+          <TabsContent value="detail" className="flex-1 overflow-y-auto m-0">
+            <EventErrorBoundary event={event}>
+              <DetailKindRenderer event={event} />
+            </EventErrorBoundary>
+          </TabsContent>
+
+          {/* Spell Tab Contents */}
+          {eventSpells.map((spell) => (
+            <SpellTabContent
+              key={spell.id}
+              spellId={spell.id}
+              spell={spell}
+              targetEventId={event.id}
+            />
+          ))}
+        </Tabs>
       </div>
 
       {/* JSON Viewer Dialog */}
