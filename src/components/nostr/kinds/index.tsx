@@ -154,6 +154,9 @@ import { RelayDiscoveryRenderer } from "./RelayDiscoveryRenderer";
 import { RelayDiscoveryDetailRenderer } from "./RelayDiscoveryDetailRenderer";
 import { GoalRenderer } from "./GoalRenderer";
 import { GoalDetailRenderer } from "./GoalDetailRenderer";
+import { PollRenderer } from "./PollRenderer";
+import { PollDetailRenderer } from "./PollDetailRenderer";
+import { PollResponseRenderer } from "./PollResponseRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -173,7 +176,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   20: Kind20Renderer, // Picture (NIP-68)
   21: Kind21Renderer, // Video Event (NIP-71)
   22: Kind22Renderer, // Short Video (NIP-71)
+  1018: PollResponseRenderer, // Poll Response (NIP-88)
   1063: Kind1063Renderer, // File Metadata (NIP-94)
+  1068: PollRenderer, // Poll (NIP-88)
   1111: Kind1111Renderer, // Post (NIP-22)
   1222: VoiceMessageRenderer, // Voice Message (NIP-A0)
   1311: LiveChatMessageRenderer, // Live Chat Message (NIP-53)
@@ -286,6 +291,7 @@ const detailRenderers: Record<
   3: Kind3DetailView, // Contact List Detail
   8: BadgeAwardDetailRenderer, // Badge Award Detail (NIP-58)
   777: SpellDetailRenderer, // Spell Detail
+  1068: PollDetailRenderer, // Poll Detail (NIP-88)
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
