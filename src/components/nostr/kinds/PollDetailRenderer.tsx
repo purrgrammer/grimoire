@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { NostrEvent } from "@/types/nostr";
 import {
+  ListCheck,
   ListChecks,
   Clock,
   Users,
@@ -13,6 +14,7 @@ import { useGrimoire } from "@/core/state";
 import { Progress } from "@/components/ui/progress";
 import { UserName } from "../UserName";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelayLink } from "../RelayLink";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import {
   getPollQuestion,
@@ -102,7 +104,11 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
       <div className="flex flex-col gap-4">
         {/* Poll Type Badge */}
         <div className="flex items-center gap-2 text-muted-foreground">
-          <ListChecks className="size-5" />
+          {pollType === "multiplechoice" ? (
+            <ListChecks className="size-5" />
+          ) : (
+            <ListCheck className="size-5" />
+          )}
           <span className="text-sm uppercase tracking-wide">
             {pollType === "multiplechoice"
               ? "Multiple Choice"
@@ -228,16 +234,16 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
       {pollRelays.length > 0 && (
         <div className="flex flex-col gap-2 pt-4 border-t border-border">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Vote on these relays
+            Relays
           </h3>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-1">
             {pollRelays.map((relay) => (
-              <span
+              <RelayLink
                 key={relay}
-                className="px-2 py-1 text-xs font-mono bg-muted rounded"
-              >
-                {relay.replace(/^wss?:\/\//, "")}
-              </span>
+                url={relay}
+                showInboxOutbox={false}
+                className="text-sm"
+              />
             ))}
           </div>
         </div>

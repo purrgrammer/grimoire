@@ -3,7 +3,13 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { ListChecks, Clock, CheckCircle2, CircleDot } from "lucide-react";
+import {
+  ListCheck,
+  ListChecks,
+  Clock,
+  CheckCircle2,
+  CircleDot,
+} from "lucide-react";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import {
@@ -36,7 +42,11 @@ export function PollRenderer({ event }: BaseEventProps) {
       <div className="flex flex-col gap-3">
         {/* Poll Header */}
         <div className="flex items-center gap-2 text-muted-foreground">
-          <ListChecks className="size-4" />
+          {pollType === "multiplechoice" ? (
+            <ListChecks className="size-4" />
+          ) : (
+            <ListCheck className="size-4" />
+          )}
           <span className="text-xs uppercase tracking-wide">
             {pollType === "multiplechoice"
               ? "Multiple Choice"
