@@ -689,10 +689,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 className="gap-2 w-32"
               >
                 {isPublishing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Publishing...
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
