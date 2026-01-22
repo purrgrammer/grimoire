@@ -73,20 +73,22 @@ function SpellTabContent({
   const eventStore = useEventStore();
 
   // Fetch target pubkey's contacts (kind 3 contact list)
+  const contactListEvent = use$(
+    () =>
+      targetPubkey
+        ? eventStore.replaceable(kinds.Contacts, targetPubkey)
+        : undefined,
+    [targetPubkey, eventStore],
+  );
+
   const targetContacts = useMemo(() => {
-    if (!targetPubkey) return [];
+    if (!contactListEvent) return [];
 
     try {
-      const contactListEvent = eventStore.replaceable(
-        kinds.Contacts,
-        targetPubkey,
-      );
-      if (!contactListEvent) return [];
-
       // Extract pubkeys from p tags
       const contacts = contactListEvent.tags
-        .filter((tag) => tag[0] === "p" && tag[1])
-        .map((tag) => tag[1]);
+        .filter((tag: string[]) => tag[0] === "p" && tag[1])
+        .map((tag: string[]) => tag[1]);
 
       console.log(
         `[SpellTabContent:${spell.name || spellId}] Target contacts:`,
@@ -104,7 +106,7 @@ function SpellTabContent({
       );
       return [];
     }
-  }, [targetPubkey, eventStore, spell.name, spellId]);
+  }, [contactListEvent, targetPubkey, spell.name, spellId]);
 
   // Parse spell and get filter - handle both published (with event) and local (command-only) spells
   const parsed = useMemo(() => {

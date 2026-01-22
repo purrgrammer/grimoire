@@ -1299,7 +1299,6 @@ describe("Spell Conversion", () => {
 
       it("should work end-to-end: encode → decode → apply", () => {
         const hex1 = "a".repeat(64);
-        const hex2 = "b".repeat(64);
 
         // Create parameterized spell using $me as placeholder
         // Encoding will convert $me to $pubkey automatically
