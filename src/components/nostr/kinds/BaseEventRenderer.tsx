@@ -36,6 +36,8 @@ import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
 import { parseAddressPointer } from "@/lib/nip89-helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { getCommentReplyPointer } from "applesauce-common/helpers";
+import { parseChatCommand } from "@/lib/chat-parser";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
@@ -214,25 +216,86 @@ export function EventMenu({
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    // Special handling for kind 1111 comments - open chat with root event
+    if (event.kind === 1111) {
+      const rootPointer = getCommentReplyPointer(event);
+      if (rootPointer) {
+        // Encode root as nevent/naddr and parse
+        const seenRelaysSet = getSeenRelays(event);
+        const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-      // Open chat with NIP-10 thread protocol
-      addWindow("chat", {
-        protocol: "nip-10",
-        identifier: {
-          type: "thread",
-          value: {
-            id: event.id,
-            relays,
-            author: event.pubkey,
-            kind: event.kind,
-          },
-          relays,
-        },
+        let encoded: string;
+        // Convert CommentPointer to standard nip19 pointer types
+        if (
+          rootPointer.type === "address" &&
+          rootPointer.pubkey &&
+          rootPointer.identifier !== undefined
+        ) {
+          // CommentAddressPointer -> AddressPointer
+          encoded = nip19.naddrEncode({
+            kind: rootPointer.kind,
+            pubkey: rootPointer.pubkey,
+            identifier: rootPointer.identifier,
+            relays: rootPointer.relay ? [rootPointer.relay, ...relays] : relays,
+          });
+        } else if (rootPointer.type === "event" && rootPointer.id) {
+          // CommentEventPointer -> EventPointer
+          encoded = nip19.neventEncode({
+            id: rootPointer.id,
+            relays: rootPointer.relay ? [rootPointer.relay, ...relays] : relays,
+            author: rootPointer.pubkey,
+            kind: rootPointer.kind,
+          });
+        } else {
+          console.error("Unsupported comment root pointer type:", rootPointer);
+          return;
+        }
+
+        // Parse and open
+        try {
+          const result = parseChatCommand([encoded]);
+          addWindow("chat", {
+            protocol: result.protocol,
+            identifier: result.identifier,
+          });
+        } catch (err) {
+          console.error("Failed to open chat for comment root:", err);
+        }
+      }
+      return;
+    }
+
+    // For all other events, encode as nevent/naddr and let parser detect protocol
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+    let encoded: string;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      encoded = nip19.naddrEncode({
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+        relays: relays,
       });
+    } else {
+      encoded = nip19.neventEncode({
+        id: event.id,
+        author: event.pubkey,
+        kind: event.kind,
+        relays: relays,
+      });
+    }
+
+    // Parse and open
+    try {
+      const result = parseChatCommand([encoded]);
+      addWindow("chat", {
+        protocol: result.protocol,
+        identifier: result.identifier,
+      });
+    } catch (err) {
+      console.error("Failed to open chat for event:", err);
     }
   };
 
@@ -252,12 +315,10 @@ export function EventMenu({
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </DropdownMenuItem>
-        {event.kind === 1 && (
-          <DropdownMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          Chat
+        </DropdownMenuItem>
         {canSign && onReactClick && (
           <DropdownMenuItem onClick={onReactClick}>
             <SmilePlus className="size-4 mr-2" />
@@ -384,25 +445,86 @@ export function EventContextMenu({
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    // Special handling for kind 1111 comments - open chat with root event
+    if (event.kind === 1111) {
+      const rootPointer = getCommentReplyPointer(event);
+      if (rootPointer) {
+        // Encode root as nevent/naddr and parse
+        const seenRelaysSet = getSeenRelays(event);
+        const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-      // Open chat with NIP-10 thread protocol
-      addWindow("chat", {
-        protocol: "nip-10",
-        identifier: {
-          type: "thread",
-          value: {
-            id: event.id,
-            relays,
-            author: event.pubkey,
-            kind: event.kind,
-          },
-          relays,
-        },
+        let encoded: string;
+        // Convert CommentPointer to standard nip19 pointer types
+        if (
+          rootPointer.type === "address" &&
+          rootPointer.pubkey &&
+          rootPointer.identifier !== undefined
+        ) {
+          // CommentAddressPointer -> AddressPointer
+          encoded = nip19.naddrEncode({
+            kind: rootPointer.kind,
+            pubkey: rootPointer.pubkey,
+            identifier: rootPointer.identifier,
+            relays: rootPointer.relay ? [rootPointer.relay, ...relays] : relays,
+          });
+        } else if (rootPointer.type === "event" && rootPointer.id) {
+          // CommentEventPointer -> EventPointer
+          encoded = nip19.neventEncode({
+            id: rootPointer.id,
+            relays: rootPointer.relay ? [rootPointer.relay, ...relays] : relays,
+            author: rootPointer.pubkey,
+            kind: rootPointer.kind,
+          });
+        } else {
+          console.error("Unsupported comment root pointer type:", rootPointer);
+          return;
+        }
+
+        // Parse and open
+        try {
+          const result = parseChatCommand([encoded]);
+          addWindow("chat", {
+            protocol: result.protocol,
+            identifier: result.identifier,
+          });
+        } catch (err) {
+          console.error("Failed to open chat for comment root:", err);
+        }
+      }
+      return;
+    }
+
+    // For all other events, encode as nevent/naddr and let parser detect protocol
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+
+    let encoded: string;
+    if (isAddressableKind(event.kind)) {
+      const dTag = getTagValue(event, "d") || "";
+      encoded = nip19.naddrEncode({
+        kind: event.kind,
+        pubkey: event.pubkey,
+        identifier: dTag,
+        relays: relays,
       });
+    } else {
+      encoded = nip19.neventEncode({
+        id: event.id,
+        author: event.pubkey,
+        kind: event.kind,
+        relays: relays,
+      });
+    }
+
+    // Parse and open
+    try {
+      const result = parseChatCommand([encoded]);
+      addWindow("chat", {
+        protocol: result.protocol,
+        identifier: result.identifier,
+      });
+    } catch (err) {
+      console.error("Failed to open chat for event:", err);
     }
   };
 
@@ -418,12 +540,10 @@ export function EventContextMenu({
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </ContextMenuItem>
-        {event.kind === 1 && (
-          <ContextMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          Chat
+        </ContextMenuItem>
         {canSign && onReactClick && (
           <ContextMenuItem onClick={onReactClick}>
             <SmilePlus className="size-4 mr-2" />
