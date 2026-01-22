@@ -22,8 +22,7 @@ import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-import { mergeRelaySets } from "applesauce-core/helpers";
-import { getOutboxes } from "applesauce-core/helpers/mailboxes";
+import { mergeRelaySets, getOutboxes } from "applesauce-core/helpers";
 import {
   getEventPointerFromETag,
   parseReplaceableAddress,
@@ -170,6 +169,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         const fetchedRoot = await this.fetchEventByPointer(
           eventPointer,
           relayHints,
+          providedEvent, // Pass comment event for relay hint extraction
         );
         if (!fetchedRoot) {
           throw new Error("Comment root not found");
@@ -192,6 +192,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         const fetchedRoot = await this.fetchAddressableEvent(
           addressPointer,
           relayHints,
+          providedEvent, // Pass comment event for relay hint extraction
         );
         if (!fetchedRoot) {
           throw new Error("Comment root not found");
@@ -868,22 +869,95 @@ export class Nip22Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Helper: Fetch event by EventPointer
+   * Helper: Extract relay hints from comment event tags
+   * NIP-22 comments (kind 1111) may have relay hints in A/E tags
+   */
+  private extractRelayHintsFromComment(
+    comment: NostrEvent,
+    targetEventId?: string,
+    targetCoordinate?: string,
+  ): string[] {
+    const relays: string[] = [];
+
+    // Look for A-tag (addressable root) with relay hint
+    if (targetCoordinate) {
+      for (const tag of comment.tags) {
+        if (
+          (tag[0] === "A" || tag[0] === "a") &&
+          tag[1] === targetCoordinate &&
+          tag[2]
+        ) {
+          relays.push(tag[2]);
+        }
+      }
+    }
+
+    // Look for E-tag (regular event root) with relay hint
+    if (targetEventId) {
+      for (const tag of comment.tags) {
+        if (
+          (tag[0] === "E" || tag[0] === "e") &&
+          tag[1] === targetEventId &&
+          tag[2]
+        ) {
+          relays.push(tag[2]);
+        }
+      }
+    }
+
+    return relays;
+  }
+
+  /**
+   * Helper: Fetch event by EventPointer with improved relay selection
+   * Uses: relay hints from pointer, relay hints from comment tags, author's outbox relays
    */
   private async fetchEventByPointer(
     pointer: EventPointer,
     additionalHints: string[] = [],
+    commentEvent?: NostrEvent,
   ): Promise<NostrEvent | null> {
-    const relayHints = mergeRelaySets(pointer.relays || [], additionalHints);
-    return this.fetchEvent({ id: pointer.id, kind: pointer.kind }, relayHints);
+    // Merge relay hints from multiple sources
+    const pointerHints = pointer.relays || [];
+    const commentHints = commentEvent
+      ? this.extractRelayHintsFromComment(commentEvent, pointer.id)
+      : [];
+
+    // Get author's outbox relays if we know the author
+    let authorOutbox: string[] = [];
+    if (pointer.author) {
+      try {
+        const relayListEvent = await firstValueFrom(
+          eventStore.replaceable(10002, pointer.author, ""),
+          { defaultValue: undefined },
+        );
+        if (relayListEvent) {
+          authorOutbox = getOutboxes(relayListEvent);
+        }
+      } catch {
+        // Ignore errors fetching relay list
+      }
+    }
+
+    // Merge all hints (prioritize pointer hints, then comment hints, then author outbox)
+    const allHints = mergeRelaySets(
+      pointerHints,
+      commentHints,
+      authorOutbox.slice(0, 3), // Limit outbox to 3 relays
+      additionalHints,
+    );
+
+    return this.fetchEvent({ id: pointer.id, kind: pointer.kind }, allHints);
   }
 
   /**
-   * Helper: Fetch addressable event by AddressPointer
+   * Helper: Fetch addressable event by AddressPointer with improved relay selection
+   * Uses: relay hints from pointer, relay hints from comment tags, author's outbox relays
    */
   private async fetchAddressableEvent(
     pointer: AddressPointer,
     additionalHints: string[] = [],
+    commentEvent?: NostrEvent,
   ): Promise<NostrEvent | null> {
     const { kind, pubkey, identifier } = pointer;
 
@@ -894,10 +968,37 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     );
     if (cached) return cached;
 
-    // Not in store - fetch from relays
-    const relayHints = mergeRelaySets(pointer.relays || [], additionalHints);
+    // Merge relay hints from multiple sources
+    const pointerHints = pointer.relays || [];
+    const coordinate = `${kind}:${pubkey}:${identifier}`;
+    const commentHints = commentEvent
+      ? this.extractRelayHintsFromComment(commentEvent, undefined, coordinate)
+      : [];
+
+    // Get author's outbox relays
+    let authorOutbox: string[] = [];
+    try {
+      const relayListEvent = await firstValueFrom(
+        eventStore.replaceable(10002, pubkey, ""),
+        { defaultValue: undefined },
+      );
+      if (relayListEvent) {
+        authorOutbox = getOutboxes(relayListEvent);
+      }
+    } catch {
+      // Ignore errors fetching relay list
+    }
+
+    // Merge all hints (prioritize pointer hints, then comment hints, then author outbox)
+    const allHints = mergeRelaySets(
+      pointerHints,
+      commentHints,
+      authorOutbox.slice(0, 3), // Limit outbox to 3 relays
+      additionalHints,
+    );
+
     const relays =
-      relayHints.length > 0 ? relayHints : await this.getDefaultRelays();
+      allHints.length > 0 ? allHints : await this.getDefaultRelays();
 
     const filter: Filter = {
       kinds: [kind],

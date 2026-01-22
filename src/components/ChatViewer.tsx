@@ -69,6 +69,8 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import { getKindIcon } from "@/constants/kinds";
+import { getEventDisplayTitle } from "@/lib/event-title";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -831,6 +833,8 @@ export function ChatViewer({
   const handleNipClick = useCallback(() => {
     if (conversation?.protocol === "nip-10") {
       addWindow("nip", { number: 10 });
+    } else if (conversation?.protocol === "nip-22") {
+      addWindow("nip", { number: 22 });
     } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
@@ -906,6 +910,30 @@ export function ChatViewer({
     liveActivity?.hostPubkey,
   ]);
 
+  // Get root event for NIP-10 and NIP-22 to build custom title
+  // Must be called before any early returns (React Hooks rules)
+  const rootEventId =
+    (protocol === "nip-10" || protocol === "nip-22") && conversation
+      ? conversation.metadata?.rootEventId ||
+        conversation.metadata?.providedEventId
+      : undefined;
+
+  const rootEvent = use$(
+    () => (rootEventId ? eventStore.event(rootEventId) : undefined),
+    [rootEventId],
+  );
+
+  // Compute custom title for thread-based protocols (NIP-10, NIP-22)
+  const threadTitle = useMemo(() => {
+    if ((protocol !== "nip-10" && protocol !== "nip-22") || !rootEvent) {
+      return null;
+    }
+
+    const kindIcon = getKindIcon(rootEvent.kind);
+    const eventTitle = getEventDisplayTitle(rootEvent);
+    return { kindIcon, author: rootEvent.pubkey, eventTitle };
+  }, [protocol, rootEvent]);
+
   // Handle loading state
   if (!conversationResult || conversationResult.status === "loading") {
     return (
@@ -951,10 +979,28 @@ export function ChatViewer({
               <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
                   <button
-                    className="text-sm font-semibold truncate cursor-help text-left"
+                    className="text-sm font-semibold truncate cursor-help text-left flex items-center gap-1.5 min-w-0"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {threadTitle ? (
+                      <>
+                        {(() => {
+                          const KindIcon = threadTitle.kindIcon;
+                          return KindIcon ? (
+                            <KindIcon className="size-4 flex-shrink-0" />
+                          ) : null;
+                        })()}
+                        <UserName
+                          pubkey={threadTitle.author}
+                          className="text-sm font-semibold flex-shrink-0"
+                        />
+                        <span className="truncate">
+                          {threadTitle.eventTitle}
+                        </span>
+                      </>
+                    ) : (
+                      customTitle || conversation.title
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -988,7 +1034,9 @@ export function ChatViewer({
                     )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
+                      {(conversation.protocol === "nip-10" ||
+                        conversation.protocol === "nip-22" ||
+                        conversation.type === "group" ||
                         conversation.type === "live-chat") && (
                         <button
                           onClick={(e) => {
@@ -1000,11 +1048,14 @@ export function ChatViewer({
                           {conversation.protocol.toUpperCase()}
                         </button>
                       )}
-                      {(conversation.type === "group" ||
+                      {(conversation.protocol === "nip-10" ||
+                        conversation.protocol === "nip-22" ||
+                        conversation.type === "group" ||
                         conversation.type === "live-chat") && (
                         <span className="opacity-60">•</span>
                       )}
-                      {conversation.protocol === "nip-10" ? (
+                      {conversation.protocol === "nip-10" ||
+                      conversation.protocol === "nip-22" ? (
                         <span className="flex items-center gap-1 opacity-80">
                           <FileText className="size-3" />
                           Thread
@@ -1057,7 +1108,9 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
+            {(conversation.protocol === "nip-10" ||
+              conversation.protocol === "nip-22" ||
+              conversation.type === "group" ||
               conversation.type === "live-chat") && (
               <button
                 onClick={handleNipClick}
@@ -1083,7 +1136,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-22" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
