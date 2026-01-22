@@ -287,9 +287,17 @@ export function EventMenu({
       });
     }
 
+    // Debug: verify encoding includes kind
+    console.log("[openChatWindow] Opening chat for event:", {
+      id: event.id.slice(0, 8),
+      kind: event.kind,
+      encoded,
+    });
+
     // Parse and open
     try {
       const result = parseChatCommand([encoded]);
+      console.log("[openChatWindow] Adapter selected:", result.protocol);
       addWindow("chat", {
         protocol: result.protocol,
         identifier: result.identifier,
@@ -516,9 +524,17 @@ export function EventContextMenu({
       });
     }
 
+    // Debug: verify encoding includes kind
+    console.log("[openChatWindow] Opening chat for event:", {
+      id: event.id.slice(0, 8),
+      kind: event.kind,
+      encoded,
+    });
+
     // Parse and open
     try {
       const result = parseChatCommand([encoded]);
+      console.log("[openChatWindow] Adapter selected:", result.protocol);
       addWindow("chat", {
         protocol: result.protocol,
         identifier: result.identifier,

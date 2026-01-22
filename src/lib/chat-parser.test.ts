@@ -175,6 +175,28 @@ describe("parseChatCommand", () => {
   });
 
   describe("NIP-22 event comments (catch-all)", () => {
+    it("should parse kind 1068 nevent (file metadata) as NIP-22", () => {
+      const nevent = nip19.neventEncode({
+        id: "0000000000000000000000000000000000000000000000000000000000000001",
+        kind: 1068, // File metadata
+        author:
+          "0000000000000000000000000000000000000000000000000000000000000002",
+        relays: ["wss://relay.example.com"],
+      });
+
+      // Debug: verify kind is encoded
+      const decoded = nip19.decode(nevent);
+      if (decoded.type === "nevent") {
+        expect(decoded.data.kind).toBe(1068);
+      }
+
+      const result = parseChatCommand([nevent]);
+
+      expect(result.protocol).toBe("nip-22");
+      expect(result.identifier.type).toBe("thread");
+      expect(result.adapter.protocol).toBe("nip-22");
+    });
+
     it("should parse note1 format", () => {
       const eventId =
         "0000000000000000000000000000000000000000000000000000000000000001";
