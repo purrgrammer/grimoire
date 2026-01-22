@@ -15,7 +15,13 @@ export const CHAT_KINDS = [
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol = "nip-17" | "nip-28" | "nip-29" | "nip-53" | "nip-10";
+export type ChatProtocol =
+  | "nip-17"
+  | "nip-28"
+  | "nip-29"
+  | "nip-53"
+  | "nip-10"
+  | "nip-22";
 
 /**
  * Conversation type
@@ -78,11 +84,12 @@ export interface ConversationMetadata {
   encrypted?: boolean;
   giftWrapped?: boolean;
 
-  // NIP-10 thread
+  // NIP-10/NIP-22 thread
   rootEventId?: string; // Thread root event ID
   providedEventId?: string; // Original event from nevent (may be reply)
   threadDepth?: number; // Approximate depth of thread
   relays?: string[]; // Relays for this conversation
+  rootCoordinate?: string; // For addressable events: "kind:pubkey:d-tag"
 }
 
 /**

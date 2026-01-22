@@ -89,13 +89,13 @@ describe("parseChatCommand", () => {
       );
     });
 
-    it("should throw error for npub (NIP-C7 disabled)", () => {
+    it("should throw error for npub (not an event)", () => {
       expect(() => parseChatCommand(["npub1xyz"])).toThrow(
         /Unable to determine chat protocol/,
       );
     });
 
-    it("should throw error for note/nevent (NIP-28 not implemented)", () => {
+    it("should throw error for malformed note/nevent", () => {
       expect(() => parseChatCommand(["note1xyz"])).toThrow(
         /Unable to determine chat protocol/,
       );
@@ -171,6 +171,63 @@ describe("parseChatCommand", () => {
       const result = parseChatCommand([naddr]);
 
       expect(result.protocol).toBe("nip-29");
+    });
+  });
+
+  describe("NIP-22 event comments (catch-all)", () => {
+    it("should parse note1 format", () => {
+      const eventId =
+        "0000000000000000000000000000000000000000000000000000000000000001";
+      const note = nip19.noteEncode(eventId);
+
+      const result = parseChatCommand([note]);
+
+      // NIP-10 handles kind 1 notes specifically, so note1 goes to NIP-10
+      // For NIP-22, we need nevent with non-kind-1 kind
+      expect(result.protocol).toBe("nip-10"); // note1 defaults to NIP-10
+    });
+
+    it("should parse nevent for non-kind-1 events", () => {
+      const nevent = nip19.neventEncode({
+        id: "0000000000000000000000000000000000000000000000000000000000000001",
+        kind: 30023, // Long-form article
+        relays: ["wss://relay.example.com"],
+      });
+
+      const result = parseChatCommand([nevent]);
+
+      expect(result.protocol).toBe("nip-22");
+      expect(result.identifier.type).toBe("thread");
+      expect(result.adapter.protocol).toBe("nip-22");
+    });
+
+    it("should parse naddr for non-NIP-29/NIP-53 addressable events", () => {
+      const naddr = nip19.naddrEncode({
+        kind: 30023, // Long-form article (not 39000 or 30311)
+        pubkey:
+          "0000000000000000000000000000000000000000000000000000000000000001",
+        identifier: "my-article",
+        relays: ["wss://relay.example.com"],
+      });
+
+      const result = parseChatCommand([naddr]);
+
+      expect(result.protocol).toBe("nip-22");
+      expect(result.identifier.type).toBe("thread");
+      expect(result.adapter.protocol).toBe("nip-22");
+    });
+
+    it("should parse nevent without kind (defaults to NIP-10)", () => {
+      const nevent = nip19.neventEncode({
+        id: "0000000000000000000000000000000000000000000000000000000000000001",
+        relays: ["wss://relay.example.com"],
+      });
+
+      const result = parseChatCommand([nevent]);
+
+      // Without kind hint, NIP-10 accepts it (assumes kind 1 thread)
+      // Only nevents with explicit non-kind-1 kind hint go to NIP-22
+      expect(result.protocol).toBe("nip-10");
     });
   });
 });

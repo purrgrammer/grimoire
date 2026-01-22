@@ -25,6 +25,7 @@ import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getSemanticAuthor } from "@/lib/semantic-author";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
+import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
 import { useState, useEffect } from "react";
 
@@ -738,9 +739,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     const identifier = props.identifier as ProtocolIdentifier;
 
     // Get adapter and resolve conversation
-    // Currently only NIP-29 is supported
     const getAdapter = () => {
       switch (protocol) {
+        case "nip-22":
+          return new Nip22Adapter();
         case "nip-29":
           return new Nip29Adapter();
         default:
