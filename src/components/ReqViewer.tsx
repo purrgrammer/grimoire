@@ -18,6 +18,7 @@ import {
   Sparkles,
   Link as LinkIcon,
   Check,
+  Target,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
@@ -90,6 +91,27 @@ const MemoizedFeedEvent = memo(
   (prev, next) => prev.event.id === next.event.id,
 );
 
+/**
+ * Compact event ID display in query dropdown
+ * Shows truncated ID with click to open
+ */
+function EventIdPreview({ eventId }: { eventId: string }) {
+  const { addWindow } = useGrimoire();
+
+  const handleClick = useCallback(() => {
+    addWindow("open", { pointer: { id: eventId } });
+  }, [eventId, addWindow]);
+
+  return (
+    <code
+      className="text-xs font-mono cursor-crosshair hover:text-primary transition-colors"
+      onClick={handleClick}
+    >
+      {eventId.slice(0, 8)}...{eventId.slice(-4)}
+    </code>
+  );
+}
+
 interface ReqViewerProps {
   filter: NostrFilter;
   relays?: string[];
@@ -120,10 +142,14 @@ function QueryDropdown({
   const { copy: handleCopy, copied } = useCopy();
 
   // Expandable lists state
+  const [showAllIds, setShowAllIds] = useState(false);
   const [showAllAuthors, setShowAllAuthors] = useState(false);
   const [showAllPTags, setShowAllPTags] = useState(false);
   const [showAllETags, setShowAllETags] = useState(false);
   const [showAllTTags, setShowAllTTags] = useState(false);
+
+  // Get IDs for direct lookup (from -i flag)
+  const eventIds = filter.ids || [];
 
   // Get pubkeys for authors and #p tags
   const authorPubkeys = filter.authors || [];
@@ -154,6 +180,7 @@ function QueryDropdown({
   // Determine if we should use accordion for complex queries
   const isComplexQuery =
     (filter.kinds?.length || 0) +
+      eventIds.length +
       authorPubkeys.length +
       (filter.search ? 1 : 0) +
       tagCount >
@@ -170,6 +197,7 @@ function QueryDropdown({
           type="multiple"
           defaultValue={[
             "kinds",
+            "ids",
             "authors",
             "mentions",
             "time",
@@ -198,6 +226,35 @@ function QueryDropdown({
                       clickable
                     />
                   ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* IDs Section (direct event lookup) */}
+          {eventIds.length > 0 && (
+            <AccordionItem value="ids" className="border-0">
+              <AccordionTrigger className="py-2 hover:no-underline">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <Target className="size-3.5 text-muted-foreground" />
+                  Event IDs ({eventIds.length})
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1 ml-5">
+                  {eventIds
+                    .slice(0, showAllIds ? undefined : 3)
+                    .map((eventId) => (
+                      <EventIdPreview key={eventId} eventId={eventId} />
+                    ))}
+                  {eventIds.length > 3 && (
+                    <button
+                      onClick={() => setShowAllIds(!showAllIds)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {showAllIds ? "Show less" : `Show all ${eventIds.length}`}
+                    </button>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -465,6 +522,31 @@ function QueryDropdown({
                     clickable
                   />
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Event IDs (direct lookup) */}
+          {eventIds.length > 0 && (
+            <div className="">
+              <div className="flex items-center gap-2 text-xs font-semibold mb-1.5">
+                <Target className="size-3.5 text-muted-foreground" />
+                Event IDs ({eventIds.length})
+              </div>
+              <div className="ml-5 space-y-1">
+                {eventIds
+                  .slice(0, showAllIds ? undefined : 3)
+                  .map((eventId) => (
+                    <EventIdPreview key={eventId} eventId={eventId} />
+                  ))}
+                {eventIds.length > 3 && (
+                  <button
+                    onClick={() => setShowAllIds(!showAllIds)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {showAllIds ? "Show less" : `Show all ${eventIds.length}`}
+                  </button>
+                )}
               </div>
             </div>
           )}
