@@ -70,6 +70,41 @@ function SpellTabContent({
   targetPubkey,
 }: SpellTabContentProps) {
   const { state } = useGrimoire();
+  const eventStore = useEventStore();
+
+  // Fetch target pubkey's contacts (kind 3 contact list)
+  const targetContacts = useMemo(() => {
+    if (!targetPubkey) return [];
+
+    try {
+      const contactListEvent = eventStore.replaceable(
+        kinds.Contacts,
+        targetPubkey,
+      );
+      if (!contactListEvent) return [];
+
+      // Extract pubkeys from p tags
+      const contacts = contactListEvent.tags
+        .filter((tag) => tag[0] === "p" && tag[1])
+        .map((tag) => tag[1]);
+
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Target contacts:`,
+        {
+          count: contacts.length,
+          targetPubkey,
+        },
+      );
+
+      return contacts;
+    } catch (error) {
+      console.error(
+        `[SpellTabContent:${spell.name || spellId}] Failed to fetch contacts:`,
+        error,
+      );
+      return [];
+    }
+  }, [targetPubkey, eventStore, spell.name, spellId]);
 
   // Parse spell and get filter - handle both published (with event) and local (command-only) spells
   const parsed = useMemo(() => {
@@ -149,11 +184,15 @@ function SpellTabContent({
     if (!parsed || !targetPubkey) return null;
 
     try {
-      const applied = applySpellParameters(parsed, [targetPubkey]);
+      const applied = applySpellParameters(parsed, {
+        targetPubkey,
+        targetContacts,
+      });
       console.log(
         `[SpellTabContent:${spell.name || spellId}] Applied parameters:`,
         {
-          input: targetPubkey,
+          targetPubkey,
+          targetContactsCount: targetContacts.length,
           result: applied,
         },
       );
@@ -165,7 +204,7 @@ function SpellTabContent({
       );
       return null;
     }
-  }, [parsed, targetPubkey, spell.name, spellId]);
+  }, [parsed, targetPubkey, targetContacts, spell.name, spellId]);
 
   // Resolve relays - use explicit relays from spell, or use NIP-65 outbox selection
   const fallbackRelays = useMemo(

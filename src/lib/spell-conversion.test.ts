@@ -1014,22 +1014,9 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "a".repeat(64);
-          const result = applySpellParameters(parsed, [hex]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex });
 
           expect(result.authors).toEqual([hex]);
-        });
-
-        it("should substitute $pubkey with multiple values", () => {
-          const parsed = {
-            filter: { kinds: [1], authors: ["$pubkey"] },
-            parameter: { type: "$pubkey" as const },
-          } as any;
-
-          const hex1 = "a".repeat(64);
-          const hex2 = "b".repeat(64);
-          const result = applySpellParameters(parsed, [hex1, hex2]);
-
-          expect(result.authors).toEqual([hex1, hex2]);
         });
 
         it("should substitute $pubkey in #p tag filters", () => {
@@ -1039,7 +1026,7 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "c".repeat(64);
-          const result = applySpellParameters(parsed, [hex]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex });
 
           expect(result["#p"]).toEqual([hex]);
         });
@@ -1051,7 +1038,7 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "d".repeat(64);
-          const result = applySpellParameters(parsed, [hex]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex });
 
           expect(result["#P"]).toEqual([hex]);
         });
@@ -1064,19 +1051,19 @@ describe("Spell Conversion", () => {
             parameter: { type: "$pubkey" as const },
           } as any;
 
-          const result = applySpellParameters(parsed, [hex2]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex2 });
 
           expect(result.authors).toEqual([hex1, hex2]);
         });
 
-        it("should use default values when no args provided", () => {
+        it("should use default values when no target provided", () => {
           const hex = "a".repeat(64);
           const parsed = {
             filter: { kinds: [1], authors: ["$pubkey"] },
             parameter: { type: "$pubkey" as const, default: [hex] },
           } as any;
 
-          const result = applySpellParameters(parsed, []);
+          const result = applySpellParameters(parsed, {});
 
           expect(result.authors).toEqual([hex]);
         });
@@ -1090,7 +1077,9 @@ describe("Spell Conversion", () => {
           } as any;
 
           const eventId = "abc123def456";
-          const result = applySpellParameters(parsed, [eventId]);
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+          });
 
           expect(result["#e"]).toEqual([eventId]);
         });
@@ -1102,7 +1091,7 @@ describe("Spell Conversion", () => {
           } as any;
 
           const addr = "30023:pubkey:article";
-          const result = applySpellParameters(parsed, [addr]);
+          const result = applySpellParameters(parsed, { targetEventId: addr });
 
           expect(result["#a"]).toEqual([addr]);
         });
@@ -1114,22 +1103,11 @@ describe("Spell Conversion", () => {
           } as any;
 
           const eventId = "abc123def456";
-          const result = applySpellParameters(parsed, [eventId]);
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+          });
 
           expect(result.ids).toEqual([eventId]);
-        });
-
-        it("should substitute $event with multiple values", () => {
-          const parsed = {
-            filter: { kinds: [1], "#e": ["$event"] },
-            parameter: { type: "$event" as const },
-          } as any;
-
-          const event1 = "abc123";
-          const event2 = "def456";
-          const result = applySpellParameters(parsed, [event1, event2]);
-
-          expect(result["#e"]).toEqual([event1, event2]);
         });
       });
 
@@ -1141,22 +1119,9 @@ describe("Spell Conversion", () => {
           } as any;
 
           const relay = "wss://relay.example.com/";
-          const result = applySpellParameters(parsed, [relay]);
+          const result = applySpellParameters(parsed, { targetRelay: relay });
 
           expect(result["#r"]).toEqual([relay]);
-        });
-
-        it("should substitute $relay with multiple values", () => {
-          const parsed = {
-            filter: { kinds: [1], "#r": ["$relay"] },
-            parameter: { type: "$relay" as const },
-          } as any;
-
-          const relay1 = "wss://relay1.com/";
-          const relay2 = "wss://relay2.com/";
-          const result = applySpellParameters(parsed, [relay1, relay2]);
-
-          expect(result["#r"]).toEqual([relay1, relay2]);
         });
       });
 
@@ -1166,7 +1131,9 @@ describe("Spell Conversion", () => {
             filter: { kinds: [1], authors: ["abc123"] },
           } as any;
 
-          const result = applySpellParameters(parsed, ["def456"]);
+          const result = applySpellParameters(parsed, {
+            targetPubkey: "def456",
+          });
 
           expect(result).toEqual({ kinds: [1], authors: ["abc123"] });
         });
@@ -1177,8 +1144,8 @@ describe("Spell Conversion", () => {
             parameter: { type: "$pubkey" as const },
           } as any;
 
-          expect(() => applySpellParameters(parsed, [])).toThrow(
-            "Parameterized spell requires $pubkey argument(s)",
+          expect(() => applySpellParameters(parsed, {})).toThrow(
+            "Parameterized $pubkey spell requires target pubkey",
           );
         });
 
@@ -1190,7 +1157,7 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "a".repeat(64);
-          applySpellParameters(parsed, [hex]);
+          applySpellParameters(parsed, { targetPubkey: hex });
 
           // Original should be unchanged
           expect(original.authors).toEqual(["$pubkey"]);
@@ -1203,7 +1170,7 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "a".repeat(64);
-          const result = applySpellParameters(parsed, [hex]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex });
 
           expect(result.authors).toEqual([]);
         });
@@ -1215,10 +1182,84 @@ describe("Spell Conversion", () => {
           } as any;
 
           const hex = "a".repeat(64);
-          const result = applySpellParameters(parsed, [hex]);
+          const result = applySpellParameters(parsed, { targetPubkey: hex });
 
           expect(result.authors).toBeUndefined();
           expect(result.kinds).toEqual([1]);
+        });
+      });
+
+      describe("Implicit $me and $contacts resolution", () => {
+        it("should resolve $me to targetPubkey", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$me"] },
+          } as any;
+
+          const targetPubkey = "a".repeat(64);
+          const result = applySpellParameters(parsed, { targetPubkey });
+
+          expect(result.authors).toEqual([targetPubkey]);
+        });
+
+        it("should resolve $contacts to targetContacts array", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$contacts"] },
+          } as any;
+
+          const contact1 = "a".repeat(64);
+          const contact2 = "b".repeat(64);
+          const result = applySpellParameters(parsed, {
+            targetContacts: [contact1, contact2],
+          });
+
+          expect(result.authors).toEqual([contact1, contact2]);
+        });
+
+        it("should resolve both $me and $contacts in same filter", () => {
+          const parsed = {
+            filter: { kinds: [1], authors: ["$me", "$contacts"] },
+          } as any;
+
+          const targetPubkey = "a".repeat(64);
+          const contact1 = "b".repeat(64);
+          const contact2 = "c".repeat(64);
+          const result = applySpellParameters(parsed, {
+            targetPubkey,
+            targetContacts: [contact1, contact2],
+          });
+
+          expect(result.authors).toEqual([targetPubkey, contact1, contact2]);
+        });
+
+        it("should resolve $me and $contacts in #p tags", () => {
+          const parsed = {
+            filter: { kinds: [1], "#p": ["$me", "$contacts"] },
+          } as any;
+
+          const targetPubkey = "a".repeat(64);
+          const contact1 = "b".repeat(64);
+          const result = applySpellParameters(parsed, {
+            targetPubkey,
+            targetContacts: [contact1],
+          });
+
+          expect(result["#p"]).toEqual([targetPubkey, contact1]);
+        });
+
+        it("should preserve other values when resolving $me/$contacts", () => {
+          const otherPubkey = "z".repeat(64);
+          const parsed = {
+            filter: { kinds: [1], authors: [otherPubkey, "$me", "$contacts"] },
+          } as any;
+
+          const targetPubkey = "a".repeat(64);
+          const contact = "b".repeat(64);
+          const result = applySpellParameters(parsed, {
+            targetPubkey,
+            targetContacts: [contact],
+          });
+
+          expect(result.authors).toEqual([otherPubkey, targetPubkey, contact]);
         });
       });
     });
@@ -1284,11 +1325,11 @@ describe("Spell Conversion", () => {
         // Filter should now have $pubkey placeholder
         expect(decoded.filter.authors).toEqual(["$pubkey"]);
 
-        // Apply with arguments
-        const filter = applySpellParameters(decoded, [hex1, hex2]);
+        // Apply with single target pubkey
+        const filter = applySpellParameters(decoded, { targetPubkey: hex1 });
 
         expect(filter.kinds).toEqual([1]);
-        expect(filter.authors).toEqual([hex1, hex2]);
+        expect(filter.authors).toEqual([hex1]);
       });
 
       it("should handle complex parameterized spell", () => {
@@ -1316,7 +1357,7 @@ describe("Spell Conversion", () => {
         expect(decoded.filter.authors).toEqual(["$pubkey"]);
 
         const hex = "c".repeat(64);
-        const filter = applySpellParameters(decoded, [hex]);
+        const filter = applySpellParameters(decoded, { targetPubkey: hex });
 
         expect(filter.kinds).toEqual([1, 30023]);
         expect(filter.authors).toEqual([hex]);

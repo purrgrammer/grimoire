@@ -115,9 +115,11 @@ function SpellTabContent({
     if (!parsed || !targetRelay) return null;
 
     try {
-      const applied = applySpellParameters(parsed, [targetRelay]);
+      const applied = applySpellParameters(parsed, {
+        targetRelay,
+      });
       console.log(`[RelaySpell:${spell.name || spellId}] Applied parameters:`, {
-        input: targetRelay,
+        targetRelay,
         result: applied,
       });
       return applied;

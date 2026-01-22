@@ -506,115 +506,137 @@ export function reconstructCommand(
  * Apply parameter values to a parameterized spell
  * Substitutes parameter placeholders with actual values
  *
- * @param parsed - Parsed spell (must have parameter configuration)
- * @param args - Arguments to substitute (if empty, uses defaults)
+ * For $pubkey spells:
+ * - $me is replaced with targetPubkey
+ * - $contacts is replaced with targetContacts
+ * - $pubkey is replaced with targetPubkey (for explicitly parameterized spells)
+ *
+ * @param parsed - Parsed spell
+ * @param context - Context for substitution (pubkey, contacts, or event/relay IDs)
  * @returns Filter with parameters applied
  */
 export function applySpellParameters(
   parsed: Pick<ParsedSpell, "filter" | "parameter">,
-  args: string[] = [],
+  context: {
+    targetPubkey?: string;
+    targetContacts?: string[];
+    targetEventId?: string;
+    targetRelay?: string;
+  } = {},
 ): NostrFilter {
-  if (!parsed.parameter) {
-    // Not an explicitly parameterized spell
-    // Check if we have args and the filter uses $me or $contacts (implicit parameterization)
-    if (args.length > 0) {
-      const filter: NostrFilter = { ...parsed.filter };
-
-      // Substitute $me and $contacts with provided pubkey(s)
-      if (filter.authors) {
-        filter.authors = filter.authors.flatMap((author) =>
-          author === "$me" || author === "$contacts" ? args : [author],
-        );
-      }
-
-      if (filter["#p"]) {
-        filter["#p"] = filter["#p"].flatMap((p) =>
-          p === "$me" || p === "$contacts" ? args : [p],
-        );
-      }
-
-      if (filter["#P"]) {
-        filter["#P"] = filter["#P"].flatMap((p) =>
-          p === "$me" || p === "$contacts" ? args : [p],
-        );
-      }
-
-      return filter;
-    }
-
-    // No parameter and no args, return filter as-is
-    return parsed.filter;
-  }
-
-  // Use provided args or fall back to defaults
-  const values = args.length > 0 ? args : parsed.parameter.default || [];
-
-  if (values.length === 0) {
-    throw new Error(
-      `Parameterized spell requires ${parsed.parameter.type} argument(s)`,
-    );
-  }
+  const {
+    targetPubkey,
+    targetContacts = [],
+    targetEventId,
+    targetRelay,
+  } = context;
 
   // Clone the filter
   const filter: NostrFilter = { ...parsed.filter };
 
-  // Apply substitution based on parameter type
-  switch (parsed.parameter.type) {
-    case "$pubkey":
-      // Substitute in authors array
-      if (filter.authors) {
-        filter.authors = filter.authors.flatMap((author) =>
-          author === "$pubkey" ? values : [author],
-        );
+  // Handle explicitly parameterized spells
+  if (parsed.parameter) {
+    switch (parsed.parameter.type) {
+      case "$pubkey": {
+        const values = targetPubkey
+          ? [targetPubkey]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error("Parameterized $pubkey spell requires target pubkey");
+        }
+
+        // Substitute $pubkey placeholders
+        if (filter.authors) {
+          filter.authors = filter.authors.flatMap((author) =>
+            author === "$pubkey" ? values : [author],
+          );
+        }
+        if (filter["#p"]) {
+          filter["#p"] = filter["#p"].flatMap((p) =>
+            p === "$pubkey" ? values : [p],
+          );
+        }
+        if (filter["#P"]) {
+          filter["#P"] = filter["#P"].flatMap((p) =>
+            p === "$pubkey" ? values : [p],
+          );
+        }
+        break;
       }
 
-      // Substitute in #p tag filters
-      if (filter["#p"]) {
-        filter["#p"] = filter["#p"].flatMap((p) =>
-          p === "$pubkey" ? values : [p],
-        );
+      case "$event": {
+        const values = targetEventId
+          ? [targetEventId]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error(
+            "Parameterized $event spell requires target event ID",
+          );
+        }
+
+        if (filter["#e"]) {
+          filter["#e"] = filter["#e"].flatMap((e) =>
+            e === "$event" ? values : [e],
+          );
+        }
+        if (filter["#a"]) {
+          filter["#a"] = filter["#a"].flatMap((a) =>
+            a === "$event" ? values : [a],
+          );
+        }
+        if (filter.ids) {
+          filter.ids = filter.ids.flatMap((id) =>
+            id === "$event" ? values : [id],
+          );
+        }
+        break;
       }
 
-      // Substitute in #P tag filters
-      if (filter["#P"]) {
-        filter["#P"] = filter["#P"].flatMap((p) =>
-          p === "$pubkey" ? values : [p],
-        );
-      }
-      break;
+      case "$relay": {
+        const values = targetRelay
+          ? [targetRelay]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error("Parameterized $relay spell requires target relay");
+        }
 
-    case "$event":
-      // Substitute in #e tag filters
-      if (filter["#e"]) {
-        filter["#e"] = filter["#e"].flatMap((e) =>
-          e === "$event" ? values : [e],
-        );
+        if (filter["#r"]) {
+          filter["#r"] = filter["#r"].flatMap((r) =>
+            r === "$relay" ? values : [r],
+          );
+        }
+        break;
       }
+    }
+  }
 
-      // Substitute in #a tag filters
-      if (filter["#a"]) {
-        filter["#a"] = filter["#a"].flatMap((a) =>
-          a === "$event" ? values : [a],
-        );
-      }
+  // Handle implicit parameterization ($me and $contacts)
+  // $me → targetPubkey
+  // $contacts → targetContacts
+  if (targetPubkey || targetContacts.length > 0) {
+    if (filter.authors) {
+      filter.authors = filter.authors.flatMap((author) => {
+        if (author === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (author === "$contacts") return targetContacts;
+        return [author];
+      });
+    }
 
-      // Substitute in ids array
-      if (filter.ids) {
-        filter.ids = filter.ids.flatMap((id) =>
-          id === "$event" ? values : [id],
-        );
-      }
-      break;
+    if (filter["#p"]) {
+      filter["#p"] = filter["#p"].flatMap((p) => {
+        if (p === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (p === "$contacts") return targetContacts;
+        return [p];
+      });
+    }
 
-    case "$relay":
-      // Relay parameters are handled differently
-      // They could affect relay hints or #r tag filters
-      if (filter["#r"]) {
-        filter["#r"] = filter["#r"].flatMap((r) =>
-          r === "$relay" ? values : [r],
-        );
-      }
-      break;
+    if (filter["#P"]) {
+      filter["#P"] = filter["#P"].flatMap((p) => {
+        if (p === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (p === "$contacts") return targetContacts;
+        return [p];
+      });
+    }
   }
 
   return filter;

@@ -129,9 +129,11 @@ function SpellTabContent({
     if (!parsed || !targetEventId) return null;
 
     try {
-      const applied = applySpellParameters(parsed, [targetEventId]);
+      const applied = applySpellParameters(parsed, {
+        targetEventId,
+      });
       console.log(`[EventSpell:${spell.name || spellId}] Applied parameters:`, {
-        input: targetEventId,
+        targetEventId,
         result: applied,
       });
       return applied;
