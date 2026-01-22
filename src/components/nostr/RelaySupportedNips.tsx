@@ -1,5 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { NIPBadge } from "@/components/NIPBadge";
+import { FileText } from "lucide-react";
 
 interface RelaySupportedNipsProps {
   nips: number[];
@@ -17,7 +18,8 @@ export function RelaySupportedNips({ nips }: RelaySupportedNipsProps) {
 
   return (
     <div className="space-y-2">
-      <Label className="text-muted-foreground">
+      <Label className="flex items-center gap-2 text-muted-foreground">
+        <FileText className="size-4" />
         Supported NIPs ({nips.length})
       </Label>
       <div className="flex flex-wrap gap-1.5">
