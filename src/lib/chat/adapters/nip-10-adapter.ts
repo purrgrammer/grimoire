@@ -943,9 +943,11 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     repostEvent: NostrEvent,
     conversationId: string,
   ): Message {
-    // Find what event is being reposted (e-tag)
+    // Find what event is being reposted (e-tag) - use full pointer with relay hints
     const eTag = repostEvent.tags.find((t) => t[0] === "e");
-    const replyTo = eTag?.[1];
+    const replyTo = eTag
+      ? (getEventPointerFromETag(eTag) ?? undefined)
+      : undefined;
 
     return {
       id: repostEvent.id,
