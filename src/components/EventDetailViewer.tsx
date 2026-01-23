@@ -15,6 +15,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Button } from "./ui/button";
 import { nip19 } from "nostr-tools";
 import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";

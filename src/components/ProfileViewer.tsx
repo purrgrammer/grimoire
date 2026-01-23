@@ -27,6 +27,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Button } from "./ui/button";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
