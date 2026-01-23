@@ -88,7 +88,7 @@ export function SpellHeader({
         {/* Event Count (with export) */}
         <EventCountDropdown
           events={events}
-          defaultFilename={exportFilename || spellName}
+          defaultFilename={exportFilename || "spell-events"}
         />
 
         {/* Relay Count */}
