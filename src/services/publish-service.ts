@@ -281,10 +281,22 @@ class PublishService {
       publishEvent.results.set(relay, { status: "publishing" });
 
       try {
-        await pool.publish([relay], event);
-        publishEvent.results.set(relay, { status: "success" });
-        this.emitStatus(publishId, relay, "success");
-        return { relay, success: true as const };
+        // pool.publish returns array of { from: string, ok: boolean, message?: string }
+        const responses = await pool.publish([relay], event);
+        const response = responses[0];
+
+        // Check if relay accepted the event
+        if (response && response.ok) {
+          publishEvent.results.set(relay, { status: "success" });
+          this.emitStatus(publishId, relay, "success");
+          return { relay, success: true as const };
+        } else {
+          // Relay rejected the event
+          const error = response?.message || "Relay rejected event";
+          publishEvent.results.set(relay, { status: "error", error });
+          this.emitStatus(publishId, relay, "error", error);
+          return { relay, success: false as const, error };
+        }
       } catch (err) {
         const error = err instanceof Error ? err.message : "Unknown error";
         publishEvent.results.set(relay, { status: "error", error });

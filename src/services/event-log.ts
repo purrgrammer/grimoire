@@ -282,6 +282,22 @@ class EventLogService {
    * Handle a publish event from PublishService
    */
   private handlePublishEvent(event: PublishEvent): void {
+    // Check if we already have an entry for this publish (avoid duplicates)
+    const existingEntryId = this.publishIdToEntryId.get(event.id);
+    if (existingEntryId) {
+      // Update existing entry instead of creating a new one
+      const entryIndex = this.entries.findIndex(
+        (e) => e.id === existingEntryId && e.type === "PUBLISH",
+      );
+      if (entryIndex !== -1) {
+        const entry = this.entries[entryIndex] as PublishLogEntry;
+        entry.relayStatus = new Map(event.results);
+        entry.status = this.calculatePublishStatus(event.results);
+        this.entriesSubject.next([...this.entries]);
+      }
+      return;
+    }
+
     const entryId = this.generateId();
 
     // Create initial publish entry
