@@ -6,7 +6,31 @@ import type {
   SpellEvent,
 } from "@/types/spell";
 import type { NostrFilter } from "@/types/nostr";
+import type { NostrEvent } from "@/types/nostr";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
+import { isAddressableKind } from "./nostr-kinds";
+import { getTagValue } from "applesauce-core/helpers";
+
+/**
+ * Construct an address coordinate from an event if it's addressable
+ * Returns coordinate in format: kind:pubkey:d-tag
+ *
+ * For replaceable events (10000-19999): kind:pubkey:
+ * For parameterized replaceable events (30000-39999): kind:pubkey:d-tag
+ *
+ * @param event - Nostr event
+ * @returns Coordinate string or null if not addressable
+ */
+export function getEventCoordinate(event: NostrEvent): string | null {
+  if (!isAddressableKind(event.kind)) {
+    return null;
+  }
+
+  // Get d-tag value (empty string for simple replaceable events)
+  const dTag = getTagValue(event, "d") || "";
+
+  return `${event.kind}:${event.pubkey}:${dTag}`;
+}
 
 /**
  * Simple tokenization that doesn't expand shell variables
@@ -511,8 +535,12 @@ export function reconstructCommand(
  * - $contacts is replaced with targetContacts
  * - $pubkey is replaced with targetPubkey (for explicitly parameterized spells)
  *
+ * For $event spells:
+ * - If targetAddress is provided (replaceable events), uses #a tags instead of #e tags
+ * - This ensures replaceable events are referenced by coordinate rather than ID
+ *
  * @param parsed - Parsed spell
- * @param context - Context for substitution (pubkey, contacts, or event/relay IDs)
+ * @param context - Context for substitution (pubkey, contacts, event ID/address, or relay)
  * @returns Filter with parameters applied
  */
 export function applySpellParameters(
@@ -521,6 +549,7 @@ export function applySpellParameters(
     targetPubkey?: string;
     targetContacts?: string[];
     targetEventId?: string;
+    targetAddress?: string;
     targetRelay?: string;
   } = {},
 ): NostrFilter {
@@ -528,6 +557,7 @@ export function applySpellParameters(
     targetPubkey,
     targetContacts = [],
     targetEventId,
+    targetAddress,
     targetRelay,
   } = context;
 
@@ -576,21 +606,64 @@ export function applySpellParameters(
           );
         }
 
-        // Substitute $event in ids
+        // For replaceable events, we use address coordinates instead of event IDs in tags
+        const useAddress = !!targetAddress;
+        const addressValues = targetAddress ? [targetAddress] : [];
+
+        // Substitute $event in ids (always use event ID for direct lookups)
         if (filter.ids) {
           filter.ids = filter.ids.flatMap((id) =>
             id === "$event" ? values : [id],
           );
         }
 
-        // Substitute $event in all single-letter tag filters (#e, #a, etc.)
+        // Substitute $event in all single-letter tag filters
+        // For #e tags on replaceable events, convert to #a tags with address coordinate
         for (const key in filter) {
           if (key.startsWith("#") && key.length === 2) {
             const tagArray = filter[key as keyof NostrFilter] as string[];
             if (Array.isArray(tagArray)) {
-              (filter as any)[key] = tagArray.flatMap((val) =>
-                val === "$event" ? values : [val],
+              // Check if this filter has $event placeholder
+              const hasEventPlaceholder = tagArray.some(
+                (val) => val === "$event",
               );
+
+              if (hasEventPlaceholder) {
+                // Special handling for #e tags with replaceable events
+                if (key === "#e" && useAddress) {
+                  // Move substitutions to #a tags for replaceable events
+                  const substituted = tagArray.flatMap(
+                    (val) => (val === "$event" ? [] : [val]), // Remove $event from #e
+                  );
+                  if (substituted.length > 0 || tagArray.length === 1) {
+                    // Only keep #e if it has non-placeholder values
+                    (filter as any)[key] =
+                      substituted.length > 0 ? substituted : undefined;
+                  }
+                  // Add to #a tags
+                  const existingA = (filter as any)["#a"] || [];
+                  (filter as any)["#a"] = [...existingA, ...addressValues];
+                } else {
+                  // Normal substitution for other tags
+                  (filter as any)[key] = tagArray.flatMap((val) =>
+                    val === "$event"
+                      ? useAddress && key === "#a"
+                        ? addressValues
+                        : values
+                      : [val],
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // Clean up empty tag filters
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter];
+            if (Array.isArray(tagArray) && tagArray.length === 0) {
+              delete (filter as any)[key];
             }
           }
         }

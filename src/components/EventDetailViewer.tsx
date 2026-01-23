@@ -29,6 +29,7 @@ import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import {
   applySpellParameters,
   detectCommandType,
+  getEventCoordinate,
 } from "@/lib/spell-conversion";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { KindBadge } from "./KindBadge";
@@ -70,14 +71,20 @@ function SpellTabContent({
 
   // Apply parameters to get final filter
   const appliedFilter = useMemo(() => {
-    if (!parsed || !targetEventId) return null;
+    if (!parsed || !targetEventId || !targetEvent) return null;
 
     try {
+      // For replaceable events, get the address coordinate (kind:pubkey:d-tag)
+      // This ensures we reference them by address instead of event ID in filters
+      const targetAddress = getEventCoordinate(targetEvent);
+
       const applied = applySpellParameters(parsed, {
         targetEventId,
+        targetAddress: targetAddress || undefined,
       });
       console.log(`[EventSpell:${spell.name || spellId}] Applied parameters:`, {
         targetEventId,
+        targetAddress,
         result: applied,
       });
       return applied;
@@ -88,7 +95,7 @@ function SpellTabContent({
       );
       return null;
     }
-  }, [parsed, targetEventId, spell.name, spellId]);
+  }, [parsed, targetEventId, targetEvent, spell.name, spellId]);
 
   // Resolve relays - use explicit relays from spell, or use relay hints from target event
   const finalRelays = useMemo(() => {

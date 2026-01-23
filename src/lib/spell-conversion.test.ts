@@ -3,8 +3,10 @@ import {
   encodeSpell,
   decodeSpell,
   applySpellParameters,
+  getEventCoordinate,
 } from "./spell-conversion";
 import type { SpellEvent } from "@/types/spell";
+import type { NostrEvent } from "@/types/nostr";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 describe("Spell Conversion", () => {
@@ -1005,6 +1007,98 @@ describe("Spell Conversion", () => {
       });
     });
 
+    describe("getEventCoordinate", () => {
+      it("should return null for regular events", () => {
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey: "a".repeat(64),
+          created_at: 1234567890,
+          kind: 1, // Regular kind
+          tags: [],
+          content: "Test",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBeNull();
+      });
+
+      it("should return coordinate for simple replaceable events (kind 0)", () => {
+        const pubkey = "a".repeat(64);
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey,
+          created_at: 1234567890,
+          kind: 0, // Metadata - simple replaceable
+          tags: [],
+          content: "{}",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBe(`0:${pubkey}:`);
+      });
+
+      it("should return coordinate for simple replaceable events (kind 10002)", () => {
+        const pubkey = "b".repeat(64);
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey,
+          created_at: 1234567890,
+          kind: 10002, // Relay list - simple replaceable
+          tags: [],
+          content: "",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBe(`10002:${pubkey}:`);
+      });
+
+      it("should return coordinate for parameterized replaceable events with d-tag", () => {
+        const pubkey = "c".repeat(64);
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey,
+          created_at: 1234567890,
+          kind: 30023, // Long-form content - parameterized replaceable
+          tags: [["d", "my-article-slug"]],
+          content: "Article content",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBe(
+          `30023:${pubkey}:my-article-slug`,
+        );
+      });
+
+      it("should return coordinate with empty d-tag for parameterized replaceable without d-tag", () => {
+        const pubkey = "d".repeat(64);
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey,
+          created_at: 1234567890,
+          kind: 30078, // App data - parameterized replaceable
+          tags: [],
+          content: "{}",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBe(`30078:${pubkey}:`);
+      });
+
+      it("should return null for ephemeral events", () => {
+        const event: NostrEvent = {
+          id: "test123",
+          pubkey: "e".repeat(64),
+          created_at: 1234567890,
+          kind: 20000, // Ephemeral
+          tags: [],
+          content: "",
+          sig: "test-sig",
+        };
+
+        expect(getEventCoordinate(event)).toBeNull();
+      });
+    });
+
     describe("applySpellParameters", () => {
       describe("$pubkey parameters", () => {
         it("should substitute $pubkey in authors array", () => {
@@ -1108,6 +1202,96 @@ describe("Spell Conversion", () => {
           });
 
           expect(result.ids).toEqual([eventId]);
+        });
+
+        it("should convert #e to #a tags when targetAddress is provided", () => {
+          const parsed = {
+            filter: { kinds: [1], "#e": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const address = "30023:pubkeyhex:article-slug";
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+            targetAddress: address,
+          });
+
+          // Should remove #e filter and add #a filter instead
+          expect(result["#e"]).toBeUndefined();
+          expect(result["#a"]).toEqual([address]);
+        });
+
+        it("should preserve existing #a values when converting from #e", () => {
+          const existingAddress = "30024:otherpubkey:other-article";
+          const parsed = {
+            filter: { kinds: [1], "#a": [existingAddress], "#e": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const address = "30023:pubkeyhex:article-slug";
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+            targetAddress: address,
+          });
+
+          // Should keep existing #a values and add new one
+          expect(result["#e"]).toBeUndefined();
+          expect(result["#a"]).toContain(existingAddress);
+          expect(result["#a"]).toContain(address);
+        });
+
+        it("should preserve non-$event values in #e when converting to #a", () => {
+          const otherEventId = "otherevent123";
+          const parsed = {
+            filter: { kinds: [1], "#e": [otherEventId, "$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const address = "30023:pubkeyhex:article-slug";
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+            targetAddress: address,
+          });
+
+          // Should keep non-$event values in #e and add $event to #a
+          expect(result["#e"]).toEqual([otherEventId]);
+          expect(result["#a"]).toEqual([address]);
+        });
+
+        it("should use event ID in #e when no targetAddress provided", () => {
+          const parsed = {
+            filter: { kinds: [1], "#e": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+          });
+
+          // Should use normal event ID substitution
+          expect(result["#e"]).toEqual([eventId]);
+          expect(result["#a"]).toBeUndefined();
+        });
+
+        it("should use targetAddress in #a tags directly", () => {
+          const parsed = {
+            filter: { kinds: [1], "#a": ["$event"] },
+            parameter: { type: "$event" as const },
+          } as any;
+
+          const eventId = "abc123def456";
+          const address = "30023:pubkeyhex:article-slug";
+          const result = applySpellParameters(parsed, {
+            targetEventId: eventId,
+            targetAddress: address,
+          });
+
+          // Should use address for #a tags
+          expect(result["#a"]).toEqual([address]);
         });
       });
 
