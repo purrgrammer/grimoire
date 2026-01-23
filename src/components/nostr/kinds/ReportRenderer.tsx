@@ -5,7 +5,6 @@
  * Reports can target profiles, events, or blobs.
  */
 
-import { useMemo } from "react";
 import {
   Flag,
   AlertTriangle,
@@ -17,59 +16,35 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
-import { KindRenderer } from "./index";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { QuotedEvent } from "@/components/nostr/QuotedEvent";
 import { UserName } from "@/components/nostr/UserName";
-import { EventCardSkeleton } from "@/components/ui/skeleton";
 import {
-  parseReport,
+  getReportInfo,
   type ReportType,
   REPORT_TYPE_LABELS,
 } from "@/lib/nip56-helpers";
 
 /**
- * Get icon for report type
+ * Get icon for report type (all muted/neutral colors)
  */
 function getReportTypeIcon(reportType: ReportType) {
+  const className = "size-3.5 text-muted-foreground";
   switch (reportType) {
     case "nudity":
-      return <AlertTriangle className="size-4 text-orange-500" />;
+      return <AlertTriangle className={className} />;
     case "malware":
-      return <Bug className="size-4 text-red-500" />;
+      return <Bug className={className} />;
     case "profanity":
-      return <MessageSquareWarning className="size-4 text-yellow-500" />;
+      return <MessageSquareWarning className={className} />;
     case "illegal":
-      return <Gavel className="size-4 text-red-600" />;
+      return <Gavel className={className} />;
     case "spam":
-      return <Mail className="size-4 text-blue-500" />;
+      return <Mail className={className} />;
     case "impersonation":
-      return <UserX className="size-4 text-purple-500" />;
+      return <UserX className={className} />;
     case "other":
     default:
-      return <HelpCircle className="size-4 text-muted-foreground" />;
-  }
-}
-
-/**
- * Get background color class for report type badge
- */
-function getReportTypeBgClass(reportType: ReportType): string {
-  switch (reportType) {
-    case "nudity":
-      return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
-    case "malware":
-      return "bg-red-500/10 text-red-600 dark:text-red-400";
-    case "profanity":
-      return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
-    case "illegal":
-      return "bg-red-600/10 text-red-700 dark:text-red-300";
-    case "spam":
-      return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
-    case "impersonation":
-      return "bg-purple-500/10 text-purple-600 dark:text-purple-400";
-    case "other":
-    default:
-      return "bg-muted text-muted-foreground";
+      return <HelpCircle className={className} />;
   }
 }
 
@@ -77,17 +52,8 @@ function getReportTypeBgClass(reportType: ReportType): string {
  * Renderer for Kind 1984 - Reports (NIP-56)
  */
 export function ReportRenderer({ event }: BaseEventProps) {
-  // Parse the report
-  const report = useMemo(() => parseReport(event), [event]);
-
-  // Get event pointer if reporting an event
-  const eventPointer = useMemo(() => {
-    if (!report?.reportedEventId) return undefined;
-    return { id: report.reportedEventId };
-  }, [report?.reportedEventId]);
-
-  // Fetch reported event if applicable
-  const reportedEvent = useNostrEvent(eventPointer);
+  // Parse report using cached helper (no useMemo needed - applesauce caches internally)
+  const report = getReportInfo(event);
 
   if (!report) {
     return (
@@ -104,13 +70,11 @@ export function ReportRenderer({ event }: BaseEventProps) {
       <div className="flex flex-col gap-3">
         {/* Report header with type badge */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Flag className="size-4 text-red-500 flex-shrink-0" />
+          <Flag className="size-4 text-muted-foreground flex-shrink-0" />
           <span className="text-sm text-muted-foreground">Reported</span>
 
-          {/* Report type badge */}
-          <span
-            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${getReportTypeBgClass(report.reportType)}`}
-          >
+          {/* Report type badge - neutral/muted styling */}
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
             {getReportTypeIcon(report.reportType)}
             {REPORT_TYPE_LABELS[report.reportType]}
           </span>
@@ -134,18 +98,12 @@ export function ReportRenderer({ event }: BaseEventProps) {
                 <UserName pubkey={report.reportedPubkey} />
               </div>
 
-              {/* Embedded reported event */}
-              {reportedEvent && (
-                <div className="border border-muted rounded-md overflow-hidden">
-                  <KindRenderer event={reportedEvent} depth={1} />
-                </div>
-              )}
-
-              {/* Loading state */}
-              {report.reportedEventId && !reportedEvent && (
-                <div className="border border-muted rounded-md p-2">
-                  <EventCardSkeleton variant="compact" showActions={false} />
-                </div>
+              {/* Embedded reported event using QuotedEvent */}
+              {report.reportedEventId && (
+                <QuotedEvent
+                  eventPointer={{ id: report.reportedEventId }}
+                  depth={1}
+                />
               )}
             </div>
           )}

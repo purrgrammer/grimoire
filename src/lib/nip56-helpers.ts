@@ -4,9 +4,11 @@
  *
  * A report signals that some referenced content is objectionable.
  * Reports can target profiles, events, or blobs.
+ *
+ * Uses applesauce caching pattern - results are cached on the event object.
  */
 
-import { getTagValue } from "applesauce-core/helpers";
+import { getTagValue, getOrComputeCachedValue } from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -55,6 +57,10 @@ export const REPORT_TYPE_DESCRIPTIONS: Record<ReportType, string> = {
  * Report target types
  */
 export type ReportTargetType = "profile" | "event" | "blob";
+
+// Symbols for caching computed values on events
+const ParsedReportSymbol = Symbol("parsedReport");
+const ReportLabelsSymbol = Symbol("reportLabels");
 
 /**
  * Parsed report information from a kind 1984 event
@@ -137,42 +143,45 @@ export function getReportServerUrls(event: NostrEvent): string[] {
 
 /**
  * Parse a report event into a structured format
+ * Uses applesauce caching - result is cached on the event object
  */
-export function parseReport(event: NostrEvent): ParsedReport | undefined {
+export function getReportInfo(event: NostrEvent): ParsedReport | undefined {
   if (event.kind !== 1984) return undefined;
 
-  const reportedPubkey = getReportedPubkey(event);
-  if (!reportedPubkey) return undefined;
+  return getOrComputeCachedValue(event, ParsedReportSymbol, () => {
+    const reportedPubkey = getReportedPubkey(event);
+    if (!reportedPubkey) return undefined;
 
-  const reportType = getReportType(event) || "other";
-  const reportedEventId = getReportedEventId(event);
-  const reportedBlobHash = getReportedBlobHash(event);
-  const serverUrls = getReportServerUrls(event);
+    const reportType = getReportType(event) || "other";
+    const reportedEventId = getReportedEventId(event);
+    const reportedBlobHash = getReportedBlobHash(event);
+    const serverUrls = getReportServerUrls(event);
 
-  // Determine blob event ID (e tag when x tag is present)
-  let blobEventId: string | undefined;
-  if (reportedBlobHash) {
-    blobEventId = reportedEventId;
-  }
+    // Determine blob event ID (e tag when x tag is present)
+    let blobEventId: string | undefined;
+    if (reportedBlobHash) {
+      blobEventId = reportedEventId;
+    }
 
-  // Determine target type
-  let targetType: ReportTargetType = "profile";
-  if (reportedBlobHash) {
-    targetType = "blob";
-  } else if (reportedEventId) {
-    targetType = "event";
-  }
+    // Determine target type
+    let targetType: ReportTargetType = "profile";
+    if (reportedBlobHash) {
+      targetType = "blob";
+    } else if (reportedEventId) {
+      targetType = "event";
+    }
 
-  return {
-    reportedPubkey,
-    reportType,
-    reportedEventId: targetType === "event" ? reportedEventId : undefined,
-    reportedBlobHash,
-    blobEventId,
-    serverUrls: serverUrls.length > 0 ? serverUrls : undefined,
-    comment: event.content,
-    targetType,
-  };
+    return {
+      reportedPubkey,
+      reportType,
+      reportedEventId: targetType === "event" ? reportedEventId : undefined,
+      reportedBlobHash,
+      blobEventId,
+      serverUrls: serverUrls.length > 0 ? serverUrls : undefined,
+      comment: event.content,
+      targetType,
+    };
+  });
 }
 
 /**
@@ -184,19 +193,20 @@ export function isValidReportType(type: string): type is ReportType {
 
 /**
  * Get NIP-32 label tags from a report event (optional enhancement)
+ * Uses applesauce caching - result is cached on the event object
  */
 export function getReportLabels(
   event: NostrEvent,
 ): { namespace: string; label: string }[] {
-  const namespace = getTagValue(event, "L");
-  if (!namespace) return [];
+  return getOrComputeCachedValue(event, ReportLabelsSymbol, () => {
+    const namespace = getTagValue(event, "L");
+    if (!namespace) return [];
 
-  const labels = event.tags
-    .filter((t) => t[0] === "l" && t[2] === namespace)
-    .map((t) => ({
-      namespace,
-      label: t[1],
-    }));
-
-  return labels;
+    return event.tags
+      .filter((t) => t[0] === "l" && t[2] === namespace)
+      .map((t) => ({
+        namespace,
+        label: t[1],
+      }));
+  });
 }
