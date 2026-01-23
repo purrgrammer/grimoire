@@ -18,6 +18,7 @@ import {
 import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
 import { QuotedEvent } from "@/components/nostr/QuotedEvent";
 import { UserName } from "@/components/nostr/UserName";
+import { useGrimoire } from "@/core/state";
 import {
   getReportInfo,
   type ReportType,
@@ -52,6 +53,7 @@ function getReportTypeIcon(reportType: ReportType) {
  * Renderer for Kind 1984 - Reports (NIP-56)
  */
 export function ReportRenderer({ event }: BaseEventProps) {
+  const { addWindow } = useGrimoire();
   // Parse report using cached helper (no useMemo needed - applesauce caches internally)
   const report = getReportInfo(event);
 
@@ -67,26 +69,34 @@ export function ReportRenderer({ event }: BaseEventProps) {
 
   const reasonLabel = REPORT_TYPE_LABELS[report.reportType].toLowerCase();
 
+  // Open report detail view
+  const openReportDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    addWindow("open", { pointer: { id: event.id } });
+  };
+
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
-        {/* Report header: "Reported <username> for <reason>" */}
-        <div className="flex items-center gap-1.5 flex-wrap text-sm">
+        {/* Report header: "Reported <username> for <reason>" - whole line clickable */}
+        <button
+          onClick={openReportDetail}
+          className="flex items-center gap-1.5 flex-wrap text-sm text-left hover:bg-muted/30 -mx-1 px-1 py-0.5 rounded cursor-pointer"
+        >
           <Flag className="size-4 text-muted-foreground flex-shrink-0" />
           <span className="text-muted-foreground">Reported</span>
           <UserName pubkey={report.reportedPubkey} />
-          <span className="text-muted-foreground">for</span>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-            {getReportTypeIcon(report.reportType)}
-            {reasonLabel}
+            for {getReportTypeIcon(report.reportType)} {reasonLabel}
           </span>
-        </div>
+        </button>
 
-        {/* Reported event - collapsed by default (depth=2) */}
+        {/* Reported event - collapsed with hidden preview (depth=2, hidePreview) */}
         {report.targetType === "event" && report.reportedEventId && (
           <QuotedEvent
             eventPointer={{ id: report.reportedEventId }}
             depth={2}
+            hidePreview
           />
         )}
 
