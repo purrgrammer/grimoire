@@ -113,7 +113,7 @@ export function StatusIndicator({
     const badgeClasses = getStatusBadgeClasses(effectiveKind);
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium border rounded-sm ${badgeClasses} ${className}`}
+        className={`inline-flex w-fit items-center gap-1.5 px-2 py-1 text-xs font-medium border rounded-sm ${badgeClasses} ${className}`}
       >
         <StatusIcon className="size-3.5" />
         <span className="capitalize">{statusText}</span>
