@@ -315,7 +315,7 @@ function SpellTabContent({
   return (
     <TabsContent
       value={spellId}
-      className="h-full overflow-hidden m-0 flex flex-col"
+      className="flex-1 overflow-hidden m-0 flex flex-col"
     >
       {!appliedFilter ? (
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
@@ -806,13 +806,15 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         {pubkeySpells.length > 0 ? (
           <Tabs className="flex flex-col h-full">
             <div className="flex items-center border-b">
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setCreateSpellDialogOpen(true)}
-                className="px-4 py-2 flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r"
+                className="rounded-none border-r h-10 w-10"
                 title="Create spell for this profile"
               >
                 <Wand2 className="size-4" />
-              </button>
+              </Button>
               <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
                 {pubkeySpells.map((spell) => {
                   // Extract kinds from spell for display
@@ -872,15 +874,16 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
             ))}
           </Tabs>
         ) : (
-          <div className="flex items-center justify-center p-4 border-b">
-            <button
+          <div className="flex items-center justify-center border-b">
+            <Button
+              variant="ghost"
               onClick={() => setCreateSpellDialogOpen(true)}
-              className="px-4 py-2 flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-md"
+              className="w-full justify-center rounded-none"
               title="Create spell for this profile"
             >
-              <Wand2 className="size-4" />
-              <span className="text-sm">Create spell</span>
-            </button>
+              <Wand2 />
+              Create spell
+            </Button>
           </div>
         )}
       </div>
