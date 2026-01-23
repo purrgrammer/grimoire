@@ -77,11 +77,11 @@ export function ReportRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {/* Report header: "Reported <username> for <reason>" - whole line clickable */}
         <button
           onClick={openReportDetail}
-          className="flex items-center gap-1.5 flex-wrap text-sm text-left hover:bg-muted/30 -mx-1 px-1 py-0.5 rounded cursor-pointer"
+          className="flex items-center gap-1.5 flex-wrap text-sm text-left hover:underline decoration-dotted cursor-crosshair"
         >
           <Flag className="size-4 text-muted-foreground flex-shrink-0" />
           <span className="text-muted-foreground">Reported</span>
@@ -97,6 +97,7 @@ export function ReportRenderer({ event }: BaseEventProps) {
             eventPointer={{ id: report.reportedEventId }}
             depth={2}
             hidePreview
+            className="mt-0"
           />
         )}
 
