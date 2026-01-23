@@ -191,6 +191,14 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       `[NIP-22] Found provided event ${pointer.id.slice(0, 8)} (kind ${providedEvent.kind})`,
     );
 
+    // Verify event is in EventStore
+    const eventInStore = eventStore.getEvent(providedEvent.id);
+    if (!eventInStore) {
+      console.warn(
+        `[NIP-22] WARNING: Provided event ${providedEvent.id.slice(0, 8)} not in EventStore after loading!`,
+      );
+    }
+
     // 2. Determine root event based on kind
     let rootEvent: NostrEvent;
     let rootId: string;
@@ -258,6 +266,23 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         rootCoordinate = `${rootEvent.kind}:${rootEvent.pubkey}:${dTag}`;
         rootId = rootCoordinate; // Use coordinate as primary ID
       }
+    }
+
+    // Verify root event is in EventStore
+    const rootInStore = eventStore.getEvent(rootEvent.id);
+    if (!rootInStore) {
+      console.warn(
+        `[NIP-22] WARNING: Root event ${rootEvent.id.slice(0, 8)} not in EventStore after loading!`,
+      );
+      console.warn(
+        `[NIP-22] Attempting to add root event to EventStore manually...`,
+      );
+      // Try to add it manually
+      eventStore.add(rootEvent);
+    } else {
+      console.log(
+        `[NIP-22] ✓ Root event ${rootEvent.id.slice(0, 8)} confirmed in EventStore`,
+      );
     }
 
     // 3. Determine conversation relays
@@ -380,6 +405,22 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
     // Return observable from EventStore
     // Combine root event with comments
+    console.log(
+      `[NIP-22] Creating message observable for root ${rootEventId.slice(0, 8)}`,
+    );
+
+    // Verify root is in store before creating observable
+    const rootCheck = eventStore.getEvent(rootEventId);
+    if (rootCheck) {
+      console.log(
+        `[NIP-22] ✓ Root ${rootEventId.slice(0, 8)} is in EventStore (kind ${rootCheck.kind})`,
+      );
+    } else {
+      console.error(
+        `[NIP-22] ✗ Root ${rootEventId.slice(0, 8)} NOT in EventStore! Observable may not emit.`,
+      );
+    }
+
     const rootEvent$ = eventStore.event(rootEventId);
 
     // Build timeline filter based on event type
@@ -389,8 +430,16 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
     const comments$ = eventStore.timeline(timelineFilter);
 
+    console.log(
+      `[NIP-22] Subscribing to root + comments for conversation ${conversationId}`,
+    );
+
     return combineLatest([rootEvent$, comments$]).pipe(
       map(([rootEvent, commentEvents]) => {
+        console.log(
+          `[NIP-22] combineLatest emitted: root=${rootEvent ? `${rootEvent.id.slice(0, 8)} kind ${rootEvent.kind}` : "null"}, comments=${commentEvents.length}`,
+        );
+
         const messages: Message[] = [];
 
         // Add root event as first message
@@ -403,6 +452,10 @@ export class Nip22Adapter extends ChatProtocolAdapter {
           if (rootMessage) {
             messages.push(rootMessage);
           }
+        } else {
+          console.warn(
+            `[NIP-22] Root event ${rootEventId.slice(0, 8)} not found in EventStore!`,
+          );
         }
 
         // Convert comments to messages
@@ -413,6 +466,10 @@ export class Nip22Adapter extends ChatProtocolAdapter {
           .filter((msg): msg is Message => msg !== null);
 
         messages.push(...commentMessages);
+
+        console.log(
+          `[NIP-22] Returning ${messages.length} messages (1 root + ${commentMessages.length} comments)`,
+        );
 
         // Sort by timestamp ascending (chronological order)
         return messages.sort((a, b) => a.timestamp - b.timestamp);
