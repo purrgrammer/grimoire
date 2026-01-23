@@ -130,7 +130,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
         case "-a":
         case "--author": {
-          // Support comma-separated authors: -a npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts
+          // Support comma-separated authors: -a npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts,$pubkey
           if (!nextArg) {
             i++;
             break;
@@ -139,9 +139,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           const values = nextArg.split(",").map((a) => a.trim());
           for (const authorStr of values) {
             if (!authorStr) continue;
-            // Check for $me and $contacts aliases (case-insensitive)
+            // Check for variable literals (case-insensitive)
             const normalized = authorStr.toLowerCase();
-            if (normalized === "$me" || normalized === "$contacts") {
+            if (
+              normalized === "$me" ||
+              normalized === "$contacts" ||
+              normalized === "$pubkey"
+            ) {
               authors.add(normalized);
               addedAny = true;
             } else if (authorStr.startsWith("@")) {
@@ -215,8 +219,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-e": {
-          // Tag-based filtering: -e note1...,nevent1...,naddr1...,hex
-          // Events go to #e tag, addresses go to #a tag
+          // Support comma-separated event identifiers: -e note1...,nevent1...,naddr1...,hex,$event
           if (!nextArg) {
             i++;
             break;
@@ -227,6 +230,14 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
           for (const val of values) {
             if (!val) continue;
+
+            // Check for $event variable literal (case-insensitive)
+            const normalized = val.toLowerCase();
+            if (normalized === "$event") {
+              eventIds.add(normalized);
+              addedAny = true;
+              continue;
+            }
 
             const parsed = parseEventIdentifier(val);
             if (parsed) {
@@ -251,7 +262,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-p": {
-          // Support comma-separated pubkeys: -p npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts
+          // Support comma-separated pubkeys: -p npub1...,npub2...,user@domain.com,@domain.com,$me,$contacts,$pubkey
           if (!nextArg) {
             i++;
             break;
@@ -260,9 +271,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           const values = nextArg.split(",").map((p) => p.trim());
           for (const pubkeyStr of values) {
             if (!pubkeyStr) continue;
-            // Check for $me and $contacts aliases (case-insensitive)
+            // Check for variable literals (case-insensitive)
             const normalized = pubkeyStr.toLowerCase();
-            if (normalized === "$me" || normalized === "$contacts") {
+            if (
+              normalized === "$me" ||
+              normalized === "$contacts" ||
+              normalized === "$pubkey"
+            ) {
               pTags.add(normalized);
               addedAny = true;
             } else if (pubkeyStr.startsWith("@")) {
@@ -294,7 +309,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
 
         case "-P": {
           // Uppercase P tag (e.g., zap sender in kind 9735)
-          // Support comma-separated pubkeys: -P npub1...,npub2...,@domain.com,$me,$contacts
+          // Support comma-separated pubkeys: -P npub1...,npub2...,@domain.com,$me,$contacts,$pubkey
           if (!nextArg) {
             i++;
             break;
@@ -303,9 +318,13 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           const values = nextArg.split(",").map((p) => p.trim());
           for (const pubkeyStr of values) {
             if (!pubkeyStr) continue;
-            // Check for $me and $contacts aliases (case-insensitive)
+            // Check for variable literals (case-insensitive)
             const normalized = pubkeyStr.toLowerCase();
-            if (normalized === "$me" || normalized === "$contacts") {
+            if (
+              normalized === "$me" ||
+              normalized === "$contacts" ||
+              normalized === "$pubkey"
+            ) {
               pTagsUppercase.add(normalized);
               addedAny = true;
             } else if (pubkeyStr.startsWith("@")) {
@@ -340,7 +359,18 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           if (nextArg) {
             const addedAny = parseCommaSeparated(
               nextArg,
-              (v) => v, // hashtags are already strings
+              (v) => {
+                // Preserve variable literals
+                const normalized = v.toLowerCase();
+                if (
+                  normalized === "$relay" ||
+                  normalized === "$event" ||
+                  normalized === "$pubkey"
+                ) {
+                  return normalized;
+                }
+                return v; // hashtags are already strings
+              },
               tTags,
             );
             i += addedAny ? 2 : 1;
@@ -351,11 +381,22 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         }
 
         case "-d": {
-          // Support comma-separated d-tags: -d article1,article2,article3
+          // Support comma-separated d-tags: -d article1,article2,article3,$relay
           if (nextArg) {
             const addedAny = parseCommaSeparated(
               nextArg,
-              (v) => v, // d-tags are already strings
+              (v) => {
+                // Preserve variable literals like $relay
+                const normalized = v.toLowerCase();
+                if (
+                  normalized === "$relay" ||
+                  normalized === "$event" ||
+                  normalized === "$pubkey"
+                ) {
+                  return normalized;
+                }
+                return v; // d-tags are already strings
+              },
               dTags,
             );
             i += addedAny ? 2 : 1;
@@ -417,7 +458,7 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
         case "-T":
         case "--tag": {
           // Generic tag filter: --tag <letter> <value>
-          // Supports comma-separated values: --tag a val1,val2
+          // Supports comma-separated values: --tag a val1,val2,$relay,$event,$pubkey
           if (!nextArg) {
             i++;
             break;
@@ -443,7 +484,18 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           // Parse comma-separated values
           const addedAny = parseCommaSeparated(
             valueArg,
-            (v) => v, // tag values are already strings
+            (v) => {
+              // Preserve variable literals
+              const normalized = v.toLowerCase();
+              if (
+                normalized === "$relay" ||
+                normalized === "$event" ||
+                normalized === "$pubkey"
+              ) {
+                return normalized;
+              }
+              return v; // tag values are already strings
+            },
             tagSet,
           );
 
