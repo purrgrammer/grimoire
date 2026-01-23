@@ -910,21 +910,49 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
   /**
    * Helper: Fetch event by EventPointer with improved relay selection
-   * Uses: relay hints from pointer, relay hints from comment tags, author's outbox relays
+   * Uses: relay hints from pointer, relay hints from comment tags,
+   *       comment author's outbox relays (they saw the root somewhere),
+   *       root author's outbox relays, aggregator relays
    */
   private async fetchEventByPointer(
     pointer: EventPointer,
     additionalHints: string[] = [],
     commentEvent?: NostrEvent,
   ): Promise<NostrEvent | null> {
-    // Merge relay hints from multiple sources
+    // Check EventStore first
+    const cached = await firstValueFrom(eventStore.event(pointer.id), {
+      defaultValue: undefined,
+    });
+    if (cached) return cached;
+
+    console.log(
+      `[NIP-22] Fetching root event ${pointer.id.slice(0, 8)} for comment ${commentEvent?.id.slice(0, 8) || "unknown"}`,
+    );
+
+    // Gather relay hints from all available sources
     const pointerHints = pointer.relays || [];
     const commentHints = commentEvent
       ? this.extractRelayHintsFromComment(commentEvent, pointer.id)
       : [];
 
-    // Get author's outbox relays if we know the author
-    let authorOutbox: string[] = [];
+    // Get comment author's outbox relays (they saw the root event somewhere)
+    let commentAuthorOutbox: string[] = [];
+    if (commentEvent) {
+      try {
+        const relayListEvent = await firstValueFrom(
+          eventStore.replaceable(10002, commentEvent.pubkey, ""),
+          { defaultValue: undefined },
+        );
+        if (relayListEvent) {
+          commentAuthorOutbox = getOutboxes(relayListEvent);
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    // Get root author's outbox relays if we know the author
+    let rootAuthorOutbox: string[] = [];
     if (pointer.author) {
       try {
         const relayListEvent = await firstValueFrom(
@@ -932,27 +960,62 @@ export class Nip22Adapter extends ChatProtocolAdapter {
           { defaultValue: undefined },
         );
         if (relayListEvent) {
-          authorOutbox = getOutboxes(relayListEvent);
+          rootAuthorOutbox = getOutboxes(relayListEvent);
         }
       } catch {
-        // Ignore errors fetching relay list
+        // Ignore errors
       }
     }
 
-    // Merge all hints (prioritize pointer hints, then comment hints, then author outbox)
+    // Merge all hints with priority:
+    // 1. Pointer hints (explicit in nevent)
+    // 2. Comment tag hints (relay where comment saw the root)
+    // 3. Comment author outbox (where they read from)
+    // 4. Root author outbox (where they published to)
+    // 5. Additional hints
+    // 6. Aggregator relays (fallback)
     const allHints = mergeRelaySets(
       pointerHints,
       commentHints,
-      authorOutbox.slice(0, 3), // Limit outbox to 3 relays
+      commentAuthorOutbox.slice(0, 5), // More relays from comment author
+      rootAuthorOutbox.slice(0, 5), // More relays from root author
       additionalHints,
+      AGGREGATOR_RELAYS, // Always include aggregators as fallback
     );
 
-    return this.fetchEvent({ id: pointer.id, kind: pointer.kind }, allHints);
+    console.log(
+      `[NIP-22] Querying ${allHints.length} relays for root event (pointer=${pointerHints.length}, comment=${commentHints.length}, commentAuthor=${commentAuthorOutbox.length}, rootAuthor=${rootAuthorOutbox.length}, agg=${AGGREGATOR_RELAYS.length})`,
+    );
+
+    const filter: Filter = {
+      ids: [pointer.id],
+      limit: 1,
+    };
+
+    if (pointer.kind !== undefined) {
+      filter.kinds = [pointer.kind];
+    }
+
+    const events = await firstValueFrom(
+      pool.request(allHints, [filter], { eventStore }).pipe(toArray()),
+    );
+
+    const found = events[0] || null;
+    if (found) {
+      console.log(`[NIP-22] Found root event ${pointer.id.slice(0, 8)}`);
+    } else {
+      console.warn(
+        `[NIP-22] Root event ${pointer.id.slice(0, 8)} not found on any of ${allHints.length} relays`,
+      );
+    }
+
+    return found;
   }
 
   /**
    * Helper: Fetch addressable event by AddressPointer with improved relay selection
-   * Uses: relay hints from pointer, relay hints from comment tags, author's outbox relays
+   * Uses: relay hints from pointer, relay hints from comment tags,
+   *       comment author's outbox relays, root author's outbox relays, aggregator relays
    */
   private async fetchAddressableEvent(
     pointer: AddressPointer,
@@ -968,37 +1031,60 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     );
     if (cached) return cached;
 
-    // Merge relay hints from multiple sources
-    const pointerHints = pointer.relays || [];
     const coordinate = `${kind}:${pubkey}:${identifier}`;
+    console.log(
+      `[NIP-22] Fetching addressable root ${coordinate} for comment ${commentEvent?.id.slice(0, 8) || "unknown"}`,
+    );
+
+    // Gather relay hints from all available sources
+    const pointerHints = pointer.relays || [];
     const commentHints = commentEvent
       ? this.extractRelayHintsFromComment(commentEvent, undefined, coordinate)
       : [];
 
-    // Get author's outbox relays
-    let authorOutbox: string[] = [];
+    // Get comment author's outbox relays (they saw the root event somewhere)
+    let commentAuthorOutbox: string[] = [];
+    if (commentEvent) {
+      try {
+        const relayListEvent = await firstValueFrom(
+          eventStore.replaceable(10002, commentEvent.pubkey, ""),
+          { defaultValue: undefined },
+        );
+        if (relayListEvent) {
+          commentAuthorOutbox = getOutboxes(relayListEvent);
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    // Get root author's outbox relays
+    let rootAuthorOutbox: string[] = [];
     try {
       const relayListEvent = await firstValueFrom(
         eventStore.replaceable(10002, pubkey, ""),
         { defaultValue: undefined },
       );
       if (relayListEvent) {
-        authorOutbox = getOutboxes(relayListEvent);
+        rootAuthorOutbox = getOutboxes(relayListEvent);
       }
     } catch {
-      // Ignore errors fetching relay list
+      // Ignore errors
     }
 
-    // Merge all hints (prioritize pointer hints, then comment hints, then author outbox)
+    // Merge all hints with priority (same as fetchEventByPointer)
     const allHints = mergeRelaySets(
       pointerHints,
       commentHints,
-      authorOutbox.slice(0, 3), // Limit outbox to 3 relays
+      commentAuthorOutbox.slice(0, 5),
+      rootAuthorOutbox.slice(0, 5),
       additionalHints,
+      AGGREGATOR_RELAYS,
     );
 
-    const relays =
-      allHints.length > 0 ? allHints : await this.getDefaultRelays();
+    console.log(
+      `[NIP-22] Querying ${allHints.length} relays for addressable root (pointer=${pointerHints.length}, comment=${commentHints.length}, commentAuthor=${commentAuthorOutbox.length}, rootAuthor=${rootAuthorOutbox.length}, agg=${AGGREGATOR_RELAYS.length})`,
+    );
 
     const filter: Filter = {
       kinds: [kind],
@@ -1008,10 +1094,19 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     };
 
     const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+      pool.request(allHints, [filter], { eventStore }).pipe(toArray()),
     );
 
-    return events[0] || null;
+    const found = events[0] || null;
+    if (found) {
+      console.log(`[NIP-22] Found addressable root ${coordinate}`);
+    } else {
+      console.warn(
+        `[NIP-22] Addressable root ${coordinate} not found on any of ${allHints.length} relays`,
+      );
+    }
+
+    return found;
   }
 
   /**
