@@ -443,19 +443,9 @@ const MessageItem = memo(function MessageItem({
   const messageContent = (
     <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
-        {/* For card rendering (NIP-22 root events), show minimal header with timestamp and reactions */}
+        {/* For card rendering (NIP-22 root events), just show KindRenderer */}
         {message.metadata?.renderAsCard ? (
-          <>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs text-muted-foreground">
-                <Timestamp timestamp={message.timestamp} />
-              </span>
-              {/* Reactions display - inline after timestamp */}
-              <MessageReactions messageId={message.id} relays={relays} />
-            </div>
-            {/* Render event as a card using KindRenderer */}
-            {message.event && <KindRenderer event={message.event} />}
-          </>
+          message.event && <KindRenderer event={message.event} />
         ) : (
           <>
             <div className="flex items-center gap-2">

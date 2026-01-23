@@ -1,5 +1,11 @@
 import { Observable, firstValueFrom, combineLatest } from "rxjs";
-import { map, first, toArray } from "rxjs/operators";
+import {
+  map,
+  first,
+  toArray,
+  timeout as rxTimeout,
+  catchError,
+} from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -148,16 +154,35 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       `[NIP-22] Resolving conversation from event ${pointer.id.slice(0, 8)}`,
     );
 
-    const providedEvent = await firstValueFrom(
-      eventLoader(
-        { id: pointer.id, kind: pointer.kind, relays: relayHints },
-        pointer.author,
-      ),
-    );
+    let providedEvent: NostrEvent | undefined;
+    try {
+      providedEvent = await firstValueFrom(
+        eventLoader(
+          { id: pointer.id, kind: pointer.kind, relays: relayHints },
+          pointer.author,
+        ).pipe(
+          rxTimeout(10000), // 10 second timeout
+          catchError((err) => {
+            console.error(
+              `[NIP-22] Error loading provided event ${pointer.id.slice(0, 8)}:`,
+              err,
+            );
+            throw err;
+          }),
+        ),
+        { defaultValue: undefined },
+      );
+    } catch (err) {
+      console.warn(
+        `[NIP-22] Failed to load provided event ${pointer.id.slice(0, 8)}:`,
+        err,
+      );
+      throw new Error("Event not found");
+    }
 
     if (!providedEvent) {
       console.warn(
-        `[NIP-22] Provided event ${pointer.id.slice(0, 8)} not found`,
+        `[NIP-22] Provided event ${pointer.id.slice(0, 8)} returned undefined`,
       );
       throw new Error("Event not found");
     }
@@ -876,7 +901,10 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       // 3. Uses smart relay selection (author outbox, seen relays, etc.)
       // 4. Falls back to aggregators
       const event = await firstValueFrom(
-        eventLoader(pointer, commentEvent || pointer.author),
+        eventLoader(pointer, commentEvent || pointer.author).pipe(
+          rxTimeout(10000), // 10 second timeout
+        ),
+        { defaultValue: undefined },
       );
 
       if (event) {
@@ -921,7 +949,10 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       // Note: addressLoader doesn't take context, so we can't pass comment event
       // but it still uses author outbox which is the most important source
       const event = await firstValueFrom(
-        addressLoader({ kind, pubkey, identifier }),
+        addressLoader({ kind, pubkey, identifier }).pipe(
+          rxTimeout(10000), // 10 second timeout
+        ),
+        { defaultValue: undefined },
       );
 
       if (event) {
