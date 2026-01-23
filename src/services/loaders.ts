@@ -7,7 +7,10 @@ import {
 import type { EventPointer } from "nostr-tools/nip19";
 import { Observable } from "rxjs";
 import { getSeenRelays, mergeRelaySets } from "applesauce-core/helpers/relays";
-import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
+import {
+  getEventPointerFromETag,
+  getAddressPointerFromATag,
+} from "applesauce-core/helpers/pointers";
 import { getTagValue } from "applesauce-core/helpers/event";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
@@ -23,6 +26,7 @@ function extractRelayContext(event: NostrEvent): {
   seenRelays: Set<string> | undefined;
   rTags: string[];
   eTagRelays: string[];
+  aTagRelays: string[];
 } {
   // Get relays where this event was seen (tracked by applesauce)
   const seenRelays = getSeenRelays(event);
@@ -43,10 +47,20 @@ function extractRelayContext(event: NostrEvent): {
     })
     .filter((relay): relay is string => relay !== undefined);
 
+  // Extract relay hints from all "a" tags (addressable event references)
+  // This includes both lowercase "a" (reply) and uppercase "A" (root) tags
+  const aTagRelays = event.tags
+    .filter((t) => t[0] === "a" || t[0] === "A")
+    .map((tag) => {
+      const pointer = getAddressPointerFromATag(tag);
+      return pointer?.relays?.[0]; // First relay hint from the pointer
+    })
+    .filter((relay): relay is string => relay !== undefined);
+
   // Extract first "p" tag as author hint using applesauce helper
   const authorHint = getTagValue(event, "p");
 
-  return { seenRelays, authorHint, rTags, eTagRelays };
+  return { seenRelays, authorHint, rTags, eTagRelays, aTagRelays };
 }
 
 // Aggregator relays for better event discovery
@@ -71,9 +85,10 @@ const baseEventLoader = createEventLoader(pool, {
  * 1. Direct relay hints from EventPointer
  * 2. Seen-at relays (where reply event was received)
  * 3. Author's cached outbox relays (from NIP-65)
- * 4. "r" tags from context event (URL references)
- * 5. Other "e" tag relay hints from context event
- * 6. Aggregator relays (fallback)
+ * 4. "a" tag relay hints from context event (addressable references)
+ * 5. "r" tags from context event (URL references)
+ * 6. Other "e" tag relay hints from context event
+ * 7. Aggregator relays (fallback)
  *
  * @param pointer - Event ID or EventPointer with relay hints
  * @param context - Optional context for relay hints:
@@ -92,6 +107,7 @@ export function eventLoader(
   let seenRelays: Set<string> | undefined;
   let rTags: string[] = [];
   let eTagRelays: string[] = [];
+  let aTagRelays: string[] = [];
 
   if (context) {
     if (typeof context === "string") {
@@ -104,6 +120,7 @@ export function eventLoader(
       seenRelays = extracted.seenRelays;
       rTags = extracted.rTags;
       eTagRelays = extracted.eTagRelays;
+      aTagRelays = extracted.aTagRelays;
     }
   }
 
@@ -134,9 +151,10 @@ export function eventLoader(
     directHints, // Priority 1: Direct hints (most specific)
     seenRelays, // Priority 2: Where reply was seen (high confidence)
     topCachedRelays, // Priority 3: Author's outbox (NIP-65 standard)
-    rTags, // Priority 4: Conversation context
-    eTagRelays, // Priority 5: Other event references
-    AGGREGATOR_RELAYS, // Priority 6: Fallback
+    aTagRelays, // Priority 4: Addressable event references (NIP-22, etc.)
+    rTags, // Priority 5: Conversation context
+    eTagRelays, // Priority 6: Other event references
+    AGGREGATOR_RELAYS, // Priority 7: Fallback
   );
 
   // Build enhanced pointer with all relay sources
@@ -150,6 +168,7 @@ export function eventLoader(
     directHints.length +
     (seenRelays?.size || 0) +
     topCachedRelays.length +
+    aTagRelays.length +
     rTags.length +
     eTagRelays.length +
     AGGREGATOR_RELAYS.length;
@@ -159,7 +178,7 @@ export function eventLoader(
   console.debug(
     `[eventLoader] Fetching ${pointer.id.slice(0, 8)} from ${allRelays.length} relays ` +
       `(direct=${directHints.length} seen=${seenRelays?.size || 0} cached=${topCachedRelays.length} ` +
-      `r=${rTags.length} e=${eTagRelays.length} agg=${AGGREGATOR_RELAYS.length}, ` +
+      `a=${aTagRelays.length} r=${rTags.length} e=${eTagRelays.length} agg=${AGGREGATOR_RELAYS.length}, ` +
       `${duplicatesRemoved} duplicates removed)`,
   );
 

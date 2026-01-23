@@ -23,22 +23,27 @@ import {
 
 /**
  * Convert CommentPointer to pointer format for useNostrEvent
+ * Preserves relay hints from the "a"/"e" tags for better event discovery
  */
 function convertCommentPointer(
   commentPointer: CommentPointer | null,
 ):
-  | { id: string }
-  | { kind: number; pubkey: string; identifier: string }
+  | { id: string; relays?: string[] }
+  | { kind: number; pubkey: string; identifier: string; relays?: string[] }
   | undefined {
   if (!commentPointer) return undefined;
 
   if (isCommentEventPointer(commentPointer)) {
-    return { id: commentPointer.id };
+    return {
+      id: commentPointer.id,
+      relays: commentPointer.relay ? [commentPointer.relay] : undefined,
+    };
   } else if (isCommentAddressPointer(commentPointer)) {
     return {
       kind: commentPointer.kind,
       pubkey: commentPointer.pubkey,
       identifier: commentPointer.identifier,
+      relays: commentPointer.relay ? [commentPointer.relay] : undefined,
     };
   }
   return undefined;
