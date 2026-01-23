@@ -15,10 +15,14 @@ import {
   UserX,
   HelpCircle,
 } from "lucide-react";
-import { BaseEventProps, BaseEventContainer } from "./BaseEventRenderer";
+import {
+  BaseEventProps,
+  BaseEventContainer,
+  ClickableEventTitle,
+} from "./BaseEventRenderer";
 import { QuotedEvent } from "@/components/nostr/QuotedEvent";
 import { UserName } from "@/components/nostr/UserName";
-import { useGrimoire } from "@/core/state";
+import { RichText } from "../RichText";
 import {
   getReportInfo,
   type ReportType,
@@ -53,7 +57,6 @@ function getReportTypeIcon(reportType: ReportType) {
  * Renderer for Kind 1984 - Reports (NIP-56)
  */
 export function ReportRenderer({ event }: BaseEventProps) {
-  const { addWindow } = useGrimoire();
   // Parse report using cached helper (no useMemo needed - applesauce caches internally)
   const report = getReportInfo(event);
 
@@ -69,19 +72,14 @@ export function ReportRenderer({ event }: BaseEventProps) {
 
   const reasonLabel = REPORT_TYPE_LABELS[report.reportType].toLowerCase();
 
-  // Open report detail view
-  const openReportDetail = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    addWindow("open", { pointer: { id: event.id } });
-  };
-
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Report header: "Reported <username> for <reason>" - whole line clickable */}
-        <button
-          onClick={openReportDetail}
-          className="flex items-center gap-1.5 flex-wrap text-sm text-left hover:underline decoration-dotted cursor-crosshair"
+        {/* Report header: "Reported <username> for <reason>" */}
+        <ClickableEventTitle
+          event={event}
+          as="div"
+          className="flex items-center gap-1.5 flex-wrap text-sm"
         >
           <Flag className="size-4 text-muted-foreground flex-shrink-0" />
           <span className="text-muted-foreground">Reported</span>
@@ -89,7 +87,7 @@ export function ReportRenderer({ event }: BaseEventProps) {
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
             for {getReportTypeIcon(report.reportType)} {reasonLabel}
           </span>
-        </button>
+        </ClickableEventTitle>
 
         {/* Reported event - collapsed with hidden preview (depth=2, hidePreview) */}
         {report.targetType === "event" && report.reportedEventId && (
@@ -118,12 +116,8 @@ export function ReportRenderer({ event }: BaseEventProps) {
           </div>
         )}
 
-        {/* Report comment */}
-        {report.comment && (
-          <div className="text-sm border-l-2 border-muted pl-3 text-muted-foreground italic">
-            "{report.comment}"
-          </div>
-        )}
+        {/* Report comment - rendered like a kind 1 note */}
+        {event.content && <RichText event={event} className="text-sm" />}
       </div>
     </BaseEventContainer>
   );

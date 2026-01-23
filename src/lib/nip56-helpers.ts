@@ -10,6 +10,7 @@
 
 import { getTagValue, getOrComputeCachedValue } from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
+import { getTagValues } from "@/lib/nostr-utils";
 
 /**
  * Report types as defined in NIP-56
@@ -88,33 +89,22 @@ export interface ParsedReport {
  * Get the reported pubkey from a report event
  */
 export function getReportedPubkey(event: NostrEvent): string | undefined {
-  const pTag = event.tags.find((t) => t[0] === "p");
-  return pTag?.[1];
+  return getTagValue(event, "p");
 }
 
 /**
  * Get the report type from a report event
- * The report type is the 3rd element of the p, e, or x tag
+ * The report type is the 3rd element (index 2) of the p, e, or x tag.
+ * Direct tag access is required since getTagValue only returns tag[1].
  */
 export function getReportType(event: NostrEvent): ReportType | undefined {
-  // Check p tag for report type
-  const pTag = event.tags.find((t) => t[0] === "p" && t[2]);
-  if (pTag?.[2] && REPORT_TYPES.includes(pTag[2] as ReportType)) {
-    return pTag[2] as ReportType;
+  // Check p, e, x tags for report type in the 3rd element
+  for (const tagName of ["p", "e", "x"]) {
+    const tag = event.tags.find((t) => t[0] === tagName && t[2]);
+    if (tag?.[2] && REPORT_TYPES.includes(tag[2] as ReportType)) {
+      return tag[2] as ReportType;
+    }
   }
-
-  // Check e tag for report type
-  const eTag = event.tags.find((t) => t[0] === "e" && t[2]);
-  if (eTag?.[2] && REPORT_TYPES.includes(eTag[2] as ReportType)) {
-    return eTag[2] as ReportType;
-  }
-
-  // Check x tag for report type
-  const xTag = event.tags.find((t) => t[0] === "x" && t[2]);
-  if (xTag?.[2] && REPORT_TYPES.includes(xTag[2] as ReportType)) {
-    return xTag[2] as ReportType;
-  }
-
   return undefined;
 }
 
@@ -122,23 +112,21 @@ export function getReportType(event: NostrEvent): ReportType | undefined {
  * Get the reported event ID from a report event
  */
 export function getReportedEventId(event: NostrEvent): string | undefined {
-  const eTag = event.tags.find((t) => t[0] === "e");
-  return eTag?.[1];
+  return getTagValue(event, "e");
 }
 
 /**
  * Get the reported blob hash from a report event
  */
 export function getReportedBlobHash(event: NostrEvent): string | undefined {
-  const xTag = event.tags.find((t) => t[0] === "x");
-  return xTag?.[1];
+  return getTagValue(event, "x");
 }
 
 /**
  * Get server URLs from a report event (for blob reports)
  */
 export function getReportServerUrls(event: NostrEvent): string[] {
-  return event.tags.filter((t) => t[0] === "server").map((t) => t[1]);
+  return getTagValues(event, "server");
 }
 
 /**
@@ -193,7 +181,8 @@ export function isValidReportType(type: string): type is ReportType {
 
 /**
  * Get NIP-32 label tags from a report event (optional enhancement)
- * Uses applesauce caching - result is cached on the event object
+ * Uses applesauce caching - result is cached on the event object.
+ * Direct tag access for "l" tags is required to filter by namespace in tag[2].
  */
 export function getReportLabels(
   event: NostrEvent,
