@@ -545,21 +545,23 @@ export function applySpellParameters(
           throw new Error("Parameterized $pubkey spell requires target pubkey");
         }
 
-        // Substitute $pubkey placeholders
+        // Substitute $pubkey in authors
         if (filter.authors) {
           filter.authors = filter.authors.flatMap((author) =>
             author === "$pubkey" ? values : [author],
           );
         }
-        if (filter["#p"]) {
-          filter["#p"] = filter["#p"].flatMap((p) =>
-            p === "$pubkey" ? values : [p],
-          );
-        }
-        if (filter["#P"]) {
-          filter["#P"] = filter["#P"].flatMap((p) =>
-            p === "$pubkey" ? values : [p],
-          );
+
+        // Substitute $pubkey in all single-letter tag filters (#p, #P, etc.)
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              (filter as any)[key] = tagArray.flatMap((val) =>
+                val === "$pubkey" ? values : [val],
+              );
+            }
+          }
         }
         break;
       }
@@ -574,20 +576,23 @@ export function applySpellParameters(
           );
         }
 
-        if (filter["#e"]) {
-          filter["#e"] = filter["#e"].flatMap((e) =>
-            e === "$event" ? values : [e],
-          );
-        }
-        if (filter["#a"]) {
-          filter["#a"] = filter["#a"].flatMap((a) =>
-            a === "$event" ? values : [a],
-          );
-        }
+        // Substitute $event in ids
         if (filter.ids) {
           filter.ids = filter.ids.flatMap((id) =>
             id === "$event" ? values : [id],
           );
+        }
+
+        // Substitute $event in all single-letter tag filters (#e, #a, etc.)
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              (filter as any)[key] = tagArray.flatMap((val) =>
+                val === "$event" ? values : [val],
+              );
+            }
+          }
         }
         break;
       }
@@ -600,10 +605,16 @@ export function applySpellParameters(
           throw new Error("Parameterized $relay spell requires target relay");
         }
 
-        if (filter["#r"]) {
-          filter["#r"] = filter["#r"].flatMap((r) =>
-            r === "$relay" ? values : [r],
-          );
+        // Replace $relay in all single-letter tag filters (#d, #r, etc.)
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              (filter as any)[key] = tagArray.flatMap((val) =>
+                val === "$relay" ? values : [val],
+              );
+            }
+          }
         }
         break;
       }

@@ -31,14 +31,27 @@ type PublishingState =
   | "saving"
   | "error";
 
-const PARAMETER_INFO = {
+const PARAMETER_INFO: Record<
+  "$pubkey" | "$event" | "$relay",
+  {
+    title: string;
+    description: string;
+    placeholder: string;
+    variable: string;
+    variableDescription: string;
+    defaultValue?: string;
+    requireVariable: boolean;
+  }
+> = {
   $pubkey: {
     title: "Create Profile Spell",
     description: "Create a spell that works with any profile",
-    placeholder: "req -k 1 -a $me -l 50",
-    variable: "$me",
+    placeholder: "req -k 1 -a $pubkey -l 50",
+    variable: "$pubkey",
     variableDescription:
-      "Use $me in your command to reference the target profile",
+      "Use $pubkey in your command to reference the target profile",
+    defaultValue: "$me",
+    requireVariable: true,
   },
   $event: {
     title: "Create Event Spell",
@@ -46,7 +59,8 @@ const PARAMETER_INFO = {
     placeholder: "req -k 1 -e $event -l 50",
     variable: "$event",
     variableDescription:
-      "Use $event in your command to reference the target event",
+      "Use $event in your command (e.g., -e $event for replies, --id $event for direct reference)",
+    requireVariable: true,
   },
   $relay: {
     title: "Create Relay Spell",
@@ -54,7 +68,8 @@ const PARAMETER_INFO = {
     placeholder: "req -k 1 -l 50",
     variable: "$relay",
     variableDescription:
-      "Use $relay in your command to reference the target relay",
+      "$relay is implicitly used for filtering - you can optionally use it in tags like -d $relay",
+    requireVariable: false,
   },
 };
 
@@ -93,7 +108,7 @@ export function CreateParameterizedSpellDialog({
   const commandValid = command.trim().length > 0;
   const nameValid = name.trim().length > 0;
   const hasRequiredVariable =
-    parameterType === "$relay" || command.includes(info.variable);
+    !info.requireVariable || command.includes(info.variable);
 
   const isFormValid = commandValid && nameValid && hasRequiredVariable;
 
@@ -130,7 +145,7 @@ export function CreateParameterizedSpellDialog({
         description: description.trim() || undefined,
         isPublished: false,
         parameterType,
-        parameterDefault: [info.variable],
+        parameterDefault: [info.defaultValue || info.variable],
       });
 
       // Success!
@@ -185,7 +200,7 @@ export function CreateParameterizedSpellDialog({
         description: description.trim() || undefined,
         isPublished: false,
         parameterType,
-        parameterDefault: [info.variable],
+        parameterDefault: [info.defaultValue || info.variable],
       });
 
       // 2. Use PublishSpellAction to handle signing and publishing
