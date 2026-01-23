@@ -65,11 +65,11 @@ const PARAMETER_INFO: Record<
   $relay: {
     title: "Create Relay Spell",
     description: "Create a spell that works with any relay",
-    placeholder: "req -k 1 -l 50",
+    placeholder: "req -k 1 -d $relay -l 50",
     variable: "$relay",
     variableDescription:
-      "$relay is implicitly used for filtering - you can optionally use it in tags like -d $relay",
-    requireVariable: false,
+      "Use $relay in your command (e.g., -d $relay for relay-specific events)",
+    requireVariable: true,
   },
 };
 
