@@ -6,7 +6,9 @@ import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
  * Used for filtering and validating chat-related events
  */
 export const CHAT_KINDS = [
+  1, // NIP-01: Short text notes (thread replies)
   9, // NIP-29: Group chat messages
+  1111, // NIP-22: Comments
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
   1311, // NIP-53: Live chat messages
   9735, // NIP-57: Zap receipts (part of chat context)
