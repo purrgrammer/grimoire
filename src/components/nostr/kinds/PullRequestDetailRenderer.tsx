@@ -1,15 +1,5 @@
 import { useMemo } from "react";
-import {
-  GitBranch,
-  Tag,
-  Copy,
-  CopyCheck,
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  FileEdit,
-  Loader2,
-} from "lucide-react";
+import { GitBranch, Tag, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
 import { useCopy } from "@/hooks/useCopy";
@@ -32,46 +22,10 @@ import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getOutboxes } from "applesauce-core/helpers";
 import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
+import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color classes for a status badge
- * Uses theme semantic colors
- */
-function getStatusBadgeClasses(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "bg-muted/50 text-foreground border-border";
-    case 1631: // Merged - positive
-      return "bg-accent/20 text-accent border-accent/30";
-    case 1632: // Closed - negative
-      return "bg-destructive/20 text-destructive border-destructive/30";
-    case 1633: // Draft - muted
-      return "bg-muted text-muted-foreground border-muted-foreground/30";
-    default:
-      return "bg-muted/50 text-foreground border-border";
-  }
-}
 
 /**
  * Detail renderer for Kind 1618 - Pull Request
@@ -158,44 +112,22 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
   // Format created date using locale utility
   const createdDate = formatTimestamp(event.created_at, "long");
 
-  // Status display - for PRs, 1631 means "merged"
-  const statusType = currentStatus
-    ? currentStatus.kind === 1631
-      ? "merged"
-      : getStatusType(currentStatus.kind)
-    : "open";
-  const StatusIcon = currentStatus
-    ? getStatusIcon(currentStatus.kind)
-    : CircleDot;
-  const statusBadgeClasses = currentStatus
-    ? getStatusBadgeClasses(currentStatus.kind)
-    : "bg-muted/50 text-foreground border-border";
-
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
       {/* PR Header */}
-      <header className="flex flex-col gap-4 pb-4 border-b border-border">
-        {/* Status Badge */}
-        <div className="flex items-center gap-3">
-          {statusLoading ? (
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              <span>Loading status...</span>
-            </span>
-          ) : (
-            <span
-              className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border ${statusBadgeClasses}`}
-            >
-              <StatusIcon className="size-4" />
-              <span className="capitalize">{statusType}</span>
-            </span>
-          )}
-        </div>
-
+      <header className="flex flex-col gap-3 pb-4 border-b border-border">
         {/* Title */}
-        <h1 className="text-3xl font-bold">
+        <h1 className="text-2xl font-bold">
           {subject || "Untitled Pull Request"}
         </h1>
+
+        {/* Status Badge (below title) */}
+        <StatusIndicator
+          statusKind={currentStatus?.kind}
+          loading={statusLoading}
+          eventType="pr"
+          variant="badge"
+        />
 
         {/* Repository Link */}
         {repoAddress && (

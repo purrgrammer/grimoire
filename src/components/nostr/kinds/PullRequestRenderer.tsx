@@ -1,11 +1,5 @@
 import { useMemo } from "react";
-import {
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  FileEdit,
-  GitBranch,
-} from "lucide-react";
+import { GitBranch } from "lucide-react";
 import {
   BaseEventContainer,
   type BaseEventProps,
@@ -17,7 +11,6 @@ import {
   getPullRequestBranchName,
   getPullRequestRepositoryAddress,
   getRepositoryRelays,
-  getStatusType,
   getValidStatusAuthors,
   findCurrentStatus,
 } from "@/lib/nip34-helpers";
@@ -25,46 +18,10 @@ import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getOutboxes } from "applesauce-core/helpers";
 import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
+import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color class for a status kind
- * Uses theme semantic colors
- */
-function getStatusColorClass(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "text-foreground";
-    case 1631: // Merged - positive
-      return "text-accent";
-    case 1632: // Closed - negative
-      return "text-destructive";
-    case 1633: // Draft - muted
-      return "text-muted-foreground";
-    default:
-      return "text-foreground";
-  }
-}
 
 /**
  * Renderer for Kind 1618 - Pull Request
@@ -151,37 +108,21 @@ export function PullRequestRenderer({ event }: BaseEventProps) {
     [statusEvents, validAuthors],
   );
 
-  // Status display - for PRs, 1631 means "merged" not "resolved"
-  const statusType = currentStatus
-    ? currentStatus.kind === 1631
-      ? "merged"
-      : getStatusType(currentStatus.kind)
-    : "open";
-  const StatusIcon = currentStatus
-    ? getStatusIcon(currentStatus.kind)
-    : CircleDot;
-  const statusColorClass = currentStatus
-    ? getStatusColorClass(currentStatus.kind)
-    : "text-foreground";
-
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Status and PR Title */}
-        <div className="flex items-center gap-2">
-          <StatusIcon className={`size-4 flex-shrink-0 ${statusColorClass}`} />
-          <ClickableEventTitle
-            event={event}
-            className="font-semibold text-foreground"
-          >
-            {subject || "Untitled Pull Request"}
-          </ClickableEventTitle>
-        </div>
+        {/* PR Title */}
+        <ClickableEventTitle
+          event={event}
+          className="font-semibold text-foreground"
+        >
+          {subject || "Untitled Pull Request"}
+        </ClickableEventTitle>
 
         <div className="flex flex-col gap-1">
           {/* Status and Repository */}
           <div className="flex items-center gap-2 text-xs">
-            <span className={statusColorClass}>{statusType}</span>
+            <StatusIndicator statusKind={currentStatus?.kind} eventType="pr" />
             {repoAddress && (
               <>
                 <span className="text-muted-foreground">in</span>

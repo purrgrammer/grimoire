@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { CircleDot, CheckCircle2, XCircle, FileEdit } from "lucide-react";
 import {
   BaseEventContainer,
   type BaseEventProps,
@@ -10,53 +9,16 @@ import {
   getPatchCommitId,
   getPatchRepositoryAddress,
   getRepositoryRelays,
-  getStatusType,
   getValidStatusAuthors,
   findCurrentStatus,
 } from "@/lib/nip34-helpers";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getOutboxes } from "applesauce-core/helpers";
 import { RepositoryLink } from "../RepositoryLink";
+import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color class for a status kind
- * Uses theme semantic colors
- */
-function getStatusColorClass(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "text-foreground";
-    case 1631: // Merged - positive
-      return "text-accent";
-    case 1632: // Closed - negative
-      return "text-destructive";
-    case 1633: // Draft - muted
-      return "text-muted-foreground";
-    default:
-      return "text-foreground";
-  }
-}
 
 /**
  * Renderer for Kind 1617 - Patch
@@ -145,36 +107,20 @@ export function PatchRenderer({ event }: BaseEventProps) {
     [statusEvents, validAuthors],
   );
 
-  // Status display - for patches, 1631 means "merged" not "resolved"
-  const statusType = currentStatus
-    ? currentStatus.kind === 1631
-      ? "merged"
-      : getStatusType(currentStatus.kind)
-    : "open";
-  const StatusIcon = currentStatus
-    ? getStatusIcon(currentStatus.kind)
-    : CircleDot;
-  const statusColorClass = currentStatus
-    ? getStatusColorClass(currentStatus.kind)
-    : "text-foreground";
-
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Status and Subject */}
-        <div className="flex items-center gap-2">
-          <StatusIcon className={`size-4 flex-shrink-0 ${statusColorClass}`} />
-          <ClickableEventTitle
-            event={event}
-            className="font-semibold text-foreground"
-          >
-            {subject || "Untitled Patch"}
-          </ClickableEventTitle>
-        </div>
+        {/* Subject/Title */}
+        <ClickableEventTitle
+          event={event}
+          className="font-semibold text-foreground"
+        >
+          {subject || "Untitled Patch"}
+        </ClickableEventTitle>
 
-        {/* Metadata */}
+        {/* Status and Metadata */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span className={statusColorClass}>{statusType}</span>
+          <StatusIndicator statusKind={currentStatus?.kind} eventType="patch" />
           {repoAddress && (
             <>
               <span className="text-muted-foreground">in</span>

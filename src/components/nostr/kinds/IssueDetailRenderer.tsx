@@ -1,12 +1,5 @@
 import { useMemo } from "react";
-import {
-  Tag,
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  FileEdit,
-  Loader2,
-} from "lucide-react";
+import { Tag } from "lucide-react";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
 import type { NostrEvent } from "@/types/nostr";
@@ -23,47 +16,11 @@ import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getOutboxes } from "applesauce-core/helpers";
 import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
+import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color classes for a status badge
- * Uses theme semantic colors
- */
-function getStatusBadgeClasses(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "bg-muted/50 text-foreground border-border";
-    case 1631: // Resolved/Merged - positive
-      return "bg-accent/20 text-accent border-accent/30";
-    case 1632: // Closed - negative
-      return "bg-destructive/20 text-destructive border-destructive/30";
-    case 1633: // Draft - muted
-      return "bg-muted text-muted-foreground border-muted-foreground/30";
-    default:
-      return "bg-muted/50 text-foreground border-border";
-  }
-}
 
 /**
  * Detail renderer for Kind 1621 - Issue (NIP-34)
@@ -153,38 +110,20 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
   // Format created date using locale utility
   const createdDate = formatTimestamp(event.created_at, "long");
 
-  // Get status display info
-  const statusType = currentStatus ? getStatusType(currentStatus.kind) : null;
-  const StatusIcon = currentStatus
-    ? getStatusIcon(currentStatus.kind)
-    : CircleDot;
-  const statusBadgeClasses = currentStatus
-    ? getStatusBadgeClasses(currentStatus.kind)
-    : "bg-muted/50 text-foreground border-border";
-
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
       {/* Issue Header */}
-      <header className="flex flex-col gap-4 pb-4 border-b border-border">
-        {/* Status Badge */}
-        <div className="flex items-center gap-3">
-          {statusLoading ? (
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              <span>Loading status...</span>
-            </span>
-          ) : (
-            <span
-              className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border ${statusBadgeClasses}`}
-            >
-              <StatusIcon className="size-4" />
-              <span className="capitalize">{statusType || "open"}</span>
-            </span>
-          )}
-        </div>
-
+      <header className="flex flex-col gap-3 pb-4 border-b border-border">
         {/* Title */}
-        <h1 className="text-3xl font-bold">{title || "Untitled Issue"}</h1>
+        <h1 className="text-2xl font-bold">{title || "Untitled Issue"}</h1>
+
+        {/* Status Badge (below title) */}
+        <StatusIndicator
+          statusKind={currentStatus?.kind}
+          loading={statusLoading}
+          eventType="issue"
+          variant="badge"
+        />
 
         {/* Repository Link */}
         {repoAddress && (

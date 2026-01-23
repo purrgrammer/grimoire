@@ -1,15 +1,5 @@
 import { useMemo } from "react";
-import {
-  GitCommit,
-  User,
-  Copy,
-  CopyCheck,
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  FileEdit,
-  Loader2,
-} from "lucide-react";
+import { GitCommit, User, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { useCopy } from "@/hooks/useCopy";
@@ -32,46 +22,10 @@ import {
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getOutboxes } from "applesauce-core/helpers";
 import { RepositoryLink } from "../RepositoryLink";
+import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color classes for a status badge
- * Uses theme semantic colors
- */
-function getStatusBadgeClasses(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "bg-muted/50 text-foreground border-border";
-    case 1631: // Merged - positive
-      return "bg-accent/20 text-accent border-accent/30";
-    case 1632: // Closed - negative
-      return "bg-destructive/20 text-destructive border-destructive/30";
-    case 1633: // Draft - muted
-      return "bg-muted text-muted-foreground border-muted-foreground/30";
-    default:
-      return "bg-muted/50 text-foreground border-border";
-  }
-}
 
 /**
  * Detail renderer for Kind 1617 - Patch
@@ -158,54 +112,32 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
   // Format created date using locale utility
   const createdDate = formatTimestamp(event.created_at, "long");
 
-  // Status display - for patches, 1631 means "merged"
-  const statusType = currentStatus
-    ? currentStatus.kind === 1631
-      ? "merged"
-      : getStatusType(currentStatus.kind)
-    : "open";
-  const StatusIcon = currentStatus
-    ? getStatusIcon(currentStatus.kind)
-    : CircleDot;
-  const statusBadgeClasses = currentStatus
-    ? getStatusBadgeClasses(currentStatus.kind)
-    : "bg-muted/50 text-foreground border-border";
-
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
       {/* Patch Header */}
-      <header className="flex flex-col gap-4 pb-4 border-b border-border">
-        {/* Status Badge */}
-        <div className="flex items-center gap-3">
-          {statusLoading ? (
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              <span>Loading status...</span>
-            </span>
-          ) : (
-            <span
-              className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border ${statusBadgeClasses}`}
-            >
-              <StatusIcon className="size-4" />
-              <span className="capitalize">{statusType}</span>
-            </span>
-          )}
+      <header className="flex flex-col gap-3 pb-4 border-b border-border">
+        {/* Title */}
+        <h1 className="text-2xl font-bold">{subject || "Untitled Patch"}</h1>
 
-          {/* Root badges */}
+        {/* Status and Root badges (below title) */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusIndicator
+            statusKind={currentStatus?.kind}
+            loading={statusLoading}
+            eventType="patch"
+            variant="badge"
+          />
           {isRoot && (
-            <span className="px-3 py-1 bg-accent/20 text-accent text-sm border border-accent/30">
+            <span className="px-2 py-1 bg-accent/20 text-accent text-xs border border-accent/30 rounded-sm">
               Root Patch
             </span>
           )}
           {isRootRevision && (
-            <span className="px-3 py-1 bg-primary/20 text-primary text-sm border border-primary/30">
+            <span className="px-2 py-1 bg-primary/20 text-primary text-xs border border-primary/30 rounded-sm">
               Root Revision
             </span>
           )}
         </div>
-
-        {/* Title */}
-        <h1 className="text-3xl font-bold">{subject || "Untitled Patch"}</h1>
 
         {/* Repository Link */}
         {repoAddress && (
