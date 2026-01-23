@@ -134,7 +134,7 @@ const text = getHighlightText(event);
 - `getTagValues(event, name)` - plural version to get array of tag values (src/lib/nostr-utils.ts)
 - `resolveFilterAliases(filter, pubkey, contacts)` - resolves `$me`/`$contacts` aliases (src/lib/nostr-utils.ts)
 - `getDisplayName(pubkey, metadata)` - enhanced version with pubkey fallback (src/lib/nostr-utils.ts)
-- NIP-34 git helpers (src/lib/nip34-helpers.ts) - wraps `getTagValue` for repository, issue, patch metadata
+- NIP-34 git helpers (src/lib/nip34-helpers.ts) - uses `getOrComputeCachedValue` for repository, issue, patch metadata
 - NIP-C0 code snippet helpers (src/lib/nip-c0-helpers.ts) - wraps `getTagValue` for code metadata
 
 **When to use `useMemo`**:
@@ -142,7 +142,40 @@ const text = getHighlightText(event);
 - ✅ Creating objects/arrays for dependency tracking (options, configurations)
 - ✅ Expensive computations that don't call applesauce helpers
 - ❌ Direct calls to applesauce helpers (they cache internally)
-- ❌ Grimoire helpers that wrap `getTagValue` (caching propagates)
+- ❌ Grimoire helpers that use `getOrComputeCachedValue` (they cache internally)
+
+### Writing Helper Libraries for Nostr Events
+
+When creating helper functions that compute derived values from Nostr events, **always use `getOrComputeCachedValue`** from applesauce-core to cache results on the event object:
+
+```typescript
+import { getOrComputeCachedValue } from "applesauce-core/helpers";
+
+// Define a unique symbol for caching
+const MyComputedValueSymbol = Symbol("myComputedValue");
+
+export function getMyComputedValue(event: NostrEvent): string[] {
+  return getOrComputeCachedValue(event, MyComputedValueSymbol, () => {
+    // Expensive computation that iterates over tags, parses content, etc.
+    return event.tags
+      .filter((t) => t[0] === "myTag")
+      .map((t) => t[1]);
+  });
+}
+```
+
+**Why this matters**:
+- Event objects are often accessed multiple times during rendering
+- Without caching, the same computation runs repeatedly (e.g., on every re-render)
+- `getOrComputeCachedValue` stores the result on the event object using the symbol as a key
+- Subsequent calls return the cached value instantly without recomputation
+- Components don't need `useMemo` when calling these helpers
+
+**Best practices for helper libraries**:
+1. Use `getOrComputeCachedValue` for any function that iterates tags, parses content, or does regex matching
+2. Define symbols at module scope (not inside functions) for proper caching
+3. Simple `getTagValue()` calls don't need additional caching (already cached by applesauce)
+4. Group related helpers in NIP-specific files (e.g., `nip34-helpers.ts`, `nip88-helpers.ts`)
 
 ## Major Hooks
 
