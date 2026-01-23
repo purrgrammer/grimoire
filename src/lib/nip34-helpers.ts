@@ -1,5 +1,6 @@
 import type { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers";
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 
 /**
  * NIP-34 Helper Functions
@@ -468,10 +469,6 @@ export function getStatusLabel(kind: number, forIssue = true): string {
       return "updated";
   }
 }
-
-// Import parseReplaceableAddress from applesauce-core for address parsing
-// This parses "kind:pubkey:identifier" format strings into AddressPointer objects
-import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 
 /**
  * Get all valid pubkeys that can set status for an issue/patch/PR

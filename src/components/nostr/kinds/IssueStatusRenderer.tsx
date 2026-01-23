@@ -33,19 +33,20 @@ function getStatusIcon(kind: number) {
 
 /**
  * Get the color classes for a status kind
+ * Uses theme semantic colors
  */
 function getStatusColorClass(kind: number): string {
   switch (kind) {
-    case 1630: // Open
-      return "text-green-500";
-    case 1631: // Resolved/Merged
-      return "text-purple-500";
-    case 1632: // Closed
-      return "text-red-500";
-    case 1633: // Draft
+    case 1630: // Open - neutral
+      return "text-foreground";
+    case 1631: // Resolved/Merged - positive
+      return "text-accent";
+    case 1632: // Closed - negative
+      return "text-destructive";
+    case 1633: // Draft - muted
       return "text-muted-foreground";
     default:
-      return "text-muted-foreground";
+      return "text-foreground";
   }
 }
 

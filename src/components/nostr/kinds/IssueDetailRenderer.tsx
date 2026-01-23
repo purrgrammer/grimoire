@@ -46,19 +46,20 @@ function getStatusIcon(kind: number) {
 
 /**
  * Get the color classes for a status badge
+ * Uses theme semantic colors
  */
 function getStatusBadgeClasses(kind: number): string {
   switch (kind) {
-    case 1630: // Open
-      return "bg-green-500/20 text-green-500 border-green-500/30";
-    case 1631: // Resolved/Merged
-      return "bg-purple-500/20 text-purple-500 border-purple-500/30";
-    case 1632: // Closed
-      return "bg-red-500/20 text-red-500 border-red-500/30";
-    case 1633: // Draft
+    case 1630: // Open - neutral
+      return "bg-muted/50 text-foreground border-border";
+    case 1631: // Resolved/Merged - positive
+      return "bg-accent/20 text-accent border-accent/30";
+    case 1632: // Closed - negative
+      return "bg-destructive/20 text-destructive border-destructive/30";
+    case 1633: // Draft - muted
       return "bg-muted text-muted-foreground border-muted-foreground/30";
     default:
-      return "bg-muted text-muted-foreground border-muted-foreground/30";
+      return "bg-muted/50 text-foreground border-border";
   }
 }
 
@@ -128,7 +129,7 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
     : CircleDot;
   const statusBadgeClasses = currentStatus
     ? getStatusBadgeClasses(currentStatus.kind)
-    : "bg-green-500/20 text-green-500 border-green-500/30";
+    : "bg-muted/50 text-foreground border-border";
 
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
