@@ -5,7 +5,7 @@ import eventStore from "@/services/event-store";
 import { UserName } from "../nostr/UserName";
 import { RichText } from "../nostr/RichText";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
-import type { Conversation } from "@/types/chat";
+import { CHAT_KINDS, type Conversation } from "@/types/chat";
 
 interface ReplyPreviewProps {
   replyTo: EventPointer | AddressPointer;
@@ -68,6 +68,12 @@ export const ReplyPreview = memo(function ReplyPreview({
         ↳ Replying to {eventId.slice(0, 8)}...
       </div>
     );
+  }
+
+  // Only show reply preview for chat kinds (messages, nutzaps, live chat, zap receipts)
+  // This filters out replies to non-chat events like the original note in a thread
+  if (!(CHAT_KINDS as readonly number[]).includes(replyEvent.kind)) {
+    return null;
   }
 
   return (
