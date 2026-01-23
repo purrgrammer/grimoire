@@ -143,11 +143,28 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     const pointer = identifier.value;
     const relayHints = identifier.relays || [];
 
-    // 1. Fetch the provided event
-    const providedEvent = await this.fetchEvent(pointer, relayHints);
+    // 1. Fetch the provided event using eventLoader (properly checks EventStore cache)
+    console.log(
+      `[NIP-22] Resolving conversation from event ${pointer.id.slice(0, 8)}`,
+    );
+
+    const providedEvent = await firstValueFrom(
+      eventLoader(
+        { id: pointer.id, kind: pointer.kind, relays: relayHints },
+        pointer.author,
+      ),
+    );
+
     if (!providedEvent) {
+      console.warn(
+        `[NIP-22] Provided event ${pointer.id.slice(0, 8)} not found`,
+      );
       throw new Error("Event not found");
     }
+
+    console.log(
+      `[NIP-22] Found provided event ${pointer.id.slice(0, 8)} (kind ${providedEvent.kind})`,
+    );
 
     // 2. Determine root event based on kind
     let rootEvent: NostrEvent;
@@ -840,39 +857,6 @@ export class Nip22Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Helper: Fetch an event by pointer
-   */
-  private async fetchEvent(
-    pointer: { id: string; kind?: number },
-    relayHints: string[] = [],
-  ): Promise<NostrEvent | null> {
-    // Check EventStore first
-    const cached = await firstValueFrom(eventStore.event(pointer.id), {
-      defaultValue: undefined,
-    });
-    if (cached) return cached;
-
-    // Not in store - fetch from relays
-    const relays =
-      relayHints.length > 0 ? relayHints : await this.getDefaultRelays();
-
-    const filter: Filter = {
-      ids: [pointer.id],
-      limit: 1,
-    };
-
-    if (pointer.kind !== undefined) {
-      filter.kinds = [pointer.kind];
-    }
-
-    const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
-    );
-
-    return events[0] || null;
-  }
-
-  /**
    * Helper: Fetch event by EventPointer using eventLoader
    * EventLoader properly checks EventStore cache first, then uses smart relay selection
    */
@@ -956,19 +940,6 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       );
       return null;
     }
-  }
-
-  /**
-   * Helper: Get default relays
-   */
-  private async getDefaultRelays(): Promise<string[]> {
-    const activePubkey = accountManager.active$.value?.pubkey;
-    if (activePubkey) {
-      const outbox = await this.getOutboxRelays(activePubkey);
-      if (outbox.length > 0) return outbox.slice(0, 5);
-    }
-
-    return AGGREGATOR_RELAYS;
   }
 
   /**
