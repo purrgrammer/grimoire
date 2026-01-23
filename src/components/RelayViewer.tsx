@@ -10,16 +10,16 @@ import { EventFeed } from "./nostr/EventFeed";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import {
   applySpellParameters,
-  decodeSpell,
   detectCommandType,
 } from "@/lib/spell-conversion";
-import { parseReqCommand } from "@/lib/req-parser";
 import { useMemo, useState } from "react";
 import { NIPBadge } from "./NIPBadge";
 import { KindBadge } from "./KindBadge";
 import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
 import { SpellHeader } from "./timeline/SpellHeader";
 import CountViewer from "./CountViewer";
+import { extractSpellKinds } from "@/lib/spell-display";
+import { useParseSpell } from "@/hooks/useParseSpell";
 
 export interface RelayViewerProps {
   url: string;
@@ -49,72 +49,7 @@ function SpellTabContent({
   const { addWindow } = useGrimoire();
 
   // Parse spell and get filter - handle both published (with event) and local (command-only) spells
-  const parsed = useMemo(() => {
-    if (!targetRelay) {
-      console.log(`[RelaySpell:${spell.name || spellId}] No target relay`);
-      return null;
-    }
-
-    try {
-      console.log(`[RelaySpell:${spell.name || spellId}] Parsing spell:`, {
-        hasEvent: !!spell.event,
-        command: spell.command,
-        parameterType: spell.parameterType,
-      });
-
-      // If we have a published event, decode it
-      if (spell.event) {
-        const decoded = decodeSpell(spell.event);
-        console.log(
-          `[RelaySpell:${spell.name || spellId}] Decoded from event:`,
-          {
-            filter: decoded.filter,
-            relays: decoded.relays,
-            parameter: decoded.parameter,
-          },
-        );
-        return decoded;
-      }
-
-      // For local spells, parse the command directly
-      console.log(
-        `[RelaySpell:${spell.name || spellId}] Parsing local spell command`,
-      );
-      const commandWithoutPrefix = spell.command
-        .replace(/^\s*(req|count)\s+/i, "")
-        .trim();
-      const tokens = commandWithoutPrefix.split(/\s+/);
-      const commandParsed = parseReqCommand(tokens);
-
-      // Create a ParsedSpell-like object for local spells
-      const localParsed = {
-        command: spell.command,
-        filter: commandParsed.filter,
-        relays: commandParsed.relays,
-        closeOnEose: commandParsed.closeOnEose,
-        parameter: spell.parameterType
-          ? {
-              type: spell.parameterType,
-              default: spell.parameterDefault,
-            }
-          : undefined,
-      };
-
-      console.log(`[RelaySpell:${spell.name || spellId}] Parsed local spell:`, {
-        filter: localParsed.filter,
-        relays: localParsed.relays,
-        parameter: localParsed.parameter,
-      });
-
-      return localParsed;
-    } catch (error) {
-      console.error(
-        `[RelaySpell:${spell.name || spellId}] Failed to parse spell:`,
-        error,
-      );
-      return null;
-    }
-  }, [spell, targetRelay, spellId]);
+  const parsed = useParseSpell(spell, targetRelay || "", spellId);
 
   // Apply parameters to get final filter
   const appliedFilter = useMemo(() => {
@@ -357,23 +292,7 @@ export function RelayViewer({ url }: RelayViewerProps) {
               <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
                 {relaySpells.map((spell) => {
                   // Extract kinds from spell for display
-                  const spellKinds = (() => {
-                    try {
-                      if (spell.event) {
-                        const decoded = decodeSpell(spell.event);
-                        return decoded.filter.kinds?.slice(0, 3) || [];
-                      }
-                      // For local spells, parse command
-                      const commandWithoutPrefix = spell.command
-                        .replace(/^\s*(req|count)\s+/i, "")
-                        .trim();
-                      const tokens = commandWithoutPrefix.split(/\s+/);
-                      const parsed = parseReqCommand(tokens);
-                      return parsed.filter.kinds?.slice(0, 3) || [];
-                    } catch {
-                      return [];
-                    }
-                  })();
+                  const spellKinds = extractSpellKinds(spell);
 
                   return (
                     <TabsTrigger
