@@ -135,6 +135,14 @@ function SpellTabContent({
 
   // Resolve relays - for $relay spells, we query FROM the target relay itself
   const finalRelays = useMemo(() => {
+    // Don't select relays until filter is resolved (variables substituted)
+    if (!appliedFilter) {
+      console.log(
+        `[RelaySpell:${spell.name || spellId}] Waiting for filter resolution before selecting relays`,
+      );
+      return [];
+    }
+
     // Use explicit relays from spell if provided
     if (parsed?.relays && parsed.relays.length > 0) {
       console.log(
@@ -149,7 +157,7 @@ function SpellTabContent({
       targetRelay,
     ]);
     return [targetRelay];
-  }, [parsed?.relays, targetRelay, spell.name, spellId]);
+  }, [appliedFilter, parsed?.relays, targetRelay, spell.name, spellId]);
 
   // Fetch events using the applied filter
   // Always call the hook unconditionally (React Rules of Hooks)

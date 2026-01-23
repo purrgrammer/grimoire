@@ -151,6 +151,14 @@ function SpellTabContent({
 
   // Resolve relays - use explicit relays from spell, or use relay hints from target event
   const finalRelays = useMemo(() => {
+    // Don't select relays until filter is resolved (variables substituted)
+    if (!appliedFilter) {
+      console.log(
+        `[EventSpell:${spell.name || spellId}] Waiting for filter resolution before selecting relays`,
+      );
+      return [];
+    }
+
     // Use explicit relays from spell if provided
     if (parsed?.relays && parsed.relays.length > 0) {
       console.log(
@@ -178,7 +186,7 @@ function SpellTabContent({
       `[EventSpell:${spell.name || spellId}] Using fallback AGGREGATOR_RELAYS`,
     );
     return AGGREGATOR_RELAYS;
-  }, [parsed?.relays, targetEvent, spell.name, spellId]);
+  }, [appliedFilter, parsed?.relays, targetEvent, spell.name, spellId]);
 
   // Fetch events using the applied filter
   // Always call the hook unconditionally (React Rules of Hooks)
@@ -410,9 +418,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       </div>
 
       {/* Rendered Content */}
-      <div
-        className={`overflow-y-auto ${eventSpells.length > 0 ? "flex-1 min-h-0" : ""}`}
-      >
+      <div className="overflow-y-auto">
         <EventErrorBoundary event={event}>
           <DetailKindRenderer event={event} />
         </EventErrorBoundary>
