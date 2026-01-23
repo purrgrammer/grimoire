@@ -65,70 +65,47 @@ export function ReportRenderer({ event }: BaseEventProps) {
     );
   }
 
+  const reasonLabel = REPORT_TYPE_LABELS[report.reportType].toLowerCase();
+
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-3">
-        {/* Report header with type badge */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Report header: "Reported <username> for <reason>" */}
+        <div className="flex items-center gap-1.5 flex-wrap text-sm">
           <Flag className="size-4 text-muted-foreground flex-shrink-0" />
-          <span className="text-sm text-muted-foreground">Reported</span>
-
-          {/* Report type badge - neutral/muted styling */}
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+          <span className="text-muted-foreground">Reported</span>
+          <UserName pubkey={report.reportedPubkey} />
+          <span className="text-muted-foreground">for</span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
             {getReportTypeIcon(report.reportType)}
-            {REPORT_TYPE_LABELS[report.reportType]}
+            {reasonLabel}
           </span>
         </div>
 
-        {/* Reported target */}
-        <div className="flex flex-col gap-2">
-          {/* Profile being reported */}
-          {report.targetType === "profile" && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Profile:</span>
-              <UserName pubkey={report.reportedPubkey} />
-            </div>
-          )}
+        {/* Reported event - collapsed by default (depth=2) */}
+        {report.targetType === "event" && report.reportedEventId && (
+          <QuotedEvent
+            eventPointer={{ id: report.reportedEventId }}
+            depth={2}
+          />
+        )}
 
-          {/* Event being reported */}
-          {report.targetType === "event" && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Event by:</span>
-                <UserName pubkey={report.reportedPubkey} />
-              </div>
-
-              {/* Embedded reported event using QuotedEvent */}
-              {report.reportedEventId && (
-                <QuotedEvent
-                  eventPointer={{ id: report.reportedEventId }}
-                  depth={1}
-                />
-              )}
+        {/* Blob details */}
+        {report.targetType === "blob" && (
+          <div className="flex flex-col gap-1 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Hash:</span>
+              <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                {report.reportedBlobHash?.slice(0, 16)}...
+              </code>
             </div>
-          )}
-
-          {/* Blob being reported */}
-          {report.targetType === "blob" && (
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Blob by:</span>
-                <UserName pubkey={report.reportedPubkey} />
+            {report.serverUrls && report.serverUrls.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Server: {report.serverUrls[0]}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Hash:</span>
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                  {report.reportedBlobHash?.slice(0, 16)}...
-                </code>
-              </div>
-              {report.serverUrls && report.serverUrls.length > 0 && (
-                <div className="text-xs text-muted-foreground">
-                  Server: {report.serverUrls[0]}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Report comment */}
         {report.comment && (
