@@ -107,7 +107,7 @@ export function IssueRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         {/* Title */}
         <ClickableEventTitle
           event={event}
@@ -116,20 +116,20 @@ export function IssueRenderer({ event }: BaseEventProps) {
           {title || "Untitled Issue"}
         </ClickableEventTitle>
 
-        {/* Status and Repository */}
-        <div className="flex items-center gap-2 text-xs">
-          <StatusIndicator statusKind={currentStatus?.kind} eventType="issue" />
-          {repoAddress && (
-            <>
-              <span className="text-muted-foreground">in</span>
-              <RepositoryLink repoAddress={repoAddress} />
-            </>
-          )}
-        </div>
+        {/* Status */}
+        <StatusIndicator statusKind={currentStatus?.kind} eventType="issue" />
+
+        {/* Repository */}
+        {repoAddress && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">in</span>
+            <RepositoryLink repoAddress={repoAddress} />
+          </div>
+        )}
 
         {/* Labels */}
         {labels.length > 0 && (
-          <div className="flex flex-wrap line-clamp-2 items-center gap-1 overflow-x-scroll my-1">
+          <div className="flex flex-wrap line-clamp-2 items-center gap-1 overflow-x-scroll mt-1">
             {labels.map((label, idx) => (
               <Label key={idx}>{label}</Label>
             ))}

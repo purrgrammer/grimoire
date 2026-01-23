@@ -1,54 +1,17 @@
-import { CircleDot, CheckCircle2, XCircle, FileEdit } from "lucide-react";
 import {
   BaseEventContainer,
   type BaseEventProps,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
 import { EmbeddedEvent } from "../EmbeddedEvent";
+import { StatusIndicator } from "../StatusIndicator";
+import { MarkdownContent } from "../MarkdownContent";
 import { useGrimoire } from "@/core/state";
 import {
   getStatusRootEventId,
   getStatusRootRelayHint,
-  getStatusLabel,
 } from "@/lib/nip34-helpers";
 import type { EventPointer } from "nostr-tools/nip19";
-
-/**
- * Get the icon for a status kind
- */
-function getStatusIcon(kind: number) {
-  switch (kind) {
-    case 1630:
-      return CircleDot;
-    case 1631:
-      return CheckCircle2;
-    case 1632:
-      return XCircle;
-    case 1633:
-      return FileEdit;
-    default:
-      return CircleDot;
-  }
-}
-
-/**
- * Get the color classes for a status kind
- * Uses theme semantic colors
- */
-function getStatusColorClass(kind: number): string {
-  switch (kind) {
-    case 1630: // Open - neutral
-      return "text-foreground";
-    case 1631: // Resolved/Merged - positive
-      return "text-accent";
-    case 1632: // Closed - negative
-      return "text-destructive";
-    case 1633: // Draft - muted
-      return "text-muted-foreground";
-    default:
-      return "text-foreground";
-  }
-}
 
 /**
  * Renderer for Kind 1630-1633 - Issue/Patch/PR Status Events
@@ -59,10 +22,6 @@ export function IssueStatusRenderer({ event }: BaseEventProps) {
 
   const rootEventId = getStatusRootEventId(event);
   const relayHint = getStatusRootRelayHint(event);
-  const statusLabel = getStatusLabel(event.kind);
-
-  const StatusIcon = getStatusIcon(event.kind);
-  const colorClass = getStatusColorClass(event.kind);
 
   // Build event pointer with relay hint if available
   const eventPointer: EventPointer | undefined = rootEventId
@@ -74,20 +33,17 @@ export function IssueStatusRenderer({ event }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {/* Status action header */}
-        <div className={`flex items-center gap-2 text-sm ${colorClass}`}>
-          <StatusIcon className="size-4" />
-          <ClickableEventTitle event={event}>
-            <span>{statusLabel}</span>
-          </ClickableEventTitle>
-        </div>
+        <ClickableEventTitle event={event}>
+          <StatusIndicator statusKind={event.kind} eventType="issue" />
+        </ClickableEventTitle>
 
         {/* Optional comment from the status event */}
         {event.content && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {event.content}
-          </p>
+          <div className="text-xs text-muted-foreground line-clamp-2">
+            <MarkdownContent content={event.content} />
+          </div>
         )}
 
         {/* Embedded referenced issue/patch/PR */}
