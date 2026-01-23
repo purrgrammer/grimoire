@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { GitCommit, User, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
+import { MarkdownContent } from "../MarkdownContent";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { useCopy } from "@/hooks/useCopy";
 import { formatTimestamp } from "@/hooks/useLocale";
@@ -271,9 +272,9 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
             </time>
           </div>
           {currentStatus.content && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {currentStatus.content}
-            </p>
+            <div className="text-sm mt-1">
+              <MarkdownContent content={currentStatus.content} />
+            </div>
           )}
         </section>
       )}

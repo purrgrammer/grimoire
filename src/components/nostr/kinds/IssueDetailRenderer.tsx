@@ -186,9 +186,9 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
             </time>
           </div>
           {currentStatus.content && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {currentStatus.content}
-            </p>
+            <div className="text-sm mt-1">
+              <MarkdownContent content={currentStatus.content} />
+            </div>
           )}
         </section>
       )}
