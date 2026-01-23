@@ -21,7 +21,11 @@ import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import {
+  AGGREGATOR_RELAYS,
+  eventLoader,
+  addressLoader,
+} from "@/services/loaders";
 import { mergeRelaySets, getOutboxes } from "applesauce-core/helpers";
 import {
   getEventPointerFromETag,
@@ -869,244 +873,89 @@ export class Nip22Adapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Helper: Extract relay hints from comment event tags
-   * NIP-22 comments (kind 1111) may have relay hints in A/E tags
-   */
-  private extractRelayHintsFromComment(
-    comment: NostrEvent,
-    targetEventId?: string,
-    targetCoordinate?: string,
-  ): string[] {
-    const relays: string[] = [];
-
-    // Look for A-tag (addressable root) with relay hint
-    if (targetCoordinate) {
-      for (const tag of comment.tags) {
-        if (
-          (tag[0] === "A" || tag[0] === "a") &&
-          tag[1] === targetCoordinate &&
-          tag[2]
-        ) {
-          relays.push(tag[2]);
-        }
-      }
-    }
-
-    // Look for E-tag (regular event root) with relay hint
-    if (targetEventId) {
-      for (const tag of comment.tags) {
-        if (
-          (tag[0] === "E" || tag[0] === "e") &&
-          tag[1] === targetEventId &&
-          tag[2]
-        ) {
-          relays.push(tag[2]);
-        }
-      }
-    }
-
-    return relays;
-  }
-
-  /**
-   * Helper: Fetch event by EventPointer with improved relay selection
-   * Uses: relay hints from pointer, relay hints from comment tags,
-   *       comment author's outbox relays (they saw the root somewhere),
-   *       root author's outbox relays, aggregator relays
+   * Helper: Fetch event by EventPointer using eventLoader
+   * EventLoader properly checks EventStore cache first, then uses smart relay selection
    */
   private async fetchEventByPointer(
     pointer: EventPointer,
-    additionalHints: string[] = [],
+    _additionalHints: string[] = [],
     commentEvent?: NostrEvent,
   ): Promise<NostrEvent | null> {
-    // Check EventStore first
-    const cached = await firstValueFrom(eventStore.event(pointer.id), {
-      defaultValue: undefined,
-    });
-    if (cached) return cached;
-
     console.log(
-      `[NIP-22] Fetching root event ${pointer.id.slice(0, 8)} for comment ${commentEvent?.id.slice(0, 8) || "unknown"}`,
+      `[NIP-22] Fetching root event ${pointer.id.slice(0, 8)} via eventLoader (comment: ${commentEvent?.id.slice(0, 8) || "none"})`,
     );
 
-    // Gather relay hints from all available sources
-    const pointerHints = pointer.relays || [];
-    const commentHints = commentEvent
-      ? this.extractRelayHintsFromComment(commentEvent, pointer.id)
-      : [];
-
-    // Get comment author's outbox relays (they saw the root event somewhere)
-    let commentAuthorOutbox: string[] = [];
-    if (commentEvent) {
-      try {
-        const relayListEvent = await firstValueFrom(
-          eventStore.replaceable(10002, commentEvent.pubkey, ""),
-          { defaultValue: undefined },
-        );
-        if (relayListEvent) {
-          commentAuthorOutbox = getOutboxes(relayListEvent);
-        }
-      } catch {
-        // Ignore errors
-      }
-    }
-
-    // Get root author's outbox relays if we know the author
-    let rootAuthorOutbox: string[] = [];
-    if (pointer.author) {
-      try {
-        const relayListEvent = await firstValueFrom(
-          eventStore.replaceable(10002, pointer.author, ""),
-          { defaultValue: undefined },
-        );
-        if (relayListEvent) {
-          rootAuthorOutbox = getOutboxes(relayListEvent);
-        }
-      } catch {
-        // Ignore errors
-      }
-    }
-
-    // Merge all hints with priority:
-    // 1. Pointer hints (explicit in nevent)
-    // 2. Comment tag hints (relay where comment saw the root)
-    // 3. Comment author outbox (where they read from)
-    // 4. Root author outbox (where they published to)
-    // 5. Additional hints
-    // 6. Aggregator relays (fallback)
-    const allHints = mergeRelaySets(
-      pointerHints,
-      commentHints,
-      commentAuthorOutbox.slice(0, 5), // More relays from comment author
-      rootAuthorOutbox.slice(0, 5), // More relays from root author
-      additionalHints,
-      AGGREGATOR_RELAYS, // Always include aggregators as fallback
-    );
-
-    console.log(
-      `[NIP-22] Querying ${allHints.length} relays for root event (pointer=${pointerHints.length}, comment=${commentHints.length}, commentAuthor=${commentAuthorOutbox.length}, rootAuthor=${rootAuthorOutbox.length}, agg=${AGGREGATOR_RELAYS.length})`,
-    );
-
-    const filter: Filter = {
-      ids: [pointer.id],
-      limit: 1,
-    };
-
-    if (pointer.kind !== undefined) {
-      filter.kinds = [pointer.kind];
-    }
-
-    const events = await firstValueFrom(
-      pool.request(allHints, [filter], { eventStore }).pipe(toArray()),
-    );
-
-    const found = events[0] || null;
-    if (found) {
-      console.log(`[NIP-22] Found root event ${pointer.id.slice(0, 8)}`);
-    } else {
-      console.warn(
-        `[NIP-22] Root event ${pointer.id.slice(0, 8)} not found on any of ${allHints.length} relays`,
+    try {
+      // Use eventLoader which:
+      // 1. Checks EventStore cache first (proper observable handling)
+      // 2. Extracts relay hints from context event (comment)
+      // 3. Uses smart relay selection (author outbox, seen relays, etc.)
+      // 4. Falls back to aggregators
+      const event = await firstValueFrom(
+        eventLoader(pointer, commentEvent || pointer.author),
       );
-    }
 
-    return found;
+      if (event) {
+        console.log(
+          `[NIP-22] Found root event ${pointer.id.slice(0, 8)} in cache or via relays`,
+        );
+      } else {
+        console.warn(`[NIP-22] Root event ${pointer.id.slice(0, 8)} not found`);
+      }
+
+      return event || null;
+    } catch (error) {
+      console.error(
+        `[NIP-22] Error fetching root event ${pointer.id.slice(0, 8)}:`,
+        error,
+      );
+      return null;
+    }
   }
 
   /**
-   * Helper: Fetch addressable event by AddressPointer with improved relay selection
-   * Uses: relay hints from pointer, relay hints from comment tags,
-   *       comment author's outbox relays, root author's outbox relays, aggregator relays
+   * Helper: Fetch addressable event by AddressPointer using addressLoader
+   * AddressLoader properly checks EventStore cache first, then uses smart relay selection
    */
   private async fetchAddressableEvent(
     pointer: AddressPointer,
-    additionalHints: string[] = [],
+    _additionalHints: string[] = [],
     commentEvent?: NostrEvent,
   ): Promise<NostrEvent | null> {
     const { kind, pubkey, identifier } = pointer;
-
-    // Check EventStore first (using replaceable)
-    const cached = await firstValueFrom(
-      eventStore.replaceable(kind, pubkey, identifier),
-      { defaultValue: undefined },
-    );
-    if (cached) return cached;
-
     const coordinate = `${kind}:${pubkey}:${identifier}`;
+
     console.log(
-      `[NIP-22] Fetching addressable root ${coordinate} for comment ${commentEvent?.id.slice(0, 8) || "unknown"}`,
+      `[NIP-22] Fetching addressable root ${coordinate} via addressLoader (comment: ${commentEvent?.id.slice(0, 8) || "none"})`,
     );
 
-    // Gather relay hints from all available sources
-    const pointerHints = pointer.relays || [];
-    const commentHints = commentEvent
-      ? this.extractRelayHintsFromComment(commentEvent, undefined, coordinate)
-      : [];
-
-    // Get comment author's outbox relays (they saw the root event somewhere)
-    let commentAuthorOutbox: string[] = [];
-    if (commentEvent) {
-      try {
-        const relayListEvent = await firstValueFrom(
-          eventStore.replaceable(10002, commentEvent.pubkey, ""),
-          { defaultValue: undefined },
-        );
-        if (relayListEvent) {
-          commentAuthorOutbox = getOutboxes(relayListEvent);
-        }
-      } catch {
-        // Ignore errors
-      }
-    }
-
-    // Get root author's outbox relays
-    let rootAuthorOutbox: string[] = [];
     try {
-      const relayListEvent = await firstValueFrom(
-        eventStore.replaceable(10002, pubkey, ""),
-        { defaultValue: undefined },
+      // Use addressLoader which:
+      // 1. Checks EventStore replaceable cache first (proper observable handling)
+      // 2. Uses author's outbox relays for discovery
+      // 3. Falls back to aggregators (via extraRelays config)
+      // Note: addressLoader doesn't take context, so we can't pass comment event
+      // but it still uses author outbox which is the most important source
+      const event = await firstValueFrom(
+        addressLoader({ kind, pubkey, identifier }),
       );
-      if (relayListEvent) {
-        rootAuthorOutbox = getOutboxes(relayListEvent);
+
+      if (event) {
+        console.log(
+          `[NIP-22] Found addressable root ${coordinate} in cache or via relays`,
+        );
+      } else {
+        console.warn(`[NIP-22] Addressable root ${coordinate} not found`);
       }
-    } catch {
-      // Ignore errors
-    }
 
-    // Merge all hints with priority (same as fetchEventByPointer)
-    const allHints = mergeRelaySets(
-      pointerHints,
-      commentHints,
-      commentAuthorOutbox.slice(0, 5),
-      rootAuthorOutbox.slice(0, 5),
-      additionalHints,
-      AGGREGATOR_RELAYS,
-    );
-
-    console.log(
-      `[NIP-22] Querying ${allHints.length} relays for addressable root (pointer=${pointerHints.length}, comment=${commentHints.length}, commentAuthor=${commentAuthorOutbox.length}, rootAuthor=${rootAuthorOutbox.length}, agg=${AGGREGATOR_RELAYS.length})`,
-    );
-
-    const filter: Filter = {
-      kinds: [kind],
-      authors: [pubkey],
-      "#d": [identifier],
-      limit: 1,
-    };
-
-    const events = await firstValueFrom(
-      pool.request(allHints, [filter], { eventStore }).pipe(toArray()),
-    );
-
-    const found = events[0] || null;
-    if (found) {
-      console.log(`[NIP-22] Found addressable root ${coordinate}`);
-    } else {
-      console.warn(
-        `[NIP-22] Addressable root ${coordinate} not found on any of ${allHints.length} relays`,
+      return event || null;
+    } catch (error) {
+      console.error(
+        `[NIP-22] Error fetching addressable root ${coordinate}:`,
+        error,
       );
+      return null;
     }
-
-    return found;
   }
 
   /**
