@@ -15,10 +15,12 @@ import {
   findCurrentStatus,
 } from "@/lib/nip34-helpers";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
+import { getOutboxes } from "applesauce-core/helpers";
 import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 /**
  * Get the icon for a status kind
@@ -84,11 +86,34 @@ export function IssueRenderer({ event }: BaseEventProps) {
 
   const repositoryEvent = useNostrEvent(repoPointer);
 
-  // Get relays configured in the repository for fetching status events
-  const statusRelays = useMemo(
-    () => (repositoryEvent ? getRepositoryRelays(repositoryEvent) : []),
-    [repositoryEvent],
-  );
+  // Fetch repo author's relay list for fallback
+  const repoAuthorRelayListPointer = useMemo(() => {
+    if (!parsedRepo?.pubkey) return undefined;
+    return { kind: 10002, pubkey: parsedRepo.pubkey, identifier: "" };
+  }, [parsedRepo?.pubkey]);
+
+  const repoAuthorRelayList = useNostrEvent(repoAuthorRelayListPointer);
+
+  // Build relay list with fallbacks:
+  // 1. Repository configured relays
+  // 2. Repo author's outbox (write) relays
+  // 3. AGGREGATOR_RELAYS as final fallback
+  const statusRelays = useMemo(() => {
+    // Try repository relays first
+    if (repositoryEvent) {
+      const repoRelays = getRepositoryRelays(repositoryEvent);
+      if (repoRelays.length > 0) return repoRelays;
+    }
+
+    // Try repo author's outbox relays
+    if (repoAuthorRelayList) {
+      const authorOutbox = getOutboxes(repoAuthorRelayList);
+      if (authorOutbox.length > 0) return authorOutbox;
+    }
+
+    // Fallback to aggregator relays
+    return AGGREGATOR_RELAYS;
+  }, [repositoryEvent, repoAuthorRelayList]);
 
   // Fetch status events that reference this issue
   const statusFilter = useMemo(
