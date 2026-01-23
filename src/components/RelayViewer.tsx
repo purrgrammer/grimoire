@@ -8,13 +8,18 @@ import { useGrimoire } from "@/core/state";
 import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
 import { EventFeed } from "./nostr/EventFeed";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
-import { applySpellParameters, decodeSpell } from "@/lib/spell-conversion";
+import {
+  applySpellParameters,
+  decodeSpell,
+  detectCommandType,
+} from "@/lib/spell-conversion";
 import { parseReqCommand } from "@/lib/req-parser";
 import { useMemo, useState } from "react";
 import { NIPBadge } from "./NIPBadge";
 import { KindBadge } from "./KindBadge";
 import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
 import { SpellHeader } from "./timeline/SpellHeader";
+import CountViewer from "./CountViewer";
 
 export interface RelayViewerProps {
   url: string;
@@ -190,6 +195,12 @@ function SpellTabContent({
     eoseReceived,
   });
 
+  // Determine if this is a COUNT spell or REQ spell
+  const isCountSpell = useMemo(() => {
+    if (!parsed) return false;
+    return detectCommandType(parsed.command) === "COUNT";
+  }, [parsed]);
+
   return (
     <TabsContent
       value={spellId}
@@ -202,6 +213,12 @@ function SpellTabContent({
             <p className="text-xs mt-2">Check console for details</p>
           </div>
         </div>
+      ) : isCountSpell ? (
+        <CountViewer
+          filter={appliedFilter}
+          relays={finalRelays}
+          needsAccount={false}
+        />
       ) : (
         <>
           <SpellHeader
