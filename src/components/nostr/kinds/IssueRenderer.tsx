@@ -9,6 +9,7 @@ import {
   getIssueTitle,
   getIssueLabels,
   getIssueRepositoryAddress,
+  getRepositoryRelays,
   getStatusType,
   getValidStatusAuthors,
   findCurrentStatus,
@@ -18,7 +19,6 @@ import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
 
 /**
  * Get the icon for a status kind
@@ -84,6 +84,12 @@ export function IssueRenderer({ event }: BaseEventProps) {
 
   const repositoryEvent = useNostrEvent(repoPointer);
 
+  // Get relays configured in the repository for fetching status events
+  const statusRelays = useMemo(
+    () => (repositoryEvent ? getRepositoryRelays(repositoryEvent) : []),
+    [repositoryEvent],
+  );
+
   // Fetch status events that reference this issue
   const statusFilter = useMemo(
     () => ({
@@ -96,7 +102,7 @@ export function IssueRenderer({ event }: BaseEventProps) {
   const { events: statusEvents } = useTimeline(
     `issue-status-${event.id}`,
     statusFilter,
-    AGGREGATOR_RELAYS,
+    statusRelays,
     { limit: 10 },
   );
 
