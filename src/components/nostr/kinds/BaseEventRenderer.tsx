@@ -36,7 +36,7 @@ import { nip19 } from "nostr-tools";
 import { getTagValue } from "applesauce-core/helpers";
 import { parseAddressPointer } from "@/lib/nip89-helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
-import { getCommentReplyPointer } from "applesauce-common/helpers";
+import { getCommentRootPointer } from "applesauce-common/helpers";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
@@ -218,7 +218,7 @@ export function EventMenu({
   const openChatWindow = () => {
     // Special handling for kind 1111 comments - open chat with root event
     if (event.kind === 1111) {
-      const rootPointer = getCommentReplyPointer(event);
+      const rootPointer = getCommentRootPointer(event);
       if (rootPointer) {
         // Encode root as nevent/naddr and parse
         const seenRelaysSet = getSeenRelays(event);
@@ -455,7 +455,7 @@ export function EventContextMenu({
   const openChatWindow = () => {
     // Special handling for kind 1111 comments - open chat with root event
     if (event.kind === 1111) {
-      const rootPointer = getCommentReplyPointer(event);
+      const rootPointer = getCommentRootPointer(event);
       if (rootPointer) {
         // Encode root as nevent/naddr and parse
         const seenRelaysSet = getSeenRelays(event);
