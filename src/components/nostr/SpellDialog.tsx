@@ -164,8 +164,8 @@ export function SpellDialog({
     }
   }, [mode, existingSpell, open, initialCommand]);
 
-  // Form is always valid (all fields optional)
-  const isFormValid = true;
+  // Form validation - name is now mandatory
+  const isFormValid = name.trim().length > 0;
 
   // Reset form and close dialog
   const handleClose = () => {
@@ -369,13 +369,10 @@ export function SpellDialog({
             </p>
           </div>
 
-          {/* Name field - published */}
+          {/* Name field - published - REQUIRED */}
           <div className="grid gap-2">
             <label htmlFor="name" className="text-sm font-medium">
-              Name{" "}
-              <span className="text-muted-foreground text-xs">
-                (optional, published)
-              </span>
+              Name <span className="text-red-500">*</span>
             </label>
             <Input
               id="name"
@@ -383,9 +380,10 @@ export function SpellDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isBusy}
+              required
             />
             <p className="text-muted-foreground text-xs">
-              Public spell name (shown to others if published)
+              Required - Name shown in spell tabs
             </p>
           </div>
 
