@@ -35,8 +35,8 @@ function getStatusColorClass(kind: number): string {
       return "text-foreground";
     case 1631: // Resolved/Merged - positive
       return "text-accent";
-    case 1632: // Closed - negative
-      return "text-destructive";
+    case 1632: // Closed - warning (less aggressive than destructive)
+      return "text-warning";
     case 1633: // Draft - muted
       return "text-muted-foreground";
     default:
@@ -54,8 +54,8 @@ function getStatusBadgeClasses(kind: number): string {
       return "bg-muted/50 text-foreground border-border";
     case 1631: // Resolved/Merged - positive
       return "bg-accent/20 text-accent border-accent/30";
-    case 1632: // Closed - negative
-      return "bg-destructive/20 text-destructive border-destructive/30";
+    case 1632: // Closed - warning (less aggressive than destructive)
+      return "bg-warning/20 text-warning border-warning/30";
     case 1633: // Draft - muted
       return "bg-muted text-muted-foreground border-muted-foreground/30";
     default:

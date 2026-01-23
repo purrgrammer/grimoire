@@ -122,9 +122,9 @@
     --ring: 212.7 26.8% 83.9%;
 
     /* Status colors */
-    --success: 142 76% 36%;
-    --warning: 45 93% 47%;
-    --info: 199 89% 48%;
+    --success: 142 76% 46%;
+    --warning: 38 92% 60%;
+    --info: 199 89% 58%;
 
     /* Nostr-specific colors */
     --zap: 45 93% 58%;
