@@ -9,6 +9,7 @@ import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
 import { parseZapCommand } from "@/lib/zap-parser";
+import { parseWalletCommand } from "@/lib/wallet-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -843,14 +844,32 @@ export const manPages: Record<string, ManPageEntry> = {
   wallet: {
     name: "wallet",
     section: "1",
-    synopsis: "wallet",
+    synopsis: "wallet [nwc|nip-61]",
     description:
-      "View and manage your Nostr Wallet Connect (NWC) Lightning wallet. Display wallet balance, transaction history, send/receive payments, and view wallet capabilities. The wallet interface adapts based on the methods supported by your connected wallet provider.",
-    examples: ["wallet    Open wallet viewer and manage Lightning payments"],
+      "View and manage your wallet. Supports NWC (Nostr Wallet Connect) for Lightning payments and NIP-61 for Cashu ecash. The wallet interface adapts based on the wallet type and supported capabilities.",
+    options: [
+      {
+        flag: "nwc",
+        description:
+          "NWC Lightning wallet (default). Connect via nostr+walletconnect:// URI.",
+      },
+      {
+        flag: "nip-61",
+        description:
+          "NIP-60 Cashu ecash wallet. View balance, history, and manage ecash tokens stored on Nostr relays.",
+      },
+    ],
+    examples: [
+      "wallet            Open NWC Lightning wallet (default)",
+      "wallet nwc        Open NWC Lightning wallet",
+      "wallet nip-61     Open Cashu ecash wallet",
+      "wallet cashu      Alias for nip-61",
+    ],
     seeAlso: ["profile"],
     appId: "wallet",
     category: "Nostr",
-    defaultProps: {},
+    argParser: (args: string[]) => parseWalletCommand(args),
+    defaultProps: { subcommand: "nwc" },
   },
   post: {
     name: "post",
