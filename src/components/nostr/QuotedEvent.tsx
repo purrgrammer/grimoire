@@ -18,6 +18,8 @@ interface QuotedEventProps {
   depth?: number;
   /** Optional className for container */
   className?: string;
+  /** Hide preview text when collapsed (for sensitive content) */
+  hidePreview?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export function QuotedEvent({
   onOpen,
   depth = 1,
   className,
+  hidePreview = false,
 }: QuotedEventProps) {
   const [isExpanded, setIsExpanded] = useState(depth < 2);
 
@@ -99,10 +102,17 @@ export function QuotedEvent({
       >
         <div className="flex items-center gap-2 min-w-0">
           <UserName pubkey={event.pubkey} className="text-xs font-medium" />
-          <span className="text-xs text-muted-foreground truncate">
-            {previewText}
-            {hasMore && "..."}
-          </span>
+          {!hidePreview && (
+            <span className="text-xs text-muted-foreground truncate">
+              {previewText}
+              {hasMore && "..."}
+            </span>
+          )}
+          {hidePreview && !isExpanded && (
+            <span className="text-xs text-muted-foreground italic">
+              Click to reveal content
+            </span>
+          )}
         </div>
         {isExpanded ? (
           <ChevronUp className="size-3 flex-shrink-0" />

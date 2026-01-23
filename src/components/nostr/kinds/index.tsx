@@ -157,6 +157,7 @@ import { GoalDetailRenderer } from "./GoalDetailRenderer";
 import { PollRenderer } from "./PollRenderer";
 import { PollDetailRenderer } from "./PollDetailRenderer";
 import { PollResponseRenderer } from "./PollResponseRenderer";
+import { ReportRenderer, ReportDetailRenderer } from "./ReportRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -187,6 +188,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
   1621: IssueRenderer, // Issue (NIP-34)
+  1984: ReportRenderer, // Report (NIP-56)
   9041: GoalRenderer, // Zap Goal (NIP-75)
   9735: Kind9735Renderer, // Zap Receipt
   9802: Kind9802Renderer, // Highlight
@@ -296,6 +298,7 @@ const detailRenderers: Record<
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
+  1984: ReportDetailRenderer, // Report Detail (NIP-56)
   9041: GoalDetailRenderer, // Zap Goal Detail (NIP-75)
   9802: Kind9802DetailRenderer, // Highlight Detail
   8000: AddUserDetailRenderer, // Add User Detail (NIP-43)
