@@ -226,8 +226,6 @@ function SpellTabContent({
       ) : (
         <>
           <SpellHeader
-            spellName={spell.name || "Unnamed Spell"}
-            spellEventId={spell.event?.id}
             loading={loading}
             overallState={overallState}
             events={events}
@@ -236,13 +234,6 @@ function SpellTabContent({
             spellEvent={spell.event}
             reqRelayStates={reqRelayStatesMap}
             exportFilename={spell.name || "spell-events"}
-            onOpenSpell={
-              spell.event
-                ? () => {
-                    // TODO: Add window to view spell event detail
-                  }
-                : undefined
-            }
             onOpenNip={(number) => addWindow("nip", { number })}
           />
           <div className="flex-1 overflow-hidden">

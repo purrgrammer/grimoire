@@ -14,10 +14,6 @@ import type { ReqOverallState } from "@/types/req-state";
 import type { RelaySelectionReasoning } from "@/types/relay-selection";
 
 interface SpellHeaderProps {
-  /** Spell name */
-  spellName: string;
-  /** Spell event ID (for linking if published) */
-  spellEventId?: string;
   /** Loading state */
   loading?: boolean;
   /** Overall state from req state machine */
@@ -36,8 +32,6 @@ interface SpellHeaderProps {
   reqRelayStates?: Map<string, { eose: boolean; eventCount: number }>;
   /** Default filename for exports */
   exportFilename?: string;
-  /** Callback to open spell detail */
-  onOpenSpell?: () => void;
   /** Callback to open NIP window */
   onOpenNip?: (number: string) => void;
 }
@@ -47,8 +41,6 @@ interface SpellHeaderProps {
  * Displays: [live-indicator] <- space -> [event-count] [relay-count] [filter]
  */
 export function SpellHeader({
-  spellName,
-  spellEventId,
   loading = false,
   overallState,
   events,
@@ -58,7 +50,6 @@ export function SpellHeader({
   reasoning,
   reqRelayStates,
   exportFilename,
-  onOpenSpell,
   onOpenNip,
 }: SpellHeaderProps) {
   return (
