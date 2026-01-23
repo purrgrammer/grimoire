@@ -1,40 +1,30 @@
 import { ActionRunner } from "applesauce-actions";
 import eventStore from "./event-store";
 import { EventFactory } from "applesauce-core/event-factory";
-import pool from "./relay-pool";
-import { relayListCache } from "./relay-list-cache";
-import { getSeenRelays } from "applesauce-core/helpers/relays";
 import type { NostrEvent } from "nostr-tools/core";
 import accountManager from "./accounts";
+import publishService from "./publish-service";
 
 /**
- * Publishes a Nostr event to relays using the author's outbox relays
- * Falls back to seen relays from the event if no relay list found
+ * Publishes a Nostr event to relays using the centralized PublishService
+ *
+ * Relay selection strategy (in priority order):
+ * 1. Author's outbox relays (kind 10002)
+ * 2. User's configured write relays (from Grimoire state)
+ * 3. Seen relays from the event
+ * 4. Aggregator relays (fallback)
  *
  * @param event - The signed Nostr event to publish
  */
 export async function publishEvent(event: NostrEvent): Promise<void> {
-  // Try to get author's outbox relays from EventStore (kind 10002)
-  let relays = await relayListCache.getOutboxRelays(event.pubkey);
+  const result = await publishService.publish(event);
 
-  // Fallback to relays from the event itself (where it was seen)
-  if (!relays || relays.length === 0) {
-    const seenRelays = getSeenRelays(event);
-    relays = seenRelays ? Array.from(seenRelays) : [];
+  if (!result.ok) {
+    const errors = result.failed
+      .map((f) => `${f.relay}: ${f.error}`)
+      .join(", ");
+    throw new Error(`Failed to publish to any relay. Errors: ${errors}`);
   }
-
-  // If still no relays, throw error
-  if (relays.length === 0) {
-    throw new Error(
-      "No relays found for publishing. Please configure relay list (kind 10002) or ensure event has relay hints.",
-    );
-  }
-
-  // Publish to relay pool
-  await pool.publish(relays, event);
-
-  // Add to EventStore for immediate local availability
-  eventStore.add(event);
 }
 
 const factory = new EventFactory();
@@ -46,7 +36,7 @@ const factory = new EventFactory();
  * Configured with:
  * - EventStore: Single source of truth for Nostr events
  * - EventFactory: Creates and signs events
- * - publishEvent: Publishes events to author's outbox relays (with fallback to seen relays)
+ * - publishEvent: Publishes events via centralized PublishService
  */
 export const hub = new ActionRunner(eventStore, factory, publishEvent);
 
@@ -56,20 +46,26 @@ accountManager.active$.subscribe((account) => {
   factory.setSigner(account?.signer || undefined);
 });
 
+/**
+ * Publishes a Nostr event to specific relays
+ *
+ * @param event - The signed Nostr event to publish
+ * @param relays - Explicit list of relay URLs to publish to
+ */
 export async function publishEventToRelays(
   event: NostrEvent,
   relays: string[],
 ): Promise<void> {
-  // If no relays, throw error
   if (relays.length === 0) {
-    throw new Error(
-      "No relays found for publishing. Please configure relay list (kind 10002) or ensure event has relay hints.",
-    );
+    throw new Error("No relays provided for publishing.");
   }
 
-  // Publish to relay pool
-  await pool.publish(relays, event);
+  const result = await publishService.publishToRelays(event, relays);
 
-  // Add to EventStore for immediate local availability
-  eventStore.add(event);
+  if (!result.ok) {
+    const errors = result.failed
+      .map((f) => `${f.relay}: ${f.error}`)
+      .join(", ");
+    throw new Error(`Failed to publish to any relay. Errors: ${errors}`);
+  }
 }

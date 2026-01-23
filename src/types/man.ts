@@ -876,4 +876,16 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "System",
     defaultProps: {},
   },
+  log: {
+    name: "log",
+    section: "1",
+    synopsis: "log",
+    description:
+      "View ephemeral log of relay operations for debugging and introspection. Shows PUBLISH events with per-relay status (success/error/pending), CONNECT/DISCONNECT events, AUTH challenges and results, and relay NOTICE messages. Click on failed relays to retry publishing. Filter by event type using tabs. Log is ephemeral and stored in memory only.",
+    examples: ["log    Open event log viewer"],
+    seeAlso: ["conn", "relay", "post"],
+    appId: "log",
+    category: "System",
+    defaultProps: {},
+  },
 };

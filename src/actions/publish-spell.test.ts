@@ -17,7 +17,9 @@ vi.mock("@/services/accounts", () => ({
 
 vi.mock("@/services/relay-pool", () => ({
   default: {
-    publish: vi.fn(),
+    publish: vi
+      .fn()
+      .mockResolvedValue([{ from: "wss://test.relay/", ok: true }]),
   },
 }));
 
