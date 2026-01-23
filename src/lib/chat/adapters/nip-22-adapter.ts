@@ -973,13 +973,14 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
   /**
    * Convert root event to Message object
+   * Root event is rendered as a card using KindRenderer for better UX
    */
   private rootEventToMessage(
     event: NostrEvent,
     conversationId: string,
     _aTagValue: string,
   ): Message | null {
-    // Root event has no replyTo field
+    // Root event has no replyTo field and is rendered as a card
     return {
       id: event.id,
       conversationId,
@@ -991,6 +992,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       protocol: "nip-22",
       metadata: {
         encrypted: false,
+        renderAsCard: true, // Render using KindRenderer for nice event card
       },
       event,
     };

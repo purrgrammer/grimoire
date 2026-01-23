@@ -121,6 +121,8 @@ export interface MessageMetadata {
   zapRecipient?: string; // Pubkey of zap recipient
   // NIP-61 nutzap-specific metadata
   nutzapUnit?: string; // Unit for nutzap amount (sat, usd, eur, etc.)
+  // NIP-22 event comment thread root
+  renderAsCard?: boolean; // Render using KindRenderer instead of text
 }
 
 /**

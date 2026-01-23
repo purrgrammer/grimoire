@@ -41,6 +41,7 @@ import {
 } from "@/lib/chat/group-system-messages";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
+import { KindRenderer } from "./nostr/kinds";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -442,41 +443,64 @@ const MessageItem = memo(function MessageItem({
   const messageContent = (
     <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <UserName pubkey={message.author} className="font-semibold text-sm" />
-          <span className="text-xs text-muted-foreground">
-            <Timestamp timestamp={message.timestamp} />
-          </span>
-          {/* Reactions display - inline after timestamp */}
-          <MessageReactions messageId={message.id} relays={relays} />
-          {canReply && onReply && !isRootMessage && (
-            <button
-              onClick={() => onReply(message.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
-              title="Reply to this message"
-            >
-              <Reply className="size-3" />
-            </button>
-          )}
-        </div>
-        <div className="break-words overflow-hidden">
-          {message.event ? (
-            <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo && (
-                <ReplyPreview
-                  replyTo={message.replyTo}
-                  adapter={adapter}
-                  conversation={conversation}
-                  onScrollToMessage={onScrollToMessage}
-                />
+        {/* For card rendering (NIP-22 root events), show minimal header with timestamp and reactions */}
+        {message.metadata?.renderAsCard ? (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-muted-foreground">
+                <Timestamp timestamp={message.timestamp} />
+              </span>
+              {/* Reactions display - inline after timestamp */}
+              <MessageReactions messageId={message.id} relays={relays} />
+            </div>
+            {/* Render event as a card using KindRenderer */}
+            {message.event && <KindRenderer event={message.event} />}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <UserName
+                pubkey={message.author}
+                className="font-semibold text-sm"
+              />
+              <span className="text-xs text-muted-foreground">
+                <Timestamp timestamp={message.timestamp} />
+              </span>
+              {/* Reactions display - inline after timestamp */}
+              <MessageReactions messageId={message.id} relays={relays} />
+              {canReply && onReply && !isRootMessage && (
+                <button
+                  onClick={() => onReply(message.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+                  title="Reply to this message"
+                >
+                  <Reply className="size-3" />
+                </button>
               )}
-            </RichText>
-          ) : (
-            <span className="whitespace-pre-wrap break-words">
-              {message.content}
-            </span>
-          )}
-        </div>
+            </div>
+            <div className="break-words overflow-hidden">
+              {message.event ? (
+                <RichText
+                  className="text-sm leading-tight"
+                  event={message.event}
+                >
+                  {message.replyTo && (
+                    <ReplyPreview
+                      replyTo={message.replyTo}
+                      adapter={adapter}
+                      conversation={conversation}
+                      onScrollToMessage={onScrollToMessage}
+                    />
+                  )}
+                </RichText>
+              ) : (
+                <span className="whitespace-pre-wrap break-words">
+                  {message.content}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
