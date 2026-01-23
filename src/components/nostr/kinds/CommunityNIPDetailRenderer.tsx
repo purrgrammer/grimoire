@@ -5,6 +5,7 @@ import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
 import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/useCopy";
+import { formatTimestamp } from "@/hooks/useLocale";
 import { toast } from "sonner";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -23,15 +24,8 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
     return getTagValue(event, "r");
   }, [event]);
 
-  // Format created date
-  const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
-    "en-US",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    },
-  );
+  // Format created date using locale utility
+  const createdDate = formatTimestamp(event.created_at, "long");
 
   // Copy functionality
   const { copy, copied } = useCopy();

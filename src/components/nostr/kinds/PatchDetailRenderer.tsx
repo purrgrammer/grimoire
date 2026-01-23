@@ -3,6 +3,7 @@ import { GitCommit, User, Copy, CopyCheck } from "lucide-react";
 import { UserName } from "../UserName";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
 import { useCopy } from "@/hooks/useCopy";
+import { formatTimestamp } from "@/hooks/useLocale";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import type { NostrEvent } from "@/types/nostr";
 import {
@@ -31,15 +32,8 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
   const isRoot = useMemo(() => isPatchRoot(event), [event]);
   const isRootRevision = useMemo(() => isPatchRootRevision(event), [event]);
 
-  // Format created date
-  const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
-    "en-US",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    },
-  );
+  // Format created date using locale utility
+  const createdDate = formatTimestamp(event.created_at, "long");
 
   return (
     <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">

@@ -370,3 +370,167 @@ export function getRepositoryStateTags(
       hash: t[1],
     }));
 }
+
+// ============================================================================
+// Status Event Helpers (Kind 1630-1633)
+// ============================================================================
+
+/**
+ * Status types for NIP-34 status events
+ */
+export type IssueStatusType = "open" | "resolved" | "closed" | "draft";
+
+/**
+ * Map kind numbers to status types
+ */
+export const STATUS_KIND_MAP: Record<number, IssueStatusType> = {
+  1630: "open",
+  1631: "resolved",
+  1632: "closed",
+  1633: "draft",
+};
+
+/**
+ * Get the status type from a status event kind
+ * @param kind Event kind (1630-1633)
+ * @returns Status type or undefined if not a status kind
+ */
+export function getStatusType(kind: number): IssueStatusType | undefined {
+  return STATUS_KIND_MAP[kind];
+}
+
+/**
+ * Get the root event ID being referenced by a status event
+ * The root is the original issue/patch/PR being marked with a status
+ * @param event Status event (kind 1630-1633)
+ * @returns Event ID or undefined
+ */
+export function getStatusRootEventId(event: NostrEvent): string | undefined {
+  // Look for e tag with "root" marker
+  const rootTag = event.tags.find((t) => t[0] === "e" && t[3] === "root");
+  if (rootTag) return rootTag[1];
+
+  // Fallback: first e tag without a marker or with empty marker
+  const firstETag = event.tags.find((t) => t[0] === "e");
+  return firstETag?.[1];
+}
+
+/**
+ * Get the relay hint for the root event
+ * @param event Status event (kind 1630-1633)
+ * @returns Relay URL or undefined
+ */
+export function getStatusRootRelayHint(event: NostrEvent): string | undefined {
+  const rootTag = event.tags.find((t) => t[0] === "e" && t[3] === "root");
+  if (rootTag && rootTag[2]) return rootTag[2];
+
+  const firstETag = event.tags.find((t) => t[0] === "e");
+  return firstETag?.[2] || undefined;
+}
+
+/**
+ * Get the repository address from a status event
+ * @param event Status event (kind 1630-1633)
+ * @returns Repository address (a tag) or undefined
+ */
+export function getStatusRepositoryAddress(
+  event: NostrEvent,
+): string | undefined {
+  return getTagValue(event, "a");
+}
+
+/**
+ * Check if a kind is a status event kind
+ * @param kind Event kind
+ * @returns True if kind is 1630-1633
+ */
+export function isStatusKind(kind: number): boolean {
+  return kind >= 1630 && kind <= 1633;
+}
+
+/**
+ * Get human-readable status label
+ * @param kind Event kind (1630-1633)
+ * @param forIssue Whether this is for an issue (vs patch/PR)
+ * @returns Label string
+ */
+export function getStatusLabel(kind: number, forIssue = true): string {
+  switch (kind) {
+    case 1630:
+      return "opened";
+    case 1631:
+      return forIssue ? "resolved" : "merged";
+    case 1632:
+      return "closed";
+    case 1633:
+      return "marked as draft";
+    default:
+      return "updated";
+  }
+}
+
+// Import parseReplaceableAddress from applesauce-core for address parsing
+// This parses "kind:pubkey:identifier" format strings into AddressPointer objects
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
+
+/**
+ * Get all valid pubkeys that can set status for an issue/patch/PR
+ * Valid authors: event author, repository owner (from p tag), and all maintainers
+ * @param event Issue, patch, or PR event
+ * @param repositoryEvent Optional repository event to get maintainers from
+ * @returns Set of valid pubkeys
+ */
+export function getValidStatusAuthors(
+  event: NostrEvent,
+  repositoryEvent?: NostrEvent,
+): Set<string> {
+  const validPubkeys = new Set<string>();
+
+  // Event author can always set status
+  validPubkeys.add(event.pubkey);
+
+  // Repository owner from p tag
+  const repoOwner = getTagValue(event, "p");
+  if (repoOwner) validPubkeys.add(repoOwner);
+
+  // Parse repository address to get owner pubkey using applesauce helper
+  const repoAddress =
+    getIssueRepositoryAddress(event) ||
+    getPatchRepositoryAddress(event) ||
+    getPullRequestRepositoryAddress(event);
+  if (repoAddress) {
+    const parsedRepo = parseReplaceableAddress(repoAddress);
+    if (parsedRepo?.pubkey) validPubkeys.add(parsedRepo.pubkey);
+  }
+
+  // Add maintainers from repository event
+  if (repositoryEvent) {
+    const maintainers = getMaintainers(repositoryEvent);
+    maintainers.forEach((m) => validPubkeys.add(m));
+  }
+
+  return validPubkeys;
+}
+
+/**
+ * Find the most recent valid status event from a list of status events
+ * Valid = from event author, repository owner, or maintainers
+ * @param statusEvents Array of status events (kinds 1630-1633)
+ * @param validAuthors Set of valid pubkeys (from getValidStatusAuthors)
+ * @returns Most recent valid status event or null
+ */
+export function findCurrentStatus(
+  statusEvents: NostrEvent[],
+  validAuthors: Set<string>,
+): NostrEvent | null {
+  if (statusEvents.length === 0) return null;
+
+  // Sort by created_at descending (most recent first)
+  const sorted = [...statusEvents].sort((a, b) => b.created_at - a.created_at);
+
+  // Find the most recent status from a valid author
+  const validStatus = sorted.find((s) => validAuthors.has(s.pubkey));
+
+  // Return valid status if found, otherwise most recent (may be invalid but show anyway)
+  return validStatus || sorted[0];
+}

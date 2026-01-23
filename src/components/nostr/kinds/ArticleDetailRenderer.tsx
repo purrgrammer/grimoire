@@ -8,6 +8,7 @@ import {
 import { UserName } from "../UserName";
 import { MediaEmbed } from "../MediaEmbed";
 import { MarkdownContent } from "../MarkdownContent";
+import { formatTimestamp } from "@/hooks/useLocale";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -26,14 +27,8 @@ export function Kind30023DetailRenderer({ event }: { event: NostrEvent }) {
     return rTag?.[1] || null;
   }, [event]);
 
-  // Format published date
-  const publishedDate = published
-    ? new Date(published * 1000).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : null;
+  // Format published date using locale utility
+  const publishedDate = published ? formatTimestamp(published, "long") : null;
 
   // Resolve article image URL
   const resolvedImageUrl = useMemo(() => {

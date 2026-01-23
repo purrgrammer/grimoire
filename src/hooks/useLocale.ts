@@ -50,11 +50,20 @@ export function useLocale(): LocaleConfig {
 /**
  * Format a timestamp according to locale preferences
  * @param timestamp - Unix timestamp in seconds
- * @param style - 'relative' for "2h ago", 'absolute' for full date/time, 'date' for date only, 'time' for time only
+ * @param style - 'relative' for "2h ago", 'absolute' for full date/time, 'date' for date only,
+ *                'long' for full readable date (e.g., "January 15, 2025"), 'time' for time only,
+ *                'datetime' for date with time (e.g., "January 15, 2025, 2:30 PM")
+ * @param locale - Optional locale override (defaults to browser locale)
  */
 export function formatTimestamp(
   timestamp: number,
-  style: "relative" | "absolute" | "date" | "time" = "relative",
+  style:
+    | "relative"
+    | "absolute"
+    | "date"
+    | "long"
+    | "time"
+    | "datetime" = "relative",
   locale?: string,
 ): string {
   const browserLocale = locale || navigator.language || "en-US";
@@ -99,6 +108,26 @@ export function formatTimestamp(
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
+    });
+  }
+
+  if (style === "long") {
+    // Human-readable long format: "January 15, 2025"
+    return date.toLocaleDateString(browserLocale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+
+  if (style === "datetime") {
+    // Full date with time: "January 15, 2025, 2:30 PM"
+    return date.toLocaleString(browserLocale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 

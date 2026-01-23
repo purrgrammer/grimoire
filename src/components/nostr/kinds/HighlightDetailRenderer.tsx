@@ -11,6 +11,7 @@ import {
 import { EmbeddedEvent } from "../EmbeddedEvent";
 import { UserName } from "../UserName";
 import { useGrimoire } from "@/core/state";
+import { formatTimestamp } from "@/hooks/useLocale";
 import { RichText } from "../RichText";
 
 /**
@@ -29,15 +30,8 @@ export function Kind9802DetailRenderer({ event }: { event: NostrEvent }) {
   const eventPointer = getHighlightSourceEventPointer(event);
   const addressPointer = getHighlightSourceAddressPointer(event);
 
-  // Format created date
-  const createdDate = new Date(event.created_at * 1000).toLocaleDateString(
-    "en-US",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    },
-  );
+  // Format created date using locale utility
+  const createdDate = formatTimestamp(event.created_at, "long");
 
   // Create synthetic event for comment rendering (preserves emoji tags)
   const commentEvent = comment

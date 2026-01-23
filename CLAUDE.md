@@ -237,6 +237,18 @@ if (canSign) {
 - **Path Alias**: `@/` = `./src/`
 - **Styling**: Tailwind + HSL CSS variables (theme tokens defined in `index.css`)
 - **Types**: Prefer types from `applesauce-core`, extend in `src/types/` when needed
+- **Locale-Aware Formatting** (`src/hooks/useLocale.ts`): All date, time, number, and currency formatting MUST use the user's locale:
+  - **`useLocale()` hook**: Returns `{ locale, language, region, timezone, timeFormat }` - use in components that need locale config
+  - **`formatTimestamp(timestamp, style)`**: Preferred utility for all timestamp formatting:
+    - `"relative"` → "2h ago", "3d ago"
+    - `"long"` → "January 15, 2025" (human-readable date)
+    - `"date"` → "01/15/2025" (short date)
+    - `"datetime"` → "January 15, 2025, 2:30 PM" (date with time)
+    - `"absolute"` → "2025-01-15 14:30" (ISO-8601 style)
+    - `"time"` → "14:30"
+  - Use `Intl.NumberFormat` for numbers and currencies
+  - NEVER hardcode locale strings like "en-US" or date formats like "MM/DD/YYYY"
+  - Example: `formatTimestamp(event.created_at, "long")` instead of manual `toLocaleDateString()`
 - **File Organization**: By domain (`nostr/`, `ui/`, `services/`, `hooks/`, `lib/`)
 - **State Logic**: All UI state mutations go through `src/core/logic.ts` pure functions
 
