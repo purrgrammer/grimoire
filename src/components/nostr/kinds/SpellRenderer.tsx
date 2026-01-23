@@ -152,18 +152,34 @@ export function SpellRenderer({ event }: BaseEventProps) {
   try {
     const spell = decodeSpell(event as SpellEvent);
 
+    // Check if spell has parameters but no defaults
+    const hasParameters = !!spell.parameter;
+    const hasDefault =
+      spell.parameter?.default && spell.parameter.default.length > 0;
+    const canExecute = !hasParameters || hasDefault;
+
     return (
       <BaseEventContainer event={event}>
         <div className="flex flex-col gap-2">
-          {/* Title */}
-          {spell.name && (
-            <ClickableEventTitle
-              event={event}
-              className="text-lg font-semibold text-foreground"
-            >
-              {spell.name}
-            </ClickableEventTitle>
-          )}
+          {/* Title with parameter marker */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {spell.name && (
+              <ClickableEventTitle
+                event={event}
+                className="text-lg font-semibold text-foreground"
+              >
+                {spell.name}
+              </ClickableEventTitle>
+            )}
+            {hasParameters && spell.parameter && (
+              <Badge variant="outline" className="text-[10px] gap-1">
+                {spell.parameter.type === "$pubkey" && (
+                  <User className="size-3" />
+                )}
+                {spell.parameter.type}
+              </Badge>
+            )}
+          </div>
 
           {/* Description */}
           {spell.description && (
@@ -172,13 +188,22 @@ export function SpellRenderer({ event }: BaseEventProps) {
             </p>
           )}
 
-          {/* Command Preview */}
-          <ExecutableCommand
-            commandLine={spell.command}
-            className="text-xs font-mono bg-muted/30 p-2 border border-border truncate line-clamp-1 text-primary hover:underline cursor-pointer"
-          >
-            {spell.command}
-          </ExecutableCommand>
+          {/* Command Preview - only executable if has defaults or no parameters */}
+          {canExecute ? (
+            <ExecutableCommand
+              commandLine={spell.command}
+              className="text-xs font-mono bg-muted/30 p-2 border border-border truncate line-clamp-1 text-primary hover:underline cursor-pointer"
+            >
+              {spell.command}
+            </ExecutableCommand>
+          ) : (
+            <div
+              className="text-xs font-mono bg-muted/30 p-2 border border-border truncate line-clamp-1 text-muted-foreground cursor-not-allowed opacity-60"
+              title={`Requires a ${spell.parameter?.type} to run. Use from ${spell.parameter?.type === "$pubkey" ? "profile" : spell.parameter?.type === "$event" ? "event" : "relay"} viewer.`}
+            >
+              {spell.command}
+            </div>
+          )}
 
           {/* Kind Badges */}
           {spell.filter.kinds && spell.filter.kinds.length > 0 && (
@@ -220,6 +245,12 @@ export function SpellDetailRenderer({ event }: BaseEventProps) {
   try {
     const spell = decodeSpell(event as SpellEvent);
 
+    // Check if spell has parameters but no defaults
+    const hasParameters = !!spell.parameter;
+    const hasDefault =
+      spell.parameter?.default && spell.parameter.default.length > 0;
+    const canExecute = !hasParameters || hasDefault;
+
     // Create a display filter that includes since/until even in relative format
     const displayFilter = { ...spell.filter };
 
@@ -237,14 +268,27 @@ export function SpellDetailRenderer({ event }: BaseEventProps) {
     return (
       <div className="flex flex-col gap-6 p-4">
         <div className="flex flex-col gap-2">
-          {spell.name && (
-            <ClickableEventTitle
-              event={event}
-              className="text-2xl font-bold hover:underline cursor-pointer"
-            >
-              {spell.name}
-            </ClickableEventTitle>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {spell.name && (
+              <ClickableEventTitle
+                event={event}
+                className="text-2xl font-bold hover:underline cursor-pointer"
+              >
+                {spell.name}
+              </ClickableEventTitle>
+            )}
+            {hasParameters && spell.parameter && (
+              <Badge variant="outline" className="text-xs gap-1.5">
+                {spell.parameter.type === "$pubkey" && (
+                  <User className="size-3.5" />
+                )}
+                {spell.parameter.type}
+                {hasDefault && (
+                  <span className="text-[10px] opacity-70">(has default)</span>
+                )}
+              </Badge>
+            )}
+          </div>
           {spell.description && (
             <p className="text-muted-foreground">{spell.description}</p>
           )}
@@ -254,12 +298,30 @@ export function SpellDetailRenderer({ event }: BaseEventProps) {
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Command
           </h3>
-          <ExecutableCommand
-            commandLine={spell.command}
-            className="text-sm font-mono p-4 bg-muted/30 border border-border text-primary hover:underline hover:decoration-dotted cursor-crosshair break-words overflow-x-auto"
-          >
-            {spell.command}
-          </ExecutableCommand>
+          {canExecute ? (
+            <ExecutableCommand
+              commandLine={spell.command}
+              className="text-sm font-mono p-4 bg-muted/30 border border-border text-primary hover:underline hover:decoration-dotted cursor-crosshair break-words overflow-x-auto"
+            >
+              {spell.command}
+            </ExecutableCommand>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="text-sm font-mono p-4 bg-muted/30 border border-border text-muted-foreground cursor-not-allowed opacity-60 break-words overflow-x-auto">
+                {spell.command}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                💡 This spell requires a {spell.parameter?.type} to run. Use it
+                from a{" "}
+                {spell.parameter?.type === "$pubkey"
+                  ? "profile"
+                  : spell.parameter?.type === "$event"
+                    ? "event"
+                    : "relay"}{" "}
+                viewer to execute.
+              </p>
+            </div>
+          )}
         </div>
 
         {spell.filter.kinds && spell.filter.kinds.length > 0 && (

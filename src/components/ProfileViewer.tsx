@@ -257,7 +257,7 @@ function SpellTabContent({
   return (
     <TabsContent
       value={spellId}
-      className="flex-1 overflow-hidden m-0 flex flex-col"
+      className="flex-1 overflow-auto m-0 flex flex-col"
     >
       {!appliedFilter ? (
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">

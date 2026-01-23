@@ -11,6 +11,7 @@ import {
   Archive,
   WandSparkles as Wand,
   BookUp,
+  User,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
@@ -63,6 +64,12 @@ function SpellCard({ spell, onDelete, onPublish }: SpellCardProps) {
     }
   }, [spell.command]);
 
+  // Check if spell has parameters but no defaults
+  const hasParameters = !!spell.parameterType;
+  const hasDefault =
+    spell.parameterDefault && spell.parameterDefault.length > 0;
+  const canExecute = !hasParameters || hasDefault;
+
   const handlePublish = async () => {
     setIsPublishing(true);
     try {
@@ -112,6 +119,17 @@ function SpellCard({ spell, onDelete, onPublish }: SpellCardProps) {
             >
               {displayName}
             </CardTitle>
+            {hasParameters && (
+              <Badge
+                variant="outline"
+                className="text-[10px] gap-1 flex-shrink-0"
+              >
+                {spell.parameterType === "$pubkey" && (
+                  <User className="size-3" />
+                )}
+                {spell.parameterType}
+              </Badge>
+            )}
           </div>
           {spell.deletedAt ? (
             <Badge variant="outline" className="text-muted-foreground">
@@ -139,13 +157,22 @@ function SpellCard({ spell, onDelete, onPublish }: SpellCardProps) {
 
       <CardContent className="p-4 pt-0 flex-1">
         <div className="flex flex-col gap-2">
-          <ExecutableCommand
-            commandLine={spell.command}
-            className="text-xs truncate line-clamp-1 text-primary hover:underline cursor-pointer"
-            spellId={spell.id}
-          >
-            {spell.command}
-          </ExecutableCommand>
+          {canExecute ? (
+            <ExecutableCommand
+              commandLine={spell.command}
+              className="text-xs truncate line-clamp-1 text-primary hover:underline cursor-pointer"
+              spellId={spell.id}
+            >
+              {spell.command}
+            </ExecutableCommand>
+          ) : (
+            <div
+              className="text-xs truncate line-clamp-1 text-muted-foreground cursor-not-allowed opacity-60"
+              title={`Requires a ${spell.parameterType} to run. Use from ${spell.parameterType === "$pubkey" ? "profile" : spell.parameterType === "$event" ? "event" : "relay"} viewer.`}
+            >
+              {spell.command}
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5 mt-1">
             {kinds.map((kind) => (
               <KindBadge
