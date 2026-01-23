@@ -805,7 +805,10 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
       {/* Spell Tabs */}
       <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
         {pubkeySpells.length > 0 ? (
-          <Tabs className="flex flex-col h-full">
+          <Tabs
+            defaultValue={pubkeySpells[0]?.id}
+            className="flex flex-col h-full"
+          >
             <div className="flex items-center border-b">
               <Button
                 variant="ghost"
