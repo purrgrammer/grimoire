@@ -42,7 +42,10 @@ import {
   ReactionBlueprint,
   CommentBlueprint,
 } from "applesauce-common/blueprints";
-import { getCommentReplyPointer } from "applesauce-common/helpers";
+import {
+  getCommentReplyPointer,
+  getCommentRootPointer,
+} from "applesauce-common/helpers";
 import {
   getZapAmount,
   getZapSender,
@@ -205,10 +208,10 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     let rootCoordinate: string | undefined;
 
     if (providedEvent.kind === 1111) {
-      // This is a comment - find the root via A-tag
-      const rootPointer = getCommentReplyPointer(providedEvent);
+      // This is a comment - find the root via uppercase A/E tag
+      const rootPointer = getCommentRootPointer(providedEvent);
       if (!rootPointer) {
-        throw new Error("Comment has no A-tag root reference");
+        throw new Error("Comment has no root reference (uppercase A/E tag)");
       }
 
       if (rootPointer.type === "event" && rootPointer.id) {
@@ -1063,7 +1066,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
   private eventToMessage(
     event: NostrEvent,
     conversationId: string,
-    aTagValue: string,
+    _aTagValue: string,
   ): Message | null {
     // Handle zap receipts (kind 9735)
     if (event.kind === 9735) {
@@ -1082,34 +1085,36 @@ export class Nip22Adapter extends ChatProtocolAdapter {
 
     // Handle comments (kind 1111)
     if (event.kind === 1111) {
-      // Determine what this comment is responding to
+      // Use getCommentReplyPointer to get what this comment is replying to
+      // This returns the parent (lowercase a/e tag) if present, otherwise null
+      // NIP-22: uppercase A/E = root, lowercase a/e = parent
+      const replyPointer = getCommentReplyPointer(event);
       let replyTo: EventPointer | AddressPointer | undefined;
 
-      // Check for reply to another comment (e-tag with "reply" marker)
-      const replyETag = event.tags.find(
-        (t) => t[0] === "e" && t[3] === "reply",
-      );
-      if (replyETag) {
-        const ePointer = getEventPointerFromETag(replyETag);
-        if (ePointer) {
-          replyTo = ePointer;
-        }
-      } else {
-        // Not replying to a comment - replying to root
-        // Parse A-tag to get root reference
-        const aTag = event.tags.find((t) => t[0] === "a" && t[1] === aTagValue);
-        if (aTag) {
-          const parsed = parseReplaceableAddress(aTag[1]);
-          if (parsed) {
-            replyTo = {
-              kind: parsed.kind,
-              pubkey: parsed.pubkey,
-              identifier: parsed.identifier,
-              relays: aTag[2] ? [aTag[2]] : undefined,
-            };
-          }
+      if (replyPointer) {
+        // Convert CommentPointer to EventPointer or AddressPointer
+        if (replyPointer.type === "event" && replyPointer.id) {
+          replyTo = {
+            id: replyPointer.id,
+            kind: replyPointer.kind,
+            author: replyPointer.pubkey,
+            relays: replyPointer.relay ? [replyPointer.relay] : undefined,
+          };
+        } else if (
+          replyPointer.type === "address" &&
+          replyPointer.pubkey &&
+          replyPointer.identifier !== undefined
+        ) {
+          replyTo = {
+            kind: replyPointer.kind,
+            pubkey: replyPointer.pubkey,
+            identifier: replyPointer.identifier,
+            relays: replyPointer.relay ? [replyPointer.relay] : undefined,
+          };
         }
       }
+      // If replyTo is still undefined, this is a direct reply to the root
+      // (no parent, only root pointer). ReplyPreview will not show in this case.
 
       return {
         id: event.id,
