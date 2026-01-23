@@ -162,7 +162,7 @@ function SpellTabContent({
       { limit: appliedFilter?.limit || 50, stream: true },
     );
 
-  // Convert relay states to the format expected by SpellHeader
+  // Convert relay states to format expected by SpellHeader
   const reqRelayStatesMap = useMemo(() => {
     const map = new Map<string, { eose: boolean; eventCount: number }>();
     relayStates.forEach((state, url) => {
@@ -207,6 +207,13 @@ function SpellTabContent({
             spellEvent={spell.event}
             reqRelayStates={reqRelayStatesMap}
             exportFilename={spell.name || "spell-events"}
+            onOpenSpell={
+              spell.event
+                ? () => {
+                    // TODO: Add window to view spell event detail
+                  }
+                : undefined
+            }
             onOpenNip={(number) => addWindow("nip", { number })}
           />
           <EventFeed

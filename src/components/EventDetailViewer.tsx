@@ -30,6 +30,7 @@ import { parseReqCommand } from "@/lib/req-parser";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { KindBadge } from "./KindBadge";
 import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
+import { SpellHeader } from "./timeline/SpellHeader";
 
 export interface EventDetailViewerProps {
   pointer: EventPointer | AddressPointer;
@@ -57,6 +58,7 @@ function SpellTabContent({
   targetEventId,
   targetEvent,
 }: SpellTabContentProps & { targetEvent: any }) {
+  const { addWindow } = useGrimoire();
   // Parse spell and get filter - handle both published (with event) and local (command-only) spells
   const parsed = useMemo(() => {
     if (!targetEventId) {
@@ -181,12 +183,13 @@ function SpellTabContent({
   // Fetch events using the applied filter
   // Always call the hook unconditionally (React Rules of Hooks)
   const shouldFetch = !!(appliedFilter && finalRelays.length > 0);
-  const { events, loading, eoseReceived } = useReqTimelineEnhanced(
-    shouldFetch ? `spell-${spellId}-${targetEventId}` : `disabled-${spellId}`,
-    appliedFilter || {},
-    shouldFetch ? finalRelays : [],
-    { limit: appliedFilter?.limit || 50, stream: true },
-  );
+  const { events, loading, eoseReceived, relayStates, overallState } =
+    useReqTimelineEnhanced(
+      shouldFetch ? `spell-${spellId}-${targetEventId}` : `disabled-${spellId}`,
+      appliedFilter || {},
+      shouldFetch ? finalRelays : [],
+      { limit: appliedFilter?.limit || 50, stream: true },
+    );
 
   console.log(`[EventSpell:${spell.name || spellId}] Render state:`, {
     hasFilter: !!appliedFilter,
@@ -196,8 +199,23 @@ function SpellTabContent({
     eoseReceived,
   });
 
+  // Convert relay states to format expected by SpellHeader
+  const reqRelayStatesMap = useMemo(() => {
+    const map = new Map<string, { eose: boolean; eventCount: number }>();
+    relayStates.forEach((state, url) => {
+      map.set(url, {
+        eose: state.subscriptionState === "eose",
+        eventCount: state.eventCount,
+      });
+    });
+    return map;
+  }, [relayStates]);
+
   return (
-    <TabsContent value={spellId} className="flex-1 overflow-hidden m-0">
+    <TabsContent
+      value={spellId}
+      className="flex-1 overflow-hidden m-0 flex flex-col"
+    >
       {!appliedFilter ? (
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
           <div>
@@ -206,14 +224,36 @@ function SpellTabContent({
           </div>
         </div>
       ) : (
-        <EventFeed
-          events={events}
-          view="list"
-          loading={loading}
-          eoseReceived={eoseReceived}
-          stream={true}
-          enableFreeze={true}
-        />
+        <>
+          <SpellHeader
+            spellName={spell.name || "Unnamed Spell"}
+            spellEventId={spell.event?.id}
+            loading={loading}
+            overallState={overallState}
+            events={events}
+            relays={finalRelays}
+            filter={appliedFilter}
+            spellEvent={spell.event}
+            reqRelayStates={reqRelayStatesMap}
+            exportFilename={spell.name || "spell-events"}
+            onOpenSpell={
+              spell.event
+                ? () => {
+                    // TODO: Add window to view spell event detail
+                  }
+                : undefined
+            }
+            onOpenNip={(number) => addWindow("nip", { number })}
+          />
+          <EventFeed
+            events={events}
+            view="list"
+            loading={loading}
+            eoseReceived={eoseReceived}
+            stream={true}
+            enableFreeze={true}
+          />
+        </>
       )}
     </TabsContent>
   );
