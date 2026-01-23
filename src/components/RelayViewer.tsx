@@ -216,14 +216,16 @@ function SpellTabContent({
             }
             onOpenNip={(number) => addWindow("nip", { number })}
           />
-          <EventFeed
-            events={events}
-            view="list"
-            loading={loading}
-            eoseReceived={eoseReceived}
-            stream={true}
-            enableFreeze={true}
-          />
+          <div className="flex-1 overflow-hidden">
+            <EventFeed
+              events={events}
+              view="list"
+              loading={loading}
+              eoseReceived={eoseReceived}
+              stream={true}
+              enableFreeze={true}
+            />
+          </div>
         </>
       )}
     </TabsContent>
@@ -249,9 +251,7 @@ export function RelayViewer({ url }: RelayViewerProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Relay Info Content */}
-      <div
-        className={`overflow-y-auto p-4 flex flex-col gap-6 ${relaySpells.length > 0 ? "flex-1 min-h-0" : ""}`}
-      >
+      <div className="overflow-y-auto p-4 flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <div className="flex-1">

@@ -43,8 +43,8 @@ interface SpellHeaderProps {
 }
 
 /**
- * SpellHeader - Header for spell content showing name, loading state, stats, and controls
- * Displays: [spell-name (linked)] <- space -> [loading-indicator] <- space -> [event-count] [relay-count] [filter]
+ * SpellHeader - Header for spell content showing live indicator, stats, and controls
+ * Displays: [live-indicator] <- space -> [event-count] [relay-count] [filter]
  */
 export function SpellHeader({
   spellName,
@@ -63,22 +63,8 @@ export function SpellHeader({
 }: SpellHeaderProps) {
   return (
     <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
-      {/* Left: Spell Name */}
+      {/* Left: Live Indicator */}
       <div className="flex items-center gap-2">
-        {spellEventId && onOpenSpell ? (
-          <button
-            onClick={onOpenSpell}
-            className="font-semibold text-primary hover:underline"
-          >
-            {spellName}
-          </button>
-        ) : (
-          <span className="font-semibold">{spellName}</span>
-        )}
-      </div>
-
-      {/* Center: Loading Indicator */}
-      <div className="flex-1 flex items-center justify-center">
         {loading || overallState ? (
           overallState ? (
             <Tooltip>

@@ -245,14 +245,16 @@ function SpellTabContent({
             }
             onOpenNip={(number) => addWindow("nip", { number })}
           />
-          <EventFeed
-            events={events}
-            view="list"
-            loading={loading}
-            eoseReceived={eoseReceived}
-            stream={true}
-            enableFreeze={true}
-          />
+          <div className="flex-1 overflow-hidden">
+            <EventFeed
+              events={events}
+              view="list"
+              loading={loading}
+              eoseReceived={eoseReceived}
+              stream={true}
+              enableFreeze={true}
+            />
+          </div>
         </>
       )}
     </TabsContent>
