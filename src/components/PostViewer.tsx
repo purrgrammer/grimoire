@@ -33,7 +33,9 @@ import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
 import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
 import pool from "@/services/relay-pool";
-import eventStore from "@/services/event-store";
+import publishService, {
+  type RelayPublishStatus,
+} from "@/services/publish-service";
 import { EventFactory } from "applesauce-core/event-factory";
 import { NoteBlueprint } from "applesauce-common/blueprints";
 import { useGrimoire } from "@/core/state";
@@ -43,12 +45,9 @@ import { use$ } from "applesauce-react/hooks";
 import { getAuthIcon } from "@/lib/relay-status-utils";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
-// Per-relay publish status
-type RelayStatus = "pending" | "publishing" | "success" | "error";
-
 interface RelayPublishState {
   url: string;
-  status: RelayStatus;
+  status: RelayPublishStatus;
   error?: string;
 }
 
@@ -96,7 +95,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     setRelayStates(
       writeRelays.map((url) => ({
         url,
-        status: "pending" as RelayStatus,
+        status: "pending" as RelayPublishStatus,
       })),
     );
     setSelectedRelays(new Set(writeRelays));
@@ -153,7 +152,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
               .filter((url: string) => !currentRelayUrls.has(url))
               .map((url: string) => ({
                 url,
-                status: "pending" as RelayStatus,
+                status: "pending" as RelayPublishStatus,
               }));
             return newRelays.length > 0 ? [...prev, ...newRelays] : prev;
           });
@@ -271,39 +270,42 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         return;
       }
 
-      try {
-        // Update status to publishing
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? { ...r, status: "publishing" as RelayStatus }
-              : r,
-          ),
-        );
+      // Update status to publishing
+      setRelayStates((prev) =>
+        prev.map((r) =>
+          r.url === relayUrl
+            ? { ...r, status: "publishing" as RelayPublishStatus }
+            : r,
+        ),
+      );
 
-        // Republish the same signed event
-        await pool.publish([relayUrl], lastPublishedEvent);
+      // Retry via PublishService (skipEventStore since it's already in store)
+      const result = await publishService.retryRelays(lastPublishedEvent, [
+        relayUrl,
+      ]);
 
-        // Update status to success
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? { ...r, status: "success" as RelayStatus, error: undefined }
-              : r,
-          ),
-        );
-
-        toast.success(`Published to ${relayUrl.replace(/^wss?:\/\//, "")}`);
-      } catch (error) {
-        console.error(`Failed to retry publish to ${relayUrl}:`, error);
+      if (result.ok) {
         setRelayStates((prev) =>
           prev.map((r) =>
             r.url === relayUrl
               ? {
                   ...r,
-                  status: "error" as RelayStatus,
-                  error:
-                    error instanceof Error ? error.message : "Unknown error",
+                  status: "success" as RelayPublishStatus,
+                  error: undefined,
+                }
+              : r,
+          ),
+        );
+        toast.success(`Published to ${relayUrl.replace(/^wss?:\/\//, "")}`);
+      } else {
+        const error = result.failed[0]?.error || "Unknown error";
+        setRelayStates((prev) =>
+          prev.map((r) =>
+            r.url === relayUrl
+              ? {
+                  ...r,
+                  status: "error" as RelayPublishStatus,
+                  error,
                 }
               : r,
           ),
@@ -404,67 +406,39 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       }
 
       // Signing succeeded, now publish to relays
-      try {
-        // Store the signed event for potential retries
-        setLastPublishedEvent(event);
+      // Store the signed event for potential retries
+      setLastPublishedEvent(event);
 
-        // Update relay states - set selected to publishing, keep others as pending
+      // Use PublishService with status updates
+      const { updates$, result } = publishService.publishWithUpdates(event, {
+        relays: selected,
+      });
+
+      // Subscribe to per-relay status updates for UI
+      const subscription = updates$.subscribe((update) => {
         setRelayStates((prev) =>
           prev.map((r) =>
-            selected.includes(r.url)
-              ? { ...r, status: "publishing" as RelayStatus }
+            r.url === update.relay
+              ? {
+                  ...r,
+                  status: update.status,
+                  error: update.error,
+                }
               : r,
           ),
         );
+      });
 
-        // Publish to each relay individually to track status
-        const publishPromises = selected.map(async (relayUrl) => {
-          try {
-            await pool.publish([relayUrl], event);
+      try {
+        // Wait for publish to complete
+        const publishResult = await result;
 
-            // Update status to success
-            setRelayStates((prev) =>
-              prev.map((r) =>
-                r.url === relayUrl
-                  ? { ...r, status: "success" as RelayStatus }
-                  : r,
-              ),
-            );
-            return { success: true, relayUrl };
-          } catch (error) {
-            console.error(`Failed to publish to ${relayUrl}:`, error);
+        // Unsubscribe from updates
+        subscription.unsubscribe();
 
-            // Update status to error
-            setRelayStates((prev) =>
-              prev.map((r) =>
-                r.url === relayUrl
-                  ? {
-                      ...r,
-                      status: "error" as RelayStatus,
-                      error:
-                        error instanceof Error
-                          ? error.message
-                          : "Unknown error",
-                    }
-                  : r,
-              ),
-            );
-            return { success: false, relayUrl };
-          }
-        });
+        const successCount = publishResult.successful.length;
 
-        // Wait for all publishes to complete (settled = all finished, regardless of success/failure)
-        const results = await Promise.allSettled(publishPromises);
-
-        // Check how many relays succeeded
-        const successCount = results.filter(
-          (r) => r.status === "fulfilled" && r.value.success,
-        ).length;
-
-        if (successCount > 0) {
-          // At least one relay succeeded - add to event store
-          eventStore.add(event);
-
+        if (publishResult.ok) {
           // Clear draft from localStorage
           if (pubkey) {
             const draftKey = windowId
@@ -496,16 +470,17 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           );
         }
       } catch (error) {
+        subscription.unsubscribe();
         console.error("Failed to publish:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to publish note",
         );
 
-        // Reset relay states to pending on publishing error
+        // Reset relay states to error on publishing error
         setRelayStates((prev) =>
           prev.map((r) => ({
             ...r,
-            status: "error" as RelayStatus,
+            status: "error" as RelayPublishStatus,
             error: error instanceof Error ? error.message : "Unknown error",
           })),
         );
@@ -513,7 +488,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         setIsPublishing(false);
       }
     },
-    [canSign, signer, pubkey, selectedRelays, settings],
+    [canSign, signer, pubkey, selectedRelays, settings, windowId],
   );
 
   // Handle file paste
@@ -580,7 +555,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       // Add to relay states
       setRelayStates((prev) => [
         ...prev,
-        { url: normalizedUrl, status: "pending" as RelayStatus },
+        { url: normalizedUrl, status: "pending" as RelayPublishStatus },
       ]);
 
       // Select the new relay
