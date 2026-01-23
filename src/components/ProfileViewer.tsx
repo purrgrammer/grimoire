@@ -241,15 +241,6 @@ function SpellTabContent({
       return [];
     }
 
-    // Use explicit relays from spell if provided
-    if (parsed?.relays && parsed.relays.length > 0) {
-      console.log(
-        `[SpellTabContent:${spell.name || spellId}] Using explicit relays:`,
-        parsed.relays,
-      );
-      return parsed.relays;
-    }
-
     // Wait for outbox relay selection to complete
     if (relaySelectionPhase !== "ready") {
       console.log(
@@ -258,11 +249,29 @@ function SpellTabContent({
       return [];
     }
 
+    // For profile spells, ALWAYS prefer outbox-selected relays over explicit relays
+    // This ensures we query from the author's write relays (NIP-65)
+    if (selectedRelays && selectedRelays.length > 0) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Using outbox-selected relays:`,
+        selectedRelays,
+      );
+      return selectedRelays;
+    }
+
+    // Fallback to explicit relays from spell if outbox selection yielded nothing
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Fallback to explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
     console.log(
-      `[SpellTabContent:${spell.name || spellId}] Using outbox-selected relays:`,
-      selectedRelays,
+      `[SpellTabContent:${spell.name || spellId}] No relays available`,
     );
-    return selectedRelays;
+    return [];
   }, [
     appliedFilter,
     parsed?.relays,
@@ -306,7 +315,7 @@ function SpellTabContent({
   return (
     <TabsContent
       value={spellId}
-      className="flex-1 overflow-hidden m-0 flex flex-col"
+      className="h-full overflow-hidden m-0 flex flex-col"
     >
       {!appliedFilter ? (
         <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
