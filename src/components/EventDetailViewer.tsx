@@ -378,7 +378,7 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       </div>
 
       {/* Rendered Content */}
-      <div className="overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <EventErrorBoundary event={event}>
           <DetailKindRenderer event={event} />
         </EventErrorBoundary>

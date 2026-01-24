@@ -658,7 +658,7 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
       </div>
 
       {/* Profile Content */}
-      <div className="overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4">
         {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
 
         {!profile && profileEvent && (

@@ -202,7 +202,7 @@ export function RelayViewer({ url }: RelayViewerProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Relay Info Content */}
-      <div className="overflow-y-auto p-4 flex flex-col gap-6">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <div className="flex-1">
