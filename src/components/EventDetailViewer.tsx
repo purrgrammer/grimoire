@@ -174,25 +174,24 @@ function SpellTabContent({
   }, [parsed]);
 
   return (
-    <TabsContent
-      value={spellId}
-      className="flex-1 overflow-auto m-0 flex flex-col"
-    >
+    <TabsContent value={spellId} className="m-0 data-[state=inactive]:hidden">
       {!appliedFilter ? (
-        <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
+        <div className="flex items-center justify-center h-64 p-8 text-center text-muted-foreground">
           <div>
             <p className="text-sm">Unable to apply spell to this event</p>
             <p className="text-xs mt-2">Check console for details</p>
           </div>
         </div>
       ) : isCountSpell ? (
-        <CountViewer
-          filter={appliedFilter}
-          relays={finalRelays}
-          needsAccount={false}
-        />
+        <div className="h-[60vh] min-h-[400px]">
+          <CountViewer
+            filter={appliedFilter}
+            relays={finalRelays}
+            needsAccount={false}
+          />
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col h-[60vh] min-h-[400px]">
           <SpellHeader
             loading={loading}
             overallState={overallState}
@@ -204,7 +203,7 @@ function SpellTabContent({
             exportFilename={spell.name || "spell-events"}
             onOpenNip={(number) => addWindow("nip", { number })}
           />
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto min-h-0">
             <EventFeed
               events={events}
               view="list"
@@ -214,7 +213,7 @@ function SpellTabContent({
               enableFreeze={true}
             />
           </div>
-        </>
+        </div>
       )}
     </TabsContent>
   );
@@ -377,86 +376,87 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
         </div>
       </div>
 
-      {/* Rendered Content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <EventErrorBoundary event={event}>
-          <DetailKindRenderer event={event} />
-        </EventErrorBoundary>
-      </div>
+      {/* Main Content - Single Scroll Container */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Rendered Event Content */}
+        <div>
+          <EventErrorBoundary event={event}>
+            <DetailKindRenderer event={event} />
+          </EventErrorBoundary>
+        </div>
 
-      {/* Spell Tabs */}
-      <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
-        {eventSpells.length > 0 ? (
-          <Tabs
-            defaultValue={eventSpells[0]?.id}
-            className="flex flex-col h-full"
-          >
-            <div className="flex items-center border-b">
+        {/* Spell Tabs Section */}
+        <div className="border-t border-border">
+          {eventSpells.length > 0 ? (
+            <Tabs defaultValue={eventSpells[0]?.id}>
+              {/* Sticky Tab Header */}
+              <div className="sticky top-0 z-10 bg-background border-b flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCreateSpellDialogOpen(true)}
+                  className="rounded-none border-r h-10 w-10"
+                  title="Create spell for this event"
+                >
+                  <Wand2 className="size-4" />
+                </Button>
+                <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto overflow-x-auto overflow-y-hidden scrollbar-hide">
+                  {eventSpells.map((spell) => {
+                    // Extract kinds from spell for display
+                    const spellKinds = extractSpellKinds(spell);
+
+                    return (
+                      <TabsTrigger
+                        key={spell.id}
+                        value={spell.id}
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
+                      >
+                        {spellKinds.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {spellKinds.map((kind) => (
+                              <KindBadge
+                                key={kind}
+                                kind={kind}
+                                variant="compact"
+                                iconClassname="size-3 text-muted-foreground"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <span>
+                          {spell.name || spell.alias || "Untitled Spell"}
+                        </span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
+
+              {/* Spell Tab Contents */}
+              {eventSpells.map((spell) => (
+                <SpellTabContent
+                  key={spell.id}
+                  spellId={spell.id}
+                  spell={spell}
+                  targetEventId={event.id}
+                  targetEvent={event}
+                />
+              ))}
+            </Tabs>
+          ) : (
+            <div className="sticky top-0 z-10 bg-background border-b">
               <Button
                 variant="ghost"
-                size="icon"
                 onClick={() => setCreateSpellDialogOpen(true)}
-                className="rounded-none border-r h-10 w-10"
+                className="w-full justify-center rounded-none"
                 title="Create spell for this event"
               >
-                <Wand2 className="size-4" />
+                <Wand2 />
+                Create spell
               </Button>
-              <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
-                {eventSpells.map((spell) => {
-                  // Extract kinds from spell for display
-                  const spellKinds = extractSpellKinds(spell);
-
-                  return (
-                    <TabsTrigger
-                      key={spell.id}
-                      value={spell.id}
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
-                    >
-                      {spellKinds.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          {spellKinds.map((kind) => (
-                            <KindBadge
-                              key={kind}
-                              kind={kind}
-                              variant="compact"
-                              iconClassname="size-3 text-muted-foreground"
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <span>
-                        {spell.name || spell.alias || "Untitled Spell"}
-                      </span>
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
             </div>
-
-            {/* Spell Tab Contents */}
-            {eventSpells.map((spell) => (
-              <SpellTabContent
-                key={spell.id}
-                spellId={spell.id}
-                spell={spell}
-                targetEventId={event.id}
-                targetEvent={event}
-              />
-            ))}
-          </Tabs>
-        ) : (
-          <div className="flex items-center justify-center border-b">
-            <Button
-              variant="ghost"
-              onClick={() => setCreateSpellDialogOpen(true)}
-              className="w-full justify-center rounded-none"
-              title="Create spell for this event"
-            >
-              <Wand2 />
-              Create spell
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Create Parameterized Spell Dialog */}

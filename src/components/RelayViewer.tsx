@@ -137,25 +137,24 @@ function SpellTabContent({
   }, [parsed]);
 
   return (
-    <TabsContent
-      value={spellId}
-      className="flex-1 overflow-auto m-0 flex flex-col"
-    >
+    <TabsContent value={spellId} className="m-0 data-[state=inactive]:hidden">
       {!appliedFilter ? (
-        <div className="flex items-center justify-center h-full p-8 text-center text-muted-foreground">
+        <div className="flex items-center justify-center h-64 p-8 text-center text-muted-foreground">
           <div>
             <p className="text-sm">Unable to apply spell to this relay</p>
             <p className="text-xs mt-2">Check console for details</p>
           </div>
         </div>
       ) : isCountSpell ? (
-        <CountViewer
-          filter={appliedFilter}
-          relays={finalRelays}
-          needsAccount={false}
-        />
+        <div className="h-[60vh] min-h-[400px]">
+          <CountViewer
+            filter={appliedFilter}
+            relays={finalRelays}
+            needsAccount={false}
+          />
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col h-[60vh] min-h-[400px]">
           <SpellHeader
             loading={loading}
             overallState={overallState}
@@ -167,7 +166,7 @@ function SpellTabContent({
             exportFilename={spell.name || "spell-events"}
             onOpenNip={(number) => addWindow("nip", { number })}
           />
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto min-h-0">
             <EventFeed
               events={events}
               view="list"
@@ -177,7 +176,7 @@ function SpellTabContent({
               enableFreeze={true}
             />
           </div>
-        </>
+        </div>
       )}
     </TabsContent>
   );
@@ -201,149 +200,150 @@ export function RelayViewer({ url }: RelayViewerProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Relay Info Content */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold">
-              {info?.name || "Unknown Relay"}
-            </h2>
-            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-              {url}
-              <Button
-                variant="link"
-                size="icon"
-                className="size-4 text-muted-foreground"
-                onClick={() => copy(url)}
-              >
-                {copied ? (
-                  <CopyCheck className="size-3" />
-                ) : (
-                  <Copy className="size-3" />
-                )}
-              </Button>
+      {/* Main Content - Single Scroll Container */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Relay Info Content */}
+        <div className="p-4 flex flex-col gap-6">
+          {/* Header */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold">
+                {info?.name || "Unknown Relay"}
+              </h2>
+              <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                {url}
+                <Button
+                  variant="link"
+                  size="icon"
+                  className="size-4 text-muted-foreground"
+                  onClick={() => copy(url)}
+                >
+                  {copied ? (
+                    <CopyCheck className="size-3" />
+                  ) : (
+                    <Copy className="size-3" />
+                  )}
+                </Button>
+              </div>
+              {info?.description && (
+                <p className="text-sm mt-2">{info.description}</p>
+              )}
             </div>
-            {info?.description && (
-              <p className="text-sm mt-2">{info.description}</p>
-            )}
           </div>
+
+          {/* Operator */}
+          {(info?.contact || info?.pubkey) && (
+            <div>
+              <h3 className="mb-2 font-semibold text-sm">Operator</h3>
+              <div className="space-y-2 text-sm text-accent">
+                {info.contact && info.contact.length == 64 && (
+                  <UserName pubkey={info.contact} />
+                )}
+                {info.pubkey && info.pubkey.length === 64 && (
+                  <UserName pubkey={info.pubkey} />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Software */}
+          {(info?.software || info?.version) && (
+            <div>
+              <h3 className="mb-2 font-semibold text-sm">Software</h3>
+              <span className="text-sm text-muted-foreground">
+                {info.software || info.version}
+              </span>
+            </div>
+          )}
+
+          {/* Supported NIPs */}
+          {info?.supported_nips && info.supported_nips.length > 0 && (
+            <div>
+              <h3 className="mb-3 font-semibold text-sm">Supported NIPs</h3>
+              <div className="flex flex-wrap gap-2">
+                {info.supported_nips.map((num: number) => (
+                  <NIPBadge
+                    key={num}
+                    nipNumber={String(num).padStart(2, "0")}
+                    showName={true}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Operator */}
-        {(info?.contact || info?.pubkey) && (
-          <div>
-            <h3 className="mb-2 font-semibold text-sm">Operator</h3>
-            <div className="space-y-2 text-sm text-accent">
-              {info.contact && info.contact.length == 64 && (
-                <UserName pubkey={info.contact} />
-              )}
-              {info.pubkey && info.pubkey.length === 64 && (
-                <UserName pubkey={info.pubkey} />
-              )}
-            </div>
-          </div>
-        )}
+        {/* Spell Tabs Section */}
+        <div className="border-t border-border">
+          {relaySpells.length > 0 ? (
+            <Tabs defaultValue={relaySpells[0]?.id}>
+              {/* Sticky Tab Header */}
+              <div className="sticky top-0 z-10 bg-background border-b flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCreateSpellDialogOpen(true)}
+                  className="rounded-none border-r h-10 w-10"
+                  title="Create spell for this relay"
+                >
+                  <Wand2 className="size-4" />
+                </Button>
+                <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto overflow-x-auto overflow-y-hidden scrollbar-hide">
+                  {relaySpells.map((spell) => {
+                    // Extract kinds from spell for display
+                    const spellKinds = extractSpellKinds(spell);
 
-        {/* Software */}
-        {(info?.software || info?.version) && (
-          <div>
-            <h3 className="mb-2 font-semibold text-sm">Software</h3>
-            <span className="text-sm text-muted-foreground">
-              {info.software || info.version}
-            </span>
-          </div>
-        )}
+                    return (
+                      <TabsTrigger
+                        key={spell.id}
+                        value={spell.id}
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
+                      >
+                        {spellKinds.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {spellKinds.map((kind) => (
+                              <KindBadge
+                                key={kind}
+                                kind={kind}
+                                variant="compact"
+                                iconClassname="size-3 text-muted-foreground"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <span>
+                          {spell.name || spell.alias || "Untitled Spell"}
+                        </span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
 
-        {/* Supported NIPs */}
-        {info?.supported_nips && info.supported_nips.length > 0 && (
-          <div>
-            <h3 className="mb-3 font-semibold text-sm">Supported NIPs</h3>
-            <div className="flex flex-wrap gap-2">
-              {info.supported_nips.map((num: number) => (
-                <NIPBadge
-                  key={num}
-                  nipNumber={String(num).padStart(2, "0")}
-                  showName={true}
+              {/* Spell Tab Contents */}
+              {relaySpells.map((spell) => (
+                <SpellTabContent
+                  key={spell.id}
+                  spellId={spell.id}
+                  spell={spell}
+                  targetRelay={url}
                 />
               ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Spell Tabs */}
-      <div className="border-t border-border flex-1 overflow-hidden flex flex-col min-h-0">
-        {relaySpells.length > 0 ? (
-          <Tabs
-            defaultValue={relaySpells[0]?.id}
-            className="flex flex-col h-full"
-          >
-            <div className="flex items-center border-b">
+            </Tabs>
+          ) : (
+            <div className="sticky top-0 z-10 bg-background border-b">
               <Button
                 variant="ghost"
-                size="icon"
                 onClick={() => setCreateSpellDialogOpen(true)}
-                className="rounded-none border-r h-10 w-10"
+                className="w-full justify-center rounded-none"
                 title="Create spell for this relay"
               >
-                <Wand2 className="size-4" />
+                <Wand2 />
+                Create spell
               </Button>
-              <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto flex-shrink-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
-                {relaySpells.map((spell) => {
-                  // Extract kinds from spell for display
-                  const spellKinds = extractSpellKinds(spell);
-
-                  return (
-                    <TabsTrigger
-                      key={spell.id}
-                      value={spell.id}
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
-                    >
-                      {spellKinds.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          {spellKinds.map((kind) => (
-                            <KindBadge
-                              key={kind}
-                              kind={kind}
-                              variant="compact"
-                              iconClassname="size-3 text-muted-foreground"
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <span>
-                        {spell.name || spell.alias || "Untitled Spell"}
-                      </span>
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
             </div>
-
-            {/* Spell Tab Contents */}
-            {relaySpells.map((spell) => (
-              <SpellTabContent
-                key={spell.id}
-                spellId={spell.id}
-                spell={spell}
-                targetRelay={url}
-              />
-            ))}
-          </Tabs>
-        ) : (
-          <div className="flex items-center justify-center border-b">
-            <Button
-              variant="ghost"
-              onClick={() => setCreateSpellDialogOpen(true)}
-              className="w-full justify-center rounded-none"
-              title="Create spell for this relay"
-            >
-              <Wand2 />
-              Create spell
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Create Parameterized Spell Dialog */}
