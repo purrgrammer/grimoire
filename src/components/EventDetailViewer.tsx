@@ -183,15 +183,13 @@ function SpellTabContent({
           </div>
         </div>
       ) : isCountSpell ? (
-        <div className="h-[60vh] min-h-[400px]">
-          <CountViewer
-            filter={appliedFilter}
-            relays={finalRelays}
-            needsAccount={false}
-          />
-        </div>
+        <CountViewer
+          filter={appliedFilter}
+          relays={finalRelays}
+          needsAccount={false}
+        />
       ) : (
-        <div className="flex flex-col h-[60vh] min-h-[400px]">
+        <>
           <SpellHeader
             loading={loading}
             overallState={overallState}
@@ -203,17 +201,15 @@ function SpellTabContent({
             exportFilename={spell.name || "spell-events"}
             onOpenNip={(number) => addWindow("nip", { number })}
           />
-          <div className="flex-1 overflow-y-auto min-h-0">
-            <EventFeed
-              events={events}
-              view="list"
-              loading={loading}
-              eoseReceived={eoseReceived}
-              stream={true}
-              enableFreeze={true}
-            />
-          </div>
-        </div>
+          <EventFeed
+            events={events}
+            view="list"
+            loading={loading}
+            eoseReceived={eoseReceived}
+            stream={true}
+            enableFreeze={true}
+          />
+        </>
       )}
     </TabsContent>
   );
