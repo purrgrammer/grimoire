@@ -81,8 +81,22 @@ export interface ParsedSpell {
   /** Fork provenance (event ID of source spell) */
   forkedFrom?: string;
 
+  /** Parameter configuration (if spell is parameterized) */
+  parameter?: SpellParameter;
+
   /** Full event for reference */
   event: SpellEvent;
+}
+
+/**
+ * Parameter configuration for a parameterized spell
+ */
+export interface SpellParameter {
+  /** Parameter type */
+  type: "$pubkey" | "$event" | "$relay";
+
+  /** Default values to use when parameter not provided (e.g., ["$me"]) */
+  default?: string[];
 }
 
 /**
@@ -103,6 +117,9 @@ export interface CreateSpellOptions {
 
   /** If forking, provide source event ID */
   forkedFrom?: string;
+
+  /** Parameter configuration to make spell reusable */
+  parameter?: SpellParameter;
 }
 
 /**

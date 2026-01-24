@@ -11,6 +11,7 @@ import {
   Wifi,
   HardDrive,
   Zap,
+  Wand2,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
@@ -25,18 +26,280 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Button } from "./ui/button";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
 import { addressLoader } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { USER_SERVER_LIST_KIND, getServersFromEvent } from "@/services/blossom";
 import blossomServerCache from "@/services/blossom-server-cache";
+import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
+import { EventFeed } from "./nostr/EventFeed";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
+import {
+  applySpellParameters,
+  detectCommandType,
+} from "@/lib/spell-conversion";
+import { useOutboxRelays } from "@/hooks/useOutboxRelays";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { KindBadge } from "./KindBadge";
+import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
+import { SpellHeader } from "./timeline/SpellHeader";
+import CountViewer from "./CountViewer";
+import { extractSpellKinds } from "@/lib/spell-display";
+import { useParseSpell } from "@/hooks/useParseSpell";
 
 export interface ProfileViewerProps {
   pubkey: string;
+}
+
+interface SpellTabContentProps {
+  spellId: string;
+  spell: {
+    id: string;
+    name?: string;
+    command: string;
+    parameterType: "$pubkey" | "$event" | "$relay";
+    parameterDefault?: string[];
+    event?: any;
+  };
+  targetPubkey: string | undefined;
+}
+
+/**
+ * SpellTabContent - Renders a parameterized spell applied to a specific target
+ */
+function SpellTabContent({
+  spellId,
+  spell,
+  targetPubkey,
+}: SpellTabContentProps) {
+  const { state, addWindow } = useGrimoire();
+  const eventStore = useEventStore();
+
+  // Fetch target pubkey's contacts (kind 3 contact list)
+  const contactListEvent = use$(
+    () =>
+      targetPubkey
+        ? eventStore.replaceable(kinds.Contacts, targetPubkey)
+        : undefined,
+    [targetPubkey, eventStore],
+  );
+
+  const targetContacts = useMemo(() => {
+    if (!contactListEvent) return [];
+
+    try {
+      // Extract pubkeys from p tags
+      const contacts = contactListEvent.tags
+        .filter((tag: string[]) => tag[0] === "p" && tag[1])
+        .map((tag: string[]) => tag[1]);
+
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Target contacts:`,
+        {
+          count: contacts.length,
+          targetPubkey,
+        },
+      );
+
+      return contacts;
+    } catch (error) {
+      console.error(
+        `[SpellTabContent:${spell.name || spellId}] Failed to fetch contacts:`,
+        error,
+      );
+      return [];
+    }
+  }, [contactListEvent, targetPubkey, spell.name, spellId]);
+
+  // Parse spell and get filter - handle both published (with event) and local (command-only) spells
+  const parsed = useParseSpell(spell, targetPubkey || "", spellId);
+
+  // Apply parameters to get final filter
+  const appliedFilter = useMemo(() => {
+    if (!parsed || !targetPubkey) return null;
+
+    try {
+      const applied = applySpellParameters(parsed, {
+        targetPubkey,
+        targetContacts,
+      });
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Applied parameters:`,
+        {
+          targetPubkey,
+          targetContactsCount: targetContacts.length,
+          result: applied,
+        },
+      );
+      return applied;
+    } catch (error) {
+      console.error(
+        `[SpellTabContent:${spell.name || spellId}] Failed to apply parameters:`,
+        error,
+      );
+      return null;
+    }
+  }, [parsed, targetPubkey, targetContacts, spell.name, spellId]);
+
+  // Resolve relays - use explicit relays from spell, or use NIP-65 outbox selection
+  const fallbackRelays = useMemo(
+    () =>
+      state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) ||
+      AGGREGATOR_RELAYS,
+    [state.activeAccount?.relays],
+  );
+
+  const outboxOptions = useMemo(
+    () => ({
+      fallbackRelays,
+      timeout: 1000,
+      maxRelays: 42,
+    }),
+    [fallbackRelays],
+  );
+
+  // Use outbox relay selection if no explicit relays provided in spell
+  const { relays: selectedRelays, phase: relaySelectionPhase } =
+    useOutboxRelays(appliedFilter || {}, outboxOptions);
+
+  const finalRelays = useMemo(() => {
+    // Don't select relays until filter is resolved (variables substituted)
+    if (!appliedFilter) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Waiting for filter resolution before selecting relays`,
+      );
+      return [];
+    }
+
+    // Wait for outbox relay selection to complete
+    if (relaySelectionPhase !== "ready") {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Waiting for relay selection (phase: ${relaySelectionPhase})`,
+      );
+      return [];
+    }
+
+    // For profile spells, ALWAYS prefer outbox-selected relays over explicit relays
+    // This ensures we query from the author's write relays (NIP-65)
+    if (selectedRelays && selectedRelays.length > 0) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Using outbox-selected relays:`,
+        selectedRelays,
+      );
+      return selectedRelays;
+    }
+
+    // Fallback to explicit relays from spell if outbox selection yielded nothing
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[SpellTabContent:${spell.name || spellId}] Fallback to explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
+    console.log(
+      `[SpellTabContent:${spell.name || spellId}] No relays available`,
+    );
+    return [];
+  }, [
+    appliedFilter,
+    parsed?.relays,
+    relaySelectionPhase,
+    selectedRelays,
+    spell.name,
+    spellId,
+  ]);
+
+  // Fetch events using the applied filter
+  // Always call the hook unconditionally (React Rules of Hooks)
+  const shouldFetch = !!(appliedFilter && finalRelays.length > 0);
+  const { events, loading, eoseReceived, relayStates, overallState } =
+    useReqTimelineEnhanced(
+      shouldFetch ? `spell-${spellId}-${targetPubkey}` : `disabled-${spellId}`,
+      appliedFilter || {},
+      shouldFetch ? finalRelays : [],
+      { limit: appliedFilter?.limit || 50, stream: true },
+    );
+
+  console.log(`[SpellTabContent:${spell.name || spellId}] Render state:`, {
+    hasFilter: !!appliedFilter,
+    relayCount: finalRelays.length,
+    eventCount: events.length,
+    loading,
+    eoseReceived,
+  });
+
+  // Convert relay states to format expected by SpellHeader
+  const reqRelayStatesMap = useMemo(() => {
+    const map = new Map<string, { eose: boolean; eventCount: number }>();
+    relayStates.forEach((state, url) => {
+      map.set(url, {
+        eose: state.subscriptionState === "eose",
+        eventCount: state.eventCount,
+      });
+    });
+    return map;
+  }, [relayStates]);
+
+  // Determine if this is a COUNT spell or REQ spell
+  const isCountSpell = useMemo(() => {
+    if (!parsed) return false;
+    return detectCommandType(parsed.command) === "COUNT";
+  }, [parsed]);
+
+  return (
+    <TabsContent value={spellId} className="m-0 data-[state=inactive]:hidden">
+      {!appliedFilter ? (
+        <div className="flex items-center justify-center h-64 p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Unable to apply spell to this profile</p>
+            <p className="text-xs mt-2">Check console for details</p>
+          </div>
+        </div>
+      ) : finalRelays.length === 0 ? (
+        <div className="flex items-center justify-center h-64 p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Selecting relays...</p>
+          </div>
+        </div>
+      ) : isCountSpell ? (
+        <CountViewer
+          filter={appliedFilter}
+          relays={finalRelays}
+          needsAccount={false}
+        />
+      ) : (
+        <>
+          <SpellHeader
+            loading={loading}
+            overallState={overallState}
+            events={events}
+            relays={finalRelays}
+            filter={appliedFilter}
+            spellEvent={spell.event}
+            reqRelayStates={reqRelayStatesMap}
+            exportFilename={spell.name || "spell-events"}
+            onOpenNip={(number) => addWindow("nip", { number })}
+          />
+          <EventFeed
+            events={events}
+            view="list"
+            loading={loading}
+            eoseReceived={eoseReceived}
+            stream={true}
+            enableFreeze={true}
+          />
+        </>
+      )}
+    </TabsContent>
+  );
 }
 
 /**
@@ -46,6 +309,7 @@ export interface ProfileViewerProps {
 export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const { state, addWindow } = useGrimoire();
   const accountPubkey = state.activeAccount?.pubkey;
+  const [createSpellDialogOpen, setCreateSpellDialogOpen] = useState(false);
 
   // Resolve $me alias
   const resolvedPubkey = pubkey === "$me" ? accountPubkey : pubkey;
@@ -54,6 +318,15 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
   const eventStore = useEventStore();
   const { copy, copied } = useCopy();
   const { relays: relayStates } = useRelayState();
+
+  // Get user's parameterized spells for $pubkey
+  const userRelays =
+    state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) || [];
+  const { spells: pubkeySpells } = useUserParameterizedSpells(
+    accountPubkey,
+    "$pubkey",
+    userRelays,
+  );
 
   // Fetch fresh relay list from network only if not cached or stale
   useEffect(() => {
@@ -379,97 +652,182 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         </div>
       </div>
 
-      {/* Profile Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
+      {/* Main Content - Single Scroll Container */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Profile Content */}
+        <div className="p-4">
+          {!profile && !profileEvent && <ProfileCardSkeleton variant="full" />}
 
-        {!profile && profileEvent && (
-          <div className="text-center text-muted-foreground text-sm">
-            No profile metadata found
-          </div>
-        )}
+          {!profile && profileEvent && (
+            <div className="text-center text-muted-foreground text-sm">
+              No profile metadata found
+            </div>
+          )}
 
-        {profile && (
-          <div className="flex flex-col gap-4 max-w-2xl">
-            <div className="flex flex-col gap-0">
-              {/* Display Name */}
-              <UserName
-                pubkey={pubkey}
-                className="text-2xl font-bold pointer-events-none"
-              />
-              {/* NIP-05 */}
-              {profile.nip05 && (
-                <div className="text-xs">
-                  <Nip05 pubkey={pubkey} profile={profile} />
+          {profile && (
+            <div className="flex flex-col gap-4 max-w-2xl">
+              <div className="flex flex-col gap-0">
+                {/* Display Name */}
+                <UserName
+                  pubkey={pubkey}
+                  className="text-2xl font-bold pointer-events-none"
+                />
+                {/* NIP-05 */}
+                {profile.nip05 && (
+                  <div className="text-xs">
+                    <Nip05 pubkey={pubkey} profile={profile} />
+                  </div>
+                )}
+              </div>
+
+              {/* About/Bio */}
+              {profile.about && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                    About
+                  </div>
+                  <RichText
+                    className="text-sm whitespace-pre-wrap break-words"
+                    content={profile.about}
+                  />
+                </div>
+              )}
+
+              {/* Website */}
+              {profile.website && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                    Website
+                  </div>
+                  <a
+                    href={profile.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-accent underline decoration-dotted"
+                  >
+                    {profile.website}
+                  </a>
+                </div>
+              )}
+
+              {/* Lightning Address */}
+              {profile.lud16 && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                    Lightning Address
+                  </div>
+                  <button
+                    onClick={() =>
+                      addWindow("zap", { recipientPubkey: resolvedPubkey })
+                    }
+                    className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
+                    title="Send zap"
+                  >
+                    <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
+                    <code className="text-sm font-mono flex-1 min-w-0 truncate">
+                      {profile.lud16}
+                    </code>
+                  </button>
+                </div>
+              )}
+
+              {/* LUD06 (LNURL) */}
+              {profile.lud06 && (
+                <div className="flex flex-col gap-1">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                    LNURL
+                  </div>
+                  <code className="text-sm font-mono break-all">
+                    {profile.lud06}
+                  </code>
                 </div>
               )}
             </div>
+          )}
+        </div>
 
-            {/* About/Bio */}
-            {profile.about && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  About
-                </div>
-                <RichText
-                  className="text-sm whitespace-pre-wrap break-words"
-                  content={profile.about}
+        {/* Spell Tabs Section */}
+        <div className="border-t border-border">
+          {pubkeySpells.length > 0 ? (
+            <Tabs defaultValue={pubkeySpells[0]?.id}>
+              {/* Sticky Tab Header */}
+              <div className="sticky top-0 z-10 bg-background border-b flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCreateSpellDialogOpen(true)}
+                  className="rounded-none border-r h-10 w-10"
+                  title="Create spell for this profile"
+                >
+                  <Wand2 className="size-4" />
+                </Button>
+                <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto overflow-x-auto overflow-y-hidden scrollbar-hide">
+                  {pubkeySpells.map((spell) => {
+                    // Extract kinds from spell for display
+                    const spellKinds = extractSpellKinds(spell);
+
+                    return (
+                      <TabsTrigger
+                        key={spell.id}
+                        value={spell.id}
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
+                      >
+                        {spellKinds.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {spellKinds.map((kind) => (
+                              <KindBadge
+                                key={kind}
+                                kind={kind}
+                                variant="compact"
+                                iconClassname="size-3 text-muted-foreground"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <span>
+                          {spell.name || spell.alias || "Untitled Spell"}
+                        </span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
+
+              {/* Spell Tab Contents */}
+              {pubkeySpells.map((spell) => (
+                <SpellTabContent
+                  key={spell.id}
+                  spellId={spell.id}
+                  spell={spell}
+                  targetPubkey={resolvedPubkey}
                 />
-              </div>
-            )}
-
-            {/* Website */}
-            {profile.website && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Website
-                </div>
-                <a
-                  href={profile.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-accent underline decoration-dotted"
-                >
-                  {profile.website}
-                </a>
-              </div>
-            )}
-
-            {/* Lightning Address */}
-            {profile.lud16 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Lightning Address
-                </div>
-                <button
-                  onClick={() =>
-                    addWindow("zap", { recipientPubkey: resolvedPubkey })
-                  }
-                  className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
-                  title="Send zap"
-                >
-                  <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
-                  <code className="text-sm font-mono flex-1 min-w-0 truncate">
-                    {profile.lud16}
-                  </code>
-                </button>
-              </div>
-            )}
-
-            {/* LUD06 (LNURL) */}
-            {profile.lud06 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  LNURL
-                </div>
-                <code className="text-sm font-mono break-all">
-                  {profile.lud06}
-                </code>
-              </div>
-            )}
-          </div>
-        )}
+              ))}
+            </Tabs>
+          ) : (
+            <div className="sticky top-0 z-10 bg-background border-b">
+              <Button
+                variant="ghost"
+                onClick={() => setCreateSpellDialogOpen(true)}
+                className="w-full justify-center rounded-none"
+                title="Create spell for this profile"
+              >
+                <Wand2 />
+                Create spell
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Create Parameterized Spell Dialog */}
+      <CreateParameterizedSpellDialog
+        open={createSpellDialogOpen}
+        onOpenChange={setCreateSpellDialogOpen}
+        parameterType="$pubkey"
+        onSuccess={() => {
+          // Dialog will close automatically, spells will refresh via useUserParameterizedSpells
+        }}
+      />
     </div>
   );
 }

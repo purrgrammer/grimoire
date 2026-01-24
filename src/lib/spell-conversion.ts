@@ -1,4 +1,4 @@
-import { parseReqCommand } from "./req-parser";
+import { parseReqCommand, parseTimestamp } from "./req-parser";
 import type {
   CreateSpellOptions,
   EncodedSpell,
@@ -6,7 +6,31 @@ import type {
   SpellEvent,
 } from "@/types/spell";
 import type { NostrFilter } from "@/types/nostr";
+import type { NostrEvent } from "@/types/nostr";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
+import { isAddressableKind } from "./nostr-kinds";
+import { getTagValue } from "applesauce-core/helpers";
+
+/**
+ * Construct an address coordinate from an event if it's addressable
+ * Returns coordinate in format: kind:pubkey:d-tag
+ *
+ * For replaceable events (10000-19999): kind:pubkey:
+ * For parameterized replaceable events (30000-39999): kind:pubkey:d-tag
+ *
+ * @param event - Nostr event
+ * @returns Coordinate string or null if not addressable
+ */
+export function getEventCoordinate(event: NostrEvent): string | null {
+  if (!isAddressableKind(event.kind)) {
+    return null;
+  }
+
+  // Get d-tag value (empty string for simple replaceable events)
+  const dTag = getTagValue(event, "d") || "";
+
+  return `${event.kind}:${event.pubkey}:${dTag}`;
+}
 
 /**
  * Simple tokenization that doesn't expand shell variables
@@ -72,7 +96,7 @@ export function detectCommandType(command: string): "REQ" | "COUNT" {
  * @throws Error if command is invalid or produces empty filter
  */
 export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
-  const { command, name, description, topics, forkedFrom } = options;
+  const { command, name, description, topics, forkedFrom, parameter } = options;
 
   // Validate command
   if (!command || command.trim().length === 0) {
@@ -95,6 +119,28 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
   }
 
   const parsed = parseReqCommand(tokens);
+
+  // If this is a parameterized spell, convert special aliases to parameter placeholders
+  if (parameter) {
+    if (parameter.type === "$pubkey") {
+      // Convert $me/$contacts to $pubkey placeholder in authors and tag filters
+      if (parsed.filter.authors) {
+        parsed.filter.authors = parsed.filter.authors.map((a) =>
+          a === "$me" || a === "$contacts" ? "$pubkey" : a,
+        );
+      }
+      if (parsed.filter["#p"]) {
+        parsed.filter["#p"] = parsed.filter["#p"].map((p) =>
+          p === "$me" || p === "$contacts" ? "$pubkey" : p,
+        );
+      }
+      if (parsed.filter["#P"]) {
+        parsed.filter["#P"] = parsed.filter["#P"].map((p) =>
+          p === "$me" || p === "$contacts" ? "$pubkey" : p,
+        );
+      }
+    }
+  }
 
   // Validate that parsing produced a useful filter
   // A filter must have at least one constraint
@@ -130,6 +176,15 @@ export function encodeSpell(options: CreateSpellOptions): EncodedSpell {
     ? `Grimoire ${cmdType} spell: ${description.substring(0, 100)}`
     : `Grimoire ${cmdType} spell`;
   tags.push(["alt", altText]);
+
+  // Add parameter tag if this is a parameterized spell (lens)
+  if (parameter) {
+    const paramTag: [string, string, ...string[]] = ["l", parameter.type];
+    if (parameter.default && parameter.default.length > 0) {
+      paramTag.push(...parameter.default);
+    }
+    tags.push(paramTag);
+  }
 
   // Add provenance if forked
   if (forkedFrom) {
@@ -275,6 +330,19 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
   const topics = tagMap.get("t") || [];
   const forkedFrom = tagMap.get("e")?.[0];
 
+  // Extract parameter configuration (lens support)
+  let parameter: ParsedSpell["parameter"];
+  const lTag = event.tags.find((t) => t[0] === "l");
+  if (lTag && lTag.length >= 2) {
+    const [, type, ...defaults] = lTag;
+    if (type === "$pubkey" || type === "$event" || type === "$relay") {
+      parameter = {
+        type,
+        default: defaults.length > 0 ? defaults : undefined,
+      };
+    }
+  }
+
   // Reconstruct filter from tags
   const filter: NostrFilter = {};
 
@@ -314,24 +382,17 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
 
   const since = tagMap.get("since")?.[0];
   if (since) {
-    // Check if it's a relative time or unix timestamp
-    if (/^\d{10}$/.test(since)) {
-      filter.since = parseInt(since, 10);
-    } else {
-      // It's a relative time format - preserve it as a comment
-      // For actual filtering, we'd need to resolve it at runtime
-      // For now, skip adding to filter (will be resolved at execution)
+    const timestamp = parseTimestamp(since);
+    if (timestamp) {
+      filter.since = timestamp;
     }
   }
 
   const until = tagMap.get("until")?.[0];
   if (until) {
-    // Check if it's a relative time or unix timestamp
-    if (/^\d{10}$/.test(until)) {
-      filter.until = parseInt(until, 10);
-    } else {
-      // It's a relative time format - preserve it as a comment
-      // For now, skip adding to filter (will be resolved at execution)
+    const timestamp = parseTimestamp(until);
+    if (timestamp) {
+      filter.until = timestamp;
     }
   }
 
@@ -363,6 +424,7 @@ export function decodeSpell(event: SpellEvent): ParsedSpell {
     closeOnEose,
     topics,
     forkedFrom,
+    parameter,
     event,
   };
 }
@@ -385,7 +447,7 @@ export function reconstructCommand(
     parts.push(`-k ${filter.kinds.join(",")}`);
   }
 
-  // Authors
+  // Authors (preserve $pubkey placeholder if present)
   if (filter.authors && filter.authors.length > 0) {
     parts.push(`-a ${filter.authors.join(",")}`);
   }
@@ -462,4 +524,204 @@ export function reconstructCommand(
   }
 
   return parts.join(" ");
+}
+
+/**
+ * Apply parameter values to a parameterized spell
+ * Substitutes parameter placeholders with actual values
+ *
+ * For $pubkey spells:
+ * - $me is replaced with targetPubkey
+ * - $contacts is replaced with targetContacts
+ * - $pubkey is replaced with targetPubkey (for explicitly parameterized spells)
+ *
+ * For $event spells:
+ * - If targetAddress is provided (replaceable events), uses #a tags instead of #e tags
+ * - This ensures replaceable events are referenced by coordinate rather than ID
+ *
+ * @param parsed - Parsed spell
+ * @param context - Context for substitution (pubkey, contacts, event ID/address, or relay)
+ * @returns Filter with parameters applied
+ */
+export function applySpellParameters(
+  parsed: Pick<ParsedSpell, "filter" | "parameter">,
+  context: {
+    targetPubkey?: string;
+    targetContacts?: string[];
+    targetEventId?: string;
+    targetAddress?: string;
+    targetRelay?: string;
+  } = {},
+): NostrFilter {
+  const {
+    targetPubkey,
+    targetContacts = [],
+    targetEventId,
+    targetAddress,
+    targetRelay,
+  } = context;
+
+  // Clone the filter
+  const filter: NostrFilter = { ...parsed.filter };
+
+  // Handle explicitly parameterized spells
+  if (parsed.parameter) {
+    switch (parsed.parameter.type) {
+      case "$pubkey": {
+        const values = targetPubkey
+          ? [targetPubkey]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error("Parameterized $pubkey spell requires target pubkey");
+        }
+
+        // Substitute $pubkey in authors
+        if (filter.authors) {
+          filter.authors = filter.authors.flatMap((author) =>
+            author === "$pubkey" ? values : [author],
+          );
+        }
+
+        // Substitute $pubkey in all single-letter tag filters (#p, #P, etc.)
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              (filter as any)[key] = tagArray.flatMap((val) =>
+                val === "$pubkey" ? values : [val],
+              );
+            }
+          }
+        }
+        break;
+      }
+
+      case "$event": {
+        const values = targetEventId
+          ? [targetEventId]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error(
+            "Parameterized $event spell requires target event ID",
+          );
+        }
+
+        // For replaceable events, we use address coordinates instead of event IDs in tags
+        const useAddress = !!targetAddress;
+        const addressValues = targetAddress ? [targetAddress] : [];
+
+        // Substitute $event in ids (always use event ID for direct lookups)
+        if (filter.ids) {
+          filter.ids = filter.ids.flatMap((id) =>
+            id === "$event" ? values : [id],
+          );
+        }
+
+        // Substitute $event in all single-letter tag filters
+        // For #e tags on replaceable events, convert to #a tags with address coordinate
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              // Check if this filter has $event placeholder
+              const hasEventPlaceholder = tagArray.some(
+                (val) => val === "$event",
+              );
+
+              if (hasEventPlaceholder) {
+                // Special handling for #e tags with replaceable events
+                if (key === "#e" && useAddress) {
+                  // Move substitutions to #a tags for replaceable events
+                  const substituted = tagArray.flatMap(
+                    (val) => (val === "$event" ? [] : [val]), // Remove $event from #e
+                  );
+                  if (substituted.length > 0 || tagArray.length === 1) {
+                    // Only keep #e if it has non-placeholder values
+                    (filter as any)[key] =
+                      substituted.length > 0 ? substituted : undefined;
+                  }
+                  // Add to #a tags
+                  const existingA = (filter as any)["#a"] || [];
+                  (filter as any)["#a"] = [...existingA, ...addressValues];
+                } else {
+                  // Normal substitution for other tags
+                  (filter as any)[key] = tagArray.flatMap((val) =>
+                    val === "$event"
+                      ? useAddress && key === "#a"
+                        ? addressValues
+                        : values
+                      : [val],
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // Clean up empty tag filters
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter];
+            if (Array.isArray(tagArray) && tagArray.length === 0) {
+              delete (filter as any)[key];
+            }
+          }
+        }
+        break;
+      }
+
+      case "$relay": {
+        const values = targetRelay
+          ? [targetRelay]
+          : parsed.parameter.default || [];
+        if (values.length === 0) {
+          throw new Error("Parameterized $relay spell requires target relay");
+        }
+
+        // Replace $relay in all single-letter tag filters (#d, #r, etc.)
+        for (const key in filter) {
+          if (key.startsWith("#") && key.length === 2) {
+            const tagArray = filter[key as keyof NostrFilter] as string[];
+            if (Array.isArray(tagArray)) {
+              (filter as any)[key] = tagArray.flatMap((val) =>
+                val === "$relay" ? values : [val],
+              );
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Handle implicit parameterization ($me and $contacts)
+  // $me → targetPubkey
+  // $contacts → targetContacts
+  if (targetPubkey || targetContacts.length > 0) {
+    if (filter.authors) {
+      filter.authors = filter.authors.flatMap((author) => {
+        if (author === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (author === "$contacts") return targetContacts;
+        return [author];
+      });
+    }
+
+    if (filter["#p"]) {
+      filter["#p"] = filter["#p"].flatMap((p) => {
+        if (p === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (p === "$contacts") return targetContacts;
+        return [p];
+      });
+    }
+
+    if (filter["#P"]) {
+      filter["#P"] = filter["#P"].flatMap((p) => {
+        if (p === "$me") return targetPubkey ? [targetPubkey] : [];
+        if (p === "$contacts") return targetContacts;
+        return [p];
+      });
+    }
+  }
+
+  return filter;
 }

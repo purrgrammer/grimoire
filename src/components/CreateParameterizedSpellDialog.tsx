@@ -11,55 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { parseReqCommand } from "@/lib/req-parser";
-import { reconstructCommand, detectCommandType } from "@/lib/spell-conversion";
-import type { ParsedSpell, SpellEvent } from "@/types/spell";
 import { Loader2 } from "lucide-react";
 import { saveSpell } from "@/services/spell-storage";
-import { LocalSpell } from "@/services/db";
 import { PublishSpellAction } from "@/actions/publish-spell";
 import { useAccount } from "@/hooks/useAccount";
 
-/**
- * Filter command to show only spell-relevant parts
- * Removes global flags like --title that don't affect the filter
- */
-function filterSpellCommand(command: string): string {
-  if (!command) return "";
-
-  try {
-    // Detect command type (REQ or COUNT)
-    const cmdType = detectCommandType(command);
-
-    // Parse the command - remove prefix first
-    const commandWithoutPrefix = command.replace(/^\s*(req|count)\s+/i, "");
-    const tokens = commandWithoutPrefix.split(/\s+/);
-
-    // Parse to get filter and relays
-    const parsed = parseReqCommand(tokens);
-
-    // Reconstruct with only filter-relevant parts
-    return reconstructCommand(
-      parsed.filter,
-      parsed.relays,
-      undefined,
-      undefined,
-      parsed.closeOnEose,
-      cmdType,
-    );
-  } catch {
-    // If parsing fails, return original
-    return command;
-  }
-}
-
-interface SpellDialogProps {
+interface CreateParameterizedSpellDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mode: "create" | "edit";
-  initialCommand?: string;
-  existingSpell?: ParsedSpell | LocalSpell;
-  onSuccess?: (event: SpellEvent | null) => void;
+  parameterType: "$pubkey" | "$event" | "$relay";
+  onSuccess?: () => void;
 }
 
 type PublishingState =
@@ -70,18 +31,58 @@ type PublishingState =
   | "saving"
   | "error";
 
-export function SpellDialog({
+const PARAMETER_INFO: Record<
+  "$pubkey" | "$event" | "$relay",
+  {
+    title: string;
+    description: string;
+    placeholder: string;
+    variable: string;
+    variableDescription: string;
+    defaultValue?: string;
+    requireVariable: boolean;
+  }
+> = {
+  $pubkey: {
+    title: "Create Profile Spell",
+    description: "Create a spell that works with any profile",
+    placeholder: "req -k 1 -a $pubkey -l 50",
+    variable: "$pubkey",
+    variableDescription:
+      "Use $pubkey in your command to reference the target profile",
+    defaultValue: "$me",
+    requireVariable: true,
+  },
+  $event: {
+    title: "Create Event Spell",
+    description: "Create a spell that works with any event",
+    placeholder: "req -k 1 -e $event -l 50",
+    variable: "$event",
+    variableDescription:
+      "Use $event in your command (e.g., -e $event for replies, --id $event for direct reference)",
+    requireVariable: true,
+  },
+  $relay: {
+    title: "Create Relay Spell",
+    description: "Create a spell that works with any relay",
+    placeholder: "req -k 1 -d $relay -l 50",
+    variable: "$relay",
+    variableDescription:
+      "Use $relay in your command (e.g., -d $relay for relay-specific events)",
+    requireVariable: true,
+  },
+};
+
+export function CreateParameterizedSpellDialog({
   open,
   onOpenChange,
-  mode,
-  initialCommand = "",
-  existingSpell,
+  parameterType,
   onSuccess,
-}: SpellDialogProps) {
+}: CreateParameterizedSpellDialogProps) {
   const { canSign } = useAccount();
 
   // Form state
-  const [alias, setAlias] = useState("");
+  const [command, setCommand] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -90,22 +91,26 @@ export function SpellDialog({
     useState<PublishingState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Initialize form from existing spell in edit mode
+  const info = PARAMETER_INFO[parameterType];
+
+  // Reset form when dialog opens/closes
   useEffect(() => {
-    if (mode === "edit" && existingSpell) {
-      setAlias("alias" in existingSpell ? existingSpell.alias || "" : "");
-      setName(existingSpell.name || "");
-      setDescription(existingSpell.description || "");
-    } else if (mode === "create") {
-      // Reset form for create mode
-      setAlias("");
+    if (open) {
+      setCommand("");
       setName("");
       setDescription("");
+      setPublishingState("idle");
+      setErrorMessage("");
     }
-  }, [mode, existingSpell, open, initialCommand]);
+  }, [open]);
 
-  // Form validation - name is now mandatory
-  const isFormValid = name.trim().length > 0;
+  // Validation
+  const commandValid = command.trim().length > 0;
+  const nameValid = name.trim().length > 0;
+  const hasRequiredVariable =
+    !info.requireVariable || command.includes(info.variable);
+
+  const isFormValid = commandValid && nameValid && hasRequiredVariable;
 
   // Reset form and close dialog
   const handleClose = () => {
@@ -117,7 +122,7 @@ export function SpellDialog({
       // Prevent closing during critical operations
       return;
     }
-    setAlias("");
+    setCommand("");
     setName("");
     setDescription("");
     setPublishingState("idle");
@@ -127,39 +132,30 @@ export function SpellDialog({
 
   // Handle local save (no publishing)
   const handleSaveLocally = async () => {
+    if (!isFormValid) return;
+
     try {
       setPublishingState("saving");
       setErrorMessage("");
 
-      // Get command (from initialCommand or existing spell)
-      const command =
-        mode === "edit" && existingSpell
-          ? existingSpell.command
-          : initialCommand;
-
-      if (!command) {
-        throw new Error("No command provided");
-      }
-
       // Save to local storage
       await saveSpell({
-        alias: alias.trim() || undefined,
-        name: name.trim() || undefined,
-        command,
+        name: name.trim(),
+        command: command.trim(),
         description: description.trim() || undefined,
         isPublished: false,
+        parameterType,
+        parameterDefault: [info.defaultValue || info.variable],
       });
 
       // Success!
       setPublishingState("idle");
 
-      // Call success callback
       if (onSuccess) {
-        onSuccess(null);
+        onSuccess();
       }
 
-      const spellLabel = alias.trim() || name.trim() || "Spell";
-      toast.success(`${spellLabel} saved locally!`, {
+      toast.success(`${name.trim()} saved locally!`, {
         description: "Your spell has been saved to local storage.",
       });
 
@@ -169,14 +165,12 @@ export function SpellDialog({
       console.error("Failed to save spell locally:", error);
       setPublishingState("error");
 
-      if (error instanceof Error) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to save spell. Please try again.");
-      }
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      setErrorMessage(message);
 
       toast.error("Failed to save spell", {
-        description: errorMessage || "An unexpected error occurred.",
+        description: message,
       });
     }
   };
@@ -198,24 +192,15 @@ export function SpellDialog({
       setPublishingState("validating");
       setErrorMessage("");
 
-      // Get command (from initialCommand or existing spell)
-      const command =
-        mode === "edit" && existingSpell
-          ? existingSpell.command
-          : initialCommand;
-
-      if (!command) {
-        throw new Error("No command provided");
-      }
-
       // 1. Save locally first (to get an ID)
       setPublishingState("saving");
       const localSpell = await saveSpell({
-        alias: alias.trim() || undefined,
-        name: name.trim() || undefined,
-        command,
+        name: name.trim(),
+        command: command.trim(),
         description: description.trim() || undefined,
         isPublished: false,
+        parameterType,
+        parameterDefault: [info.defaultValue || info.variable],
       });
 
       // 2. Use PublishSpellAction to handle signing and publishing
@@ -226,16 +211,12 @@ export function SpellDialog({
       // Success!
       setPublishingState("idle");
 
-      const spellLabel = alias.trim() || name.trim() || "Spell";
-      toast.success(`${spellLabel} published!`, {
+      toast.success(`${name.trim()} published!`, {
         description: `Your spell has been saved and published to Nostr.`,
       });
 
-      // Call success callback
       if (onSuccess) {
-        // We don't easily have the event here anymore, but most callers don't use it
-        // Or we could fetch it from storage if needed.
-        onSuccess(null);
+        onSuccess();
       }
 
       // Close dialog
@@ -245,22 +226,17 @@ export function SpellDialog({
       setPublishingState("error");
 
       // Handle specific errors
-      if (error instanceof Error) {
-        if (error.message.includes("User rejected")) {
-          setErrorMessage("Signing was rejected. Please try again.");
-        } else if (error.message.includes("No command provided")) {
-          setErrorMessage(
-            "No command to save. Please try again from a REQ or COUNT window.",
-          );
-        } else {
-          setErrorMessage(error.message);
-        }
-      } else {
-        setErrorMessage("Failed to publish spell. Please try again.");
-      }
+      const message =
+        error instanceof Error
+          ? error.message.includes("User rejected")
+            ? "Signing was rejected. Please try again."
+            : error.message
+          : "Failed to publish spell. Please try again.";
+
+      setErrorMessage(message);
 
       toast.error("Failed to publish spell", {
-        description: errorMessage || "An unexpected error occurred.",
+        description: message,
       });
     }
   };
@@ -274,45 +250,19 @@ export function SpellDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>
-            {mode === "create" ? "Save as Spell" : "Edit Spell"}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === "create"
-              ? "Save this command as a reusable spell. You can save it locally or publish it to Nostr."
-              : "Edit your spell and republish it to relays."}
-          </DialogDescription>
+          <DialogTitle>{info.title}</DialogTitle>
+          <DialogDescription>{info.description}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* Alias field - local only */}
-          <div className="grid gap-2">
-            <label htmlFor="alias" className="text-sm font-medium">
-              Alias{" "}
-              <span className="text-muted-foreground text-xs">
-                (optional, local-only)
-              </span>
-            </label>
-            <Input
-              id="alias"
-              placeholder="btc"
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              disabled={isBusy}
-            />
-            <p className="text-muted-foreground text-xs">
-              Quick name for running this spell (not published)
-            </p>
-          </div>
-
-          {/* Name field - published - REQUIRED */}
+          {/* Name field - REQUIRED */}
           <div className="grid gap-2">
             <label htmlFor="name" className="text-sm font-medium">
               Name <span className="text-red-500">*</span>
             </label>
             <Input
               id="name"
-              placeholder="Bitcoin Feed"
+              placeholder="Bitcoin Posts"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isBusy}
@@ -323,36 +273,46 @@ export function SpellDialog({
             </p>
           </div>
 
+          {/* Command field - REQUIRED */}
+          <div className="grid gap-2">
+            <label htmlFor="command" className="text-sm font-medium">
+              Command <span className="text-red-500">*</span>
+            </label>
+            <Textarea
+              id="command"
+              placeholder={info.placeholder}
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              disabled={isBusy}
+              required
+              rows={3}
+              className="font-mono text-sm"
+            />
+            <p className="text-muted-foreground text-xs">
+              {info.variableDescription}
+            </p>
+            {commandValid && !hasRequiredVariable && (
+              <p className="text-red-500 text-xs">
+                ⚠️ Command must include{" "}
+                <code className="font-mono">{info.variable}</code>
+              </p>
+            )}
+          </div>
+
           {/* Description field */}
           <div className="grid gap-2">
             <label htmlFor="description" className="text-sm font-medium">
               Description{" "}
-              <span className="text-muted-foreground text-xs">
-                (optional, published)
-              </span>
+              <span className="text-muted-foreground text-xs">(optional)</span>
             </label>
             <Textarea
               id="description"
-              placeholder="Notes from the last 7 days about Bitcoin"
+              placeholder="Shows recent Bitcoin-related posts"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isBusy}
-              rows={3}
+              rows={2}
             />
-          </div>
-
-          {/* Command display (read-only, filtered to show only spell parts) */}
-          <div className="grid gap-2">
-            <label htmlFor="command" className="text-sm font-medium">
-              Command
-            </label>
-            <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm font-mono break-words overflow-x-auto">
-              {filterSpellCommand(
-                mode === "edit" && existingSpell
-                  ? existingSpell.command
-                  : initialCommand || "",
-              ) || "(no filter)"}
-            </div>
           </div>
 
           {/* Error message */}
@@ -394,7 +354,7 @@ export function SpellDialog({
             {publishingState === "publishing" && "Publishing..."}
             {publishingState !== "signing" &&
               publishingState !== "publishing" &&
-              (mode === "create" ? "Save & Publish" : "Update Spell")}
+              "Save & Publish"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { DetailKindRenderer } from "./nostr/kinds";
@@ -6,7 +6,7 @@ import { EventErrorBoundary } from "./EventErrorBoundary";
 import { JsonViewer } from "./JsonViewer";
 import { RelayLink } from "./nostr/RelayLink";
 import { EventDetailSkeleton } from "@/components/ui/skeleton";
-import { Copy, CopyCheck, FileJson, Wifi } from "lucide-react";
+import { Copy, CopyCheck, FileJson, Wifi, Wand2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,15 +14,205 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Button } from "./ui/button";
 import { nip19 } from "nostr-tools";
 import { useCopy } from "../hooks/useCopy";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { getTagValue } from "applesauce-core/helpers";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import { useGrimoire } from "@/core/state";
+import { useUserParameterizedSpells } from "@/hooks/useParameterizedSpells";
+import { EventFeed } from "./nostr/EventFeed";
+import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
+import {
+  applySpellParameters,
+  detectCommandType,
+  getEventCoordinate,
+} from "@/lib/spell-conversion";
+import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { KindBadge } from "./KindBadge";
+import { CreateParameterizedSpellDialog } from "./CreateParameterizedSpellDialog";
+import { SpellHeader } from "./timeline/SpellHeader";
+import CountViewer from "./CountViewer";
+import { extractSpellKinds } from "@/lib/spell-display";
+import { useParseSpell } from "@/hooks/useParseSpell";
 
 export interface EventDetailViewerProps {
   pointer: EventPointer | AddressPointer;
+}
+
+interface SpellTabContentProps {
+  spellId: string;
+  spell: {
+    id: string;
+    name?: string;
+    command: string;
+    parameterType: "$pubkey" | "$event" | "$relay";
+    parameterDefault?: string[];
+    event?: any;
+  };
+  targetEventId: string;
+}
+
+/**
+ * SpellTabContent - Renders a parameterized spell applied to a specific event
+ */
+function SpellTabContent({
+  spellId,
+  spell,
+  targetEventId,
+  targetEvent,
+}: SpellTabContentProps & { targetEvent: any }) {
+  const { addWindow } = useGrimoire();
+  // Parse spell and get filter - handle both published (with event) and local (command-only) spells
+  const parsed = useParseSpell(spell, targetEventId || "", spellId);
+
+  // Apply parameters to get final filter
+  const appliedFilter = useMemo(() => {
+    if (!parsed || !targetEventId || !targetEvent) return null;
+
+    try {
+      // For replaceable events, get the address coordinate (kind:pubkey:d-tag)
+      // This ensures we reference them by address instead of event ID in filters
+      const targetAddress = getEventCoordinate(targetEvent);
+
+      const applied = applySpellParameters(parsed, {
+        targetEventId,
+        targetAddress: targetAddress || undefined,
+      });
+      console.log(`[EventSpell:${spell.name || spellId}] Applied parameters:`, {
+        targetEventId,
+        targetAddress,
+        result: applied,
+      });
+      return applied;
+    } catch (error) {
+      console.error(
+        `[EventSpell:${spell.name || spellId}] Failed to apply parameters:`,
+        error,
+      );
+      return null;
+    }
+  }, [parsed, targetEventId, targetEvent, spell.name, spellId]);
+
+  // Resolve relays - use explicit relays from spell, or use relay hints from target event
+  const finalRelays = useMemo(() => {
+    // Don't select relays until filter is resolved (variables substituted)
+    if (!appliedFilter) {
+      console.log(
+        `[EventSpell:${spell.name || spellId}] Waiting for filter resolution before selecting relays`,
+      );
+      return [];
+    }
+
+    // Use explicit relays from spell if provided
+    if (parsed?.relays && parsed.relays.length > 0) {
+      console.log(
+        `[EventSpell:${spell.name || spellId}] Using explicit relays:`,
+        parsed.relays,
+      );
+      return parsed.relays;
+    }
+
+    // Use relay hints from the target event
+    if (targetEvent) {
+      const seenRelaysSet = getSeenRelays(targetEvent);
+      if (seenRelaysSet && seenRelaysSet.size > 0) {
+        const eventRelays = Array.from(seenRelaysSet);
+        console.log(
+          `[EventSpell:${spell.name || spellId}] Using target event relays:`,
+          eventRelays,
+        );
+        return eventRelays;
+      }
+    }
+
+    // Fallback to aggregator relays
+    console.log(
+      `[EventSpell:${spell.name || spellId}] Using fallback AGGREGATOR_RELAYS`,
+    );
+    return AGGREGATOR_RELAYS;
+  }, [appliedFilter, parsed?.relays, targetEvent, spell.name, spellId]);
+
+  // Fetch events using the applied filter
+  // Always call the hook unconditionally (React Rules of Hooks)
+  const shouldFetch = !!(appliedFilter && finalRelays.length > 0);
+  const { events, loading, eoseReceived, relayStates, overallState } =
+    useReqTimelineEnhanced(
+      shouldFetch ? `spell-${spellId}-${targetEventId}` : `disabled-${spellId}`,
+      appliedFilter || {},
+      shouldFetch ? finalRelays : [],
+      { limit: appliedFilter?.limit || 50, stream: true },
+    );
+
+  console.log(`[EventSpell:${spell.name || spellId}] Render state:`, {
+    hasFilter: !!appliedFilter,
+    relayCount: finalRelays.length,
+    eventCount: events.length,
+    loading,
+    eoseReceived,
+  });
+
+  // Convert relay states to format expected by SpellHeader
+  const reqRelayStatesMap = useMemo(() => {
+    const map = new Map<string, { eose: boolean; eventCount: number }>();
+    relayStates.forEach((state, url) => {
+      map.set(url, {
+        eose: state.subscriptionState === "eose",
+        eventCount: state.eventCount,
+      });
+    });
+    return map;
+  }, [relayStates]);
+
+  // Determine if this is a COUNT spell or REQ spell
+  const isCountSpell = useMemo(() => {
+    if (!parsed) return false;
+    return detectCommandType(parsed.command) === "COUNT";
+  }, [parsed]);
+
+  return (
+    <TabsContent value={spellId} className="m-0 data-[state=inactive]:hidden">
+      {!appliedFilter ? (
+        <div className="flex items-center justify-center h-64 p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">Unable to apply spell to this event</p>
+            <p className="text-xs mt-2">Check console for details</p>
+          </div>
+        </div>
+      ) : isCountSpell ? (
+        <CountViewer
+          filter={appliedFilter}
+          relays={finalRelays}
+          needsAccount={false}
+        />
+      ) : (
+        <>
+          <SpellHeader
+            loading={loading}
+            overallState={overallState}
+            events={events}
+            relays={finalRelays}
+            filter={appliedFilter}
+            spellEvent={spell.event}
+            reqRelayStates={reqRelayStatesMap}
+            exportFilename={spell.name || "spell-events"}
+            onOpenNip={(number) => addWindow("nip", { number })}
+          />
+          <EventFeed
+            events={events}
+            view="list"
+            loading={loading}
+            eoseReceived={eoseReceived}
+            stream={true}
+            enableFreeze={true}
+          />
+        </>
+      )}
+    </TabsContent>
+  );
 }
 
 /**
@@ -32,8 +222,20 @@ export interface EventDetailViewerProps {
 export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
   const event = useNostrEvent(pointer);
   const [showJson, setShowJson] = useState(false);
+  const [createSpellDialogOpen, setCreateSpellDialogOpen] = useState(false);
   const { copy: copyBech32, copied: copiedBech32 } = useCopy();
   const { relays: relayStates } = useRelayState();
+  const { state } = useGrimoire();
+
+  // Get user's parameterized spells for $event
+  const accountPubkey = state.activeAccount?.pubkey;
+  const userRelays =
+    state.activeAccount?.relays?.filter((r) => r.read).map((r) => r.url) || [];
+  const { spells: eventSpells } = useUserParameterizedSpells(
+    accountPubkey,
+    "$event",
+    userRelays,
+  );
 
   // Loading state
   if (!event) {
@@ -170,12 +372,96 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
         </div>
       </div>
 
-      {/* Rendered Content - Focus Here */}
+      {/* Main Content - Single Scroll Container */}
       <div className="flex-1 overflow-y-auto">
+        {/* Rendered Event Content */}
         <EventErrorBoundary event={event}>
           <DetailKindRenderer event={event} />
         </EventErrorBoundary>
+
+        {/* Spell Tabs Section */}
+        <div className="border-t border-border">
+          {eventSpells.length > 0 ? (
+            <Tabs defaultValue={eventSpells[0]?.id}>
+              {/* Sticky Tab Header */}
+              <div className="sticky top-0 z-10 bg-background border-b flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCreateSpellDialogOpen(true)}
+                  className="rounded-none border-r h-10 w-10"
+                  title="Create spell for this event"
+                >
+                  <Wand2 className="size-4" />
+                </Button>
+                <TabsList className="flex-1 justify-start rounded-none border-none bg-transparent p-0 h-auto overflow-x-auto overflow-y-hidden scrollbar-hide">
+                  {eventSpells.map((spell) => {
+                    // Extract kinds from spell for display
+                    const spellKinds = extractSpellKinds(spell);
+
+                    return (
+                      <TabsTrigger
+                        key={spell.id}
+                        value={spell.id}
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2 flex items-center gap-2 whitespace-nowrap"
+                      >
+                        {spellKinds.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {spellKinds.map((kind) => (
+                              <KindBadge
+                                key={kind}
+                                kind={kind}
+                                variant="compact"
+                                iconClassname="size-3 text-muted-foreground"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <span>
+                          {spell.name || spell.alias || "Untitled Spell"}
+                        </span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
+
+              {/* Spell Tab Contents */}
+              {eventSpells.map((spell) => (
+                <SpellTabContent
+                  key={spell.id}
+                  spellId={spell.id}
+                  spell={spell}
+                  targetEventId={event.id}
+                  targetEvent={event}
+                />
+              ))}
+            </Tabs>
+          ) : (
+            <div className="sticky top-0 z-10 bg-background border-b">
+              <Button
+                variant="ghost"
+                onClick={() => setCreateSpellDialogOpen(true)}
+                className="w-full justify-center rounded-none"
+                title="Create spell for this event"
+              >
+                <Wand2 />
+                Create spell
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Create Parameterized Spell Dialog */}
+      <CreateParameterizedSpellDialog
+        open={createSpellDialogOpen}
+        onOpenChange={setCreateSpellDialogOpen}
+        parameterType="$event"
+        onSuccess={() => {
+          // Dialog will close automatically, spells will refresh via useUserParameterizedSpells
+        }}
+      />
 
       {/* JSON Viewer Dialog */}
       <JsonViewer
