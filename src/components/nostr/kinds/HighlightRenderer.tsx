@@ -32,13 +32,8 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
   // Load the source event for preview
   const sourceEvent = useNostrEvent(eventPointer || addressPointer);
 
-  // Extract title or content preview from source event (getArticleTitle caches internally)
-  const sourcePreview = (() => {
-    if (!sourceEvent) return null;
-    const title = getArticleTitle(sourceEvent);
-    if (title) return title;
-    return sourceEvent.content || null;
-  })();
+  // Get article title if this is an article (caches internally)
+  const sourceTitle = sourceEvent ? getArticleTitle(sourceEvent) : null;
 
   // Handle click to open source event
   const handleOpenEvent = () => {
@@ -93,18 +88,20 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
               className="text-xs flex-shrink-0 line-clamp-1"
             />
 
-            {/* Title or Content Preview */}
-            {sourcePreview && (
-              <div
-                className="hover:underline hover:decoration-dotted cursor-crosshair text-xs line-clamp-1 break-words"
-                onClick={handleOpenEvent}
-              >
-                <RichText
-                  event={{ ...sourceEvent, content: sourcePreview }}
-                  options={{ showMedia: false, showEventEmbeds: false }}
-                />
-              </div>
-            )}
+            {/* Title or Content Preview - CSS handles truncation */}
+            <div
+              className="hover:underline hover:decoration-dotted cursor-crosshair text-xs line-clamp-1 overflow-hidden min-w-0"
+              onClick={handleOpenEvent}
+            >
+              <RichText
+                event={
+                  sourceTitle
+                    ? { ...sourceEvent, content: sourceTitle }
+                    : sourceEvent
+                }
+                options={{ showMedia: false, showEventEmbeds: false }}
+              />
+            </div>
           </div>
         )}
 
