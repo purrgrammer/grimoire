@@ -375,11 +375,9 @@ export function EventDetailViewer({ pointer }: EventDetailViewerProps) {
       {/* Main Content - Single Scroll Container */}
       <div className="flex-1 overflow-y-auto">
         {/* Rendered Event Content */}
-        <div>
-          <EventErrorBoundary event={event}>
-            <DetailKindRenderer event={event} />
-          </EventErrorBoundary>
-        </div>
+        <EventErrorBoundary event={event}>
+          <DetailKindRenderer event={event} />
+        </EventErrorBoundary>
 
         {/* Spell Tabs Section */}
         <div className="border-t border-border">
