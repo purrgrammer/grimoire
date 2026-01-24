@@ -100,7 +100,7 @@ export function Kind9802Renderer({ event }: BaseEventProps) {
                 onClick={handleOpenEvent}
               >
                 <RichText
-                  content={sourcePreview}
+                  event={{ ...sourceEvent, content: sourcePreview }}
                   options={{ showMedia: false, showEventEmbeds: false }}
                 />
               </div>
