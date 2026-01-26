@@ -2,6 +2,7 @@ import { Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { Progress } from "./ui/progress";
+import { GrimoireLogo } from "./ui/grimoire-logo";
 import { MONTHLY_GOAL_SATS } from "@/services/supporters";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
@@ -86,12 +87,10 @@ export function GrimoireWelcome({
           </p>
         </div>
 
-        {/* Mobile: Simple text */}
-        <div className="md:hidden text-center">
-          <h1 className="text-4xl font-bold text-grimoire-gradient mb-2">
-            grimoire
-          </h1>
-          <p className="text-muted-foreground text-sm font-mono">
+        {/* Mobile: Logo with gradient */}
+        <div className="md:hidden flex flex-col items-center">
+          <GrimoireLogo size={120} />
+          <p className="text-muted-foreground text-sm font-mono mt-4">
             a nostr client for magicians
           </p>
         </div>
