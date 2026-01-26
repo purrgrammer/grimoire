@@ -87,9 +87,9 @@ export function GrimoireWelcome({
           </p>
         </div>
 
-        {/* Mobile: Logo with gradient */}
+        {/* Mobile: Logo with gradient matching ASCII art */}
         <div className="md:hidden flex flex-col items-center">
-          <GrimoireLogo size={120} />
+          <GrimoireLogo size={120} gradient="theme" />
           <p className="text-muted-foreground text-sm font-mono mt-4">
             a nostr client for magicians
           </p>

@@ -35,8 +35,8 @@ const STANDARD_SIZES = [16, 32, 192, 512];
 const MASKABLE_SIZES = [192, 512];
 const APPLE_TOUCH_SIZE = 180;
 
-// Background color for the icons (dark theme background)
-const BACKGROUND_COLOR = { r: 2, g: 8, b: 23, alpha: 1 }; // #020817
+// Transparent background for the icons
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
 /**
  * Generate a standard icon (logo fills most of the space with small padding)
@@ -67,7 +67,7 @@ async function generateStandardIcon(size, outputName) {
       width: size,
       height: size,
       channels: 4,
-      background: BACKGROUND_COLOR,
+      background: TRANSPARENT,
     },
   })
     .composite([{ input: resizedLogo, left, top }])
@@ -107,7 +107,7 @@ async function generateMaskableIcon(size, outputName) {
       width: size,
       height: size,
       channels: 4,
-      background: BACKGROUND_COLOR,
+      background: TRANSPARENT,
     },
   })
     .composite([{ input: resizedLogo, left, top }])
@@ -146,7 +146,7 @@ async function generateFavicon() {
         width: size,
         height: size,
         channels: 4,
-        background: BACKGROUND_COLOR,
+        background: TRANSPARENT,
       },
     })
       .composite([{ input: resizedLogo, left, top }])
