@@ -85,11 +85,23 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         if (decoded.type === "nevent") {
           const { id, relays, author, kind } = decoded.data;
 
+          console.log("[NIP-10 parseIdentifier] Decoded nevent:", {
+            id: id.slice(0, 8),
+            kind,
+            hasKind: kind !== undefined,
+          });
+
           // If kind is specified and NOT kind 1, let other adapters handle
           if (kind !== undefined && kind !== 1) {
+            console.log("[NIP-10 parseIdentifier] Rejecting non-kind-1:", kind);
             return null;
           }
 
+          console.log(
+            "[NIP-10 parseIdentifier] Accepting event (kind:",
+            kind,
+            ")",
+          );
           return {
             type: "thread",
             value: { id, relays, author, kind },

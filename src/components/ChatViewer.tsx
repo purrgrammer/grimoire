@@ -26,10 +26,10 @@ import type {
   LiveActivityMetadata,
 } from "@/types/chat";
 import { CHAT_KINDS } from "@/types/chat";
-// import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
+import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
 import type { ChatAction } from "@/types/chat-actions";
@@ -41,6 +41,7 @@ import {
 } from "@/lib/chat/group-system-messages";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
+import { KindRenderer } from "./nostr/kinds";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -69,6 +70,8 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import { getKindIcon } from "@/constants/kinds";
+import { getEventDisplayTitle } from "@/lib/event-title";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -440,41 +443,54 @@ const MessageItem = memo(function MessageItem({
   const messageContent = (
     <div className="group flex items-start hover:bg-muted/50 px-3">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <UserName pubkey={message.author} className="font-semibold text-sm" />
-          <span className="text-xs text-muted-foreground">
-            <Timestamp timestamp={message.timestamp} />
-          </span>
-          {/* Reactions display - inline after timestamp */}
-          <MessageReactions messageId={message.id} relays={relays} />
-          {canReply && onReply && !isRootMessage && (
-            <button
-              onClick={() => onReply(message.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
-              title="Reply to this message"
-            >
-              <Reply className="size-3" />
-            </button>
-          )}
-        </div>
-        <div className="break-words overflow-hidden">
-          {message.event ? (
-            <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo && (
-                <ReplyPreview
-                  replyTo={message.replyTo}
-                  adapter={adapter}
-                  conversation={conversation}
-                  onScrollToMessage={onScrollToMessage}
-                />
+        {/* For card rendering (NIP-22 root events), just show KindRenderer */}
+        {message.metadata?.renderAsCard ? (
+          message.event && <KindRenderer event={message.event} />
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <UserName
+                pubkey={message.author}
+                className="font-semibold text-sm"
+              />
+              <span className="text-xs text-muted-foreground">
+                <Timestamp timestamp={message.timestamp} />
+              </span>
+              {/* Reactions display - inline after timestamp */}
+              <MessageReactions messageId={message.id} relays={relays} />
+              {canReply && onReply && !isRootMessage && (
+                <button
+                  onClick={() => onReply(message.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
+                  title="Reply to this message"
+                >
+                  <Reply className="size-3" />
+                </button>
               )}
-            </RichText>
-          ) : (
-            <span className="whitespace-pre-wrap break-words">
-              {message.content}
-            </span>
-          )}
-        </div>
+            </div>
+            <div className="break-words overflow-hidden">
+              {message.event ? (
+                <RichText
+                  className="text-sm leading-tight"
+                  event={message.event}
+                >
+                  {message.replyTo && (
+                    <ReplyPreview
+                      replyTo={message.replyTo}
+                      adapter={adapter}
+                      conversation={conversation}
+                      onScrollToMessage={onScrollToMessage}
+                    />
+                  )}
+                </RichText>
+              ) : (
+                <span className="whitespace-pre-wrap break-words">
+                  {message.content}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -831,6 +847,8 @@ export function ChatViewer({
   const handleNipClick = useCallback(() => {
     if (conversation?.protocol === "nip-10") {
       addWindow("nip", { number: 10 });
+    } else if (conversation?.protocol === "nip-22") {
+      addWindow("nip", { number: 22 });
     } else if (conversation?.protocol === "nip-29") {
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
@@ -906,6 +924,30 @@ export function ChatViewer({
     liveActivity?.hostPubkey,
   ]);
 
+  // Get root event for NIP-10 and NIP-22 to build custom title
+  // Must be called before any early returns (React Hooks rules)
+  const rootEventId =
+    (protocol === "nip-10" || protocol === "nip-22") && conversation
+      ? conversation.metadata?.rootEventId ||
+        conversation.metadata?.providedEventId
+      : undefined;
+
+  const rootEvent = use$(
+    () => (rootEventId ? eventStore.event(rootEventId) : undefined),
+    [rootEventId],
+  );
+
+  // Compute custom title for thread-based protocols (NIP-10, NIP-22)
+  const threadTitle = useMemo(() => {
+    if ((protocol !== "nip-10" && protocol !== "nip-22") || !rootEvent) {
+      return null;
+    }
+
+    const kindIcon = getKindIcon(rootEvent.kind);
+    const eventTitle = getEventDisplayTitle(rootEvent);
+    return { kindIcon, author: rootEvent.pubkey, eventTitle };
+  }, [protocol, rootEvent]);
+
   // Handle loading state
   if (!conversationResult || conversationResult.status === "loading") {
     return (
@@ -951,10 +993,28 @@ export function ChatViewer({
               <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
                   <button
-                    className="text-sm font-semibold truncate cursor-help text-left"
+                    className="text-sm font-semibold truncate cursor-help text-left flex items-center gap-1.5 min-w-0"
                     onClick={() => setTooltipOpen(!tooltipOpen)}
                   >
-                    {customTitle || conversation.title}
+                    {threadTitle ? (
+                      <>
+                        {(() => {
+                          const KindIcon = threadTitle.kindIcon;
+                          return KindIcon ? (
+                            <KindIcon className="size-4 flex-shrink-0" />
+                          ) : null;
+                        })()}
+                        <UserName
+                          pubkey={threadTitle.author}
+                          className="text-sm font-semibold flex-shrink-0"
+                        />
+                        <span className="truncate">
+                          {threadTitle.eventTitle}
+                        </span>
+                      </>
+                    ) : (
+                      customTitle || conversation.title
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
@@ -988,7 +1048,9 @@ export function ChatViewer({
                     )}
                     {/* Protocol Type - Clickable */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {(conversation.type === "group" ||
+                      {(conversation.protocol === "nip-10" ||
+                        conversation.protocol === "nip-22" ||
+                        conversation.type === "group" ||
                         conversation.type === "live-chat") && (
                         <button
                           onClick={(e) => {
@@ -1000,11 +1062,14 @@ export function ChatViewer({
                           {conversation.protocol.toUpperCase()}
                         </button>
                       )}
-                      {(conversation.type === "group" ||
+                      {(conversation.protocol === "nip-10" ||
+                        conversation.protocol === "nip-22" ||
+                        conversation.type === "group" ||
                         conversation.type === "live-chat") && (
                         <span className="opacity-60">•</span>
                       )}
-                      {conversation.protocol === "nip-10" ? (
+                      {conversation.protocol === "nip-10" ||
+                      conversation.protocol === "nip-22" ? (
                         <span className="flex items-center gap-1 opacity-80">
                           <FileText className="size-3" />
                           Thread
@@ -1057,7 +1122,9 @@ export function ChatViewer({
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
-            {(conversation.type === "group" ||
+            {(conversation.protocol === "nip-10" ||
+              conversation.protocol === "nip-22" ||
+              conversation.type === "group" ||
               conversation.type === "live-chat") && (
               <button
                 onClick={handleNipClick}
@@ -1083,7 +1150,8 @@ export function ChatViewer({
               Header: () =>
                 hasMore &&
                 conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
+                protocol !== "nip-10" &&
+                protocol !== "nip-22" ? (
                   <div className="flex justify-center py-2">
                     <Button
                       onClick={handleLoadOlder}
@@ -1236,15 +1304,19 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
+ * Currently supported:
+ * - NIP-10 (kind 1 note threads)
+ * - NIP-22 (event comments/threads for any kind)
+ * - NIP-29 (relay-based groups)
+ * - NIP-53 (live activity chat)
  * Other protocols will be enabled in future phases
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
-    // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
-    //   return new NipC7Adapter();
+    case "nip-22":
+      return new Nip22Adapter();
     case "nip-29":
       return new Nip29Adapter();
     // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)

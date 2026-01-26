@@ -16,12 +16,12 @@ export const CHAT_KINDS = [
  * Chat protocol identifier
  */
 export type ChatProtocol =
-  | "nip-c7"
   | "nip-17"
   | "nip-28"
   | "nip-29"
   | "nip-53"
-  | "nip-10";
+  | "nip-10"
+  | "nip-22";
 
 /**
  * Conversation type
@@ -84,11 +84,12 @@ export interface ConversationMetadata {
   encrypted?: boolean;
   giftWrapped?: boolean;
 
-  // NIP-10 thread
+  // NIP-10/NIP-22 thread
   rootEventId?: string; // Thread root event ID
   providedEventId?: string; // Original event from nevent (may be reply)
   threadDepth?: number; // Approximate depth of thread
   relays?: string[]; // Relays for this conversation
+  rootCoordinate?: string; // For addressable events: "kind:pubkey:d-tag"
 }
 
 /**
@@ -120,6 +121,8 @@ export interface MessageMetadata {
   zapRecipient?: string; // Pubkey of zap recipient
   // NIP-61 nutzap-specific metadata
   nutzapUnit?: string; // Unit for nutzap amount (sat, usd, eur, etc.)
+  // NIP-22 event comment thread root
+  renderAsCard?: boolean; // Render using KindRenderer instead of text
 }
 
 /**
@@ -167,28 +170,6 @@ export interface LiveActivityIdentifier {
     identifier: string;
   };
   /** Relay hints from naddr encoding */
-  relays?: string[];
-}
-
-/**
- * NIP-C7/NIP-17 direct message identifier (resolved pubkey)
- */
-export interface DMIdentifier {
-  type: "dm-recipient" | "chat-partner";
-  /** Recipient pubkey (hex) */
-  value: string;
-  /** Relay hints */
-  relays?: string[];
-}
-
-/**
- * NIP-C7 NIP-05 identifier (needs resolution)
- */
-export interface NIP05Identifier {
-  type: "chat-partner-nip05";
-  /** NIP-05 address to resolve */
-  value: string;
-  /** Relay hints */
   relays?: string[];
 }
 
@@ -242,8 +223,6 @@ export interface ThreadIdentifier {
 export type ProtocolIdentifier =
   | GroupIdentifier
   | LiveActivityIdentifier
-  | DMIdentifier
-  | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier
   | ThreadIdentifier;
