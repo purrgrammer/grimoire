@@ -12,7 +12,8 @@ describe("Spell Conversion", () => {
       });
 
       expect(result.tags).toContainEqual(["cmd", "REQ"]);
-      expect(result.tags).toContainEqual(GRIMOIRE_CLIENT_TAG);
+      // Note: Client tag is NOT added by encodeSpell - it's added by publish-spell.ts
+      // based on user settings to avoid duplicate tags
       expect(result.tags).toContainEqual(["k", "1"]);
       expect(result.tags).toContainEqual(["k", "3"]);
       expect(result.tags).toContainEqual(["k", "7"]);
