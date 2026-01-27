@@ -31,7 +31,7 @@ import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
-import type { Message } from "@/types/chat";
+import type { Message, ParticipantRole } from "@/types/chat";
 import type { ChatAction } from "@/types/chat-actions";
 import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import {
@@ -885,6 +885,29 @@ export function ChatViewer({
 
       // Add other participants from messages (excluding host)
       const seen = new Set(hostPubkey ? [hostPubkey] : []);
+      for (const msg of messages) {
+        if (msg.type !== "system" && !seen.has(msg.author)) {
+          seen.add(msg.author);
+          participants.push({ pubkey: msg.author, role: "member" });
+        }
+      }
+
+      return participants;
+    }
+
+    // NIP-29 groups: use static participants but fallback to message authors if empty
+    // Some relays may not provide kind 39001/39002 member list events
+    if (protocol === "nip-29" && messages) {
+      const staticParticipants = conversation?.participants || [];
+
+      // If we have static participants from member list events, use them as base
+      // and augment with message authors
+      const participants: { pubkey: string; role?: ParticipantRole }[] = [
+        ...staticParticipants,
+      ];
+      const seen = new Set(staticParticipants.map((p) => p.pubkey));
+
+      // Add message authors who aren't already in the list as members
       for (const msg of messages) {
         if (msg.type !== "system" && !seen.has(msg.author)) {
           seen.add(msg.author);
