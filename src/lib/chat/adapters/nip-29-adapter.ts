@@ -269,11 +269,46 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       }
     }
 
-    const participants = Array.from(participantsMap.values());
+    let participants = Array.from(participantsMap.values());
 
     console.log(
       `[NIP-29] Found ${participants.length} participants (${adminEvents.length} admin events, ${memberEvents.length} member events)`,
     );
+
+    // Fallback: if no member list found, derive participants from recent messages
+    if (participants.length === 0) {
+      console.log(
+        `[NIP-29] No member list found, fetching recent messages for participant fallback`,
+      );
+
+      const messagesFilter: Filter = {
+        kinds: [9],
+        "#h": [groupId],
+        limit: 50,
+      };
+
+      const recentMessages = await firstValueFrom(
+        pool
+          .request([relayUrl], [messagesFilter], { eventStore })
+          .pipe(toArray()),
+      );
+
+      // Extract unique authors from messages
+      const messageAuthors = new Set<string>();
+      for (const event of recentMessages) {
+        messageAuthors.add(event.pubkey);
+      }
+
+      participants = Array.from(messageAuthors).map((pubkey) => ({
+        pubkey,
+        role: "member" as const,
+      }));
+
+      console.log(
+        `[NIP-29] Derived ${participants.length} participants from ${recentMessages.length} messages`,
+      );
+    }
+
     console.log(
       `[NIP-29] Metadata - title: ${title}, icon: ${icon}, description: ${description}`,
     );
