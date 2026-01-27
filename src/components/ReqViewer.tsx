@@ -1358,8 +1358,8 @@ export default function ReqViewer({
       {/* Results */}
       {(!needsAccount || accountPubkey) && (
         <div className="flex-1 overflow-y-auto relative">
-          {/* Floating "New Events" Button */}
-          {isFrozen && newEventCount > 0 && (
+          {/* Floating "New Events" Button (hidden in follow mode) */}
+          {isFrozen && newEventCount > 0 && !follow && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
               <Button
                 onClick={handleUnfreeze}
