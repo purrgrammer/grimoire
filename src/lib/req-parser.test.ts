@@ -1402,6 +1402,89 @@ describe("parseReqCommand", () => {
     });
   });
 
+  describe("follow flag (-f, --follow)", () => {
+    it("should parse -f flag", () => {
+      const result = parseReqCommand(["-f"]);
+      expect(result.follow).toBe(true);
+    });
+
+    it("should parse --follow flag", () => {
+      const result = parseReqCommand(["--follow"]);
+      expect(result.follow).toBe(true);
+    });
+
+    it("should default to false when not provided", () => {
+      const result = parseReqCommand(["-k", "1"]);
+      expect(result.follow).toBe(false);
+    });
+
+    it("should work with other flags", () => {
+      const result = parseReqCommand(["-k", "1", "-f", "-l", "50"]);
+      expect(result.filter.kinds).toEqual([1]);
+      expect(result.follow).toBe(true);
+      expect(result.filter.limit).toBe(50);
+    });
+  });
+
+  describe("sleep flag (-s, --sleep)", () => {
+    it("should parse -s flag with integer value", () => {
+      const result = parseReqCommand(["-s", "2"]);
+      expect(result.followInterval).toBe(2);
+    });
+
+    it("should parse -s flag with decimal value", () => {
+      const result = parseReqCommand(["-s", "0.5"]);
+      expect(result.followInterval).toBe(0.5);
+    });
+
+    it("should parse --sleep flag", () => {
+      const result = parseReqCommand(["--sleep", "3"]);
+      expect(result.followInterval).toBe(3);
+    });
+
+    it("should be undefined when not provided", () => {
+      const result = parseReqCommand(["-k", "1"]);
+      expect(result.followInterval).toBeUndefined();
+    });
+
+    it("should ignore invalid values", () => {
+      const result = parseReqCommand(["-s", "invalid"]);
+      expect(result.followInterval).toBeUndefined();
+    });
+
+    it("should ignore zero value", () => {
+      const result = parseReqCommand(["-s", "0"]);
+      expect(result.followInterval).toBeUndefined();
+    });
+
+    it("should ignore negative value", () => {
+      const result = parseReqCommand(["-s", "-1"]);
+      expect(result.followInterval).toBeUndefined();
+    });
+
+    it("should work with -f flag", () => {
+      const result = parseReqCommand(["-f", "-s", "2"]);
+      expect(result.follow).toBe(true);
+      expect(result.followInterval).toBe(2);
+    });
+
+    it("should work with other flags", () => {
+      const result = parseReqCommand([
+        "-k",
+        "1",
+        "-f",
+        "-s",
+        "0.5",
+        "-l",
+        "50",
+      ]);
+      expect(result.filter.kinds).toEqual([1]);
+      expect(result.follow).toBe(true);
+      expect(result.followInterval).toBe(0.5);
+      expect(result.filter.limit).toBe(50);
+    });
+  });
+
   describe("complex scenarios", () => {
     it("should handle multiple flags together", () => {
       const hex = "a".repeat(64);

@@ -117,6 +117,8 @@ interface ReqViewerProps {
   relays?: string[];
   closeOnEose?: boolean;
   view?: ViewMode;
+  follow?: boolean; // Auto-refresh mode (like tail -f)
+  followInterval?: number; // Refresh interval in seconds (default: 1)
   nip05Authors?: string[];
   nip05PTags?: string[];
   domainAuthors?: string[];
@@ -713,6 +715,8 @@ export default function ReqViewer({
   relays,
   closeOnEose = false,
   view = "list",
+  follow = false,
+  followInterval = 1,
   nip05Authors,
   nip05PTags,
   domainAuthors,
@@ -888,6 +892,17 @@ export default function ReqViewer({
       });
     });
   }, []);
+
+  // Auto-refresh in follow mode (like tail -f)
+  useEffect(() => {
+    if (!follow || !isFrozen || newEventCount === 0) return;
+
+    const timer = setInterval(() => {
+      handleUnfreeze();
+    }, followInterval * 1000);
+
+    return () => clearInterval(timer);
+  }, [follow, followInterval, isFrozen, newEventCount, handleUnfreeze]);
 
   /**
    * Export events to JSONL format with chunked processing for large datasets
