@@ -1,6 +1,48 @@
 import { normalizeURL as applesauceNormalizeURL } from "applesauce-core/helpers";
 
 /**
+ * Check if a string is a valid relay URL
+ * - Must have ws:// or wss:// protocol
+ * - Must be a valid URL structure
+ * - Must not contain invalid characters
+ *
+ * @returns true if the URL is a valid relay URL, false otherwise
+ */
+export function isValidRelayURL(url: unknown): url is string {
+  // Must be a non-empty string
+  if (typeof url !== "string" || !url.trim()) {
+    return false;
+  }
+
+  const trimmed = url.trim();
+
+  // Must start with ws:// or wss://
+  if (!trimmed.startsWith("ws://") && !trimmed.startsWith("wss://")) {
+    return false;
+  }
+
+  try {
+    // Must be a valid URL structure
+    const parsed = new URL(trimmed);
+
+    // Protocol must be ws: or wss:
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+      return false;
+    }
+
+    // Must have a valid hostname
+    if (!parsed.hostname || parsed.hostname.length === 0) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    // URL parsing failed
+    return false;
+  }
+}
+
+/**
  * Normalize a relay URL to ensure consistent comparison
  * - Validates input is a non-empty string
  * - Ensures wss:// protocol

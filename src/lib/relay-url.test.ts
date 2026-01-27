@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeRelayURL } from "./relay-url";
+import { normalizeRelayURL, isValidRelayURL } from "./relay-url";
 
 describe("normalizeRelayURL", () => {
   it("should add trailing slash to URL without one", () => {
@@ -124,6 +124,101 @@ describe("normalizeRelayURL", () => {
       );
       expect(result).toContain("wss://relay.example.com/");
       // Note: URL encoding is handled by browser's URL parsing
+    });
+  });
+});
+
+describe("isValidRelayURL", () => {
+  describe("Valid relay URLs", () => {
+    it("should return true for wss:// URLs", () => {
+      expect(isValidRelayURL("wss://relay.example.com")).toBe(true);
+      expect(isValidRelayURL("wss://relay.example.com/")).toBe(true);
+      expect(isValidRelayURL("wss://nos.lol")).toBe(true);
+    });
+
+    it("should return true for ws:// URLs", () => {
+      expect(isValidRelayURL("ws://localhost")).toBe(true);
+      expect(isValidRelayURL("ws://localhost:8080")).toBe(true);
+    });
+
+    it("should return true for URLs with paths", () => {
+      expect(isValidRelayURL("wss://relay.example.com/inbox")).toBe(true);
+      expect(isValidRelayURL("wss://relay.example.com/path/to/relay")).toBe(
+        true,
+      );
+    });
+
+    it("should return true for URLs with ports", () => {
+      expect(isValidRelayURL("wss://relay.example.com:8080")).toBe(true);
+      expect(isValidRelayURL("ws://localhost:3000/")).toBe(true);
+    });
+  });
+
+  describe("Invalid relay URLs - wrong protocol", () => {
+    it("should return false for http:// URLs", () => {
+      expect(isValidRelayURL("http://example.com")).toBe(false);
+      expect(isValidRelayURL("http://basspistol.org/inbox")).toBe(false);
+    });
+
+    it("should return false for https:// URLs", () => {
+      expect(isValidRelayURL("https://example.com")).toBe(false);
+      expect(isValidRelayURL("https://basspistol.org/")).toBe(false);
+    });
+
+    it("should return false for URLs without protocol", () => {
+      expect(isValidRelayURL("relay.example.com")).toBe(false);
+      expect(isValidRelayURL("nos.lol")).toBe(false);
+    });
+
+    it("should return false for other protocols", () => {
+      expect(isValidRelayURL("ftp://example.com")).toBe(false);
+      expect(isValidRelayURL("file:///path/to/file")).toBe(false);
+    });
+  });
+
+  describe("Invalid relay URLs - malformed", () => {
+    it("should return false for URLs with invalid characters", () => {
+      // Real-world case: NIP-05 identifier incorrectly parsed as URL
+      expect(isValidRelayURL("https://(strangelove@basspistol.org/")).toBe(
+        false,
+      );
+    });
+
+    it("should return false for empty or whitespace strings", () => {
+      expect(isValidRelayURL("")).toBe(false);
+      expect(isValidRelayURL("   ")).toBe(false);
+    });
+
+    it("should return false for non-string types", () => {
+      expect(isValidRelayURL(null)).toBe(false);
+      expect(isValidRelayURL(undefined)).toBe(false);
+      expect(isValidRelayURL(123)).toBe(false);
+      expect(isValidRelayURL({})).toBe(false);
+      expect(isValidRelayURL([])).toBe(false);
+    });
+
+    it("should return false for incomplete URLs", () => {
+      expect(isValidRelayURL("wss://")).toBe(false);
+      expect(isValidRelayURL("ws://")).toBe(false);
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("should handle URLs with whitespace (trimmed)", () => {
+      expect(isValidRelayURL("  wss://relay.example.com  ")).toBe(true);
+    });
+
+    it("should handle URLs with query parameters", () => {
+      expect(isValidRelayURL("wss://relay.example.com?token=abc")).toBe(true);
+    });
+
+    it("should handle localhost URLs", () => {
+      expect(isValidRelayURL("ws://127.0.0.1")).toBe(true);
+      expect(isValidRelayURL("ws://localhost:8080")).toBe(true);
+    });
+
+    it("should handle IP addresses", () => {
+      expect(isValidRelayURL("wss://192.168.1.1:8080")).toBe(true);
     });
   });
 });
