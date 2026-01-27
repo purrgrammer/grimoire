@@ -162,6 +162,8 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             relays={window.props.relays}
             closeOnEose={window.props.closeOnEose}
             view={window.props.view}
+            follow={window.props.follow}
+            followInterval={window.props.followInterval}
             nip05Authors={window.props.nip05Authors}
             nip05PTags={window.props.nip05PTags}
             domainAuthors={window.props.domainAuthors}
