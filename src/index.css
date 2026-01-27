@@ -1,11 +1,262 @@
+/* Tailwind CSS v4 - CSS-first configuration */
+@import "tailwindcss";
+
 /* Prism syntax highlighting theme */
 @import "./styles/prism-theme.css";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ==========================================================================
+   Theme Configuration (@theme)
+   These define Tailwind's design tokens - colors, fonts, animations, etc.
+   They reference the runtime CSS variables set by ThemeProvider.
+   ========================================================================== */
 
-/* Custom scrollbar styling - uses theme variables */
+@theme {
+  /* Font Family */
+  --font-mono: "Oxygen Mono", monospace;
+
+  /* Border Radius - using CSS variable for runtime theming */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Animations */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-skeleton-pulse: skeleton-pulse 1.5s ease-in-out infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* ==========================================================================
+     Color Tokens
+     These map runtime CSS variables (set by ThemeProvider) to Tailwind colors.
+     The runtime variables use HSL values WITHOUT the hsl() wrapper.
+     ========================================================================== */
+
+  /* Core Colors */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  /* Card */
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  /* Popover */
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  /* Primary */
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  /* Secondary */
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  /* Accent */
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  /* Muted */
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  /* Destructive */
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* Form Elements */
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Status Colors */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-info: hsl(var(--info));
+
+  /* Nostr-specific Colors */
+  --color-zap: hsl(var(--zap));
+  --color-live: hsl(var(--live));
+  --color-highlight: hsl(var(--highlight));
+
+  /* Tooltip */
+  --color-tooltip: hsl(var(--tooltip));
+  --color-tooltip-foreground: hsl(var(--tooltip-foreground));
+}
+
+/* ==========================================================================
+   Runtime Theme Variables
+   These are HSL values WITHOUT the hsl() wrapper, allowing alpha transparency.
+   Set dynamically by ThemeProvider via applyTheme().
+   ========================================================================== */
+
+:root {
+  /* Core colors - light theme defaults (overridden by ThemeProvider) */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+  --radius: 0.5rem;
+
+  /* Status colors */
+  --success: 142 76% 36%;
+  --warning: 45 93% 47%;
+  --info: 199 89% 48%;
+
+  /* Nostr-specific colors */
+  --zap: 45 93% 40%;
+  --live: 0 72% 45%;
+
+  /* UI highlight (active user, self-references) */
+  --highlight: 25 90% 35%;
+
+  /* Tooltip colors */
+  --tooltip: 222.2 47.4% 11.2%;
+  --tooltip-foreground: 210 40% 98%;
+
+  /* Syntax highlighting */
+  --syntax-comment: 215.4 16.3% 46.9%;
+  --syntax-punctuation: 222.2 84% 30%;
+  --syntax-property: 222.2 47.4% 11.2%;
+  --syntax-string: 142 60% 30%;
+  --syntax-keyword: 270 80% 50%;
+  --syntax-function: 222.2 47.4% 11.2%;
+  --syntax-variable: 222.2 84% 4.9%;
+  --syntax-operator: 222.2 84% 20%;
+
+  /* Diff colors */
+  --diff-inserted: 142 60% 30%;
+  --diff-inserted-bg: 142 60% 50% / 0.15;
+  --diff-deleted: 0 70% 45%;
+  --diff-deleted-bg: 0 70% 50% / 0.15;
+  --diff-meta: 199 80% 40%;
+  --diff-meta-bg: 199 80% 50% / 0.1;
+
+  /* Scrollbar */
+  --scrollbar-thumb: 222.2 84% 4.9% / 0.2;
+  --scrollbar-thumb-hover: 222.2 84% 4.9% / 0.3;
+  --scrollbar-track: 0 0% 0% / 0;
+
+  /* Gradient colors (RGB values) */
+  --gradient-1: 234 179 8;
+  --gradient-2: 249 115 22;
+  --gradient-3: 147 51 234;
+  --gradient-4: 6 182 212;
+}
+
+/* Dark theme - applied via .dark class or ThemeProvider */
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 70%;
+  --accent: 270 100% 70%;
+  --accent-foreground: 222.2 84% 4.9%;
+  --destructive: 0 75% 75%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 212.7 26.8% 83.9%;
+
+  /* Status colors */
+  --success: 142 76% 46%;
+  --warning: 38 92% 60%;
+  --info: 199 89% 58%;
+
+  /* Nostr-specific colors */
+  --zap: 45 93% 58%;
+  --live: 0 72% 51%;
+
+  /* UI highlight (active user, self-references) */
+  --highlight: 27 96% 61%;
+
+  /* Tooltip colors */
+  --tooltip: 217.2 32.6% 30%;
+  --tooltip-foreground: 210 40% 98%;
+
+  /* Syntax highlighting */
+  --syntax-comment: 215 20.2% 70%;
+  --syntax-punctuation: 210 40% 70%;
+  --syntax-property: 210 40% 98%;
+  --syntax-string: 215 20.2% 70%;
+  --syntax-keyword: 210 40% 98%;
+  --syntax-function: 210 40% 98%;
+  --syntax-variable: 210 40% 98%;
+  --syntax-operator: 210 40% 98%;
+
+  /* Diff colors */
+  --diff-inserted: 134 60% 76%;
+  --diff-inserted-bg: 145 63% 42% / 0.1;
+  --diff-deleted: 0 100% 76%;
+  --diff-deleted-bg: 0 100% 60% / 0.1;
+  --diff-meta: 190 77% 70%;
+  --diff-meta-bg: 190 77% 70% / 0.08;
+
+  /* Scrollbar */
+  --scrollbar-thumb: 0 0% 100% / 0.2;
+  --scrollbar-thumb-hover: 0 0% 100% / 0.3;
+  --scrollbar-track: 0 0% 0% / 0;
+
+  /* Gradient colors (RGB values) */
+  --gradient-1: 250 204 21;
+  --gradient-2: 251 146 60;
+  --gradient-3: 168 85 247;
+  --gradient-4: 34 211 238;
+}
+
+/* ==========================================================================
+   Custom Scrollbar Styling
+   ========================================================================== */
+
 * {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
@@ -29,144 +280,9 @@
   background-color: hsl(var(--scrollbar-thumb-hover));
 }
 
-@layer base {
-  :root {
-    /* Core colors - light theme defaults (overridden by ThemeProvider) */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-
-    /* Status colors */
-    --success: 142 76% 36%;
-    --warning: 45 93% 47%;
-    --info: 199 89% 48%;
-
-    /* Nostr-specific colors */
-    --zap: 45 93% 40%;
-    --live: 0 72% 45%;
-
-    /* UI highlight (active user, self-references) */
-    --highlight: 25 90% 35%;
-
-    /* Tooltip colors */
-    --tooltip: 222.2 47.4% 11.2%;
-    --tooltip-foreground: 210 40% 98%;
-
-    /* Syntax highlighting */
-    --syntax-comment: 215.4 16.3% 46.9%;
-    --syntax-punctuation: 222.2 84% 30%;
-    --syntax-property: 222.2 47.4% 11.2%;
-    --syntax-string: 142 60% 30%;
-    --syntax-keyword: 270 80% 50%;
-    --syntax-function: 222.2 47.4% 11.2%;
-    --syntax-variable: 222.2 84% 4.9%;
-    --syntax-operator: 222.2 84% 20%;
-
-    /* Diff colors */
-    --diff-inserted: 142 60% 30%;
-    --diff-inserted-bg: 142 60% 50% / 0.15;
-    --diff-deleted: 0 70% 45%;
-    --diff-deleted-bg: 0 70% 50% / 0.15;
-    --diff-meta: 199 80% 40%;
-    --diff-meta-bg: 199 80% 50% / 0.1;
-
-    /* Scrollbar */
-    --scrollbar-thumb: 222.2 84% 4.9% / 0.2;
-    --scrollbar-thumb-hover: 222.2 84% 4.9% / 0.3;
-    --scrollbar-track: 0 0% 0% / 0;
-
-    /* Gradient colors (RGB values) */
-    --gradient-1: 234 179 8;
-    --gradient-2: 249 115 22;
-    --gradient-3: 147 51 234;
-    --gradient-4: 6 182 212;
-  }
-
-  /* Dark theme - applied via .dark class or ThemeProvider */
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 70%;
-    --accent: 270 100% 70%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 75% 75%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-
-    /* Status colors */
-    --success: 142 76% 46%;
-    --warning: 38 92% 60%;
-    --info: 199 89% 58%;
-
-    /* Nostr-specific colors */
-    --zap: 45 93% 58%;
-    --live: 0 72% 51%;
-
-    /* UI highlight (active user, self-references) */
-    --highlight: 27 96% 61%;
-
-    /* Tooltip colors */
-    --tooltip: 217.2 32.6% 30%;
-    --tooltip-foreground: 210 40% 98%;
-
-    /* Syntax highlighting */
-    --syntax-comment: 215 20.2% 70%;
-    --syntax-punctuation: 210 40% 70%;
-    --syntax-property: 210 40% 98%;
-    --syntax-string: 215 20.2% 70%;
-    --syntax-keyword: 210 40% 98%;
-    --syntax-function: 210 40% 98%;
-    --syntax-variable: 210 40% 98%;
-    --syntax-operator: 210 40% 98%;
-
-    /* Diff colors */
-    --diff-inserted: 134 60% 76%;
-    --diff-inserted-bg: 145 63% 42% / 0.1;
-    --diff-deleted: 0 100% 76%;
-    --diff-deleted-bg: 0 100% 60% / 0.1;
-    --diff-meta: 190 77% 70%;
-    --diff-meta-bg: 190 77% 70% / 0.08;
-
-    /* Scrollbar */
-    --scrollbar-thumb: 0 0% 100% / 0.2;
-    --scrollbar-thumb-hover: 0 0% 100% / 0.3;
-    --scrollbar-track: 0 0% 0% / 0;
-
-    /* Gradient colors (RGB values) */
-    --gradient-1: 250 204 21;
-    --gradient-2: 251 146 60;
-    --gradient-3: 168 85 247;
-    --gradient-4: 34 211 238;
-  }
-}
+/* ==========================================================================
+   Base Layer - Global Styles
+   ========================================================================== */
 
 @layer base {
   * {
@@ -182,30 +298,46 @@
   }
 }
 
-@layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+/* ==========================================================================
+   Custom Utilities (v4 @utility syntax)
+   ========================================================================== */
 
-  .text-grimoire-gradient {
-    background: linear-gradient(
-      to bottom,
-      rgb(var(--gradient-1)),
-      rgb(var(--gradient-2)),
-      rgb(var(--gradient-3)),
-      rgb(var(--gradient-4))
-    );
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
-/* react-medium-image-zoom theme customization - uses background with opacity */
+@utility hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility text-grimoire-gradient {
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--gradient-1)),
+    rgb(var(--gradient-2)),
+    rgb(var(--gradient-3)),
+    rgb(var(--gradient-4))
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ==========================================================================
+   Third-Party Component Overrides
+   ========================================================================== */
+
+/* react-medium-image-zoom theme customization */
 [data-rmiz-modal-overlay] {
   background-color: hsl(var(--background) / 0.92) !important;
 }
@@ -214,7 +346,10 @@
   box-shadow: 0 0 40px hsl(var(--foreground) / 0.2);
 }
 
-/* React Mosaic Theme Customization */
+/* ==========================================================================
+   React Mosaic Theme Customization
+   ========================================================================== */
+
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme {
   background: hsl(var(--background));
 }
@@ -235,16 +370,19 @@ body.animating-layout
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
   .mosaic-window
   .mosaic-window-toolbar {
-  background: hsl(var(--background));
+  background: hsl(var(--muted));
   border: none;
   border-bottom: 1px solid hsl(var(--border));
   border-radius: 0;
+  color: hsl(var(--foreground));
+  height: 30px;
 }
 
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
   .mosaic-window
   .mosaic-window-title {
   color: hsl(var(--foreground));
+  font-family: inherit;
 }
 
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme .mosaic-window {
@@ -265,23 +403,6 @@ body.animating-layout
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme.bp4-dark .mosaic-window,
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme.bp4-dark .mosaic-preview {
   box-shadow: none;
-}
-
-.mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
-  .mosaic-window
-  .mosaic-window-toolbar {
-  background: hsl(var(--muted));
-  border: none;
-  border-bottom: 1px solid hsl(var(--border));
-  color: hsl(var(--foreground));
-  height: 30px;
-}
-
-.mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
-  .mosaic-window
-  .mosaic-window-title {
-  color: hsl(var(--foreground));
-  font-family: inherit;
 }
 
 .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme
@@ -336,7 +457,10 @@ body.animating-layout
   margin: -2px 0;
 }
 
-/* Accessibility: Focus indicators for keyboard navigation */
+/* ==========================================================================
+   Accessibility: Focus Indicators
+   ========================================================================== */
+
 @layer base {
   /* Focus-visible for buttons and interactive elements */
   button:focus-visible,
@@ -367,7 +491,10 @@ body.animating-layout
   }
 }
 
-/* TipTap Editor Styles */
+/* ==========================================================================
+   TipTap Editor Styles
+   ========================================================================== */
+
 .ProseMirror {
   min-height: 1.25rem;
   line-height: 1.25rem;
@@ -449,16 +576,6 @@ body.animating-layout
 
 .ProseMirror .nostr-event-preview:hover {
   background-color: hsl(var(--primary) / 0.15);
-}
-
-/* Hide scrollbar utility */
-.hide-scrollbar {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-
-.hide-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
 }
 
 /* Hide scrollbar in RichEditor */
