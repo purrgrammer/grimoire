@@ -1,9 +1,6 @@
 import { normalizeURL as applesauceNormalizeURL } from "applesauce-core/helpers";
 import { isSafeRelayURL } from "applesauce-core/helpers/relays";
 
-// Re-export applesauce's fast relay URL check for use in hot paths
-export { isSafeRelayURL };
-
 /**
  * Check if a string is a valid relay URL
  * - Must have ws:// or wss:// protocol
