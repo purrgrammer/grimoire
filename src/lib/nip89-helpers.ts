@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers";
+import { isSafeRelayURL } from "applesauce-core/helpers/relays";
 import { AddressPointer } from "nostr-tools/nip19";
 
 /**
@@ -229,10 +230,13 @@ export function getHandlerReferences(event: NostrEvent): HandlerReference[] {
 
     const relayHint = tag[2];
     const platform = tag[3];
+    // Only include relay hint if it's a valid websocket URL
+    const validRelayHint =
+      relayHint && isSafeRelayURL(relayHint) ? relayHint : undefined;
 
     references.push({
       address,
-      relayHint: relayHint || undefined,
+      relayHint: validRelayHint,
       platform: platform || undefined,
     });
   }

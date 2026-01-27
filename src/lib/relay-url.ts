@@ -1,10 +1,17 @@
 import { normalizeURL as applesauceNormalizeURL } from "applesauce-core/helpers";
+import { isSafeRelayURL } from "applesauce-core/helpers/relays";
+
+// Re-export applesauce's fast relay URL check for use in hot paths
+export { isSafeRelayURL };
 
 /**
  * Check if a string is a valid relay URL
  * - Must have ws:// or wss:// protocol
  * - Must be a valid URL structure
- * - Must not contain invalid characters
+ * - Must have a valid hostname
+ *
+ * Uses applesauce's isSafeRelayURL for fast validation of domain-based URLs,
+ * with a fallback to URL constructor for IP addresses (which isSafeRelayURL doesn't support).
  *
  * @returns true if the URL is a valid relay URL, false otherwise
  */
@@ -21,8 +28,14 @@ export function isValidRelayURL(url: unknown): url is string {
     return false;
   }
 
+  // Fast path: use applesauce's regex-based validation for domain URLs
+  if (isSafeRelayURL(trimmed)) {
+    return true;
+  }
+
+  // Fallback: use URL constructor for IP addresses and edge cases
+  // isSafeRelayURL doesn't support IP addresses like 192.168.1.1 or 127.0.0.1
   try {
-    // Must be a valid URL structure
     const parsed = new URL(trimmed);
 
     // Protocol must be ws: or wss:

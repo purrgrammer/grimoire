@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { getTagValue } from "applesauce-core/helpers";
+import { isSafeRelayURL } from "applesauce-core/helpers/relays";
 import { AddressPointer } from "nostr-tools/nip19";
 
 /**
@@ -227,9 +228,12 @@ export function getAppReferences(event: NostrEvent): AppReference[] {
     // Kind 32267 apps are expected in curation sets
     if (address.kind === 32267) {
       const relayHint = tag[2];
+      // Only include relay hint if it's a valid websocket URL
+      const validRelayHint =
+        relayHint && isSafeRelayURL(relayHint) ? relayHint : undefined;
       references.push({
         address,
-        relayHint: relayHint || undefined,
+        relayHint: validRelayHint,
       });
     }
   }

@@ -6,6 +6,7 @@ import { GroupLink } from "../GroupLink";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import type { NostrEvent } from "@/types/nostr";
+import { isSafeRelayURL } from "applesauce-core/helpers/relays";
 
 /**
  * Extract group references from a kind 10009 event
@@ -19,9 +20,17 @@ function extractGroups(event: { tags: string[][] }): Array<{
 
   for (const tag of event.tags) {
     if (tag[0] === "group" && tag[1] && tag[2]) {
+      // Only include groups with valid relay URLs
+      const relayUrl = tag[2];
+      if (!isSafeRelayURL(relayUrl)) {
+        console.warn(
+          `[PublicChatsRenderer] Skipping group with invalid relay URL: ${relayUrl}`,
+        );
+        continue;
+      }
       groups.push({
         groupId: tag[1],
-        relayUrl: tag[2],
+        relayUrl,
       });
     }
   }

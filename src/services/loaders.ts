@@ -6,7 +6,11 @@ import {
 } from "applesauce-loaders/loaders";
 import type { EventPointer } from "nostr-tools/nip19";
 import { Observable } from "rxjs";
-import { getSeenRelays, mergeRelaySets } from "applesauce-core/helpers/relays";
+import {
+  getSeenRelays,
+  mergeRelaySets,
+  isSafeRelayURL,
+} from "applesauce-core/helpers/relays";
 import {
   getEventPointerFromETag,
   getAddressPointerFromATag,
@@ -16,7 +20,6 @@ import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
 import type { NostrEvent } from "@/types/nostr";
-import { isValidRelayURL } from "@/lib/relay-url";
 
 /**
  * Extract relay context from a Nostr event for comprehensive relay selection
@@ -37,7 +40,9 @@ function extractRelayContext(event: NostrEvent): {
   const rTags = event.tags
     .filter((t) => t[0] === "r")
     .map((t) => t[1])
-    .filter(isValidRelayURL);
+    .filter(
+      (url): url is string => typeof url === "string" && isSafeRelayURL(url),
+    );
 
   // Extract relay hints from all "e" tags using applesauce helper
   // Filter to only valid relay URLs
@@ -48,7 +53,9 @@ function extractRelayContext(event: NostrEvent): {
       // v5: returns null for invalid tags instead of throwing
       return pointer?.relays?.[0]; // First relay hint from the pointer
     })
-    .filter(isValidRelayURL);
+    .filter(
+      (url): url is string => typeof url === "string" && isSafeRelayURL(url),
+    );
 
   // Extract relay hints from all "a" tags (addressable event references)
   // This includes both lowercase "a" (reply) and uppercase "A" (root) tags
@@ -59,7 +66,9 @@ function extractRelayContext(event: NostrEvent): {
       const pointer = getAddressPointerFromATag(tag);
       return pointer?.relays?.[0]; // First relay hint from the pointer
     })
-    .filter(isValidRelayURL);
+    .filter(
+      (url): url is string => typeof url === "string" && isSafeRelayURL(url),
+    );
 
   // Extract first "p" tag as author hint using applesauce helper
   const authorHint = getTagValue(event, "p");

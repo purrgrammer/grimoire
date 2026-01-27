@@ -4,6 +4,7 @@ import type { NostrFilter } from "@/types/nostr";
 import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
+import { isSafeRelayURL } from "applesauce-core/helpers/relays";
 
 export function derivePlaceholderName(pubkey: string): string {
   return `${pubkey.slice(0, 4)}:${pubkey.slice(-4)}`;
@@ -81,6 +82,10 @@ export function getEventPointerFromQTag(
   const relayHint = tag[2];
   const authorHint = tag[3];
 
+  // Validate relay hint is a valid websocket URL before using
+  const validRelayHint =
+    relayHint && isSafeRelayURL(relayHint) ? relayHint : undefined;
+
   // Check if it's an address coordinate (contains colons: kind:pubkey:d-tag)
   if (value.includes(":")) {
     const parts = value.split(":");
@@ -91,8 +96,8 @@ export function getEventPointerFromQTag(
 
       if (!isNaN(kind) && pubkey) {
         const pointer: AddressPointer = { kind, pubkey, identifier };
-        if (relayHint) {
-          pointer.relays = [relayHint];
+        if (validRelayHint) {
+          pointer.relays = [validRelayHint];
         }
         return pointer;
       }
@@ -106,8 +111,8 @@ export function getEventPointerFromQTag(
   }
 
   const pointer: EventPointer = { id: value };
-  if (relayHint) {
-    pointer.relays = [relayHint];
+  if (validRelayHint) {
+    pointer.relays = [validRelayHint];
   }
   if (authorHint && /^[0-9a-f]{64}$/i.test(authorHint)) {
     pointer.author = authorHint;
