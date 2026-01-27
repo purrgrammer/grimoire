@@ -46,8 +46,8 @@ async function generateStandardIcon(size, outputName) {
   const padding = Math.round(size * 0.1);
   const logoSize = size - padding * 2;
 
-  // Calculate logo dimensions maintaining aspect ratio (121:160)
-  const aspectRatio = 121 / 160;
+  // Calculate logo dimensions maintaining aspect ratio (122:160)
+  const aspectRatio = 122 / 160;
   const logoHeight = logoSize;
   const logoWidth = Math.round(logoHeight * aspectRatio);
 
@@ -86,8 +86,8 @@ async function generateMaskableIcon(size, outputName) {
   const padding = Math.round(size * 0.2);
   const logoSize = size - padding * 2;
 
-  // Calculate logo dimensions maintaining aspect ratio (121:160)
-  const aspectRatio = 121 / 160;
+  // Calculate logo dimensions maintaining aspect ratio (122:160)
+  const aspectRatio = 122 / 160;
   const logoHeight = logoSize;
   const logoWidth = Math.round(logoHeight * aspectRatio);
 
