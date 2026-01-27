@@ -192,9 +192,9 @@
 }
 
 .command-list::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: hsl(var(--scrollbar-thumb));
 }
 
 .command-list::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: hsl(var(--scrollbar-thumb-hover));
 }

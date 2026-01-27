@@ -277,10 +277,54 @@ if (canSign) {
 - Copy text to clipboard with toast feedback
 - Returns: `{ copy, copied }` function and state
 
+## Tailwind CSS v4
+
+Grimoire uses **Tailwind CSS v4** with CSS-first configuration. See `.claude/skills/tailwind-v4.md` for complete reference.
+
+### Quick Reference
+
+**Import (in index.css):**
+```css
+@import "tailwindcss";
+```
+
+**Custom utilities:**
+```css
+@utility my-utility {
+  /* styles */
+}
+```
+
+**Theme colors** - Always use semantic tokens:
+```tsx
+<div className="bg-background text-foreground">
+<button className="bg-primary text-primary-foreground">
+<span className="text-muted-foreground">
+```
+
+**Container queries** (built-in, no plugin):
+```tsx
+<div className="@container">
+  <div className="@sm:grid-cols-2 @lg:grid-cols-3">
+```
+
+**Key syntax changes from v3:**
+- CSS variables: `bg-(--my-var)` not `bg-[--my-var]`
+- Important: `flex!` not `!flex`
+- Sizes: `shadow-xs` (was `shadow-sm`), `shadow-sm` (was `shadow`)
+
+### Runtime Theming
+
+Colors use two-level CSS variables:
+1. Runtime vars (HSL without wrapper): `--background: 222.2 84% 4.9%`
+2. Tailwind mapping: `--color-background: hsl(var(--background))`
+
+This allows `applyTheme()` to switch themes at runtime.
+
 ## Key Conventions
 
 - **Path Alias**: `@/` = `./src/`
-- **Styling**: Tailwind + HSL CSS variables (theme tokens defined in `index.css`)
+- **Styling**: Tailwind v4 + HSL CSS variables (theme tokens defined in `index.css`)
 - **Types**: Prefer types from `applesauce-core`, extend in `src/types/` when needed
 - **Locale-Aware Formatting** (`src/hooks/useLocale.ts`): All date, time, number, and currency formatting MUST use the user's locale:
   - **`useLocale()` hook**: Returns `{ locale, language, region, timezone, timeFormat }` - use in components that need locale config
