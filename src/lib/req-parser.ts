@@ -16,7 +16,6 @@ export interface ParsedReqCommand {
   closeOnEose?: boolean;
   view?: ViewMode; // Display mode for results
   follow?: boolean; // Auto-refresh mode (like tail -f)
-  followInterval?: number; // Refresh interval in seconds (default: 1)
   nip05Authors?: string[]; // NIP-05 identifiers that need async resolution
   nip05PTags?: string[]; // NIP-05 identifiers for #p tags that need async resolution
   nip05PTagsUppercase?: string[]; // NIP-05 identifiers for #P tags that need async resolution
@@ -86,7 +85,6 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
   let closeOnEose = false;
   let view: ViewMode | undefined;
   let follow = false;
-  let followInterval: number | undefined;
 
   let i = 0;
 
@@ -425,18 +423,6 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
           break;
         }
 
-        case "-s":
-        case "--sleep": {
-          const interval = parseFloat(nextArg);
-          if (!isNaN(interval) && interval > 0) {
-            followInterval = interval;
-            i += 2;
-          } else {
-            i++;
-          }
-          break;
-        }
-
         case "-T":
         case "--tag": {
           // Generic tag filter: --tag <letter> <value>
@@ -514,7 +500,6 @@ export function parseReqCommand(args: string[]): ParsedReqCommand {
     closeOnEose,
     view,
     follow,
-    followInterval,
     nip05Authors: nip05Authors.size > 0 ? Array.from(nip05Authors) : undefined,
     nip05PTags: nip05PTags.size > 0 ? Array.from(nip05PTags) : undefined,
     nip05PTagsUppercase:

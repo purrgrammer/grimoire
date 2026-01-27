@@ -118,7 +118,6 @@ interface ReqViewerProps {
   closeOnEose?: boolean;
   view?: ViewMode;
   follow?: boolean; // Auto-refresh mode (like tail -f)
-  followInterval?: number; // Refresh interval in seconds (default: 1)
   nip05Authors?: string[];
   nip05PTags?: string[];
   domainAuthors?: string[];
@@ -716,7 +715,6 @@ export default function ReqViewer({
   closeOnEose = false,
   view = "list",
   follow = false,
-  followInterval = 1,
   nip05Authors,
   nip05PTags,
   domainAuthors,
@@ -850,8 +848,11 @@ export default function ReqViewer({
   const [isFrozen, setIsFrozen] = useState(false);
   const virtuosoRef = useRef<any>(null);
 
-  // Freeze timeline after EOSE in streaming mode
+  // Freeze timeline after EOSE in streaming mode (skip if follow mode enabled)
   useEffect(() => {
+    // Don't freeze in follow mode - show events as they arrive
+    if (follow) return;
+
     // Freeze after EOSE in streaming mode
     if (eoseReceived && stream && !isFrozen && events.length > 0) {
       setFreezePoint(events[0].id);
@@ -863,7 +864,7 @@ export default function ReqViewer({
       setFreezePoint(null);
       setIsFrozen(false);
     }
-  }, [eoseReceived, stream, isFrozen, events]);
+  }, [follow, eoseReceived, stream, isFrozen, events]);
 
   // Filter events based on freeze point
   const { visibleEvents, newEventCount } = useMemo(() => {
@@ -892,17 +893,6 @@ export default function ReqViewer({
       });
     });
   }, []);
-
-  // Auto-refresh in follow mode (like tail -f)
-  useEffect(() => {
-    if (!follow || !isFrozen || newEventCount === 0) return;
-
-    const timer = setInterval(() => {
-      handleUnfreeze();
-    }, followInterval * 1000);
-
-    return () => clearInterval(timer);
-  }, [follow, followInterval, isFrozen, newEventCount, handleUnfreeze]);
 
   /**
    * Export events to JSONL format with chunked processing for large datasets

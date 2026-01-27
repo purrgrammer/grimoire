@@ -237,12 +237,7 @@ export const manPages: Record<string, ManPageEntry> = {
       {
         flag: "-f, --follow",
         description:
-          "Auto-refresh mode (like tail -f). Automatically displays new events instead of buffering them behind a 'X new events' button.",
-      },
-      {
-        flag: "-s, --sleep <seconds>",
-        description:
-          "Refresh interval in follow mode (default: 1 second). Only meaningful with -f. Lower values update more frequently but use more resources.",
+          "Auto-refresh mode (like tail -f). Automatically displays new events instead of buffering them behind a 'X new events' button. Refreshes every second.",
       },
       {
         flag: "[relay...]",
@@ -284,8 +279,6 @@ export const manPages: Record<string, ManPageEntry> = {
       "req -k 1 -l 100 --view compact                                                                 Get notes in compact view mode",
       "req -k 1 -f                                                                                    Follow mode: auto-display new notes (1s refresh)",
       "req -k 1 -a $contacts -f                                                                       Follow your contacts' notes in real-time",
-      "req -k 1 -f -s 2                                                                               Follow mode with 2-second refresh interval",
-      "req -k 1 -f -s 0.5                                                                             Follow mode with faster 0.5-second refresh",
     ],
     seeAlso: ["kind", "nip"],
     appId: "req",
