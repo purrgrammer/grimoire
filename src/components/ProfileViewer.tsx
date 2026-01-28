@@ -276,7 +276,7 @@ function SpellTabContent({
           needsAccount={false}
         />
       ) : (
-        <>
+        <div>
           <SpellHeader
             loading={loading}
             overallState={overallState}
@@ -296,7 +296,7 @@ function SpellTabContent({
             stream={true}
             enableFreeze={true}
           />
-        </>
+        </div>
       )}
     </TabsContent>
   );
