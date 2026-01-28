@@ -110,10 +110,10 @@ export function LayoutControls() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="h-10 w-10 md:h-6 md:w-6"
           aria-label="Layout settings"
         >
-          <SlidersHorizontal className="h-3 w-3 text-muted-foreground" />
+          <SlidersHorizontal className="h-5 w-5 md:h-3 md:w-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">

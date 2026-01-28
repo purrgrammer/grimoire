@@ -148,12 +148,12 @@ export function WindowToolbar({
           <Button
             variant="link"
             size="icon"
-            className="text-muted-foreground"
+            className="h-10 w-10 md:h-9 md:w-9 text-muted-foreground"
             onClick={handleEdit}
             title="Edit command"
             aria-label="Edit command"
           >
-            <Pencil className="size-4" />
+            <Pencil className="size-5 md:size-4" />
           </Button>
 
           {/* Copy button for NIPs */}
@@ -161,13 +161,17 @@ export function WindowToolbar({
             <Button
               variant="link"
               size="icon"
-              className="text-muted-foreground"
+              className="h-10 w-10 md:h-9 md:w-9 text-muted-foreground"
               onClick={handleCopyNip}
               title="Copy NIP markdown"
               aria-label="Copy NIP markdown"
               disabled={!nipContent}
             >
-              {copied ? <CopyCheck /> : <Copy />}
+              {copied ? (
+                <CopyCheck className="size-5 md:size-4" />
+              ) : (
+                <Copy className="size-5 md:size-4" />
+              )}
             </Button>
           )}
 
@@ -177,11 +181,11 @@ export function WindowToolbar({
               <Button
                 variant="link"
                 size="icon"
-                className="text-muted-foreground"
+                className="h-10 w-10 md:h-9 md:w-9 text-muted-foreground"
                 title="More actions"
                 aria-label="More actions"
               >
-                <MoreVertical className="size-4" />
+                <MoreVertical className="size-5 md:size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -248,12 +252,12 @@ export function WindowToolbar({
         <Button
           variant="link"
           size="icon"
-          className="text-muted-foreground"
+          className="h-10 w-10 md:h-9 md:w-9 text-muted-foreground"
           onClick={onClose}
           title="Close window"
           aria-label="Close window"
         >
-          <X className="size-4" />
+          <X className="size-5 md:size-4" />
         </Button>
       )}
     </>

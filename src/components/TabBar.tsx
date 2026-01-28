@@ -6,6 +6,7 @@ import { LayoutControls } from "./LayoutControls";
 import { useEffect, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { Workspace } from "@/types/app";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface TabItemProps {
   ws: Workspace;
@@ -17,6 +18,7 @@ interface TabItemProps {
   saveLabel: () => void;
   setActiveWorkspace: (id: string) => void;
   startEditing: (id: string, label?: string) => void;
+  isMobile: boolean;
 }
 
 function TabItem({
@@ -29,6 +31,7 @@ function TabItem({
   saveLabel,
   setActiveWorkspace,
   startEditing,
+  isMobile,
 }: TabItemProps) {
   const dragControls = useDragControls();
 
@@ -38,7 +41,7 @@ function TabItem({
       value={ws}
       dragListener={false}
       dragControls={dragControls}
-      whileDrag={{ scale: 1.05 }}
+      whileDrag={isMobile ? undefined : { scale: 1.05 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className={cn(
         "flex items-center justify-center cursor-default outline-none",
@@ -48,14 +51,14 @@ function TabItem({
         // Render input field when editing
         <div
           className={cn(
-            "px-3 py-1 text-xs font-mono rounded flex items-center gap-2 flex-shrink-0",
+            "px-3 py-2 md:py-1 text-sm md:text-xs font-mono rounded flex items-center gap-2 flex-shrink-0",
             isActive
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-foreground",
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          <span>{ws.number}</span>
+          <span className="hidden md:inline">{ws.number}</span>
           <input
             type="text"
             value={editingLabel}
@@ -73,28 +76,35 @@ function TabItem({
         // Render button when not editing
         <div
           className={cn(
-            "flex items-center gap-0 px-1 py-0.5 text-xs font-mono rounded transition-colors whitespace-nowrap flex-shrink-0 group",
+            "flex items-center gap-0 px-3 py-2 md:px-1 md:py-0.5 text-sm md:text-xs font-mono rounded transition-colors whitespace-nowrap flex-shrink-0 group",
             isActive
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted",
           )}
         >
-          <div
-            onPointerDown={(e) => dragControls.start(e)}
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-black/10 rounded flex items-center justify-center"
-          >
-            <GripVertical className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
-          </div>
+          {/* Hide drag handle on mobile - reordering disabled */}
+          {!isMobile && (
+            <div
+              onPointerDown={(e) => dragControls.start(e)}
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-black/10 rounded flex items-center justify-center"
+            >
+              <GripVertical className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+            </div>
+          )}
           <button
             onClick={() => setActiveWorkspace(ws.id)}
             onDoubleClick={() => startEditing(ws.id, ws.label)}
             className="flex items-center gap-2 px-1 py-0.5 cursor-pointer"
           >
-            <span>{ws.number}</span>
-            {ws.label && ws.label.trim() && (
+            {/* Hide workspace number on mobile - only useful for keyboard shortcuts */}
+            <span className="hidden md:inline">{ws.number}</span>
+            {ws.label && ws.label.trim() ? (
               <span style={{ width: `${ws.label.trim().length || 0}ch` }}>
                 {ws.label.trim()}
               </span>
+            ) : (
+              /* Show number as fallback on mobile when no label */
+              <span className="md:hidden">{ws.number}</span>
             )}
           </button>
         </div>
@@ -113,6 +123,7 @@ export function TabBar() {
     reorderWorkspaces,
   } = useGrimoire();
   const { workspaces, activeWorkspaceId } = state;
+  const isMobile = useIsMobile();
 
   // State for inline label editing
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -195,12 +206,16 @@ export function TabBar() {
 
   return (
     <>
-      <div className="h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto no-scrollbar">
+      <div className="h-12 md:h-8 border-t border-border bg-background flex items-center px-2 gap-1 overflow-x-auto no-scrollbar">
         {/* Left side: Workspace tabs + new workspace button */}
         <Reorder.Group
           axis="x"
           values={sortedWorkspaces}
-          onReorder={(newOrder) => reorderWorkspaces(newOrder.map((w) => w.id))}
+          onReorder={
+            isMobile
+              ? () => {} // No-op on mobile - reordering disabled
+              : (newOrder) => reorderWorkspaces(newOrder.map((w) => w.id))
+          }
           className="flex items-center gap-1 flex-nowrap list-none p-0 m-0"
         >
           {sortedWorkspaces.map((ws) => (
@@ -215,6 +230,7 @@ export function TabBar() {
               saveLabel={saveLabel}
               setActiveWorkspace={setActiveWorkspace}
               startEditing={startEditing}
+              isMobile={isMobile}
             />
           ))}
         </Reorder.Group>
@@ -222,11 +238,11 @@ export function TabBar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 ml-1 flex-shrink-0"
+          className="h-10 w-10 md:h-6 md:w-6 ml-1 flex-shrink-0"
           onClick={handleNewTab}
           aria-label="Create new workspace"
         >
-          <Plus className="h-3 w-3" />
+          <Plus className="h-5 w-5 md:h-3 md:w-3" />
         </Button>
 
         {/* Spacer to push right side controls to the end */}

@@ -285,7 +285,7 @@ export function SpellbookDropdown() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 px-2 gap-1.5 text-muted-foreground hover:text-foreground",
+              "h-10 md:h-7 px-2 gap-1.5 text-muted-foreground hover:text-foreground",
               activeSpellbook && "text-foreground font-medium",
               isTemporary && "ring-1 ring-amber-500/50",
             )}

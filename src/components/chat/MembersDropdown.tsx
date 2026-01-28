@@ -21,9 +21,9 @@ export function MembersDropdown({ participants }: MembersDropdownProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <button className="flex items-center gap-1 px-1 text-muted-foreground hover:text-foreground transition-colors">
           <Users2 className="size-3" />
-          <span>{participants.length}</span>
+          <span className="text-xs">{participants.length}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
