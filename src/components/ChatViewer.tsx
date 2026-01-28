@@ -26,7 +26,6 @@ import type {
   LiveActivityMetadata,
 } from "@/types/chat";
 import { CHAT_KINDS } from "@/types/chat";
-// import { NipC7Adapter } from "@/lib/chat/adapters/nip-c7-adapter";  // Coming soon
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
@@ -1243,8 +1242,6 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
-    // case "nip-c7":  // Phase 1 - Simple chat (coming soon)
-    //   return new NipC7Adapter();
     case "nip-29":
       return new Nip29Adapter();
     // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)

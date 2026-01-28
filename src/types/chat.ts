@@ -15,13 +15,7 @@ export const CHAT_KINDS = [
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol =
-  | "nip-c7"
-  | "nip-17"
-  | "nip-28"
-  | "nip-29"
-  | "nip-53"
-  | "nip-10";
+export type ChatProtocol = "nip-17" | "nip-28" | "nip-29" | "nip-53" | "nip-10";
 
 /**
  * Conversation type
@@ -171,7 +165,7 @@ export interface LiveActivityIdentifier {
 }
 
 /**
- * NIP-C7/NIP-17 direct message identifier (resolved pubkey)
+ * NIP-17 direct message identifier (resolved pubkey)
  */
 export interface DMIdentifier {
   type: "dm-recipient" | "chat-partner";
@@ -182,7 +176,7 @@ export interface DMIdentifier {
 }
 
 /**
- * NIP-C7 NIP-05 identifier (needs resolution)
+ * NIP-05 identifier for DMs (needs resolution)
  */
 export interface NIP05Identifier {
   type: "chat-partner-nip05";

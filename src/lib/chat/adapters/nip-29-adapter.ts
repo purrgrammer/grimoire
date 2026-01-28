@@ -459,7 +459,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       },
     );
 
-    // Add q-tag for replies (per NIP-C7 quote tag format)
+    // Add q-tag for replies (quote tag format)
     // Format: ["q", eventId, relayUrl, pubkey]
     if (options?.replyTo) {
       // Look up the event to get the author's pubkey for the q-tag
@@ -554,7 +554,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   getCapabilities(): ChatCapabilities {
     return {
       supportsEncryption: false, // kind 9 messages are public
-      supportsThreading: true, // q-tag replies (NIP-C7 style)
+      supportsThreading: true, // q-tag replies
       supportsModeration: true, // kind 9005/9006 for delete/ban
       supportsRoles: true, // admin, moderator, member
       supportsGroupManagement: true, // join/leave via kind 9021
@@ -1117,7 +1117,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Regular chat message (kind 9)
-    // Look for reply q-tags (NIP-29 uses q-tags like NIP-C7)
+    // Look for reply q-tags
     // Use getQuotePointer to extract full EventPointer with relay hints
     const replyTo = getQuotePointer(event);
 
