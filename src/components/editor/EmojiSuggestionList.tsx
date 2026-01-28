@@ -93,7 +93,7 @@ export const EmojiSuggestionList = forwardRef<
 
   if (items.length === 0) {
     return (
-      <div className="border border-border/50 bg-popover p-4 text-sm text-muted-foreground shadow-md">
+      <div className="border border-border/50 bg-popover p-4 text-sm text-popover-foreground/60 shadow-md">
         No emoji found
       </div>
     );
@@ -103,7 +103,7 @@ export const EmojiSuggestionList = forwardRef<
     <div
       ref={listRef}
       role="listbox"
-      className="max-h-[240px] w-[296px] overflow-y-auto border border-border/50 bg-popover p-2 shadow-md"
+      className="max-h-[240px] w-[296px] overflow-y-auto border border-border/50 bg-popover p-2 text-popover-foreground shadow-md"
     >
       <div className="grid grid-cols-8 gap-0.5">
         {items.map((item, index) => (
@@ -141,7 +141,7 @@ export const EmojiSuggestionList = forwardRef<
       </div>
       {/* Show selected emoji shortcode */}
       {items[selectedIndex] && (
-        <div className="mt-2 border-t border-border/50 pt-2 text-center text-xs text-muted-foreground">
+        <div className="mt-2 border-t border-border/50 pt-2 text-center text-xs text-popover-foreground/60">
           :{items[selectedIndex].shortcode}:
         </div>
       )}

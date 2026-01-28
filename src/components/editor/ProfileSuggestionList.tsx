@@ -71,7 +71,7 @@ export const ProfileSuggestionList = forwardRef<
 
   if (items.length === 0) {
     return (
-      <div className="border border-border/50 bg-popover p-4 text-sm text-muted-foreground shadow-md">
+      <div className="border border-border/50 bg-popover p-4 text-sm text-popover-foreground/60 shadow-md">
         No profiles found
       </div>
     );
@@ -81,7 +81,7 @@ export const ProfileSuggestionList = forwardRef<
     <div
       ref={listRef}
       role="listbox"
-      className="max-h-[300px] w-[320px] overflow-y-auto border border-border/50 bg-popover shadow-md"
+      className="max-h-[300px] w-[320px] overflow-y-auto border border-border/50 bg-popover text-popover-foreground shadow-md"
     >
       {items.map((item, index) => (
         <button
@@ -99,7 +99,7 @@ export const ProfileSuggestionList = forwardRef<
               <UserName pubkey={item.pubkey} />
             </div>
             {item.nip05 && (
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="truncate text-xs text-popover-foreground/60">
                 {item.nip05}
               </div>
             )}
