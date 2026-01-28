@@ -213,12 +213,12 @@ export const manPages: Record<string, ManPageEntry> = {
       {
         flag: "--since <time>",
         description:
-          "Events after timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+          "Events after timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, 'today' or 'now')",
       },
       {
         flag: "--until <time>",
         description:
-          "Events before timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, or 'now')",
+          "Events before timestamp (unix timestamp, relative: 30s, 1m, 2h, 7d, 2w, 3mo, 1y, 'today' or 'now')",
       },
       {
         flag: "--search <text>",

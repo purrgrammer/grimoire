@@ -430,6 +430,12 @@ function parseTimestamp(value: string): number | null {
     return Math.floor(Date.now() / 1000);
   }
 
+  if (value.toLowerCase() === "today") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.floor(today.getTime() / 1000);
+  }
+
   if (/^\d{10}$/.test(value)) {
     return parseInt(value, 10);
   }

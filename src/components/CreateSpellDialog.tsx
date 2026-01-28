@@ -489,7 +489,7 @@ export function CreateSpellDialog({
                     onChange={(e) => setSince(e.target.value)}
                   />
                   <div className="flex flex-wrap gap-1">
-                    {["now", "1h", "24h", "7d", "30d"].map((t) => (
+                    {["today", "now", "1h", "24h", "7d", "30d"].map((t) => (
                       <button
                         key={t}
                         onClick={() => setSince(t)}
