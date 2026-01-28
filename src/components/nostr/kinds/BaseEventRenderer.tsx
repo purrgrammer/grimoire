@@ -239,8 +239,8 @@ export function EventMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="hover:text-foreground text-muted-foreground transition-colors">
-          <Menu className="size-3" />
+        <button className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center hover:text-foreground text-muted-foreground transition-colors">
+          <Menu className="size-4 md:size-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
