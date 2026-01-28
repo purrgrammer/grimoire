@@ -34,45 +34,15 @@ import { nip19 } from "nostr-tools";
 import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
 import { FilePasteHandler } from "./extensions/file-paste-handler";
 
-/**
- * Represents an emoji tag for NIP-30
- */
-export interface EmojiTag {
-  shortcode: string;
-  url: string;
-}
+// Re-export types from core for backwards compatibility
+export type {
+  EmojiTag,
+  BlobAttachment,
+  SerializedContent,
+  AddressRef,
+} from "./core";
 
-/**
- * Represents a blob attachment for imeta tags (NIP-92)
- */
-export interface BlobAttachment {
-  /** The URL of the blob */
-  url: string;
-  /** SHA256 hash of the blob content */
-  sha256: string;
-  /** MIME type of the blob */
-  mimeType?: string;
-  /** Size in bytes */
-  size?: number;
-  /** Blossom server URL */
-  server?: string;
-}
-
-/**
- * Result of serializing editor content
- * Note: mentions, event quotes, and hashtags are extracted automatically by applesauce
- * from the text content (nostr: URIs and #hashtags), so we don't need to extract them here.
- */
-export interface SerializedContent {
-  /** The text content with mentions as nostr: URIs and emoji as :shortcode: */
-  text: string;
-  /** Emoji tags to include in the event (NIP-30) */
-  emojiTags: EmojiTag[];
-  /** Blob attachments for imeta tags (NIP-92) */
-  blobAttachments: BlobAttachment[];
-  /** Referenced addresses for a tags (from naddr - not yet handled by applesauce) */
-  addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>;
-}
+import type { EmojiTag, BlobAttachment, SerializedContent } from "./core";
 
 export interface MentionEditorProps {
   placeholder?: string;
@@ -103,84 +73,8 @@ export interface MentionEditorHandle {
   insertBlob: (blob: BlobAttachment) => void;
 }
 
-// Create emoji extension by extending Mention with a different name and custom node view
-const EmojiMention = Mention.extend({
-  name: "emoji",
-
-  // Add custom attributes for emoji (url and source)
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      url: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-url"),
-        renderHTML: (attributes) => {
-          if (!attributes.url) return {};
-          return { "data-url": attributes.url };
-        },
-      },
-      source: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-source"),
-        renderHTML: (attributes) => {
-          if (!attributes.source) return {};
-          return { "data-source": attributes.source };
-        },
-      },
-    };
-  },
-
-  // Override renderText to return empty string (nodeView handles display)
-  renderText({ node }) {
-    // Return the emoji character for unicode, or empty for custom
-    // This is what gets copied to clipboard
-    if (node.attrs.source === "unicode") {
-      return node.attrs.url || "";
-    }
-    return `:${node.attrs.id}:`;
-  },
-
-  addNodeView() {
-    return ({ node }) => {
-      const { url, source, id } = node.attrs;
-      const isUnicode = source === "unicode";
-
-      // Create wrapper span
-      const dom = document.createElement("span");
-      dom.className = "emoji-node";
-      dom.setAttribute("data-emoji", id || "");
-
-      if (isUnicode && url) {
-        // Unicode emoji - render as text span
-        const span = document.createElement("span");
-        span.className = "emoji-unicode";
-        span.textContent = url;
-        span.title = `:${id}:`;
-        dom.appendChild(span);
-      } else if (url) {
-        // Custom emoji - render as image
-        const img = document.createElement("img");
-        img.src = url;
-        img.alt = `:${id}:`;
-        img.title = `:${id}:`;
-        img.className = "emoji-image";
-        img.draggable = false;
-        img.onerror = () => {
-          // Fallback to shortcode if image fails to load
-          dom.textContent = `:${id}:`;
-        };
-        dom.appendChild(img);
-      } else {
-        // Fallback if no url - show shortcode
-        dom.textContent = `:${id}:`;
-      }
-
-      return {
-        dom,
-      };
-    };
-  },
-});
+// Import shared EmojiMention extension from core
+import { EmojiMention } from "./core";
 
 // Create blob attachment extension for media previews
 const BlobAttachmentNode = Node.create({

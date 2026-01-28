@@ -1,0 +1,479 @@
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import Mention from "@tiptap/extension-mention";
+import Placeholder from "@tiptap/extension-placeholder";
+import type { SuggestionOptions } from "@tiptap/suggestion";
+import tippy from "tippy.js";
+import type { Instance as TippyInstance } from "tippy.js";
+import "tippy.js/dist/tippy.css";
+import {
+  ProfileSuggestionList,
+  type ProfileSuggestionListHandle,
+} from "./ProfileSuggestionList";
+import {
+  EmojiSuggestionList,
+  type EmojiSuggestionListHandle,
+} from "./EmojiSuggestionList";
+import type { ProfileSearchResult } from "@/services/profile-search";
+import type { EmojiSearchResult } from "@/services/emoji-search";
+import { nip19 } from "nostr-tools";
+import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
+import { FilePasteHandler } from "./extensions/file-paste-handler";
+import { BlobAttachmentRichNode } from "./extensions/blob-attachment-rich";
+import { NostrEventPreviewRichNode } from "./extensions/nostr-event-preview-rich";
+import {
+  EmojiMention,
+  serializeEditorContent,
+  emptySerializedContent,
+  type TextEditorHandle,
+  type EmojiTag,
+  type BlobAttachment,
+  type SerializedContent,
+} from "./core";
+
+export interface TextEditorProps {
+  placeholder?: string;
+  onSubmit?: (
+    content: string,
+    emojiTags: EmojiTag[],
+    blobAttachments: BlobAttachment[],
+    addressRefs: Array<{ kind: number; pubkey: string; identifier: string }>,
+  ) => void;
+  onChange?: () => void;
+  searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
+  searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
+  onFilePaste?: (files: File[]) => void;
+  autoFocus?: boolean;
+  className?: string;
+  /** Minimum height in pixels */
+  minHeight?: number;
+  /** Maximum height in pixels */
+  maxHeight?: number;
+}
+
+// Re-export types and handle for consumers
+export type { TextEditorHandle, EmojiTag, BlobAttachment, SerializedContent };
+
+export const TextEditor = forwardRef<TextEditorHandle, TextEditorProps>(
+  (
+    {
+      placeholder = "Write your note...",
+      onSubmit,
+      onChange,
+      searchProfiles,
+      searchEmojis,
+      onFilePaste,
+      autoFocus = false,
+      className = "",
+      minHeight = 200,
+      maxHeight = 600,
+    },
+    ref,
+  ) => {
+    // Ref to access handleSubmit from keyboard shortcuts
+    const handleSubmitRef = useRef<(editor: any) => void>(() => {});
+
+    // Create mention suggestion configuration for @ mentions
+    const mentionSuggestion: Omit<SuggestionOptions, "editor"> = useMemo(
+      () => ({
+        char: "@",
+        allowSpaces: false,
+        items: async ({ query }) => {
+          return await searchProfiles(query);
+        },
+        render: () => {
+          let component: ReactRenderer<ProfileSuggestionListHandle>;
+          let popup: TippyInstance[];
+
+          return {
+            onStart: (props) => {
+              component = new ReactRenderer(ProfileSuggestionList, {
+                props: { items: [], command: props.command },
+                editor: props.editor,
+              });
+
+              if (!props.clientRect) {
+                return;
+              }
+
+              popup = tippy("body", {
+                getReferenceClientRect: props.clientRect as () => DOMRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: "manual",
+                placement: "bottom-start",
+                theme: "mention",
+              });
+            },
+
+            onUpdate(props) {
+              component.updateProps({
+                items: props.items,
+                command: props.command,
+              });
+
+              if (!props.clientRect) {
+                return;
+              }
+
+              popup[0].setProps({
+                getReferenceClientRect: props.clientRect as () => DOMRect,
+              });
+            },
+
+            onKeyDown(props) {
+              if (props.event.key === "Escape") {
+                popup[0].hide();
+                return true;
+              }
+              return component.ref?.onKeyDown(props.event) || false;
+            },
+
+            onExit() {
+              popup[0].destroy();
+              component.destroy();
+            },
+          };
+        },
+      }),
+      [searchProfiles],
+    );
+
+    // Create emoji suggestion configuration for : emojis
+    const emojiSuggestion: Omit<SuggestionOptions, "editor"> | undefined =
+      useMemo(() => {
+        if (!searchEmojis) return undefined;
+
+        return {
+          char: ":",
+          allowSpaces: false,
+          items: async ({ query }) => {
+            return await searchEmojis(query);
+          },
+          render: () => {
+            let component: ReactRenderer<EmojiSuggestionListHandle>;
+            let popup: TippyInstance[];
+
+            return {
+              onStart: (props) => {
+                component = new ReactRenderer(EmojiSuggestionList, {
+                  props: { items: [], command: props.command },
+                  editor: props.editor,
+                });
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup = tippy("body", {
+                  getReferenceClientRect: props.clientRect as () => DOMRect,
+                  appendTo: () => document.body,
+                  content: component.element,
+                  showOnCreate: true,
+                  interactive: true,
+                  trigger: "manual",
+                  placement: "bottom-start",
+                  theme: "mention",
+                });
+              },
+
+              onUpdate(props) {
+                component.updateProps({
+                  items: props.items,
+                  command: props.command,
+                });
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect as () => DOMRect,
+                });
+              },
+
+              onKeyDown(props) {
+                if (props.event.key === "Escape") {
+                  popup[0].hide();
+                  return true;
+                }
+                return component.ref?.onKeyDown(props.event) || false;
+              },
+
+              onExit() {
+                popup[0].destroy();
+                component.destroy();
+              },
+            };
+          },
+        };
+      }, [searchEmojis]);
+
+    // Handle submit
+    const handleSubmit = useCallback(
+      (editorInstance: any) => {
+        if (editorInstance.isEmpty) {
+          return;
+        }
+
+        const serialized = serializeEditorContent(editorInstance);
+
+        if (onSubmit) {
+          onSubmit(
+            serialized.text,
+            serialized.emojiTags,
+            serialized.blobAttachments,
+            serialized.addressRefs,
+          );
+          // Don't clear content here - let the parent component decide when to clear
+        }
+      },
+      [onSubmit],
+    );
+
+    // Keep ref updated with latest handleSubmit
+    handleSubmitRef.current = handleSubmit;
+
+    // Build extensions array
+    const extensions = useMemo(() => {
+      // Custom extension for keyboard shortcuts
+      const SubmitShortcut = Extension.create({
+        name: "submitShortcut",
+        addKeyboardShortcuts() {
+          return {
+            // Ctrl/Cmd+Enter submits
+            "Mod-Enter": ({ editor }) => {
+              handleSubmitRef.current(editor);
+              return true;
+            },
+            // Plain Enter creates a new line (default behavior)
+          };
+        },
+      });
+
+      const exts = [
+        SubmitShortcut,
+        StarterKit.configure({
+          // Enable paragraph, hardBreak, etc. for multi-line
+          hardBreak: {
+            keepMarks: false,
+          },
+        }),
+        Mention.extend({
+          renderText({ node }) {
+            // Serialize to nostr: URI for plain text export
+            try {
+              return `nostr:${nip19.npubEncode(node.attrs.id)}`;
+            } catch (err) {
+              console.error("[Mention] Failed to encode pubkey:", err);
+              return `@${node.attrs.label}`;
+            }
+          },
+        }).configure({
+          HTMLAttributes: {
+            class: "mention",
+          },
+          suggestion: {
+            ...mentionSuggestion,
+            command: ({ editor, range, props }: any) => {
+              // props is the ProfileSearchResult
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(range, [
+                  {
+                    type: "mention",
+                    attrs: {
+                      id: props.pubkey,
+                      label: props.displayName,
+                    },
+                  },
+                  { type: "text", text: " " },
+                ])
+                .run();
+            },
+          },
+          renderLabel({ node }) {
+            return `@${node.attrs.label}`;
+          },
+        }),
+        Placeholder.configure({
+          placeholder,
+        }),
+        // Add blob attachment extension for full-size media previews
+        BlobAttachmentRichNode,
+        // Add nostr event preview extension for full event rendering
+        NostrEventPreviewRichNode,
+        // Add paste handler to transform bech32 strings into previews
+        NostrPasteHandler,
+        // Add file paste handler for clipboard file uploads
+        FilePasteHandler.configure({
+          onFilePaste,
+        }),
+      ];
+
+      // Add emoji extension if search is provided
+      if (emojiSuggestion) {
+        exts.push(
+          EmojiMention.configure({
+            HTMLAttributes: {
+              class: "emoji",
+            },
+            suggestion: {
+              ...emojiSuggestion,
+              command: ({ editor, range, props }: any) => {
+                // props is the EmojiSearchResult
+                editor
+                  .chain()
+                  .focus()
+                  .insertContentAt(range, [
+                    {
+                      type: "emoji",
+                      attrs: {
+                        id: props.shortcode,
+                        label: props.shortcode,
+                        url: props.url,
+                        source: props.source,
+                      },
+                    },
+                    { type: "text", text: " " },
+                  ])
+                  .run();
+              },
+            },
+          }),
+        );
+      }
+
+      return exts;
+    }, [mentionSuggestion, emojiSuggestion, onFilePaste, placeholder]);
+
+    const editor = useEditor({
+      extensions,
+      editorProps: {
+        attributes: {
+          class: "prose prose-sm max-w-none focus:outline-none",
+          style: `min-height: ${minHeight}px; max-height: ${maxHeight}px; overflow-y: auto;`,
+        },
+      },
+      autofocus: autoFocus,
+      onUpdate: () => {
+        onChange?.();
+      },
+    });
+
+    // Helper to check if editor view is ready (prevents "view not available" errors)
+    const isEditorReady = useCallback(() => {
+      return editor && editor.view && editor.view.dom;
+    }, [editor]);
+
+    // Expose editor methods
+    useImperativeHandle(
+      ref,
+      () => ({
+        focus: () => {
+          if (isEditorReady()) {
+            editor?.commands.focus();
+          }
+        },
+        clear: () => {
+          if (isEditorReady()) {
+            editor?.commands.clearContent();
+          }
+        },
+        getContent: () => {
+          if (!isEditorReady()) return "";
+          return editor?.getText({ blockSeparator: "\n" }) || "";
+        },
+        getSerializedContent: () => {
+          if (!isEditorReady() || !editor) return emptySerializedContent();
+          return serializeEditorContent(editor);
+        },
+        isEmpty: () => {
+          if (!isEditorReady()) return true;
+          return editor?.isEmpty ?? true;
+        },
+        submit: () => {
+          if (isEditorReady() && editor) {
+            handleSubmit(editor);
+          }
+        },
+        insertText: (text: string) => {
+          if (isEditorReady()) {
+            editor?.commands.insertContent(text);
+          }
+        },
+        insertBlob: (blob: BlobAttachment) => {
+          if (isEditorReady()) {
+            editor?.commands.insertContent({
+              type: "blobAttachment",
+              attrs: blob,
+            });
+          }
+        },
+        getJSON: () => {
+          if (!isEditorReady()) return null;
+          return editor?.getJSON() || null;
+        },
+        setContent: (json: any) => {
+          // Check editor and view are ready before setting content
+          if (isEditorReady() && json) {
+            editor?.commands.setContent(json);
+          }
+        },
+        getEditor: () => {
+          if (!isEditorReady()) return null;
+          return editor;
+        },
+      }),
+      [editor, handleSubmit, isEditorReady],
+    );
+
+    // Handle submit on Ctrl/Cmd+Enter
+    useEffect(() => {
+      // Check both editor and editor.view exist (view may not be ready immediately)
+      if (!editor?.view?.dom) return;
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          handleSubmit(editor);
+        }
+      };
+
+      editor.view.dom.addEventListener("keydown", handleKeyDown);
+      return () => {
+        // Also check view.dom exists in cleanup (editor might be destroyed)
+        editor.view?.dom?.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [editor, handleSubmit]);
+
+    if (!editor) {
+      return null;
+    }
+
+    return (
+      <div className={`rich-editor ${className}`}>
+        <EditorContent editor={editor} />
+      </div>
+    );
+  },
+);
+
+TextEditor.displayName = "TextEditor";
+
+// Backwards compatibility alias
+export const RichEditor = TextEditor;
+export type RichEditorHandle = TextEditorHandle;
+export type RichEditorProps = TextEditorProps;
