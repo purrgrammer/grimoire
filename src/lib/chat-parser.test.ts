@@ -89,7 +89,7 @@ describe("parseChatCommand", () => {
       );
     });
 
-    it("should throw error for npub (NIP-C7 disabled)", () => {
+    it("should throw error for npub (DMs not yet supported)", () => {
       expect(() => parseChatCommand(["npub1xyz"])).toThrow(
         /Unable to determine chat protocol/,
       );

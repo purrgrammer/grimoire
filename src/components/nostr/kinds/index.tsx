@@ -172,7 +172,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   6: RepostRenderer, // Repost
   7: Kind7Renderer, // Reaction
   8: BadgeAwardRenderer, // Badge Award (NIP-58)
-  9: Kind9Renderer, // Chat Message (NIP-C7)
+  9: Kind9Renderer, // Chat Message (NIP-29)
   11: Kind1Renderer, // Public Thread Reply (NIP-10)
   16: RepostRenderer, // Generic Repost
   17: Kind7Renderer, // Reaction (NIP-25)

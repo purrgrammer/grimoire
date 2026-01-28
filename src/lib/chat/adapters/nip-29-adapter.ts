@@ -459,9 +459,18 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       },
     );
 
-    // Add q-tag for replies (NIP-29 specific, not in blueprint yet)
+    // Add q-tag for replies (quote tag format)
+    // Format: ["q", eventId, relayUrl, pubkey]
     if (options?.replyTo) {
-      draft.tags.push(["q", options.replyTo]);
+      // Look up the event to get the author's pubkey for the q-tag
+      const replyEvent = eventStore.getEvent(options.replyTo);
+      if (replyEvent) {
+        // Full q-tag with relay hint and author pubkey
+        draft.tags.push(["q", options.replyTo, relayUrl, replyEvent.pubkey]);
+      } else {
+        // Fallback: at minimum include the relay hint since we know it
+        draft.tags.push(["q", options.replyTo, relayUrl]);
+      }
     }
 
     // Add NIP-92 imeta tags for blob attachments (not yet handled by applesauce)
@@ -545,7 +554,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
   getCapabilities(): ChatCapabilities {
     return {
       supportsEncryption: false, // kind 9 messages are public
-      supportsThreading: true, // q-tag replies (NIP-C7 style)
+      supportsThreading: true, // q-tag replies
       supportsModeration: true, // kind 9005/9006 for delete/ban
       supportsRoles: true, // admin, moderator, member
       supportsGroupManagement: true, // join/leave via kind 9021
@@ -1108,7 +1117,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Regular chat message (kind 9)
-    // Look for reply q-tags (NIP-29 uses q-tags like NIP-C7)
+    // Look for reply q-tags
     // Use getQuotePointer to extract full EventPointer with relay hints
     const replyTo = getQuotePointer(event);
 
