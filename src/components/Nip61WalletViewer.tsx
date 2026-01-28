@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ArrowDownLeft,
   Search,
+  Landmark,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -209,6 +217,7 @@ export default function Nip61WalletViewer() {
     totalBalance,
     history,
     mints,
+    relays,
     unlock,
     unlocking,
     error,
@@ -336,13 +345,6 @@ export default function Nip61WalletViewer() {
       <WalletHeader
         name="Cashu Wallet"
         status={walletStatus}
-        info={
-          mints && mints.length > 0 ? (
-            <span className="text-muted-foreground ml-2">
-              {mints.length} mint{mints.length !== 1 ? "s" : ""}
-            </span>
-          ) : undefined
-        }
         actions={
           <div className="flex items-center gap-3">
             <Tooltip>
@@ -360,6 +362,68 @@ export default function Nip61WalletViewer() {
               </TooltipTrigger>
               <TooltipContent>Refresh Wallet</TooltipContent>
             </Tooltip>
+
+            {/* Relays dropdown */}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Wallet relays"
+                    >
+                      <Radio className="size-3" />
+                      <span className="text-xs">{relays?.length || 0}</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Wallet Relays</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="max-w-xs">
+                {relays && relays.length > 0 ? (
+                  relays.map((relay) => (
+                    <DropdownMenuItem key={relay} className="font-mono text-xs">
+                      {relay.replace("wss://", "")}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    No relays configured
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Mints dropdown */}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Wallet mints"
+                    >
+                      <Landmark className="size-3" />
+                      <span className="text-xs">{mints?.length || 0}</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Wallet Mints</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="max-w-xs">
+                {mints && mints.length > 0 ? (
+                  mints.map((mint) => (
+                    <DropdownMenuItem key={mint} className="font-mono text-xs">
+                      {new URL(mint).hostname}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    No mints configured
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Tooltip>
               <TooltipTrigger asChild>
