@@ -20,6 +20,7 @@ import { isNip05, resolveNip05 } from "@/lib/nip05";
 import { getDisplayName, getQuotePointer } from "@/lib/nostr-utils";
 import { isValidHexPubkey } from "@/lib/nostr-validation";
 import { getProfileContent } from "applesauce-core/helpers";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFactory } from "applesauce-core/event-factory";
 import { ReactionBlueprint } from "applesauce-common/blueprints";
 
@@ -232,8 +233,22 @@ export class NipC7Adapter extends ChatProtocolAdapter {
     factory.setSigner(activeSigner);
 
     const tags: string[][] = [["p", partner.pubkey]];
+
+    // Add q-tag for replies (per NIP-C7 quote tag format)
+    // Format: ["q", eventId, relayUrl, pubkey]
     if (options?.replyTo) {
-      tags.push(["q", options.replyTo]); // NIP-C7 quote tag for threading
+      const replyEvent = eventStore.getEvent(options.replyTo);
+      if (replyEvent) {
+        // Get a relay hint from where we've seen this event
+        const seenRelays = getSeenRelays(replyEvent);
+        const relayHint =
+          seenRelays && seenRelays.size > 0 ? [...seenRelays][0] : "";
+        // Full q-tag with relay hint and author pubkey
+        tags.push(["q", options.replyTo, relayHint, replyEvent.pubkey]);
+      } else {
+        // Fallback: just the event ID
+        tags.push(["q", options.replyTo]);
+      }
     }
 
     // Add NIP-30 emoji tags
