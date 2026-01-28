@@ -24,7 +24,6 @@ import {
   WALLET_HISTORY_KIND,
 } from "@/services/nip61-wallet";
 import { kinds, relaySet } from "applesauce-core/helpers";
-import { useGrimoire } from "@/core/state";
 
 // Import casts to enable user.wallet$ property
 import "applesauce-wallet/casts";
@@ -44,7 +43,6 @@ export type WalletState =
  */
 export function useNip61Wallet() {
   const { pubkey, canSign } = useAccount();
-  const { state: appState, setCashuWalletSyncEnabled } = useGrimoire();
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discoveryComplete, setDiscoveryComplete] = useState(false);
@@ -190,10 +188,12 @@ export function useNip61Wallet() {
     return Object.fromEntries(entries);
   }, [balance]);
 
-  // Toggle sync setting
-  const toggleSyncEnabled = useCallback(() => {
-    setCashuWalletSyncEnabled(!appState.cashuWalletSyncEnabled);
-  }, [appState.cashuWalletSyncEnabled, setCashuWalletSyncEnabled]);
+  // Compute effective relays (wallet relays + user outbox relays)
+  const effectiveRelays = useMemo(() => {
+    const walletRelays = relays || [];
+    const userOutboxes = outboxes || [];
+    return relaySet(walletRelays, userOutboxes);
+  }, [relays, outboxes]);
 
   return {
     // State machine
@@ -214,16 +214,12 @@ export function useNip61Wallet() {
     tokens,
     history,
     mints,
-    relays,
+    relays: effectiveRelays, // Combined wallet + outbox relays
     received, // Received nutzap IDs
 
     // Actions
     unlock,
     unlocking,
-
-    // Sync setting
-    syncEnabled: appState.cashuWalletSyncEnabled ?? false,
-    toggleSyncEnabled,
 
     // Error state
     error,

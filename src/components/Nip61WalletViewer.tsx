@@ -13,7 +13,6 @@ import {
   Send,
   Download,
   RefreshCw,
-  Settings,
   Coins,
   Loader2,
   Wallet,
@@ -21,11 +20,13 @@ import {
   ChevronRight,
   ChevronDown,
   ArrowDownLeft,
+  ArrowUpRight,
   Search,
   Landmark,
   Radio,
 } from "lucide-react";
 import { toast } from "sonner";
+import { use$ } from "applesauce-react/hooks";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -46,12 +47,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   WalletBalance,
   WalletHeader,
   WalletHistoryList,
-  TransactionRow,
   type HistoryItem,
 } from "@/components/wallet";
 import { CodeCopyButton } from "@/components/CodeCopyButton";
@@ -206,6 +205,57 @@ function historyToItem(entry: WalletHistory): HistoryItem {
   };
 }
 
+/**
+ * History entry row that subscribes to meta$ for amounts
+ */
+function HistoryEntryRow({
+  entry,
+  blurred,
+  onClick,
+}: {
+  entry: WalletHistory;
+  blurred: boolean;
+  onClick: () => void;
+}) {
+  // Subscribe to meta$ observable to get direction and amount
+  const meta = use$(() => entry.meta$, [entry]);
+
+  const direction = meta?.direction || "in";
+  const amount = meta?.amount || 0;
+
+  return (
+    <div
+      className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {direction === "in" ? (
+          <ArrowDownLeft className="size-4 text-green-500 flex-shrink-0" />
+        ) : (
+          <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
+        )}
+        <div className="min-w-0 flex-1">
+          <span className="text-sm">
+            {formatTimestamp(entry.event.created_at, "datetime")}
+          </span>
+          {!entry.unlocked && (
+            <span className="text-xs text-muted-foreground ml-2">(locked)</span>
+          )}
+        </div>
+      </div>
+      <div className="flex-shrink-0 ml-4">
+        <p
+          className={`text-sm font-semibold font-mono ${direction === "in" ? "text-green-500" : "text-red-500"}`}
+        >
+          {blurred
+            ? "✦✦✦✦"
+            : `${direction === "in" ? "+" : "-"}${amount.toLocaleString()}`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Nip61WalletViewer() {
   const { state, toggleWalletBalancesBlur } = useGrimoire();
   const { isLoggedIn } = useAccount();
@@ -221,8 +271,6 @@ export default function Nip61WalletViewer() {
     unlock,
     unlocking,
     error,
-    syncEnabled,
-    toggleSyncEnabled,
   } = useNip61Wallet();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -231,7 +279,6 @@ export default function Nip61WalletViewer() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [showRawTransaction, setShowRawTransaction] = useState(false);
   const [copiedRawTx, setCopiedRawTx] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const blurred = state.walletBalancesBlurred ?? false;
 
@@ -265,34 +312,11 @@ export default function Nip61WalletViewer() {
   const renderHistoryEntry = useCallback(
     (item: HistoryItem) => {
       const entry = item.data as WalletHistory;
-
-      // If not unlocked, show placeholder
-      if (!entry.unlocked) {
-        return (
-          <TransactionRow
-            key={entry.id}
-            direction="in"
-            amount={0}
-            blurred={true}
-            label={
-              <span className="text-sm text-muted-foreground">Locked</span>
-            }
-            onClick={() => handleTransactionClick(entry)}
-          />
-        );
-      }
-
       return (
-        <TransactionRow
+        <HistoryEntryRow
           key={entry.id}
-          direction="in" // TODO: Determine from meta$
-          amount={0} // TODO: Get from meta$
+          entry={entry}
           blurred={blurred}
-          label={
-            <span className="text-sm">
-              {formatTimestamp(entry.event.created_at, "datetime")}
-            </span>
-          }
           onClick={() => handleTransactionClick(entry)}
         />
       );
@@ -424,19 +448,6 @@ export default function Nip61WalletViewer() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setSettingsOpen(true)}
-                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Settings"
-                >
-                  <Settings className="size-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Settings</TooltipContent>
-            </Tooltip>
           </div>
         }
       />
@@ -498,7 +509,8 @@ export default function Nip61WalletViewer() {
       </div>
 
       {/* Transaction Detail Dialog */}
-      <Dialog
+      <TransactionDetailDialog
+        transaction={selectedTransaction}
         open={detailDialogOpen}
         onOpenChange={(open) => {
           setDetailDialogOpen(open);
@@ -507,159 +519,161 @@ export default function Nip61WalletViewer() {
             setCopiedRawTx(false);
           }
         }}
-      >
-        <DialogContent className="max-w-md max-h-[70vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Transaction Details</DialogTitle>
-          </DialogHeader>
+        showRaw={showRawTransaction}
+        onToggleRaw={() => setShowRawTransaction(!showRawTransaction)}
+        copiedRaw={copiedRawTx}
+        onCopyRaw={() => {
+          if (selectedTransaction) {
+            navigator.clipboard.writeText(
+              JSON.stringify(selectedTransaction.event, null, 2),
+            );
+            setCopiedRawTx(true);
+            setTimeout(() => setCopiedRawTx(false), 2000);
+          }
+        }}
+        blurred={blurred}
+      />
+    </div>
+  );
+}
 
-          <div className="overflow-y-auto max-h-[calc(70vh-8rem)] pr-2">
-            {selectedTransaction && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
+/**
+ * Transaction detail dialog component
+ */
+function TransactionDetailDialog({
+  transaction,
+  open,
+  onOpenChange,
+  showRaw,
+  onToggleRaw,
+  copiedRaw,
+  onCopyRaw,
+  blurred,
+}: {
+  transaction: WalletHistory | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  showRaw: boolean;
+  onToggleRaw: () => void;
+  copiedRaw: boolean;
+  onCopyRaw: () => void;
+  blurred: boolean;
+}) {
+  // Subscribe to meta$ for transaction details
+  const meta = use$(() => transaction?.meta$, [transaction]);
+
+  const direction = meta?.direction || "in";
+  const amount = meta?.amount || 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md max-h-[70vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Transaction Details</DialogTitle>
+        </DialogHeader>
+
+        <div className="overflow-y-auto max-h-[calc(70vh-8rem)] pr-2">
+          {transaction && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {direction === "in" ? (
                   <ArrowDownLeft className="size-6 text-green-500" />
-                  <div>
-                    <p className="text-lg font-semibold">Transaction</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatTimestamp(
-                        selectedTransaction.event.created_at,
-                        "datetime",
-                      )}
-                    </p>
-                  </div>
+                ) : (
+                  <ArrowUpRight className="size-6 text-red-500" />
+                )}
+                <div>
+                  <p className="text-lg font-semibold">
+                    {direction === "in" ? "Received" : "Sent"}
+                  </p>
+                  <p
+                    className={`text-2xl font-bold font-mono ${direction === "in" ? "text-green-500" : "text-red-500"}`}
+                  >
+                    {blurred
+                      ? "✦✦✦✦✦✦"
+                      : `${direction === "in" ? "+" : "-"}${amount.toLocaleString()}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Event ID
+                  </Label>
+                  <p className="text-xs font-mono break-all bg-muted p-2 rounded">
+                    {transaction.event.id}
+                  </p>
                 </div>
 
-                <div className="space-y-2">
+                {meta?.mint && (
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Event ID
-                    </Label>
-                    <p className="text-xs font-mono break-all bg-muted p-2 rounded">
-                      {selectedTransaction.event.id}
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Status
-                    </Label>
-                    <p className="text-sm">
-                      {selectedTransaction.unlocked ? "Unlocked" : "Locked"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Created At
+                      Mint
                     </Label>
                     <p className="text-sm font-mono">
-                      {formatTimestamp(
-                        selectedTransaction.event.created_at,
-                        "absolute",
-                      )}
+                      {new URL(meta.mint).hostname}
                     </p>
                   </div>
+                )}
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Status
+                  </Label>
+                  <p className="text-sm">
+                    {transaction.unlocked ? "Unlocked" : "Locked"}
+                  </p>
                 </div>
 
-                {/* Raw Transaction (expandable) */}
-                <div className="border-t border-border pt-4 mt-4">
-                  <button
-                    onClick={() => setShowRawTransaction(!showRawTransaction)}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
-                  >
-                    {showRawTransaction ? (
-                      <ChevronDown className="size-4" />
-                    ) : (
-                      <ChevronRight className="size-4" />
-                    )}
-                    <span>Show Raw Event</span>
-                  </button>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Created At
+                  </Label>
+                  <p className="text-sm font-mono">
+                    {formatTimestamp(transaction.event.created_at, "absolute")}
+                  </p>
+                </div>
+              </div>
 
-                  {showRawTransaction && (
-                    <div className="mt-3 space-y-2">
-                      <div className="relative">
-                        <pre className="text-xs font-mono bg-muted p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
-                          {JSON.stringify(selectedTransaction.event, null, 2)}
-                        </pre>
-                        <CodeCopyButton
-                          copied={copiedRawTx}
-                          onCopy={() => {
-                            navigator.clipboard.writeText(
-                              JSON.stringify(
-                                selectedTransaction.event,
-                                null,
-                                2,
-                              ),
-                            );
-                            setCopiedRawTx(true);
-                            setTimeout(() => setCopiedRawTx(false), 2000);
-                          }}
-                          label="Copy event JSON"
-                        />
-                      </div>
-                    </div>
+              {/* Raw Transaction (expandable) */}
+              <div className="border-t border-border pt-4 mt-4">
+                <button
+                  onClick={onToggleRaw}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+                >
+                  {showRaw ? (
+                    <ChevronDown className="size-4" />
+                  ) : (
+                    <ChevronRight className="size-4" />
                   )}
-                </div>
+                  <span>Show Raw Event</span>
+                </button>
+
+                {showRaw && (
+                  <div className="mt-3 space-y-2">
+                    <div className="relative">
+                      <pre className="text-xs font-mono bg-muted p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                        {JSON.stringify(transaction.event, null, 2)}
+                      </pre>
+                      <CodeCopyButton
+                        copied={copiedRaw}
+                        onCopy={onCopyRaw}
+                        label="Copy event JSON"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDetailDialogOpen(false);
-                setShowRawTransaction(false);
-              }}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Settings Dialog */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Wallet Settings</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Keep Wallet Synced</Label>
-                <p className="text-xs text-muted-foreground">
-                  Keep wallet unlocked and sync history automatically
-                </p>
-              </div>
-              <Switch
-                checked={syncEnabled}
-                onCheckedChange={toggleSyncEnabled}
-              />
             </div>
+          )}
+        </div>
 
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Blur Balances</Label>
-                <p className="text-xs text-muted-foreground">
-                  Hide balance amounts for privacy
-                </p>
-              </div>
-              <Switch
-                checked={blurred}
-                onCheckedChange={toggleWalletBalancesBlur}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSettingsOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
