@@ -41,15 +41,17 @@ export function EventFooter({ event }: EventFooterProps) {
         {/* Left: Kind Badge */}
         <button
           onClick={handleKindClick}
-          className="group flex items-center gap-1.5 cursor-crosshair hover:text-foreground transition-colors"
+          className="group flex items-center gap-2 md:gap-1.5 min-h-[44px] md:min-h-0 px-1 -mx-1 cursor-crosshair hover:text-foreground transition-colors"
           title={`View documentation for kind ${event.kind}`}
         >
           <KindBadge
             kind={event.kind}
             variant="compact"
-            iconClassname="text-muted-foreground group-hover:text-foreground transition-colors size-3"
+            iconClassname="text-muted-foreground group-hover:text-foreground transition-colors size-4 md:size-3"
           />
-          <span className="text-[10px] leading-[10px]">{kindName}</span>
+          <span className="text-xs md:text-[10px] md:leading-[10px]">
+            {kindName}
+          </span>
         </button>
 
         {/* Right: Relay Dropdown */}
@@ -57,11 +59,11 @@ export function EventFooter({ event }: EventFooterProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors"
+                className="flex items-center gap-2 md:gap-1 min-h-[44px] md:min-h-0 px-1 -mx-1 cursor-pointer hover:text-foreground transition-colors"
                 title={`Seen on ${relays.length} relay${relays.length > 1 ? "s" : ""}`}
               >
-                <Wifi className="size-3" />
-                <span className="text-[10px] leading-[10px]">
+                <Wifi className="size-4 md:size-3" />
+                <span className="text-xs md:text-[10px] md:leading-[10px]">
                   {relays.length}
                 </span>
               </button>

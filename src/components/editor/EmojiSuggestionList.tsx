@@ -103,9 +103,9 @@ export const EmojiSuggestionList = forwardRef<
     <div
       ref={listRef}
       role="listbox"
-      className="max-h-[240px] w-[296px] overflow-y-auto border border-border/50 bg-popover p-2 text-popover-foreground shadow-md"
+      className="max-h-[280px] w-full max-w-[296px] overflow-y-auto border border-border/50 bg-popover p-2 text-popover-foreground shadow-md"
     >
-      <div className="grid grid-cols-8 gap-0.5">
+      <div className="grid grid-cols-6 md:grid-cols-8 gap-1 md:gap-0.5">
         {items.map((item, index) => (
           <button
             key={`${item.shortcode}-${item.source}`}
@@ -115,20 +115,22 @@ export const EmojiSuggestionList = forwardRef<
             onClick={() => command(item)}
             onMouseEnter={() => setSelectedIndex(index)}
             className={cn(
-              "flex size-8 items-center justify-center rounded transition-colors",
+              "flex size-10 md:size-8 items-center justify-center rounded transition-colors",
               index === selectedIndex ? "bg-muted" : "hover:bg-muted/60",
             )}
             title={`:${item.shortcode}:`}
           >
             {item.source === "unicode" ? (
               // Unicode emoji - render as text
-              <span className="text-lg leading-none">{item.url}</span>
+              <span className="text-xl md:text-lg leading-none">
+                {item.url}
+              </span>
             ) : (
               // Custom emoji - render as image
               <img
                 src={item.url}
                 alt={`:${item.shortcode}:`}
-                className="size-6 object-contain"
+                className="size-7 md:size-6 object-contain"
                 loading="lazy"
                 onError={(e) => {
                   // Replace with fallback on error

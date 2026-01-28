@@ -457,6 +457,19 @@ body.animating-layout
   margin: -2px 0;
 }
 
+/* Mobile: Wider split dividers for touch dragging */
+@media (max-width: 767px) {
+  .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme .mosaic-split.-row {
+    width: 12px;
+    margin: 0 -6px;
+  }
+
+  .mosaic.mosaic-blueprint-theme.mosaic-blueprint-theme .mosaic-split.-column {
+    height: 12px;
+    margin: -6px 0;
+  }
+}
+
 /* ==========================================================================
    Accessibility: Focus Indicators
    ========================================================================== */

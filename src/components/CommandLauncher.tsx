@@ -241,7 +241,7 @@ export default function CommandLauncher({
                               </div>
                             )}
                             {cmd.spellCommand && (
-                              <div className="text-[10px] opacity-50 font-mono truncate mt-0.5">
+                              <div className="text-xs md:text-[10px] opacity-50 font-mono truncate mt-0.5">
                                 {cmd.spellCommand}
                               </div>
                             )}
@@ -254,7 +254,7 @@ export default function CommandLauncher({
             </Command.List>
 
             <div className="command-footer">
-              <div>
+              <div className="hidden md:block">
                 <kbd>↑↓</kbd> navigate
                 <kbd>↵</kbd> execute
                 <kbd>esc</kbd> close

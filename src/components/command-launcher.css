@@ -5,6 +5,14 @@
   overflow: hidden;
 }
 
+@media (max-width: 767px) {
+  .grimoire-command-launcher {
+    /* Use width with calc to stay centered (dialog uses translate-x-50%) */
+    width: calc(100% - 32px);
+    max-width: calc(100% - 32px);
+  }
+}
+
 .grimoire-command-content {
   width: 100%;
 }
@@ -84,11 +92,17 @@
 }
 
 .command-item {
-  padding: 10px 12px;
+  padding: 14px 16px;
   cursor: pointer;
   transition: all 0.1s ease;
   margin-bottom: 2px;
   border: 1px solid transparent;
+}
+
+@media (min-width: 768px) {
+  .command-item {
+    padding: 10px 12px;
+  }
 }
 
 /* Inverted selection - terminal style */
@@ -163,9 +177,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   font-family: monospace;
+}
+
+@media (min-width: 768px) {
+  .command-footer {
+    font-size: 12px;
+  }
 }
 
 .command-footer-status {
@@ -174,12 +194,19 @@
 }
 
 .command-footer kbd {
-  padding: 2px 6px;
+  padding: 4px 10px;
   background: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
-  font-size: 11px;
+  font-size: 13px;
   font-family: monospace;
   margin: 0 4px;
+}
+
+@media (min-width: 768px) {
+  .command-footer kbd {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
 }
 
 /* Scrollbar styling to match terminal aesthetic */

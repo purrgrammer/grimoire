@@ -356,6 +356,7 @@ export default function UserMenu() {
           <Button
             size="sm"
             variant="link"
+            className="h-10 w-10 md:h-8 md:w-auto p-2 md:p-1"
             aria-label={account ? "User menu" : "Log in"}
           >
             {account ? (

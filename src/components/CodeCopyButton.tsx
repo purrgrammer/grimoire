@@ -20,13 +20,13 @@ export function CodeCopyButton({
   return (
     <button
       onClick={onCopy}
-      className={`absolute top-2 right-2 p-2 bg-background/90 hover:bg-muted border border-border rounded transition-colors ${className}`.trim()}
+      className={`absolute top-2 right-2 p-3 md:p-2 bg-background/90 hover:bg-muted border border-border rounded transition-colors ${className}`.trim()}
       aria-label={label}
     >
       {copied ? (
-        <CopyCheck className="size-4 text-muted-foreground" />
+        <CopyCheck className="size-5 md:size-4 text-muted-foreground" />
       ) : (
-        <Copy className="size-4 text-muted-foreground" />
+        <Copy className="size-5 md:size-4 text-muted-foreground" />
       )}
     </button>
   );
