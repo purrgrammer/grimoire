@@ -58,6 +58,8 @@ import { useNip61Wallet } from "@/hooks/useNip61Wallet";
 import { useGrimoire } from "@/core/state";
 import { useAccount } from "@/hooks/useAccount";
 import { formatTimestamp } from "@/hooks/useLocale";
+import { UserName } from "@/components/nostr/UserName";
+import { getTagValue } from "applesauce-core/helpers";
 import type { WalletHistory } from "applesauce-wallet/casts";
 
 /**
@@ -223,6 +225,28 @@ function HistoryEntryRow({
   const direction = meta?.direction || "in";
   const amount = meta?.amount || 0;
 
+  // Check for p-tag to show username
+  const pTagPubkey = getTagValue(entry.event, "p");
+
+  // Build label: username if p-tagged, mint if available, or Received/Sent
+  const getLabel = () => {
+    if (pTagPubkey) {
+      return <UserName pubkey={pTagPubkey} className="text-sm" />;
+    }
+    if (meta?.mint) {
+      try {
+        return <span className="text-sm">{new URL(meta.mint).hostname}</span>;
+      } catch {
+        // Invalid URL, fall through
+      }
+    }
+    return (
+      <span className="text-sm">
+        {direction === "in" ? "Received" : "Sent"}
+      </span>
+    );
+  };
+
   return (
     <div
       className="flex items-center justify-between border-b border-border px-4 py-2.5 hover:bg-muted/50 transition-colors flex-shrink-0 cursor-pointer"
@@ -235,21 +259,15 @@ function HistoryEntryRow({
           <ArrowUpRight className="size-4 text-red-500 flex-shrink-0" />
         )}
         <div className="min-w-0 flex-1">
-          <span className="text-sm">
-            {formatTimestamp(entry.event.created_at, "datetime")}
-          </span>
+          {getLabel()}
           {!entry.unlocked && (
             <span className="text-xs text-muted-foreground ml-2">(locked)</span>
           )}
         </div>
       </div>
       <div className="flex-shrink-0 ml-4">
-        <p
-          className={`text-sm font-semibold font-mono ${direction === "in" ? "text-green-500" : "text-red-500"}`}
-        >
-          {blurred
-            ? "✦✦✦✦"
-            : `${direction === "in" ? "+" : "-"}${amount.toLocaleString()}`}
+        <p className="text-sm font-semibold font-mono">
+          {blurred ? "✦✦✦✦" : amount.toLocaleString()}
         </p>
       </div>
     </div>
@@ -585,12 +603,8 @@ function TransactionDetailDialog({
                   <p className="text-lg font-semibold">
                     {direction === "in" ? "Received" : "Sent"}
                   </p>
-                  <p
-                    className={`text-2xl font-bold font-mono ${direction === "in" ? "text-green-500" : "text-red-500"}`}
-                  >
-                    {blurred
-                      ? "✦✦✦✦✦✦"
-                      : `${direction === "in" ? "+" : "-"}${amount.toLocaleString()}`}
+                  <p className="text-2xl font-bold font-mono">
+                    {blurred ? "✦✦✦✦✦✦" : amount.toLocaleString()}
                   </p>
                 </div>
               </div>
