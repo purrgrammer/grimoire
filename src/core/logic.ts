@@ -602,3 +602,13 @@ export const toggleWalletBalancesBlur = (
     walletBalancesBlurred: !state.walletBalancesBlurred,
   };
 };
+
+export const setCashuWalletSyncEnabled = (
+  state: GrimoireState,
+  enabled: boolean,
+): GrimoireState => {
+  return {
+    ...state,
+    cashuWalletSyncEnabled: enabled,
+  };
+};
