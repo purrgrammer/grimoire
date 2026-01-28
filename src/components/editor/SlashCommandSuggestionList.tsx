@@ -71,7 +71,7 @@ export const SlashCommandSuggestionList = forwardRef<
 
   if (items.length === 0) {
     return (
-      <div className="border border-border/50 bg-popover p-4 text-sm text-muted-foreground shadow-md">
+      <div className="border border-border/50 bg-popover p-4 text-sm text-popover-foreground/60 shadow-md">
         No commands available
       </div>
     );
@@ -81,7 +81,7 @@ export const SlashCommandSuggestionList = forwardRef<
     <div
       ref={listRef}
       role="listbox"
-      className="max-h-[300px] w-[320px] overflow-y-auto border border-border/50 bg-popover shadow-md"
+      className="max-h-[300px] w-[320px] overflow-y-auto border border-border/50 bg-popover text-popover-foreground shadow-md"
     >
       {items.map((item, index) => (
         <button
@@ -94,12 +94,12 @@ export const SlashCommandSuggestionList = forwardRef<
             index === selectedIndex ? "bg-muted/60" : "hover:bg-muted/60"
           }`}
         >
-          <Terminal className="size-4 flex-shrink-0 text-muted-foreground" />
+          <Terminal className="size-4 flex-shrink-0 text-popover-foreground/60" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium font-mono">
               /{item.name}
             </div>
-            <div className="truncate text-xs text-muted-foreground">
+            <div className="truncate text-xs text-popover-foreground/60">
               {item.description}
             </div>
           </div>
