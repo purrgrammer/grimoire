@@ -228,8 +228,7 @@ export default function UserMenu() {
 
             <div className="space-y-4">
               {/* Balance */}
-              {(balance !== undefined ||
-                nwcConnection.balance !== undefined) && (
+              {balance !== undefined && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     Balance:
@@ -243,7 +242,7 @@ export default function UserMenu() {
                       <span>
                         {state.walletBalancesBlurred
                           ? "✦✦✦✦✦✦"
-                          : formatBalance(balance ?? nwcConnection.balance)}
+                          : formatBalance(balance)}
                       </span>
                       {state.walletBalancesBlurred ? (
                         <EyeOff className="size-3 text-muted-foreground" />
@@ -402,14 +401,13 @@ export default function UserMenu() {
             >
               <div className="flex items-center gap-2">
                 <Wallet className="size-4 text-muted-foreground" />
-                {balance !== undefined ||
-                nwcConnection.balance !== undefined ? (
+                {balance !== undefined && (
                   <span className="text-sm">
                     {state.walletBalancesBlurred
                       ? "✦✦✦✦"
-                      : formatBalance(balance ?? nwcConnection.balance)}
+                      : formatBalance(balance)}
                   </span>
-                ) : null}
+                )}
               </div>
               <div className="flex items-center gap-1.5">
                 <span
