@@ -396,12 +396,12 @@ export default function WalletViewer() {
     toggleWalletBalancesBlur,
   } = useGrimoire();
   const {
-    wallet,
     balance,
     isConnected,
     connectionStatus,
     lastError,
-    support, // Wallet capabilities from support$ observable (cached by library)
+    support,
+    walletMethods, // Combined support$ + cached info fallback
     refreshBalance,
     listTransactions,
     makeInvoice,
@@ -420,8 +420,7 @@ export default function WalletViewer() {
   const [txLoadAttempted, setTxLoadAttempted] = useState(false);
   const [txLoadFailed, setTxLoadFailed] = useState(false);
 
-  // Use refs to track loading attempts without causing re-renders
-  const lastConnectionStateRef = useRef(isConnected);
+  // Rate limiting refs
   const lastBalanceRefreshRef = useRef(0);
   const lastTxLoadRef = useRef(0);
 
@@ -456,35 +455,26 @@ export default function WalletViewer() {
   // Copy NWC connection string state
   const [copiedNwc, setCopiedNwc] = useState(false);
 
-  // Wallet methods - use support$ observable if available, fallback to cached info
-  // The support$ observable waits for kind 13194 events which some wallets don't publish
-  // The cached info comes from getInfo() RPC call during initial connection
-  const walletMethods = useMemo(() => {
-    return support?.methods ?? state.nwcConnection?.info?.methods ?? [];
-  }, [support?.methods, state.nwcConnection?.info?.methods]);
-
-  // Reset state when connection changes
+  // Reset transaction state when wallet disconnects
   useEffect(() => {
-    // Detect connection state changes
-    if (isConnected !== lastConnectionStateRef.current) {
-      lastConnectionStateRef.current = isConnected;
-
-      if (isConnected) {
-        // Reset transaction loading flags when wallet connects
-        setTxLoadAttempted(false);
-        setTxLoadFailed(false);
-        setTransactions([]);
-      } else {
-        // Clear all state when wallet disconnects
-        setTxLoadAttempted(false);
-        setTxLoadFailed(false);
-        setTransactions([]);
-        setLoading(false);
-        setLoadingMore(false);
-        setHasMore(true);
-      }
+    if (!isConnected) {
+      setTxLoadAttempted(false);
+      setTxLoadFailed(false);
+      setTransactions([]);
+      setLoading(false);
+      setLoadingMore(false);
+      setHasMore(true);
     }
   }, [isConnected]);
+
+  // Reset transaction load flag when wallet connects (to trigger reload)
+  useEffect(() => {
+    if (connectionStatus === "connected") {
+      setTxLoadAttempted(false);
+      setTxLoadFailed(false);
+      setTransactions([]);
+    }
+  }, [connectionStatus]);
 
   // Load transactions when wallet methods are available (only once)
   // walletMethods combines support$ observable with cached info fallback
@@ -959,7 +949,7 @@ export default function WalletViewer() {
     return items;
   }, [transactions]);
 
-  if (!isConnected || !wallet) {
+  if (!isConnected) {
     return (
       <div className="flex h-full items-center justify-center p-8">
         <Card className="max-w-md">
@@ -1134,7 +1124,7 @@ export default function WalletViewer() {
                 aria-label="Copy connection string"
               >
                 {copiedNwc ? (
-                  <CopyCheck className="size-3 text-green-500" />
+                  <CopyCheck className="size-3" />
                 ) : (
                   <Copy className="size-3" />
                 )}
