@@ -452,6 +452,9 @@ export default function WalletViewer() {
   const [showRawTransaction, setShowRawTransaction] = useState(false);
   const [copiedRawTx, setCopiedRawTx] = useState(false);
 
+  // Copy NWC connection string state
+  const [copiedNwc, setCopiedNwc] = useState(false);
+
   // Reset state when connection changes
   useEffect(() => {
     // Detect connection state changes
@@ -602,6 +605,24 @@ export default function WalletViewer() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function copyNwcString() {
+    if (!state.nwcConnection) return;
+
+    const { service, relays, secret, lud16 } = state.nwcConnection;
+    const params = new URLSearchParams();
+    relays.forEach((relay) => params.append("relay", relay));
+    params.append("secret", secret);
+    if (lud16) params.append("lud16", lud16);
+
+    const nwcString = `nostr+walletconnect://${service}?${params.toString()}`;
+
+    navigator.clipboard.writeText(nwcString).then(() => {
+      setCopiedNwc(true);
+      toast.success("Connection string copied");
+      setTimeout(() => setCopiedNwc(false), 2000);
+    });
   }
 
   async function handleConfirmSend() {
@@ -1090,6 +1111,23 @@ export default function WalletViewer() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={copyNwcString}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Copy connection string"
+              >
+                {copiedNwc ? (
+                  <Check className="size-3 text-green-500" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Copy Connection String</TooltipContent>
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
