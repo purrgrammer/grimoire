@@ -77,10 +77,11 @@ export function useRelaySelection(
   // Get relay pool state for connection status
   const relayPoolMap = use$(pool.relays$);
 
+  // Destructure options for stable dependency tracking
+  const { strategy, addressHints, contextRelay } = options;
+
   // Determine write relays based on strategy
   const writeRelays = useMemo(() => {
-    const { strategy, addressHints, contextRelay } = options;
-
     // Context-only strategy uses only the context relay
     if (strategy?.type === "context-only" && contextRelay) {
       return [contextRelay];
@@ -98,7 +99,7 @@ export function useRelaySelection(
 
     // Default: user-outbox or aggregator fallback
     return userWriteRelays.length > 0 ? userWriteRelays : AGGREGATOR_RELAYS;
-  }, [state.activeAccount?.relays, options]);
+  }, [state.activeAccount?.relays, strategy, addressHints, contextRelay]);
 
   // Relay states
   const [relayStates, setRelayStates] = useState<RelayPublishState[]>([]);
