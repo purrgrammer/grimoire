@@ -64,8 +64,8 @@ export function WindowToolbar({
 
   const handleMoveToNewTab = () => {
     if (!window) return;
-    const newTabNumber = moveWindowToNewWorkspace(window.id);
-    toast.success(`Moved to new tab ${newTabNumber}`);
+    moveWindowToNewWorkspace(window.id);
+    toast.success("Moved to new tab");
   };
 
   const handleEdit = () => {
@@ -210,7 +210,8 @@ export function WindowToolbar({
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuItem onClick={handleMoveToNewTab}>
-                    <Plus className="size-4 mr-2" />+ New tab
+                    <Plus className="size-4 mr-2" />
+                    New
                   </DropdownMenuItem>
                   {otherWorkspaces.length > 0 && <DropdownMenuSeparator />}
                   {otherWorkspaces.map((ws) => (
