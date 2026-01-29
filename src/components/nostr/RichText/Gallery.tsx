@@ -8,7 +8,11 @@ import { MediaDialog } from "../MediaDialog";
 import { MediaEmbed } from "../MediaEmbed";
 import { useRichTextOptions } from "../RichText";
 
-function MediaPlaceholder({ type }: { type: "image" | "video" | "audio" }) {
+function MediaPlaceholder({
+  type,
+}: {
+  type: "image" | "video" | "audio" | "gallery";
+}) {
   return <span className="text-muted-foreground">[{type}]</span>;
 }
 
@@ -62,32 +66,42 @@ export function Gallery({ node }: GalleryNodeProps) {
     return null;
   };
 
-  // Only show dialog for audio files
+  // Separate media types for layout
+  const imageLinks = links.filter((url) => isImageURL(url));
+  const imageVideoLinks = links.filter(
+    (url) => isImageURL(url) || isVideoURL(url),
+  );
   const audioLinks = links.filter((url) => isAudioURL(url));
 
-  // Separate media types for layout
-  const imageLinks = links.filter((url) => isImageURL(url) || isVideoURL(url));
-  const audioOnlyLinks = links.filter((url) => isAudioURL(url));
+  // Check if images/videos/audio should be shown
+  const shouldShowImages = options.showMedia && options.showImages;
+  const shouldShowAudio = options.showMedia && options.showAudio;
+
+  // Show [gallery] placeholder when images are disabled and gallery contains images
+  const showGalleryPlaceholder = imageLinks.length > 0 && !shouldShowImages;
 
   return (
     <>
-      {/* Grid layout for images/videos */}
-      {imageLinks.length > 0 && (
+      {/* Show single [gallery] placeholder when images are disabled */}
+      {showGalleryPlaceholder && <MediaPlaceholder type="gallery" />}
+
+      {/* Grid layout for images/videos when enabled */}
+      {imageVideoLinks.length > 0 && !showGalleryPlaceholder && (
         <div className="my-2 grid grid-cols-3 gap-1.5">
-          {imageLinks.map((url: string, i: number) => (
+          {imageVideoLinks.map((url: string, i: number) => (
             <div key={`${url}-${i}`}>{renderLink(url, links.indexOf(url))}</div>
           ))}
         </div>
       )}
       {/* Stack layout for audio */}
-      {audioOnlyLinks.length > 0 && (
+      {audioLinks.length > 0 && (
         <div className="my-2 flex flex-col gap-2">
-          {audioOnlyLinks.map((url: string, i: number) => (
+          {audioLinks.map((url: string, i: number) => (
             <div key={`${url}-${i}`}>{renderLink(url, links.indexOf(url))}</div>
           ))}
         </div>
       )}
-      {audioLinks.length > 0 && (
+      {audioLinks.length > 0 && shouldShowAudio && (
         <MediaDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
