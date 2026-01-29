@@ -62,6 +62,7 @@ import { KindRenderer } from "./nostr/kinds";
 import { RichText } from "./nostr/RichText";
 import { UserName } from "./nostr/UserName";
 import { CodeCopyButton } from "./CodeCopyButton";
+import { WalletConnectionStatus } from "./WalletConnectionStatus";
 import type { Transaction } from "@/types/wallet";
 
 interface InvoiceDetails {
@@ -873,17 +874,7 @@ export default function WalletViewer() {
           </span>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div
-                className={`size-1.5 rounded-full ${
-                  connectionStatus === "connected"
-                    ? "bg-green-500"
-                    : connectionStatus === "connecting"
-                      ? "bg-yellow-500 animate-pulse"
-                      : connectionStatus === "error"
-                        ? "bg-red-500"
-                        : "bg-gray-500"
-                }`}
-              />
+              <WalletConnectionStatus status={connectionStatus} size="sm" />
             </TooltipTrigger>
             <TooltipContent>
               {connectionStatus === "connected" && "Connected"}

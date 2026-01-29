@@ -10,6 +10,7 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
+import { WalletConnectionStatus } from "@/components/WalletConnectionStatus";
 import accounts from "@/services/accounts";
 import { useProfile } from "@/hooks/useProfile";
 import { use$ } from "applesauce-react/hooks";
@@ -239,22 +240,11 @@ export default function UserMenu() {
               {/* Connection Status */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Status:</span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`size-2 rounded-full ${
-                      connectionStatus === "connected"
-                        ? "bg-green-500"
-                        : connectionStatus === "connecting"
-                          ? "bg-yellow-500 animate-pulse"
-                          : connectionStatus === "error"
-                            ? "bg-red-500"
-                            : "bg-gray-500"
-                    }`}
-                  />
-                  <span className="text-sm font-medium capitalize">
-                    {connectionStatus}
-                  </span>
-                </div>
+                <WalletConnectionStatus
+                  status={connectionStatus}
+                  size="md"
+                  showLabel
+                />
               </div>
 
               {/* Lightning Address */}
@@ -378,17 +368,7 @@ export default function UserMenu() {
                   </span>
                 )}
               </div>
-              <span
-                className={`size-1.5 rounded-full ${
-                  connectionStatus === "connected"
-                    ? "bg-green-500"
-                    : connectionStatus === "connecting"
-                      ? "bg-yellow-500 animate-pulse"
-                      : connectionStatus === "error"
-                        ? "bg-red-500"
-                        : "bg-gray-500"
-                }`}
-              />
+              <WalletConnectionStatus status={connectionStatus} size="sm" />
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
