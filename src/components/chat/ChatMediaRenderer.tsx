@@ -6,6 +6,7 @@
  */
 
 import { Image, Video, Music, File, Flower2 } from "lucide-react";
+import { getHashFromURL } from "blossom-client-sdk/helpers/url";
 import { useGrimoire } from "@/core/state";
 import { formatFileSize } from "@/lib/imeta";
 import type { MediaRendererProps } from "@/components/nostr/RichText";
@@ -18,10 +19,10 @@ function getFilename(url: string): string {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
     const lastSegment = pathname.split("/").pop() || "";
-    // If it's a hash (64 hex chars), truncate it
-    if (/^[0-9a-f]{64}$/i.test(lastSegment.replace(/\.[^.]+$/, ""))) {
+    // If it's a blossom hash, truncate it
+    const hash = getHashFromURL(url);
+    if (hash) {
       const ext = lastSegment.includes(".") ? lastSegment.split(".").pop() : "";
-      const hash = lastSegment.replace(/\.[^.]+$/, "");
       return ext ? `${hash.slice(0, 8)}...${ext}` : `${hash.slice(0, 8)}...`;
     }
     // Decode URI component for readable filenames
@@ -32,25 +33,18 @@ function getFilename(url: string): string {
 }
 
 /**
- * Check if URL is a blossom URL (has sha256 hash in path)
- * Returns the sha256 and server URL if it is, null otherwise
+ * Parse blossom URL - returns sha256 and server URL if valid
  */
 function parseBlossomUrl(
   url: string,
 ): { sha256: string; serverUrl: string } | null {
+  const sha256 = getHashFromURL(url);
+  if (!sha256) return null;
+
   try {
     const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const segments = pathname.split("/").filter(Boolean);
-    const lastSegment = segments[segments.length - 1] || "";
-    // Remove extension if present
-    const possibleHash = lastSegment.replace(/\.[^.]+$/, "");
-
-    if (/^[0-9a-f]{64}$/i.test(possibleHash)) {
-      const serverUrl = `${urlObj.protocol}//${urlObj.host}`;
-      return { sha256: possibleHash.toLowerCase(), serverUrl };
-    }
-    return null;
+    const serverUrl = `${urlObj.protocol}//${urlObj.host}`;
+    return { sha256, serverUrl };
   } catch {
     return null;
   }
