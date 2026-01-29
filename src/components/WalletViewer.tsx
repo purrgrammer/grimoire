@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { useWallet } from "@/hooks/useWallet";
+import { useCopy } from "@/hooks/useCopy";
 import { useGrimoire } from "@/core/state";
 import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { Button } from "@/components/ui/button";
@@ -442,7 +443,6 @@ export default function WalletViewer() {
   const [generatedPaymentHash, setGeneratedPaymentHash] = useState("");
   const [invoiceQR, setInvoiceQR] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
 
   // Transaction detail dialog state
@@ -450,10 +450,11 @@ export default function WalletViewer() {
     useState<Transaction | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [showRawTransaction, setShowRawTransaction] = useState(false);
-  const [copiedRawTx, setCopiedRawTx] = useState(false);
 
-  // Copy NWC connection string state
-  const [copiedNwc, setCopiedNwc] = useState(false);
+  // Copy hooks for clipboard operations
+  const { copy: copyInvoice, copied: invoiceCopied } = useCopy(2000);
+  const { copy: copyRawTx, copied: rawTxCopied } = useCopy(2000);
+  const { copy: copyNwc, copied: nwcCopied } = useCopy(2000);
 
   // Reset transaction state when wallet disconnects
   useEffect(() => {
@@ -611,7 +612,7 @@ export default function WalletViewer() {
     }
   }
 
-  function copyNwcString() {
+  function handleCopyNwcString() {
     if (!state.nwcConnection) return;
 
     const { service, relays, secret, lud16 } = state.nwcConnection;
@@ -621,12 +622,8 @@ export default function WalletViewer() {
     if (lud16) params.append("lud16", lud16);
 
     const nwcString = `nostr+walletconnect://${service}?${params.toString()}`;
-
-    navigator.clipboard.writeText(nwcString).then(() => {
-      setCopiedNwc(true);
-      toast.success("Connection string copied");
-      setTimeout(() => setCopiedNwc(false), 2000);
-    });
+    copyNwc(nwcString);
+    toast.success("Connection string copied");
   }
 
   async function handleConfirmSend() {
@@ -869,16 +866,9 @@ export default function WalletViewer() {
     }
   }
 
-  async function handleCopyInvoice() {
-    try {
-      await navigator.clipboard.writeText(generatedInvoice);
-      setCopied(true);
-      toast.success("Invoice copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Failed to copy invoice:", error);
-      toast.error("Failed to copy to clipboard");
-    }
+  function handleCopyInvoice() {
+    copyInvoice(generatedInvoice);
+    toast.success("Invoice copied to clipboard");
   }
 
   function resetReceiveDialog() {
@@ -887,7 +877,6 @@ export default function WalletViewer() {
     setInvoiceQR("");
     setReceiveAmount("");
     setReceiveDescription("");
-    setCopied(false);
   }
 
   function handleDisconnect() {
@@ -1119,11 +1108,11 @@ export default function WalletViewer() {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={copyNwcString}
+                onClick={handleCopyNwcString}
                 className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Copy connection string"
               >
-                {copiedNwc ? (
+                {nwcCopied ? (
                   <CopyCheck className="size-3" />
                 ) : (
                   <Copy className="size-3" />
@@ -1336,7 +1325,6 @@ export default function WalletViewer() {
           setDetailDialogOpen(open);
           if (!open) {
             setShowRawTransaction(false);
-            setCopiedRawTx(false);
           }
         }}
       >
@@ -1502,13 +1490,11 @@ export default function WalletViewer() {
                           {JSON.stringify(selectedTransaction, null, 2)}
                         </pre>
                         <CodeCopyButton
-                          copied={copiedRawTx}
+                          copied={rawTxCopied}
                           onCopy={() => {
-                            navigator.clipboard.writeText(
+                            copyRawTx(
                               JSON.stringify(selectedTransaction, null, 2),
                             );
-                            setCopiedRawTx(true);
-                            setTimeout(() => setCopiedRawTx(false), 2000);
                           }}
                           label="Copy transaction JSON"
                         />
@@ -1526,7 +1512,6 @@ export default function WalletViewer() {
               onClick={() => {
                 setDetailDialogOpen(false);
                 setShowRawTransaction(false);
-                setCopiedRawTx(false);
               }}
             >
               Close
@@ -1754,7 +1739,7 @@ export default function WalletViewer() {
                     variant="default"
                     className="w-full h-12"
                   >
-                    {copied ? (
+                    {invoiceCopied ? (
                       <>
                         <Check className="mr-2 size-5" />
                         Copied Invoice
