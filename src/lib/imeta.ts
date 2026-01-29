@@ -65,6 +65,17 @@ export function parseImetaTags(event: NostrEvent): ImetaEntry[] {
 }
 
 /**
+ * Find imeta entry for a specific URL
+ */
+export function findImetaForUrl(
+  event: NostrEvent,
+  url: string,
+): ImetaEntry | undefined {
+  const entries = parseImetaTags(event);
+  return entries.find((entry) => entry.url === url);
+}
+
+/**
  * Parse file metadata from NIP-94 kind 1063 event tags
  */
 export function parseFileMetadata(event: NostrEvent): ImetaEntry {
