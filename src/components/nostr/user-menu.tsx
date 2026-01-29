@@ -118,18 +118,12 @@ export default function UserMenu() {
     return sats.toString();
   }
 
-  // Get wallet service profile for display name, using wallet relays as hints
-  const walletServiceProfile = useProfile(
-    nwcConnection?.service,
-    nwcConnection?.relays,
-  );
-
-  // Use wallet hook for real-time balance and methods
+  // Use wallet hook for real-time balance and connection status
   const {
     disconnect: disconnectWallet,
     refreshBalance,
     balance,
-    wallet,
+    connectionStatus,
   } = useWallet();
 
   function openProfile() {
@@ -183,26 +177,6 @@ export default function UserMenu() {
     } catch (_error) {
       toast.error("Failed to refresh balance");
     }
-  }
-
-  function getWalletName(): string {
-    if (!nwcConnection) return "";
-    // Use service pubkey profile name, fallback to alias, then pubkey slice
-    return (
-      getDisplayName(nwcConnection.service, walletServiceProfile) ||
-      nwcConnection.info?.alias ||
-      nwcConnection.service.slice(0, 8)
-    );
-  }
-
-  function openWalletServiceProfile() {
-    if (!nwcConnection?.service) return;
-    addWindow(
-      "profile",
-      { pubkey: nwcConnection.service },
-      `Profile ${nwcConnection.service.slice(0, 8)}...`,
-    );
-    setShowWalletInfo(false);
   }
 
   return (
@@ -262,28 +236,23 @@ export default function UserMenu() {
                 </div>
               )}
 
-              {/* Wallet Name */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Wallet:</span>
-                <button
-                  onClick={openWalletServiceProfile}
-                  className="text-sm font-medium hover:underline cursor-crosshair text-primary"
-                >
-                  {getWalletName()}
-                </button>
-              </div>
-
               {/* Connection Status */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Status:</span>
                 <div className="flex items-center gap-2">
                   <span
                     className={`size-2 rounded-full ${
-                      wallet ? "bg-green-500" : "bg-red-500"
+                      connectionStatus === "connected"
+                        ? "bg-green-500"
+                        : connectionStatus === "connecting"
+                          ? "bg-yellow-500 animate-pulse"
+                          : connectionStatus === "error"
+                            ? "bg-red-500"
+                            : "bg-gray-500"
                     }`}
                   />
-                  <span className="text-sm font-medium">
-                    {wallet ? "Connected" : "Disconnected"}
+                  <span className="text-sm font-medium capitalize">
+                    {connectionStatus}
                   </span>
                 </div>
               </div>
@@ -409,16 +378,17 @@ export default function UserMenu() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`size-1.5 rounded-full ${
-                    wallet ? "bg-green-500" : "bg-red-500"
-                  }`}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {getWalletName()}
-                </span>
-              </div>
+              <span
+                className={`size-1.5 rounded-full ${
+                  connectionStatus === "connected"
+                    ? "bg-green-500"
+                    : connectionStatus === "connecting"
+                      ? "bg-yellow-500 animate-pulse"
+                      : connectionStatus === "error"
+                        ? "bg-red-500"
+                        : "bg-gray-500"
+                }`}
+              />
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem

@@ -26,6 +26,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { useGrimoire } from "@/core/state";
+import type { WalletSupport } from "applesauce-wallet-connect/helpers";
 import {
   wallet$,
   restoreWallet,
@@ -53,8 +54,11 @@ export function useWallet() {
   const lastError = use$(lastError$);
   const transactionsState = use$(transactionsState$);
 
-  // Wallet support from library's support$ observable (cached)
-  const support = use$(() => wallet?.support$, [wallet]);
+  // Wallet support from library's support$ observable (cached by library for 60s)
+  const support: WalletSupport | null | undefined = use$(
+    () => wallet?.support$,
+    [wallet],
+  );
 
   // Wallet methods - combines reactive support$ with cached info fallback
   // The support$ waits for kind 13194 events which some wallets don't publish
@@ -63,6 +67,8 @@ export function useWallet() {
   }, [support?.methods, state.nwcConnection?.info?.methods]);
 
   // Restore wallet on mount if connection exists
+  // Note: Not awaited intentionally - wallet is available synchronously from wallet$
+  // before validation completes. Any async errors are handled within restoreWallet.
   useEffect(() => {
     if (nwcConnection && !wallet && !restoreAttemptedRef.current) {
       restoreAttemptedRef.current = true;

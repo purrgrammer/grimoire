@@ -25,6 +25,7 @@ WalletConnect.pool = pool;
 
 // Internal state
 let notificationSubscription: Subscription | null = null;
+let notificationRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Connection status for the NWC wallet
@@ -75,9 +76,13 @@ function hexToBytes(hex: string): Uint8Array {
  * Notifications trigger balance refresh for real-time updates.
  */
 function subscribeToNotifications(wallet: WalletConnect) {
-  // Clean up existing subscription
+  // Clean up existing subscription and pending retry
   notificationSubscription?.unsubscribe();
   notificationSubscription = null;
+  if (notificationRetryTimeout) {
+    clearTimeout(notificationRetryTimeout);
+    notificationRetryTimeout = null;
+  }
 
   let retryCount = 0;
   const maxRetries = 5;
@@ -109,7 +114,7 @@ function subscribeToNotifications(wallet: WalletConnect) {
           const delay = baseDelay * Math.pow(2, retryCount);
           retryCount++;
           connectionStatus$.next("connecting");
-          setTimeout(subscribe, delay);
+          notificationRetryTimeout = setTimeout(subscribe, delay);
         } else {
           connectionStatus$.next("error");
           lastError$.next(
@@ -124,7 +129,7 @@ function subscribeToNotifications(wallet: WalletConnect) {
         if (wallet$.value && retryCount < maxRetries) {
           const delay = baseDelay * Math.pow(2, retryCount);
           retryCount++;
-          setTimeout(subscribe, delay);
+          notificationRetryTimeout = setTimeout(subscribe, delay);
         }
       },
     });
@@ -209,8 +214,13 @@ export async function restoreWallet(
  * Disconnects and clears the wallet.
  */
 export function clearWallet(): void {
+  // Clean up subscription and pending retry
   notificationSubscription?.unsubscribe();
   notificationSubscription = null;
+  if (notificationRetryTimeout) {
+    clearTimeout(notificationRetryTimeout);
+    notificationRetryTimeout = null;
+  }
 
   wallet$.next(null);
   balance$.next(undefined);
@@ -221,7 +231,12 @@ export function clearWallet(): void {
 
 /**
  * Refreshes the balance from the wallet.
- * Includes retry logic for reliability.
+ * Includes retry logic with exponential backoff for reliability.
+ *
+ * Note: If we're already connected and a balance fetch fails after retries,
+ * we don't set error state. This prevents UI flapping - the notification
+ * subscription is the primary health indicator. A transient balance fetch
+ * failure shouldn't mark an otherwise working connection as errored.
  */
 export async function refreshBalance(): Promise<number | undefined> {
   const wallet = wallet$.value;
@@ -253,6 +268,7 @@ export async function refreshBalance(): Promise<number | undefined> {
           setTimeout(r, baseDelay * Math.pow(2, attempt)),
         );
       } else if (connectionStatus$.value !== "connected") {
+        // Only set error state if not already connected (e.g., during initial validation)
         connectionStatus$.next("error");
         lastError$.next(
           error instanceof Error ? error : new Error("Failed to get balance"),
