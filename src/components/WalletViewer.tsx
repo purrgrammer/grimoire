@@ -5,7 +5,7 @@
  * Layout: Header → Big centered balance → Send/Receive buttons → Transaction list
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Wallet,
@@ -62,21 +62,7 @@ import { KindRenderer } from "./nostr/kinds";
 import { RichText } from "./nostr/RichText";
 import { UserName } from "./nostr/UserName";
 import { CodeCopyButton } from "./CodeCopyButton";
-
-interface Transaction {
-  type: "incoming" | "outgoing";
-  invoice?: string;
-  description?: string;
-  description_hash?: string;
-  preimage?: string;
-  payment_hash?: string;
-  amount: number;
-  fees_paid?: number;
-  created_at: number;
-  expires_at?: number;
-  settled_at?: number;
-  metadata?: Record<string, any>;
-}
+import type { Transaction } from "@/types/wallet";
 
 interface InvoiceDetails {
   amount?: number;
@@ -85,7 +71,6 @@ interface InvoiceDetails {
   expiry?: number;
 }
 
-const BATCH_SIZE = 20;
 const PAYMENT_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 /**
@@ -403,27 +388,24 @@ export default function WalletViewer() {
     lastError,
     support,
     walletMethods, // Combined support$ + cached info fallback
+    transactionsState,
     refreshBalance,
-    listTransactions,
     makeInvoice,
     payInvoice,
     lookupInvoice,
     disconnect,
     reconnect,
+    loadTransactions,
+    loadMoreTransactions,
+    retryLoadTransactions,
   } = useWallet();
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [refreshingBalance, setRefreshingBalance] = useState(false);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
-  const [txLoadAttempted, setTxLoadAttempted] = useState(false);
-  const [txLoadFailed, setTxLoadFailed] = useState(false);
 
-  // Rate limiting refs
+  // Rate limiting ref
   const lastBalanceRefreshRef = useRef(0);
-  const lastTxLoadRef = useRef(0);
 
   // Send dialog state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -456,73 +438,17 @@ export default function WalletViewer() {
   const { copy: copyRawTx, copied: rawTxCopied } = useCopy(2000);
   const { copy: copyNwc, copied: nwcCopied } = useCopy(2000);
 
-  // Reset transaction state when wallet disconnects
-  useEffect(() => {
-    if (!isConnected) {
-      setTxLoadAttempted(false);
-      setTxLoadFailed(false);
-      setTransactions([]);
-      setLoading(false);
-      setLoadingMore(false);
-      setHasMore(true);
-    }
-  }, [isConnected]);
-
-  // Reset transaction load flag when wallet connects (to trigger reload)
-  useEffect(() => {
-    if (connectionStatus === "connected") {
-      setTxLoadAttempted(false);
-      setTxLoadFailed(false);
-      setTransactions([]);
-    }
-  }, [connectionStatus]);
-
-  // Load transactions when wallet methods are available (only once)
-  // walletMethods combines support$ observable with cached info fallback
+  // Trigger lazy load of transactions when wallet supports it
   useEffect(() => {
     if (
       walletMethods.includes("list_transactions") &&
-      !txLoadAttempted &&
-      !loading
+      !transactionsState.initialized
     ) {
-      setLoading(true);
-      setTxLoadAttempted(true);
-      listTransactions({
-        limit: BATCH_SIZE,
-        offset: 0,
-      })
-        .then((result) => {
-          const txs = result.transactions || [];
-          setTransactions(txs);
-          setHasMore(txs.length === BATCH_SIZE);
-          setTxLoadFailed(false);
-        })
-        .catch((error) => {
-          console.error("Failed to load transactions:", error);
-          setTxLoadFailed(true);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+      loadTransactions();
     }
-  }, [walletMethods, txLoadAttempted, loading, listTransactions]);
+  }, [walletMethods, transactionsState.initialized, loadTransactions]);
 
-  // Helper to reload transactions (resets flags to trigger reload)
-  const reloadTransactions = useCallback(() => {
-    // Rate limiting: minimum 5 seconds between transaction reloads
-    const now = Date.now();
-    const timeSinceLastLoad = now - lastTxLoadRef.current;
-    if (timeSinceLastLoad < 5000) {
-      const waitTime = Math.ceil((5000 - timeSinceLastLoad) / 1000);
-      toast.warning(`Please wait ${waitTime}s before reloading transactions`);
-      return;
-    }
-
-    lastTxLoadRef.current = now;
-    setTxLoadAttempted(false);
-    setTxLoadFailed(false);
-  }, []);
-
+  // Poll for payment status when waiting for invoice to be paid
   useEffect(() => {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
@@ -532,13 +458,11 @@ export default function WalletViewer() {
       setCheckingPayment(true);
       try {
         const result = await lookupInvoice(generatedPaymentHash);
-        // If invoice is settled, close dialog and refresh
+        // If invoice is settled, close dialog (notifications will refresh transactions)
         if (result.settled_at) {
           toast.success("Payment received!");
           setReceiveDialogOpen(false);
           resetReceiveDialog();
-          // Reload transactions
-          reloadTransactions();
         }
       } catch {
         // Ignore errors, will retry
@@ -549,45 +473,7 @@ export default function WalletViewer() {
 
     const intervalId = setInterval(checkPayment, PAYMENT_CHECK_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [
-    generatedPaymentHash,
-    receiveDialogOpen,
-    walletMethods,
-    lookupInvoice,
-    reloadTransactions,
-  ]);
-
-  const loadMoreTransactions = useCallback(async () => {
-    if (
-      !walletMethods.includes("list_transactions") ||
-      !hasMore ||
-      loadingMore
-    ) {
-      return;
-    }
-
-    setLoadingMore(true);
-    try {
-      const result = await listTransactions({
-        limit: BATCH_SIZE,
-        offset: transactions.length,
-      });
-      const newTxs = result.transactions || [];
-      setTransactions((prev) => [...prev, ...newTxs]);
-      setHasMore(newTxs.length === BATCH_SIZE);
-    } catch (error) {
-      console.error("Failed to load more transactions:", error);
-      toast.error("Failed to load more transactions");
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [
-    walletMethods,
-    hasMore,
-    loadingMore,
-    transactions.length,
-    listTransactions,
-  ]);
+  }, [generatedPaymentHash, receiveDialogOpen, walletMethods, lookupInvoice]);
 
   async function handleRefreshBalance() {
     // Rate limiting: minimum 2 seconds between refreshes
@@ -600,7 +486,7 @@ export default function WalletViewer() {
     }
 
     lastBalanceRefreshRef.current = now;
-    setLoading(true);
+    setRefreshingBalance(true);
     try {
       await refreshBalance();
       toast.success("Balance refreshed");
@@ -608,7 +494,7 @@ export default function WalletViewer() {
       console.error("Failed to refresh balance:", error);
       toast.error("Failed to refresh balance");
     } finally {
-      setLoading(false);
+      setRefreshingBalance(false);
     }
   }
 
@@ -802,8 +688,7 @@ export default function WalletViewer() {
       toast.success("Payment sent successfully");
       resetSendDialog();
       setSendDialogOpen(false);
-      // Reload transactions
-      reloadTransactions();
+      // Notifications will automatically refresh transactions
     } catch (error) {
       console.error("Payment failed:", error);
       toast.error(error instanceof Error ? error.message : "Payment failed");
@@ -901,6 +786,13 @@ export default function WalletViewer() {
   function formatFullDate(timestamp: number): string {
     return new Date(timestamp * 1000).toLocaleString();
   }
+
+  // Derive values from transactionsState for convenience
+  const transactions = transactionsState.items;
+  const txLoading = transactionsState.loading;
+  const txLoadingMore = transactionsState.loadingMore;
+  const txHasMore = transactionsState.hasMore;
+  const txError = transactionsState.error;
 
   // Process transactions to include day markers
   const transactionsWithMarkers = useMemo(() => {
@@ -1126,12 +1018,12 @@ export default function WalletViewer() {
             <TooltipTrigger asChild>
               <button
                 onClick={handleRefreshBalance}
-                disabled={loading}
+                disabled={refreshingBalance}
                 className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 aria-label="Refresh balance"
               >
                 <RefreshCw
-                  className={`size-3 ${loading ? "animate-spin" : ""}`}
+                  className={`size-3 ${refreshingBalance ? "animate-spin" : ""}`}
                 />
               </button>
             </TooltipTrigger>
@@ -1199,11 +1091,11 @@ export default function WalletViewer() {
       <div className="flex-1 overflow-hidden flex justify-center">
         <div className="w-full max-w-md">
           {walletMethods.includes("list_transactions") ? (
-            loading ? (
+            txLoading ? (
               <div className="flex h-full items-center justify-center">
                 <RefreshCw className="size-6 animate-spin text-muted-foreground" />
               </div>
-            ) : txLoadFailed ? (
+            ) : txError ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
                 <p className="text-sm text-muted-foreground text-center">
                   Failed to load transaction history
@@ -1211,7 +1103,7 @@ export default function WalletViewer() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={reloadTransactions}
+                  onClick={retryLoadTransactions}
                 >
                   <RefreshCw className="mr-2 size-4" />
                   Retry
@@ -1269,11 +1161,11 @@ export default function WalletViewer() {
                 }}
                 components={{
                   Footer: () =>
-                    loadingMore ? (
+                    txLoadingMore ? (
                       <div className="flex justify-center py-4 border-b border-border">
                         <RefreshCw className="size-4 animate-spin text-muted-foreground" />
                       </div>
-                    ) : !hasMore && transactions.length > 0 ? (
+                    ) : !txHasMore && transactions.length > 0 ? (
                       <div className="py-4 text-center text-xs text-muted-foreground border-b border-border">
                         No more transactions
                       </div>

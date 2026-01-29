@@ -13,6 +13,10 @@
 
 import { WalletConnect } from "applesauce-wallet-connect";
 import type { NWCConnection } from "@/types/app";
+import {
+  type TransactionsState,
+  INITIAL_TRANSACTIONS_STATE,
+} from "@/types/wallet";
 import pool from "./relay-pool";
 import { BehaviorSubject, Subscription, firstValueFrom, timeout } from "rxjs";
 
@@ -48,6 +52,11 @@ export const lastError$ = new BehaviorSubject<Error | null>(null);
 
 /** Current balance in millisats */
 export const balance$ = new BehaviorSubject<number | undefined>(undefined);
+
+/** Transaction list state (lazy loaded) */
+export const transactionsState$ = new BehaviorSubject<TransactionsState>(
+  INITIAL_TRANSACTIONS_STATE,
+);
 
 // ============================================================================
 // Internal helpers
@@ -89,8 +98,9 @@ function subscribeToNotifications(wallet: WalletConnect) {
           lastError$.next(null);
         }
 
-        // Refresh balance on any notification
+        // Refresh balance and transactions on any notification
         refreshBalance();
+        refreshTransactions();
       },
       error: (error) => {
         console.error("[NWC] Notification error:", error);
@@ -205,6 +215,7 @@ export function clearWallet(): void {
   balance$.next(undefined);
   connectionStatus$.next("disconnected");
   lastError$.next(null);
+  resetTransactions();
 }
 
 /**
@@ -264,4 +275,163 @@ export async function reconnect(): Promise<void> {
 
   subscribeToNotifications(wallet);
   await refreshBalance();
+}
+
+// ============================================================================
+// Transaction loading (lazy, paginated)
+// ============================================================================
+
+const TRANSACTIONS_PAGE_SIZE = 20;
+
+/**
+ * Loads the initial batch of transactions.
+ * Only loads if not already initialized (lazy loading).
+ */
+export async function loadTransactions(): Promise<void> {
+  const wallet = wallet$.value;
+  if (!wallet) return;
+
+  const current = transactionsState$.value;
+
+  // Skip if already loading or initialized
+  if (current.loading || current.initialized) return;
+
+  transactionsState$.next({
+    ...current,
+    loading: true,
+    error: null,
+  });
+
+  try {
+    const result = await wallet.listTransactions({
+      limit: TRANSACTIONS_PAGE_SIZE,
+    });
+
+    transactionsState$.next({
+      items: result.transactions,
+      loading: false,
+      loadingMore: false,
+      hasMore: result.transactions.length >= TRANSACTIONS_PAGE_SIZE,
+      error: null,
+      initialized: true,
+    });
+  } catch (error) {
+    console.error("[NWC] Failed to load transactions:", error);
+    transactionsState$.next({
+      ...transactionsState$.value,
+      loading: false,
+      error:
+        error instanceof Error
+          ? error
+          : new Error("Failed to load transactions"),
+      initialized: true,
+    });
+  }
+}
+
+/**
+ * Loads more transactions (pagination).
+ */
+export async function loadMoreTransactions(): Promise<void> {
+  const wallet = wallet$.value;
+  if (!wallet) return;
+
+  const current = transactionsState$.value;
+
+  // Skip if already loading or no more to load
+  if (current.loading || current.loadingMore || !current.hasMore) return;
+
+  transactionsState$.next({
+    ...current,
+    loadingMore: true,
+  });
+
+  try {
+    // Get the oldest transaction timestamp for pagination
+    const oldestTx = current.items[current.items.length - 1];
+    const until = oldestTx?.created_at;
+
+    const result = await wallet.listTransactions({
+      limit: TRANSACTIONS_PAGE_SIZE,
+      until,
+    });
+
+    // Filter out any duplicates (in case of overlapping timestamps)
+    const existingHashes = new Set(current.items.map((tx) => tx.payment_hash));
+    const newTransactions = result.transactions.filter(
+      (tx) => !existingHashes.has(tx.payment_hash),
+    );
+
+    transactionsState$.next({
+      ...current,
+      items: [...current.items, ...newTransactions],
+      loadingMore: false,
+      hasMore: result.transactions.length >= TRANSACTIONS_PAGE_SIZE,
+    });
+  } catch (error) {
+    console.error("[NWC] Failed to load more transactions:", error);
+    transactionsState$.next({
+      ...current,
+      loadingMore: false,
+      error:
+        error instanceof Error
+          ? error
+          : new Error("Failed to load more transactions"),
+    });
+  }
+}
+
+/**
+ * Refreshes the transaction list (prepends new transactions).
+ * Called automatically on payment notifications.
+ */
+export async function refreshTransactions(): Promise<void> {
+  const wallet = wallet$.value;
+  if (!wallet) return;
+
+  const current = transactionsState$.value;
+
+  // Only refresh if already initialized
+  if (!current.initialized) return;
+
+  try {
+    // Get the newest transaction timestamp
+    const newestTx = current.items[0];
+    const from = newestTx?.created_at ? newestTx.created_at + 1 : undefined;
+
+    const result = await wallet.listTransactions({
+      limit: TRANSACTIONS_PAGE_SIZE,
+      from,
+    });
+
+    // Filter out duplicates and prepend new transactions
+    const existingHashes = new Set(current.items.map((tx) => tx.payment_hash));
+    const newTransactions = result.transactions.filter(
+      (tx) => !existingHashes.has(tx.payment_hash),
+    );
+
+    if (newTransactions.length > 0) {
+      transactionsState$.next({
+        ...current,
+        items: [...newTransactions, ...current.items],
+      });
+    }
+  } catch (error) {
+    console.error("[NWC] Failed to refresh transactions:", error);
+  }
+}
+
+/**
+ * Resets transaction state (called on wallet clear).
+ */
+function resetTransactions(): void {
+  transactionsState$.next(INITIAL_TRANSACTIONS_STATE);
+}
+
+/**
+ * Force reload transactions (used for retry after error).
+ */
+export async function retryLoadTransactions(): Promise<void> {
+  resetTransactions();
+  await loadTransactions();
 }

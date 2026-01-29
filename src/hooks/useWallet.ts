@@ -35,6 +35,10 @@ import {
   balance$,
   connectionStatus$,
   lastError$,
+  transactionsState$,
+  loadTransactions as loadTransactionsService,
+  loadMoreTransactions as loadMoreTransactionsService,
+  retryLoadTransactions as retryLoadTransactionsService,
 } from "@/services/nwc";
 
 export function useWallet() {
@@ -47,6 +51,7 @@ export function useWallet() {
   const balance = use$(balance$);
   const connectionStatus = use$(connectionStatus$);
   const lastError = use$(lastError$);
+  const transactionsState = use$(transactionsState$);
 
   // Wallet support from library's support$ observable (cached)
   const support = use$(() => wallet?.support$, [wallet]);
@@ -145,6 +150,18 @@ export function useWallet() {
     return await refreshBalanceService();
   }
 
+  async function loadTransactions() {
+    await loadTransactionsService();
+  }
+
+  async function loadMoreTransactions() {
+    await loadMoreTransactionsService();
+  }
+
+  async function retryLoadTransactions() {
+    await retryLoadTransactionsService();
+  }
+
   return {
     // State (all derived from observables)
     wallet,
@@ -154,6 +171,7 @@ export function useWallet() {
     lastError,
     support,
     walletMethods,
+    transactionsState,
 
     // Operations
     payInvoice,
@@ -166,5 +184,8 @@ export function useWallet() {
     payKeysend,
     disconnect,
     reconnect,
+    loadTransactions,
+    loadMoreTransactions,
+    retryLoadTransactions,
   };
 }
