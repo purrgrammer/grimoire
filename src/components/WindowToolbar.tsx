@@ -7,6 +7,7 @@ import {
   CopyCheck,
   ArrowRightFromLine,
   ExternalLink,
+  Plus,
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -44,22 +45,27 @@ export function WindowToolbar({
 }: WindowToolbarProps) {
   const setEditMode = useSetAtom(commandLauncherEditModeAtom);
   const [showSpellDialog, setShowSpellDialog] = useState(false);
-  const { state, moveWindowToWorkspace, setActiveWorkspace } = useGrimoire();
+  const { state, moveWindowToWorkspace, moveWindowToNewWorkspace } =
+    useGrimoire();
 
   // Get workspaces for move action
   const otherWorkspaces = Object.values(state.workspaces)
     .filter((ws) => ws.id !== state.activeWorkspaceId)
     .sort((a, b) => a.number - b.number);
-  const hasMultipleWorkspaces = Object.keys(state.workspaces).length > 1;
 
   const handleMoveToWorkspace = (targetWorkspaceId: string) => {
     if (!window) return;
     const targetWorkspace = state.workspaces[targetWorkspaceId];
     moveWindowToWorkspace(window.id, targetWorkspaceId);
-    setActiveWorkspace(targetWorkspaceId);
     toast.success(
       `Moved to tab ${targetWorkspace.number}${targetWorkspace.label ? ` (${targetWorkspace.label})` : ""}`,
     );
+  };
+
+  const handleMoveToNewTab = () => {
+    if (!window) return;
+    const newTabNumber = moveWindowToNewWorkspace(window.id);
+    toast.success(`Moved to new tab ${newTabNumber}`);
   };
 
   const handleEdit = () => {
@@ -195,31 +201,29 @@ export function WindowToolbar({
                 Pop out window
               </DropdownMenuItem>
 
-              {/* Move to tab submenu - only show if multiple workspaces */}
-              {hasMultipleWorkspaces && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={otherWorkspaces.length === 0}
+              {/* Move to tab submenu */}
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ArrowRightFromLine className="size-4 mr-2" />
+                  Move to tab
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={handleMoveToNewTab}>
+                    <Plus className="size-4 mr-2" />+ New tab
+                  </DropdownMenuItem>
+                  {otherWorkspaces.length > 0 && <DropdownMenuSeparator />}
+                  {otherWorkspaces.map((ws) => (
+                    <DropdownMenuItem
+                      key={ws.id}
+                      onClick={() => handleMoveToWorkspace(ws.id)}
                     >
-                      <ArrowRightFromLine className="size-4 mr-2" />
-                      Move to tab
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      {otherWorkspaces.map((ws) => (
-                        <DropdownMenuItem
-                          key={ws.id}
-                          onClick={() => handleMoveToWorkspace(ws.id)}
-                        >
-                          {ws.number}
-                          {ws.label ? ` ${ws.label}` : ""}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </>
-              )}
+                      {ws.number}
+                      {ws.label ? ` ${ws.label}` : ""}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
 
               {/* REQ/COUNT-specific actions */}
               {isSpellableWindow && (

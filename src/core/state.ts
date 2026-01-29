@@ -236,6 +236,20 @@ export const useGrimoire = () => {
     [setState],
   );
 
+  const moveWindowToNewWorkspace = useCallback(
+    (windowId: string): number => {
+      let newWorkspaceNumber = 0;
+      setState((prev) => {
+        const result = Logic.moveWindowToNewWorkspace(prev, windowId);
+        newWorkspaceNumber =
+          result.state.workspaces[result.newWorkspaceId].number;
+        return result.state;
+      });
+      return newWorkspaceNumber;
+    },
+    [setState],
+  );
+
   const updateLayout = useCallback(
     (layout: any) => {
       setState((prev) => Logic.updateLayout(prev, layout));
@@ -385,6 +399,7 @@ export const useGrimoire = () => {
     updateWindow,
     removeWindow,
     moveWindowToWorkspace,
+    moveWindowToNewWorkspace,
     updateLayout,
     setActiveWorkspace,
     setActiveAccount,
