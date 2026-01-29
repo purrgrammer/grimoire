@@ -100,6 +100,7 @@ export interface NWCConnection {
   /** Optional wallet info */
   info?: {
     alias?: string;
+    network?: string;
     methods?: string[];
     notifications?: string[];
   };

@@ -1,84 +1,102 @@
 /**
  * useWallet Hook
  *
- * Provides access to the NWC wallet throughout the application.
- * Fully reactive using observables - balance updates automatically via use$()
+ * Provides reactive access to the NWC wallet throughout the application.
+ * All state is derived from observables - no manual synchronization needed.
  *
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { wallet, balance, payInvoice, makeInvoice } = useWallet();
+ *   const { wallet, balance, connectionStatus, walletMethods, payInvoice } = useWallet();
  *
- *   async function handlePay() {
- *     if (!wallet) return;
- *     await payInvoice("lnbc...");
- *     // Balance automatically updates via notifications!
+ *   if (connectionStatus === 'error') {
+ *     return <ErrorState onRetry={reconnect} />;
  *   }
  *
- *   return <div>Balance: {balance ? Math.floor(balance / 1000) : 0} sats</div>;
+ *   // walletMethods combines support$ with cached info for reliability
+ *   if (walletMethods.includes('pay_invoice')) {
+ *     return <PayButton onClick={() => payInvoice("lnbc...")} />;
+ *   }
+ *
+ *   return <div>Balance: {formatSats(balance)}</div>;
  * }
  * ```
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { useGrimoire } from "@/core/state";
+import type { WalletSupport } from "applesauce-wallet-connect/helpers";
 import {
-  getWallet,
+  wallet$,
   restoreWallet,
-  clearWallet as clearWalletService,
+  clearWallet,
   refreshBalance as refreshBalanceService,
+  reconnect as reconnectService,
   balance$,
+  connectionStatus$,
+  lastError$,
+  transactionsState$,
+  loadTransactions as loadTransactionsService,
+  loadMoreTransactions as loadMoreTransactionsService,
+  retryLoadTransactions as retryLoadTransactionsService,
 } from "@/services/nwc";
-import type { WalletConnect } from "applesauce-wallet-connect";
 
 export function useWallet() {
   const { state } = useGrimoire();
   const nwcConnection = state.nwcConnection;
-  const [wallet, setWallet] = useState<WalletConnect | null>(getWallet());
+  const restoreAttemptedRef = useRef(false);
 
-  // Subscribe to balance updates from observable (fully reactive!)
+  // All state derived from observables
+  const wallet = use$(wallet$);
   const balance = use$(balance$);
+  const connectionStatus = use$(connectionStatus$);
+  const lastError = use$(lastError$);
+  const transactionsState = use$(transactionsState$);
 
-  // Initialize wallet on mount if connection exists but no wallet instance
+  // Wallet support from library's support$ observable (cached by library for 60s)
+  const support: WalletSupport | null | undefined = use$(
+    () => wallet?.support$,
+    [wallet],
+  );
+
+  // Wallet methods - combines reactive support$ with cached info fallback
+  // The support$ waits for kind 13194 events which some wallets don't publish
+  const walletMethods = useMemo(() => {
+    return support?.methods ?? state.nwcConnection?.info?.methods ?? [];
+  }, [support?.methods, state.nwcConnection?.info?.methods]);
+
+  // Restore wallet on mount if connection exists
+  // Note: Not awaited intentionally - wallet is available synchronously from wallet$
+  // before validation completes. Any async errors are handled within restoreWallet.
   useEffect(() => {
-    if (nwcConnection && !wallet) {
-      console.log("[useWallet] Restoring wallet from saved connection");
-      const restoredWallet = restoreWallet(nwcConnection);
-      setWallet(restoredWallet);
-
-      // Fetch initial balance
-      refreshBalanceService();
+    if (nwcConnection && !wallet && !restoreAttemptedRef.current) {
+      restoreAttemptedRef.current = true;
+      restoreWallet(nwcConnection);
     }
   }, [nwcConnection, wallet]);
 
-  // Update local wallet ref when connection changes
+  // Reset restore flag when connection is cleared
   useEffect(() => {
-    const currentWallet = getWallet();
-    if (currentWallet !== wallet) {
-      setWallet(currentWallet);
+    if (!nwcConnection) {
+      restoreAttemptedRef.current = false;
     }
-  }, [nwcConnection, wallet]);
+  }, [nwcConnection]);
 
-  /**
-   * Pay a BOLT11 invoice
-   * Balance will auto-update via notification subscription
-   */
+  // Derived state
+  const isConnected = connectionStatus !== "disconnected";
+
+  // ============================================================================
+  // Wallet operations
+  // ============================================================================
+
   async function payInvoice(invoice: string, amount?: number) {
     if (!wallet) throw new Error("No wallet connected");
-
     const result = await wallet.payInvoice(invoice, amount);
-
-    // Balance will update automatically via notifications
-    // But we can also refresh immediately for instant feedback
     await refreshBalanceService();
-
     return result;
   }
 
-  /**
-   * Generate a new invoice
-   */
   async function makeInvoice(
     amount: number,
     options?: {
@@ -88,40 +106,20 @@ export function useWallet() {
     },
   ) {
     if (!wallet) throw new Error("No wallet connected");
-
     return await wallet.makeInvoice(amount, options);
   }
 
-  /**
-   * Get wallet info (capabilities, alias, etc.)
-   */
   async function getInfo() {
     if (!wallet) throw new Error("No wallet connected");
-
     return await wallet.getInfo();
   }
 
-  /**
-   * Get current balance
-   */
   async function getBalance() {
     if (!wallet) throw new Error("No wallet connected");
-
     const result = await wallet.getBalance();
     return result.balance;
   }
 
-  /**
-   * Manually refresh the balance
-   */
-  async function refreshBalance() {
-    return await refreshBalanceService();
-  }
-
-  /**
-   * List recent transactions
-   * @param options - Pagination and filter options
-   */
   async function listTransactions(options?: {
     from?: number;
     until?: number;
@@ -131,69 +129,69 @@ export function useWallet() {
     type?: "incoming" | "outgoing";
   }) {
     if (!wallet) throw new Error("No wallet connected");
-
     return await wallet.listTransactions(options);
   }
 
-  /**
-   * Look up an invoice by payment hash
-   * @param paymentHash - The payment hash to look up
-   */
   async function lookupInvoice(paymentHash: string) {
     if (!wallet) throw new Error("No wallet connected");
-
     return await wallet.lookupInvoice(paymentHash);
   }
 
-  /**
-   * Pay to a node pubkey directly (keysend)
-   * @param pubkey - The node pubkey to pay
-   * @param amount - Amount in millisats
-   * @param preimage - Optional preimage (hex string)
-   */
   async function payKeysend(pubkey: string, amount: number, preimage?: string) {
     if (!wallet) throw new Error("No wallet connected");
-
     const result = await wallet.payKeysend(pubkey, amount, preimage);
-
-    // Refresh balance after payment
     await refreshBalanceService();
-
     return result;
   }
 
-  /**
-   * Disconnect the wallet
-   */
   function disconnect() {
-    clearWalletService();
-    setWallet(null);
+    clearWallet();
+  }
+
+  async function reconnect() {
+    await reconnectService();
+  }
+
+  async function refreshBalance() {
+    return await refreshBalanceService();
+  }
+
+  async function loadTransactions() {
+    await loadTransactionsService();
+  }
+
+  async function loadMoreTransactions() {
+    await loadMoreTransactionsService();
+  }
+
+  async function retryLoadTransactions() {
+    await retryLoadTransactionsService();
   }
 
   return {
-    /** The wallet instance (null if not connected) */
+    // State (all derived from observables)
     wallet,
-    /** Current balance in millisats (auto-updates via observable!) */
     balance,
-    /** Whether a wallet is connected */
-    isConnected: !!wallet,
-    /** Pay a BOLT11 invoice */
+    isConnected,
+    connectionStatus,
+    lastError,
+    support,
+    walletMethods,
+    transactionsState,
+
+    // Operations
     payInvoice,
-    /** Generate a new invoice */
     makeInvoice,
-    /** Get wallet information */
     getInfo,
-    /** Get current balance */
     getBalance,
-    /** Manually refresh balance */
     refreshBalance,
-    /** List recent transactions */
     listTransactions,
-    /** Look up an invoice by payment hash */
     lookupInvoice,
-    /** Pay to a node pubkey directly (keysend) */
     payKeysend,
-    /** Disconnect wallet */
     disconnect,
+    reconnect,
+    loadTransactions,
+    loadMoreTransactions,
+    retryLoadTransactions,
   };
 }
