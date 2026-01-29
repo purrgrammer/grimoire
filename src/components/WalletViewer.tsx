@@ -76,17 +76,6 @@ interface Transaction {
   metadata?: Record<string, any>;
 }
 
-interface WalletInfo {
-  alias?: string;
-  color?: string;
-  pubkey?: string;
-  network?: string;
-  block_height?: number;
-  block_hash?: string;
-  methods: string[];
-  notifications?: string[];
-}
-
 interface InvoiceDetails {
   amount?: number;
   description?: string;
@@ -409,16 +398,18 @@ export default function WalletViewer() {
     wallet,
     balance,
     isConnected,
-    getInfo,
+    connectionStatus,
+    lastError,
+    support, // Wallet capabilities from support$ observable (cached by library)
     refreshBalance,
     listTransactions,
     makeInvoice,
     payInvoice,
     lookupInvoice,
     disconnect,
+    reconnect,
   } = useWallet();
 
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -429,7 +420,6 @@ export default function WalletViewer() {
   const [txLoadFailed, setTxLoadFailed] = useState(false);
 
   // Use refs to track loading attempts without causing re-renders
-  const walletInfoLoadedRef = useRef(false);
   const lastConnectionStateRef = useRef(isConnected);
   const lastBalanceRefreshRef = useRef(0);
   const lastTxLoadRef = useRef(0);
@@ -462,48 +452,34 @@ export default function WalletViewer() {
   const [showRawTransaction, setShowRawTransaction] = useState(false);
   const [copiedRawTx, setCopiedRawTx] = useState(false);
 
-  // Load wallet info when connected
+  // Reset state when connection changes
   useEffect(() => {
     // Detect connection state changes
     if (isConnected !== lastConnectionStateRef.current) {
       lastConnectionStateRef.current = isConnected;
-      walletInfoLoadedRef.current = false;
 
       if (isConnected) {
         // Reset transaction loading flags when wallet connects
         setTxLoadAttempted(false);
         setTxLoadFailed(false);
         setTransactions([]);
-        setWalletInfo(null);
       } else {
         // Clear all state when wallet disconnects
         setTxLoadAttempted(false);
         setTxLoadFailed(false);
         setTransactions([]);
-        setWalletInfo(null);
         setLoading(false);
         setLoadingMore(false);
         setHasMore(true);
       }
     }
+  }, [isConnected]);
 
-    // Load wallet info if connected and not yet loaded
-    if (isConnected && !walletInfoLoadedRef.current) {
-      walletInfoLoadedRef.current = true;
-      getInfo()
-        .then((info) => setWalletInfo(info))
-        .catch((error) => {
-          console.error("Failed to load wallet info:", error);
-          toast.error("Failed to load wallet info");
-          walletInfoLoadedRef.current = false; // Allow retry
-        });
-    }
-  }, [isConnected, getInfo]);
-
-  // Load transactions when wallet info is available (only once)
+  // Load transactions when wallet support is available (only once)
+  // support comes from the library's support$ observable (cached)
   useEffect(() => {
     if (
-      walletInfo?.methods.includes("list_transactions") &&
+      support?.methods?.includes("list_transactions") &&
       !txLoadAttempted &&
       !loading
     ) {
@@ -527,7 +503,7 @@ export default function WalletViewer() {
           setLoading(false);
         });
     }
-  }, [walletInfo, txLoadAttempted, loading, listTransactions]);
+  }, [support, txLoadAttempted, loading, listTransactions]);
 
   // Helper to reload transactions (resets flags to trigger reload)
   const reloadTransactions = useCallback(() => {
@@ -549,7 +525,7 @@ export default function WalletViewer() {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
     const checkPayment = async () => {
-      if (!walletInfo?.methods.includes("lookup_invoice")) return;
+      if (!support?.methods?.includes("lookup_invoice")) return;
 
       setCheckingPayment(true);
       try {
@@ -574,14 +550,14 @@ export default function WalletViewer() {
   }, [
     generatedPaymentHash,
     receiveDialogOpen,
-    walletInfo,
+    support,
     lookupInvoice,
     reloadTransactions,
   ]);
 
   const loadMoreTransactions = useCallback(async () => {
     if (
-      !walletInfo?.methods.includes("list_transactions") ||
+      !support?.methods?.includes("list_transactions") ||
       !hasMore ||
       loadingMore
     ) {
@@ -603,7 +579,7 @@ export default function WalletViewer() {
     } finally {
       setLoadingMore(false);
     }
-  }, [walletInfo, hasMore, loadingMore, transactions.length, listTransactions]);
+  }, [support, hasMore, loadingMore, transactions.length, listTransactions]);
 
   async function handleRefreshBalance() {
     // Rate limiting: minimum 2 seconds between refreshes
@@ -984,17 +960,49 @@ export default function WalletViewer() {
     <div className="h-full w-full flex flex-col bg-background text-foreground">
       {/* Header */}
       <div className="border-b border-border px-4 py-2 font-mono text-xs flex items-center justify-between">
-        {/* Left: Wallet Name + Status */}
+        {/* Left: Wallet Name + Connection Status */}
         <div className="flex items-center gap-2">
           <span className="font-semibold">
-            {walletInfo?.alias || "Lightning Wallet"}
+            {state.nwcConnection?.info?.alias || "Lightning Wallet"}
           </span>
-          <div className="size-1.5 rounded-full bg-green-500" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`size-1.5 rounded-full ${
+                  connectionStatus === "connected"
+                    ? "bg-green-500"
+                    : connectionStatus === "connecting"
+                      ? "bg-yellow-500 animate-pulse"
+                      : connectionStatus === "error"
+                        ? "bg-red-500"
+                        : "bg-gray-500"
+                }`}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              {connectionStatus === "connected" && "Connected"}
+              {connectionStatus === "connecting" && "Connecting..."}
+              {connectionStatus === "error" && (
+                <span>Error: {lastError?.message || "Connection failed"}</span>
+              )}
+              {connectionStatus === "disconnected" && "Disconnected"}
+            </TooltipContent>
+          </Tooltip>
+          {connectionStatus === "error" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-2 text-xs"
+              onClick={reconnect}
+            >
+              Retry
+            </Button>
+          )}
         </div>
 
         {/* Right: Info Dropdown, Refresh, Disconnect */}
         <div className="flex items-center gap-3">
-          {walletInfo && (
+          {support && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -1011,11 +1019,11 @@ export default function WalletViewer() {
                     <div className="text-xs font-semibold">
                       Wallet Information
                     </div>
-                    {walletInfo.network && (
+                    {state.nwcConnection?.info?.network && (
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Network</span>
                         <span className="font-mono capitalize">
-                          {walletInfo.network}
+                          {state.nwcConnection.info.network}
                         </span>
                       </div>
                     )}
@@ -1049,7 +1057,7 @@ export default function WalletViewer() {
                   <div className="space-y-2">
                     <div className="text-xs font-semibold">Capabilities</div>
                     <div className="flex flex-wrap gap-1">
-                      {walletInfo.methods.map((method) => (
+                      {support.methods?.map((method) => (
                         <span
                           key={method}
                           className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] font-mono"
@@ -1060,14 +1068,14 @@ export default function WalletViewer() {
                     </div>
                   </div>
 
-                  {walletInfo.notifications &&
-                    walletInfo.notifications.length > 0 && (
+                  {support.notifications &&
+                    support.notifications.length > 0 && (
                       <div className="space-y-2">
                         <div className="text-xs font-semibold">
                           Notifications
                         </div>
                         <div className="flex flex-wrap gap-1">
-                          {walletInfo.notifications.map((notification) => (
+                          {support.notifications.map((notification) => (
                             <span
                               key={notification}
                               className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] font-mono"
@@ -1133,12 +1141,12 @@ export default function WalletViewer() {
       </div>
 
       {/* Send / Receive Buttons */}
-      {walletInfo &&
-        (walletInfo.methods.includes("pay_invoice") ||
-          walletInfo.methods.includes("make_invoice")) && (
+      {support &&
+        (support.methods?.includes("pay_invoice") ||
+          support.methods?.includes("make_invoice")) && (
           <div className="px-4 pb-3">
             <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
-              {walletInfo.methods.includes("make_invoice") && (
+              {support.methods?.includes("make_invoice") && (
                 <Button
                   onClick={() => setReceiveDialogOpen(true)}
                   variant="outline"
@@ -1147,7 +1155,7 @@ export default function WalletViewer() {
                   Receive
                 </Button>
               )}
-              {walletInfo.methods.includes("pay_invoice") && (
+              {support.methods?.includes("pay_invoice") && (
                 <Button
                   onClick={() => setSendDialogOpen(true)}
                   variant="default"
@@ -1163,7 +1171,7 @@ export default function WalletViewer() {
       {/* Transaction History */}
       <div className="flex-1 overflow-hidden flex justify-center">
         <div className="w-full max-w-md">
-          {walletInfo?.methods.includes("list_transactions") ? (
+          {support?.methods?.includes("list_transactions") ? (
             loading ? (
               <div className="flex h-full items-center justify-center">
                 <RefreshCw className="size-6 animate-spin text-muted-foreground" />
@@ -1387,7 +1395,10 @@ export default function WalletViewer() {
                               {txid}
                             </p>
                             <a
-                              href={getMempoolUrl(txid, walletInfo?.network)}
+                              href={getMempoolUrl(
+                                txid,
+                                state.nwcConnection?.info?.network,
+                              )}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"

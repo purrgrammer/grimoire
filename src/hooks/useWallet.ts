@@ -7,7 +7,15 @@
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { wallet, balance, payInvoice, makeInvoice } = useWallet();
+ *   const { wallet, balance, connectionStatus, support, payInvoice } = useWallet();
+ *
+ *   // Connection status: 'disconnected' | 'connecting' | 'connected' | 'error'
+ *   if (connectionStatus === 'error') {
+ *     return <div>Connection error - <button onClick={reconnect}>Retry</button></div>;
+ *   }
+ *
+ *   // Wallet capabilities from support$ observable (cached by library)
+ *   const canPay = support?.methods?.includes('pay_invoice');
  *
  *   async function handlePay() {
  *     if (!wallet) return;
@@ -20,7 +28,7 @@
  * ```
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 import { useGrimoire } from "@/core/state";
 import {
@@ -28,7 +36,10 @@ import {
   restoreWallet,
   clearWallet as clearWalletService,
   refreshBalance as refreshBalanceService,
+  reconnect as reconnectService,
   balance$,
+  connectionStatus$,
+  lastError$,
 } from "@/services/nwc";
 import type { WalletConnect } from "applesauce-wallet-connect";
 
@@ -36,21 +47,36 @@ export function useWallet() {
   const { state } = useGrimoire();
   const nwcConnection = state.nwcConnection;
   const [wallet, setWallet] = useState<WalletConnect | null>(getWallet());
+  const restoreAttemptedRef = useRef(false);
 
-  // Subscribe to balance updates from observable (fully reactive!)
+  // Subscribe to observables (fully reactive!)
   const balance = use$(balance$);
+  const connectionStatus = use$(connectionStatus$);
+  const lastError = use$(lastError$);
+
+  // Subscribe to wallet support$ observable for cached capabilities
+  // This replaces manual getInfo() calls
+  const support = use$(() => wallet?.support$, [wallet]);
 
   // Initialize wallet on mount if connection exists but no wallet instance
   useEffect(() => {
-    if (nwcConnection && !wallet) {
+    if (nwcConnection && !wallet && !restoreAttemptedRef.current) {
+      restoreAttemptedRef.current = true;
       console.log("[useWallet] Restoring wallet from saved connection");
-      const restoredWallet = restoreWallet(nwcConnection);
-      setWallet(restoredWallet);
 
-      // Fetch initial balance
-      refreshBalanceService();
+      // restoreWallet is now async and validates the connection
+      restoreWallet(nwcConnection).then((restoredWallet) => {
+        setWallet(restoredWallet);
+      });
     }
   }, [nwcConnection, wallet]);
+
+  // Reset restore flag when connection is cleared
+  useEffect(() => {
+    if (!nwcConnection) {
+      restoreAttemptedRef.current = false;
+    }
+  }, [nwcConnection]);
 
   // Update local wallet ref when connection changes
   useEffect(() => {
@@ -170,6 +196,13 @@ export function useWallet() {
     setWallet(null);
   }
 
+  /**
+   * Attempt to reconnect the wallet after an error
+   */
+  async function reconnect() {
+    await reconnectService();
+  }
+
   return {
     /** The wallet instance (null if not connected) */
     wallet,
@@ -177,11 +210,17 @@ export function useWallet() {
     balance,
     /** Whether a wallet is connected */
     isConnected: !!wallet,
+    /** Connection status: 'disconnected' | 'connecting' | 'connected' | 'error' */
+    connectionStatus,
+    /** The last connection error (null if no error) */
+    lastError,
+    /** Wallet support info from support$ observable (methods, notifications, etc.) - cached by library */
+    support,
     /** Pay a BOLT11 invoice */
     payInvoice,
     /** Generate a new invoice */
     makeInvoice,
-    /** Get wallet information */
+    /** Get wallet information - prefer using support instead */
     getInfo,
     /** Get current balance */
     getBalance,
@@ -195,5 +234,7 @@ export function useWallet() {
     payKeysend,
     /** Disconnect wallet */
     disconnect,
+    /** Attempt to reconnect after an error */
+    reconnect,
   };
 }

@@ -83,6 +83,7 @@ export default function ConnectWalletDialog({
         balance,
         info: {
           alias: info.alias,
+          network: info.network,
           methods: info.methods,
           notifications: info.notifications,
         },
@@ -96,6 +97,7 @@ export default function ConnectWalletDialog({
       // Update info
       updateNWCInfo({
         alias: info.alias,
+        network: info.network,
         methods: info.methods,
         notifications: info.notifications,
       });
