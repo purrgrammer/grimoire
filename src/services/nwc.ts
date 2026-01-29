@@ -149,6 +149,7 @@ export function createWalletFromURI(connectionString: string): WalletConnect {
   wallet$.next(wallet);
 
   subscribeToNotifications(wallet);
+  refreshBalance(); // Fetch initial balance
 
   return wallet;
 }

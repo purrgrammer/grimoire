@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGrimoire } from "@/core/state";
-import { createWalletFromURI } from "@/services/nwc";
+import { createWalletFromURI, balance$ } from "@/services/nwc";
 
 interface ConnectWalletDialogProps {
   open: boolean;
@@ -66,6 +66,8 @@ export default function ConnectWalletDialog({
       try {
         const balanceResult = await wallet.getBalance();
         balance = balanceResult.balance;
+        // Update the observable immediately so WalletViewer shows correct balance
+        balance$.next(balance);
       } catch (err) {
         console.warn("[NWC] Failed to get balance:", err);
         // Balance is optional, continue anyway
