@@ -469,7 +469,7 @@ Use these commands for common workflows:
 - `/test` - Run tests and report results
 - `/lint-fix` - Auto-fix lint and formatting issues
 - `/commit-push-pr` - Create a commit and PR with proper formatting
-- `/review` - Review changes for quality and Nostr best practices
+- `/review [PR#|branch]` - Deep code review with React, Applesauce, RxJS, and Nostr best practices
 
 ## Critical Notes
 
