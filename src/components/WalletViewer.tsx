@@ -14,6 +14,7 @@ import {
   Download,
   Info,
   Copy,
+  CopyCheck,
   Check,
   ArrowUpRight,
   ArrowDownLeft,
@@ -455,6 +456,13 @@ export default function WalletViewer() {
   // Copy NWC connection string state
   const [copiedNwc, setCopiedNwc] = useState(false);
 
+  // Wallet methods - use support$ observable if available, fallback to cached info
+  // The support$ observable waits for kind 13194 events which some wallets don't publish
+  // The cached info comes from getInfo() RPC call during initial connection
+  const walletMethods = useMemo(() => {
+    return support?.methods ?? state.nwcConnection?.info?.methods ?? [];
+  }, [support?.methods, state.nwcConnection?.info?.methods]);
+
   // Reset state when connection changes
   useEffect(() => {
     // Detect connection state changes
@@ -478,11 +486,11 @@ export default function WalletViewer() {
     }
   }, [isConnected]);
 
-  // Load transactions when wallet support is available (only once)
-  // support comes from the library's support$ observable (cached)
+  // Load transactions when wallet methods are available (only once)
+  // walletMethods combines support$ observable with cached info fallback
   useEffect(() => {
     if (
-      support?.methods?.includes("list_transactions") &&
+      walletMethods.includes("list_transactions") &&
       !txLoadAttempted &&
       !loading
     ) {
@@ -506,7 +514,7 @@ export default function WalletViewer() {
           setLoading(false);
         });
     }
-  }, [support, txLoadAttempted, loading, listTransactions]);
+  }, [walletMethods, txLoadAttempted, loading, listTransactions]);
 
   // Helper to reload transactions (resets flags to trigger reload)
   const reloadTransactions = useCallback(() => {
@@ -528,7 +536,7 @@ export default function WalletViewer() {
     if (!generatedPaymentHash || !receiveDialogOpen) return;
 
     const checkPayment = async () => {
-      if (!support?.methods?.includes("lookup_invoice")) return;
+      if (!walletMethods.includes("lookup_invoice")) return;
 
       setCheckingPayment(true);
       try {
@@ -553,14 +561,14 @@ export default function WalletViewer() {
   }, [
     generatedPaymentHash,
     receiveDialogOpen,
-    support,
+    walletMethods,
     lookupInvoice,
     reloadTransactions,
   ]);
 
   const loadMoreTransactions = useCallback(async () => {
     if (
-      !support?.methods?.includes("list_transactions") ||
+      !walletMethods.includes("list_transactions") ||
       !hasMore ||
       loadingMore
     ) {
@@ -582,7 +590,13 @@ export default function WalletViewer() {
     } finally {
       setLoadingMore(false);
     }
-  }, [support, hasMore, loadingMore, transactions.length, listTransactions]);
+  }, [
+    walletMethods,
+    hasMore,
+    loadingMore,
+    transactions.length,
+    listTransactions,
+  ]);
 
   async function handleRefreshBalance() {
     // Rate limiting: minimum 2 seconds between refreshes
@@ -1120,7 +1134,7 @@ export default function WalletViewer() {
                 aria-label="Copy connection string"
               >
                 {copiedNwc ? (
-                  <Check className="size-3 text-green-500" />
+                  <CopyCheck className="size-3 text-green-500" />
                 ) : (
                   <Copy className="size-3" />
                 )}
@@ -1179,37 +1193,33 @@ export default function WalletViewer() {
       </div>
 
       {/* Send / Receive Buttons */}
-      {support &&
-        (support.methods?.includes("pay_invoice") ||
-          support.methods?.includes("make_invoice")) && (
-          <div className="px-4 pb-3">
-            <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
-              {support.methods?.includes("make_invoice") && (
-                <Button
-                  onClick={() => setReceiveDialogOpen(true)}
-                  variant="outline"
-                >
-                  <Download className="mr-2 size-4" />
-                  Receive
-                </Button>
-              )}
-              {support.methods?.includes("pay_invoice") && (
-                <Button
-                  onClick={() => setSendDialogOpen(true)}
-                  variant="default"
-                >
-                  <Send className="mr-2 size-4" />
-                  Send
-                </Button>
-              )}
-            </div>
+      {(walletMethods.includes("pay_invoice") ||
+        walletMethods.includes("make_invoice")) && (
+        <div className="px-4 pb-3">
+          <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
+            {walletMethods.includes("make_invoice") && (
+              <Button
+                onClick={() => setReceiveDialogOpen(true)}
+                variant="outline"
+              >
+                <Download className="mr-2 size-4" />
+                Receive
+              </Button>
+            )}
+            {walletMethods.includes("pay_invoice") && (
+              <Button onClick={() => setSendDialogOpen(true)} variant="default">
+                <Send className="mr-2 size-4" />
+                Send
+              </Button>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
       {/* Transaction History */}
       <div className="flex-1 overflow-hidden flex justify-center">
         <div className="w-full max-w-md">
-          {support?.methods?.includes("list_transactions") ? (
+          {walletMethods.includes("list_transactions") ? (
             loading ? (
               <div className="flex h-full items-center justify-center">
                 <RefreshCw className="size-6 animate-spin text-muted-foreground" />
