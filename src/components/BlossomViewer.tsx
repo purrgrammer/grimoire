@@ -53,6 +53,8 @@ interface BlossomViewerProps {
   sha256?: string;
   /** Full blob URL with extension (for blob subcommand) */
   blobUrl?: string;
+  /** Media type hint for preview (image/video/audio) */
+  mediaType?: "image" | "video" | "audio";
 }
 
 /**
@@ -66,6 +68,7 @@ export function BlossomViewer({
   targetServer,
   sha256,
   blobUrl,
+  mediaType,
 }: BlossomViewerProps) {
   switch (subcommand) {
     case "servers":
@@ -82,6 +85,7 @@ export function BlossomViewer({
           sha256={sha256!}
           serverUrl={serverUrl}
           blobUrl={blobUrl}
+          mediaType={mediaType}
         />
       );
     case "mirror":
@@ -1007,6 +1011,7 @@ function BlobDetailView({
   serverUrl,
   blobUrl: providedBlobUrl,
   blob: initialBlob,
+  mediaType: providedMediaType,
   onBack,
 }: {
   sha256?: string;
@@ -1014,6 +1019,8 @@ function BlobDetailView({
   /** Full blob URL with extension */
   blobUrl?: string;
   blob?: BlobDescriptor;
+  /** Media type hint (image/video/audio) */
+  mediaType?: "image" | "video" | "audio";
   onBack?: () => void;
 }) {
   const { copy, copied } = useCopy();
@@ -1049,9 +1056,19 @@ function BlobDetailView({
   };
 
   const urlMediaType = getMediaTypeFromUrl(blobUrl);
-  const isImage = mimeType?.startsWith("image/") || urlMediaType === "image";
-  const isVideo = mimeType?.startsWith("video/") || urlMediaType === "video";
-  const isAudio = mimeType?.startsWith("audio/") || urlMediaType === "audio";
+  // Priority: mimeType from blob > provided mediaType hint > detected from URL
+  const isImage =
+    mimeType?.startsWith("image/") ||
+    providedMediaType === "image" ||
+    urlMediaType === "image";
+  const isVideo =
+    mimeType?.startsWith("video/") ||
+    providedMediaType === "video" ||
+    urlMediaType === "video";
+  const isAudio =
+    mimeType?.startsWith("audio/") ||
+    providedMediaType === "audio" ||
+    urlMediaType === "audio";
 
   if (!blobSha256) {
     return (

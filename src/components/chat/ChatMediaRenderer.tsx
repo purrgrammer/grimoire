@@ -4,8 +4,8 @@
  * Shows compact inline file info with expandable media:
  * [icon] truncated-hash [blossom]
  *
- * Click on filename expands to show the actual media inline.
- * Tooltip shows full filename and size.
+ * Click on filename expands to show the actual media inline (not collapsible).
+ * Tooltip shows imeta info when available.
  */
 
 import { useState } from "react";
@@ -18,6 +18,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { MediaEmbed } from "@/components/nostr/MediaEmbed";
 import type { MediaRendererProps } from "@/components/nostr/RichText";
 
 /**
@@ -34,21 +35,6 @@ function getExtension(url: string): string | null {
     return null;
   } catch {
     return null;
-  }
-}
-
-/**
- * Get display name for the file (for tooltip)
- */
-function getFullFilename(url: string, alt?: string): string {
-  if (alt) return alt;
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const lastSegment = pathname.split("/").pop() || "";
-    return decodeURIComponent(lastSegment) || "file";
-  } catch {
-    return "file";
   }
 }
 
@@ -100,6 +86,15 @@ function parseBlossomUrl(
 }
 
 /**
+ * Format duration in seconds to human readable format
+ */
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
+/**
  * Get icon component based on media type
  */
 function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
@@ -120,17 +115,15 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   const { addWindow } = useGrimoire();
   const [expanded, setExpanded] = useState(false);
 
-  const fullFilename = getFullFilename(url, imeta?.alt);
   const truncatedHash = getTruncatedHash(url);
-  const size = imeta?.size ? formatFileSize(imeta.size) : null;
   const blossom = parseBlossomUrl(url);
 
   const handleBlossomClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (blossom) {
-      // Build command string for Edit functionality
-      const commandString = `blossom blob ${blossom.sha256} ${blossom.serverUrl}`;
+      // Build command string for Edit functionality - include media type
+      const commandString = `blossom blob ${blossom.sha256} ${blossom.serverUrl} --type ${type}`;
       addWindow(
         "blossom",
         {
@@ -138,82 +131,83 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
           sha256: blossom.sha256,
           serverUrl: blossom.serverUrl,
           blobUrl: url, // Pass full URL with extension
+          mediaType: type, // Pass media type for preview
         },
         commandString,
       );
     }
   };
 
-  const handleToggleExpand = (e: React.MouseEvent) => {
+  const handleExpand = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setExpanded(!expanded);
+    setExpanded(true);
   };
 
-  // Build tooltip content
-  const tooltipContent = (
-    <div className="space-y-0.5">
-      <div className="font-medium">{fullFilename}</div>
-      {size && <div className="text-muted-foreground">{size}</div>}
-    </div>
-  );
-
+  // When expanded, show plain MediaEmbed (not collapsible)
   if (expanded) {
     return (
-      <span className="inline-flex flex-col gap-1">
-        {/* Collapsed toggle bar */}
-        <span className="inline-flex items-center gap-1 border-b border-dotted border-muted-foreground/50">
-          <MediaIcon type={type} />
-          <button
-            onClick={handleToggleExpand}
-            className="text-muted-foreground hover:text-foreground text-xs"
-          >
-            collapse
-          </button>
-        </span>
-        {/* Expanded media */}
-        <span className="block max-w-sm">
-          {type === "image" && (
-            <img
-              src={url}
-              alt={imeta?.alt || ""}
-              className="rounded max-w-full max-h-64 object-contain"
-            />
-          )}
-          {type === "video" && (
-            <video src={url} controls className="rounded max-w-full max-h-64" />
-          )}
-          {type === "audio" && (
-            <audio src={url} controls className="w-full max-w-sm" />
-          )}
-        </span>
+      <span className="block max-w-sm my-1">
+        <MediaEmbed
+          url={url}
+          type={type}
+          alt={imeta?.alt}
+          preset="inline"
+          enableZoom={type === "image"}
+        />
       </span>
     );
   }
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-1 border-b border-dotted border-muted-foreground/50">
-          <MediaIcon type={type} />
-          <button
-            onClick={handleToggleExpand}
-            className="text-foreground hover:underline"
-          >
-            {truncatedHash}
-          </button>
-          {blossom && (
-            <button
-              onClick={handleBlossomClick}
-              className="text-muted-foreground hover:text-foreground"
-              title="View in Blossom"
-            >
-              <HardDrive className="size-3" />
-            </button>
-          )}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{tooltipContent}</TooltipContent>
-    </Tooltip>
+  // Build tooltip content from imeta if available
+  const tooltipContent = imeta ? (
+    <div className="space-y-0.5 text-xs">
+      {imeta.alt && <div className="font-medium">{imeta.alt}</div>}
+      {imeta.m && <div className="text-muted-foreground">{imeta.m}</div>}
+      {imeta.dim && <div className="text-muted-foreground">{imeta.dim}</div>}
+      {imeta.size && (
+        <div className="text-muted-foreground">
+          {formatFileSize(imeta.size)}
+        </div>
+      )}
+      {imeta.duration && (
+        <div className="text-muted-foreground">
+          {formatDuration(imeta.duration)}
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const compactView = (
+    <span className="inline-flex items-center gap-1 border-b border-dotted border-muted-foreground/50">
+      <MediaIcon type={type} />
+      <button
+        onClick={handleExpand}
+        className="text-foreground hover:underline"
+      >
+        {truncatedHash}
+      </button>
+      {blossom && (
+        <button
+          onClick={handleBlossomClick}
+          className="text-muted-foreground hover:text-foreground"
+          title="View in Blossom"
+        >
+          <HardDrive className="size-3" />
+        </button>
+      )}
+    </span>
   );
+
+  // Only wrap in tooltip if we have imeta
+  if (tooltipContent) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{compactView}</TooltipTrigger>
+        <TooltipContent>{tooltipContent}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return compactView;
 }
