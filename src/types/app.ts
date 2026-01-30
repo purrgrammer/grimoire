@@ -25,7 +25,8 @@ export type AppId =
   | "zap"
   | "post"
   | "settings"
-  | "win";
+  | "win"
+  | "ai";
 
 export interface WindowInstance {
   id: string;

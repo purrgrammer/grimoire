@@ -883,4 +883,16 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "System",
     defaultProps: {},
   },
+  ai: {
+    name: "ai",
+    section: "1",
+    synopsis: "ai",
+    description:
+      "Chat with AI models locally in your browser using WebLLM, or connect to cloud providers like PPQ.ai. Conversations are stored locally and persist across sessions.",
+    examples: ["ai    Open AI chat interface"],
+    seeAlso: ["settings", "help"],
+    appId: "ai",
+    category: "System",
+    defaultProps: {},
+  },
 };

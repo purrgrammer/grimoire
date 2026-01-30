@@ -8,6 +8,7 @@ import type {
   SpellbookContent,
   SpellbookEvent,
 } from "@/types/spell";
+import type { LLMProviderInstance, LLMConversation } from "@/types/llm";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -121,6 +122,8 @@ class GrimoireDb extends Dexie {
   spellbooks!: Table<LocalSpellbook>;
   lnurlCache!: Table<LnurlCache>;
   grimoireZaps!: Table<GrimoireZap>;
+  llmProviders!: Table<LLMProviderInstance>;
+  llmConversations!: Table<LLMConversation>;
 
   constructor(name: string) {
     super(name);
@@ -387,6 +390,25 @@ class GrimoireDb extends Dexie {
       lnurlCache: "&address, fetchedAt",
       grimoireZaps:
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+    });
+
+    // Version 18: Add LLM provider instances and conversations
+    this.version(18).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      llmProviders: "&id, providerId, enabled",
+      llmConversations: "&id, providerInstanceId, modelId, updatedAt",
     });
   }
 }

@@ -53,6 +53,9 @@ const PostViewer = lazy(() =>
 const SettingsViewer = lazy(() =>
   import("./SettingsViewer").then((m) => ({ default: m.SettingsViewer })),
 );
+const AIViewer = lazy(() =>
+  import("./AIViewer").then((m) => ({ default: m.AIViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -255,6 +258,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "settings":
         content = <SettingsViewer />;
+        break;
+      case "ai":
+        content = <AIViewer />;
         break;
       default:
         content = (
