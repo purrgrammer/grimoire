@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { FolderGit2, AlertCircle, FileQuestion, Binary } from "lucide-react";
+import {
+  FolderGit2,
+  AlertCircle,
+  FileQuestion,
+  Binary,
+  Copy,
+  Check,
+} from "lucide-react";
 import { useGitTree } from "@/hooks/useGitTree";
 import { useGitBlob } from "@/hooks/useGitBlob";
+import { useCopy } from "@/hooks/useCopy";
 import { FileTreeView } from "@/components/ui/FileTreeView";
 import { SyntaxHighlight } from "@/components/SyntaxHighlight";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
@@ -70,6 +78,9 @@ export function RepositoryFilesSection({
   const language = selectedFile
     ? getExtension(selectedFile.name) || null
     : null;
+
+  // Copy functionality for file content
+  const { copy, copied } = useCopy();
 
   const handleFileSelect = (file: SelectedFile) => {
     setSelectedFile(file);
@@ -170,11 +181,25 @@ export function RepositoryFilesSection({
             ) : fileContent ? (
               <div className="relative">
                 <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-3 py-1.5 border-b border-border/50 flex items-center justify-between">
-                  <span className="text-xs font-mono text-muted-foreground truncate">
-                    {selectedFile.path}
-                  </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono text-muted-foreground truncate">
+                      {selectedFile.path}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copy(fileContent)}
+                      className="flex-shrink-0 p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Copy file content"
+                    >
+                      {copied ? (
+                        <Check className="size-3.5 text-success" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
                   {rawContent && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
                       {formatSize(rawContent.length)}
                     </span>
                   )}

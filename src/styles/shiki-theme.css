@@ -1,11 +1,40 @@
 /* ==========================================================================
    Shiki Syntax Highlighting - CSS Variable Based Theming
 
-   Token colors are defined using CSS variables from the theme system,
+   Maps Shiki's CSS variables to our theme system variables,
    allowing automatic adaptation to light/dark mode.
    ========================================================================== */
 
-/* Base container styling */
+/* ==========================================================================
+   Shiki CSS Variables -> Theme Variables Mapping
+   These are set by Shiki's css-variables theme and we map them to our theme
+   ========================================================================== */
+
+:root {
+  /* Default/fallback - uses foreground */
+  --shiki-color-text: hsl(var(--foreground));
+  --shiki-color-background: transparent;
+
+  /* Token colors - mapped to our syntax theme variables */
+  --shiki-token-constant: hsl(var(--syntax-constant));
+  --shiki-token-string: hsl(var(--syntax-string));
+  --shiki-token-comment: hsl(var(--syntax-comment));
+  --shiki-token-keyword: hsl(var(--syntax-keyword));
+  --shiki-token-parameter: hsl(var(--syntax-variable));
+  --shiki-token-function: hsl(var(--syntax-function));
+  --shiki-token-string-expression: hsl(var(--syntax-string));
+  --shiki-token-punctuation: hsl(var(--syntax-punctuation));
+  --shiki-token-link: hsl(var(--syntax-string));
+
+  /* Diff colors */
+  --shiki-token-deleted: hsl(var(--diff-deleted));
+  --shiki-token-inserted: hsl(var(--diff-inserted));
+}
+
+/* ==========================================================================
+   Base container styling
+   ========================================================================== */
+
 .shiki-container {
   color: hsl(var(--foreground));
 }
@@ -37,55 +66,6 @@
 }
 
 /* ==========================================================================
-   Token Classes - Styled with CSS Variables
-   ========================================================================== */
-
-/* Base token - inherits foreground color */
-.shiki-token {
-  color: hsl(var(--syntax-variable));
-}
-
-/* Comments */
-.shiki-comment {
-  color: hsl(var(--syntax-comment));
-}
-
-/* Strings */
-.shiki-string {
-  color: hsl(var(--syntax-string));
-}
-
-/* Keywords (if, else, return, function, etc.) */
-.shiki-keyword {
-  color: hsl(var(--syntax-keyword));
-}
-
-/* Constants and numbers */
-.shiki-constant {
-  color: hsl(var(--syntax-constant));
-}
-
-/* Punctuation */
-.shiki-punctuation {
-  color: hsl(var(--syntax-punctuation));
-}
-
-/* Tags (HTML/JSX) */
-.shiki-tag {
-  color: hsl(var(--syntax-tag));
-}
-
-/* Diff - deleted lines */
-.shiki-deleted {
-  color: hsl(var(--diff-deleted));
-}
-
-/* Diff - inserted lines */
-.shiki-inserted {
-  color: hsl(var(--diff-inserted));
-}
-
-/* ==========================================================================
    Loading State
    ========================================================================== */
 
@@ -108,27 +88,18 @@
    ========================================================================== */
 
 /* Diff-specific styling - block-level backgrounds for inserted/deleted */
-.shiki-container .line:has(.shiki-deleted) {
+.shiki-container .line:has([style*="--shiki-token-deleted"]) {
   background: hsl(var(--diff-deleted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
 }
 
-.shiki-container .line:has(.shiki-inserted) {
+.shiki-container .line:has([style*="--shiki-token-inserted"]) {
   background: hsl(var(--diff-inserted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
-}
-
-/* Hunk headers (@@ lines) */
-.shiki-container .line:has([class*="meta"]) {
-  background: hsl(var(--diff-meta-bg));
-  display: block;
-  margin: 0 -1rem;
-  padding: 0 1rem;
-  font-weight: 600;
 }
 
 /* ==========================================================================

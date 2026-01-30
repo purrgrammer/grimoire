@@ -1,7 +1,7 @@
 import {
   createHighlighterCore,
+  createCssVariablesTheme,
   type HighlighterCore,
-  type ShikiTransformer,
 } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 
@@ -12,146 +12,16 @@ const loadedLanguages = new Set<string>();
 const failedLanguages = new Set<string>();
 
 /**
- * Transformer that cleans up Shiki output for our styling
- * Keeps inline colors from the theme but removes backgrounds
+ * CSS Variables theme for Shiki
+ * This outputs CSS custom properties that we map to our theme variables.
+ * The actual colors are defined in shiki-theme.css using our theme system.
  */
-const cleanupTransformer: ShikiTransformer = {
-  name: "cleanup-transformer",
-  pre(node) {
-    // Remove background color from pre, let CSS handle it
-    if (node.properties?.style) {
-      const style = node.properties.style as string;
-      node.properties.style = style.replace(/background-color:[^;]+;?/g, "");
-    }
-  },
-  code(node) {
-    // Remove background from code element, keep color
-    if (node.properties?.style) {
-      const style = node.properties.style as string;
-      node.properties.style = style.replace(/background-color:[^;]+;?/g, "");
-    }
-  },
-};
-
-/**
- * Minimal theme - we'll override colors via CSS
- * Using high-contrast colors as fallback if CSS fails
- */
-const minimalTheme = {
-  name: "grimoire",
-  type: "dark" as const,
-  colors: {
-    "editor.background": "transparent",
-    "editor.foreground": "#e6edf3",
-  },
-  tokenColors: [
-    {
-      scope: ["comment", "punctuation.definition.comment"],
-      settings: { foreground: "#8b949e" },
-    },
-    {
-      scope: ["string", "string.quoted"],
-      settings: { foreground: "#a5d6ff" },
-    },
-    {
-      scope: [
-        "keyword",
-        "storage",
-        "storage.type",
-        "storage.modifier",
-        "keyword.operator",
-        "keyword.control",
-      ],
-      settings: { foreground: "#f0f0f0" },
-    },
-    {
-      scope: ["entity.name.function", "support.function", "meta.function-call"],
-      settings: { foreground: "#e6edf3" },
-    },
-    {
-      scope: [
-        "entity.name.class",
-        "entity.name.type",
-        "support.class",
-        "support.type",
-      ],
-      settings: { foreground: "#f0f0f0" },
-    },
-    {
-      scope: [
-        "constant",
-        "constant.numeric",
-        "constant.language",
-        "constant.character",
-      ],
-      settings: { foreground: "#79c0ff" },
-    },
-    {
-      scope: ["variable", "variable.parameter", "variable.other"],
-      settings: { foreground: "#e6edf3" },
-    },
-    {
-      scope: ["punctuation", "meta.brace"],
-      settings: { foreground: "#c9d1d9" },
-    },
-    {
-      scope: [
-        "variable.other.property",
-        "entity.other.attribute-name",
-        "support.type.property-name",
-      ],
-      settings: { foreground: "#e6edf3" },
-    },
-    {
-      scope: ["entity.name.tag", "support.class.component"],
-      settings: { foreground: "#7ee787" },
-    },
-    {
-      scope: ["support.type.property-name.json"],
-      settings: { foreground: "#a5d6ff" },
-    },
-    {
-      scope: [
-        "markup.deleted",
-        "punctuation.definition.deleted",
-        "meta.diff.header.from-file",
-      ],
-      settings: { foreground: "#ffa198" },
-    },
-    {
-      scope: [
-        "markup.inserted",
-        "punctuation.definition.inserted",
-        "meta.diff.header.to-file",
-      ],
-      settings: { foreground: "#7ee787" },
-    },
-    {
-      scope: ["markup.changed", "meta.diff.range", "meta.diff.header"],
-      settings: { foreground: "#a5d6ff" },
-    },
-    {
-      scope: ["markup.heading", "entity.name.section"],
-      settings: { foreground: "#f0f0f0" },
-    },
-    {
-      scope: ["markup.bold"],
-      settings: { fontStyle: "bold" },
-    },
-    {
-      scope: ["markup.italic"],
-      settings: { fontStyle: "italic" },
-    },
-    {
-      scope: ["markup.underline.link"],
-      settings: { foreground: "#a5d6ff" },
-    },
-    {
-      scope: ["markup.inline.raw", "markup.raw"],
-      settings: { foreground: "#a5d6ff" },
-    },
-  ],
-};
+const cssVarsTheme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {},
+  fontStyle: true,
+});
 
 /**
  * Language alias mapping (file extensions and common names to Shiki IDs)
@@ -308,7 +178,7 @@ export async function getHighlighter(): Promise<HighlighterCore> {
 
   if (!highlighterPromise) {
     highlighterPromise = createHighlighterCore({
-      themes: [minimalTheme],
+      themes: [cssVarsTheme],
       langs: [
         import("shiki/langs/javascript.mjs"),
         import("shiki/langs/typescript.mjs"),
@@ -371,8 +241,7 @@ export async function highlightCode(
 
   return hl.codeToHtml(code, {
     lang: effectiveLang,
-    theme: "grimoire",
-    transformers: [cleanupTransformer],
+    theme: "css-variables",
   });
 }
 
