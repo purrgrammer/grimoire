@@ -17,6 +17,7 @@ import {
   Trash2,
   Brain,
   Settings2,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   useLLMProviders,
@@ -61,7 +61,7 @@ function useIsMobile() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Message Component
+// Message Bubble
 // ─────────────────────────────────────────────────────────────
 
 const MessageBubble = memo(function MessageBubble({
@@ -71,7 +71,7 @@ const MessageBubble = memo(function MessageBubble({
 }) {
   const isUser = message.role === "user";
 
-  // Don't render empty assistant messages (placeholder while thinking)
+  // Don't render empty assistant messages
   if (!isUser && !message.content) {
     return null;
   }
@@ -184,13 +184,14 @@ const ConversationItem = memo(function ConversationItem({
   return (
     <div
       className={cn(
-        "group flex items-center justify-between gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors border-b",
+        "group flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors border-b",
         isSelected && "bg-muted/70",
       )}
       onClick={onClick}
     >
+      <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{conversation.title}</div>
+        <div className="text-sm truncate">{conversation.title}</div>
         <div className="text-xs text-muted-foreground">
           {formatTimestamp(conversation.updatedAt / 1000, "relative")}
         </div>
@@ -198,7 +199,7 @@ const ConversationItem = memo(function ConversationItem({
       <Button
         variant="ghost"
         size="icon"
-        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
@@ -211,7 +212,7 @@ const ConversationItem = memo(function ConversationItem({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Chat Panel
+// Chat Panel - Messages and Input
 // ─────────────────────────────────────────────────────────────
 
 function ChatPanel({
@@ -232,11 +233,9 @@ function ChatPanel({
 
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
-  // Optimistic UI: show user message immediately
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(
     null,
   );
-  // Track when we're waiting for AI (before tokens start streaming)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -251,7 +250,7 @@ function ChatPanel({
     textareaRef.current?.focus();
   }, [conversationId]);
 
-  // Clear pending message when conversation updates with our message
+  // Clear pending message when conversation updates
   useEffect(() => {
     if (
       pendingUserMessage &&
@@ -268,13 +267,10 @@ function ChatPanel({
 
     const userContent = input.trim();
     setInput("");
-
-    // Optimistically show user message immediately
     setPendingUserMessage(userContent);
     setIsWaitingForResponse(true);
 
     try {
-      // Create conversation if needed
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         activeConversationId = await createConversation(
@@ -284,7 +280,6 @@ function ChatPanel({
         onConversationCreated(activeConversationId);
       }
 
-      // Add user message to DB
       const userMessage = await addMessage({
         role: "user",
         content: userContent,
@@ -295,7 +290,6 @@ function ChatPanel({
         return;
       }
 
-      // Get all messages for context
       const conv = await (
         await import("@/services/db")
       ).default.llmConversations.get(activeConversationId);
@@ -304,10 +298,7 @@ function ChatPanel({
         return;
       }
 
-      // Add placeholder assistant message
       await addMessage({ role: "assistant", content: "" });
-
-      // Stream response
       setStreamingContent("");
 
       let fullContent = "";
@@ -316,7 +307,6 @@ function ChatPanel({
         modelId,
         conv.messages,
         (token) => {
-          // First token received - no longer "waiting"
           setIsWaitingForResponse(false);
           fullContent += token;
           setStreamingContent(fullContent);
@@ -347,7 +337,7 @@ function ChatPanel({
 
   const messages = conversation?.messages ?? [];
 
-  // Build display messages with optimistic updates
+  // Build display messages with streaming and optimistic updates
   let displayMessages =
     streamingContent && messages.length > 0
       ? [
@@ -356,7 +346,6 @@ function ChatPanel({
         ]
       : messages;
 
-  // Add pending user message optimistically if not yet in conversation
   if (
     pendingUserMessage &&
     !messages.some((m) => m.role === "user" && m.content === pendingUserMessage)
@@ -372,16 +361,14 @@ function ChatPanel({
     ];
   }
 
-  // Show thinking indicator when waiting for response
   const showThinking =
     isWaitingForResponse || (isGenerating && !streamingContent);
-
   const isBusy = isGenerating || isWaitingForResponse;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
+    <>
+      {/* Messages - scrollable area */}
+      <div className="flex-1 overflow-y-auto p-3">
         <div className="flex flex-col gap-3">
           {displayMessages.length === 0 && !showThinking ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
@@ -397,18 +384,18 @@ function ChatPanel({
           )}
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Input - full width */}
-      <div className="border-t p-3">
-        <div className="flex gap-2">
+      {/* Input - fixed at bottom */}
+      <div className="border-t p-2 flex-shrink-0">
+        <div className="flex gap-2 items-end">
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 min-h-[40px] max-h-[120px] resize-none"
+            className="flex-1 min-h-[38px] max-h-[120px] resize-none text-sm"
             rows={1}
             disabled={isBusy}
           />
@@ -417,7 +404,7 @@ function ChatPanel({
               variant="outline"
               size="icon"
               onClick={cancel}
-              className="shrink-0"
+              className="flex-shrink-0 h-[38px] w-[38px]"
             >
               <Square className="h-4 w-4" />
             </Button>
@@ -426,14 +413,14 @@ function ChatPanel({
               size="icon"
               onClick={handleSend}
               disabled={!input.trim()}
-              className="shrink-0"
+              className="flex-shrink-0 h-[38px] w-[38px]"
             >
               <Send className="h-4 w-4" />
             </Button>
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -447,23 +434,27 @@ interface AIViewerProps {
 
 export function AIViewer({ subcommand }: AIViewerProps) {
   const isMobile = useIsMobile();
+  const { addWindow } = useGrimoire();
+
+  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
 
+  // Provider/model state
   const { instances, activeInstanceId, activeInstance, setActiveInstance } =
     useLLMProviders();
-
   const { models } = useLLMModels(activeInstanceId);
   const { status } = useWebLLMStatus();
   const { conversations, deleteConversation } = useLLMConversations();
 
+  // UI state
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
-  // Auto-select first instance if none selected
+  // Auto-select first instance
   useEffect(() => {
     if (!activeInstanceId && instances.length > 0) {
       setActiveInstance(instances[0].id);
@@ -480,12 +471,10 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     if (!activeInstance || models.length === 0) return;
 
     if (activeInstance.providerId === "webllm") {
-      // For WebLLM: if model is loaded, use that
       if (status.state === "ready") {
         setSelectedModelId(status.modelId);
         return;
       }
-      // Otherwise try last used model (if downloaded), then first downloaded
       if (!selectedModelId) {
         const lastModel = activeInstance.lastModelId
           ? models.find(
@@ -496,7 +485,6 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         if (downloaded) setSelectedModelId(downloaded.id);
       }
     } else {
-      // For PPQ and other providers: last used > first available
       if (!selectedModelId) {
         const lastModel = activeInstance.lastModelId
           ? models.find((m) => m.id === activeInstance.lastModelId)
@@ -506,17 +494,15 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     }
   }, [status, models, activeInstance, selectedModelId]);
 
+  // Handle conversation selection - also restore provider/model
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
 
-    // Set provider and model to match the conversation's settings
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
-      // Switch to the conversation's provider if different
       if (conv.providerInstanceId !== activeInstanceId) {
         setActiveInstance(conv.providerInstanceId);
       }
-      // Set the model to match the conversation's model
       setSelectedModelId(conv.modelId);
     }
 
@@ -528,7 +514,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     if (isMobile) setSidebarOpen(false);
   };
 
-  // Resize handler
+  // Resize handler for desktop sidebar
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -553,38 +539,37 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     [sidebarWidth],
   );
 
-  const { addWindow } = useGrimoire();
-
-  // Show providers management if requested via subcommand
+  // Subcommand: show providers management
   if (subcommand === "providers") {
     return <AIProvidersViewer />;
   }
 
-  // Provider state
+  // Derived state
   const isWebLLM = activeInstance?.providerId === "webllm";
   const webllmReady = status.state === "ready";
-
-  // Check if we can chat (has provider with working config)
   const canChat =
     instances.length > 0 &&
     activeInstance &&
     (isWebLLM ? webllmReady : !!activeInstance.apiKey) &&
     selectedModelId;
 
-  // Sidebar content
+  // ─────────────────────────────────────────────────────────────
+  // Sidebar Content
+  // ─────────────────────────────────────────────────────────────
+
   const sidebarContent = (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="p-2 border-b shrink-0">
+    <div className="flex flex-col h-full">
+      <div className="p-2 border-b flex-shrink-0">
         <Button
           variant="outline"
-          className="w-full justify-start"
+          className="w-full justify-start gap-2"
           onClick={handleNewConversation}
         >
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4" />
           New Chat
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {conversations.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground text-center">
             No conversations yet
@@ -600,15 +585,24 @@ export function AIViewer({ subcommand }: AIViewerProps) {
             />
           ))
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 
-  // No providers - show add provider prompt
+  // ─────────────────────────────────────────────────────────────
+  // No Providers State
+  // ─────────────────────────────────────────────────────────────
+
   if (instances.length === 0) {
     return (
-      <div className="flex flex-col h-full items-center justify-center gap-4 text-center p-8">
-        <div className="text-muted-foreground">No AI providers configured</div>
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-center p-8">
+        <Brain className="h-12 w-12 text-muted-foreground" />
+        <div>
+          <div className="font-medium mb-1">No AI providers configured</div>
+          <div className="text-sm text-muted-foreground">
+            Add a provider to start chatting with AI
+          </div>
+        </div>
         <Button
           variant="outline"
           onClick={() =>
@@ -622,35 +616,43 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     );
   }
 
-  // Main chat content
+  // ─────────────────────────────────────────────────────────────
+  // Main Chat Content
+  // ─────────────────────────────────────────────────────────────
+
   const chatContent = (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Header: [sidebar toggle] [model - centered] [provider - right] */}
-      <div className="border-b p-2 flex items-center gap-2 shrink-0">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="border-b px-2 py-1.5 flex items-center gap-2 flex-shrink-0">
+        {/* Mobile sidebar toggle */}
         {isMobile && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0"
+            className="h-7 w-7 flex-shrink-0"
             onClick={() => setSidebarOpen(true)}
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
         )}
 
-        {/* Model selector - centered, takes available space */}
+        {/* Model selector - centered */}
         <div className="flex-1 flex justify-center min-w-0">
           {!isWebLLM && models.length > 0 && (
             <Select
               value={selectedModelId || ""}
               onValueChange={setSelectedModelId}
             >
-              <SelectTrigger className="w-auto max-w-[300px]">
-                <SelectValue placeholder="Model" />
+              <SelectTrigger className="h-7 w-auto max-w-[200px] text-xs">
+                <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
                 {models.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
+                  <SelectItem
+                    key={model.id}
+                    value={model.id}
+                    className="text-xs"
+                  >
                     {model.name}
                   </SelectItem>
                 ))}
@@ -659,42 +661,40 @@ export function AIViewer({ subcommand }: AIViewerProps) {
           )}
 
           {isWebLLM && webllmReady && (
-            <div className="text-sm text-muted-foreground truncate max-w-[300px]">
+            <span className="text-xs text-muted-foreground truncate">
               {models.find((m) => m.id === status.modelId)?.name ||
                 status.modelId}
-            </div>
+            </span>
           )}
 
-          {/* WebLLM not ready - prompt to configure */}
           {isWebLLM && !webllmReady && (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {status.state === "loading" ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Loading model...
+                  Loading...
                 </span>
               ) : (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-muted-foreground"
+                  className="h-6 text-xs text-muted-foreground"
                   onClick={() =>
                     addWindow("ai", { subcommand: "providers" }, "AI Providers")
                   }
                 >
                   <Settings2 className="h-3 w-3 mr-1" />
-                  Load a model
+                  Load model
                 </Button>
               )}
             </div>
           )}
 
-          {/* PPQ without API key */}
           {!isWebLLM && !activeInstance?.apiKey && (
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground"
+              className="h-6 text-xs text-muted-foreground"
               onClick={() =>
                 addWindow("ai", { subcommand: "providers" }, "AI Providers")
               }
@@ -710,12 +710,12 @@ export function AIViewer({ subcommand }: AIViewerProps) {
           value={activeInstanceId || ""}
           onValueChange={setActiveInstance}
         >
-          <SelectTrigger className="w-[140px] shrink-0">
+          <SelectTrigger className="h-7 w-[120px] text-xs flex-shrink-0">
             <SelectValue placeholder="Provider" />
           </SelectTrigger>
           <SelectContent>
             {instances.map((inst) => (
-              <SelectItem key={inst.id} value={inst.id}>
+              <SelectItem key={inst.id} value={inst.id} className="text-xs">
                 {inst.name}
               </SelectItem>
             ))}
@@ -723,7 +723,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         </Select>
       </div>
 
-      {/* Chat - only show when ready */}
+      {/* Chat area */}
       {canChat ? (
         <ChatPanel
           conversationId={selectedConversationId}
@@ -732,24 +732,41 @@ export function AIViewer({ subcommand }: AIViewerProps) {
           onConversationCreated={setSelectedConversationId}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-4">
           {isWebLLM && status.state === "loading" ? (
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span>Loading model...</span>
             </div>
           ) : (
-            "Select a provider and model to start chatting"
+            <div className="text-center">
+              <div className="mb-2">
+                Configure a provider and model to start
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  addWindow("ai", { subcommand: "providers" }, "AI Providers")
+                }
+              >
+                <Settings2 className="h-3 w-3 mr-1" />
+                Configure
+              </Button>
+            </div>
           )}
         </div>
       )}
     </div>
   );
 
-  // Mobile layout
+  // ─────────────────────────────────────────────────────────────
+  // Layout: Mobile with Sheet sidebar
+  // ─────────────────────────────────────────────────────────────
+
   if (isMobile) {
     return (
-      <div className="flex flex-col h-full min-h-0">
+      <div className="flex flex-col h-full">
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent side="left" className="w-[280px] p-0">
             <VisuallyHidden.Root>
@@ -763,24 +780,30 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     );
   }
 
-  // Desktop layout
+  // ─────────────────────────────────────────────────────────────
+  // Layout: Desktop with resizable sidebar
+  // ─────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full">
+      {/* Sidebar */}
       <aside
-        className="flex flex-col border-r bg-background shrink-0"
+        className="flex flex-col border-r bg-background flex-shrink-0"
         style={{ width: sidebarWidth }}
       >
         {sidebarContent}
       </aside>
 
+      {/* Resize handle */}
       <div
         className={cn(
-          "w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors shrink-0",
+          "w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors flex-shrink-0",
           isResizing && "bg-primary",
         )}
         onMouseDown={handleMouseDown}
       />
 
+      {/* Main content */}
       <div className="flex-1 min-w-0 min-h-0">{chatContent}</div>
     </div>
   );
