@@ -11,28 +11,28 @@ let highlighterPromise: Promise<HighlighterCore> | null = null;
 const loadedLanguages = new Set<string>();
 
 /**
- * Grimoire dark theme - minimalistic grayscale with semantic colors
- * Uses muted grays for syntax with color only for diff semantics
+ * Grimoire dark theme - minimalistic grayscale with high contrast
+ * Uses bright grays for readability with color only for diff semantics
  */
 const grimoireDarkTheme: ThemeRegistration = {
   name: "grimoire-dark",
   type: "dark",
   colors: {
-    "editor.background": "#000000",
-    "editor.foreground": "#e5e5e5",
+    "editor.background": "#0d1117",
+    "editor.foreground": "#e6edf3",
   },
   tokenColors: [
-    // Comments - muted
+    // Comments - readable gray
     {
       scope: ["comment", "punctuation.definition.comment"],
-      settings: { foreground: "#6b7280" },
+      settings: { foreground: "#8b949e" },
     },
-    // Strings - muted but slightly emphasized
+    // Strings - distinct but not colorful
     {
       scope: ["string", "string.quoted"],
-      settings: { foreground: "#9ca3af" },
+      settings: { foreground: "#a5d6ff" },
     },
-    // Keywords, operators - emphasized gray
+    // Keywords, operators - bright
     {
       scope: [
         "keyword",
@@ -42,12 +42,12 @@ const grimoireDarkTheme: ThemeRegistration = {
         "keyword.operator",
         "keyword.control",
       ],
-      settings: { foreground: "#d4d4d4" },
+      settings: { foreground: "#f0f0f0" },
     },
     // Functions, methods - foreground bold
     {
       scope: ["entity.name.function", "support.function", "meta.function-call"],
-      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
+      settings: { foreground: "#e6edf3", fontStyle: "bold" },
     },
     // Classes, types - foreground bold
     {
@@ -57,9 +57,9 @@ const grimoireDarkTheme: ThemeRegistration = {
         "support.class",
         "support.type",
       ],
-      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
+      settings: { foreground: "#f0f0f0", fontStyle: "bold" },
     },
-    // Numbers, constants - emphasized gray
+    // Numbers, constants - bright
     {
       scope: [
         "constant",
@@ -67,17 +67,17 @@ const grimoireDarkTheme: ThemeRegistration = {
         "constant.language",
         "constant.character",
       ],
-      settings: { foreground: "#d4d4d4" },
+      settings: { foreground: "#79c0ff" },
     },
     // Variables, parameters - foreground
     {
       scope: ["variable", "variable.parameter", "variable.other"],
-      settings: { foreground: "#e5e5e5" },
+      settings: { foreground: "#e6edf3" },
     },
-    // Punctuation - slightly muted
+    // Punctuation - visible
     {
       scope: ["punctuation", "meta.brace"],
-      settings: { foreground: "#b3b3b3" },
+      settings: { foreground: "#c9d1d9" },
     },
     // Properties, attributes
     {
@@ -86,17 +86,17 @@ const grimoireDarkTheme: ThemeRegistration = {
         "entity.other.attribute-name",
         "support.type.property-name",
       ],
-      settings: { foreground: "#d4d4d4" },
+      settings: { foreground: "#e6edf3" },
     },
     // Tags (HTML/JSX)
     {
       scope: ["entity.name.tag", "support.class.component"],
-      settings: { foreground: "#d4d4d4" },
+      settings: { foreground: "#7ee787" },
     },
     // JSON keys
     {
       scope: ["support.type.property-name.json"],
-      settings: { foreground: "#d4d4d4" },
+      settings: { foreground: "#a5d6ff" },
     },
     // Diff - deleted (red)
     {
@@ -105,7 +105,7 @@ const grimoireDarkTheme: ThemeRegistration = {
         "punctuation.definition.deleted",
         "meta.diff.header.from-file",
       ],
-      settings: { foreground: "#ff8787" },
+      settings: { foreground: "#ffa198" },
     },
     // Diff - inserted (green)
     {
@@ -114,17 +114,17 @@ const grimoireDarkTheme: ThemeRegistration = {
         "punctuation.definition.inserted",
         "meta.diff.header.to-file",
       ],
-      settings: { foreground: "#69db7c" },
+      settings: { foreground: "#7ee787" },
     },
     // Diff - changed/range
     {
       scope: ["markup.changed", "meta.diff.range", "meta.diff.header"],
-      settings: { foreground: "#66d9ef" },
+      settings: { foreground: "#a5d6ff" },
     },
     // Markdown headings
     {
       scope: ["markup.heading", "entity.name.section"],
-      settings: { foreground: "#e5e5e5", fontStyle: "bold" },
+      settings: { foreground: "#f0f0f0", fontStyle: "bold" },
     },
     // Markdown bold/italic
     {
@@ -138,7 +138,12 @@ const grimoireDarkTheme: ThemeRegistration = {
     // Markdown links
     {
       scope: ["markup.underline.link"],
-      settings: { foreground: "#93c5fd" },
+      settings: { foreground: "#a5d6ff" },
+    },
+    // Markdown code
+    {
+      scope: ["markup.inline.raw", "markup.raw"],
+      settings: { foreground: "#a5d6ff" },
     },
   ],
 };
