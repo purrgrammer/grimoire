@@ -11,7 +11,7 @@
  * - Shows feed render of zapped event
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Zap,
@@ -118,17 +118,7 @@ export function ZapWindow({
   const activeAccount = accountManager.active;
   const canSign = !!activeAccount?.signer;
 
-  const { wallet, payInvoice, refreshBalance, getInfo } = useWallet();
-
-  // Fetch wallet info
-  const [walletInfo, setWalletInfo] = useState<any>(null);
-  useEffect(() => {
-    if (wallet) {
-      getInfo()
-        .then((info) => setWalletInfo(info))
-        .catch((error) => console.error("Failed to get wallet info:", error));
-    }
-  }, [wallet, getInfo]);
+  const { wallet, walletMethods, payInvoice, refreshBalance } = useWallet();
 
   // Cache LNURL data for recipient's Lightning address
   const { data: lnurlData } = useLnurlCache(recipientProfile?.lud16);
@@ -400,7 +390,7 @@ export function ZapWindow({
       setInvoice(invoiceText);
 
       // Step 5: Pay or show QR code
-      if (useWallet && wallet && walletInfo?.methods.includes("pay_invoice")) {
+      if (useWallet && wallet && walletMethods.includes("pay_invoice")) {
         // Pay with NWC wallet with timeout
         setIsPayingWithWallet(true);
         try {
@@ -568,7 +558,7 @@ export function ZapWindow({
                 {/* Retry with wallet button if payment failed/timed out */}
                 {paymentTimedOut &&
                   wallet &&
-                  walletInfo?.methods.includes("pay_invoice") && (
+                  walletMethods.includes("pay_invoice") && (
                     <Button
                       onClick={handleRetryWallet}
                       disabled={isProcessing}
@@ -718,7 +708,7 @@ export function ZapWindow({
                     isPaid
                       ? onClose?.()
                       : handleZap(
-                          wallet && walletInfo?.methods.includes("pay_invoice"),
+                          !!(wallet && walletMethods.includes("pay_invoice")),
                         )
                   }
                   disabled={
@@ -741,7 +731,7 @@ export function ZapWindow({
                       <CheckCircle2 className="size-4 mr-2" />
                       Done
                     </>
-                  ) : wallet && walletInfo?.methods.includes("pay_invoice") ? (
+                  ) : wallet && walletMethods.includes("pay_invoice") ? (
                     <>
                       <Wallet className="size-4 mr-2" />
                       Pay with Wallet (

@@ -4,19 +4,20 @@
  * Provides reactive access to the NWC wallet throughout the application.
  * All state is derived from observables - no manual synchronization needed.
  *
+ * IMPORTANT: The use$ subscription to wallet.support$ keeps the observable alive,
+ * preventing the library's ReplaySubject from resetting after 60 seconds.
+ * Always check that `support` is defined before calling wallet methods.
+ *
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { wallet, balance, connectionStatus, walletMethods, payInvoice } = useWallet();
+ *   const { wallet, support, balance, payInvoice } = useWallet();
  *
- *   if (connectionStatus === 'error') {
- *     return <ErrorState onRetry={reconnect} />;
- *   }
- *
- *   // walletMethods combines support$ with cached info for reliability
- *   if (walletMethods.includes('pay_invoice')) {
- *     return <PayButton onClick={() => payInvoice("lnbc...")} />;
- *   }
+ *   // Always check support before operations
+ *   const handlePay = async () => {
+ *     if (!wallet || !support) return;
+ *     await payInvoice("lnbc...");
+ *   };
  *
  *   return <div>Balance: {formatSats(balance)}</div>;
  * }
@@ -90,6 +91,10 @@ export function useWallet() {
   // Wallet operations
   // ============================================================================
 
+  /**
+   * Pay a Lightning invoice via NWC.
+   * The use$ subscription to support$ keeps it alive, so encryption$ will work.
+   */
   async function payInvoice(invoice: string, amount?: number) {
     if (!wallet) throw new Error("No wallet connected");
     const result = await wallet.payInvoice(invoice, amount);
