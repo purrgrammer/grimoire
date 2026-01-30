@@ -225,8 +225,7 @@ function ChatPanel({
   modelId: string;
   onConversationCreated: (id: string) => void;
 }) {
-  const { conversation, addMessage, updateLastMessage } =
-    useLLMConversation(conversationId);
+  const { conversation } = useLLMConversation(conversationId);
   const { createConversation } = useLLMConversations();
   const { isGenerating, sendMessage, cancel } = useLLMChat();
 
@@ -239,13 +238,18 @@ function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Reset local state when switching conversations
+  useEffect(() => {
+    setStreamingContent("");
+    setPendingUserMessage(null);
+    setIsWaitingForResponse(false);
+    setInput("");
+    textareaRef.current?.focus();
+  }, [conversationId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages, streamingContent, pendingUserMessage]);
-
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, [conversationId]);
 
   useEffect(() => {
     if (
@@ -266,7 +270,11 @@ function ChatPanel({
     setPendingUserMessage(userContent);
     setIsWaitingForResponse(true);
 
+    // Import db for direct operations (avoids stale closure issues)
+    const db = (await import("@/services/db")).default;
+
     try {
+      // Create or use existing conversation
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         activeConversationId = await createConversation(
@@ -276,44 +284,96 @@ function ChatPanel({
         onConversationCreated(activeConversationId);
       }
 
-      const userMessage = await addMessage({
+      // Add user message directly to DB (not through hook - avoids stale closure)
+      const userMessage: LLMMessage = {
+        id: crypto.randomUUID(),
         role: "user",
         content: userContent,
-      });
-      if (!userMessage) {
+        timestamp: Date.now(),
+      };
+
+      const currentConv = await db.llmConversations.get(activeConversationId);
+      if (!currentConv) {
         setPendingUserMessage(null);
         setIsWaitingForResponse(false);
         return;
       }
 
-      const conv = await (
-        await import("@/services/db")
-      ).default.llmConversations.get(activeConversationId);
-      if (!conv) {
+      const isFirstMessage = currentConv.messages.length === 0;
+      await db.llmConversations.update(activeConversationId, {
+        messages: [...currentConv.messages, userMessage],
+        updatedAt: Date.now(),
+        // Auto-title from first user message
+        title: isFirstMessage
+          ? userContent.slice(0, 50) + (userContent.length > 50 ? "..." : "")
+          : currentConv.title,
+      });
+
+      // Add empty assistant message placeholder
+      const assistantMessage: LLMMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+      };
+
+      const updatedConv = await db.llmConversations.get(activeConversationId);
+      if (!updatedConv) {
         setIsWaitingForResponse(false);
         return;
       }
 
-      await addMessage({ role: "assistant", content: "" });
+      await db.llmConversations.update(activeConversationId, {
+        messages: [...updatedConv.messages, assistantMessage],
+        updatedAt: Date.now(),
+      });
+
       setStreamingContent("");
+
+      // Get messages for API call (includes user message, excludes empty assistant)
+      const messagesForApi = updatedConv.messages;
 
       let fullContent = "";
       await sendMessage(
         providerInstanceId,
         modelId,
-        conv.messages,
+        messagesForApi,
         (token) => {
           setIsWaitingForResponse(false);
           fullContent += token;
           setStreamingContent(fullContent);
         },
         async () => {
-          await updateLastMessage(fullContent);
+          // Update assistant message with final content
+          const finalConv = await db.llmConversations.get(activeConversationId);
+          if (finalConv && finalConv.messages.length > 0) {
+            const messages = [...finalConv.messages];
+            messages[messages.length - 1] = {
+              ...messages[messages.length - 1],
+              content: fullContent,
+            };
+            await db.llmConversations.update(activeConversationId, {
+              messages,
+              updatedAt: Date.now(),
+            });
+          }
           setStreamingContent("");
           setIsWaitingForResponse(false);
         },
         async (error) => {
-          await updateLastMessage(`Error: ${error}`);
+          // Update assistant message with error
+          const finalConv = await db.llmConversations.get(activeConversationId);
+          if (finalConv && finalConv.messages.length > 0) {
+            const messages = [...finalConv.messages];
+            messages[messages.length - 1] = {
+              ...messages[messages.length - 1],
+              content: `Error: ${error}`,
+            };
+            await db.llmConversations.update(activeConversationId, {
+              messages,
+              updatedAt: Date.now(),
+            });
+          }
           setStreamingContent("");
           setIsWaitingForResponse(false);
         },
@@ -447,6 +507,10 @@ export function AIViewer({ subcommand }: AIViewerProps) {
   >(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
+  // Track when we're selecting a conversation (to prevent model reset race)
+  const isSelectingConversationRef = useRef(false);
+  const pendingModelIdRef = useRef<string | null>(null);
+
   // Auto-select first instance
   useEffect(() => {
     if (!activeInstanceId && instances.length > 0) {
@@ -454,12 +518,23 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     }
   }, [activeInstanceId, instances, setActiveInstance]);
 
-  // Reset model selection when switching providers
+  // Reset model selection when switching providers (but not during conversation selection)
   useEffect(() => {
-    setSelectedModelId(null);
+    if (isSelectingConversationRef.current) {
+      // Don't reset - we're selecting a conversation that specifies its own model
+      // Apply the pending model after provider switch
+      if (pendingModelIdRef.current) {
+        setSelectedModelId(pendingModelIdRef.current);
+        pendingModelIdRef.current = null;
+      }
+      isSelectingConversationRef.current = false;
+    } else {
+      // Normal provider switch - reset model
+      setSelectedModelId(null);
+    }
   }, [activeInstanceId]);
 
-  // Auto-select model
+  // Auto-select model when models load
   useEffect(() => {
     if (!activeInstance || models.length === 0) return;
 
@@ -478,9 +553,14 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
       if (conv.providerInstanceId !== activeInstanceId) {
+        // Mark that we're selecting a conversation (prevents model reset)
+        isSelectingConversationRef.current = true;
+        pendingModelIdRef.current = conv.modelId;
         setActiveInstance(conv.providerInstanceId);
+      } else {
+        // Same provider - just set the model
+        setSelectedModelId(conv.modelId);
       }
-      setSelectedModelId(conv.modelId);
     }
 
     if (isMobile) setSidebarOpen(false);
