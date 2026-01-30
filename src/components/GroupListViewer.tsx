@@ -1,10 +1,14 @@
 import { useState, useMemo, memo, useCallback, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
+import { combineLatest, of } from "rxjs";
 import { map } from "rxjs/operators";
 import { Loader2, PanelLeft } from "lucide-react";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
+import groupMetadataCache, {
+  type GroupMetadata,
+} from "@/services/group-metadata-cache";
 import { ChatViewer } from "./ChatViewer";
 import type { NostrEvent } from "@/types/nostr";
 import type { ProtocolIdentifier, GroupListIdentifier } from "@/types/chat";
@@ -15,10 +19,6 @@ import { RichText } from "./nostr/RichText";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  resolveGroupMetadata,
-  type ResolvedGroupMetadata,
-} from "@/lib/chat/group-metadata-helpers";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -43,7 +43,7 @@ interface GroupInfo {
   relayUrl: string;
   metadata?: NostrEvent;
   lastMessage?: NostrEvent;
-  resolvedMetadata?: ResolvedGroupMetadata;
+  resolvedMetadata?: GroupMetadata;
 }
 
 /**
@@ -341,40 +341,6 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }, [groups]);
 
-  // Resolve metadata with profile fallback for groups without NIP-29 metadata
-  const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
-    Map<string, ResolvedGroupMetadata>
-  >(new Map());
-
-  useEffect(() => {
-    if (groups.length === 0) return;
-
-    const resolveAllMetadata = async () => {
-      const newResolvedMap = new Map<string, ResolvedGroupMetadata>();
-
-      // Resolve metadata for each group
-      await Promise.all(
-        groups.map(async (group) => {
-          // Skip unmanaged groups
-          if (group.groupId === "_") return;
-
-          const existingMetadata = groupMetadataMap?.get(group.groupId);
-          const resolved = await resolveGroupMetadata(
-            group.groupId,
-            group.relayUrl,
-            existingMetadata,
-          );
-
-          newResolvedMap.set(`${group.relayUrl}'${group.groupId}`, resolved);
-        }),
-      );
-
-      setResolvedMetadataMap(newResolvedMap);
-    };
-
-    resolveAllMetadata();
-  }, [groups, groupMetadataMap]);
-
   // Subscribe to latest messages (kind 9) for all groups to get recency
   // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
   useEffect(() => {
@@ -401,57 +367,68 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     };
   }, [groups]);
 
-  // Load latest messages and merge with group data
+  // Load latest messages and merge with group data using reactive metadata observables
   const groupsWithRecency = use$(() => {
-    if (groups.length === 0) return undefined;
+    if (groups.length === 0) return of(undefined);
 
     const groupIds = groups.map((g) => g.groupId);
 
-    return eventStore
-      .timeline(
-        groupIds.map((groupId) => ({
-          kinds: [9],
-          "#h": [groupId],
-          limit: 1,
-        })),
-      )
-      .pipe(
-        map((events) => {
-          // Create a map of groupId -> latest message
-          const messageMap = new Map<string, NostrEvent>();
-          for (const evt of events) {
-            const hTag = evt.tags.find((t) => t[0] === "h");
-            if (hTag && hTag[1]) {
-              const existing = messageMap.get(hTag[1]);
-              if (!existing || evt.created_at > existing.created_at) {
-                messageMap.set(hTag[1], evt);
-              }
+    // Timeline of latest messages
+    const messages$ = eventStore.timeline(
+      groupIds.map((groupId) => ({
+        kinds: [9],
+        "#h": [groupId],
+        limit: 1,
+      })),
+    );
+
+    // Metadata observables for each group (reactive, auto-updates when resolved)
+    const metadata$ =
+      groups.length > 0
+        ? combineLatest(
+            groups.map((g) =>
+              g.groupId === "_"
+                ? of(undefined)
+                : groupMetadataCache.metadata$(g.relayUrl, g.groupId),
+            ),
+          )
+        : of([] as (GroupMetadata | undefined)[]);
+
+    // Combine messages and metadata
+    return combineLatest([messages$, metadata$]).pipe(
+      map(([events, metadatas]) => {
+        // Create a map of groupId -> latest message
+        const messageMap = new Map<string, NostrEvent>();
+        for (const evt of events) {
+          const hTag = evt.tags.find((t) => t[0] === "h");
+          if (hTag && hTag[1]) {
+            const existing = messageMap.get(hTag[1]);
+            if (!existing || evt.created_at > existing.created_at) {
+              messageMap.set(hTag[1], evt);
             }
           }
+        }
 
-          // Merge with groups
-          const groupsWithInfo: GroupInfo[] = groups.map((g) => {
-            const groupKey = `${g.relayUrl}'${g.groupId}`;
-            return {
-              groupId: g.groupId,
-              relayUrl: g.relayUrl,
-              metadata: groupMetadataMap?.get(g.groupId),
-              lastMessage: messageMap.get(g.groupId),
-              resolvedMetadata: resolvedMetadataMap.get(groupKey),
-            };
-          });
+        // Merge with groups
+        const groupsWithInfo: GroupInfo[] = groups.map((g, i) => ({
+          groupId: g.groupId,
+          relayUrl: g.relayUrl,
+          metadata: groupMetadataMap?.get(g.groupId),
+          lastMessage: messageMap.get(g.groupId),
+          resolvedMetadata: metadatas[i],
+        }));
 
-          // Sort by recency (most recent first)
-          groupsWithInfo.sort((a, b) => {
-            const aTime = a.lastMessage?.created_at || 0;
-            const bTime = b.lastMessage?.created_at || 0;
-            return bTime - aTime;
-          });
+        // Sort by recency (most recent first)
+        groupsWithInfo.sort((a, b) => {
+          const aTime = a.lastMessage?.created_at || 0;
+          const bTime = b.lastMessage?.created_at || 0;
+          return bTime - aTime;
+        });
 
-          return groupsWithInfo;
-        }),
-      );
-  }, [groups, groupMetadataMap, resolvedMetadataMap]);
+        return groupsWithInfo;
+      }),
+    );
+  }, [groups, groupMetadataMap]);
 
   // Only require sign-in if no identifier is provided (viewing own groups)
   if (!targetPubkey) {
