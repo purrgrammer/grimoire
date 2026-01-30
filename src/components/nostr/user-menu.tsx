@@ -38,7 +38,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Nip05 from "./nip05";
 import { RelayLink } from "./RelayLink";
-import SettingsDialog from "@/components/SettingsDialog";
 import LoginDialog from "./LoginDialog";
 import ConnectWalletDialog from "@/components/ConnectWalletDialog";
 import { useState } from "react";
@@ -87,7 +86,6 @@ export default function UserMenu() {
   const relays = state.activeAccount?.relays;
   const blossomServers = state.activeAccount?.blossomServers;
   const nwcConnection = state.nwcConnection;
-  const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showConnectWallet, setShowConnectWallet] = useState(false);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
@@ -182,7 +180,6 @@ export default function UserMenu() {
 
   return (
     <>
-      <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
       <LoginDialog open={showLogin} onOpenChange={setShowLogin} />
       <ConnectWalletDialog
         open={showConnectWallet}

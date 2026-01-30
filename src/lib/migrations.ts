@@ -105,12 +105,13 @@ const migrations: Record<number, MigrationFn> = {
       __version: 9,
     };
   },
-  // Migration from v9 to v10 - adds compactModeKinds
+  // Migration from v9 to v10 - version bump (compactModeKinds removed)
   9: (state: any) => {
+    // Remove compactModeKinds if it exists (no longer used)
+    const { compactModeKinds: _, ...rest } = state;
     return {
-      ...state,
+      ...rest,
       __version: 10,
-      compactModeKinds: [6, 7, 16, 9735],
     };
   },
 };
@@ -139,11 +140,6 @@ export function validateState(state: any): state is GrimoireState {
 
     // layoutConfig must be an object
     if (typeof state.layoutConfig !== "object") {
-      return false;
-    }
-
-    // compactModeKinds must be an array if present
-    if (state.compactModeKinds && !Array.isArray(state.compactModeKinds)) {
       return false;
     }
 

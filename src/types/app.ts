@@ -119,7 +119,6 @@ export interface GrimoireState {
     relays?: RelayInfo[];
     blossomServers?: string[];
   };
-  compactModeKinds?: number[];
   locale?: {
     locale: string;
     language: string;

@@ -552,19 +552,6 @@ export const reorderWorkspaces = (
 };
 
 /**
- * Updates the list of event kinds that should be displayed in compact mode.
- */
-export const setCompactModeKinds = (
-  state: GrimoireState,
-  kinds: number[],
-): GrimoireState => {
-  return {
-    ...state,
-    compactModeKinds: kinds,
-  };
-};
-
-/**
  * Clears the currently active spellbook tracking.
  */
 export const clearActiveSpellbook = (state: GrimoireState): GrimoireState => {
