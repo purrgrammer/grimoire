@@ -2,7 +2,6 @@ import { firstValueFrom } from "rxjs";
 import { kinds } from "nostr-tools";
 import { profileLoader } from "@/services/loaders";
 import { getProfileContent } from "applesauce-core/helpers";
-import db, { type CachedGroupMetadata } from "@/services/db";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -47,78 +46,6 @@ export function extractMetadataFromEvent(
     icon,
     source: "nip29",
   };
-}
-
-/**
- * Load cached group metadata from IndexedDB
- * Returns a Map of cache key -> metadata for fast lookups
- */
-export async function loadCachedGroupMetadata(
-  groups: Array<{ groupId: string; relayUrl: string }>,
-): Promise<Map<string, ResolvedGroupMetadata>> {
-  const keys = groups.map((g) => getGroupCacheKey(g.relayUrl, g.groupId));
-  const cached = await db.groupMetadata.bulkGet(keys);
-
-  const map = new Map<string, ResolvedGroupMetadata>();
-  for (const entry of cached) {
-    if (entry) {
-      map.set(entry.key, {
-        name: entry.name,
-        description: entry.description,
-        icon: entry.icon,
-        source: entry.source,
-      });
-    }
-  }
-  return map;
-}
-
-/**
- * Save resolved group metadata to IndexedDB cache
- */
-export async function cacheGroupMetadata(
-  relayUrl: string,
-  groupId: string,
-  metadata: ResolvedGroupMetadata,
-): Promise<void> {
-  const key = getGroupCacheKey(relayUrl, groupId);
-  const entry: CachedGroupMetadata = {
-    key,
-    groupId,
-    relayUrl,
-    name: metadata.name,
-    description: metadata.description,
-    icon: metadata.icon,
-    source: metadata.source,
-    updatedAt: Date.now(),
-  };
-  await db.groupMetadata.put(entry);
-}
-
-/**
- * Batch save multiple group metadata entries
- */
-export async function cacheGroupMetadataBatch(
-  entries: Array<{
-    relayUrl: string;
-    groupId: string;
-    metadata: ResolvedGroupMetadata;
-  }>,
-): Promise<void> {
-  const now = Date.now();
-  const records: CachedGroupMetadata[] = entries.map(
-    ({ relayUrl, groupId, metadata }) => ({
-      key: getGroupCacheKey(relayUrl, groupId),
-      groupId,
-      relayUrl,
-      name: metadata.name,
-      description: metadata.description,
-      icon: metadata.icon,
-      source: metadata.source,
-      updatedAt: now,
-    }),
-  );
-  await db.groupMetadata.bulkPut(records);
 }
 
 /**

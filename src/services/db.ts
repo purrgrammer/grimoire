@@ -108,17 +108,6 @@ export interface GrimoireZap {
   comment?: string; // Optional zap comment/message
 }
 
-export interface CachedGroupMetadata {
-  key: string; // Primary key: "relayUrl'groupId"
-  groupId: string;
-  relayUrl: string;
-  name?: string;
-  description?: string;
-  icon?: string;
-  source: "nip29" | "profile" | "fallback";
-  updatedAt: number;
-}
-
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -132,7 +121,6 @@ class GrimoireDb extends Dexie {
   spellbooks!: Table<LocalSpellbook>;
   lnurlCache!: Table<LnurlCache>;
   grimoireZaps!: Table<GrimoireZap>;
-  groupMetadata!: Table<CachedGroupMetadata>;
 
   constructor(name: string) {
     super(name);
@@ -399,24 +387,6 @@ class GrimoireDb extends Dexie {
       lnurlCache: "&address, fetchedAt",
       grimoireZaps:
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
-    });
-
-    // Version 18: Add group metadata caching to prevent name flicker
-    this.version(18).stores({
-      profiles: "&pubkey",
-      nip05: "&nip05",
-      nips: "&id",
-      relayInfo: "&url",
-      relayAuthPreferences: "&url",
-      relayLists: "&pubkey, updatedAt",
-      relayLiveness: "&url",
-      blossomServers: "&pubkey, updatedAt",
-      spells: "&id, alias, createdAt, isPublished, deletedAt",
-      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
-      lnurlCache: "&address, fetchedAt",
-      grimoireZaps:
-        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
-      groupMetadata: "&key, groupId, relayUrl, updatedAt",
     });
   }
 }

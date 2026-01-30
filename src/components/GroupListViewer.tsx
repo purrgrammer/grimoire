@@ -18,8 +18,6 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   resolveGroupMetadata,
   extractMetadataFromEvent,
-  loadCachedGroupMetadata,
-  cacheGroupMetadataBatch,
   getGroupCacheKey,
   isValidPubkey,
   type ResolvedGroupMetadata,
@@ -346,42 +344,16 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }, [groups]);
 
-  // Resolve metadata with a multi-tier approach to prevent flicker:
-  // 1. Load from IndexedDB cache immediately (fastest, prevents flicker on subsequent visits)
-  // 2. Use sync extraction from kind 39000 events (fast, no async)
-  // 3. Only async-resolve for groups needing profile fallback (slow, only when needed)
+  // Resolve metadata with sync extraction + async-only-when-needed:
+  // 1. Sync extraction from kind 39000 events (fast, no async)
+  // 2. Only async-resolve for groups needing profile fallback (groupId is pubkey)
   const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
     Map<string, ResolvedGroupMetadata>
   >(new Map());
 
-  // Track if cache has been loaded to avoid flashing groupId before cache loads
-  const [cacheLoaded, setCacheLoaded] = useState(false);
-
-  // Step 1: Load from IndexedDB cache immediately on mount (fast path for returning users)
+  // Sync extraction from kind 39000 + async profile fallback only when needed
   useEffect(() => {
-    if (groups.length === 0) {
-      setCacheLoaded(true);
-      return;
-    }
-
-    loadCachedGroupMetadata(groups).then((cached) => {
-      if (cached.size > 0) {
-        setResolvedMetadataMap((prev) => {
-          // Merge cached with existing (cached is baseline, existing may have fresher data)
-          const merged = new Map(cached);
-          for (const [key, value] of prev) {
-            merged.set(key, value);
-          }
-          return merged;
-        });
-      }
-      setCacheLoaded(true);
-    });
-  }, [groups]);
-
-  // Step 2 & 3: Sync extraction from kind 39000 + async profile fallback
-  useEffect(() => {
-    if (groups.length === 0 || !cacheLoaded) return;
+    if (groups.length === 0) return;
 
     // Determine which groups need async resolution (no NIP-29 metadata, groupId is pubkey)
     const needsAsyncResolution: Array<{ groupId: string; relayUrl: string }> =
@@ -417,7 +389,7 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
           // No NIP-29 metadata, not a pubkey - use groupId as name
           updated.set(key, { name: group.groupId, source: "fallback" });
         }
-        // For pubkey groups without metadata, keep existing cached value (don't overwrite)
+        // For pubkey groups without metadata, keep existing value (don't overwrite)
       }
 
       return updated;
@@ -456,39 +428,12 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
             }
             return updated;
           });
-
-          // Cache the resolved metadata for future visits
-          cacheGroupMetadataBatch(resolved);
         }
       };
 
       resolveProfileMetadata();
     }
-
-    // Cache sync-resolved NIP-29 metadata
-    const toCache: Array<{
-      relayUrl: string;
-      groupId: string;
-      metadata: ResolvedGroupMetadata;
-    }> = [];
-
-    for (const group of groups) {
-      if (group.groupId === "_") continue;
-
-      const metadataEvent = groupMetadataMap?.get(group.groupId);
-      if (metadataEvent && metadataEvent.kind === 39000) {
-        toCache.push({
-          relayUrl: group.relayUrl,
-          groupId: group.groupId,
-          metadata: extractMetadataFromEvent(group.groupId, metadataEvent),
-        });
-      }
-    }
-
-    if (toCache.length > 0) {
-      cacheGroupMetadataBatch(toCache);
-    }
-  }, [groups, groupMetadataMap, cacheLoaded]);
+  }, [groups, groupMetadataMap]);
 
   // Subscribe to latest messages (kind 9) for all groups to get recency
   // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
