@@ -69,20 +69,24 @@
   font-family: "Oxygen Mono", monospace;
   font-size: 0.75rem;
   line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+  white-space: pre;
   tab-size: 4;
   color: hsl(var(--foreground));
   /* Flex layout for consistent line spacing */
   display: flex;
   flex-direction: column;
   gap: 0;
+  /* Ensure lines extend for proper diff backgrounds */
+  width: fit-content;
+  min-width: 100%;
 }
 
-/* Lines with proper spacing and wrapping */
+/* Lines with proper spacing */
 .shiki-container .line {
   display: block;
   min-height: 1.5em;
+  /* Ensure background extends full width for diff highlighting */
+  width: 100%;
 }
 
 /* Ensure shiki's inline styles don't conflict */
