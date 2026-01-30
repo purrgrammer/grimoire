@@ -1,6 +1,15 @@
-/* Shiki syntax highlighting - Grimoire dark theme overrides */
+/* ==========================================================================
+   Shiki Syntax Highlighting - CSS Variable Based Theming
+
+   Token colors are defined using CSS variables from the theme system,
+   allowing automatic adaptation to light/dark mode.
+   ========================================================================== */
 
 /* Base container styling */
+.shiki-container {
+  color: hsl(var(--foreground));
+}
+
 .shiki-container pre {
   background: transparent !important;
   margin: 0;
@@ -15,6 +24,7 @@
   word-spacing: normal;
   word-break: normal;
   tab-size: 4;
+  color: hsl(var(--foreground));
 }
 
 /* Ensure shiki's inline styles don't conflict */
@@ -26,7 +36,59 @@
   background: transparent !important;
 }
 
-/* Loading state - subtle pulse animation */
+/* ==========================================================================
+   Token Classes - Styled with CSS Variables
+   ========================================================================== */
+
+/* Base token - inherits foreground color */
+.shiki-token {
+  color: hsl(var(--syntax-variable));
+}
+
+/* Comments */
+.shiki-comment {
+  color: hsl(var(--syntax-comment));
+}
+
+/* Strings */
+.shiki-string {
+  color: hsl(var(--syntax-string));
+}
+
+/* Keywords (if, else, return, function, etc.) */
+.shiki-keyword {
+  color: hsl(var(--syntax-keyword));
+}
+
+/* Constants and numbers */
+.shiki-constant {
+  color: hsl(var(--syntax-constant));
+}
+
+/* Punctuation */
+.shiki-punctuation {
+  color: hsl(var(--syntax-punctuation));
+}
+
+/* Tags (HTML/JSX) */
+.shiki-tag {
+  color: hsl(var(--syntax-tag));
+}
+
+/* Diff - deleted lines */
+.shiki-deleted {
+  color: hsl(var(--diff-deleted));
+}
+
+/* Diff - inserted lines */
+.shiki-inserted {
+  color: hsl(var(--diff-inserted));
+}
+
+/* ==========================================================================
+   Loading State
+   ========================================================================== */
+
 .shiki-loading {
   animation: shiki-pulse 1.5s ease-in-out infinite;
 }
@@ -41,34 +103,38 @@
   }
 }
 
+/* ==========================================================================
+   Diff Block Backgrounds
+   ========================================================================== */
+
 /* Diff-specific styling - block-level backgrounds for inserted/deleted */
-/* These target the line spans that Shiki generates for diff content */
-.shiki-container .line:has(.diff.add),
-.shiki-container .line:has([style*="color:#69db7c"]) {
-  background: rgba(52, 199, 89, 0.1);
+.shiki-container .line:has(.shiki-deleted) {
+  background: hsl(var(--diff-deleted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
 }
 
-.shiki-container .line:has(.diff.remove),
-.shiki-container .line:has([style*="color:#ff8787"]) {
-  background: rgba(255, 59, 48, 0.1);
+.shiki-container .line:has(.shiki-inserted) {
+  background: hsl(var(--diff-inserted-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
 }
 
-/* Hunk headers (@@ lines) - cyan background */
-.shiki-container .line:has([style*="color:#66d9ef"]) {
-  background: rgba(102, 217, 239, 0.08);
+/* Hunk headers (@@ lines) */
+.shiki-container .line:has([class*="meta"]) {
+  background: hsl(var(--diff-meta-bg));
   display: block;
   margin: 0 -1rem;
   padding: 0 1rem;
   font-weight: 600;
 }
 
-/* Optional: Line numbers */
+/* ==========================================================================
+   Line Numbers (optional)
+   ========================================================================== */
+
 .shiki-container.line-numbers .line::before {
   content: attr(data-line);
   display: inline-block;

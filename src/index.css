@@ -164,6 +164,8 @@
   --syntax-function: 222.2 47.4% 11.2%;
   --syntax-variable: 222.2 84% 4.9%;
   --syntax-operator: 222.2 84% 20%;
+  --syntax-constant: 199 89% 48%;
+  --syntax-tag: 142 76% 36%;
 
   /* Diff colors */
   --diff-inserted: 142 60% 30%;
@@ -223,15 +225,17 @@
   --tooltip: 217.2 32.6% 30%;
   --tooltip-foreground: 210 40% 98%;
 
-  /* Syntax highlighting */
-  --syntax-comment: 215 20.2% 70%;
-  --syntax-punctuation: 210 40% 70%;
+  /* Syntax highlighting - high contrast for dark backgrounds */
+  --syntax-comment: 215 20% 55%;
+  --syntax-punctuation: 210 30% 75%;
   --syntax-property: 210 40% 98%;
-  --syntax-string: 215 20.2% 70%;
-  --syntax-keyword: 210 40% 98%;
+  --syntax-string: 140 70% 65%;
+  --syntax-keyword: 270 100% 80%;
   --syntax-function: 210 40% 98%;
   --syntax-variable: 210 40% 98%;
   --syntax-operator: 210 40% 98%;
+  --syntax-constant: 199 90% 70%;
+  --syntax-tag: 140 70% 65%;
 
   /* Diff colors */
   --diff-inserted: 134 60% 76%;
