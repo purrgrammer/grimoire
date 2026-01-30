@@ -230,6 +230,8 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             sourceUrl={window.props.sourceUrl}
             targetServer={window.props.targetServer}
             sha256={window.props.sha256}
+            blobUrl={window.props.blobUrl}
+            mediaType={window.props.mediaType}
           />
         );
         break;
