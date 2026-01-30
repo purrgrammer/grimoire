@@ -340,80 +340,29 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }, [groups]);
 
-  // Track resolved metadata for UI updates
-  const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
-    Map<string, GroupMetadata>
-  >(new Map());
+  // Track when cache has been populated (triggers re-render after async resolves)
+  const [cacheVersion, setCacheVersion] = useState(0);
 
-  // Update shared cache when kind 39000 events arrive, then sync to local state
-  useEffect(() => {
-    if (!groupMetadataMap || groupMetadataMap.size === 0) return;
-
-    // Update cache from received events
-    for (const [groupId, event] of groupMetadataMap) {
-      const group = groups.find((g) => g.groupId === groupId);
-      if (group) {
-        groupMetadataCache.updateFromEvent(group.relayUrl, event);
-      }
-    }
-
-    // Sync cache to local state for rendering
-    setResolvedMetadataMap((prev) => {
-      const updated = new Map(prev);
-      for (const group of groups) {
-        if (group.groupId === "_") continue;
-        const cached = groupMetadataCache.get(group.relayUrl, group.groupId);
-        if (cached) {
-          updated.set(
-            groupMetadataCache.getKey(group.relayUrl, group.groupId),
-            cached,
-          );
-        }
-      }
-      return updated;
-    });
-  }, [groups, groupMetadataMap]);
-
-  // Resolve metadata for groups not yet in cache (async, triggers on mount)
+  // Background resolve for all groups - fire-and-forget, triggers re-render when complete
   useEffect(() => {
     if (groups.length === 0) return;
 
-    const resolveUncached = async () => {
-      const resolved: Array<{
-        key: string;
-        metadata: GroupMetadata;
-      }> = [];
+    let mounted = true;
 
-      await Promise.all(
-        groups.map(async (group) => {
-          if (group.groupId === "_") return;
-
-          const key = groupMetadataCache.getKey(group.relayUrl, group.groupId);
-
-          // Skip if already in shared cache (avoids re-fetching)
-          if (groupMetadataCache.get(group.relayUrl, group.groupId)) return;
-
-          // Resolve using shared cache (will fetch if needed)
-          const metadata = await groupMetadataCache.resolve(
-            group.relayUrl,
-            group.groupId,
-          );
-          resolved.push({ key, metadata });
-        }),
-      );
-
-      if (resolved.length > 0) {
-        setResolvedMetadataMap((prev) => {
-          const updated = new Map(prev);
-          for (const { key, metadata } of resolved) {
-            updated.set(key, metadata);
-          }
-          return updated;
-        });
+    Promise.all(
+      groups.map(async (g) => {
+        if (g.groupId === "_") return;
+        await groupMetadataCache.resolve(g.relayUrl, g.groupId);
+      }),
+    ).then(() => {
+      if (mounted) {
+        setCacheVersion((v) => v + 1);
       }
-    };
+    });
 
-    resolveUncached();
+    return () => {
+      mounted = false;
+    };
   }, [groups]);
 
   // Subscribe to latest messages (kind 9) for all groups to get recency
@@ -470,15 +419,26 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
             }
           }
 
-          // Merge with groups
+          // Merge with groups - get metadata inline from cache
           const groupsWithInfo: GroupInfo[] = groups.map((g) => {
-            const groupKey = `${g.relayUrl}'${g.groupId}`;
+            const metadataEvent = groupMetadataMap?.get(g.groupId);
+            // Update cache from event if available, otherwise get from cache
+            const resolvedMetadata =
+              g.groupId === "_"
+                ? undefined
+                : metadataEvent
+                  ? groupMetadataCache.updateFromEvent(
+                      g.relayUrl,
+                      metadataEvent,
+                    )
+                  : groupMetadataCache.get(g.relayUrl, g.groupId);
+
             return {
               groupId: g.groupId,
               relayUrl: g.relayUrl,
-              metadata: groupMetadataMap?.get(g.groupId),
+              metadata: metadataEvent,
               lastMessage: messageMap.get(g.groupId),
-              resolvedMetadata: resolvedMetadataMap.get(groupKey),
+              resolvedMetadata,
             };
           });
 
@@ -492,7 +452,8 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
           return groupsWithInfo;
         }),
       );
-  }, [groups, groupMetadataMap, resolvedMetadataMap]);
+    // cacheVersion triggers re-render when async resolves complete
+  }, [groups, groupMetadataMap, cacheVersion]);
 
   // Only require sign-in if no identifier is provided (viewing own groups)
   if (!targetPubkey) {
