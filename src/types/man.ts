@@ -886,13 +886,30 @@ export const manPages: Record<string, ManPageEntry> = {
   ai: {
     name: "ai",
     section: "1",
-    synopsis: "ai",
+    synopsis: "ai [providers]",
     description:
-      "Chat with AI models locally in your browser using WebLLM, or connect to cloud providers like PPQ.ai. Conversations are stored locally and persist across sessions.",
-    examples: ["ai    Open AI chat interface"],
+      "Chat with AI models locally in your browser using WebLLM, or connect to cloud providers like PPQ.ai. Conversations are stored locally and persist across sessions. Use 'ai providers' to configure providers.",
+    options: [
+      {
+        flag: "providers",
+        description:
+          "Open the provider configuration interface to add/remove providers and manage models",
+      },
+    ],
+    examples: [
+      "ai              Open AI chat interface",
+      "ai providers    Manage AI providers",
+    ],
     seeAlso: ["settings", "help"],
     appId: "ai",
     category: "System",
+    argParser: (args: string[]) => {
+      // Check for 'providers' subcommand
+      if (args[0] === "providers") {
+        return { subcommand: "providers" };
+      }
+      return {};
+    },
     defaultProps: {},
   },
 };

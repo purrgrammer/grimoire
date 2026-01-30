@@ -6,6 +6,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Loader2,
   PanelLeft,
@@ -13,10 +15,9 @@ import {
   Send,
   Square,
   Trash2,
-  Settings,
   Download,
   Check,
-  ExternalLink,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,15 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
@@ -50,7 +42,8 @@ import {
   useLLMChat,
 } from "@/hooks/useLLM";
 import { formatTimestamp } from "@/hooks/useLocale";
-import type { LLMMessage, LLMModel, LLMProviderInstance } from "@/types/llm";
+import { AIProvidersViewer } from "./AIProvidersViewer";
+import type { LLMMessage, LLMModel } from "@/types/llm";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -91,7 +84,81 @@ const MessageBubble = memo(function MessageBubble({
             : "bg-muted text-foreground",
         )}
       >
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words">
+            {message.content}
+          </div>
+        ) : (
+          <div className="prose prose-invert prose-sm max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ ...props }) => (
+                  <p className="mb-2 last:mb-0" {...props} />
+                ),
+                code: ({ className, children, ...props }: any) => {
+                  const isBlock = className?.includes("language-");
+                  if (isBlock) {
+                    return (
+                      <pre className="bg-background/50 p-2 rounded text-xs overflow-x-auto my-2">
+                        <code {...props}>{children}</code>
+                      </pre>
+                    );
+                  }
+                  return (
+                    <code
+                      className="bg-background/50 px-1 py-0.5 rounded text-xs"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                pre: ({ children }) => <>{children}</>,
+                ul: ({ ...props }) => (
+                  <ul
+                    className="list-disc list-inside my-2 space-y-1"
+                    {...props}
+                  />
+                ),
+                ol: ({ ...props }) => (
+                  <ol
+                    className="list-decimal list-inside my-2 space-y-1"
+                    {...props}
+                  />
+                ),
+                a: ({ href, children, ...props }) => (
+                  <a
+                    href={href}
+                    className="text-accent underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    {...props}
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────
+// Thinking Indicator
+// ─────────────────────────────────────────────────────────────
+
+const ThinkingIndicator = memo(function ThinkingIndicator() {
+  return (
+    <div className="flex w-full justify-start">
+      <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm flex items-center gap-2">
+        <Brain className="h-4 w-4 animate-pulse" />
+        <span className="text-muted-foreground animate-pulse">Thinking...</span>
       </div>
     </div>
   );
@@ -142,7 +209,7 @@ const ConversationItem = memo(function ConversationItem({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Model Selector (for WebLLM)
+// Model Selector (for WebLLM when no model loaded)
 // ─────────────────────────────────────────────────────────────
 
 function WebLLMModelSelector({
@@ -214,112 +281,6 @@ function WebLLMModelSelector({
         </div>
       ))}
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Provider Setup Dialog
-// ─────────────────────────────────────────────────────────────
-
-function ProviderSetupDialog({
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (instance: Omit<LLMProviderInstance, "id">) => void;
-}) {
-  const { configs } = useLLMProviders();
-  const [providerId, setProviderId] = useState("webllm");
-  const [name, setName] = useState("");
-  const [apiKey, setApiKey] = useState("");
-
-  const selectedConfig = configs.find((c) => c.id === providerId);
-
-  const handleSave = () => {
-    onSave({
-      providerId,
-      name: name || selectedConfig?.name || providerId,
-      apiKey: selectedConfig?.requiresApiKey ? apiKey : undefined,
-      enabled: true,
-    });
-    onOpenChange(false);
-    setName("");
-    setApiKey("");
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Provider</DialogTitle>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4 py-4">
-          <div className="flex flex-col gap-2">
-            <Label>Provider</Label>
-            <Select value={providerId} onValueChange={setProviderId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {configs.map((config) => (
-                  <SelectItem key={config.id} value={config.id}>
-                    {config.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label>Display Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={selectedConfig?.name}
-            />
-          </div>
-
-          {selectedConfig?.requiresApiKey && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <Label>API Key</Label>
-                {selectedConfig.apiKeyUrl && (
-                  <a
-                    href={selectedConfig.apiKeyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  >
-                    Get API Key <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-              />
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={selectedConfig?.requiresApiKey && !apiKey}
-          >
-            Add Provider
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -407,7 +368,7 @@ function ChatPanel({
         setStreamingContent("");
       },
       async (error) => {
-        await updateLastMessage(`Error: ${error}`);
+        await updateLastMessage(error);
         setStreamingContent("");
       },
     );
@@ -434,20 +395,23 @@ function ChatPanel({
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="flex flex-col gap-3">
-          {displayMessages.length === 0 ? (
+          {displayMessages.length === 0 && !isGenerating ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
               Start a conversation
             </div>
           ) : (
-            displayMessages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))
+            <>
+              {displayMessages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+              {isGenerating && !streamingContent && <ThinkingIndicator />}
+            </>
           )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Input */}
+      {/* Input - full width */}
       <div className="border-t p-3">
         <div className="flex gap-2">
           <Textarea
@@ -456,16 +420,26 @@ function ChatPanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="min-h-[40px] max-h-[120px] resize-none"
+            className="flex-1 min-h-[40px] max-h-[120px] resize-none"
             rows={1}
             disabled={isGenerating}
           />
           {isGenerating ? (
-            <Button variant="outline" size="icon" onClick={cancel}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={cancel}
+              className="shrink-0"
+            >
               <Square className="h-4 w-4" />
             </Button>
           ) : (
-            <Button size="icon" onClick={handleSend} disabled={!input.trim()}>
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className="shrink-0"
+            >
               <Send className="h-4 w-4" />
             </Button>
           )}
@@ -479,20 +453,18 @@ function ChatPanel({
 // Main AIViewer Component
 // ─────────────────────────────────────────────────────────────
 
-export function AIViewer() {
+interface AIViewerProps {
+  subcommand?: "providers";
+}
+
+export function AIViewer({ subcommand }: AIViewerProps) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
-  const {
-    instances,
-    activeInstanceId,
-    activeInstance,
-    addInstance,
-    setActiveInstance,
-  } = useLLMProviders();
+  const { instances, activeInstanceId, activeInstance, setActiveInstance } =
+    useLLMProviders();
 
   const { models, loading: modelsLoading } = useLLMModels(activeInstanceId);
   const { status, loadModel } = useWebLLMStatus();
@@ -525,13 +497,6 @@ export function AIViewer() {
       }
     }
   }, [status, models, activeInstance, selectedModelId]);
-
-  const handleAddProvider = async (
-    instance: Omit<LLMProviderInstance, "id">,
-  ) => {
-    const id = await addInstance(instance);
-    setActiveInstance(id);
-  };
 
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
@@ -568,25 +533,14 @@ export function AIViewer() {
     [sidebarWidth],
   );
 
-  // No providers configured
+  // Show providers management if requested via subcommand
+  if (subcommand === "providers") {
+    return <AIProvidersViewer />;
+  }
+
+  // No providers configured - show providers setup
   if (instances.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
-        <div className="text-lg font-medium">Set up an AI Provider</div>
-        <div className="text-sm text-muted-foreground text-center max-w-sm">
-          Add a local model with WebLLM or connect to PPQ.ai for cloud models.
-        </div>
-        <Button onClick={() => setShowProviderDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Provider
-        </Button>
-        <ProviderSetupDialog
-          open={showProviderDialog}
-          onOpenChange={setShowProviderDialog}
-          onSave={handleAddProvider}
-        />
-      </div>
-    );
+    return <AIProvidersViewer />;
   }
 
   // WebLLM: Need to select/load model
@@ -613,13 +567,6 @@ export function AIViewer() {
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowProviderDialog(true)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -638,35 +585,13 @@ export function AIViewer() {
             />
           )}
         </div>
-
-        <ProviderSetupDialog
-          open={showProviderDialog}
-          onOpenChange={setShowProviderDialog}
-          onSave={handleAddProvider}
-        />
       </div>
     );
   }
 
-  // PPQ: Need API key
+  // PPQ: Need API key - redirect to providers
   if (!isWebLLM && !activeInstance?.apiKey) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
-        <div className="text-lg font-medium">API Key Required</div>
-        <div className="text-sm text-muted-foreground">
-          Configure your PPQ.ai API key in settings.
-        </div>
-        <Button variant="outline" onClick={() => setShowProviderDialog(true)}>
-          <Settings className="h-4 w-4 mr-2" />
-          Configure
-        </Button>
-        <ProviderSetupDialog
-          open={showProviderDialog}
-          onOpenChange={setShowProviderDialog}
-          onSave={handleAddProvider}
-        />
-      </div>
-    );
+    return <AIProvidersViewer />;
   }
 
   // Sidebar content
@@ -758,15 +683,6 @@ export function AIViewer() {
               status.modelId}
           </div>
         )}
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => setShowProviderDialog(true)}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Chat */}
@@ -794,11 +710,6 @@ export function AIViewer() {
           </SheetContent>
         </Sheet>
         {chatContent}
-        <ProviderSetupDialog
-          open={showProviderDialog}
-          onOpenChange={setShowProviderDialog}
-          onSave={handleAddProvider}
-        />
       </div>
     );
   }
@@ -822,12 +733,6 @@ export function AIViewer() {
       />
 
       <div className="flex-1 min-w-0">{chatContent}</div>
-
-      <ProviderSetupDialog
-        open={showProviderDialog}
-        onOpenChange={setShowProviderDialog}
-        onSave={handleAddProvider}
-      />
     </div>
   );
 }

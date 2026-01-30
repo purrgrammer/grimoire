@@ -110,6 +110,14 @@ class PPQProvider {
       });
 
       if (!response.ok) {
+        // Handle specific HTTP errors
+        if (response.status === 402) {
+          yield {
+            type: "error",
+            error: "Insufficient balance. Top up at https://ppq.ai/api-topups",
+          };
+          return;
+        }
         const errorText = await response.text();
         yield {
           type: "error",

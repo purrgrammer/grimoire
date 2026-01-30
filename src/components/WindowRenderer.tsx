@@ -260,7 +260,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         content = <SettingsViewer />;
         break;
       case "ai":
-        content = <AIViewer />;
+        content = <AIViewer subcommand={window.props.subcommand} />;
         break;
       default:
         content = (
