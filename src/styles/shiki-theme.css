@@ -68,12 +68,22 @@
 .shiki-container code {
   font-family: "Oxygen Mono", monospace;
   font-size: 0.75rem;
-  line-height: 1.5;
+  line-height: 1.4;
   white-space: pre;
   word-spacing: normal;
   word-break: normal;
   tab-size: 4;
   color: hsl(var(--foreground));
+  /* Flex layout for tight line packing */
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Lines should be inline-block to allow background colors */
+.shiki-container .line {
+  display: block;
+  min-height: 1.4em;
 }
 
 /* Ensure shiki's inline styles don't conflict */
@@ -107,19 +117,13 @@
    Diff Block Backgrounds
    ========================================================================== */
 
-/* Diff-specific styling - block-level backgrounds for inserted/deleted */
+/* Diff-specific styling - highlight inserted/deleted lines */
 .shiki-container .line:has([style*="--shiki-token-deleted"]) {
   background: hsl(var(--diff-deleted-bg));
-  display: block;
-  margin: 0 -1rem;
-  padding: 0 1rem;
 }
 
 .shiki-container .line:has([style*="--shiki-token-inserted"]) {
   background: hsl(var(--diff-inserted-bg));
-  display: block;
-  margin: 0 -1rem;
-  padding: 0 1rem;
 }
 
 /* ==========================================================================
