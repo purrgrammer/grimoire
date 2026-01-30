@@ -9,6 +9,7 @@ import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 let highlighter: HighlighterCore | null = null;
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 const loadedLanguages = new Set<string>();
+const failedLanguages = new Set<string>();
 
 /**
  * Grimoire dark theme - minimalistic grayscale with high contrast
@@ -461,6 +462,7 @@ export async function getHighlighter(): Promise<HighlighterCore> {
  */
 async function loadLanguage(lang: string): Promise<boolean> {
   if (lang === "text" || loadedLanguages.has(lang)) return true;
+  if (failedLanguages.has(lang)) return false;
 
   const hl = await getHighlighter();
 
@@ -471,7 +473,8 @@ async function loadLanguage(lang: string): Promise<boolean> {
     loadedLanguages.add(lang);
     return true;
   } catch {
-    // Language not available
+    // Language not available - track to avoid repeated warnings
+    failedLanguages.add(lang);
     console.warn(
       `[shiki] Language "${lang}" not available, falling back to plaintext`,
     );

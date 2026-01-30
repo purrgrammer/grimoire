@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { FolderGit2, AlertCircle, FileQuestion, Binary } from "lucide-react";
 import { useGitTree } from "@/hooks/useGitTree";
 import { useGitBlob } from "@/hooks/useGitBlob";
@@ -67,10 +67,9 @@ export function RepositoryFilesSection({
   });
 
   // Get the language for syntax highlighting from the file extension
-  const language = useMemo(() => {
-    if (!selectedFile) return null;
-    return getExtension(selectedFile.name) || null;
-  }, [selectedFile]);
+  const language = selectedFile
+    ? getExtension(selectedFile.name) || null
+    : null;
 
   const handleFileSelect = (file: SelectedFile) => {
     setSelectedFile(file);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getObject } from "@fiatjaf/git-natural-api";
 
 interface UseGitBlobOptions {
@@ -61,6 +61,9 @@ export function useGitBlob({
   const [error, setError] = useState<Error | null>(null);
   const [isBinary, setIsBinary] = useState(false);
 
+  // Track mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   const fetchBlob = useCallback(async () => {
     if (!serverUrl || !hash) {
       return;
@@ -74,6 +77,8 @@ export function useGitBlob({
 
     try {
       const object = await getObject(serverUrl, hash);
+
+      if (!isMountedRef.current) return;
 
       if (!object || !object.data) {
         throw new Error("Empty or invalid blob");
@@ -97,18 +102,28 @@ export function useGitBlob({
         }
       }
     } catch (e) {
+      if (!isMountedRef.current) return;
+
       const err = e instanceof Error ? e : new Error(String(e));
       console.warn(`[useGitBlob] Failed to fetch blob ${hash}:`, err.message);
       setError(err);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [serverUrl, hash]);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (enabled && serverUrl && hash) {
       fetchBlob();
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [enabled, serverUrl, hash, fetchBlob]);
 
   return {

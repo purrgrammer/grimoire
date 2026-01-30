@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   getInfoRefs,
   getDirectoryTreeAt,
   MissingCapability,
 } from "@fiatjaf/git-natural-api";
+import { useStableArray } from "@/hooks/useStable";
 import type { DirectoryTree } from "@/lib/git-types";
 
 interface UseGitTreeOptions {
@@ -51,8 +52,14 @@ export function useGitTree({
   const [error, setError] = useState<Error | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
+  // Stabilize cloneUrls to prevent unnecessary re-fetches
+  const stableCloneUrls = useStableArray(cloneUrls);
+
+  // Track mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   const fetchTree = useCallback(async () => {
-    if (cloneUrls.length === 0) {
+    if (stableCloneUrls.length === 0) {
       setError(new Error("No clone URLs provided"));
       return;
     }
@@ -64,10 +71,15 @@ export function useGitTree({
 
     const errors: Error[] = [];
 
-    for (const url of cloneUrls) {
+    for (const url of stableCloneUrls) {
+      // Check if still mounted before each iteration
+      if (!isMountedRef.current) return;
+
       try {
         // Get server info to check capabilities and resolve refs
         const info = await getInfoRefs(url);
+
+        if (!isMountedRef.current) return;
 
         // Only use servers that support filter capability (lightweight fetch)
         // Skip servers that would require downloading all blobs
@@ -105,6 +117,8 @@ export function useGitTree({
         // Fetch the tree using lightweight filter (tree only, no blobs)
         const fetchedTree = await getDirectoryTreeAt(url, resolvedRef);
 
+        if (!isMountedRef.current) return;
+
         setTree(fetchedTree);
         setServerUrl(url);
         setLoading(false);
@@ -128,20 +142,28 @@ export function useGitTree({
       }
     }
 
+    if (!isMountedRef.current) return;
+
     // All URLs failed
     const message =
       errors.length === 1
         ? errors[0].message
-        : `All ${cloneUrls.length} servers failed`;
+        : `All ${stableCloneUrls.length} servers failed`;
     setError(new Error(message));
     setLoading(false);
-  }, [cloneUrls, ref]);
+  }, [stableCloneUrls, ref]);
 
   useEffect(() => {
-    if (enabled && cloneUrls.length > 0) {
+    isMountedRef.current = true;
+
+    if (enabled && stableCloneUrls.length > 0) {
       fetchTree();
     }
-  }, [enabled, fetchTree, cloneUrls.length]);
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [enabled, fetchTree, stableCloneUrls]);
 
   return {
     tree,

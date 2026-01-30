@@ -237,31 +237,37 @@ function TreeContents({
 
   return (
     <div>
-      {sortedEntries.dirs.map((dir) => (
-        <TreeNode
-          key={dir.hash}
-          name={dir.name}
-          hash={dir.hash}
-          path={basePath ? `${basePath}/${dir.name}` : dir.name}
-          isDirectory={true}
-          content={dir.content}
-          onFileSelect={onFileSelect}
-          selectedPath={selectedPath}
-          depth={depth}
-        />
-      ))}
-      {sortedEntries.files.map((file) => (
-        <TreeNode
-          key={file.hash}
-          name={file.name}
-          hash={file.hash}
-          path={basePath ? `${basePath}/${file.name}` : file.name}
-          isDirectory={false}
-          onFileSelect={onFileSelect}
-          selectedPath={selectedPath}
-          depth={depth}
-        />
-      ))}
+      {sortedEntries.dirs.map((dir) => {
+        const dirPath = basePath ? `${basePath}/${dir.name}` : dir.name;
+        return (
+          <TreeNode
+            key={dirPath}
+            name={dir.name}
+            hash={dir.hash}
+            path={dirPath}
+            isDirectory={true}
+            content={dir.content}
+            onFileSelect={onFileSelect}
+            selectedPath={selectedPath}
+            depth={depth}
+          />
+        );
+      })}
+      {sortedEntries.files.map((file) => {
+        const filePath = basePath ? `${basePath}/${file.name}` : file.name;
+        return (
+          <TreeNode
+            key={filePath}
+            name={file.name}
+            hash={file.hash}
+            path={filePath}
+            isDirectory={false}
+            onFileSelect={onFileSelect}
+            selectedPath={selectedPath}
+            depth={depth}
+          />
+        );
+      })}
     </div>
   );
 }
