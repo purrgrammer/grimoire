@@ -1,8 +1,14 @@
 import { firstValueFrom } from "rxjs";
 import { kinds } from "nostr-tools";
 import { profileLoader } from "@/services/loaders";
-import { getProfileContent } from "applesauce-core/helpers";
+import {
+  getProfileContent,
+  getOrComputeCachedValue,
+} from "applesauce-core/helpers";
 import type { NostrEvent } from "@/types/nostr";
+
+// Symbol for caching extracted group metadata on event objects
+const GroupMetadataSymbol = Symbol("groupMetadata");
 
 /**
  * Check if a string is a valid nostr pubkey (64 character hex string)
@@ -30,22 +36,25 @@ export function getGroupCacheKey(relayUrl: string, groupId: string): string {
 
 /**
  * Extract metadata synchronously from a kind 39000 event
- * This is the fast path - no async needed when we have the metadata event
+ * Uses applesauce caching to avoid recomputing on every access
  */
 export function extractMetadataFromEvent(
   groupId: string,
   metadataEvent: NostrEvent,
 ): ResolvedGroupMetadata {
-  const name = metadataEvent.tags.find((t) => t[0] === "name")?.[1] || groupId;
-  const description = metadataEvent.tags.find((t) => t[0] === "about")?.[1];
-  const icon = metadataEvent.tags.find((t) => t[0] === "picture")?.[1];
+  return getOrComputeCachedValue(metadataEvent, GroupMetadataSymbol, () => {
+    const name =
+      metadataEvent.tags.find((t) => t[0] === "name")?.[1] || groupId;
+    const description = metadataEvent.tags.find((t) => t[0] === "about")?.[1];
+    const icon = metadataEvent.tags.find((t) => t[0] === "picture")?.[1];
 
-  return {
-    name,
-    description,
-    icon,
-    source: "nip29",
-  };
+    return {
+      name,
+      description,
+      icon,
+      source: "nip29" as const,
+    };
+  });
 }
 
 /**
@@ -66,19 +75,9 @@ export async function resolveGroupMetadata(
   relayUrl: string,
   metadataEvent?: NostrEvent,
 ): Promise<ResolvedGroupMetadata> {
-  // If NIP-29 metadata exists, use it (priority 1)
+  // If NIP-29 metadata exists, use cached extraction (priority 1)
   if (metadataEvent && metadataEvent.kind === 39000) {
-    const name =
-      metadataEvent.tags.find((t) => t[0] === "name")?.[1] || groupId;
-    const description = metadataEvent.tags.find((t) => t[0] === "about")?.[1];
-    const icon = metadataEvent.tags.find((t) => t[0] === "picture")?.[1];
-
-    return {
-      name,
-      description,
-      icon,
-      source: "nip29",
-    };
+    return extractMetadataFromEvent(groupId, metadataEvent);
   }
 
   // If no NIP-29 metadata and groupId is a valid pubkey, try profile fallback (priority 2)
