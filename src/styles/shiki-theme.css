@@ -15,7 +15,7 @@
   --shiki-color-text: hsl(var(--foreground));
   --shiki-color-background: transparent;
 
-  /* Token colors - mapped to our syntax theme variables */
+  /* Core token colors - mapped to our syntax theme variables */
   --shiki-token-constant: hsl(var(--syntax-constant));
   --shiki-token-string: hsl(var(--syntax-string));
   --shiki-token-comment: hsl(var(--syntax-comment));
@@ -25,6 +25,26 @@
   --shiki-token-string-expression: hsl(var(--syntax-string));
   --shiki-token-punctuation: hsl(var(--syntax-punctuation));
   --shiki-token-link: hsl(var(--syntax-string));
+
+  /* HTML/XML tokens */
+  --shiki-token-tag: hsl(var(--syntax-tag));
+  --shiki-token-attribute: hsl(var(--syntax-property));
+  --shiki-token-attr-value: hsl(var(--syntax-string));
+
+  /* CSS tokens */
+  --shiki-token-selector: hsl(var(--syntax-tag));
+  --shiki-token-property: hsl(var(--syntax-property));
+
+  /* Additional tokens */
+  --shiki-token-variable: hsl(var(--syntax-variable));
+  --shiki-token-operator: hsl(var(--syntax-operator));
+  --shiki-token-number: hsl(var(--syntax-constant));
+  --shiki-token-boolean: hsl(var(--syntax-constant));
+  --shiki-token-regex: hsl(var(--syntax-string));
+  --shiki-token-class: hsl(var(--syntax-keyword));
+  --shiki-token-interface: hsl(var(--syntax-keyword));
+  --shiki-token-namespace: hsl(var(--syntax-keyword));
+  --shiki-token-type: hsl(var(--syntax-keyword));
 
   /* Diff colors */
   --shiki-token-deleted: hsl(var(--diff-deleted));

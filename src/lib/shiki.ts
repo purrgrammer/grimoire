@@ -13,13 +13,15 @@ const failedLanguages = new Set<string>();
 
 /**
  * CSS Variables theme for Shiki
- * This outputs CSS custom properties that we map to our theme variables.
- * The actual colors are defined in shiki-theme.css using our theme system.
+ * Maps TextMate scopes to CSS variable names that reference our theme system.
  */
 const cssVarsTheme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",
-  variableDefaults: {},
+  variableDefaults: {
+    foreground: "var(--shiki-color-text)",
+    background: "var(--shiki-color-background)",
+  },
   fontStyle: true,
 });
 
@@ -155,9 +157,12 @@ const CORE_LANGUAGES = [
   "javascript",
   "typescript",
   "json",
+  "html",
+  "css",
   "diff",
   "bash",
   "rust",
+  "toml",
   "markdown",
 ] as const;
 
@@ -183,9 +188,12 @@ export async function getHighlighter(): Promise<HighlighterCore> {
         import("shiki/langs/javascript.mjs"),
         import("shiki/langs/typescript.mjs"),
         import("shiki/langs/json.mjs"),
+        import("shiki/langs/html.mjs"),
+        import("shiki/langs/css.mjs"),
         import("shiki/langs/diff.mjs"),
         import("shiki/langs/bash.mjs"),
         import("shiki/langs/rust.mjs"),
+        import("shiki/langs/toml.mjs"),
         import("shiki/langs/markdown.mjs"),
       ],
       engine: createOnigurumaEngine(import("shiki/wasm")),
