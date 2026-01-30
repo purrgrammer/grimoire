@@ -17,6 +17,11 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   resolveGroupMetadata,
+  extractMetadataFromEvent,
+  loadCachedGroupMetadata,
+  cacheGroupMetadataBatch,
+  getGroupCacheKey,
+  isValidPubkey,
   type ResolvedGroupMetadata,
 } from "@/lib/chat/group-metadata-helpers";
 
@@ -341,39 +346,149 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }, [groups]);
 
-  // Resolve metadata with profile fallback for groups without NIP-29 metadata
+  // Resolve metadata with a multi-tier approach to prevent flicker:
+  // 1. Load from IndexedDB cache immediately (fastest, prevents flicker on subsequent visits)
+  // 2. Use sync extraction from kind 39000 events (fast, no async)
+  // 3. Only async-resolve for groups needing profile fallback (slow, only when needed)
   const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
     Map<string, ResolvedGroupMetadata>
   >(new Map());
 
+  // Track if cache has been loaded to avoid flashing groupId before cache loads
+  const [cacheLoaded, setCacheLoaded] = useState(false);
+
+  // Step 1: Load from IndexedDB cache immediately on mount (fast path for returning users)
   useEffect(() => {
-    if (groups.length === 0) return;
+    if (groups.length === 0) {
+      setCacheLoaded(true);
+      return;
+    }
 
-    const resolveAllMetadata = async () => {
-      const newResolvedMap = new Map<string, ResolvedGroupMetadata>();
+    loadCachedGroupMetadata(groups).then((cached) => {
+      if (cached.size > 0) {
+        setResolvedMetadataMap((prev) => {
+          // Merge cached with existing (cached is baseline, existing may have fresher data)
+          const merged = new Map(cached);
+          for (const [key, value] of prev) {
+            merged.set(key, value);
+          }
+          return merged;
+        });
+      }
+      setCacheLoaded(true);
+    });
+  }, [groups]);
 
-      // Resolve metadata for each group
-      await Promise.all(
-        groups.map(async (group) => {
-          // Skip unmanaged groups
-          if (group.groupId === "_") return;
+  // Step 2 & 3: Sync extraction from kind 39000 + async profile fallback
+  useEffect(() => {
+    if (groups.length === 0 || !cacheLoaded) return;
 
-          const existingMetadata = groupMetadataMap?.get(group.groupId);
-          const resolved = await resolveGroupMetadata(
-            group.groupId,
-            group.relayUrl,
-            existingMetadata,
+    // Determine which groups need async resolution (no NIP-29 metadata, groupId is pubkey)
+    const needsAsyncResolution: Array<{ groupId: string; relayUrl: string }> =
+      [];
+
+    for (const group of groups) {
+      if (group.groupId === "_") continue;
+
+      const metadataEvent = groupMetadataMap?.get(group.groupId);
+      if (!metadataEvent && isValidPubkey(group.groupId)) {
+        needsAsyncResolution.push(group);
+      }
+    }
+
+    // Update state using functional update to avoid stale reads
+    // This extracts sync metadata and preserves existing values for async groups
+    setResolvedMetadataMap((prev) => {
+      const updated = new Map(prev);
+
+      for (const group of groups) {
+        if (group.groupId === "_") continue;
+
+        const key = getGroupCacheKey(group.relayUrl, group.groupId);
+        const metadataEvent = groupMetadataMap?.get(group.groupId);
+
+        if (metadataEvent && metadataEvent.kind === 39000) {
+          // Fast path: we have the NIP-29 metadata event, extract synchronously
+          updated.set(
+            key,
+            extractMetadataFromEvent(group.groupId, metadataEvent),
           );
+        } else if (!isValidPubkey(group.groupId)) {
+          // No NIP-29 metadata, not a pubkey - use groupId as name
+          updated.set(key, { name: group.groupId, source: "fallback" });
+        }
+        // For pubkey groups without metadata, keep existing cached value (don't overwrite)
+      }
 
-          newResolvedMap.set(`${group.relayUrl}'${group.groupId}`, resolved);
-        }),
-      );
+      return updated;
+    });
 
-      setResolvedMetadataMap(newResolvedMap);
-    };
+    // Async pass: resolve profile metadata for groups that need it
+    if (needsAsyncResolution.length > 0) {
+      const resolveProfileMetadata = async () => {
+        const resolved: Array<{
+          relayUrl: string;
+          groupId: string;
+          metadata: ResolvedGroupMetadata;
+        }> = [];
 
-    resolveAllMetadata();
-  }, [groups, groupMetadataMap]);
+        await Promise.all(
+          needsAsyncResolution.map(async (group) => {
+            const metadata = await resolveGroupMetadata(
+              group.groupId,
+              group.relayUrl,
+              undefined, // No NIP-29 metadata, that's why we're here
+            );
+            resolved.push({
+              relayUrl: group.relayUrl,
+              groupId: group.groupId,
+              metadata,
+            });
+          }),
+        );
+
+        // Update state with async-resolved metadata
+        if (resolved.length > 0) {
+          setResolvedMetadataMap((prev) => {
+            const updated = new Map(prev);
+            for (const { relayUrl, groupId, metadata } of resolved) {
+              updated.set(getGroupCacheKey(relayUrl, groupId), metadata);
+            }
+            return updated;
+          });
+
+          // Cache the resolved metadata for future visits
+          cacheGroupMetadataBatch(resolved);
+        }
+      };
+
+      resolveProfileMetadata();
+    }
+
+    // Cache sync-resolved NIP-29 metadata
+    const toCache: Array<{
+      relayUrl: string;
+      groupId: string;
+      metadata: ResolvedGroupMetadata;
+    }> = [];
+
+    for (const group of groups) {
+      if (group.groupId === "_") continue;
+
+      const metadataEvent = groupMetadataMap?.get(group.groupId);
+      if (metadataEvent && metadataEvent.kind === 39000) {
+        toCache.push({
+          relayUrl: group.relayUrl,
+          groupId: group.groupId,
+          metadata: extractMetadataFromEvent(group.groupId, metadataEvent),
+        });
+      }
+    }
+
+    if (toCache.length > 0) {
+      cacheGroupMetadataBatch(toCache);
+    }
+  }, [groups, groupMetadataMap, cacheLoaded]);
 
   // Subscribe to latest messages (kind 9) for all groups to get recency
   // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
