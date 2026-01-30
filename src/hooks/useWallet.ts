@@ -40,6 +40,7 @@ import {
   loadTransactions as loadTransactionsService,
   loadMoreTransactions as loadMoreTransactionsService,
   retryLoadTransactions as retryLoadTransactionsService,
+  ensureWalletReady,
 } from "@/services/nwc";
 
 export function useWallet() {
@@ -90,9 +91,19 @@ export function useWallet() {
   // Wallet operations
   // ============================================================================
 
+  /**
+   * Pay a Lightning invoice via NWC.
+   *
+   * IMPORTANT: This first calls ensureWalletReady() to ensure the wallet's
+   * support$ observable has emitted. Without this, wallet.payInvoice() can
+   * hang forever because the applesauce-wallet-connect library's genericCall
+   * waits for encryption$ (derived from support$) without any timeout.
+   */
   async function payInvoice(invoice: string, amount?: number) {
-    if (!wallet) throw new Error("No wallet connected");
-    const result = await wallet.payInvoice(invoice, amount);
+    // Ensure wallet is ready - this waits for support$ with a timeout
+    // instead of letting it hang forever
+    const readyWallet = await ensureWalletReady();
+    const result = await readyWallet.payInvoice(invoice, amount);
     await refreshBalanceService();
     return result;
   }
@@ -105,18 +116,18 @@ export function useWallet() {
       expiry?: number;
     },
   ) {
-    if (!wallet) throw new Error("No wallet connected");
-    return await wallet.makeInvoice(amount, options);
+    const readyWallet = await ensureWalletReady();
+    return await readyWallet.makeInvoice(amount, options);
   }
 
   async function getInfo() {
-    if (!wallet) throw new Error("No wallet connected");
-    return await wallet.getInfo();
+    const readyWallet = await ensureWalletReady();
+    return await readyWallet.getInfo();
   }
 
   async function getBalance() {
-    if (!wallet) throw new Error("No wallet connected");
-    const result = await wallet.getBalance();
+    const readyWallet = await ensureWalletReady();
+    const result = await readyWallet.getBalance();
     return result.balance;
   }
 
@@ -128,18 +139,18 @@ export function useWallet() {
     unpaid?: boolean;
     type?: "incoming" | "outgoing";
   }) {
-    if (!wallet) throw new Error("No wallet connected");
-    return await wallet.listTransactions(options);
+    const readyWallet = await ensureWalletReady();
+    return await readyWallet.listTransactions(options);
   }
 
   async function lookupInvoice(paymentHash: string) {
-    if (!wallet) throw new Error("No wallet connected");
-    return await wallet.lookupInvoice(paymentHash);
+    const readyWallet = await ensureWalletReady();
+    return await readyWallet.lookupInvoice(paymentHash);
   }
 
   async function payKeysend(pubkey: string, amount: number, preimage?: string) {
-    if (!wallet) throw new Error("No wallet connected");
-    const result = await wallet.payKeysend(pubkey, amount, preimage);
+    const readyWallet = await ensureWalletReady();
+    const result = await readyWallet.payKeysend(pubkey, amount, preimage);
     await refreshBalanceService();
     return result;
   }
