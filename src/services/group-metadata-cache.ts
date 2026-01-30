@@ -1,6 +1,7 @@
 import { BehaviorSubject, firstValueFrom, type Observable } from "rxjs";
-import { filter, first, take, timeout, catchError } from "rxjs/operators";
+import { first, take, timeout, catchError } from "rxjs/operators";
 import { of } from "rxjs";
+import { onlyEvents } from "applesauce-relay/operators";
 import { kinds, type Filter } from "nostr-tools";
 import {
   getProfileContent,
@@ -165,7 +166,7 @@ class GroupMetadataCache {
     try {
       const event = await firstValueFrom(
         pool.subscription([relayUrl], [filterDef], { eventStore }).pipe(
-          filter((r): r is NostrEvent => typeof r !== "string"),
+          onlyEvents(),
           take(1),
           timeout(timeoutMs),
           catchError(() => of(undefined as NostrEvent | undefined)),
