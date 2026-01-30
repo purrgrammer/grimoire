@@ -146,6 +146,9 @@ export function RichText({
   renderMedia,
   children,
 }: RichTextProps) {
+  // Get parent media renderer to inherit if not explicitly overridden
+  const parentMediaRenderer = useMediaRenderer();
+
   // Merge provided options with defaults
   const mergedOptions: Required<RichTextOptions> = {
     ...defaultOptions,
@@ -191,7 +194,9 @@ export function RichText({
   return (
     <DepthContext.Provider value={depth}>
       <OptionsContext.Provider value={mergedOptions}>
-        <MediaRendererContext.Provider value={renderMedia ?? null}>
+        <MediaRendererContext.Provider
+          value={renderMedia !== undefined ? renderMedia : parentMediaRenderer}
+        >
           <EventContext.Provider value={event ?? null}>
             <div
               dir="auto"
