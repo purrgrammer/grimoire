@@ -35,12 +35,16 @@ let notificationSubscription: Subscription | null = null;
 let notificationRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Tracks whether the wallet's support$ observable has emitted.
- * The applesauce-wallet-connect library's genericCall waits for encryption$
- * which derives from support$. If support$ never emits, all wallet methods hang forever.
- * We use this flag to track readiness and ensure support$ has emitted before operations.
+ * Subscription that keeps the wallet's support$ observable alive.
+ *
+ * CRITICAL: The applesauce-wallet-connect library's support$ uses a ReplaySubject(1)
+ * with resetOnRefCountZero: timer(60000). This means if no one subscribes to support$
+ * for 60 seconds, the cached value is LOST. Then genericCall's firstValueFrom(encryption$)
+ * hangs forever waiting for a new kind 13194 event.
+ *
+ * We keep a persistent subscription to support$ to prevent this reset.
  */
-let walletSupportReceived = false;
+let supportSubscription: Subscription | null = null;
 
 /**
  * Connection status for the NWC wallet
@@ -154,14 +158,18 @@ function subscribeToNotifications(wallet: WalletConnect) {
 }
 
 /**
- * Waits for the wallet's support$ to emit, ensuring the wallet is ready for operations.
+ * Waits for the wallet's support$ to emit and creates a persistent subscription.
  *
- * CRITICAL: The applesauce-wallet-connect library's genericCall method waits for
- * encryption$ (derived from support$) without any timeout. If support$ never emits
- * (e.g., wallet service doesn't send kind 13194 events quickly), operations hang forever.
+ * CRITICAL: The applesauce-wallet-connect library has two issues:
+ * 1. genericCall waits for encryption$ (derived from support$) without any timeout
+ * 2. support$ uses ReplaySubject(1) with resetOnRefCountZero: timer(60000)
  *
- * This function must be called before any wallet operation to ensure support$ has emitted.
- * It will wait up to the specified timeout before throwing an error.
+ * This means if no one subscribes to support$ for 60 seconds, the cached value is LOST,
+ * and subsequent genericCall invocations hang forever waiting for a new kind 13194 event.
+ *
+ * This function:
+ * 1. Waits for support$ to emit with a timeout
+ * 2. Creates a PERSISTENT subscription to support$ to prevent the ReplaySubject reset
  *
  * @param wallet The wallet instance
  * @param timeoutMs Maximum time to wait (default: 15 seconds)
@@ -171,10 +179,9 @@ async function waitForSupport(
   wallet: WalletConnect,
   timeoutMs = 15000,
 ): Promise<void> {
-  // Already received support info
-  if (walletSupportReceived) {
-    return;
-  }
+  // Clean up any existing subscription
+  supportSubscription?.unsubscribe();
+  supportSubscription = null;
 
   try {
     // Race support$ against a timeout
@@ -191,7 +198,24 @@ async function waitForSupport(
         ),
       ),
     );
-    walletSupportReceived = true;
+
+    // CRITICAL: Create a persistent subscription to support$ to prevent
+    // the ReplaySubject from resetting after 60 seconds of inactivity.
+    // Without this, genericCall's firstValueFrom(encryption$) would hang
+    // if the user waits >60 seconds between operations.
+    supportSubscription = wallet.support$.subscribe({
+      next: (support) => {
+        console.log(
+          "[NWC] Support info updated:",
+          support?.methods?.length,
+          "methods available",
+        );
+      },
+      error: (err) => {
+        console.error("[NWC] Support subscription error:", err);
+      },
+    });
+
     console.log("[NWC] Wallet support info received, ready for operations");
   } catch (error) {
     console.error("[NWC] Failed to get wallet support info:", error);
@@ -203,6 +227,9 @@ async function waitForSupport(
  * Ensures the wallet is ready before performing operations.
  * This must be called before any wallet method that uses genericCall internally.
  *
+ * If the wallet is already connected with an active support subscription, returns immediately.
+ * Otherwise, waits for support$ to emit with a timeout.
+ *
  * @throws Error if wallet not connected or not ready
  */
 export async function ensureWalletReady(): Promise<WalletConnect> {
@@ -211,6 +238,12 @@ export async function ensureWalletReady(): Promise<WalletConnect> {
     throw new Error("No wallet connected");
   }
 
+  // If we already have an active support subscription, wallet is ready
+  if (supportSubscription && !supportSubscription.closed) {
+    return wallet;
+  }
+
+  // Otherwise, wait for support to be available
   await waitForSupport(wallet);
   return wallet;
 }
@@ -229,7 +262,6 @@ export async function createWalletFromURI(
 ): Promise<WalletConnect> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
-  walletSupportReceived = false;
 
   const wallet = WalletConnect.fromConnectURI(connectionString);
   wallet$.next(wallet);
@@ -265,7 +297,6 @@ export async function restoreWallet(
 ): Promise<WalletConnect> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
-  walletSupportReceived = false;
 
   const wallet = new WalletConnect({
     service: connection.service,
@@ -308,9 +339,11 @@ export async function restoreWallet(
  * Disconnects and clears the wallet.
  */
 export function clearWallet(): void {
-  // Clean up subscription and pending retry
+  // Clean up subscriptions and pending retry
   notificationSubscription?.unsubscribe();
   notificationSubscription = null;
+  supportSubscription?.unsubscribe();
+  supportSubscription = null;
   if (notificationRetryTimeout) {
     clearTimeout(notificationRetryTimeout);
     notificationRetryTimeout = null;
@@ -320,7 +353,6 @@ export function clearWallet(): void {
   balance$.next(undefined);
   connectionStatus$.next("disconnected");
   lastError$.next(null);
-  walletSupportReceived = false;
   resetTransactions();
 }
 
@@ -385,7 +417,6 @@ export async function reconnect(): Promise<void> {
 
   connectionStatus$.next("connecting");
   lastError$.next(null);
-  walletSupportReceived = false;
 
   // Re-subscribe to notifications (this keeps events$ alive)
   subscribeToNotifications(wallet);
