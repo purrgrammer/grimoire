@@ -223,31 +223,6 @@ async function waitForSupport(
   }
 }
 
-/**
- * Ensures the wallet is ready before performing operations.
- * This must be called before any wallet method that uses genericCall internally.
- *
- * If the wallet is already connected with an active support subscription, returns immediately.
- * Otherwise, waits for support$ to emit with a timeout.
- *
- * @throws Error if wallet not connected or not ready
- */
-export async function ensureWalletReady(): Promise<WalletConnect> {
-  const wallet = wallet$.value;
-  if (!wallet) {
-    throw new Error("No wallet connected");
-  }
-
-  // If we already have an active support subscription, wallet is ready
-  if (supportSubscription && !supportSubscription.closed) {
-    return wallet;
-  }
-
-  // Otherwise, wait for support to be available
-  await waitForSupport(wallet);
-  return wallet;
-}
-
 // ============================================================================
 // Public API
 // ============================================================================

@@ -4,19 +4,20 @@
  * Provides reactive access to the NWC wallet throughout the application.
  * All state is derived from observables - no manual synchronization needed.
  *
+ * IMPORTANT: The use$ subscription to wallet.support$ keeps the observable alive,
+ * preventing the library's ReplaySubject from resetting after 60 seconds.
+ * Always check that `support` is defined before calling wallet methods.
+ *
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { wallet, balance, connectionStatus, walletMethods, payInvoice } = useWallet();
+ *   const { wallet, support, balance, payInvoice } = useWallet();
  *
- *   if (connectionStatus === 'error') {
- *     return <ErrorState onRetry={reconnect} />;
- *   }
- *
- *   // walletMethods combines support$ with cached info for reliability
- *   if (walletMethods.includes('pay_invoice')) {
- *     return <PayButton onClick={() => payInvoice("lnbc...")} />;
- *   }
+ *   // Always check support before operations
+ *   const handlePay = async () => {
+ *     if (!wallet || !support) return;
+ *     await payInvoice("lnbc...");
+ *   };
  *
  *   return <div>Balance: {formatSats(balance)}</div>;
  * }
@@ -40,7 +41,6 @@ import {
   loadTransactions as loadTransactionsService,
   loadMoreTransactions as loadMoreTransactionsService,
   retryLoadTransactions as retryLoadTransactionsService,
-  ensureWalletReady,
 } from "@/services/nwc";
 
 export function useWallet() {
@@ -93,17 +93,11 @@ export function useWallet() {
 
   /**
    * Pay a Lightning invoice via NWC.
-   *
-   * IMPORTANT: This first calls ensureWalletReady() to ensure the wallet's
-   * support$ observable has emitted. Without this, wallet.payInvoice() can
-   * hang forever because the applesauce-wallet-connect library's genericCall
-   * waits for encryption$ (derived from support$) without any timeout.
+   * The use$ subscription to support$ keeps it alive, so encryption$ will work.
    */
   async function payInvoice(invoice: string, amount?: number) {
-    // Ensure wallet is ready - this waits for support$ with a timeout
-    // instead of letting it hang forever
-    const readyWallet = await ensureWalletReady();
-    const result = await readyWallet.payInvoice(invoice, amount);
+    if (!wallet) throw new Error("No wallet connected");
+    const result = await wallet.payInvoice(invoice, amount);
     await refreshBalanceService();
     return result;
   }
@@ -116,18 +110,18 @@ export function useWallet() {
       expiry?: number;
     },
   ) {
-    const readyWallet = await ensureWalletReady();
-    return await readyWallet.makeInvoice(amount, options);
+    if (!wallet) throw new Error("No wallet connected");
+    return await wallet.makeInvoice(amount, options);
   }
 
   async function getInfo() {
-    const readyWallet = await ensureWalletReady();
-    return await readyWallet.getInfo();
+    if (!wallet) throw new Error("No wallet connected");
+    return await wallet.getInfo();
   }
 
   async function getBalance() {
-    const readyWallet = await ensureWalletReady();
-    const result = await readyWallet.getBalance();
+    if (!wallet) throw new Error("No wallet connected");
+    const result = await wallet.getBalance();
     return result.balance;
   }
 
@@ -139,18 +133,18 @@ export function useWallet() {
     unpaid?: boolean;
     type?: "incoming" | "outgoing";
   }) {
-    const readyWallet = await ensureWalletReady();
-    return await readyWallet.listTransactions(options);
+    if (!wallet) throw new Error("No wallet connected");
+    return await wallet.listTransactions(options);
   }
 
   async function lookupInvoice(paymentHash: string) {
-    const readyWallet = await ensureWalletReady();
-    return await readyWallet.lookupInvoice(paymentHash);
+    if (!wallet) throw new Error("No wallet connected");
+    return await wallet.lookupInvoice(paymentHash);
   }
 
   async function payKeysend(pubkey: string, amount: number, preimage?: string) {
-    const readyWallet = await ensureWalletReady();
-    const result = await readyWallet.payKeysend(pubkey, amount, preimage);
+    if (!wallet) throw new Error("No wallet connected");
+    const result = await wallet.payKeysend(pubkey, amount, preimage);
     await refreshBalanceService();
     return result;
   }
