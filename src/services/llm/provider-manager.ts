@@ -219,8 +219,11 @@ class LLMProviderManager {
       };
     }
 
-    // Update lastUsed
-    await db.llmProviders.update(instanceId, { lastUsed: Date.now() });
+    // Update lastUsed and lastModelId
+    await db.llmProviders.update(instanceId, {
+      lastUsed: Date.now(),
+      lastModelId: modelId,
+    });
   }
 
   /**

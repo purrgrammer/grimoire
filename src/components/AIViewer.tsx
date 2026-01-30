@@ -306,72 +306,110 @@ function ChatPanel({
 
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
+  // Optimistic UI: show user message immediately
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(
+    null,
+  );
+  // Track when we're waiting for AI (before tokens start streaming)
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation?.messages, streamingContent]);
+  }, [conversation?.messages, streamingContent, pendingUserMessage]);
 
   // Focus textarea on mount
   useEffect(() => {
     textareaRef.current?.focus();
   }, [conversationId]);
 
+  // Clear pending message when conversation updates with our message
+  useEffect(() => {
+    if (
+      pendingUserMessage &&
+      conversation?.messages.some(
+        (m) => m.role === "user" && m.content === pendingUserMessage,
+      )
+    ) {
+      setPendingUserMessage(null);
+    }
+  }, [conversation?.messages, pendingUserMessage]);
+
   const handleSend = async () => {
-    if (!input.trim() || isGenerating) return;
+    if (!input.trim() || isGenerating || isWaitingForResponse) return;
 
     const userContent = input.trim();
     setInput("");
 
-    // Create conversation if needed
-    let activeConversationId = conversationId;
-    if (!activeConversationId) {
-      activeConversationId = await createConversation(
+    // Optimistically show user message immediately
+    setPendingUserMessage(userContent);
+    setIsWaitingForResponse(true);
+
+    try {
+      // Create conversation if needed
+      let activeConversationId = conversationId;
+      if (!activeConversationId) {
+        activeConversationId = await createConversation(
+          providerInstanceId,
+          modelId,
+        );
+        onConversationCreated(activeConversationId);
+      }
+
+      // Add user message to DB
+      const userMessage = await addMessage({
+        role: "user",
+        content: userContent,
+      });
+      if (!userMessage) {
+        setPendingUserMessage(null);
+        setIsWaitingForResponse(false);
+        return;
+      }
+
+      // Get all messages for context
+      const conv = await (
+        await import("@/services/db")
+      ).default.llmConversations.get(activeConversationId);
+      if (!conv) {
+        setIsWaitingForResponse(false);
+        return;
+      }
+
+      // Add placeholder assistant message
+      await addMessage({ role: "assistant", content: "" });
+
+      // Stream response
+      setStreamingContent("");
+
+      let fullContent = "";
+      await sendMessage(
         providerInstanceId,
         modelId,
+        conv.messages,
+        (token) => {
+          // First token received - no longer "waiting"
+          setIsWaitingForResponse(false);
+          fullContent += token;
+          setStreamingContent(fullContent);
+        },
+        async () => {
+          await updateLastMessage(fullContent);
+          setStreamingContent("");
+          setIsWaitingForResponse(false);
+        },
+        async (error) => {
+          await updateLastMessage(`Error: ${error}`);
+          setStreamingContent("");
+          setIsWaitingForResponse(false);
+        },
       );
-      onConversationCreated(activeConversationId);
+    } catch (error) {
+      setPendingUserMessage(null);
+      setIsWaitingForResponse(false);
     }
-
-    // Add user message
-    const userMessage = await addMessage({
-      role: "user",
-      content: userContent,
-    });
-    if (!userMessage) return;
-
-    // Get all messages for context
-    const conv = await (
-      await import("@/services/db")
-    ).default.llmConversations.get(activeConversationId);
-    if (!conv) return;
-
-    // Add placeholder assistant message
-    await addMessage({ role: "assistant", content: "" });
-
-    // Stream response
-    setStreamingContent("");
-
-    let fullContent = "";
-    await sendMessage(
-      providerInstanceId,
-      modelId,
-      conv.messages,
-      (token) => {
-        fullContent += token;
-        setStreamingContent(fullContent);
-      },
-      async () => {
-        await updateLastMessage(fullContent);
-        setStreamingContent("");
-      },
-      async (error) => {
-        await updateLastMessage(error);
-        setStreamingContent("");
-      },
-    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -382,7 +420,9 @@ function ChatPanel({
   };
 
   const messages = conversation?.messages ?? [];
-  const displayMessages =
+
+  // Build display messages with optimistic updates
+  let displayMessages =
     streamingContent && messages.length > 0
       ? [
           ...messages.slice(0, -1),
@@ -390,12 +430,34 @@ function ChatPanel({
         ]
       : messages;
 
+  // Add pending user message optimistically if not yet in conversation
+  if (
+    pendingUserMessage &&
+    !messages.some((m) => m.role === "user" && m.content === pendingUserMessage)
+  ) {
+    displayMessages = [
+      ...displayMessages,
+      {
+        id: "pending",
+        role: "user" as const,
+        content: pendingUserMessage,
+        timestamp: Date.now(),
+      },
+    ];
+  }
+
+  // Show thinking indicator when waiting for response
+  const showThinking =
+    isWaitingForResponse || (isGenerating && !streamingContent);
+
+  const isBusy = isGenerating || isWaitingForResponse;
+
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="flex flex-col gap-3">
-          {displayMessages.length === 0 && !isGenerating ? (
+          {displayMessages.length === 0 && !showThinking ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
               Start a conversation
             </div>
@@ -404,7 +466,7 @@ function ChatPanel({
               {displayMessages.map((msg) => (
                 <MessageBubble key={msg.id} message={msg} />
               ))}
-              {isGenerating && !streamingContent && <ThinkingIndicator />}
+              {showThinking && <ThinkingIndicator />}
             </>
           )}
           <div ref={messagesEndRef} />
@@ -422,9 +484,9 @@ function ChatPanel({
             placeholder="Type a message..."
             className="flex-1 min-h-[40px] max-h-[120px] resize-none"
             rows={1}
-            disabled={isGenerating}
+            disabled={isBusy}
           />
-          {isGenerating ? (
+          {isBusy ? (
             <Button
               variant="outline"
               size="icon"
@@ -482,18 +544,38 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     }
   }, [activeInstanceId, instances, setActiveInstance]);
 
-  // Auto-select loaded model or first downloaded model
+  // Reset model selection when switching providers
   useEffect(() => {
-    if (activeInstance?.providerId === "webllm") {
+    setSelectedModelId(null);
+  }, [activeInstanceId]);
+
+  // Auto-select model: last used > first downloaded (WebLLM) > first available
+  useEffect(() => {
+    if (!activeInstance || models.length === 0) return;
+
+    if (activeInstance.providerId === "webllm") {
+      // For WebLLM: if model is loaded, use that
       if (status.state === "ready") {
         setSelectedModelId(status.modelId);
-      } else if (!selectedModelId && models.length > 0) {
-        const downloaded = models.find((m) => m.isDownloaded);
+        return;
+      }
+      // Otherwise try last used model (if downloaded), then first downloaded
+      if (!selectedModelId) {
+        const lastModel = activeInstance.lastModelId
+          ? models.find(
+              (m) => m.id === activeInstance.lastModelId && m.isDownloaded,
+            )
+          : null;
+        const downloaded = lastModel || models.find((m) => m.isDownloaded);
         if (downloaded) setSelectedModelId(downloaded.id);
       }
-    } else if (activeInstance?.providerId === "ppq" && models.length > 0) {
+    } else {
+      // For PPQ and other providers: last used > first available
       if (!selectedModelId) {
-        setSelectedModelId(models[0].id);
+        const lastModel = activeInstance.lastModelId
+          ? models.find((m) => m.id === activeInstance.lastModelId)
+          : null;
+        setSelectedModelId(lastModel?.id || models[0].id);
       }
     }
   }, [status, models, activeInstance, selectedModelId]);

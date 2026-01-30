@@ -45,6 +45,7 @@ export interface LLMProviderInstance {
   // State
   enabled: boolean;
   lastUsed?: number;
+  lastModelId?: string; // Last model used with this provider
 
   // Cached model list
   cachedModels?: LLMModel[];
