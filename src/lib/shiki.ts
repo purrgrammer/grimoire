@@ -14,7 +14,7 @@ const loadedLanguages = new Set<string>();
  * Grimoire dark theme - minimalistic grayscale with semantic colors
  * Uses muted grays for syntax with color only for diff semantics
  */
-const grimoireTheme: ThemeRegistration = {
+const grimoireDarkTheme: ThemeRegistration = {
   name: "grimoire-dark",
   type: "dark",
   colors: {
@@ -139,6 +139,138 @@ const grimoireTheme: ThemeRegistration = {
     {
       scope: ["markup.underline.link"],
       settings: { foreground: "#93c5fd" },
+    },
+  ],
+};
+
+/**
+ * Grimoire light theme - minimalistic grayscale for light backgrounds
+ */
+const grimoireLightTheme: ThemeRegistration = {
+  name: "grimoire-light",
+  type: "light",
+  colors: {
+    "editor.background": "#ffffff",
+    "editor.foreground": "#1a1a1a",
+  },
+  tokenColors: [
+    // Comments - muted
+    {
+      scope: ["comment", "punctuation.definition.comment"],
+      settings: { foreground: "#6b7280" },
+    },
+    // Strings - muted but slightly emphasized
+    {
+      scope: ["string", "string.quoted"],
+      settings: { foreground: "#4b5563" },
+    },
+    // Keywords, operators - emphasized dark gray
+    {
+      scope: [
+        "keyword",
+        "storage",
+        "storage.type",
+        "storage.modifier",
+        "keyword.operator",
+        "keyword.control",
+      ],
+      settings: { foreground: "#374151" },
+    },
+    // Functions, methods - foreground bold
+    {
+      scope: ["entity.name.function", "support.function", "meta.function-call"],
+      settings: { foreground: "#1a1a1a", fontStyle: "bold" },
+    },
+    // Classes, types - foreground bold
+    {
+      scope: [
+        "entity.name.class",
+        "entity.name.type",
+        "support.class",
+        "support.type",
+      ],
+      settings: { foreground: "#1a1a1a", fontStyle: "bold" },
+    },
+    // Numbers, constants - emphasized dark gray
+    {
+      scope: [
+        "constant",
+        "constant.numeric",
+        "constant.language",
+        "constant.character",
+      ],
+      settings: { foreground: "#374151" },
+    },
+    // Variables, parameters - foreground
+    {
+      scope: ["variable", "variable.parameter", "variable.other"],
+      settings: { foreground: "#1a1a1a" },
+    },
+    // Punctuation - slightly muted
+    {
+      scope: ["punctuation", "meta.brace"],
+      settings: { foreground: "#4b5563" },
+    },
+    // Properties, attributes
+    {
+      scope: [
+        "variable.other.property",
+        "entity.other.attribute-name",
+        "support.type.property-name",
+      ],
+      settings: { foreground: "#374151" },
+    },
+    // Tags (HTML/JSX)
+    {
+      scope: ["entity.name.tag", "support.class.component"],
+      settings: { foreground: "#374151" },
+    },
+    // JSON keys
+    {
+      scope: ["support.type.property-name.json"],
+      settings: { foreground: "#374151" },
+    },
+    // Diff - deleted (red)
+    {
+      scope: [
+        "markup.deleted",
+        "punctuation.definition.deleted",
+        "meta.diff.header.from-file",
+      ],
+      settings: { foreground: "#dc2626" },
+    },
+    // Diff - inserted (green)
+    {
+      scope: [
+        "markup.inserted",
+        "punctuation.definition.inserted",
+        "meta.diff.header.to-file",
+      ],
+      settings: { foreground: "#16a34a" },
+    },
+    // Diff - changed/range
+    {
+      scope: ["markup.changed", "meta.diff.range", "meta.diff.header"],
+      settings: { foreground: "#0891b2" },
+    },
+    // Markdown headings
+    {
+      scope: ["markup.heading", "entity.name.section"],
+      settings: { foreground: "#1a1a1a", fontStyle: "bold" },
+    },
+    // Markdown bold/italic
+    {
+      scope: ["markup.bold"],
+      settings: { fontStyle: "bold" },
+    },
+    {
+      scope: ["markup.italic"],
+      settings: { fontStyle: "italic" },
+    },
+    // Markdown links
+    {
+      scope: ["markup.underline.link"],
+      settings: { foreground: "#2563eb" },
     },
   ],
 };
@@ -298,7 +430,7 @@ export async function getHighlighter(): Promise<HighlighterCore> {
 
   if (!highlighterPromise) {
     highlighterPromise = createHighlighterCore({
-      themes: [grimoireTheme],
+      themes: [grimoireDarkTheme, grimoireLightTheme],
       langs: [
         import("shiki/langs/javascript.mjs"),
         import("shiki/langs/typescript.mjs"),
@@ -343,8 +475,17 @@ async function loadLanguage(lang: string): Promise<boolean> {
 }
 
 /**
+ * Detect if dark mode is currently active
+ */
+function isDarkMode(): boolean {
+  if (typeof document === "undefined") return true;
+  return document.documentElement.classList.contains("dark");
+}
+
+/**
  * Highlight code with lazy language loading
  * Returns HTML string
+ * Automatically uses the appropriate theme based on current color scheme
  */
 export async function highlightCode(
   code: string,
@@ -357,9 +498,12 @@ export async function highlightCode(
   const loaded = await loadLanguage(lang);
   const effectiveLang = loaded ? lang : "text";
 
+  // Select theme based on current color scheme
+  const theme = isDarkMode() ? "grimoire-dark" : "grimoire-light";
+
   return hl.codeToHtml(code, {
     lang: effectiveLang,
-    theme: "grimoire-dark",
+    theme,
   });
 }
 

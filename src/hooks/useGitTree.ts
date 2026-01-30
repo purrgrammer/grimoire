@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getInfoRefs,
   getDirectoryTreeAt,
-  shallowCloneRepositoryAt,
   MissingCapability,
 } from "@fiatjaf/git-natural-api";
 import type { DirectoryTree } from "@/lib/git-types";
@@ -33,8 +32,8 @@ interface UseGitTreeResult {
  * Hook to fetch a git repository tree from clone URLs
  *
  * Tries each clone URL in sequence until one succeeds.
- * Uses the lightweight `getDirectoryTreeAt` if the server supports filtering,
- * otherwise falls back to `shallowCloneRepositoryAt`.
+ * Uses the lightweight `getDirectoryTreeAt` which requires filter capability.
+ * Servers without filter support are skipped.
  *
  * @example
  * const { tree, loading, error } = useGitTree({
@@ -69,7 +68,18 @@ export function useGitTree({
       try {
         // Get server info to check capabilities and resolve refs
         const info = await getInfoRefs(url);
-        const hasFilter = info.capabilities.includes("filter");
+
+        // Only use servers that support filter capability (lightweight fetch)
+        // Skip servers that would require downloading all blobs
+        if (!info.capabilities.includes("filter")) {
+          console.warn(
+            `[useGitTree] Server ${url} doesn't support filter capability, skipping`,
+          );
+          errors.push(
+            new MissingCapability("filter", "Server doesn't support filter"),
+          );
+          continue;
+        }
 
         // Resolve the ref to a commit hash
         let resolvedRef = ref;
@@ -92,15 +102,8 @@ export function useGitTree({
           }
         }
 
-        // Fetch the tree
-        let fetchedTree: DirectoryTree;
-        if (hasFilter) {
-          // Server supports filter - use lightweight fetch (tree only, no blobs)
-          fetchedTree = await getDirectoryTreeAt(url, resolvedRef);
-        } else {
-          // No filter support - need to do shallow clone
-          fetchedTree = await shallowCloneRepositoryAt(url, resolvedRef);
-        }
+        // Fetch the tree using lightweight filter (tree only, no blobs)
+        const fetchedTree = await getDirectoryTreeAt(url, resolvedRef);
 
         setTree(fetchedTree);
         setServerUrl(url);
