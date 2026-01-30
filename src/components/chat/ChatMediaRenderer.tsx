@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Image, Video, Music, File, Flower2 } from "lucide-react";
+import { Image, Video, Music, File, HardDrive } from "lucide-react";
 import { getHashFromURL } from "blossom-client-sdk/helpers/url";
 import { useGrimoire } from "@/core/state";
 import { formatFileSize } from "@/lib/imeta";
@@ -98,11 +98,18 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
     e.preventDefault();
     e.stopPropagation();
     if (blossom) {
-      addWindow("blossom", {
-        subcommand: "blob",
-        sha256: blossom.sha256,
-        serverUrl: blossom.serverUrl,
-      });
+      // Build command string for Edit functionality
+      const commandString = `blossom blob ${blossom.sha256} ${blossom.serverUrl}`;
+      addWindow(
+        "blossom",
+        {
+          subcommand: "blob",
+          sha256: blossom.sha256,
+          serverUrl: blossom.serverUrl,
+          blobUrl: url, // Pass full URL with extension
+        },
+        commandString,
+      );
     }
   };
 
@@ -137,7 +144,7 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
             className="text-muted-foreground hover:text-foreground"
             title="View in Blossom"
           >
-            <Flower2 className="size-3" />
+            <HardDrive className="size-3" />
           </button>
         )}
       </span>

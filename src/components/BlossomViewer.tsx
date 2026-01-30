@@ -51,6 +51,8 @@ interface BlossomViewerProps {
   sourceUrl?: string;
   targetServer?: string;
   sha256?: string;
+  /** Full blob URL with extension (for blob subcommand) */
+  blobUrl?: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export function BlossomViewer({
   sourceUrl,
   targetServer,
   sha256,
+  blobUrl,
 }: BlossomViewerProps) {
   switch (subcommand) {
     case "servers":
@@ -74,7 +77,13 @@ export function BlossomViewer({
     case "list":
       return <ListBlobsView pubkey={pubkey} serverUrl={serverUrl} />;
     case "blob":
-      return <BlobDetailView sha256={sha256!} serverUrl={serverUrl} />;
+      return (
+        <BlobDetailView
+          sha256={sha256!}
+          serverUrl={serverUrl}
+          blobUrl={blobUrl}
+        />
+      );
     case "mirror":
       return <MirrorView sourceUrl={sourceUrl!} targetServer={targetServer!} />;
     case "delete":
@@ -996,20 +1005,25 @@ function BlobRow({
 function BlobDetailView({
   sha256,
   serverUrl,
+  blobUrl: providedBlobUrl,
   blob: initialBlob,
   onBack,
 }: {
   sha256?: string;
   serverUrl?: string;
+  /** Full blob URL with extension */
+  blobUrl?: string;
   blob?: BlobDescriptor;
   onBack?: () => void;
 }) {
   const { copy, copied } = useCopy();
   const blob = initialBlob;
 
-  // If we have a blob descriptor, use that data
+  // Use provided URL, or blob descriptor URL, or construct from server + sha256
   const blobUrl =
-    blob?.url || (serverUrl && sha256 ? `${serverUrl}/${sha256}` : null);
+    providedBlobUrl ||
+    blob?.url ||
+    (serverUrl && sha256 ? `${serverUrl}/${sha256}` : null);
   const blobSha256 = blob?.sha256 || sha256;
   const mimeType = blob?.type;
 
