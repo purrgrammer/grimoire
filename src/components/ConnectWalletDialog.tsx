@@ -59,19 +59,29 @@ export default function ConnectWalletDialog({
       // This waits for the wallet to be ready (support$ must emit)
       const wallet = await createWalletFromURI(connectionString);
 
-      // Get wallet info (wallet is already ready at this point)
-      const info = await wallet.getInfo();
+      // Get support info from the already-emitted support$ (no network request needed)
+      const support = await wallet.getSupport();
 
-      // Get initial balance
+      // Try to get extended info (alias, network) but don't fail if it times out
+      let alias: string | undefined;
+      let network: string | undefined;
+      try {
+        const info = await wallet.getInfo();
+        alias = info.alias;
+        network = info.network;
+      } catch (err) {
+        console.warn("[NWC] Failed to get extended wallet info:", err);
+        // Continue without alias/network - they're optional
+      }
+
+      // Get initial balance (also optional)
       let balance: number | undefined;
       try {
         const balanceResult = await wallet.getBalance();
         balance = balanceResult.balance;
-        // Update the observable immediately so WalletViewer shows correct balance
         balance$.next(balance);
       } catch (err) {
         console.warn("[NWC] Failed to get balance:", err);
-        // Balance is optional, continue anyway
       }
 
       // Get connection details from the wallet instance
@@ -85,10 +95,10 @@ export default function ConnectWalletDialog({
         lud16: serialized.lud16,
         balance,
         info: {
-          alias: info.alias,
-          network: info.network,
-          methods: info.methods,
-          notifications: info.notifications,
+          alias,
+          network,
+          methods: support?.methods ?? [],
+          notifications: support?.notifications,
         },
       });
 
@@ -99,10 +109,10 @@ export default function ConnectWalletDialog({
 
       // Update info
       updateNWCInfo({
-        alias: info.alias,
-        network: info.network,
-        methods: info.methods,
-        notifications: info.notifications,
+        alias,
+        network,
+        methods: support?.methods ?? [],
+        notifications: support?.notifications,
       });
 
       // Show success toast
