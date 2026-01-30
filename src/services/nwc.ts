@@ -222,16 +222,35 @@ export async function ensureWalletReady(): Promise<WalletConnect> {
 /**
  * Creates a new wallet connection from a NWC URI.
  * Used when user connects a new wallet.
+ * Waits for wallet to be ready before returning.
  */
-export function createWalletFromURI(connectionString: string): WalletConnect {
+export async function createWalletFromURI(
+  connectionString: string,
+): Promise<WalletConnect> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
+  walletSupportReceived = false;
 
   const wallet = WalletConnect.fromConnectURI(connectionString);
   wallet$.next(wallet);
 
+  // Subscribe to notifications to keep events$ alive
   subscribeToNotifications(wallet);
-  refreshBalance(); // Fetch initial balance
+
+  // Wait for wallet to be ready (support$ must emit)
+  try {
+    await waitForSupport(wallet, 15000);
+    connectionStatus$.next("connected");
+    // Start fetching balance after wallet is ready
+    refreshBalance();
+  } catch (error) {
+    console.error("[NWC] Wallet connection failed:", error);
+    connectionStatus$.next("error");
+    lastError$.next(
+      error instanceof Error ? error : new Error("Connection failed"),
+    );
+    throw error; // Re-throw so the dialog can show the error
+  }
 
   return wallet;
 }

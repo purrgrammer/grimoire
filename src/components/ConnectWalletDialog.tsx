@@ -56,9 +56,10 @@ export default function ConnectWalletDialog({
 
     try {
       // Create wallet instance from connection string
-      const wallet = createWalletFromURI(connectionString);
+      // This waits for the wallet to be ready (support$ must emit)
+      const wallet = await createWalletFromURI(connectionString);
 
-      // Test the connection by getting wallet info
+      // Get wallet info (wallet is already ready at this point)
       const info = await wallet.getInfo();
 
       // Get initial balance
