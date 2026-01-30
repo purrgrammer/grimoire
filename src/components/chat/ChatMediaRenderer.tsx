@@ -54,7 +54,7 @@ function parseBlossomUrl(
  * Get icon component based on media type
  */
 function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
-  const iconClass = "size-4 shrink-0";
+  const iconClass = "size-3.5 shrink-0 text-muted-foreground";
   switch (type) {
     case "image":
       return <Image className={iconClass} />;
@@ -91,7 +91,7 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   };
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded bg-muted/50 px-2 py-0.5 text-sm">
+    <span className="inline-flex items-center gap-1 border-b border-dotted border-muted-foreground/50">
       <MediaIcon type={type} />
       <a
         href={url}
@@ -109,10 +109,10 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
       {blossom && (
         <button
           onClick={handleBlossomClick}
-          className="text-muted-foreground hover:text-foreground shrink-0"
+          className="text-muted-foreground hover:text-foreground"
           title="View in Blossom"
         >
-          <Flower2 className="size-3.5" />
+          <Flower2 className="size-3" />
         </button>
       )}
     </span>
