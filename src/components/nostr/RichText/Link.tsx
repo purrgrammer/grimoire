@@ -7,12 +7,10 @@ import {
 import { MediaDialog } from "../MediaDialog";
 import { MediaEmbed } from "../MediaEmbed";
 import { PlainLink } from "../LinkPreview";
-import {
-  useRichTextOptions,
-  useMediaRenderer,
-  useRichTextEvent,
-} from "../RichText";
+import { CompactMediaRenderer } from "../CompactMediaRenderer";
+import { useRichTextOptions, useRichTextEvent } from "../RichText";
 import { findImetaForUrl } from "@/lib/imeta";
+import { useSettings } from "@/hooks/useSettings";
 
 function MediaPlaceholder({ type }: { type: "image" | "video" | "audio" }) {
   return <span className="text-muted-foreground">[{type}]</span>;
@@ -26,10 +24,13 @@ interface LinkNodeProps {
 
 export function Link({ node }: LinkNodeProps) {
   const options = useRichTextOptions();
-  const CustomMediaRenderer = useMediaRenderer();
   const event = useRichTextEvent();
+  const { settings } = useSettings();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { href } = node;
+
+  // Check global loadMedia setting
+  const loadMedia = settings?.appearance?.loadMedia ?? true;
 
   // Look up imeta for this URL if event is available
   const imeta = event ? findImetaForUrl(event, href) : undefined;
@@ -44,8 +45,8 @@ export function Link({ node }: LinkNodeProps) {
   // Render appropriate link type
   if (isImageURL(href)) {
     if (shouldShowMedia && options.showImages) {
-      if (CustomMediaRenderer) {
-        return <CustomMediaRenderer url={href} type="image" imeta={imeta} />;
+      if (!loadMedia) {
+        return <CompactMediaRenderer url={href} type="image" imeta={imeta} />;
       }
       return (
         <MediaEmbed
@@ -62,8 +63,8 @@ export function Link({ node }: LinkNodeProps) {
 
   if (isVideoURL(href)) {
     if (shouldShowMedia && options.showVideos) {
-      if (CustomMediaRenderer) {
-        return <CustomMediaRenderer url={href} type="video" imeta={imeta} />;
+      if (!loadMedia) {
+        return <CompactMediaRenderer url={href} type="video" imeta={imeta} />;
       }
       return (
         <MediaEmbed
@@ -79,8 +80,8 @@ export function Link({ node }: LinkNodeProps) {
 
   if (isAudioURL(href)) {
     if (shouldShowMedia && options.showAudio) {
-      if (CustomMediaRenderer) {
-        return <CustomMediaRenderer url={href} type="audio" imeta={imeta} />;
+      if (!loadMedia) {
+        return <CompactMediaRenderer url={href} type="audio" imeta={imeta} />;
       }
       return (
         <>

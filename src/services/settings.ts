@@ -22,6 +22,8 @@ export interface PostSettings {
 export interface AppearanceSettings {
   /** Show client tags in event UI */
   showClientTags: boolean;
+  /** Load media inline (images, videos, audio) - when false, show compact links */
+  loadMedia: boolean;
 }
 
 /**
@@ -43,6 +45,7 @@ const DEFAULT_POST_SETTINGS: PostSettings = {
 
 const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   showClientTags: true,
+  loadMedia: true,
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {

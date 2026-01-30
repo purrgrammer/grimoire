@@ -40,7 +40,6 @@ import {
 } from "@/lib/chat/group-system-messages";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
-import { ChatMediaRenderer } from "./chat/ChatMediaRenderer";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -459,11 +458,7 @@ const MessageItem = memo(function MessageItem({
         </div>
         <div className="break-words overflow-hidden">
           {message.event ? (
-            <RichText
-              className="text-sm leading-tight"
-              event={message.event}
-              renderMedia={ChatMediaRenderer}
-            >
+            <RichText className="text-sm leading-tight" event={message.event}>
               {message.replyTo && (
                 <ReplyPreview
                   replyTo={message.replyTo}

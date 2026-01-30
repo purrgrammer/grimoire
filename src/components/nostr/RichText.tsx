@@ -26,14 +26,6 @@ export interface MediaRendererProps {
   imeta?: ImetaEntry;
 }
 
-// Context for custom media rendering across RichText subtree
-const MediaRendererContext =
-  createContext<React.ComponentType<MediaRendererProps> | null>(null);
-
-export function useMediaRenderer() {
-  return useContext(MediaRendererContext);
-}
-
 // Context for passing the source event (for imeta lookup)
 const EventContext = createContext<NostrEvent | null>(null);
 
@@ -113,8 +105,6 @@ interface RichTextProps {
   options?: RichTextOptions;
   /** Parser options for customizing content parsing */
   parserOptions?: ParserOptions;
-  /** Custom media renderer for images, videos, and audio */
-  renderMedia?: React.ComponentType<MediaRendererProps>;
   children?: React.ReactNode;
 }
 
@@ -143,12 +133,8 @@ export function RichText({
   depth = 1,
   options = {},
   parserOptions = {},
-  renderMedia,
   children,
 }: RichTextProps) {
-  // Get parent media renderer to inherit if not explicitly overridden
-  const parentMediaRenderer = useMediaRenderer();
-
   // Merge provided options with defaults
   const mergedOptions: Required<RichTextOptions> = {
     ...defaultOptions,
@@ -194,19 +180,15 @@ export function RichText({
   return (
     <DepthContext.Provider value={depth}>
       <OptionsContext.Provider value={mergedOptions}>
-        <MediaRendererContext.Provider
-          value={renderMedia !== undefined ? renderMedia : parentMediaRenderer}
-        >
-          <EventContext.Provider value={event ?? null}>
-            <div
-              dir="auto"
-              className={cn("leading-relaxed break-words", className)}
-            >
-              {children}
-              {renderedContent}
-            </div>
-          </EventContext.Provider>
-        </MediaRendererContext.Provider>
+        <EventContext.Provider value={event ?? null}>
+          <div
+            dir="auto"
+            className={cn("leading-relaxed break-words", className)}
+          >
+            {children}
+            {renderedContent}
+          </div>
+        </EventContext.Provider>
       </OptionsContext.Provider>
     </DepthContext.Provider>
   );

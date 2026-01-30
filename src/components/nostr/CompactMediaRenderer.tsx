@@ -1,5 +1,5 @@
 /**
- * Chat-specific media renderer
+ * Compact media renderer for RichText
  *
  * Shows compact inline file info with expandable media:
  * [icon] truncated-hash [blossom]
@@ -111,7 +111,7 @@ function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
   }
 }
 
-export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
+export function CompactMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   const { addWindow } = useGrimoire();
   const [expanded, setExpanded] = useState(false);
 
@@ -160,19 +160,43 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   }
 
   // Build tooltip content from imeta if available
+  // Format: "Field <value>" with field name and value side by side
   const tooltipContent = imeta ? (
-    <div className="space-y-0.5 text-xs">
-      {imeta.alt && <div className="font-medium">{imeta.alt}</div>}
-      {imeta.m && <div className="text-muted-foreground">{imeta.m}</div>}
-      {imeta.dim && <div className="text-muted-foreground">{imeta.dim}</div>}
+    <div className="space-y-1 text-xs">
+      {imeta.x && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Hash</span>
+          <span className="font-mono truncate max-w-48">{imeta.x}</span>
+        </div>
+      )}
       {imeta.size && (
-        <div className="text-muted-foreground">
-          {formatFileSize(imeta.size)}
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Size</span>
+          <span>{formatFileSize(imeta.size)}</span>
+        </div>
+      )}
+      {imeta.dim && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Dimensions</span>
+          <span>{imeta.dim}</span>
+        </div>
+      )}
+      {imeta.m && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Type</span>
+          <span>{imeta.m}</span>
         </div>
       )}
       {imeta.duration && (
-        <div className="text-muted-foreground">
-          {formatDuration(imeta.duration)}
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Duration</span>
+          <span>{formatDuration(imeta.duration)}</span>
+        </div>
+      )}
+      {imeta.alt && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground shrink-0">Alt</span>
+          <span className="truncate max-w-48">{imeta.alt}</span>
         </div>
       )}
     </div>
