@@ -3,14 +3,14 @@
  *
  * Shows inline file info instead of embedded media:
  * [icon] filename [size] [blossom-link]
+ *
+ * Click on filename opens media in new tab.
  */
 
-import { useState } from "react";
 import { Image, Video, Music, File, HardDrive } from "lucide-react";
 import { getHashFromURL } from "blossom-client-sdk/helpers/url";
 import { useGrimoire } from "@/core/state";
 import { formatFileSize } from "@/lib/imeta";
-import { MediaDialog } from "@/components/nostr/MediaDialog";
 import type { MediaRendererProps } from "@/components/nostr/RichText";
 
 /**
@@ -73,7 +73,7 @@ function parseBlossomUrl(
  * Get icon component based on media type
  */
 function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
-  const iconClass = "size-3.5 shrink-0 text-muted-foreground";
+  const iconClass = "size-3 shrink-0 text-muted-foreground";
   switch (type) {
     case "image":
       return <Image className={iconClass} />;
@@ -88,7 +88,6 @@ function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
 
 export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   const { addWindow } = useGrimoire();
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filename = imeta?.alt || getFilename(url);
   const size = imeta?.size ? formatFileSize(imeta.size) : null;
@@ -114,46 +113,34 @@ export function ChatMediaRenderer({ url, type, imeta }: MediaRendererProps) {
   };
 
   const handleMediaClick = (e: React.MouseEvent) => {
-    e.preventDefault();
     e.stopPropagation();
-    // Images and videos open in dialog, audio opens in new tab
-    if (type === "image" || type === "video") {
-      setDialogOpen(true);
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
   };
 
   return (
-    <>
-      <span className="inline-flex items-center gap-1.5 border border-dotted border-muted-foreground/40 rounded px-1">
-        <MediaIcon type={type} />
+    <span className="inline-flex items-center gap-1 border-b border-dotted border-muted-foreground/50">
+      <MediaIcon type={type} />
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleMediaClick}
+        className="text-foreground hover:underline truncate max-w-48"
+        title={imeta?.alt || url}
+      >
+        {filename}
+      </a>
+      {size && (
+        <span className="text-muted-foreground text-xs shrink-0">{size}</span>
+      )}
+      {blossom && (
         <button
-          onClick={handleMediaClick}
-          className="text-foreground hover:underline truncate max-w-48 text-left"
-          title={imeta?.alt || url}
+          onClick={handleBlossomClick}
+          className="text-muted-foreground hover:text-foreground"
+          title="View in Blossom"
         >
-          {filename}
+          <HardDrive className="size-3" />
         </button>
-        {size && (
-          <span className="text-muted-foreground text-xs shrink-0">{size}</span>
-        )}
-        {blossom && (
-          <button
-            onClick={handleBlossomClick}
-            className="text-muted-foreground hover:text-foreground"
-            title="View in Blossom"
-          >
-            <HardDrive className="size-3" />
-          </button>
-        )}
-      </span>
-      <MediaDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        urls={[url]}
-        initialIndex={0}
-      />
-    </>
+      )}
+    </span>
   );
 }
