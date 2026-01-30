@@ -35,14 +35,8 @@ let notificationSubscription: Subscription | null = null;
 let notificationRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Subscription that keeps the wallet's support$ observable alive.
- *
- * CRITICAL: The applesauce-wallet-connect library's support$ uses a ReplaySubject(1)
- * with resetOnRefCountZero: timer(60000). This means if no one subscribes to support$
- * for 60 seconds, the cached value is LOST. Then genericCall's firstValueFrom(encryption$)
- * hangs forever waiting for a new kind 13194 event.
- *
- * We keep a persistent subscription to support$ to prevent this reset.
+ * Keeps the wallet's support$ subscribed to prevent ReplaySubject cache reset.
+ * The library resets after 60 seconds of no subscribers.
  */
 let supportSubscription: Subscription | null = null;
 
@@ -160,16 +154,9 @@ function subscribeToNotifications(wallet: WalletConnect) {
 /**
  * Waits for the wallet's support$ to emit and creates a persistent subscription.
  *
- * CRITICAL: The applesauce-wallet-connect library has two issues:
- * 1. genericCall waits for encryption$ (derived from support$) without any timeout
- * 2. support$ uses ReplaySubject(1) with resetOnRefCountZero: timer(60000)
- *
- * This means if no one subscribes to support$ for 60 seconds, the cached value is LOST,
- * and subsequent genericCall invocations hang forever waiting for a new kind 13194 event.
- *
- * This function:
- * 1. Waits for support$ to emit with a timeout
- * 2. Creates a PERSISTENT subscription to support$ to prevent the ReplaySubject reset
+ * The applesauce-wallet-connect library's support$ uses ReplaySubject(1) with
+ * resetOnRefCountZero: timer(60000). We keep a persistent subscription to
+ * prevent the cache from resetting.
  *
  * @param wallet The wallet instance
  * @param timeoutMs Maximum time to wait (default: 15 seconds)
@@ -184,8 +171,6 @@ async function waitForSupport(
   supportSubscription = null;
 
   try {
-    // Race support$ against a timeout
-    // This ensures we don't hang forever waiting for kind 13194 events
     await firstValueFrom(
       race(
         wallet.support$,
@@ -199,24 +184,10 @@ async function waitForSupport(
       ),
     );
 
-    // CRITICAL: Create a persistent subscription to support$ to prevent
-    // the ReplaySubject from resetting after 60 seconds of inactivity.
-    // Without this, genericCall's firstValueFrom(encryption$) would hang
-    // if the user waits >60 seconds between operations.
-    supportSubscription = wallet.support$.subscribe({
-      next: (support) => {
-        console.log(
-          "[NWC] Support info updated:",
-          support?.methods?.length,
-          "methods available",
-        );
-      },
-      error: (err) => {
-        console.error("[NWC] Support subscription error:", err);
-      },
-    });
+    // Keep support$ subscribed to prevent ReplaySubject reset
+    supportSubscription = wallet.support$.subscribe();
 
-    console.log("[NWC] Wallet support info received, ready for operations");
+    console.log("[NWC] Wallet ready");
   } catch (error) {
     console.error("[NWC] Failed to get wallet support info:", error);
     throw error;
@@ -384,7 +355,6 @@ export async function refreshBalance(): Promise<number | undefined> {
 
 /**
  * Attempts to reconnect after an error.
- * Resets support tracking and waits for wallet to become ready again.
  */
 export async function reconnect(): Promise<void> {
   const wallet = wallet$.value;
