@@ -18,7 +18,7 @@ import {
 import {
   Menu,
   Copy,
-  Check,
+  CopyCheck,
   FileJson,
   ExternalLink,
   Zap,
@@ -267,7 +267,7 @@ export function EventMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyEventId}>
           {copied ? (
-            <Check className="size-4 mr-2 text-green-500" />
+            <CopyCheck className="size-4 mr-2 text-success" />
           ) : (
             <Copy className="size-4 mr-2" />
           )}
@@ -433,7 +433,7 @@ export function EventContextMenu({
         <ContextMenuSeparator />
         <ContextMenuItem onClick={copyEventId}>
           {copied ? (
-            <Check className="size-4 mr-2 text-green-500" />
+            <CopyCheck className="size-4 mr-2 text-success" />
           ) : (
             <Copy className="size-4 mr-2" />
           )}
