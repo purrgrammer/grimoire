@@ -87,6 +87,27 @@ export function SettingsViewer() {
                   }
                 />
               </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label
+                    htmlFor="load-media"
+                    className="text-base font-medium cursor-pointer"
+                  >
+                    Load media
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Render links to media as inline images, videos, and audio
+                  </p>
+                </div>
+                <Switch
+                  id="load-media"
+                  checked={settings?.appearance?.loadMedia ?? true}
+                  onCheckedChange={(checked: boolean) =>
+                    updateSetting("appearance", "loadMedia", checked)
+                  }
+                />
+              </div>
             </div>
           </TabsContent>
 

@@ -51,6 +51,10 @@ interface BlossomViewerProps {
   sourceUrl?: string;
   targetServer?: string;
   sha256?: string;
+  /** Full blob URL with extension (for blob subcommand) */
+  blobUrl?: string;
+  /** Media type hint for preview (image/video/audio) */
+  mediaType?: "image" | "video" | "audio";
 }
 
 /**
@@ -63,6 +67,8 @@ export function BlossomViewer({
   sourceUrl,
   targetServer,
   sha256,
+  blobUrl,
+  mediaType,
 }: BlossomViewerProps) {
   switch (subcommand) {
     case "servers":
@@ -74,7 +80,14 @@ export function BlossomViewer({
     case "list":
       return <ListBlobsView pubkey={pubkey} serverUrl={serverUrl} />;
     case "blob":
-      return <BlobDetailView sha256={sha256!} serverUrl={serverUrl} />;
+      return (
+        <BlobDetailView
+          sha256={sha256!}
+          serverUrl={serverUrl}
+          blobUrl={blobUrl}
+          mediaType={mediaType}
+        />
+      );
     case "mirror":
       return <MirrorView sourceUrl={sourceUrl!} targetServer={targetServer!} />;
     case "delete":
@@ -996,26 +1009,66 @@ function BlobRow({
 function BlobDetailView({
   sha256,
   serverUrl,
+  blobUrl: providedBlobUrl,
   blob: initialBlob,
+  mediaType: providedMediaType,
   onBack,
 }: {
   sha256?: string;
   serverUrl?: string;
+  /** Full blob URL with extension */
+  blobUrl?: string;
   blob?: BlobDescriptor;
+  /** Media type hint (image/video/audio) */
+  mediaType?: "image" | "video" | "audio";
   onBack?: () => void;
 }) {
   const { copy, copied } = useCopy();
   const blob = initialBlob;
 
-  // If we have a blob descriptor, use that data
+  // Use provided URL, or blob descriptor URL, or construct from server + sha256
   const blobUrl =
-    blob?.url || (serverUrl && sha256 ? `${serverUrl}/${sha256}` : null);
+    providedBlobUrl ||
+    blob?.url ||
+    (serverUrl && sha256 ? `${serverUrl}/${sha256}` : null);
   const blobSha256 = blob?.sha256 || sha256;
   const mimeType = blob?.type;
 
-  const isImage = mimeType?.startsWith("image/");
-  const isVideo = mimeType?.startsWith("video/");
-  const isAudio = mimeType?.startsWith("audio/");
+  // Detect media type from URL extension if mimeType not available
+  const getMediaTypeFromUrl = (
+    url: string | null,
+  ): "image" | "video" | "audio" | null => {
+    if (!url) return null;
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      const ext = pathname.split(".").pop();
+      if (!ext) return null;
+      const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"];
+      const videoExts = ["mp4", "webm", "mov", "avi", "mkv", "m4v"];
+      const audioExts = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+      if (imageExts.includes(ext)) return "image";
+      if (videoExts.includes(ext)) return "video";
+      if (audioExts.includes(ext)) return "audio";
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const urlMediaType = getMediaTypeFromUrl(blobUrl);
+  // Priority: mimeType from blob > provided mediaType hint > detected from URL
+  const isImage =
+    mimeType?.startsWith("image/") ||
+    providedMediaType === "image" ||
+    urlMediaType === "image";
+  const isVideo =
+    mimeType?.startsWith("video/") ||
+    providedMediaType === "video" ||
+    urlMediaType === "video";
+  const isAudio =
+    mimeType?.startsWith("audio/") ||
+    providedMediaType === "audio" ||
+    urlMediaType === "audio";
 
   if (!blobSha256) {
     return (
@@ -1133,8 +1186,10 @@ function BlobDetailView({
                 Server
               </div>
               <div className="flex items-center gap-2">
-                <HardDrive className="size-4 text-muted-foreground" />
-                <code className="text-xs">{serverUrl}</code>
+                <HardDrive className="size-4 text-muted-foreground shrink-0" />
+                <code className="text-xs truncate" title={serverUrl}>
+                  {serverUrl}
+                </code>
               </div>
             </div>
           )}

@@ -14,6 +14,24 @@ import { nipReferences } from "@/lib/nip-transformer";
 import { relayReferences } from "@/lib/relay-transformer";
 import type { NostrEvent } from "@/types/nostr";
 import type { Root } from "applesauce-content/nast";
+import type { ImetaEntry } from "@/lib/imeta";
+
+/**
+ * Props for custom media renderers
+ */
+export interface MediaRendererProps {
+  url: string;
+  type: "image" | "video" | "audio";
+  /** Image/video metadata from imeta tags (NIP-92) if available */
+  imeta?: ImetaEntry;
+}
+
+// Context for passing the source event (for imeta lookup)
+const EventContext = createContext<NostrEvent | null>(null);
+
+export function useRichTextEvent() {
+  return useContext(EventContext);
+}
 
 /** Transformer function type compatible with applesauce-content */
 export type ContentTransformer = () => (tree: Root) => void;
@@ -162,13 +180,15 @@ export function RichText({
   return (
     <DepthContext.Provider value={depth}>
       <OptionsContext.Provider value={mergedOptions}>
-        <div
-          dir="auto"
-          className={cn("leading-relaxed break-words", className)}
-        >
-          {children}
-          {renderedContent}
-        </div>
+        <EventContext.Provider value={event ?? null}>
+          <div
+            dir="auto"
+            className={cn("leading-relaxed break-words", className)}
+          >
+            {children}
+            {renderedContent}
+          </div>
+        </EventContext.Provider>
       </OptionsContext.Provider>
     </DepthContext.Provider>
   );

@@ -6,7 +6,10 @@ import {
 } from "applesauce-core/helpers/url";
 import { MediaDialog } from "../MediaDialog";
 import { MediaEmbed } from "../MediaEmbed";
-import { useRichTextOptions } from "../RichText";
+import { CompactMediaRenderer } from "../CompactMediaRenderer";
+import { useRichTextOptions, useRichTextEvent } from "../RichText";
+import { findImetaForUrl } from "@/lib/imeta";
+import { useSettings } from "@/hooks/useSettings";
 
 function MediaPlaceholder({
   type,
@@ -24,8 +27,13 @@ interface GalleryNodeProps {
 
 export function Gallery({ node }: GalleryNodeProps) {
   const options = useRichTextOptions();
+  const event = useRichTextEvent();
+  const { settings } = useSettings();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialIndex, setInitialIndex] = useState(0);
+
+  // Check global loadMedia setting
+  const loadMedia = settings?.appearance?.loadMedia ?? true;
 
   const links = node.links || [];
 
@@ -38,20 +46,32 @@ export function Gallery({ node }: GalleryNodeProps) {
     // Check if media should be shown
     const shouldShowMedia = options.showMedia;
 
+    // Look up imeta for this URL if event is available
+    const imeta = event ? findImetaForUrl(event, url) : undefined;
+
     if (isImageURL(url)) {
       if (shouldShowMedia && options.showImages) {
+        if (!loadMedia) {
+          return <CompactMediaRenderer url={url} type="image" imeta={imeta} />;
+        }
         return <MediaEmbed url={url} type="image" preset="grid" enableZoom />;
       }
       return <MediaPlaceholder type="image" />;
     }
     if (isVideoURL(url)) {
       if (shouldShowMedia && options.showVideos) {
+        if (!loadMedia) {
+          return <CompactMediaRenderer url={url} type="video" imeta={imeta} />;
+        }
         return <MediaEmbed url={url} type="video" preset="grid" />;
       }
       return <MediaPlaceholder type="video" />;
     }
     if (isAudioURL(url)) {
       if (shouldShowMedia && options.showAudio) {
+        if (!loadMedia) {
+          return <CompactMediaRenderer url={url} type="audio" imeta={imeta} />;
+        }
         return (
           <MediaEmbed
             url={url}

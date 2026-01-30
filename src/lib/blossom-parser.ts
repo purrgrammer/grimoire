@@ -34,6 +34,10 @@ export interface BlossomCommandResult {
   // For 'mirror' subcommand
   sourceUrl?: string;
   targetServer?: string;
+  // For 'blob' subcommand - media type hint for preview
+  mediaType?: "image" | "video" | "audio";
+  // For 'blob' subcommand - full blob URL with extension
+  blobUrl?: string;
 }
 
 /**
@@ -166,17 +170,39 @@ export async function parseBlossomCommand(
     case "view": {
       if (args.length < 2) {
         throw new Error(
-          "SHA256 hash required. Usage: blossom blob <sha256> [server]",
+          "SHA256 hash required. Usage: blossom blob <sha256> [server] [--type image|video|audio]",
         );
       }
       const sha256 = args[1].toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(sha256)) {
         throw new Error("Invalid SHA256 hash. Must be 64 hex characters.");
       }
+
+      // Parse remaining args for server and --type flag
+      let serverUrl: string | undefined;
+      let mediaType: "image" | "video" | "audio" | undefined;
+
+      for (let i = 2; i < args.length; i++) {
+        if (args[i] === "--type" && args[i + 1]) {
+          const typeArg = args[i + 1].toLowerCase();
+          if (
+            typeArg === "image" ||
+            typeArg === "video" ||
+            typeArg === "audio"
+          ) {
+            mediaType = typeArg;
+          }
+          i++; // Skip the type value
+        } else if (!args[i].startsWith("--") && !serverUrl) {
+          serverUrl = normalizeServerUrl(args[i]);
+        }
+      }
+
       return {
         subcommand: "blob",
         sha256,
-        serverUrl: args[2] ? normalizeServerUrl(args[2]) : undefined,
+        serverUrl,
+        mediaType,
       };
     }
 
