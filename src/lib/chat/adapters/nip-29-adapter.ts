@@ -17,6 +17,7 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import groupMetadataCache from "@/services/group-metadata-cache";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getQuotePointer } from "@/lib/nostr-utils";
@@ -28,10 +29,6 @@ import {
   GroupMessageBlueprint,
   ReactionBlueprint,
 } from "applesauce-common/blueprints";
-import {
-  resolveGroupMetadata,
-  extractMetadataFromEvent,
-} from "@/lib/chat/group-metadata-helpers";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -132,89 +129,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    console.log(
-      `[NIP-29] Resolving group metadata for ${groupId} from ${relayUrl}`,
-    );
-
-    // Check eventStore first for cached kind 39000 event
-    // Use timeline query since we don't know the relay's pubkey
-    const cachedMetadata = await firstValueFrom(
-      eventStore
-        .timeline([{ kinds: [39000], "#d": [groupId], limit: 1 }])
-        .pipe(first()),
-      { defaultValue: [] },
-    );
-    let metadataEvent: NostrEvent | undefined = cachedMetadata[0];
-
-    // If not in store, fetch from relay
-    if (!metadataEvent) {
-      console.log(`[NIP-29] No cached metadata, fetching from relay`);
-
-      const metadataFilter: Filter = {
-        kinds: [39000],
-        "#d": [groupId],
-        limit: 1,
-      };
-
-      const metadataEvents: NostrEvent[] = [];
-      const metadataObs = pool.subscription([relayUrl], [metadataFilter], {
-        eventStore,
-      });
-
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          console.log("[NIP-29] Metadata fetch timeout");
-          resolve();
-        }, 5000);
-
-        const sub = metadataObs.subscribe({
-          next: (response) => {
-            if (typeof response === "string") {
-              clearTimeout(timeout);
-              console.log(
-                `[NIP-29] Got ${metadataEvents.length} metadata events`,
-              );
-              sub.unsubscribe();
-              resolve();
-            } else {
-              metadataEvents.push(response);
-            }
-          },
-          error: (err) => {
-            clearTimeout(timeout);
-            console.error("[NIP-29] Metadata fetch error:", err);
-            sub.unsubscribe();
-            reject(err);
-          },
-        });
-      });
-
-      metadataEvent = metadataEvents[0];
-    } else {
-      console.log(`[NIP-29] Using cached metadata event`);
-    }
-
-    // Extract metadata - use sync extraction if we have the event
-    let title: string;
-    let description: string | undefined;
-    let icon: string | undefined;
-    let source: string;
-
-    if (metadataEvent && metadataEvent.kind === 39000) {
-      // Fast path: sync extraction from kind 39000 event
-      const resolved = extractMetadataFromEvent(groupId, metadataEvent);
-      title = resolved.name || groupId;
-      description = resolved.description;
-      icon = resolved.icon;
-      source = resolved.source;
-    } else {
-      // Slow path: async resolution with profile fallback (for pubkey-based groupIds)
-      const resolved = await resolveGroupMetadata(groupId, relayUrl, undefined);
-      title = resolved.name || groupId;
-      description = resolved.description;
-      icon = resolved.icon;
-      source = resolved.source;
-    }
+    // Resolve group metadata using shared cache
+    const metadata = await groupMetadataCache.resolve(relayUrl, groupId);
+    const { name: title, description, icon, source } = metadata;
 
     console.log(`[NIP-29] Group title: ${title} (source: ${source})`);
 
