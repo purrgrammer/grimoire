@@ -135,7 +135,7 @@ function CodeBlock({
   return (
     <div className="relative my-4">
       {language ? (
-        <SyntaxHighlight code={code} language={language as any} />
+        <SyntaxHighlight code={code} language={language} />
       ) : (
         <pre
           className={`bg-muted p-4 border border-border rounded overflow-x-auto max-w-full ${isSingleLine ? "" : "pr-12"}`}

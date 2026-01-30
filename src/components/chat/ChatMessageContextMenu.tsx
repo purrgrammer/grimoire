@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/context-menu";
 import {
   Copy,
-  Check,
+  CopyCheck,
   FileJson,
   ExternalLink,
   Reply,
@@ -212,7 +212,7 @@ export function ChatMessageContextMenu({
           </ContextMenuItem>
           <ContextMenuItem onClick={copyEventId}>
             {copied ? (
-              <Check className="size-4 mr-2 text-green-500" />
+              <CopyCheck className="size-4 mr-2 text-success" />
             ) : (
               <Copy className="size-4 mr-2" />
             )}
