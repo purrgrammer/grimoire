@@ -12,48 +12,11 @@ const loadedLanguages = new Set<string>();
 const failedLanguages = new Set<string>();
 
 /**
- * Transformer that adds CSS classes based on token scopes
- * This allows us to style tokens with CSS variables instead of inline colors
+ * Transformer that cleans up Shiki output for our styling
+ * Keeps inline colors from the theme but removes backgrounds
  */
-const classTransformer: ShikiTransformer = {
-  name: "class-transformer",
-  span(node) {
-    // Map inline colors to semantic CSS classes
-    // This allows us to style tokens with CSS variables instead of hardcoded colors
-    const style = node.properties?.style as string | undefined;
-    if (!style) return;
-
-    // Remove inline style and add class based on token type
-    delete node.properties.style;
-
-    // Add base class
-    node.properties.className = node.properties.className || [];
-    const classes = node.properties.className as string[];
-    classes.push("shiki-token");
-
-    // Detect token type from the original style color
-    // These colors come from our theme definitions
-    if (style.includes("#8b949e") || style.includes("comment")) {
-      classes.push("shiki-comment");
-    } else if (style.includes("#a5d6ff") || style.includes("string")) {
-      classes.push("shiki-string");
-    } else if (style.includes("#79c0ff") || style.includes("constant")) {
-      classes.push("shiki-constant");
-    } else if (style.includes("#7ee787") || style.includes("tag")) {
-      classes.push("shiki-tag");
-    } else if (style.includes("#ffa198") || style.includes("deleted")) {
-      classes.push("shiki-deleted");
-    } else if (
-      style.includes("#f0f0f0") ||
-      style.includes("#e6edf3") ||
-      style.includes("keyword") ||
-      style.includes("function")
-    ) {
-      classes.push("shiki-keyword");
-    } else if (style.includes("#c9d1d9") || style.includes("punctuation")) {
-      classes.push("shiki-punctuation");
-    }
-  },
+const cleanupTransformer: ShikiTransformer = {
+  name: "cleanup-transformer",
   pre(node) {
     // Remove background color from pre, let CSS handle it
     if (node.properties?.style) {
@@ -62,9 +25,10 @@ const classTransformer: ShikiTransformer = {
     }
   },
   code(node) {
-    // Remove color from code element
+    // Remove background from code element, keep color
     if (node.properties?.style) {
-      delete node.properties.style;
+      const style = node.properties.style as string;
+      node.properties.style = style.replace(/background-color:[^;]+;?/g, "");
     }
   },
 };
@@ -408,7 +372,7 @@ export async function highlightCode(
   return hl.codeToHtml(code, {
     lang: effectiveLang,
     theme: "grimoire",
-    transformers: [classTransformer],
+    transformers: [cleanupTransformer],
   });
 }
 
