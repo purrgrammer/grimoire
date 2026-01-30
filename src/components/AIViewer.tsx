@@ -6,8 +6,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   Loader2,
   PanelLeft,
@@ -42,6 +40,7 @@ import {
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { AIProvidersViewer } from "./AIProvidersViewer";
+import { MarkdownContent } from "./nostr/MarkdownContent";
 import type { LLMMessage } from "@/types/llm";
 
 const MOBILE_BREAKPOINT = 768;
@@ -92,59 +91,8 @@ const MessageBubble = memo(function MessageBubble({
             {message.content}
           </div>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                p: ({ ...props }) => (
-                  <p className="mb-2 last:mb-0" {...props} />
-                ),
-                code: ({ className, children, ...props }: any) => {
-                  const isBlock = className?.includes("language-");
-                  if (isBlock) {
-                    return (
-                      <pre className="bg-background/50 p-2 rounded text-xs overflow-x-auto my-2">
-                        <code {...props}>{children}</code>
-                      </pre>
-                    );
-                  }
-                  return (
-                    <code
-                      className="bg-background/50 px-1 py-0.5 rounded text-xs"
-                      {...props}
-                    >
-                      {children}
-                    </code>
-                  );
-                },
-                pre: ({ children }) => <>{children}</>,
-                ul: ({ ...props }) => (
-                  <ul
-                    className="list-disc list-inside my-2 space-y-1"
-                    {...props}
-                  />
-                ),
-                ol: ({ ...props }) => (
-                  <ol
-                    className="list-decimal list-inside my-2 space-y-1"
-                    {...props}
-                  />
-                ),
-                a: ({ href, children, ...props }) => (
-                  <a
-                    href={href}
-                    className="text-accent underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    {...props}
-                  >
-                    {children}
-                  </a>
-                ),
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+          <div className="[&>article]:p-0 [&>article]:m-0">
+            <MarkdownContent content={message.content} />
           </div>
         )}
       </div>
@@ -422,8 +370,8 @@ function ChatPanel({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-3">
-        <div className="flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto p-3 flex justify-center">
+        <div className="flex flex-col gap-3 w-full max-w-4xl">
           {displayMessages.length === 0 && !showThinking ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
               Start a conversation
@@ -440,8 +388,8 @@ function ChatPanel({
         </div>
       </div>
 
-      <div className="border-t p-2 flex-shrink-0">
-        <div className="flex gap-2 items-end">
+      <div className="border-t p-2 flex-shrink-0 flex justify-center">
+        <div className="flex gap-2 items-end w-full max-w-4xl">
           <Textarea
             ref={textareaRef}
             value={input}

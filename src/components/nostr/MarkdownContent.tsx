@@ -332,6 +332,26 @@ export function MarkdownContent({
             />
           ),
           hr: () => <hr className="my-4" />,
+          // Footnotes (remarkGfm feature)
+          sup: ({ children, ...props }) => (
+            <sup className="text-xs text-accent" {...props}>
+              {children}
+            </sup>
+          ),
+          section: ({ children, className, ...props }) => {
+            // Style footnotes section at the bottom
+            if (className === "footnotes") {
+              return (
+                <section
+                  className="mt-8 pt-4 border-t border-border text-xs text-muted-foreground"
+                  {...props}
+                >
+                  {children}
+                </section>
+              );
+            }
+            return <section {...props}>{children}</section>;
+          },
         }}
       >
         {content.replace(/\\n/g, "\n")}
