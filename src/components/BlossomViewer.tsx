@@ -1186,8 +1186,10 @@ function BlobDetailView({
                 Server
               </div>
               <div className="flex items-center gap-2">
-                <HardDrive className="size-4 text-muted-foreground" />
-                <code className="text-xs">{serverUrl}</code>
+                <HardDrive className="size-4 text-muted-foreground shrink-0" />
+                <code className="text-xs truncate" title={serverUrl}>
+                  {serverUrl}
+                </code>
               </div>
             </div>
           )}
