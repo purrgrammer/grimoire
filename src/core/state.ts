@@ -26,7 +26,6 @@ const initialState: GrimoireState = {
     insertionPosition: "second",
     autoPreset: undefined,
   },
-  compactModeKinds: [6, 7, 16, 9735],
   workspaces: {
     default: {
       id: "default",
@@ -326,13 +325,6 @@ export const useGrimoire = () => {
     [setState],
   );
 
-  const setCompactModeKinds = useCallback(
-    (kinds: number[]) => {
-      setState((prev) => Logic.setCompactModeKinds(prev, kinds));
-    },
-    [setState],
-  );
-
   const loadSpellbook = useCallback(
     (spellbook: ParsedSpellbook) => {
       setState((prev) => SpellbookManager.loadSpellbook(prev, spellbook));
@@ -409,7 +401,6 @@ export const useGrimoire = () => {
     applyPresetLayout,
     updateWorkspaceLabel,
     reorderWorkspaces,
-    setCompactModeKinds,
     loadSpellbook,
     clearActiveSpellbook,
     switchToTemporary,
