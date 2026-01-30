@@ -1,5 +1,6 @@
-import { firstValueFrom } from "rxjs";
-import { first } from "rxjs/operators";
+import { BehaviorSubject, firstValueFrom, type Observable } from "rxjs";
+import { filter, first, take, timeout, catchError } from "rxjs/operators";
+import { of } from "rxjs";
 import { kinds, type Filter } from "nostr-tools";
 import {
   getProfileContent,
@@ -53,10 +54,21 @@ function extractFromEvent(groupId: string, event: NostrEvent): GroupMetadata {
  *
  * Provides a shared cache between GroupListViewer and NIP-29 adapter.
  * Checks eventStore first, then fetches from relay if needed.
+ *
+ * Exposes observables via metadata$() for reactive UI updates.
  */
 class GroupMetadataCache {
   // In-memory cache: "relayUrl'groupId" -> metadata
   private cache = new Map<string, GroupMetadata>();
+
+  // Observable subjects for reactive updates
+  private subjects = new Map<
+    string,
+    BehaviorSubject<GroupMetadata | undefined>
+  >();
+
+  // Track in-flight resolves to avoid duplicate fetches
+  private resolving = new Map<string, Promise<GroupMetadata>>();
 
   /**
    * Get cache key for a group
@@ -73,17 +85,51 @@ class GroupMetadataCache {
   }
 
   /**
-   * Set metadata in cache
+   * Set metadata in cache and notify subscribers
    */
   set(relayUrl: string, groupId: string, metadata: GroupMetadata): void {
-    this.cache.set(this.getKey(relayUrl, groupId), metadata);
+    const key = this.getKey(relayUrl, groupId);
+    this.cache.set(key, metadata);
+    // Notify any subscribers
+    this.subjects.get(key)?.next(metadata);
+  }
+
+  /**
+   * Get reactive observable for a group's metadata
+   *
+   * Returns a BehaviorSubject that:
+   * - Emits cached value immediately (or undefined if not cached)
+   * - Emits resolved value when async resolution completes
+   *
+   * Use with use$() in React components for automatic re-renders.
+   */
+  metadata$(
+    relayUrl: string,
+    groupId: string,
+  ): Observable<GroupMetadata | undefined> {
+    const key = this.getKey(relayUrl, groupId);
+
+    if (!this.subjects.has(key)) {
+      // Create subject with current cached value (may be undefined)
+      const subject = new BehaviorSubject<GroupMetadata | undefined>(
+        this.cache.get(key),
+      );
+      this.subjects.set(key, subject);
+
+      // Trigger background resolution if not already cached
+      if (!this.cache.has(key)) {
+        this.resolve(relayUrl, groupId);
+      }
+    }
+
+    return this.subjects.get(key)!.asObservable();
   }
 
   /**
    * Check eventStore for cached kind 39000 event and extract metadata
    * Returns undefined if not in store
    */
-  async getFromEventStore(
+  private async getFromEventStore(
     groupId: string,
   ): Promise<{ event: NostrEvent; metadata: GroupMetadata } | undefined> {
     const events = await firstValueFrom(
@@ -105,55 +151,37 @@ class GroupMetadataCache {
   /**
    * Fetch metadata from relay (adds to eventStore automatically)
    */
-  async fetchFromRelay(
+  private async fetchFromRelay(
     relayUrl: string,
     groupId: string,
     timeoutMs = 5000,
   ): Promise<NostrEvent | undefined> {
-    const filter: Filter = {
+    const filterDef: Filter = {
       kinds: [39000],
       "#d": [groupId],
       limit: 1,
     };
 
-    const events: NostrEvent[] = [];
-    const subscription = pool.subscription([relayUrl], [filter], {
-      eventStore,
-    });
-
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        console.log(`[GroupMetadataCache] Fetch timeout for ${groupId}`);
-        resolve();
-      }, timeoutMs);
-
-      const sub = subscription.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            events.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error(`[GroupMetadataCache] Fetch error:`, err);
-          sub.unsubscribe();
-          resolve();
-        },
-      });
-    });
-
-    return events[0];
+    try {
+      const event = await firstValueFrom(
+        pool.subscription([relayUrl], [filterDef], { eventStore }).pipe(
+          filter((r): r is NostrEvent => typeof r !== "string"),
+          take(1),
+          timeout(timeoutMs),
+          catchError(() => of(undefined as NostrEvent | undefined)),
+        ),
+        { defaultValue: undefined },
+      );
+      return event;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Resolve profile metadata for pubkey-based group IDs
    */
-  async resolveProfileFallback(
+  private async resolveProfileFallback(
     groupId: string,
     relayUrl: string,
   ): Promise<GroupMetadata | undefined> {
@@ -185,11 +213,8 @@ class GroupMetadataCache {
           };
         }
       }
-    } catch (error) {
-      console.warn(
-        `[GroupMetadataCache] Profile fallback failed for ${groupId.slice(0, 8)}:`,
-        error,
-      );
+    } catch {
+      // Profile fallback failed, continue to next fallback
     }
 
     return undefined;
@@ -218,20 +243,40 @@ class GroupMetadataCache {
       return cached;
     }
 
+    // Deduplicate in-flight resolves
+    const existing = this.resolving.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const resolvePromise = this.doResolve(relayUrl, groupId, options);
+    this.resolving.set(key, resolvePromise);
+
+    try {
+      return await resolvePromise;
+    } finally {
+      this.resolving.delete(key);
+    }
+  }
+
+  private async doResolve(
+    relayUrl: string,
+    groupId: string,
+    options?: { skipFetch?: boolean },
+  ): Promise<GroupMetadata> {
     // 2. Check eventStore
     const fromStore = await this.getFromEventStore(groupId);
     if (fromStore) {
-      this.cache.set(key, fromStore.metadata);
+      this.set(relayUrl, groupId, fromStore.metadata);
       return fromStore.metadata;
     }
 
     // 3. Fetch from relay (unless skipped)
     if (!options?.skipFetch) {
-      console.log(`[GroupMetadataCache] Fetching ${groupId} from ${relayUrl}`);
       const event = await this.fetchFromRelay(relayUrl, groupId);
       if (event) {
         const metadata = extractFromEvent(groupId, event);
-        this.cache.set(key, metadata);
+        this.set(relayUrl, groupId, metadata);
         return metadata;
       }
     }
@@ -242,7 +287,7 @@ class GroupMetadataCache {
       relayUrl,
     );
     if (profileMetadata) {
-      this.cache.set(key, profileMetadata);
+      this.set(relayUrl, groupId, profileMetadata);
       return profileMetadata;
     }
 
@@ -251,23 +296,8 @@ class GroupMetadataCache {
       name: groupId,
       source: "fallback",
     };
-    this.cache.set(key, fallback);
+    this.set(relayUrl, groupId, fallback);
     return fallback;
-  }
-
-  /**
-   * Sync resolve from cache or eventStore (no network)
-   * Returns undefined if not available
-   */
-  getSync(relayUrl: string, groupId: string): GroupMetadata | undefined {
-    // Check in-memory cache first
-    const cached = this.get(relayUrl, groupId);
-    if (cached) {
-      return cached;
-    }
-
-    // Can't do sync eventStore query, return undefined
-    return undefined;
   }
 
   /**
@@ -293,6 +323,9 @@ class GroupMetadataCache {
    */
   clear(): void {
     this.cache.clear();
+    this.subjects.forEach((s) => s.complete());
+    this.subjects.clear();
+    this.resolving.clear();
   }
 }
 
