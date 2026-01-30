@@ -1027,9 +1027,31 @@ function BlobDetailView({
   const blobSha256 = blob?.sha256 || sha256;
   const mimeType = blob?.type;
 
-  const isImage = mimeType?.startsWith("image/");
-  const isVideo = mimeType?.startsWith("video/");
-  const isAudio = mimeType?.startsWith("audio/");
+  // Detect media type from URL extension if mimeType not available
+  const getMediaTypeFromUrl = (
+    url: string | null,
+  ): "image" | "video" | "audio" | null => {
+    if (!url) return null;
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      const ext = pathname.split(".").pop();
+      if (!ext) return null;
+      const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"];
+      const videoExts = ["mp4", "webm", "mov", "avi", "mkv", "m4v"];
+      const audioExts = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+      if (imageExts.includes(ext)) return "image";
+      if (videoExts.includes(ext)) return "video";
+      if (audioExts.includes(ext)) return "audio";
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const urlMediaType = getMediaTypeFromUrl(blobUrl);
+  const isImage = mimeType?.startsWith("image/") || urlMediaType === "image";
+  const isVideo = mimeType?.startsWith("video/") || urlMediaType === "video";
+  const isAudio = mimeType?.startsWith("audio/") || urlMediaType === "audio";
 
   if (!blobSha256) {
     return (
