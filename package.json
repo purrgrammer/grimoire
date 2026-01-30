@@ -72,6 +72,7 @@
     "js-yaml": "^4.1.1",
     "lucide-react": "latest",
     "media-chrome": "^4.17.2",
+    "openai": "^6.17.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

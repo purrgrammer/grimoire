@@ -1,88 +1,128 @@
 /**
- * Types for Local LLM / AI Chat functionality
+ * Types for AI Chat functionality
+ *
+ * All providers use OpenAI-compatible APIs.
  */
 
 // ─────────────────────────────────────────────────────────────
 // Provider Configuration
 // ─────────────────────────────────────────────────────────────
 
-export type LLMProviderType = "webllm" | "openai-compatible";
-
-export interface LLMProviderConfig {
-  id: string; // "webllm", "ppq"
-  name: string; // "WebLLM (Local)", "PPQ.ai"
-  type: LLMProviderType;
-
-  // Connection requirements
-  requiresApiKey: boolean;
-  requiresBaseUrl: boolean;
-
-  // URLs for user
-  apiKeyUrl?: string; // Where to get API key
-  topUpUrl?: string; // Where to add credits
-
-  // For openai-compatible providers
-  baseUrl?: string;
-
-  // Capabilities
-  supportsBalance: boolean;
-  isLocal: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────
-// User's configured provider instance
-// ─────────────────────────────────────────────────────────────
-
-export interface LLMProviderInstance {
-  id: string; // User-defined ID
-  providerId: string; // References LLMProviderConfig.id
+/**
+ * User's configured provider instance stored in IndexedDB.
+ */
+export interface AIProvider {
+  id: string; // UUID
+  presetId: string; // References preset (ppq, openrouter, openai, custom)
   name: string; // User-friendly name
-
-  // Credentials
-  apiKey?: string;
-  baseUrl?: string;
-
-  // State
+  baseURL: string; // API base URL
+  apiKey?: string; // API key (optional for some providers)
   enabled: boolean;
+  createdAt: number;
   lastUsed?: number;
-  lastModelId?: string; // Last model used with this provider
-
-  // Cached model list
-  cachedModels?: LLMModel[];
-  modelsCachedAt?: number;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
 
-export interface LLMModel {
-  id: string; // Model identifier
+export interface AIModel {
+  id: string; // Model ID from API
   name: string; // Display name
-  providerId: string; // Which provider config this belongs to
-
-  // Sizing
-  contextLength?: number;
-
-  // For display
   description?: string;
-  tags?: string[]; // ["fast", "coding", "vision"]
-
-  // For WebLLM
-  vramMB?: number;
-  downloadSize?: string;
-  isDownloaded?: boolean;
-
-  // For paid providers
+  contextLength?: number;
   pricing?: {
-    inputPerMillion?: number;
-    outputPerMillion?: number;
+    promptPerMillion: number; // USD per million tokens
+    completionPerMillion: number;
   };
 }
 
 // ─────────────────────────────────────────────────────────────
 // Messages and Conversations
 // ─────────────────────────────────────────────────────────────
+
+export interface AIMessage {
+  id: string;
+  role: "system" | "user" | "assistant";
+  content: string;
+  timestamp: number;
+}
+
+export interface AIConversation {
+  id: string;
+  title: string;
+  providerId: string; // References AIProvider.id
+  modelId: string; // Model ID used
+  systemPrompt?: string;
+  messages: AIMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI Settings (persisted globally)
+// ─────────────────────────────────────────────────────────────
+
+export interface AISettings {
+  activeProviderId: string | null;
+  activeModelId: string | null; // Format: modelId (within active provider)
+  recentModels: string[]; // Format: "providerId/modelId" (last 10)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Chat Types
+// ─────────────────────────────────────────────────────────────
+
+export interface ChatStreamChunk {
+  type: "token" | "done" | "error";
+  content?: string;
+  error?: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  };
+}
+
+export interface ChatOptions {
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  signal?: AbortSignal;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Legacy types (for DB migration compatibility)
+// ─────────────────────────────────────────────────────────────
+
+// Keep these for backwards compatibility with existing DB schema
+export interface LLMProviderInstance {
+  id: string;
+  providerId: string;
+  name: string;
+  apiKey?: string;
+  baseUrl?: string;
+  enabled: boolean;
+  lastUsed?: number;
+  lastModelId?: string;
+  cachedModels?: LLMModel[];
+  modelsCachedAt?: number;
+}
+
+export interface LLMModel {
+  id: string;
+  name: string;
+  providerId: string;
+  contextLength?: number;
+  description?: string;
+  tags?: string[];
+  vramMB?: number;
+  downloadSize?: string;
+  isDownloaded?: boolean;
+  pricing?: {
+    inputPerMillion?: number;
+    outputPerMillion?: number;
+  };
+}
 
 export interface LLMMessage {
   id: string;
@@ -94,23 +134,13 @@ export interface LLMMessage {
 export interface LLMConversation {
   id: string;
   title: string;
-
-  // Provider + model at time of creation
   providerInstanceId: string;
   modelId: string;
-
-  // Content
   systemPrompt?: string;
   messages: LLMMessage[];
-
-  // Metadata
   createdAt: number;
   updatedAt: number;
 }
-
-// ─────────────────────────────────────────────────────────────
-// Engine Status
-// ─────────────────────────────────────────────────────────────
 
 export type LLMEngineStatus =
   | { state: "idle" }
@@ -118,31 +148,3 @@ export type LLMEngineStatus =
   | { state: "ready"; modelId: string }
   | { state: "generating"; modelId: string }
   | { state: "error"; error: string };
-
-// ─────────────────────────────────────────────────────────────
-// Provider Interface
-// ─────────────────────────────────────────────────────────────
-
-export interface ChatStreamChunk {
-  type: "token" | "done" | "error";
-  content?: string;
-  error?: string;
-}
-
-export interface ChatOptions {
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-  signal?: AbortSignal;
-}
-
-export interface ProviderBalance {
-  available: number;
-  currency: string;
-  formatted: string;
-}
-
-export interface DownloadProgress {
-  progress: number; // 0-1
-  text: string;
-}

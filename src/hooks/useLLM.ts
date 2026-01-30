@@ -1,5 +1,5 @@
 /**
- * React hooks for LLM functionality
+ * React hooks for AI Chat functionality
  */
 
 import { useState, useCallback, useEffect } from "react";
@@ -7,13 +7,8 @@ import { use$ } from "applesauce-react/hooks";
 import { useLiveQuery } from "dexie-react-hooks";
 import db from "@/services/db";
 import { providerManager } from "@/services/llm/provider-manager";
-import { PROVIDER_CONFIGS } from "@/services/llm/providers";
-import type {
-  LLMProviderInstance,
-  LLMModel,
-  LLMMessage,
-  LLMEngineStatus,
-} from "@/types/llm";
+import { AI_PROVIDER_PRESETS } from "@/lib/ai-provider-presets";
+import type { LLMProviderInstance, LLMModel, LLMMessage } from "@/types/llm";
 
 // ─────────────────────────────────────────────────────────────
 // Provider Management
@@ -45,7 +40,7 @@ export function useLLMProviders() {
   }, []);
 
   return {
-    configs: PROVIDER_CONFIGS,
+    presets: AI_PROVIDER_PRESETS,
     instances: instances ?? [],
     activeInstanceId,
     activeInstance: instances?.find((i) => i.id === activeInstanceId),
@@ -105,43 +100,12 @@ export function useLLMModels(instanceId: string | null) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// WebLLM Engine Status
+// Recent Models
 // ─────────────────────────────────────────────────────────────
 
-export function useWebLLMStatus() {
-  const status = use$(providerManager.getWebLLMStatus$());
-  const loadedModelId = providerManager.getLoadedWebLLMModelId();
-
-  const loadModel = useCallback(
-    async (
-      modelId: string,
-      onProgress?: (progress: { progress: number; text: string }) => void,
-    ) => {
-      await providerManager.loadWebLLMModel(modelId, onProgress);
-    },
-    [],
-  );
-
-  const deleteModel = useCallback(async (modelId: string) => {
-    await providerManager.deleteWebLLMModel(modelId);
-  }, []);
-
-  const interrupt = useCallback(() => {
-    providerManager.interruptWebLLM();
-  }, []);
-
-  return {
-    status: status ?? ({ state: "idle" } as LLMEngineStatus),
-    loadedModelId,
-    isIdle: status?.state === "idle",
-    isLoading: status?.state === "loading",
-    isReady: status?.state === "ready",
-    isGenerating: status?.state === "generating",
-    isError: status?.state === "error",
-    loadModel,
-    deleteModel,
-    interrupt,
-  };
+export function useRecentModels() {
+  const recentModels = use$(providerManager.recentModels$);
+  return recentModels ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -321,12 +285,42 @@ export function useLLMChat() {
 
   const cancel = useCallback(() => {
     abortController?.abort();
-    providerManager.interruptWebLLM();
   }, [abortController]);
 
   return {
     isGenerating,
     sendMessage,
     cancel,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Connection Test
+// ─────────────────────────────────────────────────────────────
+
+export function useTestConnection() {
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    error?: string;
+  } | null>(null);
+
+  const testConnection = useCallback(async (instance: LLMProviderInstance) => {
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await providerManager.testConnection(instance);
+      setResult(res);
+      return res;
+    } finally {
+      setTesting(false);
+    }
+  }, []);
+
+  return {
+    testing,
+    result,
+    testConnection,
+    reset: () => setResult(null),
   };
 }

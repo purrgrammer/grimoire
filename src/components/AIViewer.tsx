@@ -1,8 +1,8 @@
 /**
- * AIViewer - Local LLM Chat Interface
+ * AIViewer - AI Chat Interface
  *
- * Provides a chat interface for local (WebLLM) and remote (PPQ) LLM providers.
- * Uses sidebar pattern from GroupListViewer for conversation history.
+ * Chat interface for OpenAI-compatible AI providers.
+ * Uses sidebar pattern for conversation history.
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
@@ -18,6 +18,7 @@ import {
   Brain,
   Settings2,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   useLLMProviders,
   useLLMModels,
-  useWebLLMStatus,
   useLLMConversations,
   useLLMConversation,
   useLLMChat,
@@ -71,7 +71,6 @@ const MessageBubble = memo(function MessageBubble({
 }) {
   const isUser = message.role === "user";
 
-  // Don't render empty assistant messages
   if (!isUser && !message.content) {
     return null;
   }
@@ -212,7 +211,7 @@ const ConversationItem = memo(function ConversationItem({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Chat Panel - Messages and Input
+// Chat Panel
 // ─────────────────────────────────────────────────────────────
 
 function ChatPanel({
@@ -240,17 +239,14 @@ function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages, streamingContent, pendingUserMessage]);
 
-  // Focus textarea on mount
   useEffect(() => {
     textareaRef.current?.focus();
   }, [conversationId]);
 
-  // Clear pending message when conversation updates
   useEffect(() => {
     if (
       pendingUserMessage &&
@@ -337,7 +333,6 @@ function ChatPanel({
 
   const messages = conversation?.messages ?? [];
 
-  // Build display messages with streaming and optimistic updates
   let displayMessages =
     streamingContent && messages.length > 0
       ? [
@@ -367,7 +362,6 @@ function ChatPanel({
 
   return (
     <>
-      {/* Messages - scrollable area */}
       <div className="flex-1 overflow-y-auto p-3">
         <div className="flex flex-col gap-3">
           {displayMessages.length === 0 && !showThinking ? (
@@ -386,7 +380,6 @@ function ChatPanel({
         </div>
       </div>
 
-      {/* Input - fixed at bottom */}
       <div className="border-t p-2 flex-shrink-0">
         <div className="flex gap-2 items-end">
           <Textarea
@@ -436,19 +429,19 @@ export function AIViewer({ subcommand }: AIViewerProps) {
   const isMobile = useIsMobile();
   const { addWindow } = useGrimoire();
 
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
 
-  // Provider/model state
   const { instances, activeInstanceId, activeInstance, setActiveInstance } =
     useLLMProviders();
-  const { models } = useLLMModels(activeInstanceId);
-  const { status } = useWebLLMStatus();
+  const {
+    models,
+    loading: modelsLoading,
+    refresh: refreshModels,
+  } = useLLMModels(activeInstanceId);
   const { conversations, deleteConversation } = useLLMConversations();
 
-  // UI state
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
@@ -466,35 +459,19 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     setSelectedModelId(null);
   }, [activeInstanceId]);
 
-  // Auto-select model: last used > first downloaded (WebLLM) > first available
+  // Auto-select model
   useEffect(() => {
     if (!activeInstance || models.length === 0) return;
 
-    if (activeInstance.providerId === "webllm") {
-      if (status.state === "ready") {
-        setSelectedModelId(status.modelId);
-        return;
-      }
-      if (!selectedModelId) {
-        const lastModel = activeInstance.lastModelId
-          ? models.find(
-              (m) => m.id === activeInstance.lastModelId && m.isDownloaded,
-            )
-          : null;
-        const downloaded = lastModel || models.find((m) => m.isDownloaded);
-        if (downloaded) setSelectedModelId(downloaded.id);
-      }
-    } else {
-      if (!selectedModelId) {
-        const lastModel = activeInstance.lastModelId
-          ? models.find((m) => m.id === activeInstance.lastModelId)
-          : null;
-        setSelectedModelId(lastModel?.id || models[0].id);
-      }
+    if (!selectedModelId) {
+      // Prefer last used model
+      const lastModel = activeInstance.lastModelId
+        ? models.find((m) => m.id === activeInstance.lastModelId)
+        : null;
+      setSelectedModelId(lastModel?.id || models[0].id);
     }
-  }, [status, models, activeInstance, selectedModelId]);
+  }, [models, activeInstance, selectedModelId]);
 
-  // Handle conversation selection - also restore provider/model
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
 
@@ -514,7 +491,6 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     if (isMobile) setSidebarOpen(false);
   };
 
-  // Resize handler for desktop sidebar
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -544,14 +520,9 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     return <AIProvidersViewer />;
   }
 
-  // Derived state
-  const isWebLLM = activeInstance?.providerId === "webllm";
-  const webllmReady = status.state === "ready";
+  // Check if we can chat
   const canChat =
-    instances.length > 0 &&
-    activeInstance &&
-    (isWebLLM ? webllmReady : !!activeInstance.apiKey) &&
-    selectedModelId;
+    instances.length > 0 && activeInstance?.apiKey && selectedModelId;
 
   // ─────────────────────────────────────────────────────────────
   // Sidebar Content
@@ -624,7 +595,6 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="border-b px-2 py-1.5 flex items-center gap-2 flex-shrink-0">
-        {/* Mobile sidebar toggle */}
         {isMobile && (
           <Button
             variant="ghost"
@@ -637,71 +607,46 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         )}
 
         {/* Model selector - centered */}
-        <div className="flex-1 flex justify-center min-w-0">
-          {!isWebLLM && models.length > 0 && (
-            <Select
-              value={selectedModelId || ""}
-              onValueChange={setSelectedModelId}
-            >
-              <SelectTrigger className="h-7 w-auto max-w-[200px] text-xs">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {models.map((model) => (
-                  <SelectItem
-                    key={model.id}
-                    value={model.id}
-                    className="text-xs"
-                  >
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {isWebLLM && webllmReady && (
-            <span className="text-xs text-muted-foreground truncate">
-              {models.find((m) => m.id === status.modelId)?.name ||
-                status.modelId}
+        <div className="flex-1 flex justify-center items-center gap-1 min-w-0">
+          {modelsLoading ? (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading models...
             </span>
-          )}
-
-          {isWebLLM && !webllmReady && (
-            <div className="text-xs text-muted-foreground">
-              {status.state === "loading" ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Loading...
-                </span>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-xs text-muted-foreground"
-                  onClick={() =>
-                    addWindow("ai", { subcommand: "providers" }, "AI Providers")
-                  }
-                >
-                  <Settings2 className="h-3 w-3 mr-1" />
-                  Load model
-                </Button>
-              )}
-            </div>
-          )}
-
-          {!isWebLLM && !activeInstance?.apiKey && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 text-xs text-muted-foreground"
-              onClick={() =>
-                addWindow("ai", { subcommand: "providers" }, "AI Providers")
-              }
-            >
-              <Settings2 className="h-3 w-3 mr-1" />
-              Configure API key
-            </Button>
+          ) : models.length > 0 ? (
+            <>
+              <Select
+                value={selectedModelId || ""}
+                onValueChange={setSelectedModelId}
+              >
+                <SelectTrigger className="h-7 w-auto max-w-[200px] text-xs">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem
+                      key={model.id}
+                      value={model.id}
+                      className="text-xs"
+                    >
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={refreshModels}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {activeInstance?.apiKey ? "No models found" : "Configure API key"}
+            </span>
           )}
         </div>
 
@@ -733,35 +678,30 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-4">
-          {isWebLLM && status.state === "loading" ? (
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading model...</span>
+          <div className="text-center">
+            <div className="mb-2">
+              {!activeInstance?.apiKey
+                ? "Configure your API key to start"
+                : "Select a model to start chatting"}
             </div>
-          ) : (
-            <div className="text-center">
-              <div className="mb-2">
-                Configure a provider and model to start
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  addWindow("ai", { subcommand: "providers" }, "AI Providers")
-                }
-              >
-                <Settings2 className="h-3 w-3 mr-1" />
-                Configure
-              </Button>
-            </div>
-          )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                addWindow("ai", { subcommand: "providers" }, "AI Providers")
+              }
+            >
+              <Settings2 className="h-3 w-3 mr-1" />
+              Configure
+            </Button>
+          </div>
         </div>
       )}
     </div>
   );
 
   // ─────────────────────────────────────────────────────────────
-  // Layout: Mobile with Sheet sidebar
+  // Layout: Mobile
   // ─────────────────────────────────────────────────────────────
 
   if (isMobile) {
@@ -781,12 +721,11 @@ export function AIViewer({ subcommand }: AIViewerProps) {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Layout: Desktop with resizable sidebar
+  // Layout: Desktop
   // ─────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full">
-      {/* Sidebar */}
       <aside
         className="flex flex-col border-r bg-background flex-shrink-0"
         style={{ width: sidebarWidth }}
@@ -794,7 +733,6 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         {sidebarContent}
       </aside>
 
-      {/* Resize handle */}
       <div
         className={cn(
           "w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors flex-shrink-0",
@@ -803,7 +741,6 @@ export function AIViewer({ subcommand }: AIViewerProps) {
         onMouseDown={handleMouseDown}
       />
 
-      {/* Main content */}
       <div className="flex-1 min-w-0 min-h-0">{chatContent}</div>
     </div>
   );

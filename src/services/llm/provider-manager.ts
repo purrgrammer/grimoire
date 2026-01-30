@@ -1,11 +1,12 @@
 /**
- * LLM Provider Manager
+ * AI Provider Manager
  *
- * Manages provider instances, model caching, and coordinates between
- * WebLLM (local) and PPQ (remote) providers.
+ * Manages provider instances, model fetching, and chat functionality.
+ * All providers use OpenAI-compatible APIs.
  */
 
 import { BehaviorSubject } from "rxjs";
+import OpenAI from "openai";
 import db from "@/services/db";
 import type {
   LLMProviderInstance,
@@ -13,24 +14,30 @@ import type {
   LLMMessage,
   ChatStreamChunk,
   ChatOptions,
-  DownloadProgress,
 } from "@/types/llm";
-import { PROVIDER_CONFIGS } from "./providers";
-import { webllmProvider } from "./webllm-provider";
-import { ppqProvider } from "./ppq-provider";
+import {
+  createOpenAIClient,
+  formatModelName,
+  parseAPIError,
+} from "./openai-client";
+import { AI_PROVIDER_PRESETS } from "@/lib/ai-provider-presets";
 
-const MODEL_CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const MODEL_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
-class LLMProviderManager {
+class AIProviderManager {
   // Reactive state
   instances$ = new BehaviorSubject<LLMProviderInstance[]>([]);
   activeInstanceId$ = new BehaviorSubject<string | null>(null);
+  recentModels$ = new BehaviorSubject<string[]>([]); // "providerId/modelId" format
 
   // Model cache (instance ID → models)
   private modelCache = new Map<
     string,
     { models: LLMModel[]; cachedAt: number }
   >();
+
+  // OpenAI clients (instance ID → client)
+  private clients = new Map<string, OpenAI>();
 
   /**
    * Initialize the manager - load saved instances from Dexie.
@@ -39,20 +46,22 @@ class LLMProviderManager {
     const instances = await db.llmProviders.toArray();
     this.instances$.next(instances);
 
-    // Configure PPQ provider if there's a saved instance with API key
-    const ppqInstance = instances.find(
-      (i) => i.providerId === "ppq" && i.apiKey,
-    );
-    if (ppqInstance?.apiKey) {
-      ppqProvider.configure(ppqInstance.apiKey);
+    // Load recent models from localStorage
+    try {
+      const saved = localStorage.getItem("ai-recent-models");
+      if (saved) {
+        this.recentModels$.next(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore parse errors
     }
   }
 
   /**
-   * Get provider configs (static list of available providers).
+   * Get provider presets (static list of available providers).
    */
-  getProviderConfigs() {
-    return PROVIDER_CONFIGS;
+  getProviderPresets() {
+    return AI_PROVIDER_PRESETS;
   }
 
   /**
@@ -63,23 +72,17 @@ class LLMProviderManager {
     const instances = await db.llmProviders.toArray();
     this.instances$.next(instances);
 
-    // Configure PPQ if this is a PPQ instance with API key
-    if (instance.providerId === "ppq" && instance.apiKey) {
-      ppqProvider.configure(instance.apiKey);
-    }
+    // Clear cached client when updating
+    this.clients.delete(instance.id);
   }
 
   /**
    * Remove a provider instance.
    */
   async removeProviderInstance(instanceId: string): Promise<void> {
-    const instance = await db.llmProviders.get(instanceId);
-    if (instance?.providerId === "ppq") {
-      ppqProvider.clear();
-    }
-
     await db.llmProviders.delete(instanceId);
     this.modelCache.delete(instanceId);
+    this.clients.delete(instanceId);
 
     const instances = await db.llmProviders.toArray();
     this.instances$.next(instances);
@@ -107,6 +110,18 @@ class LLMProviderManager {
   }
 
   /**
+   * Get or create an OpenAI client for an instance.
+   */
+  private getClient(instance: LLMProviderInstance): OpenAI {
+    let client = this.clients.get(instance.id);
+    if (!client) {
+      client = createOpenAIClient(instance);
+      this.clients.set(instance.id, client);
+    }
+    return client;
+  }
+
+  /**
    * List models for a provider instance (with caching).
    */
   async listModels(
@@ -128,66 +143,100 @@ class LLMProviderManager {
       return cached.models;
     }
 
-    // Fetch models based on provider type
-    let models: LLMModel[];
+    try {
+      const client = this.getClient(instance);
 
-    if (instance.providerId === "webllm") {
-      models = await webllmProvider.listModels();
-    } else if (instance.providerId === "ppq") {
-      if (!instance.apiKey) {
-        throw new Error("PPQ API key not configured");
+      // Fetch models from /v1/models endpoint
+      const response = await client.models.list({
+        signal: AbortSignal.timeout(10000), // 10s timeout
+      });
+
+      // Transform to our format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const models: LLMModel[] = (response.data as any[])
+        .filter((m: Record<string, unknown>) => {
+          // Filter to chat models if type is available
+          if ("type" in m && m.type !== undefined) {
+            return m.type === "chat";
+          }
+          return true;
+        })
+        .map((m: Record<string, unknown>) => {
+          const modelId = m.id as string;
+          const model: LLMModel = {
+            id: modelId,
+            name:
+              "name" in m && typeof m.name === "string"
+                ? m.name
+                : formatModelName(modelId),
+            providerId: instance.providerId,
+            description:
+              "description" in m && typeof m.description === "string"
+                ? m.description
+                : undefined,
+            contextLength:
+              "context_length" in m && typeof m.context_length === "number"
+                ? m.context_length
+                : undefined,
+          };
+
+          // Extract pricing if available
+          if ("pricing" in m && m.pricing && typeof m.pricing === "object") {
+            const pricing = m.pricing as Record<string, unknown>;
+            if ("prompt" in pricing && "completion" in pricing) {
+              const prompt = parseFloat(String(pricing.prompt));
+              const completion = parseFloat(String(pricing.completion));
+              if (!isNaN(prompt) && !isNaN(completion)) {
+                model.pricing = {
+                  inputPerMillion: prompt * 1_000_000,
+                  outputPerMillion: completion * 1_000_000,
+                };
+              }
+            }
+          }
+
+          return model;
+        });
+
+      // Update cache
+      this.modelCache.set(instanceId, { models, cachedAt: Date.now() });
+
+      return models;
+    } catch (error) {
+      console.warn("Failed to fetch models:", error);
+
+      // Return cached models if available, even if stale
+      if (cached) {
+        return cached.models;
       }
-      ppqProvider.configure(instance.apiKey);
-      models = await ppqProvider.listModels();
-    } else {
-      throw new Error(`Unknown provider: ${instance.providerId}`);
+
+      throw error;
     }
-
-    // Update cache
-    this.modelCache.set(instanceId, { models, cachedAt: Date.now() });
-
-    // Persist to instance
-    await db.llmProviders.update(instanceId, {
-      cachedModels: models,
-      modelsCachedAt: Date.now(),
-    });
-
-    return models;
   }
 
   /**
-   * Get WebLLM engine status.
+   * Add a model to recent models list.
    */
-  getWebLLMStatus$() {
-    return webllmProvider.status$;
+  addRecentModel(providerId: string, modelId: string): void {
+    const fullId = `${providerId}/${modelId}`;
+    const current = this.recentModels$.value;
+
+    // Remove if already exists, then add to front
+    const filtered = current.filter((m) => m !== fullId);
+    const updated = [fullId, ...filtered].slice(0, 10);
+
+    this.recentModels$.next(updated);
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem("ai-recent-models", JSON.stringify(updated));
+    } catch {
+      // Ignore quota errors
+    }
   }
 
   /**
-   * Load a WebLLM model.
-   */
-  async loadWebLLMModel(
-    modelId: string,
-    onProgress?: (progress: DownloadProgress) => void,
-  ): Promise<void> {
-    return webllmProvider.loadModel(modelId, onProgress);
-  }
-
-  /**
-   * Delete a WebLLM model from cache.
-   */
-  async deleteWebLLMModel(modelId: string): Promise<void> {
-    return webllmProvider.deleteModel(modelId);
-  }
-
-  /**
-   * Get the currently loaded WebLLM model ID.
-   */
-  getLoadedWebLLMModelId(): string | null {
-    return webllmProvider.getLoadedModelId();
-  }
-
-  /**
-   * Chat with a model.
+   * Chat with a model (streaming).
    */
   async *chat(
     instanceId: string,
@@ -201,49 +250,80 @@ class LLMProviderManager {
       return;
     }
 
-    const chatOptions: ChatOptions = { ...options, model: modelId };
-
-    if (instance.providerId === "webllm") {
-      yield* webllmProvider.chat(messages, chatOptions);
-    } else if (instance.providerId === "ppq") {
-      if (!instance.apiKey) {
-        yield { type: "error", error: "PPQ API key not configured" };
-        return;
-      }
-      ppqProvider.configure(instance.apiKey);
-      yield* ppqProvider.chat(messages, chatOptions);
-    } else {
-      yield {
-        type: "error",
-        error: `Unknown provider: ${instance.providerId}`,
-      };
+    if (!instance.apiKey) {
+      yield { type: "error", error: "API key not configured" };
+      return;
     }
 
-    // Update lastUsed and lastModelId
-    await db.llmProviders.update(instanceId, {
-      lastUsed: Date.now(),
-      lastModelId: modelId,
-    });
+    try {
+      const client = this.getClient(instance);
+
+      const stream = await client.chat.completions.create(
+        {
+          model: modelId,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          stream: true,
+          stream_options: { include_usage: true },
+          temperature: options.temperature ?? 0.7,
+          max_tokens: options.maxTokens,
+        },
+        { signal: options.signal },
+      );
+
+      let usage: ChatStreamChunk["usage"] | undefined;
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          yield { type: "token", content };
+        }
+
+        // Capture usage from final chunk
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens,
+            completionTokens: chunk.usage.completion_tokens,
+          };
+        }
+      }
+
+      yield { type: "done", usage };
+
+      // Update lastUsed and add to recent models
+      await db.llmProviders.update(instanceId, {
+        lastUsed: Date.now(),
+        lastModelId: modelId,
+      });
+      this.addRecentModel(instance.providerId, modelId);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        yield { type: "done" };
+        return;
+      }
+
+      const message = parseAPIError(error);
+      yield { type: "error", error: message };
+    }
   }
 
   /**
-   * Interrupt current WebLLM generation.
+   * Test connection to a provider.
    */
-  interruptWebLLM(): void {
-    webllmProvider.interrupt();
-  }
-
-  /**
-   * Clean up resources.
-   */
-  async dispose(): Promise<void> {
-    await webllmProvider.dispose();
-    ppqProvider.clear();
+  async testConnection(
+    instance: LLMProviderInstance,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const client = createOpenAIClient(instance);
+      await client.models.list({ signal: AbortSignal.timeout(5000) });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: parseAPIError(error) };
+    }
   }
 }
 
 // Singleton instance
-export const providerManager = new LLMProviderManager();
+export const providerManager = new AIProviderManager();
 
 // Initialize on import
 providerManager.initialize().catch(console.error);
