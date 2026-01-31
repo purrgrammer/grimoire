@@ -74,7 +74,7 @@ export interface AISettings {
 // ─────────────────────────────────────────────────────────────
 
 export interface ChatStreamChunk {
-  type: "token" | "reasoning" | "tool_call" | "done" | "error";
+  type: "token" | "reasoning" | "tool_call" | "done" | "error" | "retry";
   content?: string;
   /** Streaming tool call delta */
   tool_call?: StreamingToolCall;
@@ -84,6 +84,17 @@ export interface ChatStreamChunk {
   usage?: {
     promptTokens: number;
     completionTokens: number;
+  };
+  /** Retry information for error recovery */
+  retry?: {
+    /** Current attempt number (1-based) */
+    attempt: number;
+    /** Maximum attempts allowed */
+    maxAttempts: number;
+    /** Delay before next retry (ms) */
+    delayMs: number;
+    /** Whether this error is retryable */
+    retryable: boolean;
   };
 }
 
@@ -153,6 +164,18 @@ export interface ChatSessionState {
   // For resume functionality
   finishReason?: "stop" | "length" | "tool_calls" | "error" | null;
   lastError?: string;
+
+  // Retry state for transient errors
+  retryState?: {
+    /** Current retry attempt (1-based) */
+    attempt: number;
+    /** Maximum attempts allowed */
+    maxAttempts: number;
+    /** Whether currently waiting before retry */
+    isRetrying: boolean;
+    /** Time remaining until next retry (ms) */
+    retryDelayMs: number;
+  };
 
   // Reference counting - how many windows have this session open
   subscriberCount: number;

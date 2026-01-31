@@ -15,11 +15,14 @@ import type {
   ChatStreamChunk,
   ChatOptions,
 } from "@/types/llm";
+import { createOpenAIClient, formatModelName } from "./openai-client";
 import {
-  createOpenAIClient,
-  formatModelName,
-  parseAPIError,
-} from "./openai-client";
+  parseError,
+  calculateBackoff,
+  sleep,
+  DEFAULT_RETRY_CONFIG,
+  type RetryConfig,
+} from "./error-handling";
 import { AI_PROVIDER_PRESETS } from "@/lib/ai-provider-presets";
 
 const MODEL_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
@@ -237,12 +240,13 @@ class AIProviderManager {
 
   /**
    * Chat with a model (streaming).
+   * Includes automatic retry logic for transient errors.
    */
   async *chat(
     instanceId: string,
     modelId: string,
     messages: LLMMessage[],
-    options: Omit<ChatOptions, "model">,
+    options: Omit<ChatOptions, "model"> & { retryConfig?: RetryConfig },
   ): AsyncGenerator<ChatStreamChunk> {
     const instance = await db.llmProviders.get(instanceId);
     if (!instance) {
@@ -255,108 +259,179 @@ class AIProviderManager {
       return;
     }
 
-    try {
-      const client = this.getClient(instance);
+    const retryConfig = options.retryConfig ?? DEFAULT_RETRY_CONFIG;
+    const maxAttempts = retryConfig.maxRetries + 1;
 
-      // Format messages for OpenAI API
-      const formattedMessages = this.formatMessages(messages);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Yield all chunks from the stream attempt
+        const streamResult = yield* this.streamChat(
+          instance,
+          modelId,
+          messages,
+          options,
+        );
 
-      // Build request params
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const params: any = {
-        model: modelId,
-        messages: formattedMessages,
-        stream: true,
-        stream_options: { include_usage: true },
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens,
-      };
+        // If we got here successfully, update usage tracking and return
+        if (streamResult.success) {
+          await db.llmProviders.update(instanceId, {
+            lastUsed: Date.now(),
+            lastModelId: modelId,
+          });
+          this.addRecentModel(instance.providerId, modelId);
+          return;
+        }
+      } catch (error) {
+        // Handle abort - don't retry
+        if (error instanceof DOMException && error.name === "AbortError") {
+          yield { type: "done" };
+          return;
+        }
 
-      // Add tools if provided
-      if (options.tools && options.tools.length > 0) {
-        params.tools = options.tools;
-        if (options.tool_choice) {
-          params.tool_choice = options.tool_choice;
+        // Parse the error
+        const llmError = parseError(error);
+
+        // If not retryable or last attempt, yield error and stop
+        if (!llmError.retryable || attempt >= maxAttempts - 1) {
+          yield {
+            type: "error",
+            error: llmError.message,
+            retry: {
+              attempt: attempt + 1,
+              maxAttempts,
+              delayMs: 0,
+              retryable: false,
+            },
+          };
+          return;
+        }
+
+        // Calculate backoff delay
+        const delayMs = calculateBackoff(
+          attempt,
+          llmError.retryAfter,
+          retryConfig,
+        );
+
+        // Yield retry event so UI can show progress
+        yield {
+          type: "retry",
+          error: llmError.message,
+          retry: {
+            attempt: attempt + 1,
+            maxAttempts,
+            delayMs,
+            retryable: true,
+          },
+        };
+
+        // Wait before retrying (respects abort signal)
+        try {
+          await sleep(delayMs, options.signal);
+        } catch {
+          // Aborted during wait
+          yield { type: "done" };
+          return;
         }
       }
+    }
+  }
 
-      const stream = (await client.chat.completions.create(params, {
-        signal: options.signal,
-      })) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  /**
+   * Internal: Stream a single chat completion attempt.
+   * Returns a result indicating success/failure.
+   */
+  private async *streamChat(
+    instance: LLMProviderInstance,
+    modelId: string,
+    messages: LLMMessage[],
+    options: Omit<ChatOptions, "model">,
+  ): AsyncGenerator<ChatStreamChunk, { success: boolean }> {
+    const client = this.getClient(instance);
 
-      let usage: ChatStreamChunk["usage"] | undefined;
-      let finishReason: ChatStreamChunk["finish_reason"] = null;
+    // Format messages for OpenAI API
+    const formattedMessages = this.formatMessages(messages);
 
-      for await (const chunk of stream) {
-        const choice = chunk.choices[0];
-        if (!choice) continue;
+    // Build request params
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any = {
+      model: modelId,
+      messages: formattedMessages,
+      stream: true,
+      stream_options: { include_usage: true },
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens,
+    };
 
-        const delta = choice.delta;
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      params.tools = options.tools;
+      if (options.tool_choice) {
+        params.tool_choice = options.tool_choice;
+      }
+    }
 
-        // Regular content
-        if (delta?.content) {
-          yield { type: "token", content: delta.content };
-        }
+    const stream = (await client.chat.completions.create(params, {
+      signal: options.signal,
+    })) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
-        // Extended thinking / reasoning (Claude, DeepSeek, etc.)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const reasoning = (delta as any)?.reasoning_content;
-        if (reasoning) {
-          yield { type: "reasoning", content: reasoning };
-        }
+    let usage: ChatStreamChunk["usage"] | undefined;
+    let finishReason: ChatStreamChunk["finish_reason"] = null;
 
-        // Tool calls (streamed incrementally)
-        if (delta?.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            yield {
-              type: "tool_call",
-              tool_call: {
-                index: tc.index,
-                id: tc.id,
-                type: tc.type,
-                function: tc.function
-                  ? {
-                      name: tc.function.name,
-                      arguments: tc.function.arguments,
-                    }
-                  : undefined,
-              },
-            };
-          }
-        }
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) continue;
 
-        // Capture finish reason
-        if (choice.finish_reason) {
-          finishReason =
-            choice.finish_reason as ChatStreamChunk["finish_reason"];
-        }
+      const delta = choice.delta;
 
-        // Capture usage from final chunk
-        if (chunk.usage) {
-          usage = {
-            promptTokens: chunk.usage.prompt_tokens,
-            completionTokens: chunk.usage.completion_tokens,
+      // Regular content
+      if (delta?.content) {
+        yield { type: "token", content: delta.content };
+      }
+
+      // Extended thinking / reasoning (Claude, DeepSeek, etc.)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reasoning = (delta as any)?.reasoning_content;
+      if (reasoning) {
+        yield { type: "reasoning", content: reasoning };
+      }
+
+      // Tool calls (streamed incrementally)
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          yield {
+            type: "tool_call",
+            tool_call: {
+              index: tc.index,
+              id: tc.id,
+              type: tc.type,
+              function: tc.function
+                ? {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments,
+                  }
+                : undefined,
+            },
           };
         }
       }
 
-      yield { type: "done", usage, finish_reason: finishReason };
-
-      // Update lastUsed and add to recent models
-      await db.llmProviders.update(instanceId, {
-        lastUsed: Date.now(),
-        lastModelId: modelId,
-      });
-      this.addRecentModel(instance.providerId, modelId);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        yield { type: "done" };
-        return;
+      // Capture finish reason
+      if (choice.finish_reason) {
+        finishReason = choice.finish_reason as ChatStreamChunk["finish_reason"];
       }
 
-      const message = parseAPIError(error);
-      yield { type: "error", error: message };
+      // Capture usage from final chunk
+      if (chunk.usage) {
+        usage = {
+          promptTokens: chunk.usage.prompt_tokens,
+          completionTokens: chunk.usage.completion_tokens,
+        };
+      }
     }
+
+    yield { type: "done", usage, finish_reason: finishReason };
+    return { success: true };
   }
 
   /**
@@ -410,7 +485,8 @@ class AIProviderManager {
       await client.models.list({ signal: AbortSignal.timeout(5000) });
       return { success: true };
     } catch (error) {
-      return { success: false, error: parseAPIError(error) };
+      const llmError = parseError(error);
+      return { success: false, error: llmError.message };
     }
   }
 }

@@ -628,12 +628,53 @@ class ChatSessionManager {
           streamingMessage: { ...streaming },
           lastActivity: Date.now(),
         });
+      } else if (chunk.type === "retry" && chunk.retry) {
+        // Transient error - retrying automatically
+        this.updateSession(conversationId, {
+          ...session,
+          retryState: {
+            attempt: chunk.retry.attempt,
+            maxAttempts: chunk.retry.maxAttempts,
+            isRetrying: true,
+            retryDelayMs: chunk.retry.delayMs,
+          },
+          lastError: chunk.error,
+          lastActivity: Date.now(),
+        });
+
+        // Emit error event for UI awareness (but we're handling it)
+        if (chunk.error) {
+          this.error$.next({
+            conversationId,
+            error: `${chunk.error} (retry ${chunk.retry.attempt}/${chunk.retry.maxAttempts})`,
+          });
+        }
       } else if (chunk.type === "done") {
         usage = chunk.usage;
         if (chunk.finish_reason) {
           finishReason = chunk.finish_reason;
         }
+        // Clear retry state on success
+        const currentSession = this.getSession(conversationId);
+        if (currentSession?.retryState) {
+          this.updateSession(conversationId, {
+            ...currentSession,
+            retryState: undefined,
+          });
+        }
       } else if (chunk.type === "error") {
+        // Check if this is a non-retryable error with retry info
+        if (chunk.retry && !chunk.retry.retryable) {
+          this.updateSession(conversationId, {
+            ...session,
+            retryState: {
+              attempt: chunk.retry.attempt,
+              maxAttempts: chunk.retry.maxAttempts,
+              isRetrying: false,
+              retryDelayMs: 0,
+            },
+          });
+        }
         throw new Error(chunk.error || "Unknown error");
       }
     }

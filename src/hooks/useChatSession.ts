@@ -43,6 +43,9 @@ interface UseChatSessionResult {
   // Resume state
   canResume: boolean;
   finishReason: ChatSessionState["finishReason"];
+
+  // Retry state
+  retryState: ChatSessionState["retryState"];
 }
 
 /**
@@ -118,6 +121,9 @@ export function useChatSession(
           (session.finishReason === null && session.streamingContent)),
       ),
       finishReason: session?.finishReason,
+
+      // Retry state
+      retryState: session?.retryState,
     }),
     [conversation, session],
   );

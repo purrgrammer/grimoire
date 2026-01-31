@@ -20,6 +20,8 @@ import {
   RefreshCw,
   Play,
   Sparkles,
+  AlertCircle,
+  RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -256,8 +258,14 @@ function ChatPanel({
   onConversationCreated: (id: string) => void;
 }) {
   // Session manager hooks
-  const { messages, isLoading, streamingContent, error, canResume } =
-    useChatSession(conversationId, { providerInstanceId, modelId });
+  const {
+    messages,
+    isLoading,
+    streamingContent,
+    error,
+    canResume,
+    retryState,
+  } = useChatSession(conversationId, { providerInstanceId, modelId });
 
   const { sendMessage, createConversation, stopGeneration, resumeGeneration } =
     useChatActions();
@@ -444,10 +452,31 @@ function ChatPanel({
             </>
           )}
 
-          {/* Error display */}
-          {error && !isLoading && (
-            <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-              {error}
+          {/* Retry indicator - shown during automatic retry */}
+          {retryState?.isRetrying && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+              <RotateCw className="h-4 w-4 animate-spin" />
+              <span>
+                Retrying ({retryState.attempt}/{retryState.maxAttempts})...
+              </span>
+            </div>
+          )}
+
+          {/* Error display - shown for non-retryable errors */}
+          {error && !isLoading && !retryState?.isRetrying && (
+            <div className="flex items-start gap-2 text-sm bg-destructive/10 rounded-lg px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="text-destructive">{error}</span>
+                {retryState &&
+                  !retryState.isRetrying &&
+                  retryState.attempt > 0 && (
+                    <span className="text-muted-foreground text-xs block mt-1">
+                      Failed after {retryState.attempt} attempt
+                      {retryState.attempt > 1 ? "s" : ""}
+                    </span>
+                  )}
+              </div>
             </div>
           )}
 
