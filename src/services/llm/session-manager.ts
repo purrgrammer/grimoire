@@ -535,6 +535,8 @@ class ChatSessionManager {
     const toolCallsMap = new Map<number, StreamingToolCall>();
     let usage: ChatSessionState["usage"];
     let finishReason: ChatSessionState["finishReason"] = "stop";
+    let actualModel: string | undefined;
+    let apiCost: number | undefined;
 
     // Build messages array with system prompt prepended if present
     const messagesForAPI: LLMMessage[] = conversation.systemPrompt
@@ -654,6 +656,13 @@ class ChatSessionManager {
         if (chunk.finish_reason) {
           finishReason = chunk.finish_reason;
         }
+        // Capture actual model and API-provided cost
+        if (chunk.model) {
+          actualModel = chunk.model;
+        }
+        if (chunk.cost !== undefined) {
+          apiCost = chunk.cost;
+        }
         // Clear retry state on success
         const currentSession = this.getSession(conversationId);
         if (currentSession?.retryState) {
@@ -679,12 +688,12 @@ class ChatSessionManager {
       }
     }
 
-    // Calculate cost before creating message (so we can include it)
-    let cost = 0;
-    if (usage) {
+    // Use API-provided cost if available, otherwise calculate from pricing
+    let cost = apiCost;
+    if (cost === undefined && usage) {
       cost = await this.calculateCost(
         providerInstanceId,
-        modelId,
+        actualModel || modelId,
         usage.promptTokens,
         usage.completionTokens,
       );
@@ -696,10 +705,10 @@ class ChatSessionManager {
       role: "assistant",
       content: streaming.content,
       timestamp: Date.now(),
-      // Local-only fields for cost display
-      model: modelId,
+      // Local-only fields for cost display (actual model from API, not requested model)
+      model: actualModel || modelId,
       usage,
-      cost: cost > 0 ? cost : undefined,
+      cost: cost !== undefined && cost > 0 ? cost : undefined,
     };
 
     // Add optional fields if present
@@ -726,7 +735,7 @@ class ChatSessionManager {
       finishReason,
       toolCalls: streaming.tool_calls,
       usage,
-      cost,
+      cost: cost ?? 0,
     };
   }
 

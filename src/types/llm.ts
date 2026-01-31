@@ -81,10 +81,14 @@ export interface ChatStreamChunk {
   /** Finish reason from the API */
   finish_reason?: "stop" | "length" | "tool_calls" | null;
   error?: string;
+  /** Actual model that generated the response (may differ from requested) */
+  model?: string;
   usage?: {
     promptTokens: number;
     completionTokens: number;
   };
+  /** Cost from API response (USD) - preferred over calculated cost */
+  cost?: number;
   /** Retry information for error recovery */
   retry?: {
     /** Current attempt number (1-based) */

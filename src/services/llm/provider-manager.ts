@@ -377,8 +377,15 @@ class AIProviderManager {
 
     let usage: ChatStreamChunk["usage"] | undefined;
     let finishReason: ChatStreamChunk["finish_reason"] = null;
+    let actualModel: string | undefined;
+    let cost: number | undefined;
 
     for await (const chunk of stream) {
+      // Capture model from first chunk that has it (actual model may differ from requested)
+      if (chunk.model && !actualModel) {
+        actualModel = chunk.model;
+      }
+
       const choice = chunk.choices[0];
       if (!choice) continue;
 
@@ -421,16 +428,33 @@ class AIProviderManager {
         finishReason = choice.finish_reason as ChatStreamChunk["finish_reason"];
       }
 
-      // Capture usage from final chunk
+      // Capture usage and cost from final chunk
       if (chunk.usage) {
         usage = {
           promptTokens: chunk.usage.prompt_tokens,
           completionTokens: chunk.usage.completion_tokens,
         };
+
+        // Extract cost from API response (OpenRouter/PPQ provide this)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usageAny = chunk.usage as any;
+        if (typeof usageAny.cost === "number") {
+          cost = usageAny.cost;
+        } else if (
+          usageAny.cost_details?.upstream_inference_cost !== undefined
+        ) {
+          cost = usageAny.cost_details.upstream_inference_cost;
+        }
       }
     }
 
-    yield { type: "done", usage, finish_reason: finishReason };
+    yield {
+      type: "done",
+      usage,
+      finish_reason: finishReason,
+      model: actualModel,
+      cost,
+    };
     return { success: true };
   }
 
