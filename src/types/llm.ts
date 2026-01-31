@@ -350,6 +350,17 @@ export interface AssistantMessage extends BaseMessage {
   reasoning_content?: string;
   /** Tool calls requested by the assistant */
   tool_calls?: ToolCall[];
+
+  // ─── Local-only fields (not sent to API) ───
+  /** Model that generated this response (may differ from requested due to routing) */
+  model?: string;
+  /** Token usage for this message */
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  };
+  /** Cost in USD for this message */
+  cost?: number;
 }
 
 /**

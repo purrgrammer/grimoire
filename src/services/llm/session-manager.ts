@@ -679,12 +679,27 @@ class ChatSessionManager {
       }
     }
 
+    // Calculate cost before creating message (so we can include it)
+    let cost = 0;
+    if (usage) {
+      cost = await this.calculateCost(
+        providerInstanceId,
+        modelId,
+        usage.promptTokens,
+        usage.completionTokens,
+      );
+    }
+
     // Create assistant message with all accumulated content
     const assistantMessage: AssistantMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
       content: streaming.content,
       timestamp: Date.now(),
+      // Local-only fields for cost display
+      model: modelId,
+      usage,
+      cost: cost > 0 ? cost : undefined,
     };
 
     // Add optional fields if present
@@ -705,17 +720,6 @@ class ChatSessionManager {
     }
 
     this.messageAdded$.next({ conversationId, message: assistantMessage });
-
-    // Calculate cost
-    let cost = 0;
-    if (usage) {
-      cost = await this.calculateCost(
-        providerInstanceId,
-        modelId,
-        usage.promptTokens,
-        usage.completionTokens,
-      );
-    }
 
     return {
       assistantMessage,

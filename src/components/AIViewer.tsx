@@ -6,7 +6,7 @@
  * Powered by ChatSessionManager for multi-window support.
  */
 
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import {
   Loader2,
   PanelLeft,
@@ -17,7 +17,6 @@ import {
   Brain,
   Settings2,
   MessageSquare,
-  RefreshCw,
   Play,
   Sparkles,
   AlertCircle,
@@ -121,46 +120,58 @@ const MessageBubble = memo(function MessageBubble({
   // Assistant message
   const assistantMsg = message as AssistantMessage;
 
+  // Format cost info for display
+  const costInfo = formatMessageCost(assistantMsg);
+
   return (
     <div className="flex w-full justify-start">
-      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-muted text-foreground space-y-2">
-        {/* Reasoning content (collapsible) */}
-        {assistantMsg.reasoning_content && (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground flex items-center gap-1.5">
-              <Brain className="h-3 w-3" />
-              <span>Reasoning</span>
-            </summary>
-            <div className="mt-2 pl-4 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap">
-              {assistantMsg.reasoning_content}
-            </div>
-          </details>
-        )}
-
-        {/* Tool calls */}
-        {assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0 && (
-          <div className="space-y-1">
-            {assistantMsg.tool_calls.map((tc) => (
-              <div
-                key={tc.id}
-                className="text-xs bg-background/50 rounded px-2 py-1.5 border border-border"
-              >
-                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                  <Settings2 className="h-3 w-3" />
-                  <span className="font-medium">{tc.function.name}</span>
-                </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10px]">
-                  {formatToolArgs(tc.function.arguments)}
-                </pre>
+      <div className="max-w-[85%] space-y-1">
+        <div className="rounded-lg px-3 py-2 text-sm bg-muted text-foreground space-y-2">
+          {/* Reasoning content (collapsible) */}
+          {assistantMsg.reasoning_content && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground flex items-center gap-1.5">
+                <Brain className="h-3 w-3" />
+                <span>Reasoning</span>
+              </summary>
+              <div className="mt-2 pl-4 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap">
+                {assistantMsg.reasoning_content}
               </div>
-            ))}
-          </div>
-        )}
+            </details>
+          )}
 
-        {/* Regular content */}
-        {content && (
-          <div className="[&>article]:p-0 [&>article]:m-0">
-            <MarkdownContent content={content} />
+          {/* Tool calls */}
+          {assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0 && (
+            <div className="space-y-1">
+              {assistantMsg.tool_calls.map((tc) => (
+                <div
+                  key={tc.id}
+                  className="text-xs bg-background/50 rounded px-2 py-1.5 border border-border"
+                >
+                  <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                    <Settings2 className="h-3 w-3" />
+                    <span className="font-medium">{tc.function.name}</span>
+                  </div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10px]">
+                    {formatToolArgs(tc.function.arguments)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Regular content */}
+          {content && (
+            <div className="[&>article]:p-0 [&>article]:m-0">
+              <MarkdownContent content={content} />
+            </div>
+          )}
+        </div>
+
+        {/* Cost info footer */}
+        {costInfo && (
+          <div className="text-[10px] text-muted-foreground/70 px-1 flex items-center gap-1.5">
+            {costInfo}
           </div>
         )}
       </div>
@@ -178,6 +189,48 @@ function formatToolArgs(args: string): string {
   } catch {
     return args;
   }
+}
+
+/**
+ * Format message cost info for display.
+ * Returns null if no cost info available.
+ */
+function formatMessageCost(msg: AssistantMessage): string | null {
+  const parts: string[] = [];
+
+  // Model name (clean it up for display)
+  if (msg.model) {
+    const modelName = msg.model
+      .replace(/^(openai\/|anthropic\/|google\/|meta-llama\/|mistralai\/)/, "")
+      .replace(/-\d{4}-\d{2}-\d{2}$/, "");
+    parts.push(modelName);
+  }
+
+  // Token count
+  if (msg.usage) {
+    const total = msg.usage.promptTokens + msg.usage.completionTokens;
+    parts.push(`${total.toLocaleString()} tokens`);
+  }
+
+  // Cost
+  if (msg.cost !== undefined && msg.cost > 0) {
+    parts.push(formatCost(msg.cost));
+  }
+
+  return parts.length > 0 ? parts.join(" • ") : null;
+}
+
+/**
+ * Format cost in USD.
+ */
+function formatCost(cost: number): string {
+  if (cost < 0.0001) {
+    return "<$0.0001";
+  }
+  if (cost < 0.01) {
+    return `$${cost.toFixed(4)}`;
+  }
+  return `$${cost.toFixed(2)}`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -272,6 +325,16 @@ function ChatPanel({
 
   // Prompt options for selector
   const promptOptions = usePromptOptions();
+
+  // Calculate total conversation cost from messages
+  const conversationCost = useMemo(() => {
+    return messages.reduce((total, msg) => {
+      if (msg.role === "assistant" && "cost" in msg && msg.cost) {
+        return total + msg.cost;
+      }
+      return total;
+    }, 0);
+  }, [messages]);
 
   // Local UI state
   const [input, setInput] = useState("");
@@ -499,27 +562,37 @@ function ChatPanel({
         </div>
       </div>
 
-      <div className="border-t p-2 flex-shrink-0 flex justify-center">
-        <div className="flex gap-2 items-end w-full max-w-4xl">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            className="flex-1 max-h-[120px] resize-none text-sm"
-            rows={1}
-            disabled={isLoading}
-          />
-          {isLoading ? (
-            <Button variant="outline" size="icon" onClick={handleStop}>
-              <Square className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button size="icon" onClick={handleSend} disabled={!input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          )}
+      <div className="border-t flex-shrink-0 flex flex-col items-center">
+        {/* Session cost indicator */}
+        {conversationCost > 0 && (
+          <div className="w-full max-w-4xl px-2 pt-1">
+            <div className="text-[10px] text-muted-foreground/60 text-right">
+              Session: {formatCost(conversationCost)}
+            </div>
+          </div>
+        )}
+        <div className="p-2 flex justify-center w-full">
+          <div className="flex gap-2 items-end w-full max-w-4xl">
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              className="flex-1 max-h-[120px] resize-none text-sm"
+              rows={1}
+              disabled={isLoading}
+            />
+            {isLoading ? (
+              <Button variant="outline" size="icon" onClick={handleStop}>
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button size="icon" onClick={handleSend} disabled={!input.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -544,11 +617,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
 
   const { instances, activeInstanceId, activeInstance, setActiveInstance } =
     useLLMProviders();
-  const {
-    models,
-    loading: modelsLoading,
-    refresh: refreshModels,
-  } = useLLMModels(activeInstanceId);
+  const { models, loading: modelsLoading } = useLLMModels(activeInstanceId);
   const { conversations } = useConversations();
   const { deleteConversation } = useChatActions();
 
