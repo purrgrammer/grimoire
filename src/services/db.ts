@@ -8,7 +8,11 @@ import type {
   SpellbookContent,
   SpellbookEvent,
 } from "@/types/spell";
-import type { LLMProviderInstance, LLMConversation } from "@/types/llm";
+import type {
+  LLMProviderInstance,
+  LLMConversation,
+  LLMSystemPrompt,
+} from "@/types/llm";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -124,6 +128,7 @@ class GrimoireDb extends Dexie {
   grimoireZaps!: Table<GrimoireZap>;
   llmProviders!: Table<LLMProviderInstance>;
   llmConversations!: Table<LLMConversation>;
+  llmSystemPrompts!: Table<LLMSystemPrompt>;
 
   constructor(name: string) {
     super(name);
@@ -409,6 +414,26 @@ class GrimoireDb extends Dexie {
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
       llmProviders: "&id, providerId, enabled",
       llmConversations: "&id, providerInstanceId, modelId, updatedAt",
+    });
+
+    // Version 19: Add LLM system prompts
+    this.version(19).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      llmProviders: "&id, providerId, enabled",
+      llmConversations: "&id, providerInstanceId, modelId, updatedAt",
+      llmSystemPrompts: "&id, isBuiltin, createdAt",
     });
   }
 }

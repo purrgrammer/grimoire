@@ -14,6 +14,7 @@ import { BehaviorSubject, Subject } from "rxjs";
 import db from "@/services/db";
 import { providerManager } from "./provider-manager";
 import { toolRegistry, executeToolCalls, type ToolContext } from "./tools";
+import { systemPromptManager, NO_PROMPT_ID } from "./system-prompts";
 import "@/services/llm/builtin-tools"; // Register built-in tools
 import type {
   ChatSessionState,
@@ -210,15 +211,24 @@ class ChatSessionManager {
     providerInstanceId: string,
     modelId: string,
     title?: string,
+    systemPromptId?: string,
   ): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
+
+    // Get system prompt content if specified
+    const systemPrompt = systemPromptId
+      ? systemPromptManager.getPromptContent(systemPromptId)
+      : undefined;
 
     const conversation: LLMConversation = {
       id,
       title: title || "New conversation",
       providerInstanceId,
       modelId,
+      systemPromptId:
+        systemPromptId !== NO_PROMPT_ID ? systemPromptId : undefined,
+      systemPrompt,
       messages: [],
       createdAt: now,
       updatedAt: now,
@@ -526,10 +536,23 @@ class ChatSessionManager {
     let usage: ChatSessionState["usage"];
     let finishReason: ChatSessionState["finishReason"] = "stop";
 
+    // Build messages array with system prompt prepended if present
+    const messagesForAPI: LLMMessage[] = conversation.systemPrompt
+      ? [
+          {
+            id: "system",
+            role: "system" as const,
+            content: conversation.systemPrompt,
+            timestamp: conversation.createdAt,
+          },
+          ...conversation.messages,
+        ]
+      : conversation.messages;
+
     const chatGenerator = providerManager.chat(
       providerInstanceId,
       modelId,
-      conversation.messages,
+      messagesForAPI,
       { signal, tools },
     );
 

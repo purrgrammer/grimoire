@@ -138,6 +138,7 @@ interface UseChatActionsResult {
     providerInstanceId: string,
     modelId: string,
     title?: string,
+    systemPromptId?: string,
   ) => Promise<string>;
 
   /** Delete a conversation */
@@ -162,8 +163,18 @@ export function useChatActions(): UseChatActionsResult {
   );
 
   const createConversation = useCallback(
-    (providerInstanceId: string, modelId: string, title?: string) =>
-      sessionManager.createConversation(providerInstanceId, modelId, title),
+    (
+      providerInstanceId: string,
+      modelId: string,
+      title?: string,
+      systemPromptId?: string,
+    ) =>
+      sessionManager.createConversation(
+        providerInstanceId,
+        modelId,
+        title,
+        systemPromptId,
+      ),
     [],
   );
 

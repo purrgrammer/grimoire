@@ -19,6 +19,7 @@ import {
   MessageSquare,
   RefreshCw,
   Play,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,9 +39,11 @@ import {
   useChatActions,
   useConversations,
 } from "@/hooks/useChatSession";
+import { usePromptOptions, GRIMOIRE_PROMPT_ID } from "@/hooks/useSystemPrompts";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { AIProvidersViewer } from "./AIProvidersViewer";
+import AIPromptsViewer from "./AIPromptsViewer";
 import { MarkdownContent } from "./nostr/MarkdownContent";
 import {
   getMessageTextContent,
@@ -241,11 +244,15 @@ function ChatPanel({
   conversationId,
   providerInstanceId,
   modelId,
+  selectedPromptId,
+  onPromptChange,
   onConversationCreated,
 }: {
   conversationId: string | null;
   providerInstanceId: string;
   modelId: string;
+  selectedPromptId: string;
+  onPromptChange: (promptId: string) => void;
   onConversationCreated: (id: string) => void;
 }) {
   // Session manager hooks
@@ -254,6 +261,9 @@ function ChatPanel({
 
   const { sendMessage, createConversation, stopGeneration, resumeGeneration } =
     useChatActions();
+
+  // Prompt options for selector
+  const promptOptions = usePromptOptions();
 
   // Local UI state
   const [input, setInput] = useState("");
@@ -313,6 +323,8 @@ function ChatPanel({
         activeConversationId = await createConversation(
           providerInstanceId,
           modelId,
+          undefined, // title (auto-generated)
+          selectedPromptId,
         );
         // Mark that we're creating - prevents useEffect from clearing pendingUserMessage
         isCreatingConversationRef.current = true;
@@ -395,8 +407,33 @@ function ChatPanel({
       <div className="flex-1 overflow-y-auto p-3 flex justify-center">
         <div className="flex flex-col gap-3 w-full max-w-4xl">
           {displayMessages.length === 0 && !showThinking ? (
-            <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-              Start a conversation
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="text-center">
+                <Sparkles className="h-10 w-10 text-primary mx-auto mb-3" />
+                <h3 className="text-lg font-medium mb-1">
+                  Start a conversation
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Choose a system prompt to configure the AI's behavior
+                </p>
+              </div>
+              <Select value={selectedPromptId} onValueChange={onPromptChange}>
+                <SelectTrigger className="w-[280px]">
+                  <SelectValue placeholder="Select a prompt" />
+                </SelectTrigger>
+                <SelectContent>
+                  {promptOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>
+                      <div className="flex items-center gap-2">
+                        {opt.id === GRIMOIRE_PROMPT_ID && (
+                          <Sparkles className="h-3 w-3 text-primary" />
+                        )}
+                        <span>{opt.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           ) : (
             <>
@@ -475,7 +512,7 @@ function ChatPanel({
 // ─────────────────────────────────────────────────────────────
 
 interface AIViewerProps {
-  subcommand?: "providers";
+  subcommand?: "providers" | "prompts";
 }
 
 export function AIViewer({ subcommand }: AIViewerProps) {
@@ -500,6 +537,8 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     string | null
   >(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedPromptId, setSelectedPromptId] =
+    useState<string>(GRIMOIRE_PROMPT_ID);
 
   // Track when we're selecting a conversation (to prevent model reset race)
   const isSelectingConversationRef = useRef(false);
@@ -592,6 +631,11 @@ export function AIViewer({ subcommand }: AIViewerProps) {
   // Subcommand: show providers management
   if (subcommand === "providers") {
     return <AIProvidersViewer />;
+  }
+
+  // Subcommand: show prompts management
+  if (subcommand === "prompts") {
+    return <AIPromptsViewer />;
   }
 
   // Check if we can chat
@@ -748,6 +792,8 @@ export function AIViewer({ subcommand }: AIViewerProps) {
           conversationId={selectedConversationId}
           providerInstanceId={activeInstanceId!}
           modelId={selectedModelId!}
+          selectedPromptId={selectedPromptId}
+          onPromptChange={setSelectedPromptId}
           onConversationCreated={setSelectedConversationId}
         />
       ) : (

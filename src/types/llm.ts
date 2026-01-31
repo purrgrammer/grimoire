@@ -387,7 +387,21 @@ export interface LLMConversation {
   providerInstanceId: string;
   modelId: string;
   systemPrompt?: string;
+  systemPromptId?: string; // Reference to the prompt used (for UI display)
   messages: LLMMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * User-created or built-in system prompt.
+ */
+export interface LLMSystemPrompt {
+  id: string;
+  name: string;
+  content: string;
+  description?: string;
+  isBuiltin: boolean; // true for "Grimoire" prompt
   createdAt: number;
   updatedAt: number;
 }

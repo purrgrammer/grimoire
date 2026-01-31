@@ -27,7 +27,8 @@ export type AppId =
   | "settings"
   | "win"
   | "ai"
-  | "ai-providers";
+  | "ai-providers"
+  | "ai-prompts";
 
 export interface WindowInstance {
   id: string;

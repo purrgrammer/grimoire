@@ -895,18 +895,25 @@ export const manPages: Record<string, ManPageEntry> = {
         description:
           "Open the provider configuration interface to add/remove providers and manage models",
       },
+      {
+        flag: "prompts",
+        description: "Manage system prompts for AI conversations",
+      },
     ],
     examples: [
       "ai              Open AI chat interface",
       "ai providers    Manage AI providers",
+      "ai prompts      Manage system prompts",
     ],
     seeAlso: ["settings", "help"],
     appId: "ai",
     category: "System",
     argParser: (args: string[]) => {
-      // Check for 'providers' subcommand
       if (args[0] === "providers") {
         return { subcommand: "providers" };
+      }
+      if (args[0] === "prompts") {
+        return { subcommand: "prompts" };
       }
       return {};
     },
