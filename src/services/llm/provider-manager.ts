@@ -396,9 +396,12 @@ class AIProviderManager {
         yield { type: "token", content: delta.content };
       }
 
-      // Extended thinking / reasoning (Claude, DeepSeek, etc.)
+      // Extended thinking / reasoning (multiple formats across providers)
+      // - Claude/DeepSeek: delta.reasoning_content
+      // - OpenAI/OpenRouter: delta.reasoning
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const reasoning = (delta as any)?.reasoning_content;
+      const deltaAny = delta as any;
+      const reasoning = deltaAny?.reasoning_content || deltaAny?.reasoning;
       if (reasoning) {
         yield { type: "reasoning", content: reasoning };
       }
