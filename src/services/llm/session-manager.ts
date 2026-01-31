@@ -258,21 +258,27 @@ class ChatSessionManager {
   /**
    * Send a message and stream the response.
    * This is the main entry point for chat interactions.
+   * Auto-opens a session if one doesn't exist.
    */
   async sendMessage(conversationId: string, content: string): Promise<void> {
-    const session = this.getSession(conversationId);
+    // Get conversation from Dexie first (we need it for auto-session and message)
+    const conversation = await db.llmConversations.get(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    // Auto-open session if it doesn't exist
+    let session = this.getSession(conversationId);
     if (!session) {
-      throw new Error(`No session found for conversation ${conversationId}`);
+      session = this.openSession(
+        conversationId,
+        conversation.providerInstanceId,
+        conversation.modelId,
+      );
     }
 
     if (session.isLoading) {
       throw new Error("Session is already generating a response");
-    }
-
-    // Get conversation from Dexie
-    const conversation = await db.llmConversations.get(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation ${conversationId} not found`);
     }
 
     // Create user message

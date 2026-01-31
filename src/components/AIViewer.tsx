@@ -263,8 +263,20 @@ function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Reset input when switching conversations
+  // Track if we're in the middle of creating a new conversation
+  // This prevents the reset useEffect from clearing pendingUserMessage
+  const isCreatingConversationRef = useRef(false);
+
+  // Reset input when switching conversations (but not when creating new one)
   useEffect(() => {
+    if (isCreatingConversationRef.current) {
+      // We just created this conversation - don't reset pendingUserMessage
+      isCreatingConversationRef.current = false;
+      textareaRef.current?.focus();
+      return;
+    }
+
+    // User switched to a different conversation - reset everything
     setInput("");
     setPendingUserMessage(null);
     textareaRef.current?.focus();
@@ -302,14 +314,17 @@ function ChatPanel({
           providerInstanceId,
           modelId,
         );
+        // Mark that we're creating - prevents useEffect from clearing pendingUserMessage
+        isCreatingConversationRef.current = true;
         onConversationCreated(activeConversationId);
       }
 
-      // Send via session manager (handles everything)
+      // Send via session manager (auto-opens session if needed)
       await sendMessage(activeConversationId, userContent);
     } catch (err) {
       console.error("Failed to send message:", err);
       setPendingUserMessage(null);
+      isCreatingConversationRef.current = false;
     }
   };
 
