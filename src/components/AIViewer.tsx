@@ -507,26 +507,16 @@ function ChatPanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 min-h-[38px] max-h-[120px] resize-none text-sm"
+            className="flex-1 max-h-[120px] resize-none text-sm"
             rows={1}
             disabled={isLoading}
           />
           {isLoading ? (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleStop}
-              className="flex-shrink-0 h-[38px] w-[38px]"
-            >
+            <Button variant="outline" size="icon" onClick={handleStop}>
               <Square className="h-4 w-4" />
             </Button>
           ) : (
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="flex-shrink-0 h-[38px] w-[38px]"
-            >
+            <Button size="icon" onClick={handleSend} disabled={!input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           )}
@@ -677,10 +667,11 @@ export function AIViewer({ subcommand }: AIViewerProps) {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      <div className="p-2 border-b flex-shrink-0">
+      <div className="p-1 border-b flex-shrink-0">
         <Button
           variant="outline"
-          className="w-full justify-start gap-2"
+          size="sm"
+          className="w-full"
           onClick={handleNewConversation}
         >
           <Plus className="h-4 w-4" />
@@ -781,6 +772,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
                   ))}
                 </SelectContent>
               </Select>
+              {/*
               <Button
                 variant="ghost"
                 size="icon"
@@ -789,6 +781,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
               >
                 <RefreshCw className="h-3 w-3" />
               </Button>
+               */}
             </>
           ) : (
             <span className="text-xs text-muted-foreground">
@@ -802,7 +795,7 @@ export function AIViewer({ subcommand }: AIViewerProps) {
           value={activeInstanceId || ""}
           onValueChange={setActiveInstance}
         >
-          <SelectTrigger className="h-7 w-[120px] text-xs flex-shrink-0">
+          <SelectTrigger className="h-7 w-fit text-xs flex-shrink-0">
             <SelectValue placeholder="Provider" />
           </SelectTrigger>
           <SelectContent>
