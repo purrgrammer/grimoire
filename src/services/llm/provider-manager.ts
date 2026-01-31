@@ -439,14 +439,13 @@ class AIProviderManager {
         };
 
         // Extract cost from API response (OpenRouter/PPQ provide this)
+        // Prefer upstream_inference_cost (actual cost for BYOK) over cost (which is 0 for BYOK)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const usageAny = chunk.usage as any;
-        if (typeof usageAny.cost === "number") {
-          cost = usageAny.cost;
-        } else if (
-          usageAny.cost_details?.upstream_inference_cost !== undefined
-        ) {
+        if (usageAny.cost_details?.upstream_inference_cost !== undefined) {
           cost = usageAny.cost_details.upstream_inference_cost;
+        } else if (typeof usageAny.cost === "number" && usageAny.cost > 0) {
+          cost = usageAny.cost;
         }
       }
     }
