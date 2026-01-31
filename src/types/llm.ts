@@ -91,6 +91,81 @@ export interface ChatOptions {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Session State (for ChatSessionManager)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Transient state for an active chat session.
+ * Multiple windows can view the same conversation and share this state.
+ * Messages are stored in Dexie; this tracks streaming/loading state.
+ */
+export interface ChatSessionState {
+  conversationId: string;
+  providerInstanceId: string;
+  modelId: string;
+
+  // Streaming state (shared across all windows viewing this conversation)
+  isLoading: boolean;
+  streamingContent: string;
+  abortController?: AbortController;
+
+  // Usage from last completion
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  };
+
+  // Cost tracking (USD)
+  sessionCost: number;
+
+  // For resume functionality
+  finishReason?: "stop" | "length" | "error" | null;
+  lastError?: string;
+
+  // Reference counting - how many windows have this session open
+  subscriberCount: number;
+
+  // Timing
+  lastActivity: number;
+}
+
+/**
+ * Event emitted during streaming updates.
+ */
+export interface StreamingUpdateEvent {
+  conversationId: string;
+  content: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  };
+}
+
+/**
+ * Event emitted when a message is added to a conversation.
+ */
+export interface MessageAddedEvent {
+  conversationId: string;
+  message: LLMMessage;
+}
+
+/**
+ * Event emitted when session loading state changes.
+ */
+export interface LoadingChangedEvent {
+  conversationId: string;
+  isLoading: boolean;
+}
+
+/**
+ * Event emitted on session error.
+ */
+export interface SessionErrorEvent {
+  conversationId: string;
+  error: string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Legacy types (for DB migration compatibility)
 // ─────────────────────────────────────────────────────────────
 

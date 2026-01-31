@@ -3,6 +3,7 @@
  *
  * Chat interface for OpenAI-compatible AI providers.
  * Uses sidebar pattern for conversation history.
+ * Powered by ChatSessionManager for multi-window support.
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
@@ -17,6 +18,7 @@ import {
   Settings2,
   MessageSquare,
   RefreshCw,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,13 +32,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { useLLMProviders, useLLMModels } from "@/hooks/useLLM";
 import {
-  useLLMProviders,
-  useLLMModels,
-  useLLMConversations,
-  useLLMConversation,
-  useLLMChat,
-} from "@/hooks/useLLM";
+  useChatSession,
+  useChatActions,
+  useConversations,
+} from "@/hooks/useChatSession";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { AIProvidersViewer } from "./AIProvidersViewer";
@@ -159,7 +160,7 @@ const ConversationItem = memo(function ConversationItem({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Chat Panel
+// Chat Panel (uses ChatSessionManager)
 // ─────────────────────────────────────────────────────────────
 
 function ChatPanel({
@@ -173,56 +174,54 @@ function ChatPanel({
   modelId: string;
   onConversationCreated: (id: string) => void;
 }) {
-  const { conversation } = useLLMConversation(conversationId);
-  const { createConversation } = useLLMConversations();
-  const { isGenerating, sendMessage, cancel } = useLLMChat();
+  // Session manager hooks
+  const { messages, isLoading, streamingContent, error, canResume } =
+    useChatSession(conversationId, { providerInstanceId, modelId });
 
+  const { sendMessage, createConversation, stopGeneration, resumeGeneration } =
+    useChatActions();
+
+  // Local UI state
   const [input, setInput] = useState("");
-  const [streamingContent, setStreamingContent] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(
     null,
   );
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Reset local state when switching conversations
+  // Reset input when switching conversations
   useEffect(() => {
-    setStreamingContent("");
-    setPendingUserMessage(null);
-    setIsWaitingForResponse(false);
     setInput("");
+    setPendingUserMessage(null);
     textareaRef.current?.focus();
   }, [conversationId]);
 
+  // Auto-scroll on new messages or streaming
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation?.messages, streamingContent, pendingUserMessage]);
+  }, [messages, streamingContent, pendingUserMessage]);
 
+  // Clear pending message once it appears in the conversation
   useEffect(() => {
     if (
       pendingUserMessage &&
-      conversation?.messages.some(
+      messages.some(
         (m) => m.role === "user" && m.content === pendingUserMessage,
       )
     ) {
       setPendingUserMessage(null);
     }
-  }, [conversation?.messages, pendingUserMessage]);
+  }, [messages, pendingUserMessage]);
 
   const handleSend = async () => {
-    if (!input.trim() || isGenerating || isWaitingForResponse) return;
+    if (!input.trim() || isLoading) return;
 
     const userContent = input.trim();
     setInput("");
     setPendingUserMessage(userContent);
-    setIsWaitingForResponse(true);
-
-    // Import db for direct operations (avoids stale closure issues)
-    const db = (await import("@/services/db")).default;
 
     try {
-      // Create or use existing conversation
+      // Create conversation if needed
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         activeConversationId = await createConversation(
@@ -232,103 +231,11 @@ function ChatPanel({
         onConversationCreated(activeConversationId);
       }
 
-      // Add user message directly to DB (not through hook - avoids stale closure)
-      const userMessage: LLMMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: userContent,
-        timestamp: Date.now(),
-      };
-
-      const currentConv = await db.llmConversations.get(activeConversationId);
-      if (!currentConv) {
-        setPendingUserMessage(null);
-        setIsWaitingForResponse(false);
-        return;
-      }
-
-      const isFirstMessage = currentConv.messages.length === 0;
-      await db.llmConversations.update(activeConversationId, {
-        messages: [...currentConv.messages, userMessage],
-        updatedAt: Date.now(),
-        // Auto-title from first user message
-        title: isFirstMessage
-          ? userContent.slice(0, 50) + (userContent.length > 50 ? "..." : "")
-          : currentConv.title,
-      });
-
-      // Add empty assistant message placeholder
-      const assistantMessage: LLMMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-      };
-
-      const updatedConv = await db.llmConversations.get(activeConversationId);
-      if (!updatedConv) {
-        setIsWaitingForResponse(false);
-        return;
-      }
-
-      await db.llmConversations.update(activeConversationId, {
-        messages: [...updatedConv.messages, assistantMessage],
-        updatedAt: Date.now(),
-      });
-
-      setStreamingContent("");
-
-      // Get messages for API call (includes user message, excludes empty assistant)
-      const messagesForApi = updatedConv.messages;
-
-      let fullContent = "";
-      await sendMessage(
-        providerInstanceId,
-        modelId,
-        messagesForApi,
-        (token) => {
-          setIsWaitingForResponse(false);
-          fullContent += token;
-          setStreamingContent(fullContent);
-        },
-        async () => {
-          // Update assistant message with final content
-          const finalConv = await db.llmConversations.get(activeConversationId);
-          if (finalConv && finalConv.messages.length > 0) {
-            const messages = [...finalConv.messages];
-            messages[messages.length - 1] = {
-              ...messages[messages.length - 1],
-              content: fullContent,
-            };
-            await db.llmConversations.update(activeConversationId, {
-              messages,
-              updatedAt: Date.now(),
-            });
-          }
-          setStreamingContent("");
-          setIsWaitingForResponse(false);
-        },
-        async (error) => {
-          // Update assistant message with error
-          const finalConv = await db.llmConversations.get(activeConversationId);
-          if (finalConv && finalConv.messages.length > 0) {
-            const messages = [...finalConv.messages];
-            messages[messages.length - 1] = {
-              ...messages[messages.length - 1],
-              content: `Error: ${error}`,
-            };
-            await db.llmConversations.update(activeConversationId, {
-              messages,
-              updatedAt: Date.now(),
-            });
-          }
-          setStreamingContent("");
-          setIsWaitingForResponse(false);
-        },
-      );
-    } catch {
+      // Send via session manager (handles everything)
+      await sendMessage(activeConversationId, userContent);
+    } catch (err) {
+      console.error("Failed to send message:", err);
       setPendingUserMessage(null);
-      setIsWaitingForResponse(false);
     }
   };
 
@@ -339,16 +246,44 @@ function ChatPanel({
     }
   };
 
-  const messages = conversation?.messages ?? [];
+  const handleStop = () => {
+    if (conversationId) {
+      stopGeneration(conversationId);
+    }
+  };
 
-  let displayMessages =
-    streamingContent && messages.length > 0
-      ? [
-          ...messages.slice(0, -1),
-          { ...messages[messages.length - 1], content: streamingContent },
-        ]
-      : messages;
+  const handleResume = () => {
+    if (conversationId) {
+      resumeGeneration(conversationId);
+    }
+  };
 
+  // Build display messages with streaming content overlay
+  let displayMessages = [...messages];
+
+  // If streaming, overlay streaming content on last assistant message
+  if (streamingContent && messages.length > 0) {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === "assistant") {
+      displayMessages = [
+        ...messages.slice(0, -1),
+        { ...lastMsg, content: streamingContent },
+      ];
+    } else {
+      // Streaming but last message is user - add streaming as new message
+      displayMessages = [
+        ...messages,
+        {
+          id: "streaming",
+          role: "assistant" as const,
+          content: streamingContent,
+          timestamp: Date.now(),
+        },
+      ];
+    }
+  }
+
+  // Show pending user message optimistically
   if (
     pendingUserMessage &&
     !messages.some((m) => m.role === "user" && m.content === pendingUserMessage)
@@ -364,9 +299,7 @@ function ChatPanel({
     ];
   }
 
-  const showThinking =
-    isWaitingForResponse || (isGenerating && !streamingContent);
-  const isBusy = isGenerating || isWaitingForResponse;
+  const showThinking = isLoading && !streamingContent;
 
   return (
     <>
@@ -384,6 +317,29 @@ function ChatPanel({
               {showThinking && <ThinkingIndicator />}
             </>
           )}
+
+          {/* Error display */}
+          {error && !isLoading && (
+            <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {/* Resume button */}
+          {canResume && conversationId && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResume}
+                className="gap-2"
+              >
+                <Play className="h-3 w-3" />
+                Resume
+              </Button>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -398,13 +354,13 @@ function ChatPanel({
             placeholder="Type a message..."
             className="flex-1 min-h-[38px] max-h-[120px] resize-none text-sm"
             rows={1}
-            disabled={isBusy}
+            disabled={isLoading}
           />
-          {isBusy ? (
+          {isLoading ? (
             <Button
               variant="outline"
               size="icon"
-              onClick={cancel}
+              onClick={handleStop}
               className="flex-shrink-0 h-[38px] w-[38px]"
             >
               <Square className="h-4 w-4" />
@@ -448,7 +404,8 @@ export function AIViewer({ subcommand }: AIViewerProps) {
     loading: modelsLoading,
     refresh: refreshModels,
   } = useLLMModels(activeInstanceId);
-  const { conversations, deleteConversation } = useLLMConversations();
+  const { conversations } = useConversations();
+  const { deleteConversation } = useChatActions();
 
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
