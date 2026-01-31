@@ -14,6 +14,7 @@ import { BehaviorSubject, Subject } from "rxjs";
 import db from "@/services/db";
 import { providerManager } from "./provider-manager";
 import { toolRegistry, executeToolCalls, type ToolContext } from "./tools";
+import "@/services/llm/builtin-tools"; // Register built-in tools
 import type {
   ChatSessionState,
   StreamingUpdateEvent,
@@ -30,6 +31,9 @@ import type {
 
 // Session cleanup delay (ms) - wait before cleaning up after last subscriber leaves
 const CLEANUP_DELAY = 5000;
+
+// Maximum tool execution iterations to prevent infinite loops
+const MAX_TOOL_ITERATIONS = 10;
 
 class ChatSessionManager {
   // ─────────────────────────────────────────────────────────────
@@ -340,8 +344,19 @@ class ChatSessionManager {
       // Agentic loop - continue until we get a final response
       let continueLoop = true;
       let totalCost = 0;
+      let iterations = 0;
 
       while (continueLoop) {
+        iterations++;
+
+        // Safety check: prevent infinite loops
+        if (iterations > MAX_TOOL_ITERATIONS) {
+          console.warn(
+            `[SessionManager] Max tool iterations (${MAX_TOOL_ITERATIONS}) reached for conversation ${conversationId}`,
+          );
+          break;
+        }
+
         // Check if aborted
         if (abortController.signal.aborted) {
           throw new DOMException("Aborted", "AbortError");
