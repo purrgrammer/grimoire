@@ -258,24 +258,77 @@ class AIProviderManager {
     try {
       const client = this.getClient(instance);
 
-      const stream = await client.chat.completions.create(
-        {
-          model: modelId,
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
-          stream: true,
-          stream_options: { include_usage: true },
-          temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens,
-        },
-        { signal: options.signal },
-      );
+      // Format messages for OpenAI API
+      const formattedMessages = this.formatMessages(messages);
+
+      // Build request params
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const params: any = {
+        model: modelId,
+        messages: formattedMessages,
+        stream: true,
+        stream_options: { include_usage: true },
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens,
+      };
+
+      // Add tools if provided
+      if (options.tools && options.tools.length > 0) {
+        params.tools = options.tools;
+        if (options.tool_choice) {
+          params.tool_choice = options.tool_choice;
+        }
+      }
+
+      const stream = (await client.chat.completions.create(params, {
+        signal: options.signal,
+      })) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
       let usage: ChatStreamChunk["usage"] | undefined;
+      let finishReason: ChatStreamChunk["finish_reason"] = null;
 
       for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content;
-        if (content) {
-          yield { type: "token", content };
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+
+        const delta = choice.delta;
+
+        // Regular content
+        if (delta?.content) {
+          yield { type: "token", content: delta.content };
+        }
+
+        // Extended thinking / reasoning (Claude, DeepSeek, etc.)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reasoning = (delta as any)?.reasoning_content;
+        if (reasoning) {
+          yield { type: "reasoning", content: reasoning };
+        }
+
+        // Tool calls (streamed incrementally)
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            yield {
+              type: "tool_call",
+              tool_call: {
+                index: tc.index,
+                id: tc.id,
+                type: tc.type,
+                function: tc.function
+                  ? {
+                      name: tc.function.name,
+                      arguments: tc.function.arguments,
+                    }
+                  : undefined,
+              },
+            };
+          }
+        }
+
+        // Capture finish reason
+        if (choice.finish_reason) {
+          finishReason =
+            choice.finish_reason as ChatStreamChunk["finish_reason"];
         }
 
         // Capture usage from final chunk
@@ -287,7 +340,7 @@ class AIProviderManager {
         }
       }
 
-      yield { type: "done", usage };
+      yield { type: "done", usage, finish_reason: finishReason };
 
       // Update lastUsed and add to recent models
       await db.llmProviders.update(instanceId, {
@@ -304,6 +357,46 @@ class AIProviderManager {
       const message = parseAPIError(error);
       yield { type: "error", error: message };
     }
+  }
+
+  /**
+   * Format LLMMessage array for OpenAI API.
+   * Handles tool messages and multimodal content.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private formatMessages(messages: LLMMessage[]): any[] {
+    return messages.map((m) => {
+      if (m.role === "tool") {
+        // Tool response message
+        return {
+          role: "tool",
+          content: m.content,
+          tool_call_id: m.tool_call_id,
+        };
+      }
+
+      if (m.role === "assistant" && m.tool_calls && m.tool_calls.length > 0) {
+        // Assistant message with tool calls
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.tool_calls.map((tc) => ({
+            id: tc.id,
+            type: tc.type,
+            function: {
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            },
+          })),
+        };
+      }
+
+      // Standard message (handles string content and array content)
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
   }
 
   /**

@@ -74,8 +74,12 @@ export interface AISettings {
 // ─────────────────────────────────────────────────────────────
 
 export interface ChatStreamChunk {
-  type: "token" | "done" | "error";
+  type: "token" | "reasoning" | "tool_call" | "done" | "error";
   content?: string;
+  /** Streaming tool call delta */
+  tool_call?: StreamingToolCall;
+  /** Finish reason from the API */
+  finish_reason?: "stop" | "length" | "tool_calls" | null;
   error?: string;
   usage?: {
     promptTokens: number;
@@ -83,16 +87,43 @@ export interface ChatStreamChunk {
   };
 }
 
+/**
+ * Tool definition for function calling.
+ */
+export interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters?: Record<string, unknown>; // JSON Schema
+  };
+}
+
 export interface ChatOptions {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  tools?: ToolDefinition[];
+  tool_choice?:
+    | "none"
+    | "auto"
+    | "required"
+    | { type: "function"; function: { name: string } };
   signal?: AbortSignal;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Session State (for ChatSessionManager)
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Streaming message state during generation.
+ */
+export interface StreamingMessage {
+  content: string;
+  reasoning_content?: string;
+  tool_calls?: ToolCall[];
+}
 
 /**
  * Transient state for an active chat session.
@@ -107,6 +138,7 @@ export interface ChatSessionState {
   // Streaming state (shared across all windows viewing this conversation)
   isLoading: boolean;
   streamingContent: string;
+  streamingMessage?: StreamingMessage;
   abortController?: AbortController;
 
   // Usage from last completion
@@ -119,7 +151,7 @@ export interface ChatSessionState {
   sessionCost: number;
 
   // For resume functionality
-  finishReason?: "stop" | "length" | "error" | null;
+  finishReason?: "stop" | "length" | "tool_calls" | "error" | null;
   lastError?: string;
 
   // Reference counting - how many windows have this session open
@@ -199,11 +231,154 @@ export interface LLMModel {
   };
 }
 
-export interface LLMMessage {
+// ─────────────────────────────────────────────────────────────
+// Message Content Types (OpenAI-compatible)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Text content part for multimodal messages.
+ */
+export interface TextContentPart {
+  type: "text";
+  text: string;
+}
+
+/**
+ * Image content part for multimodal messages.
+ * Supports both URLs and base64 data URIs.
+ */
+export interface ImageContentPart {
+  type: "image_url";
+  image_url: {
+    url: string; // URL or data:image/...;base64,...
+    detail?: "auto" | "low" | "high";
+  };
+}
+
+/**
+ * Content can be a simple string or an array of content parts (for multimodal).
+ */
+export type MessageContent = string | (TextContentPart | ImageContentPart)[];
+
+// ─────────────────────────────────────────────────────────────
+// Tool Call Types (OpenAI-compatible)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * A tool call made by the assistant.
+ */
+export interface ToolCall {
   id: string;
-  role: "system" | "user" | "assistant";
-  content: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+
+/**
+ * Streaming tool call (may have partial data).
+ */
+export interface StreamingToolCall {
+  index: number;
+  id?: string;
+  type?: "function";
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Message Types (OpenAI-compatible with extensions)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Base message fields shared by all message types.
+ */
+interface BaseMessage {
+  id: string;
   timestamp: number;
+}
+
+/**
+ * System message - sets context for the conversation.
+ */
+export interface SystemMessage extends BaseMessage {
+  role: "system";
+  content: string;
+}
+
+/**
+ * User message - can include text and/or images.
+ */
+export interface UserMessage extends BaseMessage {
+  role: "user";
+  content: MessageContent;
+}
+
+/**
+ * Assistant message - can include text, reasoning, and tool calls.
+ */
+export interface AssistantMessage extends BaseMessage {
+  role: "assistant";
+  content: string;
+  /** Extended thinking / reasoning (Claude, DeepSeek, etc.) */
+  reasoning_content?: string;
+  /** Tool calls requested by the assistant */
+  tool_calls?: ToolCall[];
+}
+
+/**
+ * Tool result message - response to a tool call.
+ */
+export interface ToolMessage extends BaseMessage {
+  role: "tool";
+  content: string;
+  /** ID of the tool call this responds to */
+  tool_call_id: string;
+}
+
+/**
+ * Union type for all message types.
+ */
+export type LLMMessage =
+  | SystemMessage
+  | UserMessage
+  | AssistantMessage
+  | ToolMessage;
+
+/**
+ * Helper to get text content from a message (handles multimodal).
+ */
+export function getMessageTextContent(message: LLMMessage): string {
+  if (typeof message.content === "string") {
+    return message.content;
+  }
+  // For array content, concatenate all text parts
+  return message.content
+    .filter((part): part is TextContentPart => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
+/**
+ * Helper to check if a message has tool calls.
+ */
+export function hasToolCalls(message: LLMMessage): message is AssistantMessage {
+  return (
+    message.role === "assistant" &&
+    "tool_calls" in message &&
+    Array.isArray(message.tool_calls) &&
+    message.tool_calls.length > 0
+  );
+}
+
+/**
+ * Helper to check if a message is a tool result.
+ */
+export function isToolMessage(message: LLMMessage): message is ToolMessage {
+  return message.role === "tool";
 }
 
 export interface LLMConversation {

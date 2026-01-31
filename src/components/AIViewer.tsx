@@ -42,7 +42,13 @@ import { formatTimestamp } from "@/hooks/useLocale";
 import { useGrimoire } from "@/core/state";
 import { AIProvidersViewer } from "./AIProvidersViewer";
 import { MarkdownContent } from "./nostr/MarkdownContent";
-import type { LLMMessage } from "@/types/llm";
+import {
+  getMessageTextContent,
+  hasToolCalls,
+  isToolMessage,
+  type LLMMessage,
+  type AssistantMessage,
+} from "@/types/llm";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -70,36 +76,104 @@ const MessageBubble = memo(function MessageBubble({
   message: LLMMessage;
 }) {
   const isUser = message.role === "user";
+  const isTool = isToolMessage(message);
+  const hasTools = hasToolCalls(message);
+  const content = getMessageTextContent(message);
 
-  if (!isUser && !message.content) {
+  // Skip empty non-user messages that don't have tool calls
+  if (!isUser && !content && !hasTools) {
     return null;
   }
 
-  return (
-    <div
-      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
-    >
-      <div
-        className={cn(
-          "max-w-[85%] rounded-lg px-3 py-2 text-sm",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground",
-        )}
-      >
-        {isUser ? (
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
+  // Tool message (response from tool execution)
+  if (isTool) {
+    return (
+      <div className="flex w-full justify-start">
+        <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-accent/50 border border-border">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Settings2 className="h-3 w-3" />
+            <span>Tool Result</span>
           </div>
-        ) : (
+          <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-all font-mono">
+            {content}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  // User message
+  if (isUser) {
+    return (
+      <div className="flex w-full justify-end">
+        <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-primary text-primary-foreground">
+          <div className="whitespace-pre-wrap break-words">{content}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Assistant message
+  const assistantMsg = message as AssistantMessage;
+
+  return (
+    <div className="flex w-full justify-start">
+      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-muted text-foreground space-y-2">
+        {/* Reasoning content (collapsible) */}
+        {assistantMsg.reasoning_content && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground flex items-center gap-1.5">
+              <Brain className="h-3 w-3" />
+              <span>Reasoning</span>
+            </summary>
+            <div className="mt-2 pl-4 border-l-2 border-muted-foreground/30 text-muted-foreground whitespace-pre-wrap">
+              {assistantMsg.reasoning_content}
+            </div>
+          </details>
+        )}
+
+        {/* Tool calls */}
+        {assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0 && (
+          <div className="space-y-1">
+            {assistantMsg.tool_calls.map((tc) => (
+              <div
+                key={tc.id}
+                className="text-xs bg-background/50 rounded px-2 py-1.5 border border-border"
+              >
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <Settings2 className="h-3 w-3" />
+                  <span className="font-medium">{tc.function.name}</span>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10px]">
+                  {formatToolArgs(tc.function.arguments)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Regular content */}
+        {content && (
           <div className="[&>article]:p-0 [&>article]:m-0">
-            <MarkdownContent content={message.content} />
+            <MarkdownContent content={content} />
           </div>
         )}
       </div>
     </div>
   );
 });
+
+/**
+ * Format tool call arguments for display.
+ */
+function formatToolArgs(args: string): string {
+  try {
+    const parsed = JSON.parse(args);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return args;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Thinking Indicator

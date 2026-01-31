@@ -13,6 +13,7 @@
 import { BehaviorSubject, Subject } from "rxjs";
 import db from "@/services/db";
 import { providerManager } from "./provider-manager";
+import { toolRegistry, executeToolCalls, type ToolContext } from "./tools";
 import type {
   ChatSessionState,
   StreamingUpdateEvent,
@@ -21,6 +22,10 @@ import type {
   SessionErrorEvent,
   LLMMessage,
   LLMConversation,
+  AssistantMessage,
+  StreamingMessage,
+  StreamingToolCall,
+  ToolCall,
 } from "@/types/llm";
 
 // Session cleanup delay (ms) - wait before cleaning up after last subscriber leaves
@@ -293,6 +298,7 @@ class ChatSessionManager {
 
   /**
    * Start or resume AI generation for a conversation.
+   * Implements the agentic loop: generates, executes tools, continues until done.
    */
   async startGeneration(conversationId: string): Promise<void> {
     const session = this.getSession(conversationId);
@@ -318,6 +324,7 @@ class ChatSessionManager {
       ...session,
       isLoading: true,
       streamingContent: "",
+      streamingMessage: undefined,
       abortController,
       lastError: undefined,
       finishReason: null,
@@ -326,89 +333,87 @@ class ChatSessionManager {
 
     this.loadingChanged$.next({ conversationId, isLoading: true });
 
+    // Get tool definitions if any tools are registered
+    const tools = toolRegistry.getDefinitions();
+
     try {
-      // Stream response from provider
-      let fullContent = "";
-      let usage: ChatSessionState["usage"];
+      // Agentic loop - continue until we get a final response
+      let continueLoop = true;
+      let totalCost = 0;
 
-      const chatGenerator = providerManager.chat(
-        session.providerInstanceId,
-        session.modelId,
-        conversation.messages,
-        { signal: abortController.signal },
-      );
-
-      for await (const chunk of chatGenerator) {
-        // Check if session still exists and is loading
-        const currentSession = this.getSession(conversationId);
-        if (!currentSession?.isLoading) {
-          break;
+      while (continueLoop) {
+        // Check if aborted
+        if (abortController.signal.aborted) {
+          throw new DOMException("Aborted", "AbortError");
         }
 
-        if (chunk.type === "token" && chunk.content) {
-          fullContent += chunk.content;
-
-          // Update streaming content
-          this.updateSession(conversationId, {
-            ...currentSession,
-            streamingContent: fullContent,
-            lastActivity: Date.now(),
-          });
-
-          this.streamingUpdate$.next({
-            conversationId,
-            content: fullContent,
-          });
-        } else if (chunk.type === "done") {
-          usage = chunk.usage;
-        } else if (chunk.type === "error") {
-          throw new Error(chunk.error || "Unknown error");
-        }
-      }
-
-      // Create assistant message
-      const assistantMessage: LLMMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: fullContent,
-        timestamp: Date.now(),
-      };
-
-      // Add to Dexie
-      const updatedConv = await db.llmConversations.get(conversationId);
-      if (updatedConv) {
-        await db.llmConversations.update(conversationId, {
-          messages: [...updatedConv.messages, assistantMessage],
-          updatedAt: Date.now(),
-        });
-      }
-
-      this.messageAdded$.next({ conversationId, message: assistantMessage });
-
-      // Calculate cost if we have usage and pricing
-      let cost = 0;
-      if (usage) {
-        cost = await this.calculateCost(
+        // Run one turn of generation
+        const result = await this.runGenerationTurn(
+          conversationId,
           session.providerInstanceId,
           session.modelId,
-          usage.promptTokens,
-          usage.completionTokens,
+          tools.length > 0 ? tools : undefined,
+          abortController.signal,
         );
-      }
 
-      // Update session to completed state
-      const finalSession = this.getSession(conversationId);
-      if (finalSession) {
-        this.updateSession(conversationId, {
-          ...finalSession,
-          isLoading: false,
-          streamingContent: "",
-          abortController: undefined,
-          usage,
-          sessionCost: finalSession.sessionCost + cost,
-          finishReason: "stop",
-          lastActivity: Date.now(),
-        });
+        // Accumulate cost
+        totalCost += result.cost;
+
+        // Check if we need to execute tools
+        if (
+          result.finishReason === "tool_calls" &&
+          result.toolCalls &&
+          result.toolCalls.length > 0
+        ) {
+          // Execute tool calls
+          const toolContext: ToolContext = {
+            conversationId,
+            providerInstanceId: session.providerInstanceId,
+            modelId: session.modelId,
+            signal: abortController.signal,
+          };
+
+          const toolMessages = await executeToolCalls(
+            result.toolCalls,
+            toolContext,
+          );
+
+          // Add tool messages to conversation
+          const conv = await db.llmConversations.get(conversationId);
+          if (conv) {
+            await db.llmConversations.update(conversationId, {
+              messages: [...conv.messages, ...toolMessages],
+              updatedAt: Date.now(),
+            });
+          }
+
+          // Emit events for each tool message
+          for (const msg of toolMessages) {
+            this.messageAdded$.next({ conversationId, message: msg });
+          }
+
+          // Continue the loop to process tool results
+          continueLoop = true;
+        } else {
+          // No more tools to execute, we're done
+          continueLoop = false;
+
+          // Update session to completed state
+          const finalSession = this.getSession(conversationId);
+          if (finalSession) {
+            this.updateSession(conversationId, {
+              ...finalSession,
+              isLoading: false,
+              streamingContent: "",
+              streamingMessage: undefined,
+              abortController: undefined,
+              usage: result.usage,
+              sessionCost: finalSession.sessionCost + totalCost,
+              finishReason: result.finishReason,
+              lastActivity: Date.now(),
+            });
+          }
+        }
       }
 
       this.loadingChanged$.next({ conversationId, isLoading: false });
@@ -420,6 +425,7 @@ class ChatSessionManager {
           this.updateSession(conversationId, {
             ...currentSession,
             isLoading: false,
+            streamingMessage: undefined,
             abortController: undefined,
             finishReason: null, // Can resume
             lastActivity: Date.now(),
@@ -439,6 +445,7 @@ class ChatSessionManager {
           ...currentSession,
           isLoading: false,
           streamingContent: "",
+          streamingMessage: undefined,
           abortController: undefined,
           lastError: errorMessage,
           finishReason: "error",
@@ -452,6 +459,188 @@ class ChatSessionManager {
   }
 
   /**
+   * Run a single turn of generation (stream response from model).
+   * Returns the assistant message, finish reason, and cost.
+   */
+  private async runGenerationTurn(
+    conversationId: string,
+    providerInstanceId: string,
+    modelId: string,
+    tools: import("@/types/llm").ToolDefinition[] | undefined,
+    signal: AbortSignal,
+  ): Promise<{
+    assistantMessage: AssistantMessage;
+    finishReason: ChatSessionState["finishReason"];
+    toolCalls: ToolCall[] | undefined;
+    usage: ChatSessionState["usage"];
+    cost: number;
+  }> {
+    // Get current messages from Dexie
+    const conversation = await db.llmConversations.get(conversationId);
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    // Initialize streaming message state
+    const streaming: StreamingMessage = {
+      content: "",
+      reasoning_content: undefined,
+      tool_calls: undefined,
+    };
+
+    // Update session with empty streaming message
+    const currentSession = this.getSession(conversationId);
+    if (currentSession) {
+      this.updateSession(conversationId, {
+        ...currentSession,
+        streamingMessage: { ...streaming },
+        streamingContent: "",
+        lastActivity: Date.now(),
+      });
+    }
+
+    // Track streaming tool calls by index
+    const toolCallsMap = new Map<number, StreamingToolCall>();
+    let usage: ChatSessionState["usage"];
+    let finishReason: ChatSessionState["finishReason"] = "stop";
+
+    const chatGenerator = providerManager.chat(
+      providerInstanceId,
+      modelId,
+      conversation.messages,
+      { signal, tools },
+    );
+
+    for await (const chunk of chatGenerator) {
+      // Check if session still exists and is loading
+      const session = this.getSession(conversationId);
+      if (!session?.isLoading) {
+        break;
+      }
+
+      if (chunk.type === "token" && chunk.content) {
+        // Regular content token
+        streaming.content += chunk.content;
+
+        // Update streaming state
+        this.updateSession(conversationId, {
+          ...session,
+          streamingContent: streaming.content,
+          streamingMessage: { ...streaming },
+          lastActivity: Date.now(),
+        });
+
+        this.streamingUpdate$.next({
+          conversationId,
+          content: streaming.content,
+        });
+      } else if (chunk.type === "reasoning" && chunk.content) {
+        // Reasoning/thinking content (Claude, DeepSeek, etc.)
+        streaming.reasoning_content =
+          (streaming.reasoning_content || "") + chunk.content;
+
+        this.updateSession(conversationId, {
+          ...session,
+          streamingMessage: { ...streaming },
+          lastActivity: Date.now(),
+        });
+      } else if (chunk.type === "tool_call" && chunk.tool_call) {
+        // Accumulate streaming tool call
+        const tc = chunk.tool_call;
+        const existing = toolCallsMap.get(tc.index);
+
+        if (existing) {
+          // Append to existing tool call
+          if (tc.id) existing.id = tc.id;
+          if (tc.type) existing.type = tc.type;
+          if (tc.function) {
+            existing.function = existing.function || {};
+            if (tc.function.name) existing.function.name = tc.function.name;
+            if (tc.function.arguments) {
+              existing.function.arguments =
+                (existing.function.arguments || "") + tc.function.arguments;
+            }
+          }
+        } else {
+          // New tool call
+          toolCallsMap.set(tc.index, { ...tc });
+        }
+
+        // Convert map to array for state
+        streaming.tool_calls = Array.from(toolCallsMap.values())
+          .filter((t) => t.id && t.function?.name)
+          .map((t) => ({
+            id: t.id!,
+            type: "function" as const,
+            function: {
+              name: t.function!.name!,
+              arguments: t.function!.arguments || "",
+            },
+          }));
+
+        this.updateSession(conversationId, {
+          ...session,
+          streamingMessage: { ...streaming },
+          lastActivity: Date.now(),
+        });
+      } else if (chunk.type === "done") {
+        usage = chunk.usage;
+        if (chunk.finish_reason) {
+          finishReason = chunk.finish_reason;
+        }
+      } else if (chunk.type === "error") {
+        throw new Error(chunk.error || "Unknown error");
+      }
+    }
+
+    // Create assistant message with all accumulated content
+    const assistantMessage: AssistantMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: streaming.content,
+      timestamp: Date.now(),
+    };
+
+    // Add optional fields if present
+    if (streaming.reasoning_content) {
+      assistantMessage.reasoning_content = streaming.reasoning_content;
+    }
+    if (streaming.tool_calls && streaming.tool_calls.length > 0) {
+      assistantMessage.tool_calls = streaming.tool_calls;
+    }
+
+    // Add to Dexie
+    const updatedConv = await db.llmConversations.get(conversationId);
+    if (updatedConv) {
+      await db.llmConversations.update(conversationId, {
+        messages: [...updatedConv.messages, assistantMessage],
+        updatedAt: Date.now(),
+      });
+    }
+
+    this.messageAdded$.next({ conversationId, message: assistantMessage });
+
+    // Calculate cost
+    let cost = 0;
+    if (usage) {
+      cost = await this.calculateCost(
+        providerInstanceId,
+        modelId,
+        usage.promptTokens,
+        usage.completionTokens,
+      );
+    }
+
+    return {
+      assistantMessage,
+      finishReason,
+      toolCalls: streaming.tool_calls,
+      usage,
+      cost,
+    };
+  }
+
+  /**
    * Stop generation for a conversation.
    */
   stopGeneration(conversationId: string): void {
@@ -461,14 +650,15 @@ class ChatSessionManager {
     session.abortController?.abort("User stopped generation");
 
     // If there's streaming content, save it as a partial message
-    if (session.streamingContent) {
-      this.savePartialMessage(conversationId, session.streamingContent);
+    if (session.streamingMessage?.content || session.streamingContent) {
+      this.savePartialMessage(conversationId, session.streamingMessage);
     }
 
     this.updateSession(conversationId, {
       ...session,
       isLoading: false,
       streamingContent: "",
+      streamingMessage: undefined,
       abortController: undefined,
       finishReason: null, // Can resume
       lastActivity: Date.now(),
@@ -482,19 +672,31 @@ class ChatSessionManager {
    */
   private async savePartialMessage(
     conversationId: string,
-    content: string,
+    streamingMessage?: StreamingMessage,
   ): Promise<void> {
+    const content = streamingMessage?.content || "";
     if (!content.trim()) return;
 
     const conversation = await db.llmConversations.get(conversationId);
     if (!conversation) return;
 
-    const assistantMessage: LLMMessage = {
+    const assistantMessage: AssistantMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
       content: content + "\n\n_(generation stopped)_",
       timestamp: Date.now(),
     };
+
+    // Preserve reasoning and tool calls if present
+    if (streamingMessage?.reasoning_content) {
+      assistantMessage.reasoning_content = streamingMessage.reasoning_content;
+    }
+    if (
+      streamingMessage?.tool_calls &&
+      streamingMessage.tool_calls.length > 0
+    ) {
+      assistantMessage.tool_calls = streamingMessage.tool_calls;
+    }
 
     await db.llmConversations.update(conversationId, {
       messages: [...conversation.messages, assistantMessage],
