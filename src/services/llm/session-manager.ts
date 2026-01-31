@@ -116,6 +116,7 @@ class ChatSessionManager {
       sessionCost: 0,
       subscriberCount: 1,
       lastActivity: Date.now(),
+      finishReason: "stop", // Nothing to resume initially
     };
 
     this.updateSession(conversationId, session);

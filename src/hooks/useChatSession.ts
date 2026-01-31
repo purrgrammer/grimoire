@@ -106,12 +106,16 @@ export function useChatSession(
       usage: session?.usage,
       cost: session?.sessionCost ?? 0,
 
-      // Resume state
+      // Resume state - only show resume when there's actually something to continue
+      // tool_calls: model called tools, waiting for results
+      // length: response was truncated
+      // null: user aborted mid-stream (only if there's partial content)
       canResume: Boolean(
         session &&
         !session.isLoading &&
-        session.finishReason !== "stop" &&
-        session.finishReason !== "error",
+        (session.finishReason === "tool_calls" ||
+          session.finishReason === "length" ||
+          (session.finishReason === null && session.streamingContent)),
       ),
       finishReason: session?.finishReason,
     }),
