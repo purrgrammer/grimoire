@@ -900,7 +900,15 @@ export const MentionEditor = forwardRef<
                   .run();
               },
             },
-            // Note: renderLabel is not used when nodeView is defined
+            // Provide renderText option to prevent fallback to '@' character
+            // TipTap's default renderText uses `suggestion?.char ?? '@'` which
+            // can produce '@' when suggestion context is unavailable (e.g., during backspace)
+            renderText({ node }: any) {
+              if (node.attrs.source === "unicode") {
+                return node.attrs.url || "";
+              }
+              return `:${node.attrs.id}:`;
+            },
           }),
         );
       }
