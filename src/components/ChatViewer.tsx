@@ -608,6 +608,11 @@ export function ChatViewer({
     };
   }, [adapter, conversation]);
 
+  // Reset initial scroll flag when conversation changes
+  useEffect(() => {
+    isInitialScrollDone.current = false;
+  }, [conversation?.id]);
+
   // Load messages for this conversation (reactive)
   const messages = use$(
     () => (conversation ? adapter.loadMessages(conversation) : undefined),
@@ -673,6 +678,9 @@ export function ChatViewer({
 
   // Ref to Virtuoso for programmatic scrolling
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  // Track if initial scroll has completed (to avoid smooth scroll on first load)
+  const isInitialScrollDone = useRef(false);
 
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
@@ -1076,7 +1084,14 @@ export function ChatViewer({
             ref={virtuosoRef}
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput="smooth"
+            followOutput={() => {
+              // Skip smooth scroll on initial load to avoid slow scroll animation
+              if (!isInitialScrollDone.current) {
+                isInitialScrollDone.current = true;
+                return false;
+              }
+              return "smooth";
+            }}
             alignToBottom
             components={{
               Header: () =>
