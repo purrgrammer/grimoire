@@ -1085,10 +1085,10 @@ export function ChatViewer({
             data={messagesWithMarkers}
             initialTopMostItemIndex={messagesWithMarkers.length - 1}
             followOutput={() => {
-              // Skip smooth scroll on initial load to avoid slow scroll animation
+              // Use instant scroll on initial load to avoid slow scroll animation
               if (!isInitialScrollDone.current) {
                 isInitialScrollDone.current = true;
-                return false;
+                return "auto"; // Instant scroll (no animation)
               }
               return "smooth";
             }}
