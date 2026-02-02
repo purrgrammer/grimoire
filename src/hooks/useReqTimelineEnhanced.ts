@@ -216,16 +216,33 @@ export function useReqTimelineEnhanced(
                   eoseAt: Date.now(),
                 });
 
-                // Check if ALL relays have reached EOSE
-                const allEose = Array.from(next.values()).every(
+                // Count states for majority heuristic
+                const states = Array.from(next.values());
+                const eoseCount = states.filter(
+                  (s) => s.subscriptionState === "eose",
+                ).length;
+                const totalRelays = states.length;
+
+                // Majority heuristic: consider stream ready when >50% of relays have EOSE
+                // This prevents slow/unresponsive relays from blocking the UI
+                const majorityEose = eoseCount > totalRelays / 2;
+
+                // Fallback: also ready if all relays are in terminal states
+                // (handles error scenarios where relays fail without EOSE)
+                const allTerminal = states.every(
                   (s) =>
                     s.subscriptionState === "eose" ||
                     s.connectionState === "error" ||
                     s.connectionState === "disconnected",
                 );
 
-                if (allEose && !eoseReceivedRef.current) {
-                  console.log("REQ Enhanced: All relays finished");
+                if ((majorityEose || allTerminal) && !eoseReceivedRef.current) {
+                  console.log("REQ Enhanced: Stream ready", {
+                    eoseCount,
+                    totalRelays,
+                    majorityEose,
+                    allTerminal,
+                  });
                   setEoseReceived(true);
                   if (!stream) {
                     setLoading(false);
