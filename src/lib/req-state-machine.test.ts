@@ -538,6 +538,7 @@ describe("getStatusText", () => {
     connectedCount: 3,
     receivingCount: 2,
     eoseCount: 1,
+    liveCount: 0,
     errorCount: 0,
     disconnectedCount: 0,
     hasReceivedEvents: true,
@@ -568,6 +569,7 @@ describe("getStatusTooltip", () => {
     connectedCount: 3,
     receivingCount: 2,
     eoseCount: 1,
+    liveCount: 0,
     errorCount: 0,
     disconnectedCount: 0,
     hasReceivedEvents: true,
@@ -625,7 +627,18 @@ describe("shouldAnimate", () => {
 });
 
 describe("getRelayStateBadge", () => {
-  it("should return receiving badge", () => {
+  it("should return live badge (EOSE received + streaming)", () => {
+    const badge = getRelayStateBadge({
+      url: "wss://relay.com",
+      connectionState: "connected",
+      subscriptionState: "live",
+      eventCount: 15,
+    });
+    expect(badge?.text).toBe("LIVE");
+    expect(badge?.color).toBe("text-success");
+  });
+
+  it("should return receiving badge (before EOSE)", () => {
     const badge = getRelayStateBadge({
       url: "wss://relay.com",
       connectionState: "connected",
@@ -633,7 +646,8 @@ describe("getRelayStateBadge", () => {
       eventCount: 5,
     });
     expect(badge?.text).toBe("RECEIVING");
-    expect(badge?.color).toBe("text-success");
+    // Warning color because it's still loading (pre-EOSE)
+    expect(badge?.color).toBe("text-warning");
   });
 
   it("should return eose badge", () => {

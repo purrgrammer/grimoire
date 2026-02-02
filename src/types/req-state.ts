@@ -18,11 +18,23 @@ export type RelayConnectionState =
 
 /**
  * Subscription state specific to this REQ
+ *
+ * State machine:
+ *   waiting → receiving → eose → live
+ *                  ↘      ↗
+ *                   error
+ *
+ * - waiting: Connected, subscription sent, no events yet
+ * - receiving: Getting historical events (before EOSE)
+ * - eose: EOSE received, no live events yet
+ * - live: EOSE received AND receiving live events (streaming mode)
+ * - error: Subscription error occurred
  */
 export type RelaySubscriptionState =
   | "waiting" // Connected but no events yet
-  | "receiving" // Events being received
-  | "eose" // EOSE received (real or timeout)
+  | "receiving" // Getting historical events (before EOSE)
+  | "eose" // EOSE received, idle (no live events yet)
+  | "live" // EOSE received AND receiving live events
   | "error"; // Subscription error
 
 /**
@@ -75,7 +87,8 @@ export interface ReqOverallState {
   totalRelays: number;
   connectedCount: number;
   receivingCount: number;
-  eoseCount: number;
+  eoseCount: number; // Relays in "eose" state (EOSE received, idle)
+  liveCount: number; // Relays in "live" state (EOSE received + streaming)
   errorCount: number;
   disconnectedCount: number;
 

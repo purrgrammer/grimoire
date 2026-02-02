@@ -1234,12 +1234,17 @@ export default function ReqViewer({
                               </div>
                             )}
 
-                            {/* EOSE status */}
+                            {/* Subscription status icon */}
                             {reqState && (
                               <>
-                                {reqState.subscriptionState === "eose" ? (
+                                {reqState.subscriptionState === "live" ? (
+                                  // Live: EOSE received + actively streaming
+                                  <Radio className="size-3 text-green-500 animate-pulse" />
+                                ) : reqState.subscriptionState === "eose" ? (
+                                  // EOSE received, idle
                                   <Check className="size-3 text-green-600/70" />
                                 ) : (
+                                  // Receiving historical or waiting
                                   (reqState.subscriptionState === "receiving" ||
                                     reqState.subscriptionState ===
                                       "waiting") && (

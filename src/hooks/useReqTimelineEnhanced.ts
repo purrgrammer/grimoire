@@ -216,10 +216,12 @@ export function useReqTimelineEnhanced(
                   eoseAt: Date.now(),
                 });
 
-                // Check if ALL relays have reached EOSE
+                // Check if ALL relays have reached EOSE (or beyond)
+                // "live" means EOSE was received and we're getting live events
                 const allEose = Array.from(next.values()).every(
                   (s) =>
                     s.subscriptionState === "eose" ||
+                    s.subscriptionState === "live" ||
                     s.connectionState === "error" ||
                     s.connectionState === "disconnected",
                 );
@@ -268,10 +270,15 @@ export function useReqTimelineEnhanced(
                     lastEventAt: now,
                   });
                 } else {
-                  // Update existing relay state
+                  // Determine correct subscription state:
+                  // - If EOSE already received (eoseAt exists), this is a LIVE event
+                  // - Otherwise, we're still receiving historical events
+                  const hasEose = state.eoseAt !== undefined;
+                  const newSubscriptionState = hasEose ? "live" : "receiving";
+
                   next.set(url, {
                     ...state,
-                    subscriptionState: "receiving",
+                    subscriptionState: newSubscriptionState,
                     eventCount: state.eventCount + 1,
                     firstEventAt: state.firstEventAt ?? now,
                     lastEventAt: now,

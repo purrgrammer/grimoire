@@ -35,6 +35,7 @@ export function deriveOverallState(
     (s) => s.subscriptionState === "receiving",
   ).length;
   const eoseCount = states.filter((s) => s.subscriptionState === "eose").length;
+  const liveCount = states.filter((s) => s.subscriptionState === "live").length;
   const errorCount = states.filter((s) => s.connectionState === "error").length;
   const disconnectedCount = states.filter(
     (s) => s.connectionState === "disconnected",
@@ -55,10 +56,12 @@ export function deriveOverallState(
 
   const allEoseAt = overallEoseReceived ? Date.now() : undefined;
 
-  // Check if all relays are in terminal states (won't make further progress)
+  // Check if all relays are in terminal states (won't make further progress on initial load)
+  // "live" means EOSE received + streaming, so it's also a terminal state for initial load
   const allRelaysTerminal = states.every(
     (s) =>
       s.subscriptionState === "eose" ||
+      s.subscriptionState === "live" ||
       s.connectionState === "error" ||
       s.connectionState === "disconnected",
   );
@@ -143,6 +146,7 @@ export function deriveOverallState(
     connectedCount,
     receivingCount,
     eoseCount,
+    liveCount,
     errorCount,
     disconnectedCount,
     hasReceivedEvents,
@@ -242,11 +246,17 @@ export function getRelayStateBadge(
 ): { text: string; color: string } | null {
   const { subscriptionState, connectionState } = relay;
 
-  // Prioritize subscription state
+  // Prioritize subscription state (order matters for display priority)
+  if (subscriptionState === "live") {
+    // EOSE received, actively receiving live events
+    return { text: "LIVE", color: "text-success" };
+  }
   if (subscriptionState === "receiving") {
-    return { text: "RECEIVING", color: "text-success" };
+    // Receiving historical events (before EOSE)
+    return { text: "RECEIVING", color: "text-warning" };
   }
   if (subscriptionState === "eose") {
+    // EOSE received, idle (no live events yet)
     return { text: "EOSE", color: "text-info" };
   }
   if (subscriptionState === "error") {
