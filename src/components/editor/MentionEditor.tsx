@@ -5,6 +5,7 @@ import {
   useMemo,
   useCallback,
   useRef,
+  useState,
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
@@ -384,6 +385,9 @@ export const MentionEditor = forwardRef<
     },
     ref,
   ) => {
+    // Track when editor is fully ready (view mounted)
+    const [isEditorReady, setIsEditorReady] = useState(false);
+
     // Ref to access handleSubmit from suggestion plugins (defined early so useMemo can access it)
     const handleSubmitRef = useRef<(editor: any) => void>(() => {});
 
@@ -958,39 +962,72 @@ export const MentionEditor = forwardRef<
         },
       },
       autofocus: autoFocus,
+      onCreate: () => {
+        // Editor view is now mounted and ready
+        setIsEditorReady(true);
+      },
+      onDestroy: () => {
+        // Editor is being destroyed
+        setIsEditorReady(false);
+      },
     });
+
+    // Helper to check if editor view is ready (prevents "view not available" errors)
+    const checkEditorReady = useCallback(() => {
+      return (
+        isEditorReady &&
+        editor &&
+        !editor.isDestroyed &&
+        editor.view &&
+        editor.view.dom
+      );
+    }, [editor, isEditorReady]);
 
     // Expose editor methods
     useImperativeHandle(
       ref,
       () => ({
-        focus: () => editor?.commands.focus(),
-        clear: () => editor?.commands.clearContent(),
-        getContent: () => editor?.getText({ blockSeparator: "\n" }) || "",
+        focus: () => {
+          if (checkEditorReady()) {
+            editor!.commands.focus();
+          }
+        },
+        clear: () => {
+          if (checkEditorReady()) {
+            editor!.commands.clearContent();
+          }
+        },
+        getContent: () => {
+          if (!checkEditorReady()) return "";
+          return editor!.getText({ blockSeparator: "\n" }) || "";
+        },
         getSerializedContent: () => {
-          if (!editor)
+          if (!checkEditorReady())
             return {
               text: "",
               emojiTags: [],
               blobAttachments: [],
               addressRefs: [],
             };
-          return serializeContent(editor);
+          return serializeContent(editor!);
         },
-        isEmpty: () => editor?.isEmpty ?? true,
+        isEmpty: () => {
+          if (!checkEditorReady()) return true;
+          return editor!.isEmpty;
+        },
         submit: () => {
-          if (editor) {
-            handleSubmit(editor);
+          if (checkEditorReady()) {
+            handleSubmit(editor!);
           }
         },
         insertText: (text: string) => {
-          if (editor) {
-            editor.chain().focus().insertContent(text).run();
+          if (checkEditorReady()) {
+            editor!.chain().focus().insertContent(text).run();
           }
         },
         insertBlob: (blob: BlobAttachment) => {
-          if (editor) {
-            editor
+          if (checkEditorReady()) {
+            editor!
               .chain()
               .focus()
               .insertContent([
@@ -1010,15 +1047,10 @@ export const MentionEditor = forwardRef<
           }
         },
       }),
-      [editor, serializeContent, handleSubmit],
+      [editor, serializeContent, handleSubmit, checkEditorReady],
     );
 
-    // Cleanup on unmount
-    useEffect(() => {
-      return () => {
-        editor?.destroy();
-      };
-    }, [editor]);
+    // Note: useEditor handles cleanup automatically, no need for manual destroy
 
     if (!editor) {
       return null;

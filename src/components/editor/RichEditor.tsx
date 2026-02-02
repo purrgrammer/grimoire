@@ -5,6 +5,7 @@ import {
   useMemo,
   useCallback,
   useRef,
+  useState,
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
@@ -234,6 +235,9 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     },
     ref,
   ) => {
+    // Track when editor is fully ready (view mounted)
+    const [isEditorReady, setIsEditorReady] = useState(false);
+
     // Ref to access handleSubmit from keyboard shortcuts
     const handleSubmitRef = useRef<(editor: any) => void>(() => {});
 
@@ -523,84 +527,108 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         },
       },
       autofocus: autoFocus,
+      onCreate: () => {
+        // Editor view is now mounted and ready
+        setIsEditorReady(true);
+      },
+      onDestroy: () => {
+        // Editor is being destroyed
+        setIsEditorReady(false);
+      },
       onUpdate: () => {
         onChange?.();
       },
     });
 
     // Helper to check if editor view is ready (prevents "view not available" errors)
-    const isEditorReady = useCallback(() => {
-      return editor && editor.view && editor.view.dom;
-    }, [editor]);
+    // This checks both the state flag AND the actual editor/view existence
+    const checkEditorReady = useCallback(() => {
+      return (
+        isEditorReady &&
+        editor &&
+        !editor.isDestroyed &&
+        editor.view &&
+        editor.view.dom
+      );
+    }, [editor, isEditorReady]);
 
     // Expose editor methods
     useImperativeHandle(
       ref,
       () => ({
         focus: () => {
-          if (isEditorReady()) {
-            editor?.commands.focus();
+          if (checkEditorReady()) {
+            editor!.commands.focus();
           }
         },
         clear: () => {
-          if (isEditorReady()) {
-            editor?.commands.clearContent();
+          if (checkEditorReady()) {
+            editor!.commands.clearContent();
           }
         },
         getContent: () => {
-          if (!isEditorReady()) return "";
-          return editor?.getText({ blockSeparator: "\n" }) || "";
+          if (!checkEditorReady()) return "";
+          return editor!.getText({ blockSeparator: "\n" }) || "";
         },
         getSerializedContent: () => {
-          if (!isEditorReady() || !editor)
+          if (!checkEditorReady())
             return {
               text: "",
               emojiTags: [],
               blobAttachments: [],
               addressRefs: [],
             };
-          return serializeContent(editor);
+          return serializeContent(editor!);
         },
         isEmpty: () => {
-          if (!isEditorReady()) return true;
-          return editor?.isEmpty ?? true;
+          if (!checkEditorReady()) return true;
+          return editor!.isEmpty;
         },
         submit: () => {
-          if (isEditorReady() && editor) {
-            handleSubmit(editor);
+          if (checkEditorReady()) {
+            handleSubmit(editor!);
           }
         },
         insertText: (text: string) => {
-          if (isEditorReady()) {
-            editor?.commands.insertContent(text);
+          if (checkEditorReady()) {
+            editor!.commands.insertContent(text);
           }
         },
         insertBlob: (blob: BlobAttachment) => {
-          if (isEditorReady()) {
-            editor?.commands.insertContent({
+          if (checkEditorReady()) {
+            editor!.commands.insertContent({
               type: "blobAttachment",
               attrs: blob,
             });
           }
         },
         getJSON: () => {
-          if (!isEditorReady()) return null;
-          return editor?.getJSON() || null;
+          if (!checkEditorReady()) return null;
+          return editor!.getJSON();
         },
         setContent: (json: any) => {
           // Check editor and view are ready before setting content
-          if (isEditorReady() && json) {
-            editor?.commands.setContent(json);
+          if (checkEditorReady() && json) {
+            editor!.commands.setContent(json);
           }
         },
       }),
-      [editor, handleSubmit, isEditorReady],
+      [editor, handleSubmit, checkEditorReady],
     );
 
     // Handle submit on Ctrl/Cmd+Enter
     useEffect(() => {
-      // Check both editor and editor.view exist (view may not be ready immediately)
-      if (!editor?.view?.dom) return;
+      // Wait until editor is fully ready
+      if (
+        !isEditorReady ||
+        !editor ||
+        editor.isDestroyed ||
+        !editor.view?.dom
+      ) {
+        return;
+      }
+
+      const dom = editor.view.dom;
 
       const handleKeyDown = (event: KeyboardEvent) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -609,12 +637,12 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         }
       };
 
-      editor.view.dom.addEventListener("keydown", handleKeyDown);
+      dom.addEventListener("keydown", handleKeyDown);
       return () => {
-        // Also check view.dom exists in cleanup (editor might be destroyed)
-        editor.view?.dom?.removeEventListener("keydown", handleKeyDown);
+        // Check dom still exists in cleanup (editor might be destroyed)
+        dom.removeEventListener("keydown", handleKeyDown);
       };
-    }, [editor, handleSubmit]);
+    }, [editor, handleSubmit, isEditorReady]);
 
     if (!editor) {
       return null;
