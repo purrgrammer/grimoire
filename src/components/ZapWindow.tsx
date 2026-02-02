@@ -352,11 +352,16 @@ export function ZapWindow({
       const comment = serialized.text;
       const emojiTags = serialized.emojiTags;
 
-      // Validate comment length if provided
-      if (comment && lnurlData.commentAllowed) {
-        if (comment.length > lnurlData.commentAllowed) {
+      // Check if LNURL server accepts comments (commentAllowed > 0)
+      // The comment always goes in the zap request event (kind 9734 content)
+      // But only goes to the LNURL callback if the server accepts it
+      const commentAllowedLength = lnurlData.commentAllowed ?? 0;
+
+      // Validate comment length for LNURL callback if server accepts comments
+      if (comment && commentAllowedLength > 0) {
+        if (comment.length > commentAllowedLength) {
           throw new Error(
-            `Comment too long. Maximum ${lnurlData.commentAllowed} characters.`,
+            `Comment too long for payment. Maximum ${commentAllowedLength} characters.`,
           );
         }
       }
@@ -385,11 +390,12 @@ export function ZapWindow({
       const serializedZapRequest = serializeZapRequest(zapRequest);
 
       // Step 4: Fetch invoice from LNURL callback
+      // Only include comment in LNURL callback if server accepts it (commentAllowed > 0)
       const invoiceResponse = await fetchInvoiceFromCallback(
         lnurlData.callback,
         amountMillisats,
         serializedZapRequest,
-        comment || undefined,
+        commentAllowedLength > 0 ? comment || undefined : undefined,
       );
 
       const invoiceText = invoiceResponse.pr;
