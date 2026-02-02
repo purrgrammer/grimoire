@@ -352,16 +352,79 @@ TipTap provides pre-built React components for common editor controls:
 
 **Licensing**: Open-source components use MIT license. Cloud features require subscription.
 
-## Integration with Grimoire
+## Grimoire's Current TipTap Implementation
 
-For Grimoire's use case (Nostr rich text editing), consider:
+### Editor Components
 
-1. **Use the declarative `<Tiptap>` component** for cleaner composition
-2. **Isolate editor state** to prevent re-renders from Jotai atoms
-3. **Use `useEditorState`** for toolbar state (bold active, heading level, etc.)
-4. **Consider custom node views** for Nostr-specific content (mentions, event embeds)
-5. **Set `immediatelyRender: false`** if SSR is ever needed
-6. **Keep `shouldRerenderOnTransaction: false`** and use selective state subscriptions
+Grimoire has two TipTap editor components:
+
+#### 1. `MentionEditor` (`src/components/editor/MentionEditor.tsx`)
+- **Purpose**: Chat/messaging input (single-line style)
+- **Features**: @ mentions, : emoji suggestions, / slash commands, inline blob previews, Nostr event previews
+- **Node Views**: Plain DOM manipulation (performance optimization for many instances)
+
+#### 2. `RichEditor` (`src/components/editor/RichEditor.tsx`)
+- **Purpose**: Long-form content creation (multi-line, for POST composer)
+- **Features**: Full StarterKit formatting, block-level media previews, JSON serialization for drafts
+- **Node Views**: Uses `ReactNodeViewRenderer` for rich previews
+
+### Custom Extensions
+
+| Extension | File | Purpose |
+|-----------|------|---------|
+| `NostrPasteHandler` | `extensions/nostr-paste-handler.ts` | Transforms pasted bech32 → preview nodes |
+| `FilePasteHandler` | `extensions/file-paste-handler.ts` | Intercepts file pastes for upload |
+| `BlobAttachmentRichNode` | `extensions/blob-attachment-rich.ts` | Block-level media with React node view |
+| `NostrEventPreviewRichNode` | `extensions/nostr-event-preview-rich.ts` | Block-level event preview |
+
+### Key Implementation Pattern: Editor Readiness
+
+A critical pattern for preventing "DOM not available" errors:
+
+```tsx
+const [isEditorReady, setIsEditorReady] = useState(false);
+
+const editor = useEditor({
+  extensions,
+  onCreate: () => setIsEditorReady(true),
+  onDestroy: () => setIsEditorReady(false),
+});
+
+const checkEditorReady = useCallback(() => {
+  return (
+    isEditorReady &&
+    editor &&
+    !editor.isDestroyed &&
+    editor.view &&
+    editor.view.dom
+  );
+}, [editor, isEditorReady]);
+
+// Use in all imperative methods
+useImperativeHandle(ref, () => ({
+  focus: () => {
+    if (checkEditorReady()) {
+      editor!.commands.focus();
+    }
+  },
+  // ... other methods
+}), [editor, checkEditorReady]);
+```
+
+**Why this matters**: The `useEditor` hook can return an editor object before the view is fully mounted. The `onCreate` callback fires only when the view is ready, making it safe to call editor methods.
+
+### Technical Debt
+
+1. **Tippy.js** - Should migrate to Floating UI (v3 deprecation)
+2. **No `immediatelyRender: false`** - Would need for SSR
+3. **No explicit `shouldRerenderOnTransaction`** - Works but undocumented intent
+
+### Recommendations for Future Work
+
+1. **Migrate from Tippy.js to Floating UI** - Required for full v3 compatibility
+2. **Consider the declarative `<Tiptap>` component** - Cleaner for new editors
+3. **Add explicit `shouldRerenderOnTransaction: false`** - Documents intent
+4. **Check `getPos()` for undefined** - v3 breaking change in node views
 
 ## Sources
 
