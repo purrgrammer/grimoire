@@ -1,5 +1,10 @@
-import { Observable, firstValueFrom } from "rxjs";
-import { map, first, toArray } from "rxjs/operators";
+import {
+  Observable,
+  firstValueFrom,
+  combineLatest,
+  BehaviorSubject,
+} from "rxjs";
+import { map, first, toArray, filter as filterOp } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -286,6 +291,9 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     // Clean up any existing subscription for this conversation
     this.cleanup(conversation.id);
 
+    // Track EOSE state - don't emit until initial batch is loaded
+    const eoseReceived$ = new BehaviorSubject<boolean>(false);
+
     // Start a persistent subscription to the relays
     const subscription = pool
       .subscription(relays, [filter], {
@@ -295,6 +303,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
         next: (response) => {
           if (typeof response === "string") {
             console.log("[NIP-53] EOSE received");
+            eoseReceived$.next(true);
           } else {
             console.log(
               `[NIP-53] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
@@ -306,9 +315,10 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     // Store subscription for cleanup
     this.subscriptions.set(conversation.id, subscription);
 
-    // Return observable from EventStore which will update automatically
-    return eventStore.timeline(filter).pipe(
-      map((events) => {
+    // Return observable that only emits after EOSE (prevents partial renders during initial load)
+    return combineLatest([eventStore.timeline(filter), eoseReceived$]).pipe(
+      filterOp(([, eose]) => eose), // Only emit after EOSE received
+      map(([events]) => {
         const messages = events
           .map((event) => {
             // Convert zaps (kind 9735) using zapToMessage
