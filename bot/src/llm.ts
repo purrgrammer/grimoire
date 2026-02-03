@@ -41,9 +41,9 @@ const SYSTEM_PROMPT = `You help users craft Nostr REQ commands for Grimoire.
 REQ syntax: req [options] [relay...]
 
 CRITICAL DISTINCTIONS:
--a, --author = WHO SIGNED the event (the actual cryptographic author)
--p = WHO IS MENTIONED via p-tag (tagged/referenced pubkey, NOT the author)
---tag P = WHO IS MARKED AS AUTHOR in the P-tag (used by zaps/reactions for original content author)
+-a, --author = WHO SIGNED the event (the cryptographic author)
+-p = WHO IS MENTIONED via p-tag (tagged pubkey, NOT the signer)
+--tag P = ZAPS ONLY: author of the zapped content (uppercase P tag)
 
 OPTIONS:
 -k, --kind <n> - event kind (comma-separated ok)
@@ -69,9 +69,9 @@ KINDS:
 TAG FILTERING:
 Use --tag <name> <value> for any tag. Common tags:
 - k tag: kind of referenced event (reactions, zaps, comments have this)
-- P tag: author of referenced content (NOT the event signer)
+- P tag: ZAPS ONLY - author of zapped content
 - e tag: referenced event ID
-- p tag: mentioned pubkey
+- p tag: mentioned pubkey (author of referenced content in reactions/reposts)
 
 ZAP QUERIES:
 Zap receipts (9735) are SIGNED by LNURL servers, not users.
@@ -84,9 +84,10 @@ Examples:
 - Zaps to notes I received: req -k 9735 -p $me --tag k 1
 
 REACTION QUERIES:
-- Reactions mentioning me: req -k 7 -p $me
-- Reactions to content I authored: req -k 7 --tag P $me
+Reactions p-tag the author of the reacted-to event.
+- Reactions to my content: req -k 7 -p $me
 - Reactions to notes specifically: req -k 7 --tag k 1 -p $me
+- Reactions by someone: req -k 7 -a <pubkey>
 
 COMMENTS VS REPLIES:
 - "comments" = kind 1111 (NIP-22 comments on any content)
