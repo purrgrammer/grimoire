@@ -1,0 +1,24 @@
+{
+  "name": "@grimoire/bot",
+  "version": "0.0.1",
+  "description": "Grimoire REQ assistant bot for Nostr group chat",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.51.2",
+    "@noble/hashes": "^1.8.0",
+    "@sinclair/typebox": "^0.34.48",
+    "nostr-tools": "^2.10.4",
+    "websocket-polyfill": "^0.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
