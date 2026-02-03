@@ -6,7 +6,7 @@
  */
 
 import "websocket-polyfill";
-import { SimplePool, finalizeEvent, getPublicKey } from "nostr-tools";
+import { SimplePool, finalizeEvent, getPublicKey, Relay } from "nostr-tools";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { hexToBytes } from "@noble/hashes/utils";
 import { processMessage } from "./llm.js";
@@ -38,11 +38,39 @@ console.log(`Relay: ${RELAY_URL}`);
 console.log(`Group: ${GROUP_ID}`);
 console.log("");
 
-// Create relay pool
+// Create relay pool (for discovery relays)
 const pool = new SimplePool();
 
 // Track processed event IDs to avoid duplicates
 const processedEvents = new Set<string>();
+
+// Group relay connection
+let groupRelay: Relay | null = null;
+
+/**
+ * Send a NIP-29 join request to the group
+ */
+async function sendJoinRequest(relay: Relay): Promise<void> {
+  const eventTemplate = {
+    kind: 9021,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [["h", GROUP_ID]],
+    content: "",
+  };
+  const joinEvent = finalizeEvent(eventTemplate, botSecretKey);
+
+  console.log("Sending join request to group...");
+  try {
+    await relay.publish(joinEvent);
+    console.log("Join request sent");
+  } catch (error) {
+    // May fail if already a member, that's ok
+    console.log(
+      "Join request:",
+      error instanceof Error ? error.message : "sent (may already be member)",
+    );
+  }
+}
 
 /**
  * Check if a message mentions the bot
@@ -85,6 +113,11 @@ async function sendGroupMessage(
   content: string,
   replyToEvent?: NostrEvent,
 ): Promise<void> {
+  if (!groupRelay) {
+    console.error("Not connected to group relay");
+    return;
+  }
+
   const tags: string[][] = [["h", GROUP_ID]];
 
   // Add reply reference if replying to a message
@@ -104,7 +137,7 @@ async function sendGroupMessage(
   console.log(`Sending message: ${content.substring(0, 100)}...`);
 
   try {
-    await Promise.any(pool.publish([RELAY_URL], signedEvent));
+    await groupRelay.publish(signedEvent);
     console.log(`Message sent: ${signedEvent.id}`);
   } catch (error) {
     console.error("Failed to send message:", error);
@@ -184,13 +217,39 @@ async function publishProfile(): Promise<void> {
 }
 
 /**
+ * Connect to group relay with AUTH support
+ */
+async function connectToGroupRelay(): Promise<Relay> {
+  console.log(`Connecting to group relay: ${RELAY_URL}`);
+
+  const relay = await Relay.connect(RELAY_URL);
+
+  // Handle AUTH challenges - onauth receives an EventTemplate and must return a signed event
+  relay.onauth = async (evt) => {
+    console.log("Received AUTH challenge, authenticating...");
+    const signedEvent = finalizeEvent(evt, botSecretKey);
+    console.log("AUTH successful");
+    return signedEvent;
+  };
+
+  console.log("Connected to group relay");
+  return relay;
+}
+
+/**
  * Start the bot
  */
 async function main(): Promise<void> {
   // Publish profile first
   await publishProfile();
 
-  console.log("Connecting to relay and subscribing to group...\n");
+  // Connect to group relay with AUTH support
+  groupRelay = await connectToGroupRelay();
+
+  // Send join request to the group
+  await sendJoinRequest(groupRelay);
+
+  console.log("\nSubscribing to group messages...");
 
   // Subscribe to group messages
   const filter: Filter = {
@@ -199,7 +258,7 @@ async function main(): Promise<void> {
     since: Math.floor(Date.now() / 1000), // Only new messages
   };
 
-  const sub = pool.subscribeMany([RELAY_URL], filter, {
+  const sub = groupRelay.subscribe([filter], {
     onevent(event: NostrEvent) {
       // Check if this message mentions the bot
       if (isBotMentioned(event)) {
@@ -212,17 +271,15 @@ async function main(): Promise<void> {
   });
 
   // Handle graceful shutdown
-  process.on("SIGINT", () => {
+  const shutdown = () => {
     console.log("\nShutting down...");
     sub.close();
+    groupRelay?.close();
     process.exit(0);
-  });
+  };
 
-  process.on("SIGTERM", () => {
-    console.log("\nShutting down...");
-    sub.close();
-    process.exit(0);
-  });
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
   // Keep the process alive
   console.log("Bot is running. Press Ctrl+C to stop.\n");
