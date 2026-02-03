@@ -25,6 +25,16 @@ import { getNipInfo, searchNips } from "./data/nips.js";
 const PROVIDER = process.env.LLM_PROVIDER || "anthropic";
 const MODEL_ID = process.env.LLM_MODEL || "claude-3-5-haiku-20241022";
 
+// API key from environment
+const API_KEY = process.env.ANTHROPIC_API_KEY;
+
+if (!API_KEY) {
+  console.error("ERROR: ANTHROPIC_API_KEY environment variable is not set.");
+  console.error("Please set it before running the bot:");
+  console.error("  export ANTHROPIC_API_KEY=sk-ant-...");
+  process.exit(1);
+}
+
 // Use default model for simplicity (typed correctly)
 const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
@@ -247,7 +257,14 @@ export async function processMessage(userMessage: string): Promise<string> {
   while (iterations < maxIterations) {
     iterations++;
 
-    const response = await complete(model, context);
+    const response = await complete(model, context, { apiKey: API_KEY });
+
+    // Debug: log full response if DEBUG is set
+    if (process.env.DEBUG) {
+      console.error(`DEBUG: Iteration ${iterations}`);
+      console.error("DEBUG: response =", JSON.stringify(response, null, 2));
+    }
+
     context.messages.push(response);
 
     // Check for tool calls
@@ -257,6 +274,16 @@ export async function processMessage(userMessage: string): Promise<string> {
       // No tool calls, extract text response
       const textBlocks = response.content.filter((b) => b.type === "text");
       const textContent = textBlocks.map((b) => (b as any).text).join("\n");
+
+      // Debug: log response structure if empty
+      if (!textContent && process.env.DEBUG) {
+        console.error("DEBUG: Empty text response");
+        console.error(
+          "DEBUG: response.content =",
+          JSON.stringify(response.content, null, 2),
+        );
+      }
+
       return (
         textContent ||
         "I couldn't generate a response. Please try rephrasing your question."
