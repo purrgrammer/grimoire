@@ -141,16 +141,16 @@ req [options] [relay...]
 | 10 | Group Reply | NIP-29 group chat threaded reply | 29 |
 | 13 | Seal | Sealed/wrapped event | 59 |
 | 14 | Direct Message | NIP-17 private direct message | 17 |
-| 1111 | Comment | Generic comment on any content | 22 |
+| 1111 | Comment | Generic comment on any content (uses #k tag for target kind) | 22 |
 
 ### Social Interactions
 | Kind | Name | Description | NIP |
 |------|------|-------------|-----|
 | 5 | Deletion | Event deletion request | 09 |
 | 6 | Repost | Repost (retweet equivalent) | 18 |
-| 7 | Reaction | Reaction (like, emoji, +, -) | 25 |
+| 7 | Reaction | Reaction (like, emoji, +, -); uses #k tag for target kind | 25 |
 | 8 | Badge Award | Award badge to user | 58 |
-| 16 | Generic Repost | Repost any event kind | 18 |
+| 16 | Generic Repost | Repost any event kind; uses #k tag for target kind | 18 |
 | 9802 | Highlight | Text highlight from content | 84 |
 
 ### Media
@@ -179,7 +179,7 @@ req [options] [relay...]
 | Kind | Name | Description | NIP |
 |------|------|-------------|-----|
 | 9734 | Zap Request | Lightning zap request | 57 |
-| 9735 | Zap | Zap receipt (payment proof) | 57 |
+| 9735 | Zap | Zap receipt (payment proof); uses #k tag for target kind | 57 |
 | 9041 | Zap Goal | Fundraising goal | 75 |
 | 9321 | Nutzap | Cashu-based zap | 61 |
 
@@ -297,6 +297,7 @@ req [options] [relay...]
 - Filter by multiple authors (OR logic): \`-a npub1...,npub2...\`
 - Filter by multiple tags of same type (OR logic): \`-t nostr,bitcoin\`
 - Combine different filter fields (AND logic): \`-k 1 -a npub1...\` = kind 1 AND author npub1
+- Filter by target kind using #k tag: \`--tag k 30023\` = events targeting articles (comments, reactions, zaps)
 - Time range filtering with since/until
 - Limit results
 - Full-text search (relay-dependent)
@@ -391,6 +392,19 @@ req -k 30617                        # All repositories
 req -k 1621 -a npub1...             # Issues by author
 req -k 1617 --tag a <repo-addr>     # Patches for a repo
 \`\`\`
+
+### Comments & Target Kind Filtering (NIP-22)
+Comments, reactions, generic reposts, and zaps use the \`k\` tag to indicate the kind of content being targeted. This enables filtering by target content type:
+\`\`\`
+req -k 1111 --tag k 1               # Comments on notes
+req -k 1111 --tag k 30023           # Comments on articles
+req -k 1111 --tag k 9802            # Comments on highlights
+req -k 1111 -a $contacts --tag k 30023  # Comments from follows on articles
+req -k 7 --tag k 30023              # Reactions on articles
+req -k 9735 --tag k 30311           # Zaps on live events
+req -k 16 --tag k 30023             # Generic reposts of articles
+\`\`\`
+The \`k\` tag is particularly useful for finding engagement on specific content types without client-side filtering.
 
 ---
 
