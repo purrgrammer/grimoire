@@ -70,10 +70,13 @@ Use --tag k <kind> to filter by referenced kind.
 Example: req -k 7 --tag k 1 -p $me = reactions to notes mentioning me
 
 ZAP QUERIES:
+Zaps have two pubkey tags: p=recipient (gets sats), P=original author (of zapped content).
+Both are queried with -p (case-insensitive in filters).
 - Zaps received by someone: req -k 9735 -p <pubkey>
 - Zaps to notes specifically: req -k 9735 -p <pubkey> --tag k 1
 - Zaps to articles: req -k 9735 -p <pubkey> --tag k 30023
-Note: -p filters by the zap recipient (who got zapped), -a is the LNURL server not the sender.
+- Zaps to content authored by someone: req -k 9735 --tag P <pubkey>
+Note: -a is the LNURL server that created the zap, not the sender.
 
 COMMENTS VS REPLIES:
 - "comments" = kind 1111 (NIP-22 comments on any content)
