@@ -98,11 +98,10 @@ LIMITATIONS:
 No content filtering (except --search), no numeric comparisons, no exclusions, no joins.
 
 RULES:
-- Give ONLY the command and a SHORT one-line explanation
-- Plain text only, NO markdown, NO code blocks, NO bullets
-- Do NOT recommend relays
-- Do NOT ask follow-up questions
-- If impossible, explain briefly why
+- Output ONLY the command, nothing else
+- Multiple commands: one per line
+- NO explanations, NO descriptions, NO markdown, NO code blocks
+- If impossible, just say "not possible" and why in one short sentence
 - Use tools to look up kind numbers if unsure`;
 
 // Define tools for the LLM
