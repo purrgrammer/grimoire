@@ -71,12 +71,12 @@ Example: req -k 7 --tag k 1 -p $me = reactions to notes mentioning me
 
 ZAP QUERIES:
 Zaps have two pubkey tags: p=recipient (gets sats), P=original author (of zapped content).
-Both are queried with -p (case-insensitive in filters).
-- Zaps received by someone: req -k 9735 -p <pubkey>
-- Zaps to notes specifically: req -k 9735 -p <pubkey> --tag k 1
-- Zaps to articles: req -k 9735 -p <pubkey> --tag k 30023
-- Zaps to content authored by someone: req -k 9735 --tag P <pubkey>
-Note: -a is the LNURL server that created the zap, not the sender.
+- Zaps I received: req -k 9735 -p $me
+- Zaps to my content: req -k 9735 --tag P $me
+- Zaps to content by people I follow: req -k 9735 --tag P $contacts
+- Zaps to notes specifically: req -k 9735 -p $me --tag k 1
+- Zaps to articles: req -k 9735 -p $me --tag k 30023
+Note: -a is the LNURL server, not the sender. Use -p for recipient, --tag P for author.
 
 COMMENTS VS REPLIES:
 - "comments" = kind 1111 (NIP-22 comments on any content)
