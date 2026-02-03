@@ -18,6 +18,15 @@ const BOT_PRIVATE_KEY =
 const RELAY_URL = process.env.RELAY_URL || "wss://groups.0xchat.com";
 const GROUP_ID = process.env.GROUP_ID || "NkeVhXuWHGKKJCpn";
 
+// Discovery relays for publishing profile
+const DISCOVERY_RELAYS = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.nostr.band",
+  "wss://purplepag.es",
+  RELAY_URL, // Also publish to the group relay
+];
+
 // Derive bot pubkey from private key
 const botSecretKey = hexToBytes(BOT_PRIVATE_KEY);
 const botPubkey = getPublicKey(botSecretKey);
@@ -143,9 +152,44 @@ async function handleMention(event: NostrEvent): Promise<void> {
 }
 
 /**
+ * Publish bot profile to discovery relays
+ */
+async function publishProfile(): Promise<void> {
+  const profile = {
+    name: "sancho",
+    about: "a grimoire assistant",
+    picture: "",
+    nip05: "",
+  };
+
+  const eventTemplate = {
+    kind: 0,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [],
+    content: JSON.stringify(profile),
+  };
+
+  const signedEvent = finalizeEvent(eventTemplate, botSecretKey);
+
+  console.log("Publishing profile to discovery relays...");
+
+  const results = await Promise.allSettled(
+    pool.publish(DISCOVERY_RELAYS, signedEvent),
+  );
+
+  const successful = results.filter((r) => r.status === "fulfilled").length;
+  console.log(
+    `Profile published to ${successful}/${DISCOVERY_RELAYS.length} relays\n`,
+  );
+}
+
+/**
  * Start the bot
  */
 async function main(): Promise<void> {
+  // Publish profile first
+  await publishProfile();
+
   console.log("Connecting to relay and subscribing to group...\n");
 
   // Subscribe to group messages
