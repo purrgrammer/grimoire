@@ -19,8 +19,11 @@ import {
   Link as LinkIcon,
   Check,
   Target,
+  List,
+  GalleryVertical,
 } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
+import { WindowInstance } from "@/types/app";
 import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { useGrimoire } from "@/core/state";
 import { useRelayState } from "@/hooks/useRelayState";
@@ -113,6 +116,7 @@ function EventIdPreview({ eventId }: { eventId: string }) {
 }
 
 interface ReqViewerProps {
+  windowId: WindowInstance["id"];
   filter: NostrFilter;
   relays?: string[];
   closeOnEose?: boolean;
@@ -721,8 +725,9 @@ export default function ReqViewer({
   domainPTags,
   needsAccount = false,
   title = "nostr-events",
+  windowId = "pop-up",
 }: ReqViewerProps) {
-  const { state, addWindow } = useGrimoire();
+  const { state, addWindow, updateWindow } = useGrimoire();
   const { relays: relayStates } = useRelayState();
 
   // Get active account for alias resolution
@@ -837,6 +842,7 @@ export default function ReqViewer({
     { limit: resolvedFilter.limit || 50, stream },
   );
 
+  const [viewMode, setViewMode] = useState(view);
   const [showQuery, setShowQuery] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFilename, setExportFilename] = useState("");
@@ -1003,6 +1009,34 @@ export default function ReqViewer({
     setExportProgress(0);
     setShowExportDialog(false);
   }, [events, exportFilename]);
+
+  const handleViewModeUpdate = () => {
+    const windowState = state.windows[windowId];
+    if (!windowState) return;
+
+    let { commandString } = windowState;
+
+    const newViewMode = viewMode == "compact" ? "list" : "compact";
+
+    if (commandString && commandString.indexOf("--view") > -1) {
+      if (newViewMode == "list") {
+        commandString = commandString.replace("--view compact", "--view list");
+      } else {
+        commandString = commandString.replace("--view list", "--view compact");
+      }
+    }
+
+    updateWindow(windowId, {
+      ...windowState,
+      commandString,
+      props: {
+        ...windowState.props,
+        view: newViewMode,
+      },
+    });
+
+    setViewMode(newViewMode);
+  };
 
   return (
     <div className="h-full w-full flex flex-col bg-background text-foreground">
@@ -1306,6 +1340,23 @@ export default function ReqViewer({
             )}
             <FilterIcon className="size-3" />
           </button>
+
+          {/* ViewMode (Clickeable) */}
+          <button
+            onClick={() => {
+              handleViewModeUpdate();
+            }}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={`click for ${viewMode == "list" ? "compact" : "list"} view`}
+            title={
+              viewMode == "list"
+                ? "Click to compact view"
+                : "Click to list view"
+            }
+          >
+            {viewMode == "list" && <List className="size-3" />}
+            {viewMode == "compact" && <GalleryVertical className="size-3" />}
+          </button>
         </div>
       </div>
 
@@ -1390,7 +1441,7 @@ export default function ReqViewer({
               data={visibleEvents}
               computeItemKey={(_index, item) => item.id}
               itemContent={(_index, event) =>
-                view === "compact" ? (
+                viewMode === "compact" ? (
                   <MemoizedCompactEventRow event={event} />
                 ) : (
                   <MemoizedFeedEvent event={event} />

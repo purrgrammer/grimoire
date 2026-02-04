@@ -158,6 +158,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
       case "req":
         content = (
           <ReqViewer
+            windowId={window.id}
             filter={window.props.filter}
             relays={window.props.relays}
             closeOnEose={window.props.closeOnEose}
