@@ -22,6 +22,7 @@ import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import groupMetadataCache from "@/services/group-metadata-cache";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getQuotePointer } from "@/lib/nostr-utils";
@@ -33,7 +34,6 @@ import {
   GroupMessageBlueprint,
   ReactionBlueprint,
 } from "applesauce-common/blueprints";
-import { resolveGroupMetadata } from "@/lib/chat/group-metadata-helpers";
 
 /**
  * NIP-29 Adapter - Relay-Based Groups
@@ -134,73 +134,11 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    console.log(
-      `[NIP-29] Fetching group metadata for ${groupId} from ${relayUrl}`,
-    );
+    // Resolve group metadata using shared cache
+    const metadata = await groupMetadataCache.resolve(relayUrl, groupId);
+    const { name: title, description, icon, source } = metadata;
 
-    // Fetch group metadata from the specific relay (kind 39000)
-    const metadataFilter: Filter = {
-      kinds: [39000],
-      "#d": [groupId],
-      limit: 1,
-    };
-
-    // Use pool.subscription to fetch from the relay
-    const metadataEvents: NostrEvent[] = [];
-    const metadataObs = pool.subscription([relayUrl], [metadataFilter], {
-      eventStore, // Automatically add to store
-    });
-
-    // Subscribe and wait for EOSE
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        console.log("[NIP-29] Metadata fetch timeout");
-        resolve();
-      }, 5000);
-
-      const sub = metadataObs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            console.log(
-              `[NIP-29] Got ${metadataEvents.length} metadata events`,
-            );
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            metadataEvents.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error("[NIP-29] Metadata fetch error:", err);
-          sub.unsubscribe();
-          reject(err);
-        },
-      });
-    });
-
-    const metadataEvent = metadataEvents[0];
-
-    // Debug: Log metadata event tags
-    if (metadataEvent) {
-      console.log(`[NIP-29] Metadata event tags:`, metadataEvent.tags);
-    }
-
-    // Resolve group metadata with profile fallback
-    const resolved = await resolveGroupMetadata(
-      groupId,
-      relayUrl,
-      metadataEvent,
-    );
-
-    const title = resolved.name || groupId;
-    const description = resolved.description;
-    const icon = resolved.icon;
-
-    console.log(`[NIP-29] Group title: ${title} (source: ${resolved.source})`);
+    console.log(`[NIP-29] Group title: ${title} (source: ${source})`);
 
     // Fetch admins (kind 39001) and members (kind 39002) in parallel
     // Both use d tag (addressable events signed by relay)
