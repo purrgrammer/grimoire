@@ -380,6 +380,13 @@ export const useGrimoire = () => {
     setState((prev) => Logic.toggleWalletBalancesBlur(prev));
   }, [setState]);
 
+  const setCashuWalletSyncEnabled = useCallback(
+    (enabled: boolean) => {
+      setState((prev) => Logic.setCashuWalletSyncEnabled(prev, enabled));
+    },
+    [setState],
+  );
+
   return {
     state,
     isTemporary,
@@ -411,5 +418,6 @@ export const useGrimoire = () => {
     updateNWCInfo,
     disconnectNWC,
     toggleWalletBalancesBlur,
+    setCashuWalletSyncEnabled,
   };
 };
