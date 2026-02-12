@@ -91,7 +91,7 @@ function ScopeRow({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={`${base} text-accent hover:underline hover:decoration-dotted`}
+        className={`${base} text-muted-foreground underline decoration-dotted hover:text-foreground transition-colors`}
       >
         {children}
       </a>
