@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RichText } from "../RichText";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import {
@@ -8,22 +9,22 @@ import {
 } from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { Reply } from "lucide-react";
+import { ExternalLink, Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
 import { getEventDisplayTitle } from "@/lib/event-title";
 import type { NostrEvent } from "@/types/nostr";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  getCommentRootScope,
+  isTopLevelComment,
+  getExternalIdentifierLabel,
+  type CommentRootScope,
+  type CommentScope,
+} from "@/lib/nip22-helpers";
 
 /**
  * Convert CommentPointer to pointer format for useNostrEvent
- * Preserves relay hints from the "a"/"e" tags for better event discovery
  */
 function convertCommentPointer(
   commentPointer: CommentPointer | null,
@@ -50,67 +51,159 @@ function convertCommentPointer(
 }
 
 /**
- * Parent event card component - compact single line
+ * Convert a CommentScope to a useNostrEvent-compatible pointer.
  */
-function ParentEventCard({
-  parentEvent,
-  icon: Icon,
-  tooltipText,
-  onClickHandler,
-}: {
-  parentEvent: NostrEvent;
-  icon: typeof Reply;
-  tooltipText: string;
-  onClickHandler: () => void;
-}) {
-  // Don't show kind badge for kind 1 (most common, adds clutter)
-  const showKindBadge = parentEvent.kind !== 1;
+function scopeToPointer(
+  scope: CommentScope,
+):
+  | { id: string; relays?: string[] }
+  | { kind: number; pubkey: string; identifier: string; relays?: string[] }
+  | undefined {
+  if (scope.type === "event") {
+    const { type: _, ...pointer } = scope;
+    return pointer;
+  }
+  if (scope.type === "address") {
+    const { type: _, ...pointer } = scope;
+    return pointer;
+  }
+  return undefined;
+}
 
+/**
+ * Inline scope row — children are direct flex items.
+ * Renders as a plain div, clickable div, or anchor depending on props.
+ */
+function ScopeRow({
+  children,
+  onClick,
+  href,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  href?: string;
+}) {
+  const base = "flex items-center gap-1.5 text-xs overflow-hidden min-w-0";
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${base} text-muted-foreground underline decoration-dotted hover:text-foreground transition-colors`}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <div
+        className={`${base} text-muted-foreground cursor-crosshair hover:text-foreground transition-colors`}
+        onClick={onClick}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  return <div className={`${base} text-muted-foreground`}>{children}</div>;
+}
+
+/**
+ * Inline content for a loaded Nostr event: KindBadge + UserName + title preview.
+ */
+function NostrEventContent({ nostrEvent }: { nostrEvent: NostrEvent }) {
+  const title = getEventDisplayTitle(nostrEvent, false);
   return (
-    <div
-      onClick={onClickHandler}
-      className="flex items-center gap-2 p-1 bg-muted/20 text-xs hover:bg-muted/30 cursor-crosshair rounded transition-colors"
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Icon className="size-3 flex-shrink-0" />
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{tooltipText}</p>
-        </TooltipContent>
-      </Tooltip>
-      {showKindBadge && <KindBadge kind={parentEvent.kind} variant="compact" />}
+    <>
+      <KindBadge
+        kind={nostrEvent.kind}
+        variant="compact"
+        iconClassname="size-3"
+      />
       <UserName
-        pubkey={parentEvent.pubkey}
+        pubkey={nostrEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
       />
-      <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
-        {getEventDisplayTitle(parentEvent, false) || (
-          <RichText
-            event={parentEvent}
-            options={{ showMedia: false, showEventEmbeds: false }}
-          />
-        )}
-      </div>
-    </div>
+      <span className="truncate min-w-0">
+        {title || nostrEvent.content.slice(0, 80)}
+      </span>
+    </>
   );
 }
 
 /**
- * Renderer for Kind 1111 - Post (NIP-22)
- * Shows immediate parent (reply) only for cleaner display
+ * Root scope display — loads and renders the root Nostr event, or shows external identifier
+ */
+function RootScopeDisplay({
+  root,
+  event,
+}: {
+  root: CommentRootScope;
+  event: NostrEvent;
+}) {
+  const { addWindow } = useGrimoire();
+  const pointer = scopeToPointer(root.scope);
+  const rootEvent = useNostrEvent(pointer, event);
+
+  // External identifier (I-tag) — render as a link
+  if (root.scope.type === "external") {
+    const { value, hint } = root.scope;
+    const label = getExternalIdentifierLabel(value, root.kind);
+    // Use hint if available, otherwise use value directly when it's a URL
+    const href =
+      hint ||
+      (value.startsWith("http://") || value.startsWith("https://")
+        ? value
+        : undefined);
+    return (
+      <ScopeRow href={href}>
+        <ExternalLink className="size-3 flex-shrink-0" />
+        <span className="truncate">{label}</span>
+      </ScopeRow>
+    );
+  }
+
+  if (!pointer) return null;
+
+  // Loading
+  if (!rootEvent) {
+    return (
+      <InlineReplySkeleton
+        icon={
+          <KindBadge
+            kind={parseInt(root.kind, 10) || 0}
+            variant="compact"
+            iconClassname="size-3"
+          />
+        }
+      />
+    );
+  }
+
+  return (
+    <ScopeRow onClick={() => addWindow("open", { pointer })}>
+      <NostrEventContent nostrEvent={rootEvent} />
+    </ScopeRow>
+  );
+}
+
+/**
+ * Renderer for Kind 1111 - Comment (NIP-22)
+ * Shows root scope (what the thread is about) and parent reply (if nested)
  */
 export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
   const { addWindow } = useGrimoire();
+  const root = getCommentRootScope(event);
+  const topLevel = isTopLevelComment(event);
 
-  // Use NIP-22 specific helpers to get reply pointer
+  // Parent pointer (for reply-to-comment case)
   const replyPointerRaw = getCommentReplyPointer(event);
-
-  // Convert to useNostrEvent format
   const replyPointer = convertCommentPointer(replyPointerRaw);
-
-  // Fetch reply event
-  const replyEvent = useNostrEvent(replyPointer, event);
+  const replyEvent = useNostrEvent(!topLevel ? replyPointer : undefined, event);
 
   const handleReplyClick = () => {
     if (!replyEvent || !replyPointer) return;
@@ -119,21 +212,27 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
 
   return (
     <BaseEventContainer event={event}>
-      <TooltipProvider>
-        {/* Show reply event (immediate parent) */}
-        {replyPointer && !replyEvent && (
-          <InlineReplySkeleton icon={<Reply className="size-3" />} />
-        )}
+      {/* Root scope — what this comment thread is about */}
+      {root && <RootScopeDisplay root={root} event={event} />}
 
-        {replyPointer && replyEvent && (
-          <ParentEventCard
-            parentEvent={replyEvent}
-            icon={Reply}
-            tooltipText="Replying to"
-            onClickHandler={handleReplyClick}
+      {/* Parent reply — only shown for nested comments */}
+      {!topLevel && replyPointer && !replyEvent && (
+        <InlineReplySkeleton icon={<Reply className="size-3" />} />
+      )}
+
+      {!topLevel && replyPointer && replyEvent && (
+        <ScopeRow onClick={handleReplyClick}>
+          <Reply className="size-3 flex-shrink-0" />
+          <UserName
+            pubkey={replyEvent.pubkey}
+            className="text-accent font-semibold flex-shrink-0"
           />
-        )}
-      </TooltipProvider>
+          <span className="truncate min-w-0">
+            {getEventDisplayTitle(replyEvent, false) ||
+              replyEvent.content.slice(0, 80)}
+          </span>
+        </ScopeRow>
+      )}
 
       <RichText event={event} className="text-sm" depth={depth} />
     </BaseEventContainer>
