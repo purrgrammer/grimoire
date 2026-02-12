@@ -88,7 +88,7 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
     [event.id],
   );
 
-  const { events: statusEvents, loading: statusLoading } = useTimeline(
+  const { events: statusEvents } = useTimeline(
     `issue-status-${event.id}`,
     statusFilter,
     statusRelays,
@@ -120,7 +120,6 @@ export function IssueDetailRenderer({ event }: { event: NostrEvent }) {
         {/* Status Badge (below title) */}
         <StatusIndicator
           statusKind={currentStatus?.kind}
-          loading={statusLoading}
           eventType="issue"
           variant="badge"
         />

@@ -1,10 +1,4 @@
-import {
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  FileEdit,
-  Loader2,
-} from "lucide-react";
+import { CircleDot, CheckCircle2, XCircle, FileEdit } from "lucide-react";
 import { getStatusType } from "@/lib/nip34-helpers";
 
 /**
@@ -66,8 +60,6 @@ function getStatusBadgeClasses(kind: number): string {
 export interface StatusIndicatorProps {
   /** The status event kind (1630-1633) or undefined for default "open" */
   statusKind?: number;
-  /** Whether status is loading */
-  loading?: boolean;
   /** Event type for appropriate labeling (affects "resolved" vs "merged") */
   eventType?: "issue" | "patch" | "pr";
   /** Display variant */
@@ -82,23 +74,11 @@ export interface StatusIndicatorProps {
  */
 export function StatusIndicator({
   statusKind,
-  loading = false,
   eventType = "issue",
   variant = "inline",
   className = "",
 }: StatusIndicatorProps) {
-  if (loading) {
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 text-sm text-muted-foreground ${className}`}
-      >
-        <Loader2 className="size-3.5 animate-spin" />
-        <span>Loading...</span>
-      </span>
-    );
-  }
-
-  // Default to "open" if no status
+  // Default to "open" if no status (shown immediately, updates reactively when status events arrive)
   const effectiveKind = statusKind ?? 1630;
 
   // For patches/PRs, kind 1631 means "merged" not "resolved"

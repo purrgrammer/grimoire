@@ -91,7 +91,7 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
     [event.id],
   );
 
-  const { events: statusEvents, loading: statusLoading } = useTimeline(
+  const { events: statusEvents } = useTimeline(
     `patch-status-${event.id}`,
     statusFilter,
     statusRelays,
@@ -124,7 +124,6 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
         <div className="flex items-center gap-2 flex-wrap">
           <StatusIndicator
             statusKind={currentStatus?.kind}
-            loading={statusLoading}
             eventType="patch"
             variant="badge"
           />
