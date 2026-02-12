@@ -90,7 +90,7 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
     [event.id],
   );
 
-  const { events: statusEvents, loading: statusLoading } = useTimeline(
+  const { events: statusEvents } = useTimeline(
     `pr-status-${event.id}`,
     statusFilter,
     statusRelays,
@@ -124,7 +124,6 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
         {/* Status Badge (below title) */}
         <StatusIndicator
           statusKind={currentStatus?.kind}
-          loading={statusLoading}
           eventType="pr"
           variant="badge"
         />
