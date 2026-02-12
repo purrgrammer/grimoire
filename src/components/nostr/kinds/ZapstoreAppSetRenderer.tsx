@@ -10,15 +10,27 @@ import {
 } from "@/lib/zapstore-helpers";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
+import { useMemo } from "react";
 import { Package } from "lucide-react";
+
+const ZAPSTORE_RELAY = "wss://relay.zapstore.dev/";
 
 function AppItem({
   address,
+  relayHint,
 }: {
   address: { kind: number; pubkey: string; identifier: string };
+  relayHint?: string;
 }) {
   const { addWindow } = useGrimoire();
-  const appEvent = useNostrEvent(address);
+  const pointer = useMemo(
+    () => ({
+      ...address,
+      relays: [ZAPSTORE_RELAY, ...(relayHint ? [relayHint] : [])],
+    }),
+    [address, relayHint],
+  );
+  const appEvent = useNostrEvent(pointer);
   const appName = appEvent
     ? getAppName(appEvent)
     : address?.identifier || "Unknown App";
@@ -65,7 +77,11 @@ export function ZapstoreAppSetRenderer({ event }: BaseEventProps) {
         {apps.length > 0 && (
           <div className="flex flex-col gap-0.5">
             {apps.map((ref, idx) => (
-              <AppItem key={idx} address={ref.address} />
+              <AppItem
+                key={idx}
+                address={ref.address}
+                relayHint={ref.relayHint}
+              />
             ))}
           </div>
         )}

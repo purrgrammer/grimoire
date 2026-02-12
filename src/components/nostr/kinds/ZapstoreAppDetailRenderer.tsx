@@ -169,11 +169,15 @@ export function ZapstoreAppDetailRenderer({
   const identifier = getAppIdentifier(event);
 
   // Build relay list for fetching releases:
-  // 1. Seen relays (where we received this app event)
-  // 2. Publisher's outbox relays (NIP-65)
-  // 3. Aggregator relays (fallback)
+  // 1. Zapstore relay (primary source for app events)
+  // 2. Seen relays (where we received this app event)
+  // 3. Publisher's outbox relays (NIP-65)
+  // 4. Aggregator relays (fallback)
   const relays = useMemo(() => {
     const relaySet = new Set<string>();
+
+    // Add zapstore relay (primary source for app metadata)
+    relaySet.add("wss://relay.zapstore.dev/");
 
     // Add seen relays from the app event
     const seenRelays = getSeenRelays(event);

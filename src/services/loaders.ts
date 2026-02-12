@@ -4,7 +4,7 @@ import {
   createTimelineLoader,
   createEventLoaderForStore,
 } from "applesauce-loaders/loaders";
-import type { EventPointer } from "nostr-tools/nip19";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { Observable } from "rxjs";
 import {
   getSeenRelays,
@@ -198,11 +198,28 @@ export function eventLoader(
   return baseEventLoader(enhancedPointer);
 }
 
+// Kind-specific relay overrides for addressable events
+// TODO: Remove once these events are widely replicated
+const KIND_ADDRESS_RELAYS: Record<number, string[]> = {
+  32267: ["wss://relay.zapstore.dev/"], // Zapstore app metadata
+};
+
 // Address loader for replaceable events (profiles, relay lists, etc.)
-export const addressLoader = createAddressLoader(pool, {
+const baseAddressLoader = createAddressLoader(pool, {
   eventStore,
   extraRelays: AGGREGATOR_RELAYS,
 });
+
+export function addressLoader(pointer: AddressPointer): Observable<NostrEvent> {
+  const kindRelays = KIND_ADDRESS_RELAYS[pointer.kind];
+  if (kindRelays) {
+    return baseAddressLoader({
+      ...pointer,
+      relays: [...kindRelays, ...(pointer.relays || [])],
+    });
+  }
+  return baseAddressLoader(pointer);
+}
 
 // Profile loader with batching - combines multiple profile requests within 200ms
 export const profileLoader = createAddressLoader(pool, {
