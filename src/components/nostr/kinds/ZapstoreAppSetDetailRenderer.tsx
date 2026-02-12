@@ -10,8 +10,11 @@ import {
 } from "@/lib/zapstore-helpers";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useGrimoire } from "@/core/state";
+import { useMemo } from "react";
 import { UserName } from "../UserName";
 import { Package } from "lucide-react";
+
+const ZAPSTORE_RELAY = "wss://relay.zapstore.dev/";
 import { PlatformIcon } from "./zapstore/PlatformIcon";
 
 interface ZapstoreAppSetDetailRendererProps {
@@ -23,11 +26,20 @@ interface ZapstoreAppSetDetailRendererProps {
  */
 function AppCard({
   address,
+  relayHint,
 }: {
   address: { kind: number; pubkey: string; identifier: string };
+  relayHint?: string;
 }) {
   const { addWindow } = useGrimoire();
-  const appEvent = useNostrEvent(address);
+  const pointer = useMemo(
+    () => ({
+      ...address,
+      relays: [ZAPSTORE_RELAY, ...(relayHint ? [relayHint] : [])],
+    }),
+    [address, relayHint],
+  );
+  const appEvent = useNostrEvent(pointer);
 
   if (!appEvent) {
     return (
@@ -139,7 +151,11 @@ export function ZapstoreAppSetDetailRenderer({
         ) : (
           <div className="flex flex-col gap-3">
             {apps.map((ref, idx) => (
-              <AppCard key={idx} address={ref.address} />
+              <AppCard
+                key={idx}
+                address={ref.address}
+                relayHint={ref.relayHint}
+              />
             ))}
           </div>
         )}
