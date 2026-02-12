@@ -9,17 +9,15 @@ import {
 } from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { Reply, type LucideIcon } from "lucide-react";
+import { ExternalLink, Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
-import { getKindInfo } from "@/constants/kinds";
 import { getEventDisplayTitle } from "@/lib/event-title";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getCommentRootScope,
   isTopLevelComment,
-  getExternalIdentifierIcon,
   getExternalIdentifierLabel,
   type CommentRootScope,
   type CommentScope,
@@ -54,8 +52,6 @@ function convertCommentPointer(
 
 /**
  * Convert a CommentScope to a useNostrEvent-compatible pointer.
- * Event and address scopes already carry EventPointer/AddressPointer fields
- * from applesauce helpers, so we just strip the discriminant.
  */
 function scopeToPointer(
   scope: CommentScope,
@@ -74,38 +70,20 @@ function scopeToPointer(
   return undefined;
 }
 
-function getKindIcon(kind: number): LucideIcon {
-  const info = getKindInfo(kind);
-  return info?.icon || Reply;
-}
-
 /**
- * Uniform inline scope row — icon + label text.
- * Used for both root scope and parent reply, regardless of Nostr event or external identifier.
+ * Inline scope row — children are direct flex items.
+ * Renders as a plain div, clickable div, or anchor depending on props.
  */
 function ScopeRow({
-  icon: Icon,
-  label,
+  children,
   onClick,
   href,
 }: {
-  icon: LucideIcon;
-  label: ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   href?: string;
 }) {
-  const className =
-    "flex items-center gap-1.5 text-xs text-muted-foreground overflow-hidden min-w-0" +
-    (onClick
-      ? " cursor-crosshair hover:text-foreground transition-colors"
-      : "");
-
-  const inner = (
-    <>
-      <Icon className="size-3 flex-shrink-0" />
-      <span className="truncate min-w-0">{label}</span>
-    </>
-  );
+  const base = "flex items-center gap-1.5 text-xs overflow-hidden min-w-0";
 
   if (href) {
     return (
@@ -113,32 +91,35 @@ function ScopeRow({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={className + " hover:text-foreground transition-colors"}
+        className={`${base} text-accent hover:underline hover:decoration-dotted`}
       >
-        {inner}
+        {children}
       </a>
     );
   }
 
-  return (
-    <div className={className} onClick={onClick}>
-      {inner}
-    </div>
-  );
+  if (onClick) {
+    return (
+      <div
+        className={`${base} text-muted-foreground cursor-crosshair hover:text-foreground transition-colors`}
+        onClick={onClick}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  return <div className={`${base} text-muted-foreground`}>{children}</div>;
 }
 
 /**
- * Builds the label ReactNode for a loaded Nostr event scope row.
+ * Inline content for a loaded Nostr event: KindBadge + UserName + title preview.
  */
-function NostrEventLabel({ nostrEvent }: { nostrEvent: NostrEvent }) {
+function NostrEventContent({ nostrEvent }: { nostrEvent: NostrEvent }) {
   const title = getEventDisplayTitle(nostrEvent, false);
   return (
     <>
-      <KindBadge
-        kind={nostrEvent.kind}
-        variant="compact"
-        iconClassname="size-3 text-muted-foreground"
-      />
+      <KindBadge kind={nostrEvent.kind} variant="compact" />
       <UserName
         pubkey={nostrEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
@@ -164,12 +145,15 @@ function RootScopeDisplay({
   const pointer = scopeToPointer(root.scope);
   const rootEvent = useNostrEvent(pointer, event);
 
-  // External identifier (I-tag)
+  // External identifier (I-tag) — render as a link
   if (root.scope.type === "external") {
-    const Icon = getExternalIdentifierIcon(root.kind);
     const label = getExternalIdentifierLabel(root.scope.value, root.kind);
+    const href = root.scope.hint || undefined;
     return (
-      <ScopeRow icon={Icon} label={label} href={root.scope.hint || undefined} />
+      <ScopeRow href={href}>
+        <ExternalLink className="size-3 flex-shrink-0" />
+        <span className="truncate">{label}</span>
+      </ScopeRow>
     );
   }
 
@@ -187,11 +171,9 @@ function RootScopeDisplay({
   }
 
   return (
-    <ScopeRow
-      icon={getKindIcon(rootEvent.kind)}
-      label={<NostrEventLabel nostrEvent={rootEvent} />}
-      onClick={() => addWindow("open", { pointer })}
-    />
+    <ScopeRow onClick={() => addWindow("open", { pointer })}>
+      <NostrEventContent nostrEvent={rootEvent} />
+    </ScopeRow>
   );
 }
 
@@ -219,17 +201,23 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
       {/* Root scope — what this comment thread is about */}
       {root && <RootScopeDisplay root={root} event={event} />}
 
-      {/* Parent reply — only shown for nested comments (reply to another comment) */}
+      {/* Parent reply — only shown for nested comments */}
       {!topLevel && replyPointer && !replyEvent && (
         <InlineReplySkeleton icon={<Reply className="size-3" />} />
       )}
 
       {!topLevel && replyPointer && replyEvent && (
-        <ScopeRow
-          icon={Reply}
-          label={<NostrEventLabel nostrEvent={replyEvent} />}
-          onClick={handleReplyClick}
-        />
+        <ScopeRow onClick={handleReplyClick}>
+          <Reply className="size-3 flex-shrink-0" />
+          <UserName
+            pubkey={replyEvent.pubkey}
+            className="text-accent font-semibold flex-shrink-0"
+          />
+          <span className="truncate min-w-0">
+            {getEventDisplayTitle(replyEvent, false) ||
+              replyEvent.content.slice(0, 80)}
+          </span>
+        </ScopeRow>
       )}
 
       <RichText event={event} className="text-sm" depth={depth} />
