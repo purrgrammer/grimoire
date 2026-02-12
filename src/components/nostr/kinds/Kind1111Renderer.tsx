@@ -119,7 +119,11 @@ function NostrEventContent({ nostrEvent }: { nostrEvent: NostrEvent }) {
   const title = getEventDisplayTitle(nostrEvent, false);
   return (
     <>
-      <KindBadge kind={nostrEvent.kind} variant="compact" />
+      <KindBadge
+        kind={nostrEvent.kind}
+        variant="compact"
+        iconClassname="size-3"
+      />
       <UserName
         pubkey={nostrEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
@@ -147,8 +151,14 @@ function RootScopeDisplay({
 
   // External identifier (I-tag) — render as a link
   if (root.scope.type === "external") {
-    const label = getExternalIdentifierLabel(root.scope.value, root.kind);
-    const href = root.scope.hint || undefined;
+    const { value, hint } = root.scope;
+    const label = getExternalIdentifierLabel(value, root.kind);
+    // Use hint if available, otherwise use value directly when it's a URL
+    const href =
+      hint ||
+      (value.startsWith("http://") || value.startsWith("https://")
+        ? value
+        : undefined);
     return (
       <ScopeRow href={href}>
         <ExternalLink className="size-3 flex-shrink-0" />
@@ -164,7 +174,11 @@ function RootScopeDisplay({
     return (
       <InlineReplySkeleton
         icon={
-          <KindBadge kind={parseInt(root.kind, 10) || 0} variant="compact" />
+          <KindBadge
+            kind={parseInt(root.kind, 10) || 0}
+            variant="compact"
+            iconClassname="size-3"
+          />
         }
       />
     );
