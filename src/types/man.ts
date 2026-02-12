@@ -578,15 +578,18 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat <identifier>",
     description:
-      "Join and participate in Nostr chat conversations. Supports NIP-29 relay-based groups, NIP-53 live activity chat, and multi-room group list interface. For NIP-29 groups, use format 'relay'group-id' where relay is the WebSocket URL (wss:// prefix optional). For NIP-53 live activities, pass the naddr of a kind 30311 live event. For multi-room interface, pass the naddr of a kind 10009 group list event.",
+      "Join and participate in Nostr chat conversations. Supports NIP-22 comments on any event, NIP-10 kind 1 threads, NIP-29 relay-based groups, NIP-53 live activity chat, and multi-room group list interface. Pass any nevent or naddr to open a comments view (NIP-22). For kind 1 events, NIP-10 threading is used automatically. For NIP-29 groups, use format 'relay'group-id'. For NIP-53 live activities, pass the naddr of a kind 30311 live event.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "NIP-29 group (relay'group-id), NIP-53 live activity (naddr1... kind 30311), or group list (naddr1... kind 10009)",
+          "nevent1.../naddr1... (comments/thread), relay'group-id (NIP-29 group), or naddr1... kind 10009 (group list)",
       },
     ],
     examples: [
+      "chat nevent1...                           Comments on any event (NIP-22)",
+      "chat naddr1...30023...                    Comments on an article (NIP-22)",
+      "chat note1...                             Thread chat on kind 1 note (NIP-10)",
       "chat relay.example.com'bitcoin-dev        Join NIP-29 relay group",
       "chat wss://nos.lol'welcome                Join NIP-29 group with explicit protocol",
       "chat naddr1...30311...                    Join NIP-53 live activity chat",

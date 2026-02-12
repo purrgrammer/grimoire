@@ -1,5 +1,6 @@
 import type { ChatCommandResult, GroupListIdentifier } from "@/types/chat";
 import { Nip10Adapter } from "./chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "./chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "./chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "./chat/adapters/nip-53-adapter";
 import { nip19 } from "nostr-tools";
@@ -16,6 +17,7 @@ import { nip19 } from "nostr-tools";
  * 3. NIP-28 (channels) - specific event format (kind 40)
  * 4. NIP-29 (groups) - specific group ID format
  * 5. NIP-53 (live chat) - specific addressable format (kind 30311)
+ * 6. NIP-22 (comments) - wildcard for all other events/addresses
  *
  * @param args - Command arguments (first arg is the identifier)
  * @returns Parsed result with protocol and identifier
@@ -61,12 +63,14 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
   }
 
   // Try each adapter in priority order
+  // NIP-22 is last — it's the wildcard catch-all for events not claimed by specific adapters
   const adapters = [
-    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note)
+    new Nip10Adapter(), // NIP-10 - Thread chat (nevent/note, kind 1 only)
     // new Nip17Adapter(),  // Phase 2
     // new Nip28Adapter(),  // Phase 3
     new Nip29Adapter(), // NIP-29 - Relay groups
-    new Nip53Adapter(), // NIP-53 - Live activity chat
+    new Nip53Adapter(), // NIP-53 - Live activity chat (kind 30311)
+    new Nip22Adapter(), // NIP-22 - Comments on any event (wildcard)
   ];
 
   for (const adapter of adapters) {
@@ -84,20 +88,18 @@ export function parseChatCommand(args: string[]): ChatCommandResult {
     `Unable to determine chat protocol from identifier: ${identifier}
 
 Currently supported formats:
-  - nevent1.../note1... (NIP-10 thread chat, kind 1 notes)
+  - nevent1... (NIP-22 comments on any event, or NIP-10 thread for kind 1)
     Examples:
-      chat nevent1qqsxyz... (thread with relay hints)
-      chat note1abc... (thread with event ID only)
+      chat nevent1qqsxyz... (comments/thread with relay hints)
+      chat note1abc... (kind 1 thread with event ID only)
+  - naddr1... (NIP-22 comments on addressable events, NIP-53 for kind 30311)
+    Examples:
+      chat naddr1... (article, repo, wiki, etc.)
+      chat naddr1... (live stream address → NIP-53)
   - relay.com'group-id (NIP-29 relay group, wss:// prefix optional)
     Examples:
       chat relay.example.com'bitcoin-dev
       chat wss://relay.example.com'nostr-dev
-  - naddr1... (NIP-29 group metadata, kind 39000)
-    Example:
-      chat naddr1qqxnzdesxqmnxvpexqmny...
-  - naddr1... (NIP-53 live activity chat, kind 30311)
-    Example:
-      chat naddr1... (live stream address)
   - naddr1... (Multi-room group list, kind 10009)
     Example:
       chat naddr1... (group list address)

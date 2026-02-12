@@ -27,6 +27,7 @@ import type {
 } from "@/types/chat";
 import { CHAT_KINDS } from "@/types/chat";
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
+import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -157,6 +158,11 @@ function getConversationRelays(conversation: Conversation): string[] {
     }
   }
 
+  // NIP-22 comments: Use relays from metadata
+  if (conversation.protocol === "nip-22") {
+    return conversation.metadata?.relays || [];
+  }
+
   // NIP-29 groups and fallback: Use single relay URL
   const relayUrl = conversation.metadata?.relayUrl;
   return relayUrl ? [relayUrl] : [];
@@ -168,6 +174,7 @@ function getConversationRelays(conversation: Conversation): string[] {
  *
  * For NIP-29 groups: relay'group-id (without wss:// prefix)
  * For NIP-53 live activities: naddr1... encoding
+ * For NIP-22 comments: nevent1.../naddr1... encoding
  */
 function getChatIdentifier(conversation: Conversation): string | null {
   if (conversation.protocol === "nip-29") {
@@ -194,6 +201,30 @@ function getChatIdentifier(conversation: Conversation): string | null {
       identifier: activityAddress.identifier,
       relays: relays.slice(0, 3), // Limit relay hints to keep naddr short
     });
+  }
+
+  if (conversation.protocol === "nip-22") {
+    const relays = (conversation.metadata?.relays || []).slice(0, 3);
+
+    // Addressable event — encode as naddr
+    if (conversation.metadata?.rootAddress) {
+      const parts = conversation.metadata.rootAddress.split(":");
+      const kind = parseInt(parts[0]);
+      const pubkey = parts[1];
+      const identifier = parts.slice(2).join(":");
+      return nip19.naddrEncode({ kind, pubkey, identifier, relays });
+    }
+
+    // Regular event — encode as nevent
+    if (conversation.metadata?.rootEventId) {
+      return nip19.neventEncode({
+        id: conversation.metadata.rootEventId,
+        relays,
+        kind: conversation.metadata.rootEventKind,
+      });
+    }
+
+    return null;
   }
 
   return null;
@@ -1250,13 +1281,14 @@ export function ChatViewer({
 
 /**
  * Get the appropriate adapter for a protocol
- * Currently NIP-10 (thread chat), NIP-29 (relay-based groups) and NIP-53 (live activity chat) are supported
- * Other protocols will be enabled in future phases
+ * Supported: NIP-10 (threads), NIP-22 (comments), NIP-29 (groups), NIP-53 (live activity)
  */
 function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
   switch (protocol) {
     case "nip-10":
       return new Nip10Adapter();
+    case "nip-22":
+      return new Nip22Adapter();
     case "nip-29":
       return new Nip29Adapter();
     // case "nip-17":  // Phase 2 - Encrypted DMs (coming soon)

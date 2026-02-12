@@ -8,6 +8,7 @@ import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 export const CHAT_KINDS = [
   9, // NIP-29: Group chat messages
   9321, // NIP-61: Nutzaps (ecash zaps in groups/live chats)
+  1111, // NIP-22: Comments on any event
   1311, // NIP-53: Live chat messages
   9735, // NIP-57: Zap receipts (part of chat context)
 ] as const;
@@ -15,12 +16,23 @@ export const CHAT_KINDS = [
 /**
  * Chat protocol identifier
  */
-export type ChatProtocol = "nip-17" | "nip-28" | "nip-29" | "nip-53" | "nip-10";
+export type ChatProtocol =
+  | "nip-17"
+  | "nip-28"
+  | "nip-29"
+  | "nip-53"
+  | "nip-10"
+  | "nip-22";
 
 /**
  * Conversation type
  */
-export type ConversationType = "dm" | "channel" | "group" | "live-chat";
+export type ConversationType =
+  | "dm"
+  | "channel"
+  | "group"
+  | "live-chat"
+  | "comments";
 
 /**
  * Participant role in a conversation
@@ -83,6 +95,12 @@ export interface ConversationMetadata {
   providedEventId?: string; // Original event from nevent (may be reply)
   threadDepth?: number; // Approximate depth of thread
   relays?: string[]; // Relays for this conversation
+
+  // NIP-22 comments
+  rootEventKind?: number; // Kind of the root event being commented on
+  rootAddress?: string; // "kind:pubkey:d-tag" for addressable root events
+  externalId?: string; // External identifier (NIP-73) for external root scope
+  externalKind?: string; // External identifier type (e.g., "web", "isbn")
 }
 
 /**
@@ -230,6 +248,51 @@ export interface ThreadIdentifier {
 }
 
 /**
+ * NIP-22 comment identifier - comments on any event or external resource
+ * Acts as a wildcard for events not handled by NIP-10 or NIP-53
+ */
+export interface CommentIdentifier {
+  type: "comment";
+  /** Event pointer (for regular events) */
+  value: {
+    id: string;
+    kind: number;
+    pubkey?: string;
+    relay?: string;
+  };
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
+ * NIP-22 comment on an addressable event
+ */
+export interface CommentAddressIdentifier {
+  type: "comment-address";
+  /** Address pointer for the root event */
+  value: {
+    kind: number;
+    pubkey: string;
+    identifier: string;
+  };
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
+ * NIP-22 comment on an external resource (NIP-73)
+ */
+export interface CommentExternalIdentifier {
+  type: "comment-external";
+  /** External identifier value (URL, ISBN, DOI, etc.) */
+  value: string;
+  /** External identifier type (e.g., "web", "isbn", "doi") */
+  externalKind: string;
+  /** Relay hints */
+  relays?: string[];
+}
+
+/**
  * Protocol-specific identifier - discriminated union
  * Returned by adapter parseIdentifier()
  */
@@ -240,7 +303,10 @@ export type ProtocolIdentifier =
   | NIP05Identifier
   | ChannelIdentifier
   | GroupListIdentifier
-  | ThreadIdentifier;
+  | ThreadIdentifier
+  | CommentIdentifier
+  | CommentAddressIdentifier
+  | CommentExternalIdentifier;
 
 /**
  * Chat command parsing result
