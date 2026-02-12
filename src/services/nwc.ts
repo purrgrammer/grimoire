@@ -20,8 +20,20 @@ import {
 import pool from "./relay-pool";
 import { BehaviorSubject, Subscription, firstValueFrom, timeout } from "rxjs";
 
-// Configure the pool for wallet connect
-WalletConnect.pool = pool;
+// Configure wallet connect with custom methods that don't filter offline relays.
+//
+// By default, pool.subscription() and pool.publish() call pool.group(relays)
+// with ignoreOffline=true, which silently drops relays in reconnect backoff.
+// This causes NWC requests to be published to ZERO relays if the NWC relay
+// has a momentary disconnection, making pay_invoice appear to time out.
+//
+// Using ignoreOffline=false ensures the underlying Relay.waitForReady() is
+// used instead, which queues operations until the relay reconnects rather
+// than silently dropping them.
+WalletConnect.subscriptionMethod = (relays, filters) =>
+  pool.group(relays, false).subscription(filters);
+WalletConnect.publishMethod = (relays, event) =>
+  pool.group(relays, false).publish(event);
 
 // Internal state
 let notificationSubscription: Subscription | null = null;
@@ -62,14 +74,6 @@ export const transactionsState$ = new BehaviorSubject<TransactionsState>(
 // ============================================================================
 // Internal helpers
 // ============================================================================
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-  }
-  return bytes;
-}
 
 /**
  * Subscribe to wallet notifications with automatic retry on error.
@@ -169,10 +173,10 @@ export async function restoreWallet(
   connectionStatus$.next("connecting");
   lastError$.next(null);
 
-  const wallet = new WalletConnect({
+  const wallet = WalletConnect.fromJSON({
     service: connection.service,
     relays: connection.relays,
-    secret: hexToBytes(connection.secret),
+    secret: connection.secret,
   });
 
   wallet$.next(wallet);
