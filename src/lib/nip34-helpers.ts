@@ -329,6 +329,73 @@ export function getPullRequestRepositoryAddress(
 }
 
 // ============================================================================
+// Pull Request Update Event Helpers (Kind 1619)
+// ============================================================================
+
+const PRUpdateCommitsSymbol = Symbol("prUpdateCommits");
+
+/**
+ * Get the referenced PR event ID from a PR Update event
+ * @param event PR Update event (kind 1619)
+ * @returns PR event ID or undefined
+ */
+export function getPRUpdatePREventId(event: NostrEvent): string | undefined {
+  const eTag = event.tags.find((t) => t[0] === "e");
+  return eTag?.[1];
+}
+
+/**
+ * Get the relay hint for the referenced PR
+ * @param event PR Update event (kind 1619)
+ * @returns Relay URL or undefined
+ */
+export function getPRUpdatePRRelayHint(event: NostrEvent): string | undefined {
+  const eTag = event.tags.find((t) => t[0] === "e");
+  return eTag?.[2] || undefined;
+}
+
+/**
+ * Get the repository address from a PR Update event
+ * @param event PR Update event (kind 1619)
+ * @returns Repository address (a tag) or undefined
+ */
+export function getPRUpdateRepositoryAddress(
+  event: NostrEvent,
+): string | undefined {
+  return getTagValue(event, "a");
+}
+
+/**
+ * Get the new commit tip from a PR Update event
+ * @param event PR Update event (kind 1619)
+ * @returns Commit hash or undefined
+ */
+export function getPRUpdateCommitTip(event: NostrEvent): string | undefined {
+  return getTagValue(event, "c");
+}
+
+/**
+ * Get all commit hashes from a PR Update event
+ * PR updates may include multiple commit tags for the new commits
+ * @param event PR Update event (kind 1619)
+ * @returns Array of commit hashes
+ */
+export function getPRUpdateCommits(event: NostrEvent): string[] {
+  return getOrComputeCachedValue(event, PRUpdateCommitsSymbol, () =>
+    event.tags.filter((t) => t[0] === "c" && t[1]).map((t) => t[1]),
+  );
+}
+
+/**
+ * Get the branch name from a PR Update event
+ * @param event PR Update event (kind 1619)
+ * @returns Branch name or undefined
+ */
+export function getPRUpdateBranchName(event: NostrEvent): string | undefined {
+  return getTagValue(event, "branch-name");
+}
+
+// ============================================================================
 // Repository State Event Helpers (Kind 30618)
 // ============================================================================
 

@@ -13,19 +13,15 @@ import {
   getPullRequestCloneUrls,
   getPullRequestMergeBase,
   getPullRequestRepositoryAddress,
-  getRepositoryRelays,
   getStatusType,
   getValidStatusAuthors,
   findCurrentStatus,
 } from "@/lib/nip34-helpers";
-import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
-import { getOutboxes } from "applesauce-core/helpers";
 import { Label } from "@/components/ui/label";
 import { RepositoryLink } from "../RepositoryLink";
 import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { useRepositoryRelays } from "@/hooks/useRepositoryRelays";
 
 /**
  * Detail renderer for Kind 1618 - Pull Request
@@ -42,44 +38,8 @@ export function PullRequestDetailRenderer({ event }: { event: NostrEvent }) {
   const mergeBase = getPullRequestMergeBase(event);
   const repoAddress = getPullRequestRepositoryAddress(event);
 
-  // Parse repository address for fetching repo event
-  const parsedRepo = useMemo(
-    () => (repoAddress ? parseReplaceableAddress(repoAddress) : null),
-    [repoAddress],
-  );
-
-  // Fetch repository event to get maintainers list
-  const repoPointer = useMemo(() => {
-    if (!parsedRepo) return undefined;
-    return {
-      kind: parsedRepo.kind,
-      pubkey: parsedRepo.pubkey,
-      identifier: parsedRepo.identifier,
-    };
-  }, [parsedRepo]);
-
-  const repositoryEvent = useNostrEvent(repoPointer);
-
-  // Fetch repo author's relay list for fallback
-  const repoAuthorRelayListPointer = useMemo(() => {
-    if (!parsedRepo?.pubkey) return undefined;
-    return { kind: 10002, pubkey: parsedRepo.pubkey, identifier: "" };
-  }, [parsedRepo?.pubkey]);
-
-  const repoAuthorRelayList = useNostrEvent(repoAuthorRelayListPointer);
-
-  // Build relay list with fallbacks
-  const statusRelays = useMemo(() => {
-    if (repositoryEvent) {
-      const repoRelays = getRepositoryRelays(repositoryEvent);
-      if (repoRelays.length > 0) return repoRelays;
-    }
-    if (repoAuthorRelayList) {
-      const authorOutbox = getOutboxes(repoAuthorRelayList);
-      if (authorOutbox.length > 0) return authorOutbox;
-    }
-    return AGGREGATOR_RELAYS;
-  }, [repositoryEvent, repoAuthorRelayList]);
+  const { relays: statusRelays, repositoryEvent } =
+    useRepositoryRelays(repoAddress);
 
   // Fetch status events
   const statusFilter = useMemo(

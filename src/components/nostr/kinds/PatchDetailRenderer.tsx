@@ -15,18 +15,15 @@ import {
   getPatchRepositoryAddress,
   isPatchRoot,
   isPatchRootRevision,
-  getRepositoryRelays,
   getStatusType,
   getValidStatusAuthors,
   findCurrentStatus,
 } from "@/lib/nip34-helpers";
-import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
-import { getOutboxes } from "applesauce-core/helpers";
 import { RepositoryLink } from "../RepositoryLink";
 import { StatusIndicator } from "../StatusIndicator";
 import { useTimeline } from "@/hooks/useTimeline";
-import { useNostrEvent } from "@/hooks/useNostrEvent";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { useRepositoryRelays } from "@/hooks/useRepositoryRelays";
+import { PatchSeriesNav } from "./PatchSeriesNav";
 
 /**
  * Detail renderer for Kind 1617 - Patch
@@ -43,44 +40,8 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
   const isRoot = isPatchRoot(event);
   const isRootRevision = isPatchRootRevision(event);
 
-  // Parse repository address for fetching repo event
-  const parsedRepo = useMemo(
-    () => (repoAddress ? parseReplaceableAddress(repoAddress) : null),
-    [repoAddress],
-  );
-
-  // Fetch repository event to get maintainers list
-  const repoPointer = useMemo(() => {
-    if (!parsedRepo) return undefined;
-    return {
-      kind: parsedRepo.kind,
-      pubkey: parsedRepo.pubkey,
-      identifier: parsedRepo.identifier,
-    };
-  }, [parsedRepo]);
-
-  const repositoryEvent = useNostrEvent(repoPointer);
-
-  // Fetch repo author's relay list for fallback
-  const repoAuthorRelayListPointer = useMemo(() => {
-    if (!parsedRepo?.pubkey) return undefined;
-    return { kind: 10002, pubkey: parsedRepo.pubkey, identifier: "" };
-  }, [parsedRepo?.pubkey]);
-
-  const repoAuthorRelayList = useNostrEvent(repoAuthorRelayListPointer);
-
-  // Build relay list with fallbacks
-  const statusRelays = useMemo(() => {
-    if (repositoryEvent) {
-      const repoRelays = getRepositoryRelays(repositoryEvent);
-      if (repoRelays.length > 0) return repoRelays;
-    }
-    if (repoAuthorRelayList) {
-      const authorOutbox = getOutboxes(repoAuthorRelayList);
-      if (authorOutbox.length > 0) return authorOutbox;
-    }
-    return AGGREGATOR_RELAYS;
-  }, [repositoryEvent, repoAuthorRelayList]);
+  const { relays: statusRelays, repositoryEvent } =
+    useRepositoryRelays(repoAddress);
 
   // Fetch status events
   const statusFilter = useMemo(
@@ -161,6 +122,9 @@ export function PatchDetailRenderer({ event }: { event: NostrEvent }) {
           <time>{createdDate}</time>
         </div>
       </header>
+
+      {/* Patch Series Navigation */}
+      <PatchSeriesNav event={event} relays={statusRelays} />
 
       {/* Commit Information */}
       {(commitId || parentCommit || committer) && (
