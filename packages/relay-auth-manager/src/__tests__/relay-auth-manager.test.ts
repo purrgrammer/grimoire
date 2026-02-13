@@ -677,6 +677,99 @@ describe("RelayAuthManager", () => {
       signer$.next(null);
       expect(manager.hasSignerAvailable()).toBe(false);
     });
+
+    it("pendingChallenges$.value should be consistent when states$ fires (no stale reads)", () => {
+      // This test simulates what relay-state-manager does: subscribes to states$
+      // and reads pendingChallenges$.value inside the callback. The value must
+      // always reflect the current signer state (not stale data from a previous emission).
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      // Collect pendingChallenges$.value as seen from within states$ subscriber
+      const valuesSeenFromStates: number[] = [];
+      manager.states$.subscribe(() => {
+        valuesSeenFromStates.push(manager.pendingChallenges$.value.length);
+      });
+
+      // Clear tracking (ignore emissions from setup)
+      valuesSeenFromStates.length = 0;
+
+      // Signer removed (logout) — when states$ fires, pendingChallenges$.value must be 0
+      signer$.next(null);
+
+      // Every states$ emission after signer removal should see empty pendingChallenges
+      expect(valuesSeenFromStates.length).toBeGreaterThan(0);
+      for (const count of valuesSeenFromStates) {
+        expect(count).toBe(0);
+      }
+    });
+
+    it("pendingChallenges$.value should be consistent when signer goes null→non-null→null", () => {
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      const valuesSeenFromStates: number[] = [];
+      manager.states$.subscribe(() => {
+        valuesSeenFromStates.push(manager.pendingChallenges$.value.length);
+      });
+
+      // Signer available then immediately removed (e.g., brief account switch)
+      valuesSeenFromStates.length = 0;
+      signer$.next(createMockSigner());
+      signer$.next(null);
+
+      // The last states$ emission should see 0 pending challenges
+      expect(valuesSeenFromStates[valuesSeenFromStates.length - 1]).toBe(0);
+    });
+
+    it("should never transiently expose stale challenges during signer removal", () => {
+      // Regression test: pendingChallenges$ must emit [] BEFORE states$ when signer goes null
+      signer$.next(createMockSigner());
+
+      const relay1 = createMockRelay("wss://relay1.example.com");
+      const relay2 = createMockRelay("wss://relay2.example.com");
+      relay1.connected$.next(true);
+      relay2.connected$.next(true);
+      manager.monitorRelay(relay1);
+      manager.monitorRelay(relay2);
+      relay1.challenge$.next("challenge-1");
+      relay2.challenge$.next("challenge-2");
+
+      // Verify challenges are pending
+      expect(manager.pendingChallenges$.value).toHaveLength(2);
+
+      // Track ALL emissions from both observables during signer removal
+      const emissions: Array<{ source: string; pendingCount: number }> = [];
+      manager.pendingChallenges$.subscribe((c) => {
+        emissions.push({
+          source: "pendingChallenges$",
+          pendingCount: c.length,
+        });
+      });
+      manager.states$.subscribe(() => {
+        emissions.push({
+          source: "states$",
+          pendingCount: manager.pendingChallenges$.value.length,
+        });
+      });
+      emissions.length = 0;
+
+      // Remove signer
+      signer$.next(null);
+
+      // pendingChallenges$ must emit before states$, so by the time states$ fires,
+      // pendingChallenges$.value is already 0
+      const statesEmissions = emissions.filter((e) => e.source === "states$");
+      for (const emission of statesEmissions) {
+        expect(emission.pendingCount).toBe(0);
+      }
+    });
   });
 
   describe("states$ observable", () => {

@@ -6,13 +6,15 @@ import accounts from "@/services/accounts";
  * Check if an account can sign events
  * Read-only accounts cannot sign and should not be prompted for auth
  *
+ * Uses account.type (from applesauce-accounts) instead of constructor.name
+ * to be robust against minification.
+ *
  * @param account - The account to check (can be undefined)
  * @returns true if the account can sign, false otherwise
  */
 export function canAccountSign(account: typeof accounts.active): boolean {
   if (!account) return false;
-  const accountType = account.constructor.name;
-  return accountType !== "ReadonlyAccount";
+  return account.type !== "readonly";
 }
 
 /**

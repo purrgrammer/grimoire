@@ -431,10 +431,9 @@ export class RelayAuthManager {
   }
 
   private emitState(): void {
-    // Emit a snapshot of current states
-    this.states$.next(new Map(this._relayStates));
-
-    // Derive and emit pending challenges
+    // Derive and emit pending challenges FIRST.
+    // This ensures that subscribers to states$ who read pendingChallenges$.value
+    // see consistent, up-to-date data (not stale values from a previous emission).
     const now = Date.now();
     const challenges: PendingAuthChallenge[] = [];
 
@@ -456,6 +455,9 @@ export class RelayAuthManager {
     }
 
     this.pendingChallenges$.next(challenges);
+
+    // Emit states snapshot after pendingChallenges is updated
+    this.states$.next(new Map(this._relayStates));
   }
 }
 

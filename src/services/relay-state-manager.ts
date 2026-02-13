@@ -50,11 +50,17 @@ class RelayStateManager {
 
     this.initialized = true;
 
-    // Subscribe to auth manager state changes to re-notify listeners
-    const authSub = relayAuthManager.states$.subscribe(() => {
+    // Subscribe to auth manager state and pending challenge changes
+    const stateSub = relayAuthManager.states$.subscribe(() => {
       this.notifyListeners();
     });
-    this.authUnsubscribe = () => authSub.unsubscribe();
+    const challengeSub = relayAuthManager.pendingChallenges$.subscribe(() => {
+      this.notifyListeners();
+    });
+    this.authUnsubscribe = () => {
+      stateSub.unsubscribe();
+      challengeSub.unsubscribe();
+    };
 
     // Subscribe to existing relays
     pool.relays.forEach((relay) => {
