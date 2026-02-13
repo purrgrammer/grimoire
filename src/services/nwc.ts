@@ -38,6 +38,7 @@ WalletConnect.publishMethod = (relays, event) =>
 // Internal state
 let notificationSubscription: Subscription | null = null;
 let notificationRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+let supportSubscription: Subscription | null = null;
 
 /**
  * Connection status for the NWC wallet
@@ -74,6 +75,22 @@ export const transactionsState$ = new BehaviorSubject<TransactionsState>(
 // ============================================================================
 // Internal helpers
 // ============================================================================
+
+/**
+ * Subscribe to wallet support info to keep the ReplaySubject(1) cache warm.
+ *
+ * The library's support$ uses share({ connector: () => new ReplaySubject(1),
+ * resetOnRefCountZero: () => timer(60000) }). If all subscribers drop for 60s,
+ * the cached wallet info (kind 13194) is lost. Since events$ is hot, the relay
+ * won't re-send the info event, so genericCall's firstValueFrom(encryption$)
+ * hangs indefinitely — causing every wallet operation to time out.
+ *
+ * This persistent subscription prevents the cache from expiring.
+ */
+function subscribeToSupport(wallet: WalletConnect) {
+  supportSubscription?.unsubscribe();
+  supportSubscription = wallet.support$.subscribe();
+}
 
 /**
  * Subscribe to wallet notifications with automatic retry on error.
@@ -157,6 +174,7 @@ export function createWalletFromURI(connectionString: string): WalletConnect {
   const wallet = WalletConnect.fromConnectURI(connectionString);
   wallet$.next(wallet);
 
+  subscribeToSupport(wallet);
   subscribeToNotifications(wallet);
   refreshBalance(); // Fetch initial balance
 
@@ -208,6 +226,7 @@ export async function restoreWallet(
     // Continue anyway - notifications will retry
   }
 
+  subscribeToSupport(wallet);
   subscribeToNotifications(wallet);
   refreshBalance();
 
@@ -218,7 +237,9 @@ export async function restoreWallet(
  * Disconnects and clears the wallet.
  */
 export function clearWallet(): void {
-  // Clean up subscription and pending retry
+  // Clean up subscriptions and pending retry
+  supportSubscription?.unsubscribe();
+  supportSubscription = null;
   notificationSubscription?.unsubscribe();
   notificationSubscription = null;
   if (notificationRetryTimeout) {
@@ -294,6 +315,7 @@ export async function reconnect(): Promise<void> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
 
+  subscribeToSupport(wallet);
   subscribeToNotifications(wallet);
   await refreshBalance();
 }
