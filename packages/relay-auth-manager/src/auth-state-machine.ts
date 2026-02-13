@@ -1,7 +1,7 @@
-import type { AuthStatus, AuthPreference } from "@/types/relay-state";
+import type { AuthPreference, AuthStatus } from "./types.js";
 
 /**
- * Events that trigger auth state transitions
+ * Events that trigger auth state transitions.
  */
 export type AuthEvent =
   | {
@@ -16,25 +16,28 @@ export type AuthEvent =
   | { type: "DISCONNECTED" };
 
 /**
- * Result of an auth state transition
+ * Result of an auth state transition.
  */
 export interface AuthTransitionResult {
+  /** The new auth status after the transition */
   newStatus: AuthStatus;
-  shouldAutoAuth: boolean; // True if preference is "always" and should auto-authenticate
-  clearChallenge: boolean; // True if challenge should be cleared
+  /** True if the manager should automatically authenticate (preference is "always") */
+  shouldAutoAuth: boolean;
+  /** True if the current challenge should be cleared */
+  clearChallenge: boolean;
 }
 
 /**
- * Pure function implementing the auth state machine
+ * Pure function implementing the NIP-42 auth state machine.
+ *
  * @param currentStatus - Current auth status
  * @param event - Event triggering the transition
- * @returns New state and any side effects to perform
+ * @returns Transition result with new status and side-effect flags
  */
 export function transitionAuthState(
   currentStatus: AuthStatus,
   event: AuthEvent,
 ): AuthTransitionResult {
-  // Default result - no change
   const noChange: AuthTransitionResult = {
     newStatus: currentStatus,
     shouldAutoAuth: false,
@@ -44,7 +47,6 @@ export function transitionAuthState(
   switch (currentStatus) {
     case "none":
       if (event.type === "CHALLENGE_RECEIVED") {
-        // Check if we should auto-authenticate based on preference
         if (event.preference === "always") {
           return {
             newStatus: "authenticating",
@@ -52,14 +54,12 @@ export function transitionAuthState(
             clearChallenge: false,
           };
         } else if (event.preference === "never") {
-          // Immediately reject if preference is never
           return {
             newStatus: "rejected",
             shouldAutoAuth: false,
             clearChallenge: true,
           };
         } else {
-          // Default: ask user
           return {
             newStatus: "challenge_received",
             shouldAutoAuth: false,
@@ -80,6 +80,13 @@ export function transitionAuthState(
         case "USER_REJECTED":
           return {
             newStatus: "rejected",
+            shouldAutoAuth: false,
+            clearChallenge: true,
+          };
+        case "AUTH_SUCCESS":
+          // Relay confirmed auth while prompt was still showing
+          return {
+            newStatus: "authenticated",
             shouldAutoAuth: false,
             clearChallenge: true,
           };
@@ -125,7 +132,6 @@ export function transitionAuthState(
           clearChallenge: true,
         };
       }
-      // If we get a new challenge while authenticated, transition to challenge_received
       if (event.type === "CHALLENGE_RECEIVED") {
         if (event.preference === "always") {
           return {
@@ -144,7 +150,6 @@ export function transitionAuthState(
 
     case "failed":
     case "rejected":
-      // Can receive new challenge after failure/rejection
       if (event.type === "CHALLENGE_RECEIVED") {
         if (event.preference === "always") {
           return {
@@ -175,7 +180,6 @@ export function transitionAuthState(
       return noChange;
 
     default: {
-      // Exhaustive check
       const _exhaustive: never = currentStatus;
       return _exhaustive;
     }

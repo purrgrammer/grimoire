@@ -244,16 +244,9 @@ function RelayCard({ relay }: RelayCardProps) {
                     }
 
                     setIsSavingPreference(true);
-                    try {
-                      await setAuthPreference(relay.url, value);
-                      toast.success("Preference saved");
-                    } catch (error) {
-                      toast.error(
-                        `Failed to save preference: ${error instanceof Error ? error.message : "Unknown error"}`,
-                      );
-                    } finally {
-                      setIsSavingPreference(false);
-                    }
+                    setAuthPreference(relay.url, value);
+                    toast.success("Preference saved");
+                    setIsSavingPreference(false);
                   }}
                 >
                   <DropdownMenuRadioItem value="ask">Ask</DropdownMenuRadioItem>

@@ -1,50 +1,40 @@
 import type { IRelay } from "applesauce-relay";
-import { combineLatest, firstValueFrom, race, timer } from "rxjs";
-import { filter, map, startWith } from "rxjs/operators";
+import { combineLatest } from "rxjs";
+import { map, startWith } from "rxjs/operators";
 import type {
   RelayState,
   GlobalRelayState,
   AuthPreference,
 } from "@/types/relay-state";
-import { transitionAuthState, type AuthEvent } from "@/lib/auth-state-machine";
-import { createLogger } from "@/lib/logger";
 import { normalizeRelayURL } from "@/lib/relay-url";
-import { canAccountSign } from "@/hooks/useAccount";
 import pool from "./relay-pool";
-import accountManager from "./accounts";
-import db from "./db";
-
-const logger = createLogger("RelayStateManager");
+import relayAuthManager from "./relay-auth";
 
 const MAX_NOTICES = 20;
-const MAX_ERRORS = 20;
-const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 /**
- * Observable values emitted by relay observables
- * Note: Using startWith() to ensure immediate emission with current values
+ * Observable values emitted by relay observables (connection + notices only)
  */
 interface RelayObservableValues {
   connected: boolean;
-  notices: string[]; // notices is an array of strings
-  challenge: string | null | undefined; // challenge can be null or undefined
-  authenticated: boolean;
+  notices: string[];
 }
 
 /**
- * Singleton service for managing global relay state
- * Subscribes to all relay observables and maintains state for all relays
+ * Singleton service for managing global relay state.
+ *
+ * Tracks relay connection state, notices, and errors.
+ * Delegates all NIP-42 authentication logic to the generic RelayAuthManager.
  */
 class RelayStateManager {
   private relayStates: Map<string, RelayState> = new Map();
   private subscriptions: Map<string, () => void> = new Map();
   private listeners: Set<(state: GlobalRelayState) => void> = new Set();
-  private authPreferences: Map<string, AuthPreference> = new Map();
-  private sessionRejections: Set<string> = new Set();
   private initialized = false;
   private pollingIntervalId?: NodeJS.Timeout;
   private lastNotifiedState?: GlobalRelayState;
   private stateVersion = 0;
+  private authUnsubscribe?: () => void;
 
   constructor() {
     // Don't perform async operations in constructor
@@ -55,14 +45,22 @@ class RelayStateManager {
    * Initialize relay monitoring for all relays in the pool
    * Must be called before using the manager
    */
-  async initialize() {
+  initialize() {
     if (this.initialized) return;
 
-    // Load preferences from database BEFORE starting monitoring
-    // This ensures preferences are available when relays connect
-    await this.loadAuthPreferences();
-
     this.initialized = true;
+
+    // Subscribe to auth manager state and pending challenge changes
+    const stateSub = relayAuthManager.states$.subscribe(() => {
+      this.notifyListeners();
+    });
+    const challengeSub = relayAuthManager.pendingChallenges$.subscribe(() => {
+      this.notifyListeners();
+    });
+    this.authUnsubscribe = () => {
+      stateSub.unsubscribe();
+      challengeSub.unsubscribe();
+    };
 
     // Subscribe to existing relays
     pool.relays.forEach((relay) => {
@@ -108,9 +106,10 @@ class RelayStateManager {
       this.relayStates.set(url, this.createInitialState(url));
     }
 
-    // Subscribe to all relay observables using combineLatest
-    // startWith ensures immediate emission with current values (critical for BehaviorSubjects)
-    // This prevents waiting for all observables to naturally emit
+    // Also monitor in the auth manager
+    relayAuthManager.monitorRelay(relay);
+
+    // Subscribe to connection and notice observables only
     const subscription = combineLatest({
       connected: relay.connected$.pipe(startWith(relay.connected)),
       notices: relay.notice$.pipe(
@@ -119,13 +118,7 @@ class RelayStateManager {
           Array.isArray(notice) ? notice : notice ? [notice] : [],
         ),
       ),
-      challenge: relay.challenge$.pipe(startWith(relay.challenge)),
-      authenticated: relay.authenticated$.pipe(startWith(relay.authenticated)),
     }).subscribe((values) => {
-      logger.debug(`Observable triggered for ${url}`, {
-        authenticated: values.authenticated,
-        challenge: values.challenge ? "present" : "none",
-      });
       this.updateRelayState(url, values);
     });
 
@@ -141,7 +134,7 @@ class RelayStateManager {
       url,
       connectionState: "disconnected",
       authStatus: "none",
-      authPreference: this.authPreferences.get(url),
+      authPreference: relayAuthManager.getPreference(url),
       notices: [],
       errors: [],
       stats: {
@@ -153,9 +146,7 @@ class RelayStateManager {
   }
 
   /**
-   * Update relay state based on observable values
-   * @param url - Relay URL
-   * @param values - Current values emitted by relay observables
+   * Update relay state based on observable values (connection + notices only)
    */
   private updateRelayState(url: string, values: RelayObservableValues) {
     const state = this.relayStates.get(url);
@@ -174,94 +165,10 @@ class RelayStateManager {
     } else if (!isConnected && wasConnected) {
       state.connectionState = "disconnected";
       state.lastDisconnected = now;
-      // Reset auth status when disconnecting
-      console.log(
-        `[RelayStateManager] ${url} disconnected, resetting auth status`,
-      );
-      state.authStatus = "none";
-      state.currentChallenge = undefined;
     } else if (isConnected) {
       state.connectionState = "connected";
     } else {
       state.connectionState = "disconnected";
-    }
-
-    // Update auth status using state machine
-    const challenge = values.challenge;
-    const isAuthenticated = values.authenticated;
-
-    // Determine auth events based on observable values
-    let authEvent: AuthEvent | null = null;
-
-    // Priority 1: Disconnection (handled above, but check here too)
-    if (!isConnected && wasConnected) {
-      authEvent = { type: "DISCONNECTED" };
-    }
-    // Priority 2: Authentication success
-    else if (isAuthenticated === true && state.authStatus !== "authenticated") {
-      authEvent = { type: "AUTH_SUCCESS" };
-    }
-    // Priority 3: New challenge (or challenge change)
-    else if (
-      challenge &&
-      (!state.currentChallenge ||
-        state.currentChallenge.challenge !== challenge)
-    ) {
-      const preference = this.authPreferences.get(url);
-      authEvent = { type: "CHALLENGE_RECEIVED", challenge, preference };
-    }
-    // Priority 4: Challenge cleared (authentication may have failed)
-    else if (
-      !challenge &&
-      !isAuthenticated &&
-      (state.authStatus === "authenticating" ||
-        state.authStatus === "challenge_received")
-    ) {
-      authEvent = { type: "AUTH_FAILED" };
-    }
-
-    // Apply state machine transition if we have an event
-    if (authEvent) {
-      const transition = transitionAuthState(state.authStatus, authEvent);
-
-      logger.info(
-        `${url} auth transition: ${state.authStatus} → ${transition.newStatus}`,
-        {
-          event: authEvent.type,
-        },
-      );
-
-      // Update state
-      state.authStatus = transition.newStatus;
-
-      // Update challenge
-      if (transition.clearChallenge) {
-        state.currentChallenge = undefined;
-      } else if (authEvent.type === "CHALLENGE_RECEIVED") {
-        state.currentChallenge = {
-          challenge: authEvent.challenge,
-          receivedAt: now,
-        };
-      }
-
-      // Handle side effects
-      if (transition.newStatus === "authenticated") {
-        state.lastAuthenticated = now;
-        state.stats.authSuccessCount++;
-      }
-
-      if (transition.shouldAutoAuth) {
-        console.log(
-          `[RelayStateManager] ${url} auto-authenticating (preference="always")`,
-        );
-        // Trigger authentication asynchronously
-        this.authenticateRelay(url).catch((error) => {
-          console.error(
-            `[RelayStateManager] Auto-auth failed for ${url}:`,
-            error,
-          );
-        });
-      }
     }
 
     // Add notices (bounded array)
@@ -281,297 +188,77 @@ class RelayStateManager {
   }
 
   /**
-   * Get auth preference for a relay
+   * Get auth preference for a relay (delegates to auth manager)
    */
-  async getAuthPreference(
-    relayUrl: string,
-  ): Promise<AuthPreference | undefined> {
-    try {
-      const normalizedUrl = normalizeRelayURL(relayUrl);
-
-      // Check memory cache first
-      if (this.authPreferences.has(normalizedUrl)) {
-        return this.authPreferences.get(normalizedUrl);
-      }
-
-      // Load from database
-      const record = await db.relayAuthPreferences.get(normalizedUrl);
-      if (record) {
-        this.authPreferences.set(normalizedUrl, record.preference);
-        return record.preference;
-      }
-
-      return undefined;
-    } catch (error) {
-      console.error(`Failed to get auth preference for ${relayUrl}:`, error);
-      return undefined;
-    }
+  getAuthPreference(relayUrl: string): AuthPreference | undefined {
+    return relayAuthManager.getPreference(relayUrl);
   }
 
   /**
-   * Set auth preference for a relay
+   * Set auth preference for a relay (delegates to auth manager)
    */
-  async setAuthPreference(relayUrl: string, preference: AuthPreference) {
+  setAuthPreference(relayUrl: string, preference: AuthPreference) {
+    relayAuthManager.setPreference(relayUrl, preference);
+
+    // Update local relay state for UI
     try {
       const normalizedUrl = normalizeRelayURL(relayUrl);
-      console.log(
-        `[RelayStateManager] Setting auth preference for ${normalizedUrl} to "${preference}"`,
-      );
-
-      // Update memory cache
-      this.authPreferences.set(normalizedUrl, preference);
-
-      // Save to database
-      try {
-        await db.relayAuthPreferences.put({
-          url: normalizedUrl,
-          preference,
-          updatedAt: Date.now(),
-        });
-        console.log(
-          `[RelayStateManager] Successfully saved preference to database`,
-        );
-      } catch (error) {
-        console.error(
-          `[RelayStateManager] Failed to save preference to database:`,
-          error,
-        );
-        throw error;
-      }
-
-      // Update relay state
       const state = this.relayStates.get(normalizedUrl);
       if (state) {
         state.authPreference = preference;
-        this.notifyListeners();
-        console.log(
-          `[RelayStateManager] Updated relay state and notified listeners`,
-        );
       }
-    } catch (error) {
-      console.error(`Failed to set auth preference for ${relayUrl}:`, error);
-      throw error;
+    } catch {
+      // Ignore normalization errors
     }
+
+    this.notifyListeners();
   }
 
   /**
-   * Authenticate with a relay
+   * Authenticate with a relay (delegates to auth manager)
    */
   async authenticateRelay(relayUrl: string): Promise<void> {
-    let normalizedUrl: string;
-    try {
-      normalizedUrl = normalizeRelayURL(relayUrl);
-    } catch (error) {
-      throw new Error(`Invalid relay URL ${relayUrl}: ${error}`);
-    }
-
-    const relay = pool.relay(normalizedUrl);
-    const state = this.relayStates.get(relay.url);
-
-    if (!relay || !state) {
-      throw new Error(`Relay ${relayUrl} not found`);
-    }
-
-    if (!state.currentChallenge) {
-      throw new Error(`No auth challenge for ${relayUrl}`);
-    }
-
-    // Get active account
-    const account = accountManager.active;
-    if (!account) {
-      throw new Error("No active account to authenticate with");
-    }
-
-    // Check if account can sign (read-only accounts cannot authenticate)
-    if (!canAccountSign(account)) {
-      throw new Error("Active account cannot sign events (read-only account)");
-    }
-
-    // Update status to authenticating
-    state.authStatus = "authenticating";
-    state.stats.authAttemptsCount++;
-    this.notifyListeners();
-
-    try {
-      logger.info(`Authenticating with ${relayUrl}`);
-
-      // Start authentication
-      await relay.authenticate(account);
-
-      // Wait for authenticated$ observable to emit true or timeout after 5 seconds
-      // This ensures we get the actual result from the relay, not a race condition
-      const authResult = await firstValueFrom(
-        race([
-          relay.authenticated$.pipe(
-            filter((authenticated) => authenticated === true),
-            map(() => true),
-          ),
-          timer(5000).pipe(map(() => false)),
-        ]),
-      );
-
-      if (!authResult) {
-        throw new Error("Authentication timeout - relay did not respond");
-      }
-
-      logger.info(`Successfully authenticated with ${relayUrl}`);
-      // State will be updated automatically by the combineLatest subscription
-    } catch (error) {
-      state.authStatus = "failed";
-
-      // Extract error message properly
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-
-      // Categorize error type
-      let errorType: "network" | "authentication" | "protocol" | "unknown" =
-        "unknown";
-      if (
-        errorMessage.includes("timeout") ||
-        errorMessage.includes("network")
-      ) {
-        errorType = "network";
-      } else if (
-        errorMessage.includes("auth") ||
-        errorMessage.includes("sign")
-      ) {
-        errorType = "authentication";
-      } else if (
-        errorMessage.includes("protocol") ||
-        errorMessage.includes("invalid")
-      ) {
-        errorType = "protocol";
-      }
-
-      state.errors.unshift({
-        message: `Authentication failed: ${errorMessage}`,
-        timestamp: Date.now(),
-        type: errorType,
-      });
-
-      if (state.errors.length > MAX_ERRORS) {
-        state.errors = state.errors.slice(0, MAX_ERRORS);
-      }
-      this.notifyListeners();
-      throw error;
-    }
+    await relayAuthManager.authenticate(relayUrl);
   }
 
   /**
-   * Reject authentication for a relay
+   * Reject authentication for a relay (delegates to auth manager)
    */
   rejectAuth(relayUrl: string, rememberForSession = true) {
-    try {
-      const normalizedUrl = normalizeRelayURL(relayUrl);
-      const state = this.relayStates.get(normalizedUrl);
-      if (state) {
-        // Use state machine for consistent transitions
-        const transition = transitionAuthState(state.authStatus, {
-          type: "USER_REJECTED",
-        });
-
-        console.log(
-          `[RelayStateManager] ${relayUrl} user rejected auth:`,
-          `${state.authStatus} → ${transition.newStatus}`,
-        );
-
-        state.authStatus = transition.newStatus;
-        if (transition.clearChallenge) {
-          state.currentChallenge = undefined;
-        }
-
-        if (rememberForSession) {
-          this.sessionRejections.add(normalizedUrl);
-        }
-        this.notifyListeners();
-      }
-    } catch (error) {
-      console.error(`Failed to reject auth for ${relayUrl}:`, error);
-    }
+    relayAuthManager.reject(relayUrl, rememberForSession);
   }
 
   /**
-   * Check if a relay should be prompted for auth
-   */
-  shouldPromptAuth(relayUrl: string): boolean {
-    try {
-      const normalizedUrl = normalizeRelayURL(relayUrl);
-
-      // Don't prompt if there's no active account or account can't sign
-      const account = accountManager.active;
-      if (!account || !canAccountSign(account)) return false;
-
-      // Check permanent preferences
-      const pref = this.authPreferences.get(normalizedUrl);
-      if (pref === "never") return false;
-
-      // Check session rejections
-      if (this.sessionRejections.has(normalizedUrl)) return false;
-
-      // Don't prompt if already authenticated (unless challenge changes)
-      const state = this.relayStates.get(normalizedUrl);
-      if (state?.authStatus === "authenticated") return false;
-
-      return true;
-    } catch (error) {
-      console.error(`Failed to check auth prompt for ${relayUrl}:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Check if a challenge has expired
-   */
-  private isChallengeExpired(receivedAt: number): boolean {
-    return Date.now() - receivedAt > CHALLENGE_TTL;
-  }
-
-  /**
-   * Get current global state
+   * Get current global state (merges connection state with auth state)
    */
   getState(): GlobalRelayState {
     const relays: Record<string, RelayState> = {};
+    const authStates = relayAuthManager.getAllStates();
+
     this.relayStates.forEach((state, url) => {
-      // Create shallow copy to avoid mutation issues in hasStateChanged
-      relays[url] = { ...state };
+      const authState = authStates.get(url);
+      relays[url] = {
+        ...state,
+        // Merge auth state from the auth manager
+        authStatus: authState?.status ?? "none",
+        authPreference: relayAuthManager.getPreference(url),
+        currentChallenge:
+          authState?.challenge && authState.challengeReceivedAt
+            ? {
+                challenge: authState.challenge,
+                receivedAt: authState.challengeReceivedAt,
+              }
+            : undefined,
+      };
     });
 
-    const pendingChallenges = Array.from(this.relayStates.values())
-      .filter((state) => {
-        // Only include non-expired challenges
-        if (
-          state.authStatus === "challenge_received" &&
-          state.currentChallenge &&
-          !this.isChallengeExpired(state.currentChallenge.receivedAt) &&
-          this.shouldPromptAuth(state.url)
-        ) {
-          return true;
-        }
-
-        // Clear expired challenges
-        if (
-          state.currentChallenge &&
-          this.isChallengeExpired(state.currentChallenge.receivedAt)
-        ) {
-          console.log(`[RelayStateManager] Challenge expired for ${state.url}`);
-          state.currentChallenge = undefined;
-          if (state.authStatus === "challenge_received") {
-            state.authStatus = "none";
-          }
-        }
-
-        return false;
-      })
-      .map((state) => ({
-        relayUrl: state.url,
-        challenge: state.currentChallenge!.challenge,
-        receivedAt: state.currentChallenge!.receivedAt,
-      }));
+    // Get pending challenges from auth manager
+    const pendingChallenges = relayAuthManager.pendingChallenges$.value;
 
     const authPreferences: Record<string, AuthPreference> = {};
-    this.authPreferences.forEach((pref, url) => {
+    for (const [url, pref] of relayAuthManager.getAllPreferences()) {
       authPreferences[url] = pref;
-    });
+    }
 
     return {
       relays,
@@ -654,21 +341,6 @@ class RelayStateManager {
   }
 
   /**
-   * Load auth preferences from database into memory cache
-   */
-  private async loadAuthPreferences() {
-    try {
-      const allPrefs = await db.relayAuthPreferences.toArray();
-      allPrefs.forEach((record) => {
-        this.authPreferences.set(record.url, record.preference);
-      });
-      logger.info(`Loaded ${allPrefs.length} auth preferences from database`);
-    } catch (error) {
-      logger.warn("Failed to load auth preferences", error);
-    }
-  }
-
-  /**
    * Cleanup all subscriptions and intervals
    */
   destroy() {
@@ -677,6 +349,9 @@ class RelayStateManager {
       clearInterval(this.pollingIntervalId);
       this.pollingIntervalId = undefined;
     }
+
+    // Unsubscribe from auth manager
+    this.authUnsubscribe?.();
 
     // Unsubscribe from all relay observables
     this.subscriptions.forEach((unsubscribe) => unsubscribe());

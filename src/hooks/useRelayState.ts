@@ -50,16 +50,14 @@ export function useRelayState() {
       return relayState?.relays[normalizedUrl];
     },
 
-    // Get auth preference
-    getAuthPreference: async (
-      url: string,
-    ): Promise<AuthPreference | undefined> => {
-      return await relayStateManager.getAuthPreference(url);
+    // Get auth preference (now synchronous)
+    getAuthPreference: (url: string): AuthPreference | undefined => {
+      return relayStateManager.getAuthPreference(url);
     },
 
-    // Set auth preference
-    setAuthPreference: async (url: string, preference: AuthPreference) => {
-      await relayStateManager.setAuthPreference(url, preference);
+    // Set auth preference (now synchronous)
+    setAuthPreference: (url: string, preference: AuthPreference) => {
+      relayStateManager.setAuthPreference(url, preference);
     },
 
     // Authenticate with relay

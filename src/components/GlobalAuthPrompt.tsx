@@ -155,7 +155,7 @@ export function GlobalAuthPrompt() {
             challenge={challenge.challenge}
             onAuthenticate={async (remember) => {
               if (remember) {
-                await setAuthPreference(challenge.relayUrl, "always");
+                setAuthPreference(challenge.relayUrl, "always");
               }
 
               activeToasts.current.delete(key);
@@ -184,7 +184,7 @@ export function GlobalAuthPrompt() {
             }}
             onReject={async (remember) => {
               if (remember) {
-                await setAuthPreference(challenge.relayUrl, "never");
+                setAuthPreference(challenge.relayUrl, "never");
               }
 
               rejectAuth(challenge.relayUrl, !remember);
