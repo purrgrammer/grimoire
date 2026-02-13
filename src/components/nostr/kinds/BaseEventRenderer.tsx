@@ -40,11 +40,89 @@ import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
 import { getSemanticAuthor } from "@/lib/semantic-author";
+import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
 import { EventFactory } from "applesauce-core/event-factory";
 import { ReactionBlueprint } from "applesauce-common/blueprints";
 import { publishEventToRelays } from "@/services/hub";
 import { selectRelaysForInteraction } from "@/services/relay-selection";
 import type { EmojiTag } from "@/lib/emoji-helpers";
+
+/**
+ * Determine the chat protocol and identifier for any event.
+ * - Kind 1 → NIP-10 thread
+ * - Kind 30311 → NIP-53 live activity
+ * - Everything else → NIP-22 comments (wildcard)
+ */
+function getChatPropsForEvent(
+  event: NostrEvent,
+  relays: string[],
+): { protocol: ChatProtocol; identifier: ProtocolIdentifier } {
+  // Kind 1: NIP-10 thread
+  if (event.kind === 1) {
+    return {
+      protocol: "nip-10",
+      identifier: {
+        type: "thread",
+        value: {
+          id: event.id,
+          relays,
+          author: event.pubkey,
+          kind: event.kind,
+        },
+        relays,
+      },
+    };
+  }
+
+  // Kind 30311: NIP-53 live activity
+  if (event.kind === 30311) {
+    const dTag = getTagValue(event, "d") || "";
+    return {
+      protocol: "nip-53",
+      identifier: {
+        type: "live-activity",
+        value: {
+          kind: 30311 as const,
+          pubkey: event.pubkey,
+          identifier: dTag,
+        },
+        relays,
+      },
+    };
+  }
+
+  // Addressable events (kinds 10000-19999, 30000-39999): NIP-22 comment-address
+  if (isAddressableKind(event.kind)) {
+    const dTag = getTagValue(event, "d") || "";
+    return {
+      protocol: "nip-22",
+      identifier: {
+        type: "comment-address",
+        value: {
+          kind: event.kind,
+          pubkey: event.pubkey,
+          identifier: dTag,
+        },
+        relays,
+      },
+    };
+  }
+
+  // All other events: NIP-22 comment by event ID
+  return {
+    protocol: "nip-22",
+    identifier: {
+      type: "comment",
+      value: {
+        id: event.id,
+        kind: event.kind,
+        pubkey: event.pubkey,
+        relay: relays[0],
+      },
+      relays,
+    },
+  };
+}
 
 /**
  * Universal event properties and utilities shared across all kind renderers
@@ -214,26 +292,10 @@ export function EventMenu({
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-
-      // Open chat with NIP-10 thread protocol
-      addWindow("chat", {
-        protocol: "nip-10",
-        identifier: {
-          type: "thread",
-          value: {
-            id: event.id,
-            relays,
-            author: event.pubkey,
-            kind: event.kind,
-          },
-          relays,
-        },
-      });
-    }
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    const { protocol, identifier } = getChatPropsForEvent(event, relays);
+    addWindow("chat", { protocol, identifier });
   };
 
   return (
@@ -252,12 +314,10 @@ export function EventMenu({
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </DropdownMenuItem>
-        {event.kind === 1 && (
-          <DropdownMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          {event.kind === 1 ? "Chat" : "Comments"}
+        </DropdownMenuItem>
         {canSign && onReactClick && (
           <DropdownMenuItem onClick={onReactClick}>
             <SmilePlus className="size-4 mr-2" />
@@ -384,26 +444,10 @@ export function EventContextMenu({
   };
 
   const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-
-      // Open chat with NIP-10 thread protocol
-      addWindow("chat", {
-        protocol: "nip-10",
-        identifier: {
-          type: "thread",
-          value: {
-            id: event.id,
-            relays,
-            author: event.pubkey,
-            kind: event.kind,
-          },
-          relays,
-        },
-      });
-    }
+    const seenRelaysSet = getSeenRelays(event);
+    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
+    const { protocol, identifier } = getChatPropsForEvent(event, relays);
+    addWindow("chat", { protocol, identifier });
   };
 
   return (
@@ -418,12 +462,10 @@ export function EventContextMenu({
           <Zap className="size-4 mr-2 text-yellow-500" />
           Zap
         </ContextMenuItem>
-        {event.kind === 1 && (
-          <ContextMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem onClick={openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          {event.kind === 1 ? "Chat" : "Comments"}
+        </ContextMenuItem>
         {canSign && onReactClick && (
           <ContextMenuItem onClick={onReactClick}>
             <SmilePlus className="size-4 mr-2" />
