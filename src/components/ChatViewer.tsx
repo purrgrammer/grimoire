@@ -32,6 +32,7 @@ import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
+import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction } from "@/types/chat-actions";
 import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import {
@@ -41,6 +42,7 @@ import {
 } from "@/lib/chat/group-system-messages";
 import { UserName } from "./nostr/UserName";
 import { RichText } from "./nostr/RichText";
+import { KindRenderer } from "./nostr/kinds";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -529,6 +531,74 @@ const MessageItem = memo(function MessageItem({
   }
 
   return messageContent;
+});
+
+/**
+ * RootEventItem - Renders the root event (OP) using the full KindRenderer
+ * so it looks like a proper feed item at the top of the comments thread
+ */
+const RootEventItem = memo(function RootEventItem({
+  event,
+}: {
+  event: NostrEvent;
+}) {
+  return (
+    <div className="border-b border-muted mb-2">
+      <KindRenderer event={event} />
+    </div>
+  );
+});
+
+/**
+ * ExternalRootItem - Renders an external resource root (NIP-73)
+ * for conversations scoped to URLs, ISBNs, DOIs, etc.
+ */
+const ExternalRootItem = memo(function ExternalRootItem({
+  externalId,
+  externalKind,
+}: {
+  externalId: string;
+  externalKind: string;
+}) {
+  let displayLabel = externalKind;
+  let displayValue = externalId;
+
+  if (externalKind === "web") {
+    displayLabel = "URL";
+    try {
+      const url = new URL(externalId);
+      displayValue = url.hostname + url.pathname;
+    } catch {
+      // keep raw
+    }
+  } else if (externalKind.startsWith("isbn")) {
+    displayLabel = "ISBN";
+  } else if (externalKind.startsWith("doi")) {
+    displayLabel = "DOI";
+  }
+
+  return (
+    <div className="border-b border-muted mb-2 px-3 py-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <FileText className="size-4 flex-shrink-0" />
+        <span className="font-medium uppercase text-xs">{displayLabel}</span>
+      </div>
+      <p className="text-sm mt-1 break-all">
+        {externalKind === "web" ? (
+          <a
+            href={externalId}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {displayValue}
+          </a>
+        ) : (
+          <span className="font-mono">{displayValue}</span>
+        )}
+      </p>
+    </div>
+  );
 });
 
 /**
@@ -1096,7 +1166,8 @@ export function ChatViewer({
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
             {(conversation.type === "group" ||
-              conversation.type === "live-chat") && (
+              conversation.type === "live-chat" ||
+              conversation.type === "comments") && (
               <button
                 onClick={handleNipClick}
                 className="rounded bg-muted px-1.5 py-0.5 font-mono hover:bg-muted/80 transition-colors cursor-pointer"
@@ -1125,28 +1196,41 @@ export function ChatViewer({
             }}
             alignToBottom
             components={{
-              Header: () =>
-                hasMore &&
-                conversationResult.status === "success" &&
-                protocol !== "nip-10" ? (
-                  <div className="flex justify-center py-2">
-                    <Button
-                      onClick={handleLoadOlder}
-                      disabled={isLoadingOlder}
-                      variant="ghost"
-                      size="sm"
-                    >
-                      {isLoadingOlder ? (
-                        <>
-                          <Loader2 className="size-3 animate-spin" />
-                          <span className="text-xs">Loading...</span>
-                        </>
-                      ) : (
-                        "Load older messages"
-                      )}
-                    </Button>
-                  </div>
-                ) : null,
+              Header: () => (
+                <>
+                  {/* External root display for NIP-22 conversations without a Nostr root event */}
+                  {protocol === "nip-22" &&
+                    conversation.metadata?.externalId &&
+                    conversation.metadata?.externalKind && (
+                      <ExternalRootItem
+                        externalId={conversation.metadata.externalId}
+                        externalKind={conversation.metadata.externalKind}
+                      />
+                    )}
+                  {hasMore &&
+                    conversationResult.status === "success" &&
+                    protocol !== "nip-10" &&
+                    protocol !== "nip-22" && (
+                      <div className="flex justify-center py-2">
+                        <Button
+                          onClick={handleLoadOlder}
+                          disabled={isLoadingOlder}
+                          variant="ghost"
+                          size="sm"
+                        >
+                          {isLoadingOlder ? (
+                            <>
+                              <Loader2 className="size-3 animate-spin" />
+                              <span className="text-xs">Loading...</span>
+                            </>
+                          ) : (
+                            "Load older messages"
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                </>
+              ),
               Footer: () => <div className="h-1" />,
             }}
             itemContent={(_index, item) => {
@@ -1172,10 +1256,17 @@ export function ChatViewer({
                 );
               }
 
-              // For NIP-10 threads, check if this is the root message
+              // For NIP-10 and NIP-22, check if this is the root message
               const isRootMessage =
-                protocol === "nip-10" &&
+                (protocol === "nip-10" || protocol === "nip-22") &&
                 conversation.metadata?.rootEventId === item.data.id;
+
+              // Root messages are rendered with the full KindRenderer (feed view)
+              if (isRootMessage && item.data.event) {
+                return (
+                  <RootEventItem key={item.data.id} event={item.data.event} />
+                );
+              }
 
               return (
                 <MessageItem
