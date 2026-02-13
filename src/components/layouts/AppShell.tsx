@@ -31,9 +31,7 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
 
   // Initialize global relay state manager
   useEffect(() => {
-    relayStateManager.initialize().catch((err) => {
-      console.error("Failed to initialize relay state manager:", err);
-    });
+    relayStateManager.initialize();
   }, []);
 
   // Sync relay state with Jotai
