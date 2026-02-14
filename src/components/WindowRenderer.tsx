@@ -53,6 +53,9 @@ const PostViewer = lazy(() =>
 const SettingsViewer = lazy(() =>
   import("./SettingsViewer").then((m) => ({ default: m.SettingsViewer })),
 );
+const EventLogViewer = lazy(() =>
+  import("./EventLogViewer").then((m) => ({ default: m.EventLogViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -256,6 +259,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "settings":
         content = <SettingsViewer />;
+        break;
+      case "log":
+        content = <EventLogViewer />;
         break;
       default:
         content = (
