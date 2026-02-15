@@ -37,6 +37,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tiptap/core": "^3.15.3",
+    "@tiptap/extension-link": "^3.19.0",
     "@tiptap/extension-mention": "^3.15.3",
     "@tiptap/extension-placeholder": "^3.15.3",
     "@tiptap/pm": "^3.15.3",

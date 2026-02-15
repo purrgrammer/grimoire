@@ -23,6 +23,8 @@ import { PatchRenderer } from "./PatchRenderer";
 import { PatchDetailRenderer } from "./PatchDetailRenderer";
 import { PullRequestRenderer } from "./PullRequestRenderer";
 import { PullRequestDetailRenderer } from "./PullRequestDetailRenderer";
+import { PRUpdateRenderer } from "./PRUpdateRenderer";
+import { PRUpdateDetailRenderer } from "./PRUpdateDetailRenderer";
 import { Kind9735Renderer } from "./ZapReceiptRenderer";
 import { Kind9802Renderer } from "./HighlightRenderer";
 import { Kind9802DetailRenderer } from "./HighlightDetailRenderer";
@@ -190,6 +192,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1337: Kind1337Renderer, // Code Snippet (NIP-C0)
   1617: PatchRenderer, // Patch (NIP-34)
   1618: PullRequestRenderer, // Pull Request (NIP-34)
+  1619: PRUpdateRenderer, // PR Updates (NIP-34)
   1621: IssueRenderer, // Issue (NIP-34)
   1630: IssueStatusRenderer, // Open Status (NIP-34)
   1631: IssueStatusRenderer, // Applied/Merged/Resolved Status (NIP-34)
@@ -304,6 +307,7 @@ const detailRenderers: Record<
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
   1618: PullRequestDetailRenderer, // Pull Request Detail (NIP-34)
+  1619: PRUpdateDetailRenderer, // PR Updates Detail (NIP-34)
   1621: IssueDetailRenderer, // Issue Detail (NIP-34)
   1630: IssueStatusDetailRenderer, // Open Status Detail (NIP-34)
   1631: IssueStatusDetailRenderer, // Applied/Merged/Resolved Status Detail (NIP-34)
