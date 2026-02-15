@@ -160,6 +160,7 @@ import { PollRenderer } from "./PollRenderer";
 import { PollDetailRenderer } from "./PollDetailRenderer";
 import { PollResponseRenderer } from "./PollResponseRenderer";
 import { ReportRenderer, ReportDetailRenderer } from "./ReportRenderer";
+import { ThreadRenderer } from "./ThreadRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -173,7 +174,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   7: Kind7Renderer, // Reaction
   8: BadgeAwardRenderer, // Badge Award (NIP-58)
   9: Kind9Renderer, // Chat Message (NIP-29)
-  11: Kind1Renderer, // Public Thread Reply (NIP-10)
+  11: ThreadRenderer, // Thread (NIP-7D)
   16: RepostRenderer, // Generic Repost
   17: Kind7Renderer, // Reaction (NIP-25)
   20: Kind20Renderer, // Picture (NIP-68)
