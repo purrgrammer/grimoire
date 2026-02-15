@@ -18,7 +18,14 @@ import {
   INITIAL_TRANSACTIONS_STATE,
 } from "@/types/wallet";
 import pool from "./relay-pool";
-import { BehaviorSubject, Subscription, firstValueFrom, timeout } from "rxjs";
+import {
+  BehaviorSubject,
+  Subscription,
+  firstValueFrom,
+  race,
+  timer,
+  map,
+} from "rxjs";
 
 // Configure the pool for wallet connect
 WalletConnect.pool = pool;
@@ -26,6 +33,12 @@ WalletConnect.pool = pool;
 // Internal state
 let notificationSubscription: Subscription | null = null;
 let notificationRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Keeps the wallet's support$ subscribed to prevent ReplaySubject cache reset.
+ * The library resets after 60 seconds of no subscribers.
+ */
+let supportSubscription: Subscription | null = null;
 
 /**
  * Connection status for the NWC wallet
@@ -138,6 +151,49 @@ function subscribeToNotifications(wallet: WalletConnect) {
   subscribe();
 }
 
+/**
+ * Waits for the wallet's support$ to emit and creates a persistent subscription.
+ *
+ * The applesauce-wallet-connect library's support$ uses ReplaySubject(1) with
+ * resetOnRefCountZero: timer(60000). We keep a persistent subscription to
+ * prevent the cache from resetting.
+ *
+ * @param wallet The wallet instance
+ * @param timeoutMs Maximum time to wait (default: 15 seconds)
+ * @throws Error if support$ doesn't emit within timeout
+ */
+async function waitForSupport(
+  wallet: WalletConnect,
+  timeoutMs = 15000,
+): Promise<void> {
+  // Clean up any existing subscription
+  supportSubscription?.unsubscribe();
+  supportSubscription = null;
+
+  try {
+    await firstValueFrom(
+      race(
+        wallet.support$,
+        timer(timeoutMs).pipe(
+          map(() => {
+            throw new Error(
+              "Wallet connection timeout - wallet service not responding",
+            );
+          }),
+        ),
+      ),
+    );
+
+    // Keep support$ subscribed to prevent ReplaySubject reset
+    supportSubscription = wallet.support$.subscribe();
+
+    console.log("[NWC] Wallet ready");
+  } catch (error) {
+    console.error("[NWC] Failed to get wallet support info:", error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -145,23 +201,42 @@ function subscribeToNotifications(wallet: WalletConnect) {
 /**
  * Creates a new wallet connection from a NWC URI.
  * Used when user connects a new wallet.
+ * Waits for wallet to be ready before returning.
  */
-export function createWalletFromURI(connectionString: string): WalletConnect {
+export async function createWalletFromURI(
+  connectionString: string,
+): Promise<WalletConnect> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
 
   const wallet = WalletConnect.fromConnectURI(connectionString);
   wallet$.next(wallet);
 
+  // Subscribe to notifications to keep events$ alive
   subscribeToNotifications(wallet);
-  refreshBalance(); // Fetch initial balance
+
+  // Wait for wallet to be ready (support$ must emit)
+  try {
+    await waitForSupport(wallet, 15000);
+    connectionStatus$.next("connected");
+    // Start fetching balance after wallet is ready
+    refreshBalance();
+  } catch (error) {
+    console.error("[NWC] Wallet connection failed:", error);
+    connectionStatus$.next("error");
+    lastError$.next(
+      error instanceof Error ? error : new Error("Connection failed"),
+    );
+    throw error; // Re-throw so the dialog can show the error
+  }
 
   return wallet;
 }
 
 /**
  * Restores a wallet from saved connection data.
- * Validates the connection before marking as connected.
+ * Sets up notification subscription first to keep events$ alive,
+ * then waits for support info to validate the connection.
  */
 export async function restoreWallet(
   connection: NWCConnection,
@@ -182,30 +257,26 @@ export async function restoreWallet(
     balance$.next(connection.balance);
   }
 
-  // Validate connection by waiting for support info
+  // IMPORTANT: Subscribe to notifications FIRST to keep events$ alive.
+  // This ensures the relay subscription is established before we wait for support$.
+  // Without this, support$ might never emit because there's no active subscription.
+  subscribeToNotifications(wallet);
+
+  // Now wait for support$ to emit (validates the wallet is responding)
+  // This uses a longer timeout since we need the relay to connect and wallet to respond
   try {
-    await firstValueFrom(
-      wallet.support$.pipe(
-        timeout({
-          first: 10000,
-          with: () => {
-            throw new Error("Connection timeout");
-          },
-        }),
-      ),
-    );
+    await waitForSupport(wallet, 15000);
     connectionStatus$.next("connected");
+    // Start fetching balance after wallet is ready
+    refreshBalance();
   } catch (error) {
-    console.error("[NWC] Validation failed:", error);
+    console.error("[NWC] Wallet validation failed:", error);
     connectionStatus$.next("error");
     lastError$.next(
       error instanceof Error ? error : new Error("Connection failed"),
     );
-    // Continue anyway - notifications will retry
+    // Don't call refreshBalance() here - the wallet isn't ready and it would hang
   }
-
-  subscribeToNotifications(wallet);
-  refreshBalance();
 
   return wallet;
 }
@@ -214,9 +285,11 @@ export async function restoreWallet(
  * Disconnects and clears the wallet.
  */
 export function clearWallet(): void {
-  // Clean up subscription and pending retry
+  // Clean up subscriptions and pending retry
   notificationSubscription?.unsubscribe();
   notificationSubscription = null;
+  supportSubscription?.unsubscribe();
+  supportSubscription = null;
   if (notificationRetryTimeout) {
     clearTimeout(notificationRetryTimeout);
     notificationRetryTimeout = null;
@@ -290,8 +363,21 @@ export async function reconnect(): Promise<void> {
   connectionStatus$.next("connecting");
   lastError$.next(null);
 
+  // Re-subscribe to notifications (this keeps events$ alive)
   subscribeToNotifications(wallet);
-  await refreshBalance();
+
+  // Wait for wallet to become ready
+  try {
+    await waitForSupport(wallet, 15000);
+    connectionStatus$.next("connected");
+    await refreshBalance();
+  } catch (error) {
+    console.error("[NWC] Reconnect failed:", error);
+    connectionStatus$.next("error");
+    lastError$.next(
+      error instanceof Error ? error : new Error("Reconnection failed"),
+    );
+  }
 }
 
 // ============================================================================
