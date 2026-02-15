@@ -140,4 +140,5 @@ export interface GrimoireState {
   };
   nwcConnection?: NWCConnection;
   walletBalancesBlurred?: boolean; // Privacy: blur balances and transaction amounts
+  cashuWalletSyncEnabled?: boolean; // Keep NIP-60 Cashu wallet unlocked and synced
 }

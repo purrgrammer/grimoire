@@ -43,6 +43,7 @@ const BlossomViewer = lazy(() =>
   import("./BlossomViewer").then((m) => ({ default: m.BlossomViewer })),
 );
 const WalletViewer = lazy(() => import("./WalletViewer"));
+const Nip61WalletViewer = lazy(() => import("./Nip61WalletViewer"));
 const ZapWindow = lazy(() =>
   import("./ZapWindow").then((m) => ({ default: m.ZapWindow })),
 );
@@ -236,9 +237,15 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
           />
         );
         break;
-      case "wallet":
-        content = <WalletViewer />;
+      case "wallet": {
+        const walletSubcommand = window.props.subcommand || "nwc";
+        if (walletSubcommand === "nip-61") {
+          content = <Nip61WalletViewer />;
+        } else {
+          content = <WalletViewer />;
+        }
         break;
+      }
       case "zap":
         content = (
           <ZapWindow
