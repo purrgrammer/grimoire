@@ -1,9 +1,52 @@
 import { map } from "rxjs/operators";
 import { RelayAuthManager } from "relay-auth-manager";
-import type { AuthSigner } from "relay-auth-manager";
+import type { AuthSigner, AuthPreference } from "relay-auth-manager";
 import { canAccountSign } from "@/hooks/useAccount";
 import pool from "./relay-pool";
 import accountManager from "./accounts";
+import db from "./db";
+
+const STORAGE_KEY = "relay-auth-preferences";
+
+/**
+ * One-time migration: move auth preferences from Dexie to localStorage.
+ * Runs in the background on first load. After migration, Dexie rows are
+ * cleared so it doesn't run again.
+ */
+function migrateFromDexie() {
+  // Skip if localStorage already has preferences (already migrated)
+  if (localStorage.getItem(STORAGE_KEY)) return;
+
+  db.relayAuthPreferences
+    .toArray()
+    .then((rows) => {
+      if (rows.length === 0) return;
+
+      const prefs: Record<string, string> = {};
+      for (const row of rows) {
+        if (
+          row.preference === "always" ||
+          row.preference === "never" ||
+          row.preference === "ask"
+        ) {
+          prefs[row.url] = row.preference;
+        }
+      }
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+
+      // Inject into the already-running manager
+      for (const [url, pref] of Object.entries(prefs)) {
+        relayAuthManager.setPreference(url, pref as AuthPreference);
+      }
+
+      // Clean up Dexie table
+      db.relayAuthPreferences.clear();
+    })
+    .catch(() => {
+      // Ignore migration errors — user just re-answers prompts
+    });
+}
 
 /**
  * Singleton RelayAuthManager instance for Grimoire.
@@ -23,10 +66,11 @@ const relayAuthManager = new RelayAuthManager({
     }),
   ),
 
-  // Use localStorage for preference persistence
   storage: localStorage,
-
-  // Use "relay-auth-preferences" key (default)
+  storageKey: STORAGE_KEY,
 });
+
+// Run one-time migration from Dexie → localStorage
+migrateFromDexie();
 
 export default relayAuthManager;
