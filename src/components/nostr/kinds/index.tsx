@@ -161,6 +161,10 @@ import { PollDetailRenderer } from "./PollDetailRenderer";
 import { PollResponseRenderer } from "./PollResponseRenderer";
 import { ReportRenderer, ReportDetailRenderer } from "./ReportRenderer";
 import { ThreadRenderer } from "./ThreadRenderer";
+import { TrustedAssertionRenderer } from "./TrustedAssertionRenderer";
+import { TrustedAssertionDetailRenderer } from "./TrustedAssertionDetailRenderer";
+import { TrustedProviderListRenderer } from "./TrustedProviderListRenderer";
+import { TrustedProviderListDetailRenderer } from "./TrustedProviderListDetailRenderer";
 
 /**
  * Registry of kind-specific renderers
@@ -215,6 +219,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10015: InterestListRenderer, // Interest List (NIP-51)
   10020: MediaFollowListRenderer, // Media Follow List (NIP-51)
   10030: EmojiListRenderer, // User Emoji List (NIP-51)
+  10040: TrustedProviderListRenderer, // Trusted Provider List (NIP-85)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
   10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
@@ -238,6 +243,10 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30166: RelayDiscoveryRenderer, // Relay Discovery (NIP-66)
   30267: ZapstoreAppSetRenderer, // Zapstore App Collection
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
+  30382: TrustedAssertionRenderer, // User Assertion (NIP-85)
+  30383: TrustedAssertionRenderer, // Event Assertion (NIP-85)
+  30384: TrustedAssertionRenderer, // Address Assertion (NIP-85)
+  30385: TrustedAssertionRenderer, // External Assertion (NIP-85)
   34235: Kind21Renderer, // Horizontal Video (NIP-71 legacy)
   34236: Kind22Renderer, // Vertical Video (NIP-71 legacy)
   30617: RepositoryRenderer, // Repository (NIP-34)
@@ -321,6 +330,7 @@ const detailRenderers: Record<
   10004: CommunityListDetailRenderer, // Community List Detail (NIP-51)
   10005: ChannelListDetailRenderer, // Channel List Detail (NIP-51)
   10015: InterestListDetailRenderer, // Interest List Detail (NIP-51)
+  10040: TrustedProviderListDetailRenderer, // Trusted Provider List Detail (NIP-85)
   10020: MediaFollowListDetailRenderer, // Media Follow List Detail (NIP-51)
   10030: EmojiListDetailRenderer, // User Emoji List Detail (NIP-51)
   10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
@@ -344,6 +354,10 @@ const detailRenderers: Record<
   30166: RelayDiscoveryDetailRenderer, // Relay Discovery Detail (NIP-66)
   30267: ZapstoreAppSetDetailRenderer, // Zapstore App Collection Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
+  30382: TrustedAssertionDetailRenderer, // User Assertion Detail (NIP-85)
+  30383: TrustedAssertionDetailRenderer, // Event Assertion Detail (NIP-85)
+  30384: TrustedAssertionDetailRenderer, // Address Assertion Detail (NIP-85)
+  30385: TrustedAssertionDetailRenderer, // External Assertion Detail (NIP-85)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)

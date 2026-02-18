@@ -829,6 +829,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   //   nip: "Marmot",
   //   icon: Key,
   // },
+  10040: {
+    kind: 10040,
+    name: "Trusted Providers",
+    description: "Trusted Assertion Provider List",
+    nip: "85",
+    icon: Shield,
+  },
   10063: {
     kind: 10063,
     name: "Blossom Server List",
@@ -1219,6 +1226,34 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Live Event",
     nip: "53",
     icon: Video,
+  },
+  30382: {
+    kind: 30382,
+    name: "User Assertion",
+    description: "Trusted Assertion: User",
+    nip: "85",
+    icon: BarChart3,
+  },
+  30383: {
+    kind: 30383,
+    name: "Event Assertion",
+    description: "Trusted Assertion: Event",
+    nip: "85",
+    icon: BarChart3,
+  },
+  30384: {
+    kind: 30384,
+    name: "Address Assertion",
+    description: "Trusted Assertion: Addressable Event",
+    nip: "85",
+    icon: BarChart3,
+  },
+  30385: {
+    kind: 30385,
+    name: "External Assertion",
+    description: "Trusted Assertion: External Identifier",
+    nip: "85",
+    icon: BarChart3,
   },
   30312: {
     kind: 30312,
