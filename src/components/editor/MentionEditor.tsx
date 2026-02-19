@@ -214,6 +214,7 @@ export const MentionEditor = forwardRef<
                         label: props.shortcode,
                         url: props.url,
                         source: props.source,
+                        mentionSuggestionChar: ":",
                       },
                     },
                     { type: "text", text: " " },

@@ -195,6 +195,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
                         label: props.shortcode,
                         url: props.url,
                         source: props.source,
+                        mentionSuggestionChar: ":",
                       },
                     },
                     { type: "text", text: " " },
