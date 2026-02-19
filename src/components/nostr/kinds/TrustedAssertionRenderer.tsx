@@ -16,35 +16,31 @@ import {
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
+function rankColor(rank: number) {
+  if (rank >= 70) return { indicator: "bg-green-600", text: "text-green-600" };
+  if (rank >= 40)
+    return { indicator: "bg-yellow-600", text: "text-yellow-600" };
+  return { indicator: "bg-red-600", text: "text-red-600" };
+}
+
 /**
- * Color-coded rank bar: green (>=70), yellow (40-69), red (<40)
+ * Color-coded rank bar using Progress component
  */
 function RankBar({ rank }: { rank: number }) {
   const clamped = Math.min(100, Math.max(0, rank));
-  const color =
-    clamped >= 70
-      ? "bg-green-600"
-      : clamped >= 40
-        ? "bg-yellow-600"
-        : "bg-red-600";
-  const textColor =
-    clamped >= 70
-      ? "text-green-600"
-      : clamped >= 40
-        ? "text-yellow-600"
-        : "text-red-600";
+  const { indicator, text } = rankColor(clamped);
 
   return (
     <div className="flex items-center gap-1.5">
-      <div className="h-2 w-32 rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all", color)}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-      <span className={cn("text-xs font-semibold tabular-nums", textColor)}>
+      <Progress
+        value={clamped}
+        className="w-32 bg-muted"
+        indicatorClassName={indicator}
+      />
+      <span className={cn("text-xs font-semibold tabular-nums", text)}>
         {rank}
       </span>
     </div>
@@ -126,7 +122,7 @@ function MetricsPreview({
   const tags = getAssertionTags(event);
   const rankTag = tags.find((t) => t.name === "rank");
 
-  let summaryMetrics: { label: string; value: string }[] = [];
+  let summaryMetrics: { label: string; value: string; unit?: string }[] = [];
 
   if (event.kind === 30382) {
     const data = getUserAssertionData(event);
@@ -143,7 +139,8 @@ function MetricsPreview({
     if (data.zapAmountReceived !== undefined)
       summaryMetrics.push({
         label: "Zaps In",
-        value: `${data.zapAmountReceived.toLocaleString()} sats`,
+        value: data.zapAmountReceived.toLocaleString(),
+        unit: "sats",
       });
   } else if (event.kind === 30383 || event.kind === 30384) {
     const data = getEventAssertionData(event);
@@ -160,7 +157,8 @@ function MetricsPreview({
     if (data.zapAmount !== undefined)
       summaryMetrics.push({
         label: "Zaps",
-        value: `${data.zapAmount.toLocaleString()} sats`,
+        value: data.zapAmount.toLocaleString(),
+        unit: "sats",
       });
   } else if (event.kind === 30385) {
     const data = getExternalAssertionData(event);
@@ -199,7 +197,10 @@ function MetricsPreview({
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {summaryMetrics.map((m) => (
             <span key={m.label} className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{m.value}</span>{" "}
+              <span className="font-medium text-foreground">{m.value}</span>
+              {m.unit && (
+                <span className="text-muted-foreground"> {m.unit}</span>
+              )}{" "}
               {m.label}
             </span>
           ))}

@@ -17,40 +17,36 @@ import {
 } from "@/lib/nip73-helpers";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { ShieldCheck, User, FileText, Hash } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
+function rankColor(rank: number) {
+  if (rank >= 70) return { indicator: "bg-green-600", text: "text-green-600" };
+  if (rank >= 40)
+    return { indicator: "bg-yellow-600", text: "text-yellow-600" };
+  return { indicator: "bg-red-600", text: "text-red-600" };
+}
+
 /**
- * Color-coded rank bar with label
+ * Color-coded rank bar with label, using Progress component
  */
 function RankBar({ rank }: { rank: number }) {
   const clamped = Math.min(100, Math.max(0, rank));
-  const color =
-    clamped >= 70
-      ? "bg-green-600"
-      : clamped >= 40
-        ? "bg-yellow-600"
-        : "bg-red-600";
-  const textColor =
-    clamped >= 70
-      ? "text-green-600"
-      : clamped >= 40
-        ? "text-yellow-600"
-        : "text-red-600";
+  const { indicator, text } = rankColor(clamped);
 
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm text-muted-foreground">Rank</span>
       <div className="flex items-center gap-3">
-        <div className="h-2.5 flex-1 rounded-full bg-muted overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-all", color)}
-            style={{ width: `${clamped}%` }}
-          />
-        </div>
+        <Progress
+          value={clamped}
+          className="flex-1 bg-muted"
+          indicatorClassName={indicator}
+        />
         <span
           className={cn(
             "text-sm font-semibold tabular-nums w-12 text-right",
-            textColor,
+            text,
           )}
         >
           {rank}/100
@@ -66,14 +62,23 @@ function RankBar({ rank }: { rank: number }) {
 function MetricRow({
   label,
   value,
+  unit,
 }: {
   label: string;
   value: string | number;
+  unit?: string;
 }) {
   return (
     <div className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium tabular-nums">{value}</span>
+      <span className="text-sm font-medium tabular-nums">
+        {value}
+        {unit && (
+          <span className="text-xs font-normal text-muted-foreground ml-1">
+            {unit}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -149,8 +154,10 @@ function SubjectHeader({
 function UserMetrics({ event }: { event: NostrEvent }) {
   const data = getUserAssertionData(event);
 
+  type Metric = { label: string; value: string | number; unit?: string };
+
   // Activity section
-  const activity: { label: string; value: string | number }[] = [];
+  const activity: Metric[] = [];
   if (data.postCount !== undefined)
     activity.push({ label: "Posts", value: data.postCount.toLocaleString() });
   if (data.replyCount !== undefined)
@@ -180,16 +187,18 @@ function UserMetrics({ event }: { event: NostrEvent }) {
     });
 
   // Zaps section
-  const zaps: { label: string; value: string | number }[] = [];
+  const zaps: Metric[] = [];
   if (data.zapAmountReceived !== undefined)
     zaps.push({
       label: "Received",
-      value: `${data.zapAmountReceived.toLocaleString()} sats`,
+      value: data.zapAmountReceived.toLocaleString(),
+      unit: "sats",
     });
   if (data.zapAmountSent !== undefined)
     zaps.push({
       label: "Sent",
-      value: `${data.zapAmountSent.toLocaleString()} sats`,
+      value: data.zapAmountSent.toLocaleString(),
+      unit: "sats",
     });
   if (data.zapCountReceived !== undefined)
     zaps.push({
@@ -204,16 +213,18 @@ function UserMetrics({ event }: { event: NostrEvent }) {
   if (data.zapAvgAmountDayReceived !== undefined)
     zaps.push({
       label: "Avg/Day In",
-      value: `${data.zapAvgAmountDayReceived.toLocaleString()} sats`,
+      value: data.zapAvgAmountDayReceived.toLocaleString(),
+      unit: "sats",
     });
   if (data.zapAvgAmountDaySent !== undefined)
     zaps.push({
       label: "Avg/Day Out",
-      value: `${data.zapAvgAmountDaySent.toLocaleString()} sats`,
+      value: data.zapAvgAmountDaySent.toLocaleString(),
+      unit: "sats",
     });
 
   // Moderation section
-  const moderation: { label: string; value: string | number }[] = [];
+  const moderation: Metric[] = [];
   if (data.reportsReceived !== undefined)
     moderation.push({
       label: "Reports Received",
@@ -231,7 +242,12 @@ function UserMetrics({ event }: { event: NostrEvent }) {
         <div className="flex flex-col">
           <SectionHeader>Activity</SectionHeader>
           {activity.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} />
+            <MetricRow
+              key={m.label}
+              label={m.label}
+              value={m.value}
+              unit={m.unit}
+            />
           ))}
         </div>
       )}
@@ -240,7 +256,12 @@ function UserMetrics({ event }: { event: NostrEvent }) {
         <div className="flex flex-col">
           <SectionHeader>Zaps</SectionHeader>
           {zaps.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} />
+            <MetricRow
+              key={m.label}
+              label={m.label}
+              value={m.value}
+              unit={m.unit}
+            />
           ))}
         </div>
       )}
@@ -249,7 +270,12 @@ function UserMetrics({ event }: { event: NostrEvent }) {
         <div className="flex flex-col">
           <SectionHeader>Moderation</SectionHeader>
           {moderation.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} />
+            <MetricRow
+              key={m.label}
+              label={m.label}
+              value={m.value}
+              unit={m.unit}
+            />
           ))}
         </div>
       )}
@@ -280,7 +306,8 @@ function UserMetrics({ event }: { event: NostrEvent }) {
 function EventMetrics({ event }: { event: NostrEvent }) {
   const data = getEventAssertionData(event);
 
-  const metrics: { label: string; value: string | number }[] = [];
+  const metrics: { label: string; value: string | number; unit?: string }[] =
+    [];
   if (data.commentCount !== undefined)
     metrics.push({
       label: "Comments",
@@ -303,7 +330,8 @@ function EventMetrics({ event }: { event: NostrEvent }) {
   if (data.zapAmount !== undefined)
     metrics.push({
       label: "Zap Amount",
-      value: `${data.zapAmount.toLocaleString()} sats`,
+      value: data.zapAmount.toLocaleString(),
+      unit: "sats",
     });
 
   if (metrics.length === 0) return null;
@@ -325,7 +353,8 @@ function ExternalMetrics({ event }: { event: NostrEvent }) {
   const data = getExternalAssertionData(event);
   const types = getExternalAssertionTypes(event);
 
-  const metrics: { label: string; value: string | number }[] = [];
+  const metrics: { label: string; value: string | number; unit?: string }[] =
+    [];
   if (data.commentCount !== undefined)
     metrics.push({
       label: "Comments",
@@ -362,7 +391,12 @@ function ExternalMetrics({ event }: { event: NostrEvent }) {
         <div className="flex flex-col">
           <SectionHeader>Engagement</SectionHeader>
           {metrics.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} />
+            <MetricRow
+              key={m.label}
+              label={m.label}
+              value={m.value}
+              unit={m.unit}
+            />
           ))}
         </div>
       )}
