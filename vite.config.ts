@@ -12,6 +12,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Resolve workspace package source directly (bypasses dist/)
+      "relay-auth-manager": path.resolve(
+        __dirname,
+        "./packages/relay-auth-manager/src/index.ts",
+      ),
     },
   },
   server: {

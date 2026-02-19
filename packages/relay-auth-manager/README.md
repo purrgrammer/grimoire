@@ -12,8 +12,8 @@ This is a workspace package. It has a single peer dependency on `rxjs >= 7`.
 import { RelayAuthManager } from "relay-auth-manager";
 
 const manager = new RelayAuthManager({
-  pool,       // relay pool (applesauce-relay compatible)
-  signer$,    // Observable<AuthSigner | null>
+  pool, // relay pool (applesauce-relay compatible)
+  signer$, // Observable<AuthSigner | null>
   storage: localStorage, // optional persistence
 });
 
@@ -40,15 +40,15 @@ manager.setPreference("wss://relay.example.com", "always");
 new RelayAuthManager(options: RelayAuthManagerOptions)
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `pool` | `AuthRelayPool` | *required* | Relay pool to monitor. Relays are auto-monitored on `add$` and cleaned up on `remove$`. |
-| `signer$` | `Observable<AuthSigner \| null>` | *required* | Current signer. Emit `null` when logged out or read-only. |
-| `storage` | `AuthPreferenceStorage` | `undefined` | Persistent storage for preferences. Anything with `getItem`/`setItem` works. |
-| `storageKey` | `string` | `"relay-auth-preferences"` | Key used in storage. |
-| `challengeTTL` | `number` | `300000` (5 min) | How long a challenge stays pending before being filtered out. |
-| `initialRelays` | `Iterable<AuthRelay>` | `[]` | Relays already in the pool at creation time. |
-| `normalizeUrl` | `(url: string) => string` | adds `wss://`, strips trailing `/` | Custom URL normalizer. Applied to all URLs used as map keys (preferences, state lookups). Provide this if your app uses a different normalization (e.g., lowercase hostname, trailing slash). |
+| Option          | Type                             | Default                            | Description                                                                                                                                                                                   |
+| --------------- | -------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pool`          | `AuthRelayPool`                  | _required_                         | Relay pool to monitor. Relays are auto-monitored on `add$` and cleaned up on `remove$`.                                                                                                       |
+| `signer$`       | `Observable<AuthSigner \| null>` | _required_                         | Current signer. Emit `null` when logged out or read-only.                                                                                                                                     |
+| `storage`       | `AuthPreferenceStorage`          | `undefined`                        | Persistent storage for preferences. Anything with `getItem`/`setItem` works.                                                                                                                  |
+| `storageKey`    | `string`                         | `"relay-auth-preferences"`         | Key used in storage.                                                                                                                                                                          |
+| `challengeTTL`  | `number`                         | `300000` (5 min)                   | How long a challenge stays pending before being filtered out.                                                                                                                                 |
+| `initialRelays` | `Iterable<AuthRelay>`            | `[]`                               | Relays already in the pool at creation time.                                                                                                                                                  |
+| `normalizeUrl`  | `(url: string) => string`        | adds `wss://`, strips trailing `/` | Custom URL normalizer. Applied to all URLs used as map keys (preferences, state lookups). Provide this if your app uses a different normalization (e.g., lowercase hostname, trailing slash). |
 
 ## Observables
 
@@ -67,6 +67,7 @@ manager.states$.subscribe((states) => {
 ### `pendingChallenges$: BehaviorSubject<PendingAuthChallenge[]>`
 
 Challenges that need user interaction. Already filtered — only includes relays where:
+
 - Status is `"challenge_received"`
 - A signer is available
 - Challenge hasn't expired
@@ -77,40 +78,40 @@ Challenges that need user interaction. Already filtered — only includes relays
 
 ### Authentication
 
-| Method | Description |
-|--------|-------------|
-| `authenticate(relayUrl)` | Accept a pending challenge. Signs and sends AUTH. Returns a Promise that resolves when `authenticated$` confirms. Rejects if relay disconnects, auth fails, or preconditions aren't met (no challenge, no signer, relay not monitored). |
-| `retry(relayUrl)` | Retry authentication for a relay in `"failed"` state. Re-reads the challenge from the relay. Same promise semantics as `authenticate()`. |
-| `reject(relayUrl, rememberForSession?)` | Reject a challenge. If `rememberForSession` is `true` (default), suppresses future prompts for this relay until page reload. |
+| Method                                  | Description                                                                                                                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authenticate(relayUrl)`                | Accept a pending challenge. Signs and sends AUTH. Returns a Promise that resolves when `authenticated$` confirms. Rejects if relay disconnects, auth fails, or preconditions aren't met (no challenge, no signer, relay not monitored). |
+| `retry(relayUrl)`                       | Retry authentication for a relay in `"failed"` state. Re-reads the challenge from the relay. Same promise semantics as `authenticate()`.                                                                                                |
+| `reject(relayUrl, rememberForSession?)` | Reject a challenge. If `rememberForSession` is `true` (default), suppresses future prompts for this relay until page reload.                                                                                                            |
 
 ### Preferences
 
-| Method | Description |
-|--------|-------------|
+| Method                     | Description                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `setPreference(url, pref)` | Set `"always"`, `"never"`, or `"ask"` for a relay. Persisted to storage. URL is normalized for consistent matching. |
-| `getPreference(url)` | Get preference for a relay, or `undefined`. |
-| `removePreference(url)` | Remove a preference. Returns `true` if one existed. Persisted to storage. |
-| `getAllPreferences()` | `ReadonlyMap<string, AuthPreference>` of all preferences. |
+| `getPreference(url)`       | Get preference for a relay, or `undefined`.                                                                         |
+| `removePreference(url)`    | Remove a preference. Returns `true` if one existed. Persisted to storage.                                           |
+| `getAllPreferences()`      | `ReadonlyMap<string, AuthPreference>` of all preferences.                                                           |
 
 ### Relay Monitoring
 
-| Method | Description |
-|--------|-------------|
+| Method                | Description                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------ |
 | `monitorRelay(relay)` | Start monitoring a relay for challenges. Idempotent. Called automatically for pool relays. |
-| `unmonitorRelay(url)` | Stop monitoring. Called automatically on pool `remove$`. |
+| `unmonitorRelay(url)` | Stop monitoring. Called automatically on pool `remove$`.                                   |
 
 ### State Queries
 
-| Method | Description |
-|--------|-------------|
-| `getRelayState(url)` | Get `RelayAuthState` snapshot for a single relay. Returns a copy, not a live reference. |
-| `getAllStates()` | Snapshot of all states. Same as `states$.value`. |
-| `hasSignerAvailable()` | Whether a signer is currently available. |
+| Method                 | Description                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `getRelayState(url)`   | Get `RelayAuthState` snapshot for a single relay. Returns a copy, not a live reference. |
+| `getAllStates()`       | Snapshot of all states. Same as `states$.value`.                                        |
+| `hasSignerAvailable()` | Whether a signer is currently available.                                                |
 
 ### Lifecycle
 
-| Method | Description |
-|--------|-------------|
+| Method      | Description                                                                |
+| ----------- | -------------------------------------------------------------------------- |
 | `destroy()` | Unsubscribe everything, complete observables. Safe to call multiple times. |
 
 ## Auth Lifecycle
@@ -131,11 +132,11 @@ Disconnect from any state resets to `none`. Failed relays can be retried via `re
 
 Preferences control what happens when a challenge arrives:
 
-| Preference | Behavior |
-|------------|----------|
-| `"always"` | Auto-authenticate (no user prompt). Waits for signer if unavailable. |
-| `"never"` | Auto-reject (no user prompt). |
-| `"ask"` | Show in `pendingChallenges$` for user to decide. This is the default. |
+| Preference | Behavior                                                              |
+| ---------- | --------------------------------------------------------------------- |
+| `"always"` | Auto-authenticate (no user prompt). Waits for signer if unavailable.  |
+| `"never"`  | Auto-reject (no user prompt).                                         |
+| `"ask"`    | Show in `pendingChallenges$` for user to decide. This is the default. |
 
 ## Storage
 

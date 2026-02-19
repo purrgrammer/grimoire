@@ -24,7 +24,8 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "relay-auth-manager": ["./packages/relay-auth-manager/src/index.ts"]
     }
   },
   "include": ["src"]
