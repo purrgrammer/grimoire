@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -65,9 +65,9 @@ export interface MarkdownEditorHandle {
   /** Insert a blob attachment with rich preview */
   insertBlob: (blob: BlobAttachment) => void;
   /** Get editor state as JSON (for persistence/drafts) */
-  getJSON: () => any;
+  getJSON: () => JSONContent | null;
   /** Restore editor content from JSON */
-  setContent: (json: any) => void;
+  setContent: (json: JSONContent) => void;
 }
 
 // Create emoji extension by extending Mention with a different name and custom node view
@@ -159,7 +159,7 @@ export const MarkdownEditor = forwardRef<
   ) => {
     const [preview, setPreview] = useState(false);
     const [previewContent, setPreviewContent] = useState("");
-    const handleSubmitRef = useRef<(editor: any) => void>(() => {});
+    const handleSubmitRef = useRef<(editor: Editor) => void>(() => {});
 
     // Create mention suggestion configuration
     const mentionSuggestion: Omit<SuggestionOptions, "editor"> = useMemo(
@@ -289,7 +289,7 @@ export const MarkdownEditor = forwardRef<
 
     // Handle submit
     const handleSubmit = useCallback(
-      (editorInstance: any) => {
+      (editorInstance: Editor) => {
         if (editorInstance.isEmpty) return;
 
         const serialized = serializeEditorToMarkdown(editorInstance);
@@ -340,17 +340,16 @@ export const MarkdownEditor = forwardRef<
           HTMLAttributes: { class: "mention" },
           suggestion: {
             ...mentionSuggestion,
-            command: ({ editor, range, props }: any) => {
-              editor
-                .chain()
+            command: ({ editor: ed, range: r, props: mentionAttrs }) => {
+              // items() returns ProfileSearchResult[]; the selected item is
+              // passed as props at runtime despite being typed as MentionNodeAttrs
+              const p = mentionAttrs as unknown as ProfileSearchResult;
+              ed.chain()
                 .focus()
-                .insertContentAt(range, [
+                .insertContentAt(r, [
                   {
                     type: "mention",
-                    attrs: {
-                      id: props.pubkey,
-                      label: props.displayName,
-                    },
+                    attrs: { id: p.pubkey, label: p.displayName },
                   },
                   { type: "text", text: " " },
                 ])
@@ -374,18 +373,20 @@ export const MarkdownEditor = forwardRef<
             HTMLAttributes: { class: "emoji" },
             suggestion: {
               ...emojiSuggestion,
-              command: ({ editor, range, props }: any) => {
-                editor
-                  .chain()
+              command: ({ editor: ed, range: r, props: mentionAttrs }) => {
+                // items() returns EmojiSearchResult[]; the selected item is
+                // passed as props at runtime despite being typed as MentionNodeAttrs
+                const p = mentionAttrs as unknown as EmojiSearchResult;
+                ed.chain()
                   .focus()
-                  .insertContentAt(range, [
+                  .insertContentAt(r, [
                     {
                       type: "emoji",
                       attrs: {
-                        id: props.shortcode,
-                        label: props.shortcode,
-                        url: props.url,
-                        source: props.source,
+                        id: p.shortcode,
+                        label: p.shortcode,
+                        url: p.url,
+                        source: p.source,
                       },
                     },
                     { type: "text", text: " " },
@@ -484,7 +485,7 @@ export const MarkdownEditor = forwardRef<
           if (!isEditorReady()) return null;
           return editor?.getJSON() || null;
         },
-        setContent: (json: any) => {
+        setContent: (json: JSONContent) => {
           if (isEditorReady() && json) {
             editor?.commands.setContent(json);
           }

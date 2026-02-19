@@ -1,4 +1,10 @@
+import type { Editor } from "@tiptap/core";
+import type {
+  Node as ProseMirrorNode,
+  Mark as ProseMirrorMark,
+} from "@tiptap/pm/model";
 import { nip19 } from "nostr-tools";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type {
   EmojiTag,
   BlobAttachment,
@@ -15,7 +21,7 @@ import type {
  * Returns both the markdown string and extracted metadata (emoji tags, blob
  * attachments, address refs) needed for building Nostr events.
  */
-export function serializeEditorToMarkdown(editor: any): SerializedContent {
+export function serializeEditorToMarkdown(editor: Editor): SerializedContent {
   const emojiTags: EmojiTag[] = [];
   const blobAttachments: BlobAttachment[] = [];
   const addressRefs: Array<{
@@ -27,7 +33,7 @@ export function serializeEditorToMarkdown(editor: any): SerializedContent {
   const seenBlobs = new Set<string>();
   const seenAddrs = new Set<string>();
 
-  const ctx = {
+  const ctx: SerializerContext = {
     emojiTags,
     blobAttachments,
     addressRefs,
@@ -55,13 +61,13 @@ interface SerializerContext {
  * Serialize all block-level children of a node, joined by double newlines.
  */
 function serializeBlocks(
-  node: any,
+  node: ProseMirrorNode,
   ctx: SerializerContext,
   indent: string,
 ): string {
   const blocks: string[] = [];
 
-  node.forEach((child: any) => {
+  node.forEach((child) => {
     const result = serializeBlock(child, ctx, indent);
     if (result !== null) {
       blocks.push(result);
@@ -75,7 +81,7 @@ function serializeBlocks(
  * Serialize a single block-level node to markdown.
  */
 function serializeBlock(
-  node: any,
+  node: ProseMirrorNode,
   ctx: SerializerContext,
   indent: string,
 ): string | null {
@@ -84,13 +90,13 @@ function serializeBlock(
       return indent + serializeInline(node, ctx);
 
     case "heading": {
-      const level = node.attrs.level || 1;
+      const level = (node.attrs.level as number) || 1;
       const prefix = "#".repeat(Math.min(level, 6));
       return `${indent}${prefix} ${serializeInline(node, ctx)}`;
     }
 
     case "codeBlock": {
-      const lang = node.attrs.language || "";
+      const lang = (node.attrs.language as string) || "";
       const code = node.textContent;
       return `${indent}\`\`\`${lang}\n${code}\n${indent}\`\`\``;
     }
@@ -105,7 +111,7 @@ function serializeBlock(
 
     case "bulletList": {
       const items: string[] = [];
-      node.forEach((item: any) => {
+      node.forEach((item) => {
         const content = serializeListItemContent(item, ctx, indent + "  ");
         items.push(`${indent}- ${content}`);
       });
@@ -114,8 +120,8 @@ function serializeBlock(
 
     case "orderedList": {
       const items: string[] = [];
-      const start = node.attrs.start || 1;
-      node.forEach((item: any, _offset: number, idx: number) => {
+      const start = (node.attrs.start as number) || 1;
+      node.forEach((item, _offset, idx) => {
         const num = start + idx;
         const content = serializeListItemContent(item, ctx, indent + "   ");
         items.push(`${indent}${num}. ${content}`);
@@ -127,7 +133,11 @@ function serializeBlock(
       return `${indent}---`;
 
     case "blobAttachment": {
-      const { url, sha256, mimeType, size, server } = node.attrs;
+      const url = node.attrs.url as string;
+      const sha256 = node.attrs.sha256 as string;
+      const mimeType = node.attrs.mimeType as string | undefined;
+      const size = node.attrs.size as number | undefined;
+      const server = node.attrs.server as string | undefined;
       if (!ctx.seenBlobs.has(sha256)) {
         ctx.seenBlobs.add(sha256);
         ctx.blobAttachments.push({ url, sha256, mimeType, size, server });
@@ -140,20 +150,25 @@ function serializeBlock(
     }
 
     case "nostrEventPreview": {
-      const { type, data } = node.attrs;
+      const previewType = node.attrs.type as string;
+      const previewData = node.attrs.data as
+        | string
+        | EventPointer
+        | AddressPointer;
       // Collect address refs for manual a-tags
-      if (type === "naddr" && data) {
-        const key = `${data.kind}:${data.pubkey}:${data.identifier || ""}`;
+      if (previewType === "naddr" && previewData) {
+        const addr = previewData as AddressPointer;
+        const key = `${addr.kind}:${addr.pubkey}:${addr.identifier || ""}`;
         if (!ctx.seenAddrs.has(key)) {
           ctx.seenAddrs.add(key);
           ctx.addressRefs.push({
-            kind: data.kind,
-            pubkey: data.pubkey,
-            identifier: data.identifier || "",
+            kind: addr.kind,
+            pubkey: addr.pubkey,
+            identifier: addr.identifier || "",
           });
         }
       }
-      return `${indent}${renderNostrEventPreviewText(type, data)}`;
+      return `${indent}${renderNostrEventPreviewText(previewType, previewData)}`;
     }
 
     default:
@@ -170,14 +185,14 @@ function serializeBlock(
  * subsequent blocks get their own lines with indentation.
  */
 function serializeListItemContent(
-  item: any,
+  item: ProseMirrorNode,
   ctx: SerializerContext,
   continuationIndent: string,
 ): string {
   const parts: string[] = [];
   let first = true;
 
-  item.forEach((child: any) => {
+  item.forEach((child) => {
     if (first) {
       // First child is inlined (no leading indent)
       parts.push(serializeBlock(child, ctx, "") || "");
@@ -194,10 +209,13 @@ function serializeListItemContent(
 /**
  * Serialize inline content of a block node (text with marks + inline nodes).
  */
-function serializeInline(node: any, ctx: SerializerContext): string {
+function serializeInline(
+  node: ProseMirrorNode,
+  ctx: SerializerContext,
+): string {
   let result = "";
 
-  node.forEach((child: any) => {
+  node.forEach((child) => {
     if (child.isText) {
       let text = child.text || "";
       // Apply marks — order matters: link wraps bold wraps italic etc.
@@ -218,7 +236,7 @@ function serializeInline(node: any, ctx: SerializerContext): string {
  * Sort marks so nesting is correct: innermost marks first.
  * code < strike < italic < bold < link
  */
-function markPriority(a: any, b: any): number {
+function markPriority(a: ProseMirrorMark, b: ProseMirrorMark): number {
   const order: Record<string, number> = {
     code: 0,
     strike: 1,
@@ -232,7 +250,7 @@ function markPriority(a: any, b: any): number {
 /**
  * Wrap text with the markdown syntax for a mark.
  */
-function applyMark(mark: any, text: string): string {
+function applyMark(mark: ProseMirrorMark, text: string): string {
   switch (mark.type.name) {
     case "bold":
       return `**${text}**`;
@@ -243,7 +261,7 @@ function applyMark(mark: any, text: string): string {
     case "strike":
       return `~~${text}~~`;
     case "link":
-      return `[${text}](${mark.attrs.href || ""})`;
+      return `[${text}](${(mark.attrs.href as string) || ""})`;
     default:
       return text;
   }
@@ -252,18 +270,23 @@ function applyMark(mark: any, text: string): string {
 /**
  * Serialize a non-text inline node (mention, emoji, hardBreak).
  */
-function serializeInlineNode(node: any, ctx: SerializerContext): string {
+function serializeInlineNode(
+  node: ProseMirrorNode,
+  ctx: SerializerContext,
+): string {
   switch (node.type.name) {
     case "mention": {
       try {
-        return `nostr:${nip19.npubEncode(node.attrs.id)}`;
+        return `nostr:${nip19.npubEncode(node.attrs.id as string)}`;
       } catch {
-        return `@${node.attrs.label || "unknown"}`;
+        return `@${(node.attrs.label as string) || "unknown"}`;
       }
     }
 
     case "emoji": {
-      const { id, url, source } = node.attrs;
+      const id = node.attrs.id as string;
+      const url = node.attrs.url as string;
+      const source = node.attrs.source as string;
       if (source === "unicode") {
         return url || "";
       }
@@ -286,15 +309,18 @@ function serializeInlineNode(node: any, ctx: SerializerContext): string {
 /**
  * Render a nostr event preview node back to its bech32 URI.
  */
-function renderNostrEventPreviewText(type: string, data: any): string {
+function renderNostrEventPreviewText(
+  type: string,
+  data: string | EventPointer | AddressPointer,
+): string {
   try {
     switch (type) {
       case "note":
-        return `nostr:${nip19.noteEncode(data)}`;
+        return `nostr:${nip19.noteEncode(data as string)}`;
       case "nevent":
-        return `nostr:${nip19.neventEncode(data)}`;
+        return `nostr:${nip19.neventEncode(data as EventPointer)}`;
       case "naddr":
-        return `nostr:${nip19.naddrEncode(data)}`;
+        return `nostr:${nip19.naddrEncode(data as AddressPointer)}`;
       default:
         return "";
     }

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { Editor } from "@tiptap/core";
+import type { Editor, ChainedCommands } from "@tiptap/core";
 import {
   Bold,
   Italic,
@@ -83,7 +83,7 @@ export function MarkdownToolbar({
   }>({ open: false, url: "" });
 
   const isActive = useCallback(
-    (name: string, attrs?: Record<string, any>) => {
+    (name: string, attrs?: Record<string, number | string | boolean>) => {
       if (!editor) return false;
       return editor.isActive(name, attrs);
     },
@@ -91,7 +91,7 @@ export function MarkdownToolbar({
   );
 
   const run = useCallback(
-    (command: (chain: any) => any) => {
+    (command: (chain: ChainedCommands) => void) => {
       if (!editor) return;
       command(editor.chain().focus());
     },
