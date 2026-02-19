@@ -3,6 +3,7 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
+import { Badge } from "@/components/ui/badge";
 import { UserName } from "../UserName";
 import { ExternalIdentifierInline } from "../ExternalIdentifierDisplay";
 import {
@@ -15,12 +16,45 @@ import {
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
-import { BarChart3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
- * Subject display based on assertion kind
+ * Color-coded rank bar: green (>=70), yellow (40-69), red (<40)
  */
-function AssertionSubject({
+function RankBar({ rank }: { rank: number }) {
+  const clamped = Math.min(100, Math.max(0, rank));
+  const color =
+    clamped >= 70
+      ? "bg-green-600"
+      : clamped >= 40
+        ? "bg-yellow-600"
+        : "bg-red-600";
+  const textColor =
+    clamped >= 70
+      ? "text-green-600"
+      : clamped >= 40
+        ? "text-yellow-600"
+        : "text-red-600";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="h-2 w-32 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all", color)}
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+      <span className={cn("text-xs font-semibold tabular-nums", textColor)}>
+        {rank}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Subject as the visual anchor — rendered as ClickableEventTitle
+ */
+function SubjectTitle({
   event,
   subject,
 }: {
@@ -28,39 +62,56 @@ function AssertionSubject({
   subject: string;
 }) {
   if (event.kind === 30382) {
-    // User: show as UserName
-    return <UserName pubkey={subject} className="text-sm font-medium" />;
+    return (
+      <ClickableEventTitle
+        event={event}
+        className="text-base font-semibold text-foreground"
+      >
+        <UserName pubkey={subject} className="text-base font-semibold" />
+      </ClickableEventTitle>
+    );
   }
 
   if (event.kind === 30385) {
-    // NIP-73 external identifier: use shared component with proper icon
     const kTypes = getExternalAssertionTypes(event);
     return (
-      <ExternalIdentifierInline
-        value={subject}
-        kType={kTypes[0]}
-        className="text-sm"
-      />
+      <ClickableEventTitle
+        event={event}
+        className="text-base font-semibold text-foreground"
+      >
+        <ExternalIdentifierInline
+          value={subject}
+          kType={kTypes[0]}
+          className="text-sm font-medium"
+        />
+      </ClickableEventTitle>
     );
   }
 
   if (event.kind === 30384) {
-    // Addressable event: kind:pubkey:d-tag
     const parts = subject.split(":");
-    if (parts.length >= 3) {
-      return (
-        <span className="text-sm font-mono text-muted-foreground">
-          {parts[0]}:{parts[1].slice(0, 8)}...:{parts[2] || "*"}
-        </span>
-      );
-    }
+    const display =
+      parts.length >= 3
+        ? `${parts[0]}:${parts[1].slice(0, 8)}...:${parts[2] || "*"}`
+        : subject;
+    return (
+      <ClickableEventTitle
+        event={event}
+        className="text-sm font-semibold font-mono text-foreground"
+      >
+        {display}
+      </ClickableEventTitle>
+    );
   }
 
-  // Event ID (30383) or fallback
+  // Event ID (30383)
   return (
-    <span className="text-sm font-mono text-muted-foreground truncate">
+    <ClickableEventTitle
+      event={event}
+      className="text-sm font-semibold font-mono text-foreground"
+    >
       {subject.slice(0, 16)}...
-    </span>
+    </ClickableEventTitle>
   );
 }
 
@@ -75,7 +126,6 @@ function MetricsPreview({
   const tags = getAssertionTags(event);
   const rankTag = tags.find((t) => t.name === "rank");
 
-  // Get kind-specific summary metrics
   let summaryMetrics: { label: string; value: string }[] = [];
 
   if (event.kind === 30382) {
@@ -92,7 +142,7 @@ function MetricsPreview({
       });
     if (data.zapAmountReceived !== undefined)
       summaryMetrics.push({
-        label: "Zaps Recd",
+        label: "Zaps In",
         value: `${data.zapAmountReceived.toLocaleString()} sats`,
       });
   } else if (event.kind === 30383 || event.kind === 30384) {
@@ -141,22 +191,8 @@ function MetricsPreview({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Rank badge */}
-      {rankTag && (
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{
-                  width: `${Math.min(100, Math.max(0, parseInt(rankTag.value, 10)))}%`,
-                }}
-              />
-            </div>
-            <span className="text-xs font-medium">{rankTag.value}/100</span>
-          </div>
-        </div>
-      )}
+      {/* Rank bar */}
+      {rankTag && <RankBar rank={parseInt(rankTag.value, 10)} />}
 
       {/* Summary metrics */}
       {summaryMetrics.length > 0 && (
@@ -184,25 +220,16 @@ export function TrustedAssertionRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <ClickableEventTitle
-            event={event}
-            className="text-base font-semibold"
+        {/* Kind badge + subject as title */}
+        <div className="flex flex-col gap-1">
+          <Badge
+            variant="outline"
+            className="w-fit gap-1 h-5 px-1.5 text-muted-foreground"
           >
-            <span className="flex items-center gap-1.5">
-              <BarChart3 className="size-4 text-muted-foreground" />
-              {kindLabel}
-            </span>
-          </ClickableEventTitle>
+            {kindLabel}
+          </Badge>
+          {subject && <SubjectTitle event={event} subject={subject} />}
         </div>
-
-        {/* Subject */}
-        {subject && (
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground">Subject:</span>
-            <AssertionSubject event={event} subject={subject} />
-          </div>
-        )}
 
         {/* Metrics preview */}
         <MetricsPreview event={event} />

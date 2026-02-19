@@ -136,3 +136,24 @@ export function getExternalIdentifierHref(
     return iValue;
   return undefined;
 }
+
+/**
+ * Get a human-friendly type label for a NIP-73 k-tag value.
+ * Maps protocol-level k-values to user-facing names.
+ */
+export function getExternalTypeLabel(kValue: string): string {
+  if (kValue === "web") return "Website";
+  if (kValue === "podcast:item:guid") return "Podcast Episode";
+  if (kValue === "podcast:publisher:guid") return "Podcast Publisher";
+  if (kValue === "podcast:guid" || kValue.startsWith("podcast"))
+    return "Podcast";
+  if (kValue === "isbn") return "Book";
+  if (kValue === "doi") return "Paper";
+  if (kValue === "geo") return "Location";
+  if (kValue === "iso3166") return "Country";
+  if (kValue === "#") return "Hashtag";
+  if (kValue === "isan") return "Film";
+  if (kValue.includes(":tx")) return "Transaction";
+  if (kValue.includes(":address")) return "Address";
+  return kValue;
+}

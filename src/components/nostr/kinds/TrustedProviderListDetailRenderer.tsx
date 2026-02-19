@@ -6,10 +6,11 @@ import {
   formatKindTag,
 } from "@/lib/nip85-helpers";
 import { Shield, Lock, Radio } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 /**
  * Trusted Provider List Detail Renderer (Kind 10040)
- * Full table of all public provider entries
+ * Stacked card layout for each provider entry — works at any panel width
  */
 export function TrustedProviderListDetailRenderer({
   event,
@@ -44,30 +45,33 @@ export function TrustedProviderListDetailRenderer({
         </div>
       )}
 
-      {/* Provider table */}
+      {/* Provider cards */}
       {providers.length > 0 ? (
-        <div className="flex flex-col gap-0.5">
-          {/* Table header */}
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-3 pb-2 border-b border-border text-xs text-muted-foreground font-medium">
-            <span>Metric</span>
-            <span>Provider</span>
-            <span>Relay</span>
-          </div>
-
-          {/* Rows */}
+        <div className="flex flex-col gap-2">
           {providers.map((p, i) => (
             <div
               key={`${p.kindTag}-${i}`}
-              className="grid grid-cols-[1fr_1fr_auto] gap-3 py-2 border-b border-border/30 last:border-0 items-center"
+              className="flex flex-col gap-1.5 p-3 rounded-md border border-border/50 bg-muted/30"
             >
-              <span className="text-sm font-mono">
+              {/* Metric badge */}
+              <Badge
+                variant="secondary"
+                className="w-fit h-5 px-1.5 text-xs font-mono"
+              >
                 {formatKindTag(p.kindTag)}
-              </span>
-              <UserName pubkey={p.servicePubkey} className="text-sm" />
-              <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono truncate max-w-48">
+              </Badge>
+
+              {/* Provider */}
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="text-muted-foreground text-xs">Provider:</span>
+                <UserName pubkey={p.servicePubkey} className="text-sm" />
+              </div>
+
+              {/* Relay */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Radio className="size-3 shrink-0" />
-                {p.relay}
-              </span>
+                <span className="font-mono break-all">{p.relay}</span>
+              </div>
             </div>
           ))}
         </div>

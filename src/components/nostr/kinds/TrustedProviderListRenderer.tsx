@@ -3,11 +3,11 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
+import { Badge } from "@/components/ui/badge";
 import { UserName } from "../UserName";
 import {
   getTrustedProviders,
   hasEncryptedProviders,
-  formatKindTag,
 } from "@/lib/nip85-helpers";
 import { Shield, Lock } from "lucide-react";
 
@@ -18,7 +18,7 @@ import { Shield, Lock } from "lucide-react";
 export function TrustedProviderListRenderer({ event }: BaseEventProps) {
   const providers = getTrustedProviders(event);
   const hasEncrypted = hasEncryptedProviders(event);
-  const previewProviders = providers.slice(0, 4);
+  const previewProviders = providers.slice(0, 3);
 
   return (
     <BaseEventContainer event={event}>
@@ -30,36 +30,48 @@ export function TrustedProviderListRenderer({ event }: BaseEventProps) {
           </span>
         </ClickableEventTitle>
 
-        {/* Provider count */}
-        <span className="text-xs text-muted-foreground">
-          {providers.length} public provider{providers.length !== 1 ? "s" : ""}
-          {hasEncrypted && " + encrypted entries"}
-        </span>
+        {/* Compact summary */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" className="h-5 px-1.5 text-muted-foreground">
+            {providers.length} mapping{providers.length !== 1 ? "s" : ""}
+          </Badge>
+          {hasEncrypted && (
+            <Badge
+              variant="outline"
+              className="h-5 px-1.5 gap-1 text-muted-foreground"
+            >
+              <Lock className="size-3" />
+              Encrypted
+            </Badge>
+          )}
+        </div>
 
-        {/* Preview of provider entries */}
+        {/* Provider preview: show unique service keys */}
         {previewProviders.length > 0 && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0.5">
             {previewProviders.map((p, i) => (
               <div
                 key={`${p.kindTag}-${i}`}
-                className="flex items-center gap-2 text-xs"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
               >
-                <span className="text-muted-foreground font-mono shrink-0">
-                  {formatKindTag(p.kindTag)}
-                </span>
-                <span className="text-muted-foreground">-</span>
+                <Badge
+                  variant="secondary"
+                  className="h-4 px-1 text-[10px] font-mono shrink-0"
+                >
+                  {p.kindTag}
+                </Badge>
                 <UserName pubkey={p.servicePubkey} className="text-xs" />
               </div>
             ))}
-            {providers.length > 4 && (
+            {providers.length > 3 && (
               <span className="text-xs text-muted-foreground">
-                +{providers.length - 4} more...
+                +{providers.length - 3} more
               </span>
             )}
           </div>
         )}
 
-        {/* Encrypted notice */}
+        {/* All-encrypted fallback */}
         {hasEncrypted && providers.length === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Lock className="size-3" />

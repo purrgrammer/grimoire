@@ -11,25 +11,51 @@ import {
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
+import {
+  getExternalIdentifierIcon,
+  getExternalTypeLabel,
+} from "@/lib/nip73-helpers";
 import { formatTimestamp } from "@/hooks/useLocale";
-import { BarChart3, User, FileText, Hash } from "lucide-react";
+import { ShieldCheck, User, FileText, Hash } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
- * Rank visualization bar
+ * Color-coded rank bar with label
  */
 function RankBar({ rank }: { rank: number }) {
   const clamped = Math.min(100, Math.max(0, rank));
+  const color =
+    clamped >= 70
+      ? "bg-green-600"
+      : clamped >= 40
+        ? "bg-yellow-600"
+        : "bg-red-600";
+  const textColor =
+    clamped >= 70
+      ? "text-green-600"
+      : clamped >= 40
+        ? "text-yellow-600"
+        : "text-red-600";
+
   return (
-    <div className="flex items-center gap-3">
-      <div className="h-2.5 flex-1 rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${clamped}%` }}
-        />
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm text-muted-foreground">Rank</span>
+      <div className="flex items-center gap-3">
+        <div className="h-2.5 flex-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className={cn("h-full rounded-full transition-all", color)}
+            style={{ width: `${clamped}%` }}
+          />
+        </div>
+        <span
+          className={cn(
+            "text-sm font-semibold tabular-nums w-12 text-right",
+            textColor,
+          )}
+        >
+          {rank}/100
+        </span>
       </div>
-      <span className="text-sm font-semibold tabular-nums w-12 text-right">
-        {rank}/100
-      </span>
     </div>
   );
 }
@@ -53,7 +79,18 @@ function MetricRow({
 }
 
 /**
- * Subject header section based on kind
+ * Section header for metric groups
+ */
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground pt-2 first:pt-0">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Subject header — clickable for Nostr subjects, rich display for external
  */
 function SubjectHeader({
   event,
@@ -62,116 +99,164 @@ function SubjectHeader({
   event: NostrEvent;
   subject: string;
 }) {
-  // Kind 30385: NIP-73 external identifier — use shared block component
+  // Kind 30385: NIP-73 external identifier
   if (event.kind === 30385) {
     const kTypes = getExternalAssertionTypes(event);
     return <ExternalIdentifierBlock value={subject} kType={kTypes[0]} />;
   }
 
-  const icon =
-    event.kind === 30382 ? (
-      <User className="size-4" />
-    ) : (
-      <FileText className="size-4" />
+  // Kind 30382: user pubkey
+  if (event.kind === 30382) {
+    return (
+      <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
+        <User className="size-4 text-muted-foreground" />
+        <UserName pubkey={subject} className="font-medium" />
+      </div>
     );
+  }
 
+  // Kind 30384: addressable event (kind:pubkey:d-tag)
+  if (event.kind === 30384) {
+    const parts = subject.split(":");
+    if (parts.length >= 3) {
+      return (
+        <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
+          <FileText className="size-4 text-muted-foreground" />
+          <span className="font-mono text-sm">
+            Kind {parts[0]} by{" "}
+            <UserName pubkey={parts[1]} className="text-sm inline" />
+            {parts[2] && (
+              <span className="text-muted-foreground"> / {parts[2]}</span>
+            )}
+          </span>
+        </div>
+      );
+    }
+  }
+
+  // Kind 30383: event ID
   return (
     <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-      <span className="text-muted-foreground">{icon}</span>
-      {event.kind === 30382 ? (
-        <UserName pubkey={subject} className="font-medium" />
-      ) : (
-        <span className="font-mono text-sm break-all">{subject}</span>
-      )}
+      <FileText className="size-4 text-muted-foreground" />
+      <span className="font-mono text-sm break-all">{subject}</span>
     </div>
   );
 }
 
 /**
- * User assertion metrics (kind 30382)
+ * User assertion metrics (kind 30382) — grouped into sections
  */
 function UserMetrics({ event }: { event: NostrEvent }) {
   const data = getUserAssertionData(event);
 
-  const metrics: { label: string; value: string | number }[] = [];
-
-  if (data.followers !== undefined)
-    metrics.push({
-      label: "Followers",
-      value: data.followers.toLocaleString(),
-    });
+  // Activity section
+  const activity: { label: string; value: string | number }[] = [];
   if (data.postCount !== undefined)
-    metrics.push({ label: "Posts", value: data.postCount.toLocaleString() });
+    activity.push({ label: "Posts", value: data.postCount.toLocaleString() });
   if (data.replyCount !== undefined)
-    metrics.push({ label: "Replies", value: data.replyCount.toLocaleString() });
+    activity.push({
+      label: "Replies",
+      value: data.replyCount.toLocaleString(),
+    });
   if (data.reactionsCount !== undefined)
-    metrics.push({
+    activity.push({
       label: "Reactions",
       value: data.reactionsCount.toLocaleString(),
     });
-  if (data.zapAmountReceived !== undefined)
-    metrics.push({
-      label: "Zaps Received",
-      value: `${data.zapAmountReceived.toLocaleString()} sats`,
-    });
-  if (data.zapAmountSent !== undefined)
-    metrics.push({
-      label: "Zaps Sent",
-      value: `${data.zapAmountSent.toLocaleString()} sats`,
-    });
-  if (data.zapCountReceived !== undefined)
-    metrics.push({
-      label: "Zap Count Received",
-      value: data.zapCountReceived.toLocaleString(),
-    });
-  if (data.zapCountSent !== undefined)
-    metrics.push({
-      label: "Zap Count Sent",
-      value: data.zapCountSent.toLocaleString(),
-    });
-  if (data.zapAvgAmountDayReceived !== undefined)
-    metrics.push({
-      label: "Avg Zap/Day Received",
-      value: `${data.zapAvgAmountDayReceived.toLocaleString()} sats`,
-    });
-  if (data.zapAvgAmountDaySent !== undefined)
-    metrics.push({
-      label: "Avg Zap/Day Sent",
-      value: `${data.zapAvgAmountDaySent.toLocaleString()} sats`,
-    });
-  if (data.reportsReceived !== undefined)
-    metrics.push({
-      label: "Reports Received",
-      value: data.reportsReceived.toLocaleString(),
-    });
-  if (data.reportsSent !== undefined)
-    metrics.push({
-      label: "Reports Sent",
-      value: data.reportsSent.toLocaleString(),
+  if (data.followers !== undefined)
+    activity.push({
+      label: "Followers",
+      value: data.followers.toLocaleString(),
     });
   if (data.firstCreatedAt !== undefined)
-    metrics.push({
+    activity.push({
       label: "First Post",
       value: formatTimestamp(data.firstCreatedAt, "long"),
     });
   if (data.activeHoursStart !== undefined && data.activeHoursEnd !== undefined)
-    metrics.push({
+    activity.push({
       label: "Active Hours (UTC)",
-      value: `${data.activeHoursStart}:00 - ${data.activeHoursEnd}:00`,
+      value: `${data.activeHoursStart}:00 – ${data.activeHoursEnd}:00`,
+    });
+
+  // Zaps section
+  const zaps: { label: string; value: string | number }[] = [];
+  if (data.zapAmountReceived !== undefined)
+    zaps.push({
+      label: "Received",
+      value: `${data.zapAmountReceived.toLocaleString()} sats`,
+    });
+  if (data.zapAmountSent !== undefined)
+    zaps.push({
+      label: "Sent",
+      value: `${data.zapAmountSent.toLocaleString()} sats`,
+    });
+  if (data.zapCountReceived !== undefined)
+    zaps.push({
+      label: "Count In",
+      value: data.zapCountReceived.toLocaleString(),
+    });
+  if (data.zapCountSent !== undefined)
+    zaps.push({
+      label: "Count Out",
+      value: data.zapCountSent.toLocaleString(),
+    });
+  if (data.zapAvgAmountDayReceived !== undefined)
+    zaps.push({
+      label: "Avg/Day In",
+      value: `${data.zapAvgAmountDayReceived.toLocaleString()} sats`,
+    });
+  if (data.zapAvgAmountDaySent !== undefined)
+    zaps.push({
+      label: "Avg/Day Out",
+      value: `${data.zapAvgAmountDaySent.toLocaleString()} sats`,
+    });
+
+  // Moderation section
+  const moderation: { label: string; value: string | number }[] = [];
+  if (data.reportsReceived !== undefined)
+    moderation.push({
+      label: "Reports Received",
+      value: data.reportsReceived.toLocaleString(),
+    });
+  if (data.reportsSent !== undefined)
+    moderation.push({
+      label: "Reports Sent",
+      value: data.reportsSent.toLocaleString(),
     });
 
   return (
-    <>
-      {metrics.length > 0 && (
+    <div className="flex flex-col gap-3">
+      {activity.length > 0 && (
         <div className="flex flex-col">
-          {metrics.map((m) => (
+          <SectionHeader>Activity</SectionHeader>
+          {activity.map((m) => (
             <MetricRow key={m.label} label={m.label} value={m.value} />
           ))}
         </div>
       )}
+
+      {zaps.length > 0 && (
+        <div className="flex flex-col">
+          <SectionHeader>Zaps</SectionHeader>
+          {zaps.map((m) => (
+            <MetricRow key={m.label} label={m.label} value={m.value} />
+          ))}
+        </div>
+      )}
+
+      {moderation.length > 0 && (
+        <div className="flex flex-col">
+          <SectionHeader>Moderation</SectionHeader>
+          {moderation.map((m) => (
+            <MetricRow key={m.label} label={m.label} value={m.value} />
+          ))}
+        </div>
+      )}
+
       {data.topics && data.topics.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-muted-foreground">Topics</span>
+          <SectionHeader>Topics</SectionHeader>
           <div className="flex flex-wrap gap-1.5">
             {data.topics.map((t) => (
               <span
@@ -185,7 +270,7 @@ function UserMetrics({ event }: { event: NostrEvent }) {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -196,7 +281,6 @@ function EventMetrics({ event }: { event: NostrEvent }) {
   const data = getEventAssertionData(event);
 
   const metrics: { label: string; value: string | number }[] = [];
-
   if (data.commentCount !== undefined)
     metrics.push({
       label: "Comments",
@@ -226,6 +310,7 @@ function EventMetrics({ event }: { event: NostrEvent }) {
 
   return (
     <div className="flex flex-col">
+      <SectionHeader>Engagement</SectionHeader>
       {metrics.map((m) => (
         <MetricRow key={m.label} label={m.label} value={m.value} />
       ))}
@@ -234,14 +319,13 @@ function EventMetrics({ event }: { event: NostrEvent }) {
 }
 
 /**
- * External assertion metrics (kind 30385)
+ * External assertion metrics (kind 30385) — with friendly type labels + icons
  */
 function ExternalMetrics({ event }: { event: NostrEvent }) {
   const data = getExternalAssertionData(event);
   const types = getExternalAssertionTypes(event);
 
   const metrics: { label: string; value: string | number }[] = [];
-
   if (data.commentCount !== undefined)
     metrics.push({
       label: "Comments",
@@ -257,21 +341,26 @@ function ExternalMetrics({ event }: { event: NostrEvent }) {
     <>
       {types.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-muted-foreground">Type</span>
+          <SectionHeader>Content Type</SectionHeader>
           <div className="flex flex-wrap gap-1.5">
-            {types.map((t) => (
-              <span
-                key={t}
-                className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
-              >
-                {t}
-              </span>
-            ))}
+            {types.map((t) => {
+              const Icon = getExternalIdentifierIcon(t);
+              return (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
+                >
+                  <Icon className="size-3" />
+                  {getExternalTypeLabel(t)}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
       {metrics.length > 0 && (
         <div className="flex flex-col">
+          <SectionHeader>Engagement</SectionHeader>
           {metrics.map((m) => (
             <MetricRow key={m.label} label={m.label} value={m.value} />
           ))}
@@ -287,7 +376,6 @@ function ExternalMetrics({ event }: { event: NostrEvent }) {
 function RawAssertionTags({ event }: { event: NostrEvent }) {
   const tags = getAssertionTags(event);
   const knownTags = new Set(Object.keys(ASSERTION_TAG_LABELS));
-  // Also filter topics since they're shown separately
   const unknownTags = tags.filter(
     (t) => !knownTags.has(t.name) && t.name !== "t",
   );
@@ -295,13 +383,11 @@ function RawAssertionTags({ event }: { event: NostrEvent }) {
   if (unknownTags.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm text-muted-foreground">Other Tags</span>
-      <div className="flex flex-col">
-        {unknownTags.map((t, i) => (
-          <MetricRow key={`${t.name}-${i}`} label={t.name} value={t.value} />
-        ))}
-      </div>
+    <div className="flex flex-col">
+      <SectionHeader>Other</SectionHeader>
+      {unknownTags.map((t, i) => (
+        <MetricRow key={`${t.name}-${i}`} label={t.name} value={t.value} />
+      ))}
     </div>
   );
 }
@@ -323,7 +409,7 @@ export function TrustedAssertionDetailRenderer({
     <div className="flex flex-col gap-5 p-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <BarChart3 className="size-5 text-muted-foreground" />
+        <ShieldCheck className="size-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">{kindLabel}</h2>
       </div>
 
@@ -337,12 +423,7 @@ export function TrustedAssertionDetailRenderer({
       {subject && <SubjectHeader event={event} subject={subject} />}
 
       {/* Rank */}
-      {rankTag && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-muted-foreground">Rank</span>
-          <RankBar rank={parseInt(rankTag.value, 10)} />
-        </div>
-      )}
+      {rankTag && <RankBar rank={parseInt(rankTag.value, 10)} />}
 
       {/* Kind-specific metrics */}
       {event.kind === 30382 && <UserMetrics event={event} />}

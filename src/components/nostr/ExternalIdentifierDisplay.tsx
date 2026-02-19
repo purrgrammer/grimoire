@@ -12,6 +12,7 @@ import {
   getExternalIdentifierHref,
   inferExternalIdentifierType,
 } from "@/lib/nip73-helpers";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -85,26 +86,35 @@ export function ExternalIdentifierBlock({
   const label = getExternalIdentifierLabel(value, type);
   const href = getExternalIdentifierHref(value, hint);
 
+  const isLink = !!href;
+
   const inner = (
     <div
       className={cn(
         "flex items-center gap-2 p-3 rounded-md bg-muted/50",
+        isLink && "group",
         className,
       )}
     >
       <Icon className="size-4 text-muted-foreground flex-shrink-0" />
-      <span className="text-sm break-all">{label}</span>
+      <span
+        className={cn(
+          "text-sm break-all flex-1",
+          isLink &&
+            "underline decoration-dotted group-hover:text-foreground transition-colors",
+        )}
+      >
+        {label}
+      </span>
+      {isLink && (
+        <ExternalLink className="size-3 text-muted-foreground flex-shrink-0" />
+      )}
     </div>
   );
 
-  if (href) {
+  if (isLink) {
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="hover:opacity-80 transition-opacity"
-      >
+      <a href={href} target="_blank" rel="noopener noreferrer">
         {inner}
       </a>
     );
