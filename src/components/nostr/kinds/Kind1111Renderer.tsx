@@ -9,7 +9,7 @@ import {
 } from "applesauce-common/helpers/comment";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { UserName } from "../UserName";
-import { ExternalLink, Reply } from "lucide-react";
+import { Reply } from "lucide-react";
 import { useGrimoire } from "@/core/state";
 import { InlineReplySkeleton } from "@/components/ui/skeleton";
 import { KindBadge } from "@/components/KindBadge";
@@ -18,10 +18,10 @@ import type { NostrEvent } from "@/types/nostr";
 import {
   getCommentRootScope,
   isTopLevelComment,
-  getExternalIdentifierLabel,
   type CommentRootScope,
   type CommentScope,
 } from "@/lib/nip22-helpers";
+import { ExternalIdentifierInline } from "../ExternalIdentifierDisplay";
 
 /**
  * Convert CommentPointer to pointer format for useNostrEvent
@@ -149,21 +149,14 @@ function RootScopeDisplay({
   const pointer = scopeToPointer(root.scope);
   const rootEvent = useNostrEvent(pointer, event);
 
-  // External identifier (I-tag) — render as a link
+  // External identifier (I-tag) — render using shared NIP-73 component
   if (root.scope.type === "external") {
-    const { value, hint } = root.scope;
-    const label = getExternalIdentifierLabel(value, root.kind);
-    // Use hint if available, otherwise use value directly when it's a URL
-    const href =
-      hint ||
-      (value.startsWith("http://") || value.startsWith("https://")
-        ? value
-        : undefined);
     return (
-      <ScopeRow href={href}>
-        <ExternalLink className="size-3 flex-shrink-0" />
-        <span className="truncate">{label}</span>
-      </ScopeRow>
+      <ExternalIdentifierInline
+        value={root.scope.value}
+        kType={root.kind}
+        hint={root.scope.hint}
+      />
     );
   }
 

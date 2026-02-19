@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
+import { ExternalIdentifierBlock } from "../ExternalIdentifierDisplay";
 import {
   getAssertionSubject,
   getAssertionTags,
@@ -11,7 +12,7 @@ import {
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
 import { formatTimestamp } from "@/hooks/useLocale";
-import { BarChart3, User, FileText, Link, Hash } from "lucide-react";
+import { BarChart3, User, FileText, Hash } from "lucide-react";
 
 /**
  * Rank visualization bar
@@ -54,12 +55,22 @@ function MetricRow({
 /**
  * Subject header section based on kind
  */
-function SubjectHeader({ kind, subject }: { kind: number; subject: string }) {
+function SubjectHeader({
+  event,
+  subject,
+}: {
+  event: NostrEvent;
+  subject: string;
+}) {
+  // Kind 30385: NIP-73 external identifier — use shared block component
+  if (event.kind === 30385) {
+    const kTypes = getExternalAssertionTypes(event);
+    return <ExternalIdentifierBlock value={subject} kType={kTypes[0]} />;
+  }
+
   const icon =
-    kind === 30382 ? (
+    event.kind === 30382 ? (
       <User className="size-4" />
-    ) : kind === 30385 ? (
-      <Link className="size-4" />
     ) : (
       <FileText className="size-4" />
     );
@@ -67,7 +78,7 @@ function SubjectHeader({ kind, subject }: { kind: number; subject: string }) {
   return (
     <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
       <span className="text-muted-foreground">{icon}</span>
-      {kind === 30382 ? (
+      {event.kind === 30382 ? (
         <UserName pubkey={subject} className="font-medium" />
       ) : (
         <span className="font-mono text-sm break-all">{subject}</span>
@@ -323,7 +334,7 @@ export function TrustedAssertionDetailRenderer({
       </div>
 
       {/* Subject */}
-      {subject && <SubjectHeader kind={event.kind} subject={subject} />}
+      {subject && <SubjectHeader event={event} subject={subject} />}
 
       {/* Rank */}
       {rankTag && (

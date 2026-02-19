@@ -4,12 +4,14 @@ import {
   ClickableEventTitle,
 } from "./BaseEventRenderer";
 import { UserName } from "../UserName";
+import { ExternalIdentifierInline } from "../ExternalIdentifierDisplay";
 import {
   getAssertionSubject,
   getAssertionTags,
   getUserAssertionData,
   getEventAssertionData,
   getExternalAssertionData,
+  getExternalAssertionTypes,
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
@@ -19,18 +21,30 @@ import { BarChart3 } from "lucide-react";
  * Subject display based on assertion kind
  */
 function AssertionSubject({
-  kind,
+  event,
   subject,
 }: {
-  kind: number;
+  event: BaseEventProps["event"];
   subject: string;
 }) {
-  if (kind === 30382) {
+  if (event.kind === 30382) {
     // User: show as UserName
     return <UserName pubkey={subject} className="text-sm font-medium" />;
   }
 
-  if (kind === 30384) {
+  if (event.kind === 30385) {
+    // NIP-73 external identifier: use shared component with proper icon
+    const kTypes = getExternalAssertionTypes(event);
+    return (
+      <ExternalIdentifierInline
+        value={subject}
+        kType={kTypes[0]}
+        className="text-sm"
+      />
+    );
+  }
+
+  if (event.kind === 30384) {
     // Addressable event: kind:pubkey:d-tag
     const parts = subject.split(":");
     if (parts.length >= 3) {
@@ -42,10 +56,10 @@ function AssertionSubject({
     }
   }
 
-  // Event ID (30383) or NIP-73 identifier (30385)
+  // Event ID (30383) or fallback
   return (
     <span className="text-sm font-mono text-muted-foreground truncate">
-      {kind === 30383 ? `${subject.slice(0, 16)}...` : subject}
+      {subject.slice(0, 16)}...
     </span>
   );
 }
@@ -186,7 +200,7 @@ export function TrustedAssertionRenderer({ event }: BaseEventProps) {
         {subject && (
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">Subject:</span>
-            <AssertionSubject kind={event.kind} subject={subject} />
+            <AssertionSubject event={event} subject={subject} />
           </div>
         )}
 

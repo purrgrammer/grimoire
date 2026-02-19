@@ -10,19 +10,12 @@ import type {
   AddressPointer,
   ProfilePointer,
 } from "nostr-tools/nip19";
-import type { LucideIcon } from "lucide-react";
-import {
-  Globe,
-  Podcast,
-  BookOpen,
-  FileText,
-  MapPin,
-  Hash,
-  Coins,
-  Film,
-  Flag,
-  ExternalLink,
-} from "lucide-react";
+
+// Re-export NIP-73 helpers for backwards compatibility
+export {
+  getExternalIdentifierIcon,
+  getExternalIdentifierLabel,
+} from "./nip73-helpers";
 
 // --- Types ---
 
@@ -173,72 +166,4 @@ export function isTopLevelComment(event: NostrEvent): boolean {
     if (!parent) return true;
     return parent.kind !== "1111";
   });
-}
-
-/**
- * Map a NIP-73 external identifier type (K/k value) to an appropriate icon.
- */
-export function getExternalIdentifierIcon(kValue: string): LucideIcon {
-  if (kValue === "web") return Globe;
-  if (kValue.startsWith("podcast")) return Podcast;
-  if (kValue === "isbn") return BookOpen;
-  if (kValue === "doi") return FileText;
-  if (kValue === "geo") return MapPin;
-  if (kValue === "iso3166") return Flag;
-  if (kValue === "#") return Hash;
-  if (kValue === "isan") return Film;
-  // Blockchain types: "bitcoin:tx", "ethereum:1:address", etc.
-  if (kValue.includes(":tx") || kValue.includes(":address")) return Coins;
-  return ExternalLink;
-}
-
-/**
- * Get a human-friendly label for an external identifier value.
- */
-export function getExternalIdentifierLabel(
-  iValue: string,
-  kValue?: string,
-): string {
-  // URLs - show truncated
-  if (
-    kValue === "web" ||
-    iValue.startsWith("http://") ||
-    iValue.startsWith("https://")
-  ) {
-    try {
-      const url = new URL(iValue);
-      const path = url.pathname === "/" ? "" : url.pathname;
-      return `${url.hostname}${path}`;
-    } catch {
-      return iValue;
-    }
-  }
-
-  // Podcast types
-  if (iValue.startsWith("podcast:item:guid:")) return "Podcast Episode";
-  if (iValue.startsWith("podcast:publisher:guid:")) return "Podcast Publisher";
-  if (iValue.startsWith("podcast:guid:")) return "Podcast Feed";
-
-  // ISBN
-  if (iValue.startsWith("isbn:")) return `ISBN ${iValue.slice(5)}`;
-
-  // DOI
-  if (iValue.startsWith("doi:")) return `DOI ${iValue.slice(4)}`;
-
-  // Geohash
-  if (kValue === "geo") return `Location ${iValue}`;
-
-  // Country codes
-  if (kValue === "iso3166") return iValue.toUpperCase();
-
-  // Hashtag
-  if (iValue.startsWith("#")) return iValue;
-
-  // Blockchain
-  if (iValue.includes(":tx:"))
-    return `Transaction ${iValue.split(":tx:")[1]?.slice(0, 12)}...`;
-  if (iValue.includes(":address:"))
-    return `Address ${iValue.split(":address:")[1]?.slice(0, 12)}...`;
-
-  return iValue;
 }
