@@ -139,6 +139,12 @@ export function transitionAuthState(
             shouldAutoAuth: true,
             clearChallenge: false,
           };
+        } else if (event.preference === "never") {
+          return {
+            newStatus: "rejected",
+            shouldAutoAuth: false,
+            clearChallenge: true,
+          };
         }
         return {
           newStatus: "challenge_received",

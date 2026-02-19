@@ -177,6 +177,17 @@ describe("Auth State Machine", () => {
       expect(result.shouldAutoAuth).toBe(true);
     });
 
+    it("should auto-reject new challenge with never preference", () => {
+      const result = transitionAuthState("authenticated", {
+        type: "CHALLENGE_RECEIVED",
+        challenge: "new-challenge",
+        preference: "never",
+      });
+      expect(result.newStatus).toBe("rejected");
+      expect(result.shouldAutoAuth).toBe(false);
+      expect(result.clearChallenge).toBe(true);
+    });
+
     it("should transition to challenge_received for new challenge with ask preference", () => {
       const result = transitionAuthState("authenticated", {
         type: "CHALLENGE_RECEIVED",

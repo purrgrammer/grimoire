@@ -823,6 +823,46 @@ describe("RelayAuthManager", () => {
         );
       }
     });
+
+    it("should emit state objects that are independent from internal state", () => {
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+
+      relay.challenge$.next("test-challenge");
+
+      // Capture a snapshot via states$
+      const snapshot = manager.states$.value.get("wss://relay.example.com");
+      expect(snapshot!.status).toBe("challenge_received");
+
+      // Mutate internal state by rejecting
+      manager.reject("wss://relay.example.com", false);
+
+      // The previously captured snapshot should be unchanged
+      expect(snapshot!.status).toBe("challenge_received");
+    });
+
+    it("getRelayState should return a snapshot, not a live reference", () => {
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+
+      relay.challenge$.next("test-challenge");
+
+      const snapshot = manager.getRelayState("wss://relay.example.com");
+      expect(snapshot!.status).toBe("challenge_received");
+
+      // Mutate internal state
+      manager.reject("wss://relay.example.com", false);
+
+      // Snapshot should be unchanged
+      expect(snapshot!.status).toBe("challenge_received");
+
+      // Fresh read should reflect the new state
+      expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
+        "rejected",
+      );
+    });
   });
 
   describe("connection state tracking", () => {
@@ -1047,6 +1087,45 @@ describe("RelayAuthManager", () => {
       await vi.waitFor(() => {
         expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
           "failed",
+        );
+      });
+    });
+
+    it("should not overwrite state if relay disconnected before auto-auth failure resolves", async () => {
+      const signer = createMockSigner();
+      signer$.next(signer);
+      manager.setPreference("wss://relay.example.com", "always");
+
+      // authenticate() returns a promise we control
+      let rejectAuth!: (err: Error) => void;
+      const authPromise = new Promise<never>((_, reject) => {
+        rejectAuth = reject;
+      });
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockReturnValue(
+        authPromise,
+      );
+      manager.monitorRelay(relay);
+
+      relay.challenge$.next("test-challenge");
+      expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
+        "authenticating",
+      );
+
+      // Disconnect while authenticate() is still pending
+      relay.connected$.next(false);
+      expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
+        "none",
+      );
+
+      // Now the auth promise rejects — should NOT overwrite "none" with "failed"
+      rejectAuth(new Error("signing failed"));
+      await vi.waitFor(() => {
+        // Give the microtask queue a chance to process
+        expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
+          "none",
         );
       });
     });

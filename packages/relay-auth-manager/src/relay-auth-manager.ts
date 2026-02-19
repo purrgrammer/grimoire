@@ -223,22 +223,23 @@ export class RelayAuthManager {
    * Get all auth preferences.
    */
   getAllPreferences(): ReadonlyMap<string, AuthPreference> {
-    return this.preferences;
+    return new Map(this.preferences);
   }
 
   /**
-   * Get auth state for a specific relay.
+   * Get auth state for a specific relay. Returns a snapshot (not a live reference).
    */
   getRelayState(relayUrl: string): RelayAuthState | undefined {
     const url = this.resolveRelayUrl(relayUrl);
-    return this._relayStates.get(url);
+    const state = this._relayStates.get(url);
+    return state ? { ...state } : undefined;
   }
 
   /**
-   * Get all relay auth states.
+   * Get all relay auth states. Returns a snapshot (not a live reference).
    */
   getAllStates(): ReadonlyMap<string, RelayAuthState> {
-    return this._relayStates;
+    return snapshotStates(this._relayStates);
   }
 
   /**
@@ -335,7 +336,9 @@ export class RelayAuthManager {
         if (this.signer) {
           relay.authenticate(this.signer).catch(() => {
             const s = this._relayStates.get(url);
-            if (s) {
+            // Only mark as failed if still in authenticating state — the relay
+            // may have disconnected or received a new event while we were awaiting
+            if (s && s.status === "authenticating") {
               s.status = "failed";
               this.emitState();
             }
@@ -366,7 +369,7 @@ export class RelayAuthManager {
           state.status = "authenticating";
           relay.authenticate(this.signer!).catch(() => {
             const s = this._relayStates.get(url);
-            if (s) {
+            if (s && s.status === "authenticating") {
               s.status = "failed";
               this.emitState();
             }
@@ -457,8 +460,22 @@ export class RelayAuthManager {
     this.pendingChallenges$.next(challenges);
 
     // Emit states snapshot after pendingChallenges is updated
-    this.states$.next(new Map(this._relayStates));
+    this.states$.next(snapshotStates(this._relayStates));
   }
+}
+
+/**
+ * Create a deep-copied snapshot of relay states so consumers
+ * never hold mutable references to internal objects.
+ */
+function snapshotStates(
+  states: Map<string, RelayAuthState>,
+): Map<string, RelayAuthState> {
+  const copy = new Map<string, RelayAuthState>();
+  for (const [url, state] of states) {
+    copy.set(url, { ...state });
+  }
+  return copy;
 }
 
 /**
