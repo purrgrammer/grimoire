@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@fiatjaf/git-natural-api": "npm:@jsr/fiatjaf__git-natural-api@^0.2.3",
+    "@floating-ui/react-dom": "^2.1.7",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-checkbox": "^1.3.3",
@@ -87,8 +88,7 @@
     "shell-quote": "^1.8.3",
     "shiki": "^3.20.0",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^2.5.5",
-    "tippy.js": "^6.3.7"
+    "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -28,8 +28,12 @@ import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
 import { useRelayState } from "@/hooks/useRelayState";
 import { useSettings } from "@/hooks/useSettings";
-import { RichEditor, type RichEditorHandle } from "./editor/RichEditor";
-import type { BlobAttachment, EmojiTag } from "./editor/MentionEditor";
+import {
+  RichEditor,
+  type RichEditorHandle,
+  type BlobAttachment,
+  type EmojiTag,
+} from "./editor/RichEditor";
 import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
 import pool from "@/services/relay-pool";
