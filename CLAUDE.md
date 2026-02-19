@@ -340,9 +340,13 @@ This allows `applyTheme()` to switch themes at runtime.
   - Example: `formatTimestamp(event.created_at, "long")` instead of manual `toLocaleDateString()`
 - **File Organization**: By domain (`nostr/`, `ui/`, `services/`, `hooks/`, `lib/`)
 - **State Logic**: All UI state mutations go through `src/core/logic.ts` pure functions
-- **Shared Components**:
-  - **`RelayLink`** (`src/components/nostr/RelayLink.tsx`): Always use this when displaying relay URLs. It shows the relay favicon, handles insecure `ws://` warnings, and opens the relay detail window on click. Never render raw relay URL strings — use `<RelayLink url={relayUrl} />` instead.
-  - **`UserName`** (`src/components/nostr/UserName.tsx`): Always use this for displaying user pubkeys. Accepts optional `relayHints` prop for fetching profiles from specific relays.
+- **Shared Components** — Use these instead of rolling your own:
+  - **`UserName`** (`src/components/nostr/UserName.tsx`): Always use for displaying user pubkeys. Shows display name, Grimoire member badge, supporter flame. Clicking opens profile. Accepts optional `relayHints` prop for fetching profiles from specific relays.
+  - **`RelayLink`** (`src/components/nostr/RelayLink.tsx`): Always use for displaying relay URLs. Shows relay favicon, insecure `ws://` warnings, read/write badges, and opens relay detail window on click. Never render raw relay URL strings.
+  - **`BaseEventContainer`** / **`ClickableEventTitle`** (`src/components/nostr/kinds/BaseEventRenderer.tsx`): Foundation for all feed renderers. `BaseEventContainer` wraps an event with author header, timestamp, context menu, and emoji reactions. `ClickableEventTitle` makes a title open the event detail view. Also exports `BaseEventProps` (the standard prop interface) and `EventAuthor`.
+  - **`RichText`** (`src/components/nostr/RichText.tsx`): Universal Nostr content renderer. Parses mentions, hashtags, custom emoji, media embeds, and nostr: references. Use for any event body text — never render `event.content` as a raw string.
+  - **`QuotedEvent`** (`src/components/nostr/QuotedEvent.tsx`): Renders referenced/quoted events with depth-aware collapsing. Handles both `EventPointer` and `AddressPointer` with relay hints.
+  - **`CustomEmoji`** (`src/components/nostr/CustomEmoji.tsx`): Renders NIP-30 custom emoji images inline. Shows shortcode tooltip, handles load errors gracefully.
 
 ## Important Patterns
 
