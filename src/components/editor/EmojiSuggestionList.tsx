@@ -4,9 +4,10 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  useCallback,
 } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { EmojiSearchResult } from "@/services/emoji-search";
-import { cn } from "@/lib/utils";
 
 export interface EmojiSuggestionListProps {
   items: EmojiSearchResult[];
@@ -18,43 +19,26 @@ export interface EmojiSuggestionListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean;
 }
 
-const GRID_COLS = 8;
+const ITEM_HEIGHT = 40;
+const MAX_VISIBLE = 8;
 
 export const EmojiSuggestionList = forwardRef<
   EmojiSuggestionListHandle,
   EmojiSuggestionListProps
 >(({ items, command, onClose }, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Keyboard navigation with grid support
+  // Keyboard navigation (linear list)
   useImperativeHandle(ref, () => ({
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key === "ArrowUp") {
-        setSelectedIndex((prev) => {
-          const newIndex = prev - GRID_COLS;
-          return newIndex < 0 ? Math.max(0, items.length + newIndex) : newIndex;
-        });
+        setSelectedIndex((prev) => (prev + items.length - 1) % items.length);
         return true;
       }
 
       if (event.key === "ArrowDown") {
-        setSelectedIndex((prev) => {
-          const newIndex = prev + GRID_COLS;
-          return newIndex >= items.length
-            ? Math.min(items.length - 1, newIndex % GRID_COLS)
-            : newIndex;
-        });
-        return true;
-      }
-
-      if (event.key === "ArrowLeft") {
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
-        return true;
-      }
-
-      if (event.key === "ArrowRight") {
-        setSelectedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
+        setSelectedIndex((prev) => (prev + 1) % items.length);
         return true;
       }
 
@@ -74,16 +58,12 @@ export const EmojiSuggestionList = forwardRef<
     },
   }));
 
-  // Scroll selected item into view
+  // Scroll selected item into view via Virtuoso
   useEffect(() => {
-    const selectedElement = listRef.current?.querySelector(
-      `[data-index="${selectedIndex}"]`,
-    );
-    if (selectedElement) {
-      selectedElement.scrollIntoView({
-        block: "nearest",
-      });
-    }
+    virtuosoRef.current?.scrollIntoView({
+      index: selectedIndex,
+      behavior: "auto",
+    });
   }, [selectedIndex]);
 
   // Reset selected index when items change
@@ -91,62 +71,69 @@ export const EmojiSuggestionList = forwardRef<
     setSelectedIndex(0);
   }, [items]);
 
+  const renderItem = useCallback(
+    (index: number) => {
+      const item = items[index];
+      return (
+        <button
+          role="option"
+          aria-selected={index === selectedIndex}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            command(item);
+          }}
+          onMouseEnter={() => setSelectedIndex(index)}
+          className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
+            index === selectedIndex ? "bg-muted/60" : "hover:bg-muted/60"
+          }`}
+        >
+          <span className="flex size-7 items-center justify-center flex-shrink-0">
+            {item.source === "unicode" ? (
+              <span className="text-lg leading-none">{item.url}</span>
+            ) : (
+              <img
+                src={item.url}
+                alt={`:${item.shortcode}:`}
+                className="size-6 object-contain"
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            )}
+          </span>
+          <span className="truncate text-sm text-popover-foreground/80">
+            :{item.shortcode}:
+          </span>
+        </button>
+      );
+    },
+    [items, selectedIndex, command],
+  );
+
   if (items.length === 0) {
     return (
-      <div className="border border-border/50 bg-popover p-4 text-sm text-popover-foreground/60 shadow-md">
+      <div className="rounded-md border border-border/50 bg-popover p-4 text-sm text-popover-foreground/60 shadow-md">
         No emoji found
       </div>
     );
   }
 
+  const listHeight = Math.min(items.length, MAX_VISIBLE) * ITEM_HEIGHT;
+
   return (
     <div
-      ref={listRef}
       role="listbox"
-      className="max-h-[280px] w-full max-w-[296px] overflow-y-auto border border-border/50 bg-popover p-2 text-popover-foreground shadow-md"
+      className="w-[260px] rounded-md border border-border/50 bg-popover text-popover-foreground shadow-md overflow-hidden"
     >
-      <div className="grid grid-cols-6 md:grid-cols-8 gap-1 md:gap-0.5">
-        {items.map((item, index) => (
-          <button
-            key={`${item.shortcode}-${item.source}`}
-            data-index={index}
-            role="option"
-            aria-selected={index === selectedIndex}
-            onClick={() => command(item)}
-            onMouseEnter={() => setSelectedIndex(index)}
-            className={cn(
-              "flex size-10 md:size-8 items-center justify-center rounded transition-colors",
-              index === selectedIndex ? "bg-muted" : "hover:bg-muted/60",
-            )}
-            title={`:${item.shortcode}:`}
-          >
-            {item.source === "unicode" ? (
-              // Unicode emoji - render as text
-              <span className="text-xl md:text-lg leading-none">
-                {item.url}
-              </span>
-            ) : (
-              // Custom emoji - render as image
-              <img
-                src={item.url}
-                alt={`:${item.shortcode}:`}
-                className="size-7 md:size-6 object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  // Replace with fallback on error
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            )}
-          </button>
-        ))}
-      </div>
-      {/* Show selected emoji shortcode */}
-      {items[selectedIndex] && (
-        <div className="mt-2 border-t border-border/50 pt-2 text-center text-xs text-popover-foreground/60">
-          :{items[selectedIndex].shortcode}:
-        </div>
-      )}
+      <Virtuoso
+        ref={virtuosoRef}
+        totalCount={items.length}
+        fixedItemHeight={ITEM_HEIGHT}
+        style={{ height: listHeight }}
+        itemContent={renderItem}
+      />
     </div>
   );
 });
