@@ -340,6 +340,9 @@ This allows `applyTheme()` to switch themes at runtime.
   - Example: `formatTimestamp(event.created_at, "long")` instead of manual `toLocaleDateString()`
 - **File Organization**: By domain (`nostr/`, `ui/`, `services/`, `hooks/`, `lib/`)
 - **State Logic**: All UI state mutations go through `src/core/logic.ts` pure functions
+- **Shared Components**:
+  - **`RelayLink`** (`src/components/nostr/RelayLink.tsx`): Always use this when displaying relay URLs. It shows the relay favicon, handles insecure `ws://` warnings, and opens the relay detail window on click. Never render raw relay URL strings — use `<RelayLink url={relayUrl} />` instead.
+  - **`UserName`** (`src/components/nostr/UserName.tsx`): Always use this for displaying user pubkeys. Accepts optional `relayHints` prop for fetching profiles from specific relays.
 
 ## Important Patterns
 

@@ -10,6 +10,7 @@ interface UserNameProps {
   pubkey: string;
   isMention?: boolean;
   className?: string;
+  relayHints?: string[];
 }
 
 /**
@@ -25,9 +26,14 @@ interface UserNameProps {
  * - Premium supporters (2.1k+ sats/month): Flame badge in their username color
  * - Regular supporters: Yellow flame badge (no username color change)
  */
-export function UserName({ pubkey, isMention, className }: UserNameProps) {
+export function UserName({
+  pubkey,
+  isMention,
+  className,
+  relayHints,
+}: UserNameProps) {
   const { addWindow, state } = useGrimoire();
-  const profile = useProfile(pubkey);
+  const profile = useProfile(pubkey, relayHints);
   const isGrimoire = isGrimoireMember(pubkey);
   const { isSupporter, isPremiumSupporter } = useIsSupporter(pubkey);
   const displayName = getDisplayName(pubkey, profile);

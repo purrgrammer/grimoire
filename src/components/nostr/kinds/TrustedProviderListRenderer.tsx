@@ -5,6 +5,7 @@ import {
 } from "./BaseEventRenderer";
 import { Badge } from "@/components/ui/badge";
 import { UserName } from "../UserName";
+import { RelayLink } from "../RelayLink";
 import {
   getTrustedProviders,
   hasEncryptedProviders,
@@ -33,7 +34,7 @@ export function TrustedProviderListRenderer({ event }: BaseEventProps) {
         {/* Compact summary */}
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="outline" className="h-5 px-1.5 text-muted-foreground">
-            {providers.length} mapping{providers.length !== 1 ? "s" : ""}
+            {providers.length} provider{providers.length !== 1 ? "s" : ""}
           </Badge>
           {hasEncrypted && (
             <Badge
@@ -46,21 +47,25 @@ export function TrustedProviderListRenderer({ event }: BaseEventProps) {
           )}
         </div>
 
-        {/* Provider preview: show unique service keys */}
+        {/* Provider preview */}
         {previewProviders.length > 0 && (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             {previewProviders.map((p, i) => (
               <div
-                key={`${p.kindTag}-${i}`}
+                key={`${p.servicePubkey}-${i}`}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground"
               >
-                <Badge
-                  variant="secondary"
-                  className="h-4 px-1 text-[10px] font-mono shrink-0"
-                >
-                  {p.kindTag}
-                </Badge>
-                <UserName pubkey={p.servicePubkey} className="text-xs" />
+                <UserName
+                  pubkey={p.servicePubkey}
+                  relayHints={[p.relay]}
+                  className="text-xs"
+                />
+                <span className="text-muted-foreground/50">on</span>
+                <RelayLink
+                  url={p.relay}
+                  showInboxOutbox={false}
+                  className="inline-flex"
+                />
               </div>
             ))}
             {providers.length > 3 && (

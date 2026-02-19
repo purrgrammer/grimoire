@@ -1,12 +1,11 @@
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
+import { RelayLink } from "../RelayLink";
 import {
   getTrustedProviders,
   hasEncryptedProviders,
-  formatKindTag,
 } from "@/lib/nip85-helpers";
-import { Shield, Lock, Radio } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Shield, Lock } from "lucide-react";
 
 /**
  * Trusted Provider List Detail Renderer (Kind 10040)
@@ -50,28 +49,18 @@ export function TrustedProviderListDetailRenderer({
         <div className="flex flex-col gap-2">
           {providers.map((p, i) => (
             <div
-              key={`${p.kindTag}-${i}`}
-              className="flex flex-col gap-1.5 p-3 rounded-md border border-border/50 bg-muted/30"
+              key={`${p.servicePubkey}-${i}`}
+              className="flex flex-col gap-2 p-3 rounded-md border border-border/50 bg-muted/30"
             >
-              {/* Metric badge */}
-              <Badge
-                variant="secondary"
-                className="w-fit h-5 px-1.5 text-xs font-mono"
-              >
-                {formatKindTag(p.kindTag)}
-              </Badge>
-
-              {/* Provider */}
-              <div className="flex items-center gap-1.5 text-sm">
-                <span className="text-muted-foreground text-xs">Provider:</span>
-                <UserName pubkey={p.servicePubkey} className="text-sm" />
-              </div>
+              {/* Provider name */}
+              <UserName
+                pubkey={p.servicePubkey}
+                relayHints={[p.relay]}
+                className="text-sm font-medium"
+              />
 
               {/* Relay */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Radio className="size-3 shrink-0" />
-                <span className="font-mono break-all">{p.relay}</span>
-              </div>
+              <RelayLink url={p.relay} showInboxOutbox={false} />
             </div>
           ))}
         </div>
