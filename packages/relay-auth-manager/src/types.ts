@@ -102,4 +102,14 @@ export interface RelayAuthManagerOptions {
 
   /** Initial relays to monitor (for relays already in the pool at creation time) */
   initialRelays?: Iterable<AuthRelay>;
+
+  /**
+   * Custom URL normalizer for consistent relay URL matching.
+   * Called on all URLs before they're used as Map keys (preferences, state, etc.).
+   * Default: adds wss:// prefix and strips trailing slashes.
+   *
+   * Provide this if your app uses a different normalization (e.g., lowercase hostname,
+   * trailing slash convention) to ensure preferences match relay state.
+   */
+  normalizeUrl?: (url: string) => string;
 }

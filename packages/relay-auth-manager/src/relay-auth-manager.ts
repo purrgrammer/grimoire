@@ -1,5 +1,11 @@
-import { BehaviorSubject, type Subscription, combineLatest } from "rxjs";
-import { startWith } from "rxjs/operators";
+import {
+  BehaviorSubject,
+  type Subscription,
+  combineLatest,
+  firstValueFrom,
+  race,
+} from "rxjs";
+import { filter, startWith, take, map as rxMap } from "rxjs/operators";
 import { transitionAuthState, type AuthEvent } from "./auth-state-machine.js";
 import type {
   AuthPreference,
@@ -26,6 +32,7 @@ export class RelayAuthManager {
   private readonly storageKey: string;
   private readonly challengeTTL: number;
   private readonly storage?: RelayAuthManagerOptions["storage"];
+  private readonly normalizeUrl: (url: string) => string;
 
   private signer: AuthSigner | null = null;
   private readonly relaySubscriptions = new Map<string, Subscription>();
@@ -48,6 +55,7 @@ export class RelayAuthManager {
     this.storage = options.storage;
     this.storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
     this.challengeTTL = options.challengeTTL ?? DEFAULT_CHALLENGE_TTL;
+    this.normalizeUrl = options.normalizeUrl ?? defaultNormalizeUrl;
 
     this.states$ = new BehaviorSubject<ReadonlyMap<string, RelayAuthState>>(
       new Map(),
@@ -138,6 +146,9 @@ export class RelayAuthManager {
 
   /**
    * Authenticate with a relay. Requires a pending challenge and available signer.
+   *
+   * Resolves when the relay confirms authentication (authenticated$ emits true).
+   * Rejects if the relay disconnects, the auth call throws, or the relay never confirms.
    */
   async authenticate(relayUrl: string): Promise<void> {
     const url = this.resolveRelayUrl(relayUrl);
@@ -162,13 +173,103 @@ export class RelayAuthManager {
     this.emitState();
 
     try {
-      await relay.authenticate(this.signer);
+      // Set up a race: authenticated$ confirms vs connected$ drops
+      const confirmed = firstValueFrom(
+        race(
+          relay.authenticated$.pipe(
+            filter((auth) => auth === true),
+            take(1),
+            rxMap(() => true as const),
+          ),
+          relay.connected$.pipe(
+            filter((connected) => connected === false),
+            take(1),
+            rxMap(() => {
+              throw new Error(
+                `Relay ${relayUrl} disconnected during authentication`,
+              );
+            }),
+          ),
+        ),
+      );
+
+      // Use Promise.all so both promises are awaited together.
+      // If relay.authenticate() hangs but disconnect fires, confirmed rejects
+      // and Promise.all propagates it immediately (no unhandled rejection).
+      await Promise.all([relay.authenticate(this.signer), confirmed]);
       // authenticated$ subscription will handle the success state update
     } catch (error) {
-      state.status = "failed";
-      state.challenge = null;
-      state.challengeReceivedAt = null;
-      this.emitState();
+      // Only mark as failed if still in authenticating state
+      if (state.status === "authenticating") {
+        state.status = "failed";
+        state.challenge = null;
+        state.challengeReceivedAt = null;
+        this.emitState();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Retry authentication for a relay in "failed" state.
+   * Re-uses the original challenge if still available from the relay.
+   */
+  async retry(relayUrl: string): Promise<void> {
+    const url = this.resolveRelayUrl(relayUrl);
+    const state = this._relayStates.get(url);
+
+    const relay = this.monitoredRelays.get(url);
+    if (!state || !relay) {
+      throw new Error(`Relay ${relayUrl} is not being monitored`);
+    }
+    if (state.status !== "failed") {
+      throw new Error(
+        `Cannot retry relay ${relayUrl}: status is "${state.status}", expected "failed"`,
+      );
+    }
+    if (!this.signer) {
+      throw new Error("No signer available for authentication");
+    }
+
+    // Use the relay's current challenge (it may have sent a fresh one)
+    const challenge = relay.challenge;
+    if (!challenge) {
+      throw new Error(`No auth challenge available for ${relayUrl}`);
+    }
+
+    state.status = "authenticating";
+    state.challenge = challenge;
+    state.challengeReceivedAt = Date.now();
+    this.emitState();
+
+    try {
+      const confirmed = firstValueFrom(
+        race(
+          relay.authenticated$.pipe(
+            filter((auth) => auth === true),
+            take(1),
+            rxMap(() => true as const),
+          ),
+          relay.connected$.pipe(
+            filter((connected) => connected === false),
+            take(1),
+            rxMap(() => {
+              throw new Error(
+                `Relay ${relayUrl} disconnected during authentication`,
+              );
+            }),
+          ),
+        ),
+      );
+
+      await Promise.all([relay.authenticate(this.signer), confirmed]);
+    } catch (error) {
+      if (state.status === "authenticating") {
+        state.status = "failed";
+        state.challenge = null;
+        state.challengeReceivedAt = null;
+        this.emitState();
+      }
       throw error;
     }
   }
@@ -195,7 +296,7 @@ export class RelayAuthManager {
     }
 
     if (rememberForSession) {
-      this.sessionRejections.add(url);
+      this.sessionRejections.add(this.normalizeForKey(url));
     }
 
     this.emitState();
@@ -205,7 +306,7 @@ export class RelayAuthManager {
    * Set auth preference for a relay. Persists to storage if available.
    */
   setPreference(relayUrl: string, preference: AuthPreference): void {
-    const url = this.resolveRelayUrl(relayUrl);
+    const url = this.normalizeForKey(relayUrl);
     this.preferences.set(url, preference);
     this.savePreferences();
     this.emitState();
@@ -215,8 +316,22 @@ export class RelayAuthManager {
    * Get auth preference for a relay.
    */
   getPreference(relayUrl: string): AuthPreference | undefined {
-    const url = this.resolveRelayUrl(relayUrl);
+    const url = this.normalizeForKey(relayUrl);
     return this.preferences.get(url);
+  }
+
+  /**
+   * Remove auth preference for a relay. Persists to storage if available.
+   * Returns true if a preference was removed, false if none existed.
+   */
+  removePreference(relayUrl: string): boolean {
+    const url = this.normalizeForKey(relayUrl);
+    const deleted = this.preferences.delete(url);
+    if (deleted) {
+      this.savePreferences();
+      this.emitState();
+    }
+    return deleted;
   }
 
   /**
@@ -301,7 +416,7 @@ export class RelayAuthManager {
     }
     // Priority 3: New challenge (or challenge changed)
     else if (values.challenge && values.challenge !== state.challenge) {
-      const preference = this.preferences.get(url);
+      const preference = this.preferences.get(this.normalizeForKey(url));
       authEvent = {
         type: "CHALLENGE_RECEIVED",
         challenge: values.challenge,
@@ -362,7 +477,7 @@ export class RelayAuthManager {
 
     for (const [url, state] of this._relayStates) {
       if (state.status === "challenge_received" && state.challenge) {
-        const pref = this.preferences.get(url);
+        const pref = this.preferences.get(this.normalizeForKey(url));
         if (pref === "always") {
           const relay = this.monitoredRelays.get(url);
           if (!relay) continue;
@@ -380,9 +495,10 @@ export class RelayAuthManager {
   }
 
   private shouldPrompt(url: string): boolean {
-    const pref = this.preferences.get(url);
+    const normalized = this.normalizeForKey(url);
+    const pref = this.preferences.get(normalized);
     if (pref === "never") return false;
-    if (this.sessionRejections.has(url)) return false;
+    if (this.sessionRejections.has(normalized)) return false;
     return true;
   }
 
@@ -390,13 +506,29 @@ export class RelayAuthManager {
     return now - receivedAt > this.challengeTTL;
   }
 
+  /**
+   * Normalize a URL for use as a map key (preferences, session rejections).
+   * Falls back to the raw URL if the normalizer throws.
+   */
+  private normalizeForKey(url: string): string {
+    try {
+      return this.normalizeUrl(url);
+    } catch {
+      return url;
+    }
+  }
+
   private resolveRelayUrl(url: string): string {
     // Fast path: exact match
     if (this._relayStates.has(url)) return url;
 
     // Try normalized form
-    const normalized = normalizeUrl(url);
-    if (this._relayStates.has(normalized)) return normalized;
+    try {
+      const normalized = this.normalizeUrl(url);
+      if (this._relayStates.has(normalized)) return normalized;
+    } catch {
+      // Normalization failed, fall through
+    }
 
     return url;
   }
@@ -479,9 +611,10 @@ function snapshotStates(
 }
 
 /**
- * Basic URL normalization for relay URLs.
+ * Default URL normalization for relay URLs.
+ * Adds wss:// prefix if missing and strips trailing slashes.
  */
-function normalizeUrl(url: string): string {
+function defaultNormalizeUrl(url: string): string {
   let u = url.trim();
   if (!u.startsWith("ws://") && !u.startsWith("wss://")) {
     u = `wss://${u}`;

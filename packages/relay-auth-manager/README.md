@@ -48,6 +48,7 @@ new RelayAuthManager(options: RelayAuthManagerOptions)
 | `storageKey` | `string` | `"relay-auth-preferences"` | Key used in storage. |
 | `challengeTTL` | `number` | `300000` (5 min) | How long a challenge stays pending before being filtered out. |
 | `initialRelays` | `Iterable<AuthRelay>` | `[]` | Relays already in the pool at creation time. |
+| `normalizeUrl` | `(url: string) => string` | adds `wss://`, strips trailing `/` | Custom URL normalizer. Applied to all URLs used as map keys (preferences, state lookups). Provide this if your app uses a different normalization (e.g., lowercase hostname, trailing slash). |
 
 ## Observables
 
@@ -78,15 +79,17 @@ Challenges that need user interaction. Already filtered — only includes relays
 
 | Method | Description |
 |--------|-------------|
-| `authenticate(relayUrl)` | Accept a pending challenge. Signs and sends AUTH. Returns a Promise that resolves on success. Throws if no challenge, no signer, or relay not monitored. |
-| `reject(relayUrl, rememberForSession?)` | Reject a challenge. If `rememberForSession` is `true`, suppresses future prompts for this relay until page reload. |
+| `authenticate(relayUrl)` | Accept a pending challenge. Signs and sends AUTH. Returns a Promise that resolves when `authenticated$` confirms. Rejects if relay disconnects, auth fails, or preconditions aren't met (no challenge, no signer, relay not monitored). |
+| `retry(relayUrl)` | Retry authentication for a relay in `"failed"` state. Re-reads the challenge from the relay. Same promise semantics as `authenticate()`. |
+| `reject(relayUrl, rememberForSession?)` | Reject a challenge. If `rememberForSession` is `true` (default), suppresses future prompts for this relay until page reload. |
 
 ### Preferences
 
 | Method | Description |
 |--------|-------------|
-| `setPreference(url, pref)` | Set `"always"`, `"never"`, or `"ask"` for a relay. Persisted to storage. |
+| `setPreference(url, pref)` | Set `"always"`, `"never"`, or `"ask"` for a relay. Persisted to storage. URL is normalized for consistent matching. |
 | `getPreference(url)` | Get preference for a relay, or `undefined`. |
+| `removePreference(url)` | Remove a preference. Returns `true` if one existed. Persisted to storage. |
 | `getAllPreferences()` | `ReadonlyMap<string, AuthPreference>` of all preferences. |
 
 ### Relay Monitoring
@@ -100,8 +103,8 @@ Challenges that need user interaction. Already filtered — only includes relays
 
 | Method | Description |
 |--------|-------------|
-| `getRelayState(url)` | Get `RelayAuthState` for a single relay. |
-| `getAllStates()` | Same as `states$.value`. |
+| `getRelayState(url)` | Get `RelayAuthState` snapshot for a single relay. Returns a copy, not a live reference. |
+| `getAllStates()` | Snapshot of all states. Same as `states$.value`. |
 | `hasSignerAvailable()` | Whether a signer is currently available. |
 
 ### Lifecycle
@@ -117,12 +120,12 @@ Each relay progresses through these states:
 ```
 none ──challenge──▶ challenge_received ──accept──▶ authenticating ──success──▶ authenticated
   ▲                       │                              │
-  │                    reject                          failed
-  │                       ▼                              ▼
-  └──── disconnect ──── rejected                      failed
+  │                    reject                          failed ◀──retry──┐
+  │                       ▼                              │              │
+  └──── disconnect ──── rejected                      failed ──────────┘
 ```
 
-Disconnect from any state resets to `none`.
+Disconnect from any state resets to `none`. Failed relays can be retried via `retry()`.
 
 ## Preferences
 

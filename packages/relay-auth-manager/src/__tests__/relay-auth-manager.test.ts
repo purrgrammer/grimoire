@@ -16,6 +16,7 @@ function createMockRelay(url: string): AuthRelay & {
   challenge$: BehaviorSubject<string | null>;
   authenticated$: BehaviorSubject<boolean>;
 } {
+  const authenticated$ = new BehaviorSubject<boolean>(false);
   return {
     url,
     connected: false,
@@ -23,8 +24,12 @@ function createMockRelay(url: string): AuthRelay & {
     challenge: null,
     connected$: new BehaviorSubject<boolean>(false),
     challenge$: new BehaviorSubject<string | null>(null),
-    authenticated$: new BehaviorSubject<boolean>(false),
-    authenticate: vi.fn().mockResolvedValue({ ok: true }),
+    authenticated$,
+    // Default mock: authenticate succeeds and relay confirms
+    authenticate: vi.fn().mockImplementation(() => {
+      authenticated$.next(true);
+      return Promise.resolve({ ok: true });
+    }),
   };
 }
 
@@ -317,6 +322,60 @@ describe("RelayAuthManager", () => {
       expect(relay.authenticate).toHaveBeenCalledWith(signer);
     });
 
+    it("should resolve only after authenticated$ confirms", async () => {
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      // Override: authenticate succeeds but doesn't confirm via observable
+      let resolveAuth!: () => void;
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise<void>((r) => (resolveAuth = r)),
+      );
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      let resolved = false;
+      const authPromise = manager
+        .authenticate("wss://relay.example.com")
+        .then(() => {
+          resolved = true;
+        });
+
+      // relay.authenticate() hasn't resolved yet
+      expect(resolved).toBe(false);
+
+      // relay.authenticate() resolves, but authenticated$ hasn't confirmed
+      resolveAuth();
+      await Promise.resolve(); // flush microtask
+      expect(resolved).toBe(false);
+
+      // Now relay confirms authentication
+      relay.authenticated$.next(true);
+      await authPromise;
+      expect(resolved).toBe(true);
+    });
+
+    it("should reject if relay disconnects during authentication", async () => {
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      // Override: authenticate never resolves on its own
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise(() => {}),
+      );
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      const authPromise = manager.authenticate("wss://relay.example.com");
+
+      // Disconnect during auth
+      relay.connected$.next(false);
+
+      await expect(authPromise).rejects.toThrow("disconnected during");
+    });
+
     it("should transition to authenticating status during auth", async () => {
       signer$.next(createMockSigner());
 
@@ -325,13 +384,17 @@ describe("RelayAuthManager", () => {
       manager.monitorRelay(relay);
       relay.challenge$.next("test-challenge");
 
-      // Start auth (don't await yet)
-      const authPromise = manager.authenticate("wss://relay.example.com");
+      // Subscribe BEFORE starting auth to capture intermediate states
+      const states: string[] = [];
+      manager.states$.subscribe((s) => {
+        const st = s.get("wss://relay.example.com");
+        if (st) states.push(st.status);
+      });
 
-      const state = manager.getRelayState("wss://relay.example.com");
-      expect(state!.status).toBe("authenticating");
+      await manager.authenticate("wss://relay.example.com");
 
-      await authPromise;
+      // authenticating must have appeared in the emission history
+      expect(states).toContain("authenticating");
     });
 
     it("should throw if no relay is being monitored", async () => {
@@ -397,6 +460,96 @@ describe("RelayAuthManager", () => {
 
       const state = manager.getRelayState("wss://relay.example.com");
       expect(state!.status).toBe("authenticated");
+    });
+  });
+
+  describe("retry", () => {
+    it("should retry authentication for a relay in failed state", async () => {
+      const signer = createMockSigner();
+      signer$.next(signer);
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      // First attempt fails
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("auth failed"),
+      );
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      await expect(
+        manager.authenticate("wss://relay.example.com"),
+      ).rejects.toThrow();
+      expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
+        "failed",
+      );
+
+      // Set challenge directly on relay without triggering observable state transition
+      // (In production, relay.challenge is a getter synced with challenge$)
+      (relay as Record<string, unknown>).challenge = "retry-challenge";
+
+      // Retry succeeds (default mock behavior restores after mockRejectedValueOnce)
+      await manager.retry("wss://relay.example.com");
+      expect(relay.authenticate).toHaveBeenCalledTimes(2);
+    });
+
+    it("should throw if relay is not in failed state", async () => {
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      await expect(manager.retry("wss://relay.example.com")).rejects.toThrow(
+        'expected "failed"',
+      );
+    });
+
+    it("should throw if no challenge is available on the relay", async () => {
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("fail"),
+      );
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      await expect(
+        manager.authenticate("wss://relay.example.com"),
+      ).rejects.toThrow();
+
+      // Relay has no challenge anymore
+      // relay.challenge is still null by default on the mock object
+      await expect(manager.retry("wss://relay.example.com")).rejects.toThrow(
+        "No auth challenge available",
+      );
+    });
+
+    it("should throw if no signer is available", async () => {
+      signer$.next(createMockSigner());
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      (relay.authenticate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("fail"),
+      );
+      manager.monitorRelay(relay);
+      relay.challenge$.next("test-challenge");
+
+      await expect(
+        manager.authenticate("wss://relay.example.com"),
+      ).rejects.toThrow();
+
+      // Remove signer and set challenge directly (without triggering state transition)
+      signer$.next(null);
+      (relay as Record<string, unknown>).challenge = "retry-challenge";
+
+      await expect(manager.retry("wss://relay.example.com")).rejects.toThrow(
+        "No signer available",
+      );
     });
   });
 
@@ -472,7 +625,8 @@ describe("RelayAuthManager", () => {
       expect(relay.authenticate).toHaveBeenCalledWith(signer);
 
       const state = manager.getRelayState("wss://relay.example.com");
-      expect(state!.status).toBe("authenticating");
+      // With auto-confirm mock, state may already be authenticated
+      expect(["authenticating", "authenticated"]).toContain(state!.status);
     });
 
     it("should NOT auto-authenticate when preference is always but no signer", () => {
@@ -625,6 +779,104 @@ describe("RelayAuthManager", () => {
       // Should not throw
       manager.setPreference("wss://relay.example.com", "always");
       expect(manager.getPreference("wss://relay.example.com")).toBe("always");
+    });
+  });
+
+  describe("removePreference", () => {
+    it("should remove an existing preference", () => {
+      manager.setPreference("wss://relay.example.com", "always");
+      expect(manager.getPreference("wss://relay.example.com")).toBe("always");
+
+      const removed = manager.removePreference("wss://relay.example.com");
+      expect(removed).toBe(true);
+      expect(manager.getPreference("wss://relay.example.com")).toBeUndefined();
+    });
+
+    it("should return false when removing a non-existent preference", () => {
+      const removed = manager.removePreference("wss://unknown.relay.com");
+      expect(removed).toBe(false);
+    });
+
+    it("should persist removal to storage", () => {
+      manager.setPreference("wss://a.relay.com", "always");
+      manager.setPreference("wss://b.relay.com", "never");
+      manager.removePreference("wss://a.relay.com");
+
+      const saved = JSON.parse(storage.store["relay-auth-preferences"] || "{}");
+      expect(saved["wss://a.relay.com"]).toBeUndefined();
+      expect(saved["wss://b.relay.com"]).toBe("never");
+    });
+
+    it("should not appear in getAllPreferences after removal", () => {
+      manager.setPreference("wss://a.relay.com", "always");
+      manager.setPreference("wss://b.relay.com", "never");
+      manager.removePreference("wss://a.relay.com");
+
+      const all = manager.getAllPreferences();
+      expect(all.size).toBe(1);
+      expect(all.has("wss://a.relay.com")).toBe(false);
+    });
+  });
+
+  describe("custom normalizeUrl", () => {
+    it("should use custom normalizer for preference lookups", () => {
+      manager.destroy();
+
+      // Normalizer that lowercases and adds trailing slash
+      const normalizeUrl = (url: string) => {
+        let u = url.trim().toLowerCase();
+        if (!u.startsWith("wss://")) u = `wss://${u}`;
+        if (!u.endsWith("/")) u += "/";
+        return u;
+      };
+
+      const ctx = createManager({ normalizeUrl });
+      manager = ctx.manager;
+
+      // Set preference with one form
+      manager.setPreference("wss://Relay.Example.Com", "always");
+
+      // Look up with a different form — should match via normalizer
+      expect(manager.getPreference("wss://relay.example.com/")).toBe("always");
+    });
+
+    it("should use custom normalizer for relay state lookups", () => {
+      manager.destroy();
+
+      const normalizeUrl = (url: string) =>
+        url.toLowerCase().replace(/\/+$/, "");
+
+      const ctx = createManager({ normalizeUrl });
+      manager = ctx.manager;
+
+      const relay = createMockRelay("wss://relay.example.com");
+      relay.connected$.next(true);
+      manager.monitorRelay(relay);
+
+      // Look up with different case
+      const state = manager.getRelayState("wss://Relay.Example.Com");
+      expect(state).toBeDefined();
+      expect(state!.url).toBe("wss://relay.example.com");
+    });
+
+    it("should handle normalizer errors gracefully", () => {
+      manager.destroy();
+
+      const normalizeUrl = () => {
+        throw new Error("normalization failed");
+      };
+
+      const ctx = createManager({ normalizeUrl });
+      manager = ctx.manager;
+
+      const relay = createMockRelay("wss://relay.example.com");
+      manager.monitorRelay(relay);
+
+      // Direct lookup still works (fast path)
+      expect(manager.getRelayState("wss://relay.example.com")).toBeDefined();
+
+      // Mismatched lookup returns undefined (normalizer throws, falls through)
+      expect(manager.getRelayState("wss://relay.example.com/")).toBeUndefined();
     });
   });
 
@@ -912,9 +1164,6 @@ describe("RelayAuthManager", () => {
       // Authenticate only relay1
       manager.authenticate("wss://relay1.example.com");
 
-      expect(manager.getRelayState("wss://relay1.example.com")!.status).toBe(
-        "authenticating",
-      );
       expect(manager.getRelayState("wss://relay2.example.com")!.status).toBe(
         "challenge_received",
       );
@@ -992,12 +1241,11 @@ describe("RelayAuthManager", () => {
         "challenge_received",
       );
 
-      // 2. User authenticates
+      // 2. User authenticates (mock auto-confirms via authenticated$)
       await manager.authenticate("wss://relay.example.com");
       expect(relay.authenticate).toHaveBeenCalledWith(signer);
 
-      // 3. Relay confirms authentication
-      relay.authenticated$.next(true);
+      // 3. State should now be authenticated
       expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
         "authenticated",
       );
@@ -1022,9 +1270,6 @@ describe("RelayAuthManager", () => {
       relay.challenge$.next("auth-challenge");
 
       expect(relay.authenticate).toHaveBeenCalledWith(signer);
-      expect(manager.getRelayState("wss://relay.example.com")!.status).toBe(
-        "authenticating",
-      );
     });
 
     it("should handle auto-reject flow", () => {

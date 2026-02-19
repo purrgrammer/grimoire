@@ -2,6 +2,7 @@ import { map } from "rxjs/operators";
 import { RelayAuthManager } from "relay-auth-manager";
 import type { AuthSigner, AuthPreference } from "relay-auth-manager";
 import { canAccountSign } from "@/hooks/useAccount";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import pool from "./relay-pool";
 import accountManager from "./accounts";
 import db from "./db";
@@ -68,6 +69,10 @@ const relayAuthManager = new RelayAuthManager({
 
   storage: localStorage,
   storageKey: STORAGE_KEY,
+
+  // Use Grimoire's normalizer (lowercase + trailing slash via applesauce)
+  // to ensure preference keys match relay URLs consistently.
+  normalizeUrl: normalizeRelayURL,
 });
 
 // Run one-time migration from Dexie → localStorage
