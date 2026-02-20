@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
+import { QuotedEvent } from "../QuotedEvent";
 import { ExternalIdentifierBlock } from "../ExternalIdentifierDisplay";
 import {
   getAssertionSubject,
@@ -11,12 +12,13 @@ import {
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import {
   getExternalIdentifierIcon,
   getExternalTypeLabel,
 } from "@/lib/nip73-helpers";
 import { formatTimestamp } from "@/hooks/useLocale";
-import { ShieldCheck, User, FileText, Hash } from "lucide-react";
+import { ShieldCheck, User, Hash } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
@@ -119,32 +121,14 @@ function SubjectHeader({
     );
   }
 
-  // Kind 30384: addressable event (kind:pubkey:d-tag)
+  // Kind 30384: addressable event — quote the referenced event
   if (event.kind === 30384) {
-    const parts = subject.split(":");
-    if (parts.length >= 3) {
-      return (
-        <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-          <FileText className="size-4 text-muted-foreground" />
-          <span className="font-mono text-sm">
-            Kind {parts[0]} by{" "}
-            <UserName pubkey={parts[1]} className="text-sm inline" />
-            {parts[2] && (
-              <span className="text-muted-foreground"> / {parts[2]}</span>
-            )}
-          </span>
-        </div>
-      );
-    }
+    const pointer = parseReplaceableAddress(subject);
+    if (pointer) return <QuotedEvent addressPointer={pointer} depth={1} />;
   }
 
-  // Kind 30383: event ID
-  return (
-    <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-      <FileText className="size-4 text-muted-foreground" />
-      <span className="font-mono text-sm break-all">{subject}</span>
-    </div>
-  );
+  // Kind 30383: event ID — quote the referenced event
+  return <QuotedEvent eventPointer={{ id: subject }} depth={1} />;
 }
 
 /**

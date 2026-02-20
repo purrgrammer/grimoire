@@ -5,6 +5,7 @@ import {
 } from "./BaseEventRenderer";
 import { Label } from "@/components/ui/label";
 import { UserName } from "../UserName";
+import { QuotedEvent } from "../QuotedEvent";
 import { ExternalIdentifierInline } from "../ExternalIdentifierDisplay";
 import {
   getAssertionSubject,
@@ -16,6 +17,7 @@ import {
   ASSERTION_KIND_LABELS,
   ASSERTION_TAG_LABELS,
 } from "@/lib/nip85-helpers";
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +49,7 @@ function RankBar({ rank }: { rank: number }) {
 }
 
 /**
- * Subject as the visual anchor — rendered as ClickableEventTitle
+ * Subject as the visual anchor — rendered as ClickableEventTitle or QuotedEvent
  */
 function SubjectTitle({
   event,
@@ -83,31 +85,14 @@ function SubjectTitle({
     );
   }
 
+  // Kind 30384: addressable event — quote inline
   if (event.kind === 30384) {
-    const parts = subject.split(":");
-    const display =
-      parts.length >= 3
-        ? `${parts[0]}:${parts[1].slice(0, 8)}...:${parts[2] || "*"}`
-        : subject;
-    return (
-      <ClickableEventTitle
-        event={event}
-        className="text-sm font-semibold font-mono text-foreground"
-      >
-        {display}
-      </ClickableEventTitle>
-    );
+    const pointer = parseReplaceableAddress(subject);
+    if (pointer) return <QuotedEvent addressPointer={pointer} depth={2} />;
   }
 
-  // Event ID (30383)
-  return (
-    <ClickableEventTitle
-      event={event}
-      className="text-sm font-semibold font-mono text-foreground"
-    >
-      {subject.slice(0, 16)}...
-    </ClickableEventTitle>
-  );
+  // Kind 30383: event ID — quote inline
+  return <QuotedEvent eventPointer={{ id: subject }} depth={2} />;
 }
 
 /**
