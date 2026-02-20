@@ -4,7 +4,9 @@ import { RelayLink } from "../RelayLink";
 import {
   getTrustedProviders,
   hasEncryptedProviders,
+  formatKindTag,
 } from "@/lib/nip85-helpers";
+import { Label } from "@/components/ui/label";
 import { Shield, Lock } from "lucide-react";
 
 /**
@@ -58,6 +60,9 @@ export function TrustedProviderListDetailRenderer({
                 relayHints={[p.relay]}
                 className="text-sm font-medium"
               />
+
+              {/* Kind tag */}
+              <Label className="w-fit">{formatKindTag(p.kindTag)}</Label>
 
               {/* Relay */}
               <RelayLink url={p.relay} showInboxOutbox={false} />

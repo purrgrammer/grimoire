@@ -3,12 +3,13 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { UserName } from "../UserName";
 import { RelayLink } from "../RelayLink";
 import {
   getTrustedProviders,
   hasEncryptedProviders,
+  formatKindTag,
 } from "@/lib/nip85-helpers";
 import { Shield, Lock } from "lucide-react";
 
@@ -33,33 +34,31 @@ export function TrustedProviderListRenderer({ event }: BaseEventProps) {
 
         {/* Compact summary */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className="h-5 px-1.5 text-muted-foreground">
+          <Label>
             {providers.length} provider{providers.length !== 1 ? "s" : ""}
-          </Badge>
+          </Label>
           {hasEncrypted && (
-            <Badge
-              variant="outline"
-              className="h-5 px-1.5 gap-1 text-muted-foreground"
-            >
+            <Label className="flex items-center gap-1">
               <Lock className="size-3" />
               Encrypted
-            </Badge>
+            </Label>
           )}
         </div>
 
         {/* Provider preview */}
         {previewProviders.length > 0 && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             {previewProviders.map((p, i) => (
               <div
                 key={`${p.servicePubkey}-${i}`}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
               >
                 <UserName
                   pubkey={p.servicePubkey}
                   relayHints={[p.relay]}
                   className="text-xs"
                 />
+                <Label>{formatKindTag(p.kindTag)}</Label>
                 <span className="text-muted-foreground/50">on</span>
                 <RelayLink
                   url={p.relay}
