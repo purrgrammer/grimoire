@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { profileLoader } from "@/services/loaders";
 import { ProfileContent, getProfileContent } from "applesauce-core/helpers";
 import { kinds } from "nostr-tools";
@@ -21,6 +21,14 @@ export function useProfile(
 ): ProfileContent | undefined {
   const [profile, setProfile] = useState<ProfileContent | undefined>();
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Stabilize relayHints so callers can pass [p.relay] without causing
+  // the effect to re-run (and abort in-flight fetches) every render.
+  const stableRelayHints = useMemo(
+    () => relayHints,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(relayHints)],
+  );
 
   useEffect(() => {
     if (!pubkey) {
@@ -45,7 +53,8 @@ export function useProfile(
     const sub = profileLoader({
       kind: kinds.Metadata,
       pubkey,
-      ...(relayHints && relayHints.length > 0 && { relays: relayHints }),
+      ...(stableRelayHints &&
+        stableRelayHints.length > 0 && { relays: stableRelayHints }),
     }).subscribe({
       next: async (fetchedEvent) => {
         if (controller.signal.aborted) return;
@@ -85,7 +94,7 @@ export function useProfile(
       controller.abort();
       sub.unsubscribe();
     };
-  }, [pubkey, relayHints]);
+  }, [pubkey, stableRelayHints]);
 
   return profile;
 }
