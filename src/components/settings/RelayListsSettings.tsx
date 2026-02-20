@@ -73,6 +73,15 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     hasMarkers: false,
   },
   {
+    kind: 10012,
+    name: "Favorite Relays",
+    description:
+      "Relays you find interesting or want to browse. Can be used by clients for relay discovery and recommendations.",
+    nip: "51",
+    tagName: "relay",
+    hasMarkers: false,
+  },
+  {
     kind: 10050,
     name: "DM Relays",
     description:
@@ -362,6 +371,10 @@ export function RelayListsSettings() {
     () => (pubkey ? eventStore.replaceable(10007, pubkey, "") : undefined),
     [pubkey],
   );
+  const event10012 = use$(
+    () => (pubkey ? eventStore.replaceable(10012, pubkey, "") : undefined),
+    [pubkey],
+  );
   const event10050 = use$(
     () => (pubkey ? eventStore.replaceable(10050, pubkey, "") : undefined),
     [pubkey],
@@ -372,9 +385,10 @@ export function RelayListsSettings() {
       10002: event10002,
       10006: event10006,
       10007: event10007,
+      10012: event10012,
       10050: event10050,
     }),
-    [event10002, event10006, event10007, event10050],
+    [event10002, event10006, event10007, event10012, event10050],
   );
 
   // Local draft state: kind -> entries

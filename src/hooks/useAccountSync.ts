@@ -89,7 +89,7 @@ export function useAccountSync() {
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
 
-  // Fetch other replaceable relay lists (10006, 10007, 10050) when account changes
+  // Fetch other replaceable relay lists when account changes
   // These are read directly from EventStore in the settings UI, we just need to trigger fetching
   useEffect(() => {
     if (!activeAccount?.pubkey) {
@@ -97,7 +97,7 @@ export function useAccountSync() {
     }
 
     const pubkey = activeAccount.pubkey;
-    const relayListKinds = [10006, 10007, 10050];
+    const relayListKinds = [10006, 10007, 10012, 10050];
 
     const subscriptions = relayListKinds.map((kind) =>
       addressLoader({ kind, pubkey, identifier: "" }).subscribe(),
