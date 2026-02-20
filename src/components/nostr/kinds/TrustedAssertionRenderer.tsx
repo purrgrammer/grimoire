@@ -3,7 +3,7 @@ import {
   BaseEventContainer,
   ClickableEventTitle,
 } from "./BaseEventRenderer";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { UserName } from "../UserName";
 import { ExternalIdentifierInline } from "../ExternalIdentifierDisplay";
 import {
@@ -20,10 +20,9 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 function rankColor(rank: number) {
-  if (rank >= 70) return { indicator: "bg-green-600", text: "text-green-600" };
-  if (rank >= 40)
-    return { indicator: "bg-yellow-600", text: "text-yellow-600" };
-  return { indicator: "bg-red-600", text: "text-red-600" };
+  if (rank >= 70) return { indicator: "bg-success", text: "text-success" };
+  if (rank >= 40) return { indicator: "bg-warning", text: "text-warning" };
+  return { indicator: "bg-destructive", text: "text-destructive" };
 }
 
 /**
@@ -122,6 +121,11 @@ function MetricsPreview({
   const tags = getAssertionTags(event);
   const rankTag = tags.find((t) => t.name === "rank");
 
+  // Collect metric type labels for the tag row
+  const metricLabels = tags
+    .filter((t) => t.name !== "rank" && t.name !== "t")
+    .map((t) => ASSERTION_TAG_LABELS[t.name] || t.name);
+
   let summaryMetrics: { label: string; value: string; unit?: string }[] = [];
 
   if (event.kind === 30382) {
@@ -192,6 +196,15 @@ function MetricsPreview({
       {/* Rank bar */}
       {rankTag && <RankBar rank={parseInt(rankTag.value, 10)} />}
 
+      {/* Metric type labels */}
+      {metricLabels.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {metricLabels.map((l) => (
+            <Label key={l}>{l}</Label>
+          ))}
+        </div>
+      )}
+
       {/* Summary metrics */}
       {summaryMetrics.length > 0 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -221,14 +234,9 @@ export function TrustedAssertionRenderer({ event }: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="flex flex-col gap-2">
-        {/* Kind badge + subject as title */}
+        {/* Kind label + subject as title */}
         <div className="flex flex-col gap-1">
-          <Badge
-            variant="outline"
-            className="w-fit gap-1 h-5 px-1.5 text-muted-foreground"
-          >
-            {kindLabel}
-          </Badge>
+          <Label className="w-fit">{kindLabel}</Label>
           {subject && <SubjectTitle event={event} subject={subject} />}
         </div>
 

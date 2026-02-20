@@ -21,10 +21,9 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 function rankColor(rank: number) {
-  if (rank >= 70) return { indicator: "bg-green-600", text: "text-green-600" };
-  if (rank >= 40)
-    return { indicator: "bg-yellow-600", text: "text-yellow-600" };
-  return { indicator: "bg-red-600", text: "text-red-600" };
+  if (rank >= 70) return { indicator: "bg-success", text: "text-success" };
+  if (rank >= 40) return { indicator: "bg-warning", text: "text-warning" };
+  return { indicator: "bg-destructive", text: "text-destructive" };
 }
 
 /**
