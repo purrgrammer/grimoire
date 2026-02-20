@@ -11,6 +11,8 @@ import {
   Plus,
   Loader2,
   Save,
+  Undo2,
+  CircleDot,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { NostrEvent } from "nostr-tools";
@@ -29,38 +31,35 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RelayLink } from "@/components/nostr/RelayLink";
 import { useAccount } from "@/hooks/useAccount";
-import { normalizeRelayURL, isValidRelayURL } from "@/lib/relay-url";
+import { useRelayInfo } from "@/hooks/useRelayInfo";
 import { publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
+import { cn } from "@/lib/utils";
+import {
+  type RelayEntry,
+  type RelayMode,
+  type RelayListKindConfig,
+  parseRelayEntries,
+  buildRelayListTags,
+  sanitizeRelayInput,
+  relayEntriesEqual,
+  getRelayMode,
+  modeToFlags,
+} from "@/lib/relay-list-utils";
 
-// --- Types ---
+// --- Config ---
 
-interface RelayEntry {
-  url: string;
-  read: boolean;
-  write: boolean;
-}
-
-type RelayMode = "readwrite" | "read" | "write";
-
-interface RelayListKindConfig {
-  kind: number;
-  name: string;
-  description: string;
+interface RelayListKindUIConfig extends RelayListKindConfig {
   icon: LucideIcon;
-  /** Tag name used in the event: "r" for NIP-65, "relay" for NIP-51 */
-  tagName: "r" | "relay";
-  /** Whether read/write markers are supported (only kind 10002) */
-  hasMarkers: boolean;
 }
 
-const RELAY_LIST_KINDS: RelayListKindConfig[] = [
+const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
   {
     kind: 10002,
     name: "Relay List",
-    description: "Read & write relays (NIP-65)",
+    description:
+      "Your primary read and write relays. Other clients use this to find your posts and deliver mentions to you.",
     icon: Radio,
     tagName: "r",
     hasMarkers: true,
@@ -68,7 +67,8 @@ const RELAY_LIST_KINDS: RelayListKindConfig[] = [
   {
     kind: 10006,
     name: "Blocked Relays",
-    description: "Relays to never connect to",
+    description:
+      "Relays your client should never connect to. Useful for avoiding spam or untrusted servers.",
     icon: ShieldBan,
     tagName: "relay",
     hasMarkers: false,
@@ -76,7 +76,8 @@ const RELAY_LIST_KINDS: RelayListKindConfig[] = [
   {
     kind: 10007,
     name: "Search Relays",
-    description: "Relays for search queries",
+    description:
+      "Relays used for search queries. These should support NIP-50 full-text search.",
     icon: Search,
     tagName: "relay",
     hasMarkers: false,
@@ -84,85 +85,13 @@ const RELAY_LIST_KINDS: RelayListKindConfig[] = [
   {
     kind: 10050,
     name: "DM Relays",
-    description: "Relays for receiving direct messages",
+    description:
+      "Relays where you receive direct messages. Senders look up this list to deliver encrypted DMs to you.",
     icon: Mail,
     tagName: "relay",
     hasMarkers: false,
   },
 ];
-
-// --- Helpers ---
-
-/** Parse relay entries from a Nostr event based on the kind config */
-function parseRelayEntries(
-  event: NostrEvent | undefined,
-  config: RelayListKindConfig,
-): RelayEntry[] {
-  if (!event) return [];
-
-  const entries: RelayEntry[] = [];
-  const seenUrls = new Set<string>();
-
-  for (const tag of event.tags) {
-    if (tag[0] === config.tagName && tag[1]) {
-      try {
-        const url = normalizeRelayURL(tag[1]);
-        if (seenUrls.has(url)) continue;
-        seenUrls.add(url);
-
-        if (config.hasMarkers) {
-          const marker = tag[2];
-          entries.push({
-            url,
-            read: !marker || marker === "read",
-            write: !marker || marker === "write",
-          });
-        } else {
-          entries.push({ url, read: true, write: true });
-        }
-      } catch {
-        // Skip invalid URLs
-      }
-    }
-  }
-
-  return entries;
-}
-
-/** Build event tags from relay entries */
-function buildTags(
-  entries: RelayEntry[],
-  config: RelayListKindConfig,
-): string[][] {
-  return entries.map((entry) => {
-    if (config.tagName === "r") {
-      if (entry.read && entry.write) return ["r", entry.url];
-      if (entry.read) return ["r", entry.url, "read"];
-      return ["r", entry.url, "write"];
-    }
-    return ["relay", entry.url];
-  });
-}
-
-/** Sanitize and normalize user input into a valid relay URL */
-function sanitizeRelayInput(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  // Add wss:// scheme if missing
-  let url = trimmed;
-  if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
-    url = `wss://${url}`;
-  }
-
-  try {
-    const normalized = normalizeRelayURL(url);
-    if (!isValidRelayURL(normalized)) return null;
-    return normalized;
-  } catch {
-    return null;
-  }
-}
 
 // --- Components ---
 
@@ -187,6 +116,31 @@ function RelayModeSelect({
   );
 }
 
+/** Display-only relay row for the settings list (no navigation on click) */
+function RelaySettingsRow({
+  url,
+  iconClassname,
+}: {
+  url: string;
+  iconClassname?: string;
+}) {
+  const relayInfo = useRelayInfo(url);
+  const displayUrl = url.replace(/^wss?:\/\//, "").replace(/\/$/, "");
+
+  return (
+    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+      {relayInfo?.icon && (
+        <img
+          src={relayInfo.icon}
+          alt=""
+          className={cn("size-4 flex-shrink-0 rounded-sm", iconClassname)}
+        />
+      )}
+      <span className="text-sm truncate">{displayUrl}</span>
+    </div>
+  );
+}
+
 function RelayEntryRow({
   entry,
   config,
@@ -194,37 +148,23 @@ function RelayEntryRow({
   onModeChange,
 }: {
   entry: RelayEntry;
-  config: RelayListKindConfig;
+  config: RelayListKindUIConfig;
   onRemove: () => void;
   onModeChange?: (mode: RelayMode) => void;
 }) {
-  const currentMode: RelayMode =
-    entry.read && entry.write ? "readwrite" : entry.read ? "read" : "write";
+  const currentMode = getRelayMode(entry);
 
   return (
-    <div className="flex items-center gap-2 py-1 group">
-      <div className="flex-1 min-w-0">
-        <RelayLink
-          url={entry.url}
-          read={config.hasMarkers ? entry.read : false}
-          write={config.hasMarkers ? entry.write : false}
-          showInboxOutbox={config.hasMarkers}
-          className="py-0.5"
-          iconClassname="size-4"
-          urlClassname="underline decoration-dotted"
-        />
-      </div>
+    <div className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-muted/50 group">
+      <RelaySettingsRow url={entry.url} />
       {config.hasMarkers && onModeChange && (
         <RelayModeSelect mode={currentMode} onChange={onModeChange} />
       )}
       <Button
         variant="ghost"
         size="icon"
-        className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
+        className="size-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+        onClick={onRemove}
       >
         <X className="size-3.5" />
       </Button>
@@ -237,7 +177,7 @@ function AddRelayInput({
   existingUrls,
   onAdd,
 }: {
-  config: RelayListKindConfig;
+  config: RelayListKindUIConfig;
   existingUrls: Set<string>;
   onAdd: (entry: RelayEntry) => void;
 }) {
@@ -261,8 +201,7 @@ function AddRelayInput({
 
     onAdd({
       url: normalized,
-      read: mode === "readwrite" || mode === "read",
-      write: mode === "readwrite" || mode === "write",
+      ...modeToFlags(mode),
     });
     setInput("");
     setError(null);
@@ -279,7 +218,7 @@ function AddRelayInput({
   );
 
   return (
-    <div className="space-y-1.5 pt-2">
+    <div className="space-y-1.5 pt-3 border-t border-border/30">
       <div className="flex items-center gap-2">
         <Input
           value={input}
@@ -288,7 +227,7 @@ function AddRelayInput({
             setError(null);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="wss://relay.example.com"
+          placeholder="relay.example.com"
           className="h-8 text-xs flex-1"
         />
         {config.hasMarkers && (
@@ -313,10 +252,12 @@ function AddRelayInput({
 function RelayListAccordion({
   config,
   entries,
+  isDirty,
   onChange,
 }: {
-  config: RelayListKindConfig;
+  config: RelayListKindUIConfig;
   entries: RelayEntry[];
+  isDirty: boolean;
   onChange: (entries: RelayEntry[]) => void;
 }) {
   const Icon = config.icon;
@@ -336,13 +277,7 @@ function RelayListAccordion({
     (url: string, mode: RelayMode) => {
       onChange(
         entries.map((e) =>
-          e.url === url
-            ? {
-                ...e,
-                read: mode === "readwrite" || mode === "read",
-                write: mode === "readwrite" || mode === "write",
-              }
-            : e,
+          e.url === url ? { ...e, ...modeToFlags(mode) } : e,
         ),
       );
     },
@@ -359,17 +294,19 @@ function RelayListAccordion({
   return (
     <AccordionItem value={`kind-${config.kind}`}>
       <AccordionTrigger className="hover:no-underline">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-muted-foreground" />
-          <span className="font-medium">{config.name}</span>
-          <span className="text-xs text-muted-foreground">
-            Kind {config.kind}
-          </span>
-          {entries.length > 0 && (
-            <span className="text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">
-              {entries.length}
-            </span>
-          )}
+        <div className="flex items-center gap-2.5">
+          <Icon className="size-4 text-muted-foreground flex-shrink-0" />
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium">{config.name}</span>
+            {entries.length > 0 && (
+              <span className="text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 tabular-nums">
+                {entries.length}
+              </span>
+            )}
+            {isDirty && (
+              <CircleDot className="size-3 text-primary flex-shrink-0" />
+            )}
+          </div>
         </div>
       </AccordionTrigger>
       <AccordionContent>
@@ -472,29 +409,32 @@ export function RelayListsSettings() {
     }
   }, [eventsMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check if any list has been modified
-  const hasChanges = useMemo(() => {
+  // Per-kind dirty check
+  const dirtyKinds = useMemo(() => {
+    const dirty = new Set<number>();
     for (const config of RELAY_LIST_KINDS) {
       const original = parseRelayEntries(eventsMap[config.kind], config);
       const draft = drafts[config.kind] ?? [];
-
-      if (original.length !== draft.length) return true;
-
-      for (let i = 0; i < original.length; i++) {
-        if (
-          original[i].url !== draft[i].url ||
-          original[i].read !== draft[i].read ||
-          original[i].write !== draft[i].write
-        )
-          return true;
+      if (!relayEntriesEqual(original, draft)) {
+        dirty.add(config.kind);
       }
     }
-    return false;
+    return dirty;
   }, [eventsMap, drafts]);
+
+  const hasChanges = dirtyKinds.size > 0;
 
   const handleChange = useCallback((kind: number, entries: RelayEntry[]) => {
     setDrafts((prev) => ({ ...prev, [kind]: entries }));
   }, []);
+
+  const handleDiscard = useCallback(() => {
+    const restored: Record<number, RelayEntry[]> = {};
+    for (const config of RELAY_LIST_KINDS) {
+      restored[config.kind] = parseRelayEntries(eventsMap[config.kind], config);
+    }
+    setDrafts(restored);
+  }, [eventsMap]);
 
   const handleSave = useCallback(async () => {
     if (!canSign || saving) return;
@@ -511,21 +451,10 @@ export function RelayListsSettings() {
       const factory = new EventFactory({ signer: account.signer });
 
       for (const config of RELAY_LIST_KINDS) {
-        const original = parseRelayEntries(eventsMap[config.kind], config);
+        if (!dirtyKinds.has(config.kind)) continue;
+
         const draft = drafts[config.kind] ?? [];
-
-        // Skip kinds that haven't changed
-        const isEqual =
-          original.length === draft.length &&
-          original.every(
-            (o, i) =>
-              o.url === draft[i].url &&
-              o.read === draft[i].read &&
-              o.write === draft[i].write,
-          );
-        if (isEqual) continue;
-
-        const tags = buildTags(draft, config);
+        const tags = buildRelayListTags(draft, config);
         const built = await factory.build({
           kind: config.kind,
           content: "",
@@ -544,7 +473,7 @@ export function RelayListsSettings() {
     } finally {
       setSaving(false);
     }
-  }, [canSign, saving, eventsMap, drafts]);
+  }, [canSign, saving, drafts, dirtyKinds]);
 
   if (!pubkey) {
     return (
@@ -572,12 +501,31 @@ export function RelayListsSettings() {
             key={config.kind}
             config={config}
             entries={drafts[config.kind] ?? []}
+            isDirty={dirtyKinds.has(config.kind)}
             onChange={(entries) => handleChange(config.kind, entries)}
           />
         ))}
       </Accordion>
 
-      <div className="flex justify-end pt-2">
+      {!canSign && (
+        <p className="text-xs text-muted-foreground">
+          Read-only account. Log in with a signer to edit relay lists.
+        </p>
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-2">
+        {hasChanges && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDiscard}
+            disabled={saving}
+            className="gap-1.5 text-muted-foreground"
+          >
+            <Undo2 className="size-3.5" />
+            Discard
+          </Button>
+        )}
         <Button
           onClick={handleSave}
           disabled={!hasChanges || saving || !canSign}
