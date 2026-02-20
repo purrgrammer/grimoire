@@ -102,7 +102,7 @@ export function useEmojiSearch(contextEvent?: NostrEvent) {
   const searchEmojis = useMemo(
     () =>
       async (query: string): Promise<EmojiSearchResult[]> => {
-        return await service.search(query, { limit: 24 });
+        return await service.search(query, { limit: 200 });
       },
     [service],
   );

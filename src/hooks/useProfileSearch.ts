@@ -13,7 +13,7 @@ export function useProfileSearch() {
   const searchProfiles = useMemo(
     () =>
       async (query: string): Promise<ProfileSearchResult[]> => {
-        return await profileSearch.search(query, { limit: 20 });
+        return await profileSearch.search(query, { limit: 200 });
       },
     [],
   );
