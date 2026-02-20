@@ -39,11 +39,12 @@ export const NostrPasteHandler = Extension.create({
             if (!text) return false;
 
             // Regex to detect nostr bech32 strings (with or without nostr: prefix)
-            // Only match entities surrounded by whitespace or at string boundaries
+            // Only match entities surrounded by whitespace/punctuation or at string boundaries
             // to avoid matching entities within URLs (e.g., https://njump.me/npub1...)
             // Note: Using (^|\s) capture group instead of lookbehind for Safari compatibility
+            // Trailing lookahead allows common punctuation so "npub1..., cool" works
             const bech32Regex =
-              /(^|\s)(?:nostr:)?(npub1[\w]{58,}|note1[\w]{58,}|nevent1[\w]+|naddr1[\w]+|nprofile1[\w]+)(?=$|\s)/g;
+              /(^|\s)(?:nostr:)?(npub1[a-z0-9]{58,}|note1[a-z0-9]{58,}|nevent1[a-z0-9]+|naddr1[a-z0-9]+|nprofile1[a-z0-9]+)(?=$|\s|[.,!?;:)\]}>])/g;
             const matches = Array.from(text.matchAll(bech32Regex));
 
             if (matches.length === 0) return false; // No bech32 found, use default paste
@@ -113,8 +114,15 @@ export const NostrPasteHandler = Extension.create({
                   );
                 }
 
-                // Add space after preview node
-                nodes.push(view.state.schema.text(" "));
+                // Add trailing space only when entity is at the very end of the paste
+                // (for cursor positioning). Don't add if there's more text coming,
+                // since the boundary whitespace handling already preserves spacing.
+                const isLastMatch = match === matches[matches.length - 1];
+                const hasTrailingText =
+                  matchIndex + fullMatch.length < text.length;
+                if (isLastMatch && !hasTrailingText) {
+                  nodes.push(view.state.schema.text(" "));
+                }
               } catch (err) {
                 // Invalid bech32, insert as plain text (entity portion without boundary)
                 console.warn(
@@ -139,21 +147,31 @@ export const NostrPasteHandler = Extension.create({
 
             // Insert all nodes at cursor position
             if (nodes.length > 0) {
-              const { tr } = view.state;
-              const { from } = view.state.selection;
+              try {
+                const { tr } = view.state;
+                const { from } = view.state.selection;
 
-              // Insert content and track position
-              let insertPos = from;
-              nodes.forEach((node) => {
-                tr.insert(insertPos, node);
-                insertPos += node.nodeSize;
-              });
+                // Insert content and track position
+                let insertPos = from;
+                nodes.forEach((node) => {
+                  tr.insert(insertPos, node);
+                  insertPos += node.nodeSize;
+                });
 
-              // Move cursor to end of inserted content
-              tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos)));
+                // Move cursor to end of inserted content
+                tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos)));
 
-              view.dispatch(tr);
-              return true; // Prevent default paste
+                view.dispatch(tr);
+                return true; // Prevent default paste
+              } catch (err) {
+                // If insertion fails (e.g., block node at inline position),
+                // fall through to default paste behavior
+                console.warn(
+                  "[NostrPasteHandler] Failed to insert nodes:",
+                  err,
+                );
+                return false;
+              }
             }
 
             return false;

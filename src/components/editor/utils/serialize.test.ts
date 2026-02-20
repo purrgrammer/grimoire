@@ -115,6 +115,15 @@ describe("formatBlobSize", () => {
     // Exactly 1MB
     expect(formatBlobSize(1024 * 1024)).toBe("1.0MB");
   });
+
+  it("should handle zero", () => {
+    expect(formatBlobSize(0)).toBe("0B");
+  });
+
+  it("should handle very large values (no GB formatting)", () => {
+    // 1 GB displayed as MB
+    expect(formatBlobSize(1024 * 1024 * 1024)).toBe("1024.0MB");
+  });
 });
 
 describe("serializeRichContent", () => {
@@ -320,6 +329,49 @@ describe("serializeRichContent", () => {
       expect(result.addressRefs).toHaveLength(0);
     });
   });
+
+  describe("edge cases", () => {
+    it("should return empty result for empty editor", () => {
+      editor = createRichEditor();
+      const result = serializeRichContent(editor);
+      expect(result.text).toBe("");
+      expect(result.emojiTags).toHaveLength(0);
+      expect(result.blobAttachments).toHaveLength(0);
+      expect(result.addressRefs).toHaveLength(0);
+    });
+
+    it("should NOT collect blob attachments with null sha256", () => {
+      editor = createRichEditor();
+      editor.commands.insertContent({
+        type: "blobAttachment",
+        attrs: {
+          url: "https://cdn.example.com/image.png",
+          sha256: null,
+          mimeType: "image/png",
+          size: 1024,
+        },
+      });
+
+      const result = serializeRichContent(editor);
+      expect(result.blobAttachments).toHaveLength(0);
+    });
+
+    it("should NOT collect blob attachments with null url", () => {
+      editor = createRichEditor();
+      editor.commands.insertContent({
+        type: "blobAttachment",
+        attrs: {
+          url: null,
+          sha256: "abc123",
+          mimeType: "image/png",
+          size: 1024,
+        },
+      });
+
+      const result = serializeRichContent(editor);
+      expect(result.blobAttachments).toHaveLength(0);
+    });
+  });
 });
 
 describe("serializeInlineContent", () => {
@@ -467,6 +519,116 @@ describe("serializeInlineContent", () => {
       });
       expect(result.text).toContain(`nostr:${expectedNaddr}`);
       expect(result.addressRefs).toHaveLength(1);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should return empty result for empty editor", () => {
+      editor = createInlineEditor();
+      const result = serializeInlineContent(editor);
+      expect(result.text).toBe("");
+      expect(result.emojiTags).toHaveLength(0);
+      expect(result.blobAttachments).toHaveLength(0);
+      expect(result.addressRefs).toHaveLength(0);
+    });
+
+    it("should fall back to @label for invalid pubkey in mention", () => {
+      editor = createInlineEditor();
+      editor.commands.insertContent([
+        { type: "text", text: "Hello " },
+        {
+          type: "mention",
+          attrs: { id: "not-a-valid-hex-pubkey", label: "broken" },
+        },
+      ]);
+
+      const result = serializeInlineContent(editor);
+      expect(result.text).toContain("@broken");
+    });
+
+    it("should handle mention with missing pubkey", () => {
+      editor = createInlineEditor();
+      editor.commands.insertContent([
+        { type: "text", text: "Hello " },
+        {
+          type: "mention",
+          attrs: { id: null, label: "ghost" },
+        },
+      ]);
+
+      const result = serializeInlineContent(editor);
+      // Mention with null id should be silently dropped
+      expect(result.text).not.toContain("nostr:");
+      expect(result.text).not.toContain("@ghost");
+    });
+
+    it("should handle blob attachment without sha256 (emit URL but not collect)", () => {
+      editor = createInlineEditor();
+      editor.commands.insertContent({
+        type: "blobAttachment",
+        attrs: {
+          url: "https://cdn.example.com/image.png",
+          sha256: null,
+          mimeType: "image/png",
+        },
+      });
+
+      const result = serializeInlineContent(editor);
+      expect(result.text).toContain("https://cdn.example.com/image.png");
+      expect(result.blobAttachments).toHaveLength(0);
+    });
+
+    it("should handle blob attachment without url (skip entirely)", () => {
+      editor = createInlineEditor();
+      editor.commands.insertContent({
+        type: "blobAttachment",
+        attrs: { url: null, sha256: "abc123" },
+      });
+
+      const result = serializeInlineContent(editor);
+      expect(result.text.trim()).toBe("");
+      expect(result.blobAttachments).toHaveLength(0);
+    });
+
+    it("should deduplicate inline emoji tags", () => {
+      editor = createInlineEditor();
+      editor.commands.insertContent([
+        {
+          type: "emoji",
+          attrs: {
+            id: "pepe",
+            url: "https://cdn.example.com/pepe.png",
+            source: "custom",
+            mentionSuggestionChar: ":",
+          },
+        },
+        { type: "text", text: " " },
+        {
+          type: "emoji",
+          attrs: {
+            id: "pepe",
+            url: "https://cdn.example.com/pepe.png",
+            source: "custom",
+            mentionSuggestionChar: ":",
+          },
+        },
+      ]);
+
+      const result = serializeInlineContent(editor);
+      expect(result.emojiTags).toHaveLength(1);
+    });
+
+    it("should handle multiple paragraphs", () => {
+      editor = createInlineEditor("<p>Line 1</p><p>Line 2</p><p>Line 3</p>");
+      const result = serializeInlineContent(editor);
+      expect(result.text).toBe("Line 1\nLine 2\nLine 3");
+    });
+
+    it("should handle empty paragraphs", () => {
+      editor = createInlineEditor("<p>Before</p><p></p><p>After</p>");
+      const result = serializeInlineContent(editor);
+      expect(result.text).toContain("Before");
+      expect(result.text).toContain("After");
     });
   });
 

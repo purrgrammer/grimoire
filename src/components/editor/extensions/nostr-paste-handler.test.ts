@@ -347,5 +347,163 @@ describe("NostrPasteHandler", () => {
       expect(mentionCount).toBe(1);
       expect(previewCount).toBe(1);
     });
+
+    it("should not introduce double spaces between entity and text", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      handlePaste!(
+        editor.view,
+        mockPasteEvent(`${TEST_NPUB} said hello`),
+        null as any,
+      );
+
+      // Collect all text content from the doc
+      const textNodes: string[] = [];
+      editor.state.doc.descendants((node) => {
+        if (node.isText) textNodes.push(node.text!);
+      });
+      const fullText = textNodes.join("");
+
+      // Should not have double spaces
+      expect(fullText).not.toContain("  ");
+      expect(fullText).toContain("said hello");
+    });
+
+    it("should not add trailing space when entity is followed by more text", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      handlePaste!(
+        editor.view,
+        mockPasteEvent(`${TEST_NPUB} is cool`),
+        null as any,
+      );
+
+      const textNodes: string[] = [];
+      editor.state.doc.descendants((node) => {
+        if (node.isText) textNodes.push(node.text!);
+      });
+      const fullText = textNodes.join("");
+
+      // Should have exactly one space before "is cool"
+      expect(fullText).toMatch(/\sis cool$/);
+      expect(fullText).not.toMatch(/\s\sis cool$/);
+    });
+  });
+
+  describe("punctuation handling", () => {
+    it("should match bech32 followed by comma", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(`${TEST_NPUB}, check this out`),
+        null as any,
+      );
+
+      expect(handled).toBe(true);
+
+      let mentionCount = 0;
+      let hasComma = false;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "mention") mentionCount++;
+        if (node.isText && node.text?.includes(",")) hasComma = true;
+      });
+      expect(mentionCount).toBe(1);
+      expect(hasComma).toBe(true);
+    });
+
+    it("should match bech32 followed by period", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(`See ${TEST_NPUB}.`),
+        null as any,
+      );
+
+      expect(handled).toBe(true);
+    });
+
+    it("should match bech32 followed by exclamation mark", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(`Look at ${TEST_NPUB}!`),
+        null as any,
+      );
+
+      expect(handled).toBe(true);
+    });
+
+    it("should match bech32 followed by closing parenthesis", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(`(by ${TEST_NPUB})`),
+        null as any,
+      );
+
+      expect(handled).toBe(true);
+    });
+  });
+
+  describe("malformed bech32", () => {
+    it("should fall back to plain text for invalid bech32", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      // npub1 followed by lowercase chars (matches regex) but invalid checksum
+      const fakeBech32 =
+        "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(fakeBech32),
+        null as any,
+      );
+
+      // Should match regex but fail decode — falls back to plain text insert
+      // or returns false if the catch path just inserts text
+      if (handled) {
+        // The invalid bech32 was inserted as plain text
+        let hasPlainText = false;
+        editor.state.doc.descendants((node) => {
+          if (node.isText && node.text?.includes("npub1")) {
+            hasPlainText = true;
+          }
+        });
+        expect(hasPlainText).toBe(true);
+      }
+      // Either way, no mention node should be created
+      let mentionCount = 0;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "mention") mentionCount++;
+      });
+      expect(mentionCount).toBe(0);
+    });
+
+    it("should not match uppercase bech32", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+      const handled = handlePaste!(
+        editor.view,
+        mockPasteEvent(TEST_NPUB.toUpperCase()),
+        null as any,
+      );
+
+      expect(handled).toBe(false);
+    });
+  });
+
+  describe("error resilience", () => {
+    it("should not crash the editor on dispatch failure", () => {
+      editor = createEditor();
+      const handlePaste = getPasteHandler(editor);
+
+      // This should not throw, even if internal dispatch has issues
+      expect(() => {
+        handlePaste!(editor.view, mockPasteEvent(TEST_NPUB), null as any);
+      }).not.toThrow();
+    });
   });
 });

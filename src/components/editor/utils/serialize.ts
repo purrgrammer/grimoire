@@ -36,7 +36,7 @@ export function serializeRichContent(editor: Editor): SerializedContent {
       }
     } else if (node.type.name === "blobAttachment") {
       const { url, sha256, mimeType, size, server } = node.attrs;
-      if (!seenBlobs.has(sha256)) {
+      if (url && sha256 && !seenBlobs.has(sha256)) {
         seenBlobs.add(sha256);
         blobAttachments.push({ url, sha256, mimeType, size, server });
       }
