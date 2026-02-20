@@ -2,19 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { use$, useEventStore } from "applesauce-react/hooks";
 import { EventFactory } from "applesauce-core/event-factory";
 import { toast } from "sonner";
-import {
-  Radio,
-  ShieldBan,
-  Search,
-  Mail,
-  X,
-  Plus,
-  Loader2,
-  Save,
-  Undo2,
-  CircleDot,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { X, Plus, Loader2, Save, Undo2, CircleDot } from "lucide-react";
 import type { NostrEvent } from "nostr-tools";
 import {
   Accordion,
@@ -31,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { KindBadge } from "@/components/KindBadge";
+import { NIPBadge } from "@/components/NIPBadge";
 import { useAccount } from "@/hooks/useAccount";
 import { useRelayInfo } from "@/hooks/useRelayInfo";
 import { publishEvent } from "@/services/hub";
@@ -51,7 +41,7 @@ import {
 // --- Config ---
 
 interface RelayListKindUIConfig extends RelayListKindConfig {
-  icon: LucideIcon;
+  nip: string;
 }
 
 const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
@@ -60,7 +50,7 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     name: "Relay List",
     description:
       "Your primary read and write relays. Other clients use this to find your posts and deliver mentions to you.",
-    icon: Radio,
+    nip: "65",
     tagName: "r",
     hasMarkers: true,
   },
@@ -69,7 +59,7 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     name: "Blocked Relays",
     description:
       "Relays your client should never connect to. Useful for avoiding spam or untrusted servers.",
-    icon: ShieldBan,
+    nip: "51",
     tagName: "relay",
     hasMarkers: false,
   },
@@ -78,7 +68,7 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     name: "Search Relays",
     description:
       "Relays used for search queries. These should support NIP-50 full-text search.",
-    icon: Search,
+    nip: "51",
     tagName: "relay",
     hasMarkers: false,
   },
@@ -87,7 +77,7 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     name: "DM Relays",
     description:
       "Relays where you receive direct messages. Senders look up this list to deliver encrypted DMs to you.",
-    icon: Mail,
+    nip: "17",
     tagName: "relay",
     hasMarkers: false,
   },
@@ -260,7 +250,6 @@ function RelayListAccordion({
   isDirty: boolean;
   onChange: (entries: RelayEntry[]) => void;
 }) {
-  const Icon = config.icon;
   const existingUrls = useMemo(
     () => new Set(entries.map((e) => e.url)),
     [entries],
@@ -294,25 +283,34 @@ function RelayListAccordion({
   return (
     <AccordionItem value={`kind-${config.kind}`}>
       <AccordionTrigger className="hover:no-underline">
-        <div className="flex items-center gap-2.5">
-          <Icon className="size-4 text-muted-foreground flex-shrink-0" />
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium">{config.name}</span>
-            {entries.length > 0 && (
-              <span className="text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 tabular-nums">
-                {entries.length}
-              </span>
-            )}
-            {isDirty && (
-              <CircleDot className="size-3 text-primary flex-shrink-0" />
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <KindBadge
+            kind={config.kind}
+            variant="full"
+            className="text-sm"
+            iconClassname="text-muted-foreground"
+          />
+          {entries.length > 0 && (
+            <span className="text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 tabular-nums">
+              {entries.length}
+            </span>
+          )}
+          {isDirty && (
+            <CircleDot className="size-3 text-primary flex-shrink-0" />
+          )}
         </div>
       </AccordionTrigger>
       <AccordionContent>
-        <p className="text-xs text-muted-foreground mb-3">
-          {config.description}
-        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <p className="text-xs text-muted-foreground flex-1">
+            {config.description}
+          </p>
+          <NIPBadge
+            nipNumber={config.nip}
+            showName={false}
+            className="text-xs flex-shrink-0"
+          />
+        </div>
         {entries.length === 0 ? (
           <p className="text-xs text-muted-foreground italic py-2">
             No relays configured

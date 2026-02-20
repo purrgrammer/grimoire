@@ -375,6 +375,11 @@ This allows `applyTheme()` to switch themes at runtime.
 - Provides diagnostic UI with retry capability and error details
 - Error boundaries auto-reset when event changes
 
+**Shared Badge Components**:
+- **`KindBadge`** (`src/components/KindBadge.tsx`): Displays a Nostr event kind with icon, name, and kind number. Uses `getKindInfo()` from `src/constants/kinds.ts`. Variants: `"default"` (icon + name), `"compact"` (icon only), `"full"` (icon + name + kind number). Supports `clickable` prop to open kind detail window.
+- **`NIPBadge`** (`src/components/NIPBadge.tsx`): Displays a NIP reference with number and optional name. Clickable to open the NIP document in a new window. Shows deprecation state. Props: `nipNumber`, `showName`, `showNIPPrefix`.
+- Use these components whenever displaying kind numbers or NIP references in the UI — they provide consistent styling, tooltips, and navigation.
+
 ## Chat System
 
 **Current Status**: Only NIP-29 (relay-based groups) is supported. Other protocols are planned for future releases.
