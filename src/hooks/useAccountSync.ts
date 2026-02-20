@@ -89,6 +89,25 @@ export function useAccountSync() {
     };
   }, [activeAccount?.pubkey, eventStore, setActiveAccountRelays]);
 
+  // Fetch other replaceable relay lists (10006, 10007, 10050) when account changes
+  // These are read directly from EventStore in the settings UI, we just need to trigger fetching
+  useEffect(() => {
+    if (!activeAccount?.pubkey) {
+      return;
+    }
+
+    const pubkey = activeAccount.pubkey;
+    const relayListKinds = [10006, 10007, 10050];
+
+    const subscriptions = relayListKinds.map((kind) =>
+      addressLoader({ kind, pubkey, identifier: "" }).subscribe(),
+    );
+
+    return () => {
+      subscriptions.forEach((s) => s.unsubscribe());
+    };
+  }, [activeAccount?.pubkey]);
+
   // Fetch and watch blossom server list (kind 10063) when account changes
   useEffect(() => {
     if (!activeAccount?.pubkey) {
