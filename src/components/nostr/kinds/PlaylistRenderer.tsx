@@ -9,34 +9,8 @@ import { BaseEventContainer, ClickableEventTitle } from "./BaseEventRenderer";
 import type { BaseEventProps } from "./BaseEventRenderer";
 import { Label } from "@/components/ui/label";
 import { UserName } from "../UserName";
-import { useAddWindow } from "@/core/state";
-import { nip19 } from "nostr-tools";
-import { ListMusic, Music, ExternalLink } from "lucide-react";
-import type { AddressPointer } from "nostr-tools/nip19";
-
-function TrackItem({ pointer }: { pointer: AddressPointer }) {
-  const addWindow = useAddWindow();
-
-  const naddr = nip19.naddrEncode(pointer);
-  const displayText = pointer.identifier || naddr.slice(0, 24) + "...";
-
-  const handleClick = () => {
-    addWindow("open", { pointer });
-  };
-
-  return (
-    <div
-      className="flex items-center gap-2 text-sm cursor-crosshair hover:bg-muted/50 rounded px-2 py-1.5 transition-colors"
-      onClick={handleClick}
-    >
-      <Music className="size-3.5 text-muted-foreground flex-shrink-0" />
-      <span className="text-accent hover:underline hover:decoration-dotted truncate">
-        {displayText}
-      </span>
-      <ExternalLink className="size-3 text-muted-foreground flex-shrink-0 ml-auto" />
-    </div>
-  );
-}
+import { EventRefListFull } from "../lists/EventRefList";
+import { ListMusic, Music } from "lucide-react";
 
 export function PlaylistRenderer({ event }: BaseEventProps) {
   const title = getPlaylistTitle(event);
@@ -94,24 +68,12 @@ export function PlaylistDetailRenderer({ event }: { event: NostrEvent }) {
         </div>
 
         {/* Track list */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-1">
-            <Music className="size-5 text-muted-foreground" />
-            <span className="font-semibold">Tracks ({tracks.length})</span>
-          </div>
-          {tracks.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">
-              No tracks
-            </div>
-          ) : (
-            tracks.map((pointer) => (
-              <TrackItem
-                key={`${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`}
-                pointer={pointer}
-              />
-            ))
-          )}
-        </div>
+        <EventRefListFull
+          addressPointers={tracks}
+          label="Tracks"
+          icon={<Music className="size-5 text-muted-foreground" />}
+          embedded
+        />
       </div>
     </div>
   );
