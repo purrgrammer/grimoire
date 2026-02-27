@@ -63,7 +63,7 @@ Examples:
 | `name`           | `<string>` | Human-readable spell name                                    |
 | `alt`            | `<string>` | [NIP-31](31.md) alternative text                             |
 | `t`              | `<topic>`  | Topic tag for categorization (multiple allowed)              |
-| `close-on-eose` | `""`       | Clients SHOULD close the subscription after EOSE             |
+| `close-on-eose` | none       | Clients SHOULD close the subscription after EOSE             |
 | `e`              | `<event-id>` | Fork provenance: references the parent spell event        |
 
 Note: `["t", "bitcoin"]` as a top-level tag categorizes the spell itself, while `["tag", "t", "bitcoin"]` is a filter condition matching events with `#t = bitcoin`. Both may appear in the same event.
@@ -179,7 +179,7 @@ A COUNT spell with multiple kinds and an absolute timestamp:
     ["k", "7"],
     ["authors", "$me"],
     ["since", "1704067200"],
-    ["close-on-eose", ""]
+    ["close-on-eose"]
   ]
 }
 ```
