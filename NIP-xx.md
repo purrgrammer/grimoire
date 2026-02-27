@@ -90,18 +90,22 @@ Grammar:
 ```
 value = unix-timestamp / relative-time / "now"
 relative-time = 1*DIGIT unit
-unit = "s" / "m" / "h" / "d" / "w"
+unit = "s" / "m" / "h" / "d" / "w" / "mo" / "y"
 ```
 
-| unit | meaning | seconds |
-| ---- | ------- | ------- |
-| `s`  | seconds | 1       |
-| `m`  | minutes | 60      |
-| `h`  | hours   | 3600    |
-| `d`  | days    | 86400   |
-| `w`  | weeks   | 604800  |
+| unit | meaning | seconds   |
+| ---- | ------- | --------- |
+| `s`  | seconds | 1         |
+| `m`  | minutes | 60        |
+| `h`  | hours   | 3600      |
+| `d`  | days    | 86400     |
+| `w`  | weeks   | 604800    |
+| `mo` | months  | 2592000   |
+| `y`  | years   | 31536000  |
 
-`now` resolves to the current Unix timestamp. A relative time `Nd` resolves to `now - N * 86400`.
+Months and years use approximate fixed durations (30 days and 365 days respectively).
+
+`now` resolves to the current Unix timestamp. A relative time like `7d` resolves to `now - 7 * 86400`.
 
 Clients MUST resolve relative timestamps to absolute Unix timestamps before constructing a REQ message.
 
@@ -154,14 +158,14 @@ A spell that finds recent notes about Bitcoin from the user's contacts:
 }
 ```
 
-When executed by a user with 3 contacts, this resolves to:
+When executed by a user with 3 contacts, `$contacts` resolves to their pubkeys and `7d` resolves to 7 days before the current time:
 
 ```json
 ["REQ", "<sub-id>", {
   "kinds": [1],
   "authors": ["aabb...", "ccdd...", "eeff..."],
   "#t": ["bitcoin"],
-  "since": 1740585600,
+  "since": 1740000000,
   "limit": 50
 }]
 ```
