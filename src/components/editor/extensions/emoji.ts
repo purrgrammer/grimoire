@@ -30,6 +30,14 @@ export const EmojiMention = Mention.extend({
           return { "data-source": attributes.source };
         },
       },
+      address: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-address"),
+        renderHTML: (attributes) => {
+          if (!attributes.address) return {};
+          return { "data-address": attributes.address };
+        },
+      },
     };
   },
 

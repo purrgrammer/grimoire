@@ -131,7 +131,10 @@ export const EmojiSuggestionList = forwardRef<
         ref={virtuosoRef}
         totalCount={items.length}
         fixedItemHeight={ITEM_HEIGHT}
-        style={{ height: listHeight }}
+        style={{
+          height: listHeight,
+          overflow: items.length <= MAX_VISIBLE ? "hidden" : "auto",
+        }}
         itemContent={renderItem}
       />
     </div>

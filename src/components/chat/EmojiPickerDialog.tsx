@@ -252,7 +252,11 @@ export function EmojiPickerDialog({
               ref={virtuosoRef}
               totalCount={displayEmojis.length}
               fixedItemHeight={ITEM_HEIGHT}
-              style={{ height: listHeight }}
+              style={{
+                height: listHeight,
+                overflow:
+                  displayEmojis.length <= MAX_VISIBLE ? "hidden" : "auto",
+              }}
               itemContent={renderItem}
             />
           </div>

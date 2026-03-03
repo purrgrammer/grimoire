@@ -8,6 +8,7 @@ import {
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { ProfileSearchResult } from "@/services/profile-search";
+import { UserName } from "../nostr/UserName";
 
 export interface ProfileSuggestionListProps {
   items: ProfileSearchResult[];
@@ -102,7 +103,7 @@ export const ProfileSuggestionList = forwardRef<
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">
-              {item.displayName}
+              <UserName pubkey={item.pubkey} />
             </div>
             {item.nip05 && (
               <div className="truncate text-xs text-popover-foreground/60">
@@ -135,7 +136,10 @@ export const ProfileSuggestionList = forwardRef<
         ref={virtuosoRef}
         totalCount={items.length}
         fixedItemHeight={ITEM_HEIGHT}
-        style={{ height: listHeight }}
+        style={{
+          height: listHeight,
+          overflow: items.length <= MAX_VISIBLE ? "hidden" : "auto",
+        }}
         itemContent={renderItem}
       />
     </div>

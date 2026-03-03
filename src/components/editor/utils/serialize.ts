@@ -28,11 +28,11 @@ export function serializeRichContent(editor: Editor): SerializedContent {
   // Walk the document to collect emoji, blob, and address reference data
   editor.state.doc.descendants((node) => {
     if (node.type.name === "emoji") {
-      const { id, url, source } = node.attrs;
+      const { id, url, source, address } = node.attrs;
       // Only add custom emojis (not unicode) and avoid duplicates
       if (source !== "unicode" && !seenEmojis.has(id)) {
         seenEmojis.add(id);
-        emojiTags.push({ shortcode: id, url });
+        emojiTags.push({ shortcode: id, url, address: address ?? undefined });
       }
     } else if (node.type.name === "blobAttachment") {
       const { url, sha256, mimeType, size, server } = node.attrs;
@@ -100,6 +100,7 @@ export function serializeInlineContent(editor: Editor): SerializedContent {
           const shortcode = child.attrs?.id;
           const url = child.attrs?.url;
           const source = child.attrs?.source;
+          const address = child.attrs?.address;
 
           if (source === "unicode" && url) {
             text += url;
@@ -107,7 +108,7 @@ export function serializeInlineContent(editor: Editor): SerializedContent {
             text += `:${shortcode}:`;
             if (url && !seenEmojis.has(shortcode)) {
               seenEmojis.add(shortcode);
-              emojiTags.push({ shortcode, url });
+              emojiTags.push({ shortcode, url, address: address ?? undefined });
             }
           }
         } else if (child.type === "blobAttachment") {

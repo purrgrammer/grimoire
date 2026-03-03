@@ -25,7 +25,7 @@ import { NostrEventPreviewInlineNode } from "./extensions/nostr-event-preview-in
 import { SubmitShortcut } from "./extensions/submit-shortcut";
 import { serializeInlineContent } from "./utils/serialize";
 import { useSuggestionRenderer } from "./hooks/useSuggestionRenderer";
-import type { BlobAttachment, SerializedContent } from "./types";
+import type { EmojiTag, BlobAttachment, SerializedContent } from "./types";
 
 // Re-export types for backward compatibility
 export type { EmojiTag, BlobAttachment, SerializedContent } from "./types";
@@ -34,7 +34,7 @@ export interface MentionEditorProps {
   placeholder?: string;
   onSubmit?: (
     content: string,
-    emojiTags: Array<{ shortcode: string; url: string }>,
+    emojiTags: EmojiTag[],
     blobAttachments: BlobAttachment[],
   ) => void;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
