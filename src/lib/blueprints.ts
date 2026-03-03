@@ -140,9 +140,10 @@ export function NoteReplyBlueprint(
 // GroupMessageBlueprint
 // ---------------------------------------------------------------------------
 
-export type GroupMessageOptions = TextContentOptionsWithAddress & {
-  previous?: NostrEvent[];
-};
+export type GroupMessageOptions = TextContentOptionsWithAddress &
+  MetaTagOptions & {
+    previous?: NostrEvent[];
+  };
 
 export function GroupMessageBlueprint(
   group: GroupPointer,
