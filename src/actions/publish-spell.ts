@@ -1,6 +1,7 @@
 import { LocalSpell } from "@/services/db";
 import accountManager from "@/services/accounts";
 import publishService from "@/services/publish-service";
+import { selectRelaysForPublish } from "@/services/relay-selection";
 import { encodeSpell } from "@/lib/spell-conversion";
 import { markSpellPublished } from "@/services/spell-storage";
 import { EventFactory } from "applesauce-core/event-factory";
@@ -50,21 +51,19 @@ export class PublishSpellAction {
       event = (await factory.sign(draft)) as SpellEvent;
     }
 
-    // Get relay hints from event tags
-    const eventRelayHints =
-      event.tags.find((t) => t[0] === "relays")?.slice(1) || [];
-
-    // Publish via centralized PublishService
-    let result;
+    // Determine relays: explicit target relays or outbox selection with hints
+    let relays: string[];
     if (targetRelays && targetRelays.length > 0) {
-      // Use explicit target relays
-      result = await publishService.publishToRelays(event, targetRelays);
+      relays = targetRelays;
     } else {
-      // Use automatic relay selection with event hints
-      result = await publishService.publish(event, {
+      const eventRelayHints =
+        event.tags.find((t) => t[0] === "relays")?.slice(1) || [];
+      relays = await selectRelaysForPublish(account.pubkey, {
         relayHints: eventRelayHints,
       });
     }
+
+    const result = await publishService.publish(event, relays);
 
     if (!result.ok) {
       const errors = result.failed

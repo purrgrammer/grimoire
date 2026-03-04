@@ -497,6 +497,22 @@ class EventLogService {
       entry.publishId,
     );
   }
+
+  /**
+   * Retry a single relay for a publish entry
+   */
+  async retryRelay(entryId: string, relay: string): Promise<void> {
+    const entry = this.entries.find(
+      (e) => e.id === entryId && e.type === "PUBLISH",
+    ) as PublishLogEntry | undefined;
+
+    if (!entry) return;
+
+    const status = entry.relayStatus.get(relay);
+    if (!status || status.status !== "error") return;
+
+    await publishService.retryRelays(entry.event, [relay], entry.publishId);
+  }
 }
 
 // ============================================================================

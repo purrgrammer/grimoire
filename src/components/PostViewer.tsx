@@ -415,9 +415,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       setLastPublishedEvent(event);
 
       // Use PublishService with status updates
-      const { updates$, result } = publishService.publishWithUpdates(event, {
-        relays: selected,
-      });
+      const { updates$, result } = publishService.publishWithUpdates(
+        event,
+        selected,
+      );
 
       // Subscribe to per-relay status updates for UI
       const subscription = updates$.subscribe((update) => {

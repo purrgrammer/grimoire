@@ -1,5 +1,6 @@
 import accountManager from "@/services/accounts";
 import publishService from "@/services/publish-service";
+import { selectRelaysForPublish } from "@/services/relay-selection";
 import { EventFactory } from "applesauce-core/event-factory";
 import { NostrEvent } from "@/types/nostr";
 import { settingsManager } from "@/services/settings";
@@ -32,9 +33,9 @@ export class DeleteEventAction {
 
     const event = await factory.sign(draft);
 
-    // Publish via centralized PublishService
-    // Relay selection is handled automatically (outbox + state + aggregators)
-    const result = await publishService.publish(event);
+    // Select relays and publish
+    const relays = await selectRelaysForPublish(account.pubkey);
+    const result = await publishService.publish(event, relays);
 
     if (!result.ok) {
       const errors = result.failed

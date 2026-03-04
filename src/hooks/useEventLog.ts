@@ -29,8 +29,12 @@ export interface UseEventLogResult {
   clear: () => void;
   /** Retry failed relays for a publish entry */
   retryFailedRelays: (entryId: string) => Promise<void>;
+  /** Retry a single relay for a publish entry */
+  retryRelay: (entryId: string, relay: string) => Promise<void>;
   /** Total count of all entries (before filtering) */
   totalCount: number;
+  /** Per-type counts (before filtering) */
+  typeCounts: Record<string, number>;
 }
 
 /**
@@ -108,12 +112,29 @@ export function useEventLog(
     await eventLog.retryFailedRelays(entryId);
   }, []);
 
+  // Retry a single relay
+  const retryRelay = useCallback(async (entryId: string, relay: string) => {
+    await eventLog.retryRelay(entryId, relay);
+  }, []);
+
+  // Per-type counts from unfiltered entries
+  const typeCounts = useMemo(
+    () =>
+      entries.reduce<Record<string, number>>(
+        (acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }),
+        {},
+      ),
+    [entries],
+  );
+
   return {
     entries: filteredEntries,
     publishEntries,
     clear,
     retryFailedRelays,
+    retryRelay,
     totalCount: entries.length,
+    typeCounts,
   };
 }
 

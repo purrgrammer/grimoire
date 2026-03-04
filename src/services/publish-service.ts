@@ -2,10 +2,13 @@
  * Centralized Publish Service
  *
  * Provides a unified API for publishing Nostr events with:
- * - Smart relay selection (outbox + state write relays + hints + fallbacks)
  * - Per-relay status tracking via RxJS observables
  * - EventStore integration
  * - Logging/observability hooks for EventLogService
+ *
+ * Relay selection is NOT handled here — callers must provide
+ * an explicit relay list. Use selectRelaysForPublish() or
+ * selectRelaysForInteraction() from relay-selection.ts.
  *
  * All publishing in Grimoire should go through this service.
  */
@@ -13,13 +16,8 @@
 import { Subject, Observable } from "rxjs";
 import { filter } from "rxjs/operators";
 import type { NostrEvent } from "nostr-tools";
-import { mergeRelaySets, getSeenRelays } from "applesauce-core/helpers";
 import pool from "./relay-pool";
 import eventStore from "./event-store";
-import { relayListCache } from "./relay-list-cache";
-import { AGGREGATOR_RELAYS } from "./loaders";
-import { grimoireStateAtom } from "@/core/state";
-import { getDefaultStore } from "jotai";
 
 // ============================================================================
 // Types
@@ -74,24 +72,10 @@ export interface PublishResult {
 
 /** Options for publish operations */
 export interface PublishOptions {
-  /** Explicit relays to publish to (overrides automatic selection) */
-  relays?: string[];
-  /** Additional relay hints to include */
-  relayHints?: string[];
   /** Skip adding to EventStore after publish */
   skipEventStore?: boolean;
   /** Custom publish ID (for retry operations) */
   publishId?: string;
-}
-
-/** Options for relay selection */
-export interface RelaySelectionOptions {
-  /** Author pubkey for outbox relay lookup */
-  authorPubkey?: string;
-  /** Additional relay hints */
-  relayHints?: string[];
-  /** Include aggregator relays as fallback */
-  includeAggregators?: boolean;
 }
 
 // ============================================================================
@@ -138,88 +122,6 @@ class PublishService {
   }
 
   // --------------------------------------------------------------------------
-  // Relay Selection
-  // --------------------------------------------------------------------------
-
-  /**
-   * Select relays for publishing an event
-   *
-   * Priority order:
-   * 1. Author's outbox relays (kind 10002)
-   * 2. User's configured write relays (from Grimoire state)
-   * 3. Relay hints (seen relays, explicit hints)
-   * 4. Aggregator relays (fallback)
-   */
-  async selectRelays(options: RelaySelectionOptions = {}): Promise<string[]> {
-    const {
-      authorPubkey,
-      relayHints = [],
-      includeAggregators = true,
-    } = options;
-
-    const relaySets: string[][] = [];
-
-    // 1. Author's outbox relays from kind 10002
-    if (authorPubkey) {
-      const outboxRelays = await relayListCache.getOutboxRelays(authorPubkey);
-      if (outboxRelays && outboxRelays.length > 0) {
-        relaySets.push(outboxRelays);
-      }
-    }
-
-    // 2. User's configured write relays from Grimoire state
-    const store = getDefaultStore();
-    const state = store.get(grimoireStateAtom);
-    const stateWriteRelays =
-      state.activeAccount?.relays?.filter((r) => r.write).map((r) => r.url) ||
-      [];
-    if (stateWriteRelays.length > 0) {
-      relaySets.push(stateWriteRelays);
-    }
-
-    // 3. Relay hints
-    if (relayHints.length > 0) {
-      relaySets.push(relayHints);
-    }
-
-    // 4. Aggregator relays as fallback
-    if (includeAggregators) {
-      relaySets.push(AGGREGATOR_RELAYS);
-    }
-
-    // Merge and deduplicate
-    const merged = mergeRelaySets(...relaySets);
-
-    // If still empty, return aggregators as last resort
-    if (merged.length === 0) {
-      return AGGREGATOR_RELAYS;
-    }
-
-    return merged;
-  }
-
-  /**
-   * Select relays for an event using its metadata
-   */
-  async selectRelaysForEvent(
-    event: NostrEvent,
-    additionalHints: string[] = [],
-  ): Promise<string[]> {
-    // Get seen relays from the event
-    const seenRelays = getSeenRelays(event);
-    const hints = [
-      ...additionalHints,
-      ...(seenRelays ? Array.from(seenRelays) : []),
-    ];
-
-    return this.selectRelays({
-      authorPubkey: event.pubkey,
-      relayHints: hints,
-      includeAggregators: true,
-    });
-  }
-
-  // --------------------------------------------------------------------------
   // Publish Methods
   // --------------------------------------------------------------------------
 
@@ -231,28 +133,22 @@ class PublishService {
   }
 
   /**
-   * Publish an event and return a Promise with the result
+   * Publish an event to the given relays
    *
-   * This is the main publish method - use this for simple fire-and-forget publishing.
+   * Callers must provide an explicit relay list — use selectRelaysForPublish()
+   * or selectRelaysForInteraction() from relay-selection.ts to build it.
    */
   async publish(
     event: NostrEvent,
+    relays: string[],
     options: PublishOptions = {},
   ): Promise<PublishResult> {
     const publishId = options.publishId || this.generatePublishId();
     const startedAt = Date.now();
 
-    // Determine target relays
-    let relays: string[];
-    if (options.relays && options.relays.length > 0) {
-      relays = options.relays;
-    } else {
-      relays = await this.selectRelaysForEvent(event, options.relayHints);
-    }
-
     if (relays.length === 0) {
       throw new Error(
-        "No relays available for publishing. Please configure relay list or provide relay hints.",
+        "No relays provided for publishing. Use selectRelaysForPublish() to select relays.",
       );
     }
 
@@ -341,19 +237,6 @@ class PublishService {
   }
 
   /**
-   * Publish to specific relays (explicit relay list)
-   *
-   * Use this when you know exactly which relays to publish to.
-   */
-  async publishToRelays(
-    event: NostrEvent,
-    relays: string[],
-    options: Omit<PublishOptions, "relays"> = {},
-  ): Promise<PublishResult> {
-    return this.publish(event, { ...options, relays });
-  }
-
-  /**
    * Retry publishing to specific relays
    *
    * Use this to retry failed relays from a previous publish.
@@ -363,8 +246,7 @@ class PublishService {
     relays: string[],
     originalPublishId?: string,
   ): Promise<PublishResult> {
-    return this.publish(event, {
-      relays,
+    return this.publish(event, relays, {
       publishId: originalPublishId ? `${originalPublishId}_retry` : undefined,
       skipEventStore: true, // Event should already be in store from original publish
     });
@@ -382,6 +264,7 @@ class PublishService {
    */
   publishWithUpdates(
     event: NostrEvent,
+    relays: string[],
     options: PublishOptions = {},
   ): {
     publishId: string;
@@ -394,7 +277,7 @@ class PublishService {
     const updates$ = this.getStatusUpdates(publishId);
 
     // Start the publish (returns promise)
-    const result = this.publish(event, { ...options, publishId });
+    const result = this.publish(event, relays, { ...options, publishId });
 
     return { publishId, updates$, result };
   }

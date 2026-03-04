@@ -2,13 +2,28 @@ import { ActionRunner } from "applesauce-actions";
 import eventStore from "./event-store";
 import { EventFactory } from "applesauce-core/event-factory";
 import type { NostrEvent } from "nostr-tools/core";
+import { getSeenRelays } from "applesauce-core/helpers/relays";
+import { getDefaultStore } from "jotai";
 import accountManager from "./accounts";
 import publishService from "./publish-service";
+import { selectRelaysForPublish } from "./relay-selection";
+import { grimoireStateAtom } from "@/core/state";
 
 /**
- * Publishes a Nostr event to relays using the centralized PublishService
+ * Get the active user's configured write relays from Grimoire state
+ */
+function getStateWriteRelays(): string[] {
+  const store = getDefaultStore();
+  const state = store.get(grimoireStateAtom);
+  return (
+    state.activeAccount?.relays?.filter((r) => r.write).map((r) => r.url) || []
+  );
+}
+
+/**
+ * Publishes a Nostr event to relays using the outbox model
  *
- * Relay selection strategy (in priority order):
+ * Relay selection via selectRelaysForPublish():
  * 1. Author's outbox relays (kind 10002)
  * 2. User's configured write relays (from Grimoire state)
  * 3. Seen relays from the event
@@ -17,7 +32,13 @@ import publishService from "./publish-service";
  * @param event - The signed Nostr event to publish
  */
 export async function publishEvent(event: NostrEvent): Promise<void> {
-  const result = await publishService.publish(event);
+  const seenRelays = getSeenRelays(event);
+  const relays = await selectRelaysForPublish(event.pubkey, {
+    writeRelays: getStateWriteRelays(),
+    relayHints: seenRelays ? Array.from(seenRelays) : [],
+  });
+
+  const result = await publishService.publish(event, relays);
 
   if (!result.ok) {
     const errors = result.failed
@@ -36,7 +57,7 @@ const factory = new EventFactory();
  * Configured with:
  * - EventStore: Single source of truth for Nostr events
  * - EventFactory: Creates and signs events
- * - publishEvent: Publishes events via centralized PublishService
+ * - publishEvent: Publishes events via outbox relay selection + PublishService
  */
 export const hub = new ActionRunner(eventStore, factory, publishEvent);
 
@@ -60,7 +81,7 @@ export async function publishEventToRelays(
     throw new Error("No relays provided for publishing.");
   }
 
-  const result = await publishService.publishToRelays(event, relays);
+  const result = await publishService.publish(event, relays);
 
   if (!result.ok) {
     const errors = result.failed

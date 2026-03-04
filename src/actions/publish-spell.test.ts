@@ -27,10 +27,8 @@ vi.mock("@/services/spell-storage", () => ({
   markSpellPublished: vi.fn(),
 }));
 
-vi.mock("@/services/relay-list-cache", () => ({
-  relayListCache: {
-    getOutboxRelays: vi.fn().mockResolvedValue([]),
-  },
+vi.mock("@/services/relay-selection", () => ({
+  selectRelaysForPublish: vi.fn().mockResolvedValue(["wss://test.relay/"]),
 }));
 
 vi.mock("@/services/event-store", () => ({
