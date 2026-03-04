@@ -617,11 +617,22 @@ export async function selectRelaysForInteraction(
   authorPubkey: string,
   targetPubkey: string,
 ): Promise<string[]> {
-  // Fetch relays in parallel
-  const [authorOutbox, targetInbox] = await Promise.all([
+  // Check cache first, only fetch from network if missing
+  const [cachedOutbox, cachedInbox] = await Promise.all([
     relayListCache.getOutboxRelays(authorPubkey),
     relayListCache.getInboxRelays(targetPubkey),
   ]);
+
+  const needsFetch: Promise<void>[] = [];
+  if (!cachedOutbox) needsFetch.push(fetchRelayList(authorPubkey, 1000));
+  if (!cachedInbox) needsFetch.push(fetchRelayList(targetPubkey, 1000));
+  if (needsFetch.length > 0) await Promise.all(needsFetch);
+
+  // Re-read after fetch (use cached values if no fetch was needed)
+  const authorOutbox =
+    cachedOutbox ?? (await relayListCache.getOutboxRelays(authorPubkey));
+  const targetInbox =
+    cachedInbox ?? (await relayListCache.getInboxRelays(targetPubkey));
 
   const outboxRelays = authorOutbox || [];
   const inboxRelays = targetInbox || [];

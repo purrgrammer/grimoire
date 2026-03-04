@@ -114,13 +114,6 @@ class PublishService {
     );
   }
 
-  /**
-   * Get status updates for a specific relay
-   */
-  getRelayStatusUpdates(relay: string): Observable<RelayStatusUpdate> {
-    return this.status$.pipe(filter((update) => update.relay === relay));
-  }
-
   // --------------------------------------------------------------------------
   // Publish Methods
   // --------------------------------------------------------------------------
@@ -303,20 +296,6 @@ class PublishService {
       timestamp: Date.now(),
     });
   }
-
-  /**
-   * Get active publish operations
-   */
-  getActivePublishes(): PublishEvent[] {
-    return Array.from(this.activePublishes.values());
-  }
-
-  /**
-   * Check if a publish operation is active
-   */
-  isPublishing(publishId: string): boolean {
-    return this.activePublishes.has(publishId);
-  }
 }
 
 // ============================================================================
@@ -325,6 +304,3 @@ class PublishService {
 
 const publishService = new PublishService();
 export default publishService;
-
-// Also export the class for testing
-export { PublishService };

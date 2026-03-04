@@ -4,7 +4,7 @@
  * Compact log of relay operations for debugging and introspection.
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Check,
   X,
@@ -45,7 +45,6 @@ import { EventErrorBoundary } from "./EventErrorBoundary";
 
 type TabFilter = "all" | "publish" | "connect" | "auth" | "notice";
 
-/** Map tab values to the EventLogType(s) they filter */
 const TAB_TYPE_MAP: Record<TabFilter, EventLogType[] | undefined> = {
   all: undefined,
   publish: ["PUBLISH"],
@@ -61,6 +60,17 @@ const TAB_FILTERS: { value: TabFilter; label: string }[] = [
   { value: "auth", label: "Auth" },
   { value: "notice", label: "Notice" },
 ];
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const AUTH_STATUS_TOOLTIP: Record<string, string> = {
+  challenge: "Auth challenge",
+  success: "Auth success",
+  failed: "Auth failed",
+  rejected: "Auth rejected",
+};
 
 // ============================================================================
 // Shared row layout
@@ -284,13 +294,6 @@ function ConnectEntry({ entry }: { entry: ConnectLogEntry }) {
 function AuthEntry({ entry }: { entry: AuthLogEntry }) {
   const [expanded, setExpanded] = useState(false);
 
-  const statusTooltip: Record<string, string> = {
-    challenge: "Auth challenge",
-    success: "Auth success",
-    failed: "Auth failed",
-    rejected: "Auth rejected",
-  };
-
   return (
     <EntryRow
       icon={
@@ -304,7 +307,7 @@ function AuthEntry({ entry }: { entry: AuthLogEntry }) {
           <ShieldAlert className="size-3.5 text-muted-foreground" />
         )
       }
-      tooltip={statusTooltip[entry.status] ?? "Auth"}
+      tooltip={AUTH_STATUS_TOOLTIP[entry.status] ?? "Auth"}
       timestamp={entry.timestamp}
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
@@ -389,6 +392,16 @@ function LogEntryRenderer({
 // Main Component
 // ============================================================================
 
+function getTabCount(
+  tab: TabFilter,
+  totalCount: number,
+  typeCounts: Record<string, number>,
+): number {
+  const types = TAB_TYPE_MAP[tab];
+  if (!types) return totalCount;
+  return types.reduce((sum, t) => sum + (typeCounts[t] || 0), 0);
+}
+
 export function EventLogViewer() {
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
 
@@ -400,33 +413,7 @@ export function EventLogViewer() {
     retryRelay,
     totalCount,
     typeCounts,
-  } = useEventLog({
-    types: filterTypes,
-  });
-
-  /** Get count for a tab filter */
-  const getTabCount = useCallback(
-    (tab: TabFilter): number => {
-      const types = TAB_TYPE_MAP[tab];
-      if (!types) return totalCount;
-      return types.reduce((sum, t) => sum + (typeCounts[t] || 0), 0);
-    },
-    [totalCount, typeCounts],
-  );
-
-  const handleRetry = useCallback(
-    async (entryId: string) => {
-      await retryFailedRelays(entryId);
-    },
-    [retryFailedRelays],
-  );
-
-  const handleRetryRelay = useCallback(
-    async (entryId: string, relay: string) => {
-      await retryRelay(entryId, relay);
-    },
-    [retryRelay],
-  );
+  } = useEventLog({ types: filterTypes });
 
   return (
     <div className="h-full flex flex-col">
@@ -437,20 +424,23 @@ export function EventLogViewer() {
           onValueChange={(v) => setActiveTab(v as TabFilter)}
         >
           <TabsList className="h-7">
-            {TAB_FILTERS.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="text-xs px-1.5 h-5 gap-1"
-              >
-                {tab.label}
-                {getTabCount(tab.value) > 0 && (
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {getTabCount(tab.value)}
-                  </span>
-                )}
-              </TabsTrigger>
-            ))}
+            {TAB_FILTERS.map((tab) => {
+              const count = getTabCount(tab.value, totalCount, typeCounts);
+              return (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="text-xs px-1.5 h-5 gap-1"
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      {count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
         </Tabs>
 
@@ -476,8 +466,8 @@ export function EventLogViewer() {
             <LogEntryRenderer
               key={entry.id}
               entry={entry}
-              onRetry={handleRetry}
-              onRetryRelay={handleRetryRelay}
+              onRetry={retryFailedRelays}
+              onRetryRelay={retryRelay}
             />
           ))
         )}

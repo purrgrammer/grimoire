@@ -32,7 +32,7 @@ export const darkTheme: Theme = {
     mutedForeground: "215 20.2% 70%",
 
     destructive: "0 72% 63%",
-    destructiveForeground: "0 0% 100%",
+    destructiveForeground: "210 40% 98%",
 
     border: "217.2 32.6% 17.5%",
     input: "217.2 32.6% 17.5%",

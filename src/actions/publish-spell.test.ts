@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PublishSpellAction } from "./publish-spell";
 import accountManager from "@/services/accounts";
-import pool from "@/services/relay-pool";
+import publishService from "@/services/publish-service";
 import * as spellStorage from "@/services/spell-storage";
 import { LocalSpell } from "@/services/db";
 
@@ -15,11 +15,15 @@ vi.mock("@/services/accounts", () => ({
   },
 }));
 
-vi.mock("@/services/relay-pool", () => ({
+vi.mock("@/services/publish-service", () => ({
   default: {
-    publish: vi
-      .fn()
-      .mockResolvedValue([{ from: "wss://test.relay/", ok: true }]),
+    publish: vi.fn().mockResolvedValue({
+      publishId: "pub_1",
+      event: {},
+      successful: ["wss://test.relay/"],
+      failed: [],
+      ok: true,
+    }),
   },
 }));
 
@@ -89,18 +93,18 @@ describe("PublishSpellAction", () => {
 
     await action.execute(spell);
 
-    // Check if signer was called
     expect(mockSigner.signEvent).toHaveBeenCalled();
 
-    // Check if published to pool
-    expect(pool.publish).toHaveBeenCalled();
+    // Verify publishService was called (not pool.publish)
+    expect(publishService.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 777 }),
+      ["wss://test.relay/"],
+    );
 
-    // Check if storage updated
     expect(spellStorage.markSpellPublished).toHaveBeenCalledWith(
       "local-id",
       expect.objectContaining({
         kind: 777,
-        // We expect tags to contain name and alt (description)
         tags: expect.arrayContaining([
           ["name", "My Spell"],
           ["alt", expect.stringContaining("Description")],

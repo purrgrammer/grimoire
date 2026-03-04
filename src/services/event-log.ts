@@ -443,29 +443,6 @@ class EventLogService {
   }
 
   /**
-   * Get entries filtered by type
-   */
-  getEntriesByType(type: EventLogType): LogEntry[] {
-    return this.entries.filter((e) => e.type === type);
-  }
-
-  /**
-   * Get entries for a specific relay
-   */
-  getEntriesByRelay(relay: string): LogEntry[] {
-    return this.entries.filter((e) => e.relay === relay);
-  }
-
-  /**
-   * Get publish entries only
-   */
-  getPublishEntries(): PublishLogEntry[] {
-    return this.entries.filter(
-      (e): e is PublishLogEntry => e.type === "PUBLISH",
-    );
-  }
-
-  /**
    * Clear all entries
    */
   clear(): void {
@@ -525,6 +502,3 @@ const eventLog = new EventLogService();
 eventLog.initialize();
 
 export default eventLog;
-
-// Also export the class for testing
-export { EventLogService };

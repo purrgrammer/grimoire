@@ -66,6 +66,7 @@ export function EmojiPickerDialog({
   const [searchResults, setSearchResults] = useState<EmojiSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Use the same emoji search hook as chat autocomplete
   const { service } = useEmojiSearch();
@@ -247,7 +248,13 @@ export function EmojiPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xs p-0 gap-0 overflow-hidden">
+      <DialogContent
+        className="max-w-xs p-0 gap-0 overflow-hidden"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }}
+      >
         {/* Top emojis — recently used quick-picks.
             This section also provides natural spacing for the dialog close (X) button,
             which is absolutely positioned at top-right of the dialog. */}
@@ -289,13 +296,13 @@ export function EmojiPickerDialog({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               type="text"
               placeholder="Search emojis..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               className="pl-9"
-              autoFocus
             />
           </div>
         </div>
