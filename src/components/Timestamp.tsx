@@ -1,11 +1,5 @@
-import { useMemo } from "react";
+import { formatTimestamp } from "@/hooks/useLocale";
 
 export default function Timestamp({ timestamp }: { timestamp: number }) {
-  const formatted = useMemo(() => {
-    const intl = new Intl.DateTimeFormat("es", {
-      timeStyle: "short",
-    });
-    return intl.format(timestamp * 1000);
-  }, [timestamp]);
-  return formatted;
+  return formatTimestamp(timestamp, "time");
 }

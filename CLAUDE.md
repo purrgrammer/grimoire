@@ -346,6 +346,7 @@ This allows `applyTheme()` to switch themes at runtime.
   - **`Label`** (`src/components/ui/label.tsx`): Dotted-border tag/badge for metadata labels (language, kind, status, metric type). Two sizes: `sm` (default) and `md`. Use instead of ad-hoc `<span>` tags for tag-like indicators.
   - **`RichText`** (`src/components/nostr/RichText.tsx`): Universal Nostr content renderer. Parses mentions, hashtags, custom emoji, media embeds, and nostr: references. Use for any event body text — never render `event.content` as a raw string.
   - **`CustomEmoji`** (`src/components/nostr/CustomEmoji.tsx`): Renders NIP-30 custom emoji images inline. Shows shortcode tooltip, handles load errors gracefully.
+  - **`Timestamp`** (`src/components/Timestamp.tsx`): Locale-aware short time display (e.g., "2:30 PM" or "14:30"). Takes a Unix timestamp in seconds. Use for inline time rendering in chat messages, lists, and log entries. For other formats (relative, date, datetime), use `formatTimestamp()` from `src/hooks/useLocale.ts`.
 
 ## Important Patterns
 
