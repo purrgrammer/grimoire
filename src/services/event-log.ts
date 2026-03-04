@@ -415,16 +415,6 @@ class EventLogService {
       status: newStatus,
     };
 
-    // Clean up publish ID mapping when publish reaches terminal state
-    if (newStatus !== "pending") {
-      const allTerminal = Array.from(newRelayStatus.values()).every(
-        (r) => r.status === "success" || r.status === "error",
-      );
-      if (allTerminal) {
-        this.publishIdToEntryId.delete(update.publishId);
-      }
-    }
-
     // Notify subscribers
     this.entriesSubject.next([...this.entries]);
   }
