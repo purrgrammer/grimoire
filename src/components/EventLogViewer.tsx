@@ -4,7 +4,7 @@
  * Compact log of relay operations for debugging and introspection.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Check,
   X,
@@ -19,7 +19,9 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
+import { Virtuoso } from "react-virtuoso";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -30,8 +32,10 @@ import {
   type EventLogType,
   type PublishLogEntry,
   type ConnectLogEntry,
+  type ErrorLogEntry,
   type AuthLogEntry,
   type NoticeLogEntry,
+  type RelayStatusEntry,
 } from "@/services/event-log";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { cn } from "@/lib/utils";
@@ -48,7 +52,7 @@ type TabFilter = "all" | "publish" | "connect" | "auth" | "notice";
 const TAB_TYPE_MAP: Record<TabFilter, EventLogType[] | undefined> = {
   all: undefined,
   publish: ["PUBLISH"],
-  connect: ["CONNECT", "DISCONNECT"],
+  connect: ["CONNECT", "DISCONNECT", "ERROR"],
   auth: ["AUTH"],
   notice: ["NOTICE"],
 };
@@ -71,6 +75,20 @@ const AUTH_STATUS_TOOLTIP: Record<string, string> = {
   failed: "Auth failed",
   rejected: "Auth rejected",
 };
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Format relay response time relative to publish start */
+function formatRelayTime(
+  publishTimestamp: number,
+  relayUpdatedAt: number,
+): string {
+  const ms = relayUpdatedAt - publishTimestamp;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 // ============================================================================
 // Shared row layout
@@ -143,12 +161,16 @@ function EntryRow({
 function PublishRelayRow({
   relay,
   status,
+  publishTimestamp,
   onRetry,
 }: {
   relay: string;
-  status: { status: string; error?: string };
+  status: RelayStatusEntry;
+  publishTimestamp: number;
   onRetry?: () => void;
 }) {
+  const isTerminal = status.status === "success" || status.status === "error";
+
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-1.5">
@@ -166,6 +188,11 @@ function PublishRelayRow({
           showInboxOutbox={false}
           className="flex-1 min-w-0"
         />
+        {isTerminal && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {formatRelayTime(publishTimestamp, status.updatedAt)}
+          </span>
+        )}
         {status.status === "error" && onRetry && (
           <Button
             size="sm"
@@ -223,6 +250,7 @@ function PublishEntry({
                 key={relay}
                 relay={relay}
                 status={status}
+                publishTimestamp={entry.timestamp}
                 onRetry={
                   onRetryRelay ? () => onRetryRelay(entry.id, relay) : undefined
                 }
@@ -272,6 +300,7 @@ function PublishEntry({
 }
 
 function ConnectEntry({ entry }: { entry: ConnectLogEntry }) {
+  const [expanded, setExpanded] = useState(false);
   const isConnect = entry.type === "CONNECT";
 
   return (
@@ -285,6 +314,51 @@ function ConnectEntry({ entry }: { entry: ConnectLogEntry }) {
       }
       tooltip={isConnect ? "Connected" : "Disconnected"}
       timestamp={entry.timestamp}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      details={
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Event:</span>
+            <span>{isConnect ? "Connected" : "Disconnected"}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Time:</span>
+            <span className="tabular-nums">
+              {formatTimestamp(entry.timestamp / 1000, "absolute")}
+            </span>
+          </div>
+        </div>
+      }
+    >
+      <RelayLink url={entry.relay} showInboxOutbox={false} />
+    </EntryRow>
+  );
+}
+
+function ErrorEntry({ entry }: { entry: ErrorLogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <EntryRow
+      icon={<AlertTriangle className="size-3.5 text-destructive" />}
+      tooltip="Connection error"
+      timestamp={entry.timestamp}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      details={
+        <div className="space-y-1">
+          <div className="text-destructive/80 break-words font-mono">
+            {entry.message}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Time:</span>
+            <span className="tabular-nums">
+              {formatTimestamp(entry.timestamp / 1000, "absolute")}
+            </span>
+          </div>
+        </div>
+      }
     >
       <RelayLink url={entry.relay} showInboxOutbox={false} />
     </EntryRow>
@@ -331,6 +405,12 @@ function AuthEntry({ entry }: { entry: AuthLogEntry }) {
               challenge: {entry.challenge}
             </div>
           )}
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Time:</span>
+            <span className="tabular-nums">
+              {formatTimestamp(entry.timestamp / 1000, "absolute")}
+            </span>
+          </div>
         </div>
       }
     >
@@ -350,7 +430,17 @@ function NoticeEntry({ entry }: { entry: NoticeLogEntry }) {
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       details={
-        <div className="text-muted-foreground break-words">{entry.message}</div>
+        <div className="space-y-1">
+          <div className="text-muted-foreground break-words">
+            {entry.message}
+          </div>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <span>Time:</span>
+            <span className="tabular-nums">
+              {formatTimestamp(entry.timestamp / 1000, "absolute")}
+            </span>
+          </div>
+        </div>
       }
     >
       <RelayLink url={entry.relay} showInboxOutbox={false} />
@@ -379,6 +469,8 @@ function LogEntryRenderer({
     case "CONNECT":
     case "DISCONNECT":
       return <ConnectEntry entry={entry as ConnectLogEntry} />;
+    case "ERROR":
+      return <ErrorEntry entry={entry as ErrorLogEntry} />;
     case "AUTH":
       return <AuthEntry entry={entry as AuthLogEntry} />;
     case "NOTICE":
@@ -414,6 +506,17 @@ export function EventLogViewer() {
     totalCount,
     typeCounts,
   } = useEventLog({ types: filterTypes });
+
+  const renderItem = useCallback(
+    (_index: number, entry: LogEntry) => (
+      <LogEntryRenderer
+        entry={entry}
+        onRetry={retryFailedRelays}
+        onRetryRelay={retryRelay}
+      />
+    ),
+    [retryFailedRelays, retryRelay],
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -456,20 +559,17 @@ export function EventLogViewer() {
       </div>
 
       {/* Log entries */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         {entries.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <p className="text-xs">No events logged yet</p>
           </div>
         ) : (
-          entries.map((entry) => (
-            <LogEntryRenderer
-              key={entry.id}
-              entry={entry}
-              onRetry={retryFailedRelays}
-              onRetryRelay={retryRelay}
-            />
-          ))
+          <Virtuoso
+            data={entries}
+            itemContent={renderItem}
+            style={{ height: "100%" }}
+          />
         )}
       </div>
     </div>
