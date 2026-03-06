@@ -1,12 +1,8 @@
-import { useState, useMemo, memo, useCallback, useEffect } from "react";
+import { useState, memo, useCallback } from "react";
 import { use$ } from "applesauce-react/hooks";
-import { map } from "rxjs/operators";
 import { Loader2, PanelLeft } from "lucide-react";
-import eventStore from "@/services/event-store";
-import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { ChatViewer } from "./ChatViewer";
-import type { NostrEvent } from "@/types/nostr";
 import type { ProtocolIdentifier, GroupListIdentifier } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import Timestamp from "./Timestamp";
@@ -15,36 +11,9 @@ import { RichText } from "./nostr/RichText";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  resolveGroupMetadata,
-  type ResolvedGroupMetadata,
-} from "@/lib/chat/group-metadata-helpers";
-
-const MOBILE_BREAKPOINT = 768;
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState<boolean | undefined>(undefined);
-
-  useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    };
-    mql.addEventListener("change", onChange);
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-
-  return isMobile;
-}
-
-interface GroupInfo {
-  groupId: string;
-  relayUrl: string;
-  metadata?: NostrEvent;
-  lastMessage?: NostrEvent;
-  resolvedMetadata?: ResolvedGroupMetadata;
-}
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useNip29GroupList, type GroupEntry } from "@/hooks/useNip29GroupList";
+import { useGroupMetadata } from "@/hooks/useGroupMetadata";
 
 /**
  * Format relay URL for display
@@ -61,17 +30,17 @@ const GroupListItem = memo(function GroupListItem({
   isSelected,
   onClick,
 }: {
-  group: GroupInfo;
+  group: GroupEntry;
   isSelected: boolean;
   onClick: () => void;
 }) {
-  // Extract group name from resolved metadata (includes profile fallback)
   const isUnmanagedGroup = group.groupId === "_";
+  const resolvedMetadata = useGroupMetadata(group.groupId, group.relayUrl);
+
   const groupName = isUnmanagedGroup
     ? formatRelayForDisplay(group.relayUrl)
-    : group.resolvedMetadata?.name || group.groupId;
+    : resolvedMetadata?.name || group.groupId;
 
-  // Get last message author and content
   const lastMessageAuthor = group.lastMessage?.pubkey;
   const lastMessageContent = group.lastMessage?.content;
 
@@ -165,15 +134,19 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
   const activeAccount = use$(accountManager.active$);
   const activePubkey = activeAccount?.pubkey;
 
-  // Determine which pubkey/identifier to load:
-  // - If identifier prop is provided, use that (allows viewing other users' lists)
-  // - Otherwise, use active user's pubkey (default behavior)
+  // Determine which pubkey/identifier to load
   const targetPubkey = identifier?.value.pubkey || activePubkey;
-  const targetIdentifier = identifier?.value.identifier || ""; // Empty string is default d-tag for kind 10009
+  const targetIdentifier = identifier?.value.identifier || "";
   const targetRelays = identifier?.relays;
 
-  // Mobile detection
   const isMobile = useIsMobile();
+
+  // Load groups and last messages (per-relay, composite-keyed)
+  const { groupListEvent, groups } = useNip29GroupList(
+    targetPubkey,
+    targetIdentifier,
+    targetRelays,
+  );
 
   // State for selected group
   const [selectedGroup, setSelectedGroup] = useState<{
@@ -211,7 +184,6 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const deltaX = moveEvent.clientX - startX;
         const newWidth = startWidth + deltaX;
-        // Clamp between 200px and 500px
         setSidebarWidth(Math.max(200, Math.min(500, newWidth)));
       };
 
@@ -223,235 +195,9 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
-
-      // Cleanup listeners on component unmount (stored in ref)
-      return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-      };
     },
     [sidebarWidth],
   );
-
-  // Cleanup resize event listeners on unmount
-  useEffect(() => {
-    return () => {
-      setIsResizing(false);
-    };
-  }, []);
-
-  // Load kind 10009 (group list) event
-  // If identifier is provided with relays, subscribe to those relays first
-  useEffect(() => {
-    if (!targetPubkey || !targetRelays || targetRelays.length === 0) return;
-
-    const subscription = pool
-      .subscription(
-        targetRelays,
-        [{ kinds: [10009], authors: [targetPubkey], "#d": [targetIdentifier] }],
-        { eventStore },
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [targetPubkey, targetIdentifier, targetRelays]);
-
-  const groupListEvent = use$(
-    () =>
-      targetPubkey
-        ? eventStore.replaceable(10009, targetPubkey, targetIdentifier)
-        : undefined,
-    [targetPubkey, targetIdentifier],
-  );
-
-  // Extract groups from the event with relay URL validation
-  const groups = useMemo(() => {
-    if (!groupListEvent) return [];
-
-    const extractedGroups: Array<{
-      groupId: string;
-      relayUrl: string;
-    }> = [];
-
-    for (const tag of groupListEvent.tags) {
-      if (tag[0] === "group" && tag[1] && tag[2]) {
-        // Validate relay URL before adding
-        const relayUrl = tag[2];
-        try {
-          const url = new URL(
-            relayUrl.startsWith("ws://") || relayUrl.startsWith("wss://")
-              ? relayUrl
-              : `wss://${relayUrl}`,
-          );
-          // Only accept ws:// or wss:// protocols
-          if (url.protocol === "ws:" || url.protocol === "wss:") {
-            extractedGroups.push({
-              groupId: tag[1],
-              relayUrl: url.toString(),
-            });
-          }
-        } catch {
-          // Invalid URL, skip this group
-          continue;
-        }
-      }
-    }
-
-    return extractedGroups;
-  }, [groupListEvent]);
-
-  // Subscribe to group metadata (kind 39000) for all groups
-  useEffect(() => {
-    if (groups.length === 0) return;
-
-    const groupIds = groups.map((g) => g.groupId).filter((id) => id !== "_");
-    const relayUrls = Array.from(new Set(groups.map((g) => g.relayUrl)));
-
-    if (groupIds.length === 0) return;
-
-    const subscription = pool
-      .subscription(relayUrls, [{ kinds: [39000], "#d": groupIds }], {
-        eventStore,
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [groups]);
-
-  // Load metadata for all groups
-  const groupMetadataMap = use$(() => {
-    const groupIds = groups.map((g) => g.groupId).filter((id) => id !== "_");
-    if (groupIds.length === 0) return undefined;
-
-    return eventStore.timeline([{ kinds: [39000], "#d": groupIds }]).pipe(
-      map((events) => {
-        const metadataMap = new Map<string, NostrEvent>();
-        for (const evt of events) {
-          const dTag = evt.tags.find((t) => t[0] === "d");
-          if (dTag && dTag[1]) {
-            metadataMap.set(dTag[1], evt);
-          }
-        }
-        return metadataMap;
-      }),
-    );
-  }, [groups]);
-
-  // Resolve metadata with profile fallback for groups without NIP-29 metadata
-  const [resolvedMetadataMap, setResolvedMetadataMap] = useState<
-    Map<string, ResolvedGroupMetadata>
-  >(new Map());
-
-  useEffect(() => {
-    if (groups.length === 0) return;
-
-    const resolveAllMetadata = async () => {
-      const newResolvedMap = new Map<string, ResolvedGroupMetadata>();
-
-      // Resolve metadata for each group
-      await Promise.all(
-        groups.map(async (group) => {
-          // Skip unmanaged groups
-          if (group.groupId === "_") return;
-
-          const existingMetadata = groupMetadataMap?.get(group.groupId);
-          const resolved = await resolveGroupMetadata(
-            group.groupId,
-            group.relayUrl,
-            existingMetadata,
-          );
-
-          newResolvedMap.set(`${group.relayUrl}'${group.groupId}`, resolved);
-        }),
-      );
-
-      setResolvedMetadataMap(newResolvedMap);
-    };
-
-    resolveAllMetadata();
-  }, [groups, groupMetadataMap]);
-
-  // Subscribe to latest messages (kind 9) for all groups to get recency
-  // NOTE: Separate filters needed to ensure we get 1 message per group (not N total across all groups)
-  useEffect(() => {
-    if (groups.length === 0) return;
-
-    const relayUrls = Array.from(new Set(groups.map((g) => g.relayUrl)));
-    const groupIds = groups.map((g) => g.groupId);
-
-    // One filter per group to ensure limit:1 applies per group, not globally
-    const subscription = pool
-      .subscription(
-        relayUrls,
-        groupIds.map((groupId) => ({
-          kinds: [9],
-          "#h": [groupId],
-          limit: 1,
-        })),
-        { eventStore },
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [groups]);
-
-  // Load latest messages and merge with group data
-  const groupsWithRecency = use$(() => {
-    if (groups.length === 0) return undefined;
-
-    const groupIds = groups.map((g) => g.groupId);
-
-    return eventStore
-      .timeline(
-        groupIds.map((groupId) => ({
-          kinds: [9],
-          "#h": [groupId],
-          limit: 1,
-        })),
-      )
-      .pipe(
-        map((events) => {
-          // Create a map of groupId -> latest message
-          const messageMap = new Map<string, NostrEvent>();
-          for (const evt of events) {
-            const hTag = evt.tags.find((t) => t[0] === "h");
-            if (hTag && hTag[1]) {
-              const existing = messageMap.get(hTag[1]);
-              if (!existing || evt.created_at > existing.created_at) {
-                messageMap.set(hTag[1], evt);
-              }
-            }
-          }
-
-          // Merge with groups
-          const groupsWithInfo: GroupInfo[] = groups.map((g) => {
-            const groupKey = `${g.relayUrl}'${g.groupId}`;
-            return {
-              groupId: g.groupId,
-              relayUrl: g.relayUrl,
-              metadata: groupMetadataMap?.get(g.groupId),
-              lastMessage: messageMap.get(g.groupId),
-              resolvedMetadata: resolvedMetadataMap.get(groupKey),
-            };
-          });
-
-          // Sort by recency (most recent first)
-          groupsWithInfo.sort((a, b) => {
-            const aTime = a.lastMessage?.created_at || 0;
-            const bTime = b.lastMessage?.created_at || 0;
-            return bTime - aTime;
-          });
-
-          return groupsWithInfo;
-        }),
-      );
-  }, [groups, groupMetadataMap, resolvedMetadataMap]);
 
   // Only require sign-in if no identifier is provided (viewing own groups)
   if (!targetPubkey) {
@@ -471,7 +217,7 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }
 
-  if (!groups || groups.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         No groups configured. Add groups to your kind 10009 list.
@@ -479,19 +225,10 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     );
   }
 
-  if (!groupsWithRecency) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" />
-        <span>Loading group details...</span>
-      </div>
-    );
-  }
-
   // Group list content - reused in both mobile sheet and desktop sidebar
   const groupListContent = (
     <div className="flex-1 overflow-y-auto">
-      {groupsWithRecency.map((group) => (
+      {groups.map((group) => (
         <GroupListItem
           key={`${group.relayUrl}'${group.groupId}`}
           group={group}
@@ -515,7 +252,7 @@ export function GroupListViewer({ identifier }: GroupListViewerProps) {
     <Button
       variant="ghost"
       size="icon"
-      className="h-7 w-7 flex-shrink-0"
+      className="h-7 w-7 shrink-0"
       onClick={() => setSidebarOpen(true)}
     >
       <PanelLeft className="size-4" />
