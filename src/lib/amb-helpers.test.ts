@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NostrEvent } from "@/types/nostr";
 import {
   getAmbCreators,
@@ -6,6 +6,14 @@ import {
   getAmbIsAccessibleForFree,
   getAmbDescription,
 } from "./amb-helpers";
+
+// Mock locale-utils so we can control getBrowserLanguage without relying on navigator
+vi.mock("@/lib/locale-utils", () => ({
+  getBrowserLanguage: vi.fn(() => "en"),
+}));
+
+import { getBrowserLanguage } from "@/lib/locale-utils";
+const mockGetBrowserLanguage = vi.mocked(getBrowserLanguage);
 
 // Helper to build a minimal event with specific tags
 function makeEvent(tags: string[][], content = ""): NostrEvent {
@@ -21,29 +29,13 @@ function makeEvent(tags: string[][], content = ""): NostrEvent {
 }
 
 describe("amb-helpers", () => {
-  let originalLanguage: PropertyDescriptor | undefined;
-
-  function mockBrowserLanguage(lang: string) {
-    Object.defineProperty(navigator, "language", {
-      value: lang,
-      configurable: true,
-    });
-  }
-
   beforeEach(() => {
-    originalLanguage = Object.getOwnPropertyDescriptor(navigator, "language");
-  });
-
-  afterEach(() => {
-    if (originalLanguage) {
-      Object.defineProperty(navigator, "language", originalLanguage);
-    }
+    mockGetBrowserLanguage.mockReturnValue("en");
   });
 
   describe("findPrefLabel (via getAmbLearningResourceType)", () => {
     it("should return browser language label when available", async () => {
-      mockBrowserLanguage("de");
-      // Re-import to pick up the mocked navigator
+      mockGetBrowserLanguage.mockReturnValue("de");
       const { getAmbLearningResourceType } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -57,7 +49,7 @@ describe("amb-helpers", () => {
     });
 
     it("should fall back to English when browser language not available", async () => {
-      mockBrowserLanguage("fr");
+      mockGetBrowserLanguage.mockReturnValue("fr");
       const { getAmbEducationalLevel } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -71,7 +63,7 @@ describe("amb-helpers", () => {
     });
 
     it("should fall back to first available when neither browser lang nor en exists", async () => {
-      mockBrowserLanguage("ja");
+      mockGetBrowserLanguage.mockReturnValue("ja");
       const { getAmbAudience } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -85,7 +77,7 @@ describe("amb-helpers", () => {
     });
 
     it("should return undefined when no labels exist", async () => {
-      mockBrowserLanguage("en");
+      mockGetBrowserLanguage.mockReturnValue("en");
       const { getAmbLearningResourceType } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -99,7 +91,7 @@ describe("amb-helpers", () => {
 
   describe("getAmbSubjects", () => {
     it("should pair ids with labels from preferred language only", async () => {
-      mockBrowserLanguage("de");
+      mockGetBrowserLanguage.mockReturnValue("de");
       const { getAmbSubjects } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -124,7 +116,7 @@ describe("amb-helpers", () => {
     });
 
     it("should fall back to English labels", async () => {
-      mockBrowserLanguage("ja");
+      mockGetBrowserLanguage.mockReturnValue("ja");
       const { getAmbSubjects } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -139,7 +131,7 @@ describe("amb-helpers", () => {
     });
 
     it("should handle single language correctly", async () => {
-      mockBrowserLanguage("en");
+      mockGetBrowserLanguage.mockReturnValue("en");
       const { getAmbSubjects } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -153,7 +145,7 @@ describe("amb-helpers", () => {
     });
 
     it("should handle no labels gracefully", async () => {
-      mockBrowserLanguage("en");
+      mockGetBrowserLanguage.mockReturnValue("en");
       const { getAmbSubjects } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
@@ -170,7 +162,7 @@ describe("amb-helpers", () => {
     });
 
     it("should handle more labels than ids", async () => {
-      mockBrowserLanguage("en");
+      mockGetBrowserLanguage.mockReturnValue("en");
       const { getAmbSubjects } = await import("./amb-helpers.ts");
 
       const event = makeEvent([
