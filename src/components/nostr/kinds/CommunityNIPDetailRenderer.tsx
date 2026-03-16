@@ -3,9 +3,11 @@ import { Copy, CopyCheck } from "lucide-react";
 import { getTagValue } from "applesauce-core/helpers";
 import { UserName } from "../UserName";
 import { MarkdownContent } from "../MarkdownContent";
+import { KindBadge } from "@/components/KindBadge";
 import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/useCopy";
 import { formatTimestamp } from "@/hooks/useLocale";
+import { getTagValues } from "@/lib/nostr-utils";
 import { toast } from "sonner";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -22,6 +24,12 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
   // Get canonical URL from "r" tag to resolve relative URLs
   const canonicalUrl = useMemo(() => {
     return getTagValue(event, "r");
+  }, [event]);
+
+  const kinds = useMemo(() => {
+    return getTagValues(event, "k")
+      .map(Number)
+      .filter((n) => !isNaN(n));
   }, [event]);
 
   // Format created date using locale utility
@@ -65,6 +73,19 @@ export function CommunityNIPDetailRenderer({ event }: { event: NostrEvent }) {
 
       {/* NIP Content - Markdown */}
       <MarkdownContent content={event.content} canonicalUrl={canonicalUrl} />
+
+      {kinds.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-border">
+          <h3 className="text-sm font-bold mb-3">
+            Event Kinds Defined in {title}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {kinds.map((kind) => (
+              <KindBadge key={kind} kind={kind} variant="full" clickable />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import {
   GitBranch,
   GitMerge,
   GitPullRequest,
+  GraduationCap,
   BookHeart,
   HardDrive,
   Hash,
@@ -74,12 +75,20 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+export interface CommunityNip {
+  title: string;
+  identifier: string;
+  pubkey: string;
+  relayHints?: string[];
+}
+
 export interface EventKind {
   kind: number | string;
   name: string;
   description: string;
   nip: string;
   icon: LucideIcon;
+  communityNip?: CommunityNip;
 }
 
 export const SPELL_KIND = 777;
@@ -1211,6 +1220,24 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "78",
     icon: Settings,
   },
+  30142: {
+    kind: 30142,
+    name: "Educational Resource",
+    description: "AMB Educational Resource Metadata",
+    nip: "AMB",
+    icon: GraduationCap,
+    communityNip: {
+      title: "NIP-AMB",
+      identifier: "edufeed-amb",
+      pubkey:
+        "bdc21f93b1e2cb75608cecd7a0a00a779779d9367dc9798bd9f213f06c95bc48",
+      relayHints: [
+        "wss://relay.nostr.band",
+        "wss://nos.lol",
+        "wss://relay.damus.io",
+      ],
+    },
+  },
   30166: {
     kind: 30166,
     name: "Relay Discovery",
@@ -1524,4 +1551,15 @@ export function getKindName(kind: number): string {
 
 export function getKindIcon(kind: number): LucideIcon {
   return EVENT_KINDS[kind]?.icon || MessageSquare;
+}
+
+export function getCommunityNipForNipId(
+  nipId: string,
+): CommunityNip | undefined {
+  for (const entry of Object.values(EVENT_KINDS)) {
+    if (entry.nip === nipId && entry.communityNip) {
+      return entry.communityNip;
+    }
+  }
+  return undefined;
 }
