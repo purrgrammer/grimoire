@@ -799,8 +799,10 @@ export function ChatViewer({
   // Handle reply button click
   const handleReply = useCallback((messageId: string) => {
     setReplyTo(messageId);
-    // Focus the editor so user can start typing immediately
-    editorRef.current?.focus();
+    // Focus the editor after context menu closes (next frame)
+    requestAnimationFrame(() => {
+      editorRef.current?.focus();
+    });
   }, []);
 
   // Handle scroll to message (when clicking on reply preview)
