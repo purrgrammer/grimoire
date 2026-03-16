@@ -336,6 +336,22 @@ const MessageItem = memo(function MessageItem({
     [conversation],
   );
 
+  // Determine if the reply target is a chat message (not a reaction, repost, etc.)
+  // Extract event ID from reply pointer
+  const replyEventId =
+    message.replyTo && "id" in message.replyTo ? message.replyTo.id : undefined;
+  const replyEvent = use$(
+    () => (replyEventId ? eventStore.event(replyEventId) : undefined),
+    [replyEventId],
+  );
+
+  // Chat message kinds per protocol - only show reply preview for these
+  const isChatKindReply =
+    !message.replyTo ||
+    !replyEvent ||
+    (CHAT_KINDS as readonly number[]).includes(replyEvent.kind) ||
+    (conversation.protocol === "nip-10" && replyEvent.kind === 1);
+
   // System messages (join/leave) have special styling
   if (message.type === "system") {
     return (
@@ -459,7 +475,7 @@ const MessageItem = memo(function MessageItem({
         <div className="break-words overflow-hidden">
           {message.event ? (
             <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo && (
+              {message.replyTo && isChatKindReply && (
                 <ReplyPreview
                   replyTo={message.replyTo}
                   adapter={adapter}
