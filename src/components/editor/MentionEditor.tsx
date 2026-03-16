@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -77,22 +78,25 @@ export const MentionEditor = forwardRef<
     },
     ref,
   ) => {
-    const handleSubmitRef = useRef<(editor: any) => void>(() => {});
+    // Use a ref for onSubmit to avoid stale closures in TipTap keyboard handlers.
+    // The Enter key handler reads this ref at invocation time, ensuring it always
+    // has the latest callback (including any captured reply context).
+    const onSubmitRef = useRef(onSubmit);
+    onSubmitRef.current = onSubmit;
 
-    const handleSubmit = useCallback(
-      (editorInstance: any) => {
-        if (!editorInstance || !onSubmit) return;
+    const handleSubmit = useCallback((editorInstance: Editor) => {
+      const cb = onSubmitRef.current;
+      if (!cb) return;
 
-        const { text, emojiTags, blobAttachments } =
-          serializeInlineContent(editorInstance);
-        if (text) {
-          onSubmit(text, emojiTags, blobAttachments);
-          editorInstance.commands.clearContent();
-        }
-      },
-      [onSubmit],
-    );
+      const { text, emojiTags, blobAttachments } =
+        serializeInlineContent(editorInstance);
+      if (text) {
+        cb(text, emojiTags, blobAttachments);
+        editorInstance.commands.clearContent();
+      }
+    }, []);
 
+    const handleSubmitRef = useRef(handleSubmit);
     handleSubmitRef.current = handleSubmit;
 
     // React-based suggestion renderers (replace tippy.js + ReactRenderer)

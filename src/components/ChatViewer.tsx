@@ -671,6 +671,8 @@ export function ChatViewer({
 
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
+  const replyToRef = useRef<string | undefined>(undefined);
+  replyToRef.current = replyTo;
 
   // State for loading older messages
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -1210,7 +1212,12 @@ export function ChatViewer({
               }}
               onSubmit={(content, emojiTags, blobAttachments) => {
                 if (content.trim()) {
-                  handleSend(content, replyTo, emojiTags, blobAttachments);
+                  handleSend(
+                    content,
+                    replyToRef.current,
+                    emojiTags,
+                    blobAttachments,
+                  );
                 }
               }}
               className="flex-1 min-w-0"
