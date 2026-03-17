@@ -503,6 +503,54 @@ describe("deriveOverallState", () => {
       expect(state.eoseCount).toBe(1);
     });
 
+    it("should return live when all relays at eose with post-EOSE streaming events", () => {
+      const now = Date.now();
+      const relays = new Map<string, ReqRelayState>([
+        [
+          "wss://relay1.com",
+          {
+            url: "wss://relay1.com",
+            connectionState: "connected",
+            subscriptionState: "eose",
+            eventCount: 42,
+            eoseAt: now - 5000,
+            firstEventAt: now - 10000,
+            lastEventAt: now - 100,
+          },
+        ],
+        [
+          "wss://relay2.com",
+          {
+            url: "wss://relay2.com",
+            connectionState: "connected",
+            subscriptionState: "eose",
+            eventCount: 28,
+            eoseAt: now - 3000,
+            firstEventAt: now - 8000,
+            lastEventAt: now - 200,
+          },
+        ],
+        [
+          "wss://relay3.com",
+          {
+            url: "wss://relay3.com",
+            connectionState: "connected",
+            subscriptionState: "eose",
+            eventCount: 15,
+            eoseAt: now - 2000,
+            firstEventAt: now - 6000,
+            lastEventAt: now - 500,
+          },
+        ],
+      ]);
+      const state = deriveOverallState(relays, true, true, queryStartedAt);
+      expect(state.status).toBe("live");
+      expect(state.eoseCount).toBe(3);
+      expect(state.connectedCount).toBe(3);
+      expect(state.hasActiveRelays).toBe(true);
+      expect(state.hasReceivedEvents).toBe(true);
+    });
+
     it("NEW: Mix of EOSE and errors, all terminal", () => {
       const relays = new Map<string, ReqRelayState>([
         [

@@ -271,7 +271,8 @@ export function useReqTimelineEnhanced(
                   // Update existing relay state
                   next.set(url, {
                     ...state,
-                    subscriptionState: "receiving",
+                    subscriptionState:
+                      state.subscriptionState === "eose" ? "eose" : "receiving",
                     eventCount: state.eventCount + 1,
                     firstEventAt: state.firstEventAt ?? now,
                     lastEventAt: now,
