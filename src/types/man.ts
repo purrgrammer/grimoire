@@ -105,7 +105,7 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: ["kinds    View all supported event kinds"],
     seeAlso: ["kind", "nip", "man"],
     appId: "kinds",
-    category: "System",
+    category: "Documentation",
     defaultProps: {},
   },
   nips: {
@@ -785,7 +785,7 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: ["spells          Browse your saved spells"],
     seeAlso: ["req"],
     appId: "spells",
-    category: "Nostr",
+    category: "System",
     defaultProps: {},
   },
   blossom: {
