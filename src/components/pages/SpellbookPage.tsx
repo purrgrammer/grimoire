@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { useProfile } from "@/hooks/useProfile";
+import { useUserRelays } from "@/hooks/useUserRelays";
 import { resolveNip05, isNip05 } from "@/lib/nip05";
 import { parseSpellbook } from "@/lib/spellbook-manager";
 import { SpellbookEvent } from "@/types/spell";
@@ -84,15 +85,19 @@ export default function SpellbookPage() {
     resolve();
   }, [actor]);
 
-  // 2. Fetch the spellbook event
+  // 2. Resolve author's outbox relays for better spellbook discovery
+  const { outboxRelays } = useUserRelays(resolvedPubkey ?? undefined);
+
+  // 3. Fetch the spellbook event (re-fetches when outbox relays arrive)
   const pointer = useMemo(() => {
     if (!resolvedPubkey || !identifier) return undefined;
     return {
       kind: 30777,
       pubkey: resolvedPubkey,
       identifier: identifier,
+      relays: outboxRelays,
     };
-  }, [resolvedPubkey, identifier]);
+  }, [resolvedPubkey, identifier, outboxRelays]);
 
   const spellbookEvent = useNostrEvent(pointer);
   const authorProfile = useProfile(resolvedPubkey || undefined);

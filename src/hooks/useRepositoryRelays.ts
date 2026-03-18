@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
-import { getOutboxes } from "applesauce-core/helpers";
 import { getRepositoryRelays } from "@/lib/nip34-helpers";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
+import { useUserRelays } from "@/hooks/useUserRelays";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -29,28 +29,16 @@ export function useRepositoryRelays(repoAddress: string | undefined): {
   );
 
   const repositoryEvent = useNostrEvent(repoPointer);
-
-  const authorRelayListPointer = useMemo(
-    () =>
-      repoPointer
-        ? { kind: 10002, pubkey: repoPointer.pubkey, identifier: "" }
-        : undefined,
-    [repoPointer],
-  );
-
-  const authorRelayList = useNostrEvent(authorRelayListPointer);
+  const { outboxRelays } = useUserRelays(repoPointer?.pubkey);
 
   const relays = useMemo(() => {
     if (repositoryEvent) {
       const repoRelays = getRepositoryRelays(repositoryEvent);
       if (repoRelays.length > 0) return repoRelays;
     }
-    if (authorRelayList) {
-      const outbox = getOutboxes(authorRelayList);
-      if (outbox.length > 0) return outbox;
-    }
+    if (outboxRelays && outboxRelays.length > 0) return outboxRelays;
     return AGGREGATOR_RELAYS;
-  }, [repositoryEvent, authorRelayList]);
+  }, [repositoryEvent, outboxRelays]);
 
   return { relays, repositoryEvent };
 }
