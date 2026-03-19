@@ -13,7 +13,8 @@ export function Relay({ node }: RelayNodeProps) {
     <RelayLink
       url={node.url}
       className="inline-flex underline decoration-dotted cursor-crosshair hover:text-foreground"
-      urlClassname="text-inherit"
+      urlClassname="text-[length:inherit]"
+      iconClassname="size-3.5"
     />
   );
 }
