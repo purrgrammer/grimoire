@@ -110,8 +110,11 @@ export function RelayLink({
             </HoverCardContent>
           </HoverCard>
         )}
-        <span className={cn("text-xs truncate", urlClassname)}>
-          {displayUrl}
+        <span
+          className={cn("text-xs truncate", urlClassname)}
+          title={displayUrl}
+        >
+          {relayInfo?.name || displayUrl}
         </span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
