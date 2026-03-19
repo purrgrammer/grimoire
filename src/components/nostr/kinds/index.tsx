@@ -228,6 +228,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10030: EmojiListRenderer, // User Emoji List (NIP-51)
   10040: TrustedProviderListRenderer, // Trusted Provider List (NIP-85)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
+  10051: GenericRelayListRenderer, // KeyPackage Relays (NIP-EE)
   10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
   10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
