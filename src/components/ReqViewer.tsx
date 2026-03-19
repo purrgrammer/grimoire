@@ -83,6 +83,8 @@ import {
   shouldAnimate,
 } from "@/lib/req-state-machine";
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
+import { chunkFiltersByRelay } from "@/lib/relay-filter-chunking";
+import { useStableValue } from "@/hooks/useStable";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
@@ -136,6 +138,7 @@ interface QueryDropdownProps {
   nip05PTags?: string[];
   domainAuthors?: string[];
   domainPTags?: string[];
+  relayFilterMap?: Record<string, import("nostr-tools").Filter[]>;
 }
 
 function QueryDropdown({
@@ -143,6 +146,7 @@ function QueryDropdown({
   nip05Authors,
   domainAuthors,
   domainPTags,
+  relayFilterMap,
 }: QueryDropdownProps) {
   const { copy: handleCopy, copied } = useCopy();
 
@@ -687,6 +691,100 @@ function QueryDropdown({
         </div>
       )}
 
+      {/* Per-Relay Chunked Filters (NIP-65 Outbox) */}
+      {relayFilterMap && Object.keys(relayFilterMap).length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+            <Sparkles className="size-3" />
+            Chunked REQ (NIP-65 Outbox) — {
+              Object.keys(relayFilterMap).length
+            }{" "}
+            relays
+            <ChevronDown className="size-3 ml-auto" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-2">
+              {/* Common fields shared across all relays */}
+              {(() => {
+                const commonFields: Record<string, unknown> = {};
+                for (const [key, value] of Object.entries(filter)) {
+                  if (key !== "authors" && key !== "#p") {
+                    commonFields[key] = value;
+                  }
+                }
+                return Object.keys(commonFields).length > 0 ? (
+                  <div className="text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded border border-border/40">
+                    <span className="font-medium">Common:</span>{" "}
+                    {filter.kinds && `kinds [${filter.kinds.join(", ")}]`}
+                    {filter.since &&
+                      `, since ${new Date(filter.since * 1000).toLocaleDateString()}`}
+                    {filter.until &&
+                      `, until ${new Date(filter.until * 1000).toLocaleDateString()}`}
+                    {filter.limit && `, limit ${filter.limit}`}
+                    {filter.search && `, search "${filter.search}"`}
+                    {filter["#t"] && `, #t [${filter["#t"].join(", ")}]`}
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Per-relay filters */}
+              {Object.entries(relayFilterMap).map(([relayUrl, filters]) => {
+                const authorCount = filters.reduce(
+                  (sum, f) => sum + (f.authors?.length || 0),
+                  0,
+                );
+                const isFallback =
+                  filters.length === 1 &&
+                  JSON.stringify(filters[0]) === JSON.stringify(filter);
+
+                return (
+                  <Collapsible key={relayUrl}>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-xs w-full px-2 py-1.5 rounded hover:bg-muted/50 transition-colors">
+                      <ChevronRight className="size-3 text-muted-foreground" />
+                      <RelayLink url={relayUrl} />
+                      <span className="text-muted-foreground ml-auto flex items-center gap-2">
+                        {authorCount > 0 && (
+                          <span>
+                            {authorCount} author{authorCount !== 1 && "s"}
+                          </span>
+                        )}
+                        {isFallback && (
+                          <span className="text-[10px] bg-muted px-1 py-0.5 rounded font-medium">
+                            FB
+                          </span>
+                        )}
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="ml-5 mt-1 space-y-1">
+                        {filters.map((f, i) => (
+                          <div key={i}>
+                            {f.authors && f.authors.length > 0 && (
+                              <div className="flex flex-wrap gap-1 items-center">
+                                <span className="text-[10px] text-muted-foreground font-medium">
+                                  authors:
+                                </span>
+                                {f.authors.map((pubkey) => (
+                                  <UserName
+                                    key={pubkey}
+                                    pubkey={pubkey}
+                                    className="text-xs"
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
       {/* Raw Query - Always at bottom */}
       <Collapsible>
         <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
@@ -829,6 +927,15 @@ export default function ReqViewer({
   // Streaming is the default behavior, closeOnEose inverts it
   const stream = !closeOnEose;
 
+  // Per-relay filter chunking: only send relevant authors/#p to each relay
+  const relayFilterMap = useMemo(() => {
+    // Only chunk when using NIP-65 selection (not explicit relays)
+    if (relays || !reasoning?.length) return undefined;
+    return chunkFiltersByRelay(resolvedFilter, reasoning);
+  }, [relays, reasoning, resolvedFilter]);
+
+  const stableRelayFilterMap = useStableValue(relayFilterMap);
+
   const {
     events,
     loading,
@@ -840,7 +947,11 @@ export default function ReqViewer({
     `req-${JSON.stringify(filter)}-${closeOnEose}`,
     resolvedFilter,
     normalizedRelays,
-    { limit: resolvedFilter.limit || 50, stream },
+    {
+      limit: resolvedFilter.limit || 50,
+      stream,
+      relayFilterMap: stableRelayFilterMap,
+    },
   );
 
   const [viewMode, setViewMode] = useState(view);
@@ -1369,6 +1480,7 @@ export default function ReqViewer({
           nip05PTags={nip05PTags}
           domainAuthors={domainAuthors}
           domainPTags={domainPTags}
+          relayFilterMap={stableRelayFilterMap}
         />
       )}
 

@@ -11,6 +11,8 @@ import { deriveOverallState } from "@/lib/req-state-machine";
 interface UseReqTimelineEnhancedOptions {
   limit?: number;
   stream?: boolean;
+  /** Per-relay chunked filters from NIP-65 outbox splitting */
+  relayFilterMap?: Record<string, Filter[]>;
 }
 
 interface UseReqTimelineEnhancedReturn {
@@ -49,7 +51,8 @@ export function useReqTimelineEnhanced(
   options: UseReqTimelineEnhancedOptions = { limit: 50 },
 ): UseReqTimelineEnhancedReturn {
   const eventStore = useEventStore();
-  const { limit, stream = false } = options;
+  const { limit, stream = false, relayFilterMap } = options;
+  const stableRelayFilterMap = useStableValue(relayFilterMap);
 
   // Core state (compatible with original useReqTimeline)
   const [loading, setLoading] = useState(false);
@@ -191,8 +194,14 @@ export function useReqTimelineEnhanced(
     const subscriptions = relays.map((url) => {
       const relay = pool.relay(url);
 
+      // Use per-relay chunked filters if available, otherwise use the full filter
+      const relayFilters = stableRelayFilterMap?.[url];
+      const filtersForRelay = relayFilters
+        ? relayFilters.map((f) => ({ ...f, limit: limit || f.limit }))
+        : filtersWithLimit;
+
       return relay
-        .subscription(filtersWithLimit, {
+        .subscription(filtersForRelay, {
           reconnect: 5, // v5: retries renamed to reconnect
           resubscribe: true,
         })
@@ -317,7 +326,15 @@ export function useReqTimelineEnhanced(
     return () => {
       subscriptions.forEach((sub) => sub.unsubscribe());
     };
-  }, [id, stableFilters, stableRelays, limit, stream, eventStore]);
+  }, [
+    id,
+    stableFilters,
+    stableRelays,
+    stableRelayFilterMap,
+    limit,
+    stream,
+    eventStore,
+  ]);
 
   // Derive overall state from individual relay states
   const overallState = useMemo(() => {
