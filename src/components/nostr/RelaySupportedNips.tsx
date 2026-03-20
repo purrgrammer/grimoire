@@ -1,7 +1,7 @@
 import { NIPBadge } from "@/components/NIPBadge";
 
 interface RelaySupportedNipsProps {
-  nips: string[];
+  nips: (string | number)[];
   title?: string;
   showTitle?: boolean;
 }
@@ -28,7 +28,7 @@ export function RelaySupportedNips({
         {nips.map((nip) => (
           <NIPBadge
             key={nip}
-            nipNumber={nip.padStart(2, "0")}
+            nipNumber={String(nip).padStart(2, "0")}
             showName={true}
           />
         ))}
