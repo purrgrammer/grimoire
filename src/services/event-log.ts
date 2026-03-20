@@ -20,6 +20,7 @@ import publishService, {
   type RelayStatusUpdate,
 } from "./publish-service";
 import pool from "./relay-pool";
+import relayAuthManager from "./relay-auth";
 import type { IRelay } from "applesauce-relay";
 
 // ============================================================================
@@ -209,6 +210,38 @@ class EventLogService {
         }
       });
     }, RELAY_POLL_INTERVAL);
+
+    // Monitor auth state transitions via centralized manager
+    this.subscriptions.push(
+      relayAuthManager.states$
+        .pipe(pairwise())
+        .subscribe(([prevMap, currMap]) => {
+          for (const [url, currState] of currMap) {
+            const prevState = prevMap.get(url);
+            const prevStatus = prevState?.status ?? "none";
+
+            if (currState.status === prevStatus) continue;
+
+            if (currState.status === "authenticated") {
+              this.addEntry({ type: "AUTH", relay: url, status: "success" });
+            } else if (currState.status === "failed") {
+              this.addEntry({ type: "AUTH", relay: url, status: "failed" });
+            } else if (currState.status === "rejected") {
+              this.addEntry({ type: "AUTH", relay: url, status: "rejected" });
+            } else if (
+              currState.status === "challenge_received" &&
+              currState.challenge
+            ) {
+              this.addEntry({
+                type: "AUTH",
+                relay: url,
+                status: "challenge",
+                challenge: currState.challenge,
+              });
+            }
+          }
+        }),
+    );
   }
 
   /**
@@ -266,37 +299,6 @@ class EventLogService {
             type: "ERROR",
             relay: url,
             message: error.message || "Unknown connection error",
-          });
-        }),
-    );
-
-    // Track authentication events
-    subscription.add(
-      relay.authenticated$
-        .pipe(
-          startWith(relay.authenticated),
-          pairwise(),
-          filter(([prev, curr]) => prev !== curr && curr === true),
-        )
-        .subscribe(() => {
-          this.addEntry({
-            type: "AUTH",
-            relay: url,
-            status: "success",
-          });
-        }),
-    );
-
-    // Track challenges
-    subscription.add(
-      relay.challenge$
-        .pipe(filter((challenge): challenge is string => !!challenge))
-        .subscribe((challenge) => {
-          this.addEntry({
-            type: "AUTH",
-            relay: url,
-            status: "challenge",
-            challenge,
           });
         }),
     );
