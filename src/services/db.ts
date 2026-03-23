@@ -144,8 +144,6 @@ class GrimoireDb extends Dexie {
         relayAuthPreferences: "&url",
       })
       .upgrade(async (tx) => {
-        console.log("[DB Migration v6] Normalizing relay URLs...");
-
         // Migrate relayAuthPreferences
         const authPrefs = await tx
           .table<RelayAuthPreference>("relayAuthPreferences")
@@ -178,13 +176,6 @@ class GrimoireDb extends Dexie {
         await tx
           .table("relayAuthPreferences")
           .bulkAdd(Array.from(normalizedAuthPrefs.values()));
-        console.log(
-          `[DB Migration v6] Normalized ${normalizedAuthPrefs.size} auth preferences` +
-            (skippedAuthPrefs > 0
-              ? ` (skipped ${skippedAuthPrefs} invalid)`
-              : ""),
-        );
-
         // Migrate relayInfo
         const relayInfos = await tx.table<RelayInfo>("relayInfo").toArray();
         const normalizedRelayInfos = new Map<string, RelayInfo>();
@@ -215,13 +206,6 @@ class GrimoireDb extends Dexie {
         await tx
           .table("relayInfo")
           .bulkAdd(Array.from(normalizedRelayInfos.values()));
-        console.log(
-          `[DB Migration v6] Normalized ${normalizedRelayInfos.size} relay infos` +
-            (skippedRelayInfos > 0
-              ? ` (skipped ${skippedRelayInfos} invalid)`
-              : ""),
-        );
-        console.log("[DB Migration v6] Complete!");
       });
 
     // Version 7: Add relay lists caching
@@ -270,10 +254,6 @@ class GrimoireDb extends Dexie {
         spells: "&id, createdAt, isPublished",
       })
       .upgrade(async (tx) => {
-        console.log(
-          "[DB Migration v10] Migrating spell schema (localName → alias)...",
-        );
-
         const spells = await tx.table<any>("spells").toArray();
 
         for (const spell of spells) {
@@ -290,8 +270,6 @@ class GrimoireDb extends Dexie {
 
           await tx.table("spells").put(spell);
         }
-
-        console.log(`[DB Migration v10] Migrated ${spells.length} spells`);
       });
 
     // Version 11: Add index for spell alias

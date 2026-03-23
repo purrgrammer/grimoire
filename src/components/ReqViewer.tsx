@@ -16,6 +16,8 @@ import {
   Loader2,
   Inbox,
   Sparkles,
+  Send,
+  GitBranch,
   Link as LinkIcon,
   Check,
   Target,
@@ -62,7 +64,9 @@ import {
   AccordionTrigger,
 } from "./ui/accordion";
 import { RelayLink } from "./nostr/RelayLink";
+import type { Filter } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
+import type { RelaySelectionReasoning } from "@/types/relay-selection";
 import {
   formatEventIds,
   formatDTags,
@@ -85,7 +89,7 @@ import {
 import { resolveFilterAliases, getTagValues } from "@/lib/nostr-utils";
 import { chunkFiltersByRelay } from "@/lib/relay-filter-chunking";
 import { useStableValue } from "@/hooks/useStable";
-import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
+
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import { MemoizedCompactEventRow } from "./nostr/CompactEventRow";
 import type { ViewMode } from "@/lib/req-parser";
@@ -138,7 +142,8 @@ interface QueryDropdownProps {
   nip05PTags?: string[];
   domainAuthors?: string[];
   domainPTags?: string[];
-  relayFilterMap?: Record<string, import("nostr-tools").Filter[]>;
+  relayFilterMap?: Record<string, Filter[]>;
+  relayReasoning?: RelaySelectionReasoning[];
 }
 
 function QueryDropdown({
@@ -147,6 +152,7 @@ function QueryDropdown({
   domainAuthors,
   domainPTags,
   relayFilterMap,
+  relayReasoning,
 }: QueryDropdownProps) {
   const { copy: handleCopy, copied } = useCopy();
 
@@ -196,29 +202,14 @@ function QueryDropdown({
     5;
 
   return (
-    <div className="border-b border-border px-4 py-3 bg-muted/30 space-y-3">
-      {/* Summary Header */}
-      <FilterSummaryBadges filter={filter} />
-
+    <div className="border-b border-border px-4 py-2 bg-muted/30 space-y-0.5">
       {isComplexQuery ? (
         /* Accordion for complex queries */
-        <Accordion
-          type="multiple"
-          defaultValue={[
-            "kinds",
-            "ids",
-            "authors",
-            "mentions",
-            "time",
-            "search",
-            "tags",
-          ]}
-          className="space-y-2"
-        >
+        <Accordion type="multiple" defaultValue={[]} className="space-y-0.5">
           {/* Kinds Section */}
           {filter.kinds && filter.kinds.length > 0 && (
             <AccordionItem value="kinds" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <FileText className="size-3.5 text-muted-foreground" />
                   Kinds ({filter.kinds.length})
@@ -243,7 +234,7 @@ function QueryDropdown({
           {/* IDs Section (direct event lookup) */}
           {eventIds.length > 0 && (
             <AccordionItem value="ids" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <Target className="size-3.5 text-muted-foreground" />
                   Event IDs ({eventIds.length})
@@ -272,7 +263,7 @@ function QueryDropdown({
           {/* Time Range Section */}
           {(filter.since || filter.until) && (
             <AccordionItem value="time" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <Clock className="size-3.5 text-muted-foreground" />
                   Time Range
@@ -289,7 +280,7 @@ function QueryDropdown({
           {/* Search Section */}
           {filter.search && (
             <AccordionItem value="search" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <Search className="size-3.5 text-muted-foreground" />
                   Search
@@ -308,7 +299,7 @@ function QueryDropdown({
           {/* Authors Section */}
           {authorPubkeys.length > 0 && (
             <AccordionItem value="authors" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <User className="size-3.5 text-muted-foreground" />
                   Authors ({authorPubkeys.length})
@@ -361,7 +352,7 @@ function QueryDropdown({
           {/* Mentions Section */}
           {pTagPubkeys.length > 0 && (
             <AccordionItem value="mentions" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <User className="size-3.5 text-muted-foreground" />
                   Mentions ({pTagPubkeys.length})
@@ -408,7 +399,7 @@ function QueryDropdown({
           {/* Tags Section */}
           {tagCount > 0 && (
             <AccordionItem value="tags" className="border-0">
-              <AccordionTrigger className="py-2 hover:no-underline">
+              <AccordionTrigger className="py-1 hover:no-underline">
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   <Hash className="size-3.5 text-muted-foreground" />
                   Tags ({tagCount})
@@ -691,95 +682,86 @@ function QueryDropdown({
         </div>
       )}
 
-      {/* Per-Relay Chunked Filters (NIP-65 Outbox) */}
+      {/* Per-Relay REQs (NIP-65) */}
       {relayFilterMap && Object.keys(relayFilterMap).length > 0 && (
         <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
-            <Sparkles className="size-3" />
-            Chunked REQ (NIP-65 Outbox) — {
-              Object.keys(relayFilterMap).length
-            }{" "}
-            relays
-            <ChevronDown className="size-3 ml-auto" />
+          <CollapsibleTrigger className="flex flex-1 items-center gap-2 py-1 text-xs font-semibold w-full">
+            <GitBranch className="size-3.5 text-muted-foreground" />
+            REQs ({Object.keys(relayFilterMap).length})
+            <ChevronDown className="size-4 shrink-0 ml-auto text-muted-foreground transition-transform duration-200" />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="mt-2 space-y-2">
-              {/* Common fields shared across all relays */}
-              {(() => {
-                const commonFields: Record<string, unknown> = {};
-                for (const [key, value] of Object.entries(filter)) {
-                  if (key !== "authors" && key !== "#p") {
-                    commonFields[key] = value;
-                  }
-                }
-                return Object.keys(commonFields).length > 0 ? (
-                  <div className="text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded border border-border/40">
-                    <span className="font-medium">Common:</span>{" "}
-                    {filter.kinds && `kinds [${filter.kinds.join(", ")}]`}
-                    {filter.since &&
-                      `, since ${new Date(filter.since * 1000).toLocaleDateString()}`}
-                    {filter.until &&
-                      `, until ${new Date(filter.until * 1000).toLocaleDateString()}`}
-                    {filter.limit && `, limit ${filter.limit}`}
-                    {filter.search && `, search "${filter.search}"`}
-                    {filter["#t"] && `, #t [${filter["#t"].join(", ")}]`}
-                  </div>
-                ) : null;
-              })()}
+            <div className="mt-1 pl-1">
+              {Object.entries(relayFilterMap).map(
+                ([relayUrl, relayFilters]) => {
+                  const authorCount = relayFilters.reduce(
+                    (sum, f) => sum + (f.authors?.length || 0),
+                    0,
+                  );
+                  const pTagCount = relayFilters.reduce(
+                    (sum, f) => sum + (f["#p"]?.length || 0),
+                    0,
+                  );
+                  const isFallback = !!relayReasoning?.find(
+                    (r) => r.relay === relayUrl,
+                  )?.isFallback;
+                  const relayJson = JSON.stringify(
+                    relayFilters.length === 1 ? relayFilters[0] : relayFilters,
+                    null,
+                    2,
+                  );
 
-              {/* Per-relay filters */}
-              {Object.entries(relayFilterMap).map(([relayUrl, filters]) => {
-                const authorCount = filters.reduce(
-                  (sum, f) => sum + (f.authors?.length || 0),
-                  0,
-                );
-                const isFallback =
-                  filters.length === 1 &&
-                  JSON.stringify(filters[0]) === JSON.stringify(filter);
-
-                return (
-                  <Collapsible key={relayUrl}>
-                    <CollapsibleTrigger className="flex items-center gap-2 text-xs w-full px-2 py-1.5 rounded hover:bg-muted/50 transition-colors">
-                      <ChevronRight className="size-3 text-muted-foreground" />
-                      <RelayLink url={relayUrl} />
-                      <span className="text-muted-foreground ml-auto flex items-center gap-2">
-                        {authorCount > 0 && (
-                          <span>
-                            {authorCount} author{authorCount !== 1 && "s"}
-                          </span>
-                        )}
-                        {isFallback && (
-                          <span className="text-[10px] bg-muted px-1 py-0.5 rounded font-medium">
-                            FB
-                          </span>
-                        )}
-                      </span>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="ml-5 mt-1 space-y-1">
-                        {filters.map((f, i) => (
-                          <div key={i}>
-                            {f.authors && f.authors.length > 0 && (
-                              <div className="flex flex-wrap gap-1 items-center">
-                                <span className="text-[10px] text-muted-foreground font-medium">
-                                  authors:
-                                </span>
-                                {f.authors.map((pubkey) => (
-                                  <UserName
-                                    key={pubkey}
-                                    pubkey={pubkey}
-                                    className="text-xs"
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
+                  return (
+                    <Collapsible key={relayUrl}>
+                      <CollapsibleTrigger className="flex items-center gap-1.5 text-xs w-full py-0.5 px-1 rounded hover:bg-muted/50 transition-colors min-w-0">
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <RelayLink url={relayUrl} showInboxOutbox={false} />
+                        </div>
+                        <div className="shrink-0 text-muted-foreground flex items-center gap-1.5 text-[10px]">
+                          {authorCount > 0 && (
+                            <span
+                              className="flex items-center gap-0.5"
+                              title="outbox / write"
+                            >
+                              <Send className="size-2.5" />
+                              {authorCount}
+                            </span>
+                          )}
+                          {pTagCount > 0 && (
+                            <span
+                              className="flex items-center gap-0.5"
+                              title="inbox / read"
+                            >
+                              <Inbox className="size-2.5" />
+                              {pTagCount}
+                            </span>
+                          )}
+                          {isFallback && (
+                            <span className="bg-muted px-1 py-0.5 rounded font-medium">
+                              FB
+                            </span>
+                          )}
+                          <ChevronRight className="size-3 text-muted-foreground" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="relative ml-5 mt-1">
+                          <SyntaxHighlight
+                            code={relayJson}
+                            language="json"
+                            className="bg-muted/50 p-2 pr-10 overflow-x-auto border border-border/40 rounded text-[11px]"
+                          />
+                          <CodeCopyButton
+                            onCopy={() => handleCopy(relayJson)}
+                            copied={copied}
+                            label="Copy relay filter JSON"
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                },
+              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -787,10 +769,10 @@ function QueryDropdown({
 
       {/* Raw Query - Always at bottom */}
       <Collapsible>
-        <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
-          <Code className="size-3" />
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 py-1 text-xs font-semibold w-full">
+          <Code className="size-3.5 text-muted-foreground" />
           Raw Query JSON
-          <ChevronDown className="size-3 ml-auto" />
+          <ChevronDown className="size-4 shrink-0 ml-auto text-muted-foreground transition-transform duration-200" />
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="relative mt-2">
@@ -1337,7 +1319,7 @@ export default function ReqViewer({
                                   Inbox (Read)
                                 </div>
                                 <div className="font-medium">
-                                  {nip65Info.readers.length} author
+                                  {nip65Info.readers.length} reader
                                   {nip65Info.readers.length !== 1 ? "s" : ""}
                                 </div>
                               </div>
@@ -1348,7 +1330,7 @@ export default function ReqViewer({
                                   Outbox (Write)
                                 </div>
                                 <div className="font-medium">
-                                  {nip65Info.writers.length} author
+                                  {nip65Info.writers.length} writer
                                   {nip65Info.writers.length !== 1 ? "s" : ""}
                                 </div>
                               </div>
@@ -1372,6 +1354,26 @@ export default function ReqViewer({
 
                           {/* Right side: compact status icons */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* NIP-65 write/read counts */}
+                            {nip65Info && nip65Info.writers.length > 0 && (
+                              <div
+                                className="flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                                title="outbox / write"
+                              >
+                                <Send className="size-2.5" />
+                                <span>{nip65Info.writers.length}</span>
+                              </div>
+                            )}
+                            {nip65Info && nip65Info.readers.length > 0 && (
+                              <div
+                                className="flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                                title="inbox / read"
+                              >
+                                <Inbox className="size-2.5" />
+                                <span>{nip65Info.readers.length}</span>
+                              </div>
+                            )}
+
                             {/* Event count badge */}
                             {reqState && reqState.eventCount > 0 && (
                               <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
@@ -1481,6 +1483,7 @@ export default function ReqViewer({
           domainAuthors={domainAuthors}
           domainPTags={domainPTags}
           relayFilterMap={stableRelayFilterMap}
+          relayReasoning={reasoning}
         />
       )}
 

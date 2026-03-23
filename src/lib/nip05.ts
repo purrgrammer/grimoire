@@ -67,9 +67,6 @@ export async function resolveNip05(nip05: string): Promise<string | null> {
       return null;
     }
 
-    console.log(
-      `NIP-05: Resolved ${nip05} → ${normalized} → ${profile.pubkey}`,
-    );
     return profile.pubkey.toLowerCase();
   } catch (error) {
     console.warn(`NIP-05: Resolution failed for ${normalized}:`, error);
@@ -133,7 +130,6 @@ export async function resolveDomainDirectory(
   // Check cache first
   const cached = domainDirectoryCache.get(normalizedDomain);
   if (cached && Date.now() - cached.timestamp < DOMAIN_CACHE_TTL) {
-    console.log(`Domain directory cache hit for @${normalizedDomain}`);
     return cached.pubkeys;
   }
 
@@ -162,11 +158,6 @@ export async function resolveDomainDirectory(
     const pubkeys = Object.values(data.names)
       .filter((pk): pk is string => typeof pk === "string")
       .map((pk) => pk.toLowerCase());
-
-    console.log(
-      `Resolved @${normalizedDomain} → ${pubkeys.length} pubkeys`,
-      pubkeys.slice(0, 5),
-    );
 
     // Cache the result
     domainDirectoryCache.set(normalizedDomain, {

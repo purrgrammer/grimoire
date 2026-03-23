@@ -58,8 +58,6 @@ export function useReqTimeline(
       return;
     }
 
-    console.log("REQ: Starting query", { relays, filters, limit, stream });
-
     setLoading(true);
     setError(null);
     setEoseReceived(false);

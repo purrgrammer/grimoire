@@ -113,10 +113,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    console.log(
-      `[NIP-53] Fetching live activity ${dTag} by ${pubkey.slice(0, 8)}...`,
-    );
-
     // Use author's outbox relays plus any relay hints
     const authorOutboxes = await this.getAuthorOutboxes(pubkey);
     const relays = [...new Set([...relayHints, ...authorOutboxes])];
@@ -124,8 +120,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     if (relays.length === 0) {
       throw new Error("No relays available to fetch live activity");
     }
-
-    console.log(`[NIP-53] Using relays: ${relays.join(", ")}`);
 
     // Fetch the kind 30311 live activity event
     const activityFilter: Filter = {
@@ -142,7 +136,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.log("[NIP-53] Activity fetch timeout");
         resolve();
       }, 5000);
 
@@ -151,9 +144,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           if (typeof response === "string") {
             // EOSE received
             clearTimeout(timeout);
-            console.log(
-              `[NIP-53] Got ${activityEvents.length} activity events`,
-            );
             sub.unsubscribe();
             resolve();
           } else {
@@ -196,10 +186,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const chatRelays = [
       ...new Set([...activity.relays, ...relayHints, ...authorOutboxes]),
     ];
-
-    console.log(
-      `[NIP-53] Resolved: "${activity.title}" (${status}), ${participants.length} participants, ${chatRelays.length} relays`,
-    );
 
     return {
       id: `nip-53:${pubkey}:${dTag}`,
@@ -271,10 +257,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("No relays available for live chat");
     }
 
-    console.log(
-      `[NIP-53] Loading messages for ${aTagValue} from ${relays.length} relays`,
-    );
-
     // Single filter for live chat messages (kind 1311) and zaps (kind 9735)
     const filter: Filter = {
       kinds: [1311, 9735],
@@ -303,12 +285,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-53] EOSE received");
             eoseReceived$.next(true);
-          } else {
-            console.log(
-              `[NIP-53] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
-            );
           }
         },
       });
@@ -333,7 +310,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
           })
           .filter((msg): msg is Message => msg !== null);
 
-        console.log(`[NIP-53] Timeline has ${messages.length} events`);
         // EventStore timeline returns events sorted by created_at desc,
         // we need ascending order for chat. Since it's already sorted,
         // just reverse instead of full sort (O(n) vs O(n log n))
@@ -376,10 +352,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("No relays available for live chat");
     }
 
-    console.log(
-      `[NIP-53] Loading older messages for ${aTagValue} before ${before}`,
-    );
-
     // Same filter as loadMessages but with until for pagination
     const filter: Filter = {
       kinds: [1311, 9735],
@@ -392,8 +364,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const events = await firstValueFrom(
       pool.request(relays, [filter], { eventStore }).pipe(toArray()),
     );
-
-    console.log(`[NIP-53] Loaded ${events.length} older events`);
 
     // Convert events to messages
     const messages = events
@@ -693,10 +663,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       return null;
     }
 
-    console.log(
-      `[NIP-53] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.length} relays`,
-    );
-
     const filter: Filter = {
       ids: [eventId],
       limit: 1,
@@ -707,9 +673,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        console.log(
-          `[NIP-53] Reply message fetch timeout for ${eventId.slice(0, 8)}...`,
-        );
         resolve();
       }, 3000);
 

@@ -61,7 +61,6 @@ class GlobalErrorHandler {
     this.wrapLocalStorage();
 
     this.initialized = true;
-    console.log("[ErrorHandler] Global error handler initialized");
   }
 
   /**
@@ -186,15 +185,10 @@ class GlobalErrorHandler {
       keysToRemove.forEach((key) => {
         try {
           localStorage.removeItem(key);
-          console.log(`[ErrorHandler] Removed localStorage key: ${key}`);
         } catch {
           // Ignore removal errors
         }
       });
-
-      console.log(
-        `[ErrorHandler] Removed ${keysToRemove.length} localStorage items`,
-      );
     } catch (error) {
       console.error("[ErrorHandler] Failed to clean up localStorage:", error);
     }

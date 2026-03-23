@@ -50,14 +50,6 @@ export function useLiveTimeline(
       return;
     }
 
-    console.log("LiveTimeline: Starting query", {
-      id,
-      relays,
-      filters,
-      limit,
-      stream,
-    });
-
     setLoading(true);
     setError(null);
     setEoseReceived(false);
@@ -81,7 +73,6 @@ export function useLiveTimeline(
       (response) => {
         // Response can be an event or 'EOSE' string
         if (typeof response === "string") {
-          console.log("LiveTimeline: EOSE received");
           setEoseReceived(true);
           if (!stream) {
             setLoading(false);

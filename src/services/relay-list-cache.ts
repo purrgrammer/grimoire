@@ -38,10 +38,6 @@ class RelayListCache {
         // Cache each kind:10002 event as it arrives
         this.set(event);
       });
-
-    console.log(
-      "[RelayListCache] Subscribed to EventStore for kind:10002 events",
-    );
   }
 
   /**
@@ -51,7 +47,6 @@ class RelayListCache {
     if (this.eventStoreSubscription) {
       this.eventStoreSubscription.unsubscribe();
       this.eventStoreSubscription = null;
-      console.log("[RelayListCache] Unsubscribed from EventStore");
     }
   }
 
@@ -276,7 +271,6 @@ class RelayListCache {
       // Also clear memory cache
       this.memoryCache.clear();
       this.cacheOrder = [];
-      console.log("[RelayListCache] Cleared all cached relay lists");
     } catch (error) {
       console.error("[RelayListCache] Error clearing cache:", error);
     }

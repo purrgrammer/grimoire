@@ -129,11 +129,6 @@ export function useReqTimelineEnhanced(
             disconnectedAt: globalState?.lastDisconnected,
           });
           changed = true;
-          console.log(
-            "REQ Enhanced: Initialized missing relay state",
-            url,
-            globalState?.connectionState,
-          );
         } else if (
           globalState &&
           globalState.connectionState !== currentState.connectionState
@@ -146,13 +141,6 @@ export function useReqTimelineEnhanced(
             disconnectedAt: globalState.lastDisconnected,
           });
           changed = true;
-          console.log(
-            "REQ Enhanced: Connection state changed",
-            url,
-            currentState.connectionState,
-            "→",
-            globalState.connectionState,
-          );
         }
       }
 
@@ -166,13 +154,6 @@ export function useReqTimelineEnhanced(
       setLoading(false);
       return;
     }
-
-    console.log("REQ Enhanced: Starting query", {
-      relays,
-      filters,
-      limit,
-      stream,
-    });
 
     setLoading(true);
     setError(null);
@@ -209,8 +190,6 @@ export function useReqTimelineEnhanced(
           (response) => {
             // Response can be an event or 'EOSE' string
             if (typeof response === "string" && response === "EOSE") {
-              console.log("REQ Enhanced: EOSE received from", url);
-
               // Mark THIS specific relay as having received EOSE
               setRelayStates((prev) => {
                 const state = prev.get(url);
@@ -234,7 +213,6 @@ export function useReqTimelineEnhanced(
                 );
 
                 if (allEose && !eoseReceivedRef.current) {
-                  console.log("REQ Enhanced: All relays finished");
                   setEoseReceived(true);
                   if (!stream) {
                     setLoading(false);
@@ -317,7 +295,6 @@ export function useReqTimelineEnhanced(
           },
           () => {
             // This relay's observable completed
-            console.log("REQ Enhanced: Relay completed", url);
           },
         );
     });

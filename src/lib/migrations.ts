@@ -186,17 +186,10 @@ export function migrateState(state: any): GrimoireState {
   let currentState = state;
   const startVersion = state.__version || 5; // Default to 5 if no version
 
-  console.log(
-    `[Migrations] Migrating from v${startVersion} to v${CURRENT_VERSION}`,
-  );
-
   // Apply migrations sequentially
   for (let version = startVersion; version < CURRENT_VERSION; version++) {
     const migration = migrations[version];
     if (migration) {
-      console.log(
-        `[Migrations] Applying migration v${version} -> v${version + 1}`,
-      );
       try {
         currentState = migration(currentState);
       } catch (error) {
@@ -234,9 +227,6 @@ export function loadStateWithMigration(
     // Check if migration is needed
     const storedVersion = parsed.__version || 5;
     if (storedVersion < CURRENT_VERSION) {
-      console.log(
-        `[Migrations] State version outdated (v${storedVersion}), migrating...`,
-      );
       const migrated = migrateState(parsed);
 
       // Save migrated state
@@ -314,9 +304,6 @@ export function importState(
       let finalState: GrimoireState;
 
       if (storedVersion < CURRENT_VERSION) {
-        console.log(
-          `[Migrations] Imported state is v${storedVersion}, migrating...`,
-        );
         finalState = migrateState(parsed);
       } else if (!validateState(parsed)) {
         throw new Error("Imported state failed validation");

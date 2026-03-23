@@ -48,13 +48,8 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
         eventStore, // Automatically add reactions to EventStore
       })
       .subscribe({
-        next: (response) => {
-          if (typeof response !== "string") {
-            // Event received - it's automatically added to EventStore
-            console.log(
-              `[MessageReactions] Reaction received for ${messageId.slice(0, 8)}...`,
-            );
-          }
+        next: () => {
+          // Events are automatically added to EventStore
         },
         error: (err) => {
           console.error(

@@ -326,6 +326,7 @@ This allows `applyTheme()` to switch themes at runtime.
 - **Path Alias**: `@/` = `./src/`
 - **Styling**: Tailwind v4 + HSL CSS variables (theme tokens defined in `index.css`)
 - **Types**: Prefer types from `applesauce-core`, extend in `src/types/` when needed
+- **No Inline Imports**: Never use `import("module").Type` in type annotations. Always use top-level `import type` statements.
 - **Locale-Aware Formatting** (`src/hooks/useLocale.ts`): All date, time, number, and currency formatting MUST use the user's locale:
   - **`useLocale()` hook**: Returns `{ locale, language, region, timezone, timeFormat }` - use in components that need locale config
   - **`formatTimestamp(timestamp, style)`**: Preferred utility for all timestamp formatting:

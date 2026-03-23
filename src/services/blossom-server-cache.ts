@@ -37,10 +37,6 @@ class BlossomServerCache {
         // Cache each kind:10063 event as it arrives
         this.set(event);
       });
-
-    console.log(
-      "[BlossomServerCache] Subscribed to EventStore for kind:10063 events",
-    );
   }
 
   /**
@@ -50,7 +46,6 @@ class BlossomServerCache {
     if (this.eventStoreSubscription) {
       this.eventStoreSubscription.unsubscribe();
       this.eventStoreSubscription = null;
-      console.log("[BlossomServerCache] Unsubscribed from EventStore");
     }
   }
 
@@ -226,7 +221,6 @@ class BlossomServerCache {
       // Also clear memory cache
       this.memoryCache.clear();
       this.cacheOrder = [];
-      console.log("[BlossomServerCache] Cleared all cached server lists");
     } catch (error) {
       console.error("[BlossomServerCache] Error clearing cache:", error);
     }

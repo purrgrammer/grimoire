@@ -94,11 +94,7 @@ function subscribeToNotifications(wallet: WalletConnect) {
 
   function subscribe() {
     notificationSubscription = wallet.notifications$.subscribe({
-      next: (notification) => {
-        console.log(
-          "[NWC] Notification received:",
-          notification.notification_type,
-        );
+      next: () => {
         retryCount = 0;
 
         // Recover from error state on successful notification

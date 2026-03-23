@@ -58,10 +58,6 @@ export function PublicChatsRenderer({ event }: BaseEventProps) {
   useEffect(() => {
     if (groupIds.length === 0) return;
 
-    console.log(
-      `[PublicChatsRenderer] Fetching metadata for ${groupIds.length} groups from ${relayUrls.length} relays`,
-    );
-
     // Subscribe to fetch metadata events (kind 39000) from the group relays
     const subscription = pool
       .subscription(
@@ -69,17 +65,7 @@ export function PublicChatsRenderer({ event }: BaseEventProps) {
         [{ kinds: [39000], "#d": groupIds }],
         { eventStore }, // Automatically add to store
       )
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            console.log("[PublicChatsRenderer] EOSE received for metadata");
-          } else {
-            console.log(
-              `[PublicChatsRenderer] Received metadata: ${response.id.slice(0, 8)}...`,
-            );
-          }
-        },
-      });
+      .subscribe();
 
     return () => {
       subscription.unsubscribe();

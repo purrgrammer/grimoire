@@ -132,10 +132,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("No active account");
     }
 
-    console.log(
-      `[NIP-29] Fetching group metadata for ${groupId} from ${relayUrl}`,
-    );
-
     // Fetch group metadata from the specific relay (kind 39000)
     const metadataFilter: Filter = {
       kinds: [39000],
@@ -152,7 +148,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     // Subscribe and wait for EOSE
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.log("[NIP-29] Metadata fetch timeout");
         resolve();
       }, 5000);
 
@@ -161,9 +156,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
           if (typeof response === "string") {
             // EOSE received
             clearTimeout(timeout);
-            console.log(
-              `[NIP-29] Got ${metadataEvents.length} metadata events`,
-            );
             sub.unsubscribe();
             resolve();
           } else {
@@ -182,11 +174,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     const metadataEvent = metadataEvents[0];
 
-    // Debug: Log metadata event tags
-    if (metadataEvent) {
-      console.log(`[NIP-29] Metadata event tags:`, metadataEvent.tags);
-    }
-
     // Resolve group metadata with profile fallback
     const resolved = await resolveGroupMetadata(
       groupId,
@@ -197,8 +184,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const title = resolved.name || groupId;
     const description = resolved.description;
     const icon = resolved.icon;
-
-    console.log(`[NIP-29] Group title: ${title} (source: ${resolved.source})`);
 
     // Fetch admins (kind 39001) and members (kind 39002) in parallel
     // Both use d tag (addressable events signed by relay)
@@ -220,8 +205,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         .request([relayUrl], [adminsFilter, membersFilter], { eventStore })
         .pipe(toArray()),
     );
-
-    console.log(`[NIP-29] Got ${participantEvents.length} participant events`);
 
     const adminEvents = participantEvents.filter((e) => e.kind === 39001);
     const memberEvents = participantEvents.filter((e) => e.kind === 39002);
@@ -274,13 +257,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     const participants = Array.from(participantsMap.values());
 
-    console.log(
-      `[NIP-29] Found ${participants.length} participants (${adminEvents.length} admin events, ${memberEvents.length} member events)`,
-    );
-    console.log(
-      `[NIP-29] Metadata - title: ${title}, icon: ${icon}, description: ${description}`,
-    );
-
     return {
       id: `nip-29:${relayUrl}'${groupId}`,
       type: "group",
@@ -310,8 +286,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     if (!groupId || !relayUrl) {
       throw new Error("Group ID and relay URL required");
     }
-
-    console.log(`[NIP-29] Loading messages for ${groupId} from ${relayUrl}`);
 
     // Single filter for all group events:
     // kind 9: chat messages
@@ -346,12 +320,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       .subscribe({
         next: (response) => {
           if (typeof response === "string") {
-            console.log("[NIP-29] EOSE received");
             eoseReceived$.next(true);
-          } else {
-            console.log(
-              `[NIP-29] Received event k${response.kind}: ${response.id.slice(0, 8)}...`,
-            );
           }
         },
       });
@@ -372,7 +341,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
           return this.eventToMessage(event, conversation.id);
         });
 
-        console.log(`[NIP-29] Timeline has ${messages.length} events`);
         // EventStore timeline returns events sorted by created_at desc,
         // we need ascending order for chat. Since it's already sorted,
         // just reverse instead of full sort (O(n) vs O(n log n))
@@ -395,10 +363,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
-    console.log(
-      `[NIP-29] Loading older messages for ${groupId} before ${before}`,
-    );
-
     // Same filter as loadMessages but with until for pagination
     const filter: Filter = {
       kinds: [9, 9000, 9001, 9321],
@@ -411,8 +375,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const events = await firstValueFrom(
       pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
     );
-
-    console.log(`[NIP-29] Loaded ${events.length} older events`);
 
     // Convert events to messages
     const messages = events.map((event) => {
@@ -833,10 +795,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       return null;
     }
 
-    console.log(
-      `[NIP-29] Fetching reply message ${eventId.slice(0, 8)}... from ${relays.join(", ")}`,
-    );
-
     const filter: Filter = {
       ids: [eventId],
       limit: 1,
@@ -847,9 +805,6 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        console.log(
-          `[NIP-29] Reply message fetch timeout for ${eventId.slice(0, 8)}...`,
-        );
         resolve();
       }, 3000);
 

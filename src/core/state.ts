@@ -46,9 +46,6 @@ const storage = createJSONStorage<GrimoireState>(() => ({
       const storedVersion = parsed.__version || 5;
 
       if (storedVersion < CURRENT_VERSION) {
-        console.log(
-          `[Storage] State version outdated (v${storedVersion}), migrating...`,
-        );
         const migrated = migrateState(parsed);
         localStorage.setItem(key, JSON.stringify(migrated));
         toast.success("State Updated", {

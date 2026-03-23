@@ -328,8 +328,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         url: window.location.origin,
       });
 
-      // Log for debugging
-      console.log("[NIP-46] Generated nostrconnect URI:", uri);
       setConnectUri(uri);
 
       // Generate QR code with extra margin for better scanning
@@ -349,13 +347,10 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       setLoading(false);
 
       // Wait for the remote signer to connect
-      console.log("[NIP-46] Waiting for remote signer...");
       await signer.waitForSigner(abortControllerRef.current.signal);
-      console.log("[NIP-46] Remote signer connected!");
 
       // Get the user's pubkey
       const pubkey = await signer.getPublicKey();
-      console.log("[NIP-46] Got pubkey:", pubkey);
 
       const account = new NostrConnectAccount(pubkey, signer);
       handleSuccess(account);

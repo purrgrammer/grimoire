@@ -78,27 +78,16 @@ export function useNostrEvent(
 
     // Handle string ID
     if (typeof pointer === "string") {
-      console.log("[useNostrEvent] Loading event by ID:", pointer);
       const subscription = eventLoader({ id: pointer }, context).subscribe();
       return () => subscription.unsubscribe();
     }
 
     if (isEventPointer(pointer)) {
-      console.log("[useNostrEvent] Loading event by EventPointer:", pointer);
       const subscription = eventLoader(pointer, context).subscribe();
       return () => subscription.unsubscribe();
     } else if (isAddressPointer(pointer)) {
-      console.log("[useNostrEvent] Loading event by AddressPointer:", pointer);
-      const subscription = addressLoader(pointer).subscribe({
-        next: (event) =>
-          console.log("[useNostrEvent] Received event:", event.id),
-        error: (err) => console.error("[useNostrEvent] Error loading:", err),
-        complete: () => console.log("[useNostrEvent] Loading complete"),
-      });
-      return () => {
-        console.log("[useNostrEvent] Unsubscribing from addressLoader");
-        subscription.unsubscribe();
-      };
+      const subscription = addressLoader(pointer).subscribe();
+      return () => subscription.unsubscribe();
     } else {
       console.warn("[useNostrEvent] Unknown pointer type:", pointer);
     }
