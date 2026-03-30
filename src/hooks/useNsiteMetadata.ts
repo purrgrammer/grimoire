@@ -219,7 +219,7 @@ export function useNsiteMetadata(event: NostrEvent): {
 
   return {
     title: fetched?.title,
-    description: fetched?.description ?? tagDescription,
+    description: tagDescription ?? fetched?.description,
     faviconUrl: fetched?.faviconUrl,
     loading,
   };

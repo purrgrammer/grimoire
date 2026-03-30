@@ -1,0 +1,19 @@
+{
+  "relays": [
+    "wss://lightning.red",
+    "wss://pyramid.fiatjaf.com",
+    "wss://nostr.wine",
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://relay.damus.io"
+  ],
+  "servers": [
+    "https://lightning.red",
+    "https://nostr.download",
+    "https://blossom.band",
+    "https://cdn.hzrd149.com"
+  ],
+  "id": "grimoire",
+  "title": "grimoire",
+  "description": "a nostr client for magicians"
+}
