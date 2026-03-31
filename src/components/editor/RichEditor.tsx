@@ -14,6 +14,7 @@ import { ProfileSuggestionList } from "./ProfileSuggestionList";
 import { EmojiSuggestionList } from "./EmojiSuggestionList";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import { recordEmojiUsage } from "@/services/emoji-usage";
 import { nip19 } from "nostr-tools";
 import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
 import { FilePasteHandler } from "./extensions/file-paste-handler";
@@ -196,6 +197,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             suggestion: {
               ...emojiSuggestion,
               command: ({ editor, range, props }: any) => {
+                recordEmojiUsage(props);
                 editor
                   .chain()
                   .focus()

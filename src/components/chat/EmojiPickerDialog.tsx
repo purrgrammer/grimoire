@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import { recordEmojiUsage, getRecentEmojiKeys } from "@/services/emoji-usage";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 
@@ -15,33 +16,8 @@ interface EmojiPickerDialogProps {
   contextEmojis?: EmojiTag[];
 }
 
-// Frequently used emojis stored in localStorage
-const STORAGE_KEY = "grimoire:reaction-history";
-
 const ITEM_HEIGHT = 40;
 const MAX_VISIBLE = 8;
-
-function getReactionHistory(): Record<string, number> {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-}
-
-function updateReactionHistory(emoji: string): void {
-  try {
-    const history = getReactionHistory();
-    history[emoji] = (history[emoji] || 0) + 1;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-  } catch (err) {
-    console.error(
-      "[EmojiPickerDialog] Failed to update reaction history:",
-      err,
-    );
-  }
-}
 
 /**
  * EmojiPickerDialog - Searchable emoji picker for reactions
@@ -98,12 +74,9 @@ export function EmojiPickerDialog({
     }
   }, [open]);
 
-  // Get frequently used emojis from history (sorted by use count)
+  // Get frequently used emojis ranked by recency+frequency
   const frequentlyUsed = useMemo(() => {
-    const history = getReactionHistory();
-    return Object.entries(history)
-      .sort((a, b) => b[1] - a[1])
-      .map(([emoji]) => emoji);
+    return getRecentEmojiKeys(50);
   }, []);
 
   // Resolve top 8 recently used emojis to EmojiSearchResult for rendering
@@ -157,16 +130,15 @@ export function EmojiPickerDialog({
 
   const handleEmojiClick = useCallback(
     (result: EmojiSearchResult) => {
+      recordEmojiUsage(result);
       if (result.source === "unicode") {
         onEmojiSelect(result.url);
-        updateReactionHistory(result.url);
       } else {
         onEmojiSelect(`:${result.shortcode}:`, {
           shortcode: result.shortcode,
           url: result.url,
           address: result.address,
         });
-        updateReactionHistory(`:${result.shortcode}:`);
       }
       onOpenChange(false);
     },

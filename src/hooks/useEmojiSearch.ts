@@ -1,114 +1,33 @@
-import { useEffect, useMemo, useRef } from "react";
-import {
-  EmojiSearchService,
+import { useEffect, useCallback } from "react";
+import emojiSearchService, {
   type EmojiSearchResult,
 } from "@/services/emoji-search";
-import { UNICODE_EMOJIS } from "@/lib/unicode-emojis";
-import eventStore from "@/services/event-store";
 import type { NostrEvent } from "@/types/nostr";
-import { useAccount } from "./useAccount";
 
 /**
- * Hook to provide emoji search functionality with automatic indexing
- * of Unicode emojis and user's custom emojis from the event store
+ * Hook to provide emoji search functionality.
+ *
+ * The singleton EmojiSearchService is initialized and kept in sync by
+ * useEmojiSearchSync (called once in AppShell). This hook is a thin
+ * wrapper that exposes search and handles per-component context emojis.
  */
 export function useEmojiSearch(contextEvent?: NostrEvent) {
-  const serviceRef = useRef<EmojiSearchService | null>(null);
-  const { pubkey } = useAccount();
-
-  // Create service instance (singleton per component mount)
-  if (!serviceRef.current) {
-    serviceRef.current = new EmojiSearchService();
-    // Load Unicode emojis immediately
-    serviceRef.current.addUnicodeEmojis(UNICODE_EMOJIS);
-  }
-
-  const service = serviceRef.current;
-
-  // Add context emojis when context event changes
+  // Add context emojis when context event changes (per-component, transient)
   useEffect(() => {
     if (contextEvent) {
-      service.addContextEmojis(contextEvent);
+      emojiSearchService.addContextEmojis(contextEvent);
     }
-  }, [contextEvent, service]);
+  }, [contextEvent]);
 
-  // Subscribe to user's emoji list (kind 10030) and emoji sets (kind 30030)
-  useEffect(() => {
-    if (!pubkey) {
-      return;
-    }
-
-    // Subscribe to user's emoji list (kind 10030 - replaceable)
-    const userEmojiList$ = eventStore.replaceable(10030, pubkey);
-    const userEmojiSub = userEmojiList$.subscribe({
-      next: (event) => {
-        if (event) {
-          service.addUserEmojiList(event);
-
-          // Also load referenced emoji sets from "a" tags
-          const aTags = event.tags.filter(
-            (t) => t[0] === "a" && t[1]?.startsWith("30030:"),
-          );
-          for (const aTag of aTags) {
-            const [, coordinate] = aTag;
-            const [kind, setPubkey, identifier] = coordinate.split(":");
-            if (kind && setPubkey && identifier !== undefined) {
-              // Subscribe to each referenced emoji set
-              const emojiSet$ = eventStore.replaceable(
-                parseInt(kind, 10),
-                setPubkey,
-                identifier,
-              );
-              emojiSet$.subscribe({
-                next: (setEvent) => {
-                  if (setEvent) {
-                    service.addEmojiSet(setEvent);
-                  }
-                },
-              });
-            }
-          }
-        }
-      },
-      error: (error) => {
-        console.error("Failed to load user emoji list:", error);
-      },
-    });
-
-    // Also subscribe to any emoji sets authored by the user
-    const userEmojiSets$ = eventStore.timeline([
-      { kinds: [30030], authors: [pubkey], limit: 50 },
-    ]);
-    const userEmojiSetsSub = userEmojiSets$.subscribe({
-      next: (events) => {
-        for (const event of events) {
-          service.addEmojiSet(event);
-        }
-      },
-      error: (error) => {
-        console.error("Failed to load user emoji sets:", error);
-      },
-    });
-
-    return () => {
-      userEmojiSub.unsubscribe();
-      userEmojiSetsSub.unsubscribe();
-      // Clear custom emojis but keep unicode
-      service.clearCustom();
-    };
-  }, [pubkey, service]);
-
-  // Memoize search function
-  const searchEmojis = useMemo(
-    () =>
-      async (query: string): Promise<EmojiSearchResult[]> => {
-        return await service.search(query, { limit: 200 });
-      },
-    [service],
+  const searchEmojis = useCallback(
+    async (query: string): Promise<EmojiSearchResult[]> => {
+      return emojiSearchService.search(query, { limit: 200 });
+    },
+    [],
   );
 
   return {
     searchEmojis,
-    service,
+    service: emojiSearchService,
   };
 }

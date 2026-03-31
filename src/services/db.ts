@@ -115,6 +115,21 @@ export interface GrimoireZap {
   comment?: string; // Optional zap comment/message
 }
 
+export interface CachedUserEmojiList {
+  pubkey: string; // Primary key
+  event: NostrEvent; // Raw kind 10030 event
+  emojis: Array<{ shortcode: string; url: string }>; // Derived inline emoji tags
+  setAddresses: string[]; // Derived "a" tag coordinates for referenced 30030 sets
+  updatedAt: number;
+}
+
+export interface CachedEmojiSet {
+  address: string; // Primary key: "30030:pubkey:identifier"
+  event: NostrEvent; // Raw kind 30030 event
+  emojis: Array<{ shortcode: string; url: string }>; // Derived emoji tags
+  updatedAt: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -129,6 +144,8 @@ class GrimoireDb extends Dexie {
   lnurlCache!: Table<LnurlCache>;
   nsiteMetadata!: Table<CachedNsiteMetadata>;
   grimoireZaps!: Table<GrimoireZap>;
+  userEmojiLists!: Table<CachedUserEmojiList>;
+  emojiSets!: Table<CachedEmojiSet>;
 
   constructor(name: string) {
     super(name);
@@ -391,6 +408,26 @@ class GrimoireDb extends Dexie {
       grimoireZaps:
         "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
       nsiteMetadata: "&hash",
+    });
+
+    // Version 19: Add emoji caching (kind 10030 user emoji lists, kind 30030 emoji sets)
+    this.version(19).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
     });
   }
 }

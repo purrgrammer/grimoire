@@ -17,6 +17,7 @@ import { EmojiSuggestionList } from "./EmojiSuggestionList";
 import { SlashCommandSuggestionList } from "./SlashCommandSuggestionList";
 import type { ProfileSearchResult } from "@/services/profile-search";
 import type { EmojiSearchResult } from "@/services/emoji-search";
+import { recordEmojiUsage } from "@/services/emoji-usage";
 import type { ChatAction } from "@/types/chat-actions";
 import { NostrPasteHandler } from "./extensions/nostr-paste-handler";
 import { FilePasteHandler } from "./extensions/file-paste-handler";
@@ -219,6 +220,7 @@ export const MentionEditor = forwardRef<
             suggestion: {
               ...emojiSuggestion,
               command: ({ editor, range, props }: any) => {
+                recordEmojiUsage(props);
                 editor
                   .chain()
                   .focus()

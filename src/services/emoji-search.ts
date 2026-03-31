@@ -1,6 +1,13 @@
 import { Index } from "flexsearch";
 import type { NostrEvent } from "nostr-tools";
+import type { IEventStore } from "applesauce-core/event-store";
+import type { Subscription } from "rxjs";
+import { firstValueFrom } from "rxjs";
+import { filter, timeout } from "rxjs/operators";
 import { getEmojiTags } from "@/lib/emoji-helpers";
+import { UNICODE_EMOJIS, EMOJI_KEYWORDS } from "@/lib/unicode-emojis";
+import { emojiSetCache } from "./emoji-set-cache";
+import { getRecentEmojiKeys } from "./emoji-usage";
 
 export interface EmojiSearchResult {
   shortcode: string;
@@ -14,6 +21,12 @@ export interface EmojiSearchResult {
 export class EmojiSearchService {
   private index: Index;
   private emojis: Map<string, EmojiSearchResult>;
+
+  // Subscription management — only one open sub (kind 10030)
+  private userListSub: Subscription | null = null;
+  private trackedSetAddresses = new Set<string>();
+  private currentPubkey: string | null = null;
+  private eventStore: IEventStore | null = null;
 
   constructor() {
     this.emojis = new Map();
@@ -99,16 +112,162 @@ export class EmojiSearchService {
   }
 
   /**
-   * Add multiple Unicode emojis
+   * Add multiple Unicode emojis with keyword-enriched search indexing.
+   * Keywords from emojilib are joined into the indexed string so that
+   * searching "happy" finds 😀, "animal" finds 🐶, etc.
    */
-  async addUnicodeEmojis(
+  addUnicodeEmojis(
     emojis: Array<{ shortcode: string; emoji: string }>,
-  ): Promise<void> {
+    keywords?: Record<string, string[]>,
+  ): void {
     for (const { shortcode, emoji } of emojis) {
-      // For Unicode emoji, the "url" is actually the emoji character
-      // We'll handle this specially in the UI
-      await this.addEmoji(shortcode, emoji, "unicode");
+      const normalized = shortcode.toLowerCase().replace(/^:|:$/g, "");
+
+      const emojiResult: EmojiSearchResult = {
+        shortcode: normalized,
+        url: emoji,
+        source: "unicode",
+      };
+
+      this.emojis.set(normalized, emojiResult);
+
+      // Build search string: shortcode + emojilib keywords for richer matching
+      const emojiKeywords = keywords?.[emoji];
+      const searchText = emojiKeywords
+        ? `${normalized} ${emojiKeywords.join(" ")}`
+        : normalized;
+
+      this.index.add(normalized, searchText);
     }
+  }
+
+  /**
+   * Load cached emojis from Dexie for immediate availability.
+   * Called before relay subscriptions so emojis are usable instantly.
+   */
+  async loadCachedForUser(pubkey: string): Promise<void> {
+    // Load cached user emoji list (kind 10030)
+    const cachedList = await emojiSetCache.getUserEmojiList(pubkey);
+    if (cachedList) {
+      // Add inline emojis from the user's list
+      for (const emoji of cachedList.emojis) {
+        await this.addEmoji(emoji.shortcode, emoji.url, "user");
+      }
+
+      // Load all referenced emoji sets in bulk
+      if (cachedList.setAddresses.length > 0) {
+        const cachedSets = await emojiSetCache.getEmojiSetsForAddresses(
+          cachedList.setAddresses,
+        );
+        for (const cachedSet of cachedSets) {
+          const identifier = cachedSet.address.split(":")[2] || "unnamed-set";
+          for (const emoji of cachedSet.emojis) {
+            await this.addEmoji(
+              emoji.shortcode,
+              emoji.url,
+              `set:${identifier}`,
+              cachedSet.address,
+            );
+          }
+        }
+      }
+    }
+
+    console.debug(
+      `[EmojiSearch] Loaded ${this.emojis.size} emojis from cache for ${pubkey.slice(0, 8)}`,
+    );
+  }
+
+  /**
+   * Subscribe to EventStore for live emoji updates.
+   * Only keeps one open subscription (kind 10030 user emoji list).
+   * Referenced emoji sets are fetched once when the list changes.
+   */
+  subscribeForUser(pubkey: string, eventStore: IEventStore): void {
+    if (this.currentPubkey === pubkey) return;
+
+    // Clean up any existing subscriptions
+    this.unsubscribeUser();
+    this.currentPubkey = pubkey;
+    this.eventStore = eventStore;
+
+    // Subscribe to user's emoji list (kind 10030) — the only open subscription
+    const userEmojiList$ = eventStore.replaceable(10030, pubkey);
+    this.userListSub = userEmojiList$.subscribe({
+      next: (event) => {
+        if (!event) return;
+
+        this.addUserEmojiList(event);
+        emojiSetCache.setUserEmojiList(event);
+
+        // Diff "a" tags to incrementally fetch new emoji sets
+        const newAddresses = new Set(
+          event.tags
+            .filter((t) => t[0] === "a" && t[1]?.startsWith("30030:"))
+            .map((t) => t[1]),
+        );
+
+        // Fetch only newly-referenced sets (one-shot, no persistent sub)
+        for (const address of newAddresses) {
+          if (!this.trackedSetAddresses.has(address)) {
+            this.fetchEmojiSet(address);
+          }
+        }
+
+        this.trackedSetAddresses = newAddresses;
+      },
+      error: (error) => {
+        console.error("[EmojiSearch] Failed to load user emoji list:", error);
+      },
+    });
+  }
+
+  /**
+   * One-shot fetch of an emoji set by address coordinate.
+   * Loads from EventStore (which triggers the address loader if missing),
+   * indexes the emojis, and caches to Dexie. No persistent subscription.
+   */
+  private async fetchEmojiSet(address: string): Promise<void> {
+    if (!this.eventStore) return;
+
+    const parts = address.split(":");
+    if (parts.length < 3) return;
+
+    const [kind, setPubkey, identifier] = parts;
+    if (!kind || !setPubkey || identifier === undefined) return;
+
+    try {
+      const setEvent = await firstValueFrom(
+        this.eventStore
+          .replaceable(parseInt(kind, 10), setPubkey, identifier)
+          .pipe(
+            filter((e): e is NostrEvent => e !== undefined),
+            timeout(15_000),
+          ),
+      );
+
+      this.addEmojiSet(setEvent);
+      emojiSetCache.setEmojiSet(setEvent);
+    } catch {
+      // Observable completed without emitting — set not found on relays
+      console.debug(`[EmojiSearch] Emoji set not found: ${address}`);
+    }
+  }
+
+  /**
+   * Tear down relay subscription and clear custom emojis
+   */
+  unsubscribeUser(): void {
+    if (this.userListSub) {
+      this.userListSub.unsubscribe();
+      this.userListSub = null;
+    }
+
+    this.trackedSetAddresses.clear();
+    this.currentPubkey = null;
+    this.eventStore = null;
+
+    this.clearCustom();
   }
 
   /**
@@ -124,21 +283,54 @@ export class EmojiSearchService {
     const normalizedQuery = query.toLowerCase().replace(/^:|:$/g, "");
 
     if (!normalizedQuery.trim()) {
-      // Return recent/popular emojis when no query
-      // Prioritize user emojis, then sets, then unicode
-      const items = Array.from(this.emojis.values())
-        .sort((a, b) => {
-          const priority = { user: 0, context: 1, unicode: 3 };
-          const aPriority = a.source.startsWith("set:")
-            ? 2
-            : (priority[a.source as keyof typeof priority] ?? 2);
-          const bPriority = b.source.startsWith("set:")
-            ? 2
-            : (priority[b.source as keyof typeof priority] ?? 2);
-          return aPriority - bPriority;
-        })
-        .slice(0, limit);
-      return items;
+      // Show recently-used emojis first, then fill with source-priority order
+      const recentKeys = getRecentEmojiKeys(limit);
+      const results: EmojiSearchResult[] = [];
+      const included = new Set<string>();
+
+      // Resolve recent keys to indexed emojis
+      for (const key of recentKeys) {
+        let result: EmojiSearchResult | undefined;
+        if (key.startsWith(":") && key.endsWith(":")) {
+          result = this.emojis.get(key.slice(1, -1));
+        } else {
+          // Unicode: key is the emoji character, stored as `url`
+          for (const emoji of this.emojis.values()) {
+            if (emoji.source === "unicode" && emoji.url === key) {
+              result = emoji;
+              break;
+            }
+          }
+        }
+        if (result) {
+          results.push(result);
+          included.add(result.shortcode);
+        }
+      }
+
+      // Fill remaining slots with source-priority sorted emojis
+      if (results.length < limit) {
+        const sourcePriority: Record<string, number> = {
+          user: 0,
+          context: 1,
+          unicode: 3,
+        };
+        const remaining = Array.from(this.emojis.values())
+          .filter((e) => !included.has(e.shortcode))
+          .sort((a, b) => {
+            const aPriority = a.source.startsWith("set:")
+              ? 2
+              : (sourcePriority[a.source] ?? 2);
+            const bPriority = b.source.startsWith("set:")
+              ? 2
+              : (sourcePriority[b.source] ?? 2);
+            return aPriority - bPriority;
+          })
+          .slice(0, limit - results.length);
+        results.push(...remaining);
+      }
+
+      return results;
     }
 
     // Search index
@@ -175,17 +367,12 @@ export class EmojiSearchService {
   }
 
   /**
-   * Clear only custom emojis (keep unicode)
+   * Clear only custom emojis (keep unicode).
+   * Re-indexes unicode emojis synchronously with keyword-enriched search.
    */
   clearCustom(): void {
-    const unicodeEmojis = Array.from(this.emojis.values()).filter(
-      (e) => e.source === "unicode",
-    );
     this.clear();
-    // Re-add unicode emojis
-    for (const emoji of unicodeEmojis) {
-      this.addEmoji(emoji.shortcode, emoji.url, "unicode");
-    }
+    this.addUnicodeEmojis(UNICODE_EMOJIS, EMOJI_KEYWORDS);
   }
 
   /**
@@ -195,3 +382,9 @@ export class EmojiSearchService {
     return this.emojis.size;
   }
 }
+
+// Singleton instance with Unicode emojis pre-loaded (with keyword-enriched search)
+const emojiSearchService = new EmojiSearchService();
+emojiSearchService.addUnicodeEmojis(UNICODE_EMOJIS, EMOJI_KEYWORDS);
+
+export default emojiSearchService;
