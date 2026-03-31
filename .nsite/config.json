@@ -15,5 +15,24 @@
   ],
   "id": "grimoire",
   "title": "grimoire",
-  "description": "a nostr client for magicians"
+  "description": "a nostr client for magicians",
+  "publishAppHandler": false,
+  "profile": { "name": "grimoire", "about": "a nostr client for magicians", "picture": "https://grimoire.rocks/favicon.ico", "website": "https://grimoire.rocks" },
+  "appHandler": {
+    "id": "k50nvf8d85",
+    "kinds": [777, 10777, 30777],
+    "name": "grimoire",
+    "description": "a nostr client for magicians",
+    "icon": "https://grimoire.rocks/favicon.ico",
+    "platforms": {
+      "web": {
+	"patterns": [
+	  {
+	    "url": "https://grimoire.rocks/<bech32>",
+	    "entities": ["npub", "nprofile", "nevent", "naddr"]
+	  }
+	]
+      }
+    }
+  }
 }
