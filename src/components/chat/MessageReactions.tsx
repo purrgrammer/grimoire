@@ -6,10 +6,10 @@ import pool from "@/services/relay-pool";
 import accountManager from "@/services/accounts";
 import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { UserName } from "@/components/nostr/UserName";
 
 interface MessageReactionsProps {
@@ -137,18 +137,18 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
   if (aggregated.length === 0) return null;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="inline-flex gap-2 max-w-full overflow-x-auto hide-scrollbar">
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="inline-flex gap-2 max-w-full overflow-x-auto hide-scrollbar cursor-pointer">
           {aggregated.map((reaction) => (
             <ReactionBadge
               key={reaction.customEmoji?.shortcode || reaction.emoji}
               reaction={reaction}
             />
           ))}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent className="text-left" align="start">
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="text-left w-auto p-2 text-sm" align="start">
         <div className="flex flex-col items-start gap-2">
           {aggregated.map((reaction) => (
             <div
@@ -169,24 +169,19 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
                   <Fragment key={pk}>
                     {i > 0 &&
                       (i === reaction.pubkeys.length - 1 ? (
-                        <span className="text-tooltip-foreground mx-1">
-                          and
-                        </span>
+                        <span className="text-muted-foreground mx-1">and</span>
                       ) : (
-                        <span className="text-tooltip-foreground mr-1">,</span>
+                        <span className="text-muted-foreground mr-1">,</span>
                       ))}
-                    <UserName
-                      pubkey={pk}
-                      className="text-tooltip-foreground [&>span]:text-tooltip-foreground [&>span]:bg-none"
-                    />
+                    <UserName pubkey={pk} />
                   </Fragment>
                 ))}
               </span>
             </div>
           ))}
         </div>
-      </TooltipContent>
-    </Tooltip>
+      </PopoverContent>
+    </Popover>
   );
 }
 
