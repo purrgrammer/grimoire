@@ -1,204 +1,158 @@
-# Plan: Honor Blocked Relay List (10006) & Search Relay List (10007)
+# Plan: Honor Kind 10006 Blocked Relay Lists
 
 ## Context
 
-Grimoire now fetches and displays kinds 10006 (blocked relays) and 10007 (search relays) in Settings, but these lists have **no runtime effect**. This plan adds two behaviors:
+Grimoire fetches kind 10006 (blocked relay list) for the logged-in user and displays it in Settings, but it has **no runtime effect**. Blocked relays are never filtered from queries, publishing, or event loading. This plan implements full enforcement: blocked relays are excluded everywhere, logged in the event log, and shown in the ReqViewer relay dropdown.
 
-1. **Blocked relays (kind 10006)**: Never connect to relays the user has explicitly blocked
-2. **Search relays (kind 10007)**: Use the user's search relays for NIP-50 search queries when no relays are explicitly provided
+Kind 10007 (search relays) is **out of scope** for this plan — can be a follow-up.
 
-## Architecture Analysis
+## Design Decisions
 
-### Where relay connections originate
+1. **`filter()` returns `{ allowed, blocked }`** — every caller needs both (for logging and UI display)
+2. **Blocked relays flow through `RelaySelectionResult.blockedRelays`** — existing data path from `selectRelaysForFilter` → `useOutboxRelays` → ReqViewer, zero new plumbing
+3. **BLOCK log deduplication**: per-relay+context, 60-second cooldown to prevent spam during rapid selection cycles
+4. **Filter at selection time, NOT at pool level** — pool-level blocking would break NIP-29 groups (group IS the relay) and create confusing behavior
+5. **Fail open** — if kind 10006 hasn't loaded yet when first queries fire, nothing gets blocked until the event arrives
 
-| Code Path | File | How relays are selected |
-|-----------|------|------------------------|
-| NIP-65 outbox selection | `relay-selection.ts` → `selectRelaysForFilter()` | Fetches kind 10002 for authors, applies health filter |
-| Event loader hints | `loaders.ts` → `eventLoader()` | Merges relay hints from pointers, seen-at, outbox, fallback |
-| REQ viewer (explicit relays) | `ReqViewer.tsx` | User-provided relay list from command args |
-| REQ viewer (auto) | `ReqViewer.tsx` → `useOutboxRelays()` | Calls `selectRelaysForFilter()` |
-| useReqTimelineEnhanced | `useReqTimelineEnhanced.ts` | Receives relay list from caller, subscribes per-relay |
-| Chat adapters | `nip-29-adapter.ts`, etc. | Group-specific relay (not filterable — group IS the relay) |
-| Publishing | `hub.ts` → `publishEvent()` | Author's outbox relays from `relayListCache` |
-| Address loader | `loaders.ts` → `addressLoader()` | Internal applesauce loader, uses pool directly |
-| Live timeline | `useLiveTimeline.ts` | Receives relay list from caller |
+## Implementation
 
-### Key insight: Two filtering points
+### 1. Add BLOCK type to Event Log
 
-1. **`relay-selection.ts`** — The central relay selection function. Most automated queries flow through here. This is where blocked relays should be filtered for query paths.
-2. **`relay-pool.ts`** — The singleton pool. Adding a filter here would catch ALL connections including explicit ones. This is the nuclear option.
+**File: `src/services/event-log.ts`**
 
-## Implementation Plan
+- Add `"BLOCK"` to `EventLogType` union
+- Add `BlockLogEntry` interface: `{ type: "BLOCK", relay: string, context: "relay-selection" | "event-loader" | "publish" | "interaction" }`
+- Add to `LogEntry` union and `AddEntryInput`
+- Add public `logBlock(relay, context)` method on `EventLogService` (since `addEntry` is private)
 
-### Part 1: Blocked Relay List Service
+### 2. Add `blockedRelays` to RelaySelectionResult
+
+**File: `src/types/relay-selection.ts`**
+
+- Add `blockedRelays?: string[]` field to `RelaySelectionResult`
+
+### 3. Create BlockedRelayService
 
 **New file: `src/services/blocked-relays.ts`**
 
-A lightweight singleton that reads the user's kind 10006 from EventStore and exposes:
+Singleton following `RelayListCache` pattern:
 
 ```ts
 class BlockedRelayService {
-  // Reactive set updated when kind 10006 changes in EventStore
   blockedUrls$: BehaviorSubject<Set<string>>;
 
-  // Sync check - for hot path filtering
-  isBlocked(url: string): boolean;
-
-  // Filter helper - remove blocked relays from a list
-  filter(relays: string[]): string[];
-
-  // Start watching for the active account's kind 10006
-  setAccount(pubkey: string | undefined): void;
+  isBlocked(url: string): boolean;        // Sync check, normalizes URL
+  filter(relays: string[]): { allowed: string[]; blocked: string[] };  // Pure filter
+  filterAndLog(relays: string[], context: string): { allowed: string[]; blocked: string[] };  // Filter + emit BLOCK log entries
+  setAccount(pubkey: string | undefined): void;  // Account lifecycle
+  destroy(): void;
 }
-
-export const blockedRelays = new BlockedRelayService();
 ```
 
-**Why a singleton service?** Same pattern as `relayListCache` and `relayLiveness`. Needs to be accessible from non-React code (relay-selection.ts, loaders.ts, hub.ts) without prop drilling.
+Implementation:
+- `setAccount()` subscribes to `eventStore.replaceable(10006, pubkey, "")` via RxJS
+- Parses `["relay", url]` tags, normalizes via `normalizeRelayURL()`, stores in `Set<string>`
+- `filterAndLog()` calls `filter()` then `eventLog.logBlock()` for each blocked relay (with 60s cooldown per relay+context)
+- **Fail open**: if kind 10006 hasn't loaded yet, nothing is blocked
 
-**Implementation details:**
-- Subscribe to `eventStore.replaceable(10006, pubkey, "")` when account changes
-- Parse `["relay", url]` tags, normalize URLs, store in a `Set<string>`
-- `filter()` returns `relays.filter(url => !this.isBlocked(url))`
-- Must handle the case where kind 10006 hasn't loaded yet (don't block anything — fail open)
-
-### Part 2: Wire blocked relay filtering into relay selection
-
-**File: `src/services/relay-selection.ts`**
-
-In `selectRelaysForFilter()`, after the existing health filter (`liveness.filter()`), add:
-
-```ts
-// Existing flow:
-const healthy = liveness.filter(sanitized);
-
-// Add after:
-const allowed = blockedRelays.filter(healthy);
-```
-
-This catches the main query path (REQ viewer auto-relay, outbox selection, etc.).
-
-**File: `src/services/loaders.ts`**
-
-In `eventLoader()`, filter the merged relay hints before subscribing:
-
-```ts
-const relays = blockedRelays.filter(mergedRelayHints);
-```
-
-**File: `src/services/hub.ts`**
-
-In `publishEvent()`, filter outbox relays:
-
-```ts
-let relays = await relayListCache.getOutboxRelays(event.pubkey);
-relays = blockedRelays.filter(relays ?? []);
-```
-
-This prevents publishing to blocked relays.
-
-### Part 3: Account lifecycle integration
+### 4. Wire into account lifecycle
 
 **File: `src/hooks/useAccountSync.ts`**
 
-When the active account changes, update the blocked relay service:
+- Import `blockedRelays` singleton
+- Add `useEffect` calling `blockedRelays.setAccount(activeAccount?.pubkey)` on account change
 
-```ts
-import { blockedRelays } from "@/services/blocked-relays";
-
-// In the account sync effect:
-useEffect(() => {
-  blockedRelays.setAccount(activeAccount?.pubkey);
-}, [activeAccount?.pubkey]);
-```
-
-### Part 4: Search Relay List (kind 10007)
-
-**Simpler scope** — search relays only apply when a filter has `.search` set.
+### 5. Wire into relay selection
 
 **File: `src/services/relay-selection.ts`**
 
-Add a new exported function:
+- In `getOutboxRelaysForPubkey()` and `getInboxRelaysForPubkey()`: after `liveness.filter()`, apply `blockedRelays.filter()` (no logging — outer function logs)
+- In `selectRelaysForFilter()`: after `mergeRelaySets()`, apply `blockedRelays.filterAndLog(relays, "relay-selection")`, return `blockedRelays` in result
+- In `selectRelaysForPublish()`: apply `blockedRelays.filterAndLog(merged, "publish")`
+- In `selectRelaysForInteraction()`: apply `blockedRelays.filterAndLog(relays, "interaction")`
+- In `createFallbackResult()`: apply `blockedRelays.filter()` to fallback relays too
 
-```ts
-export async function getSearchRelays(pubkey: string | undefined): Promise<string[] | undefined> {
-  if (!pubkey) return undefined;
+### 6. Wire into event loader
 
-  // Check EventStore for kind 10007
-  const event = eventStore.getReplaceable(10007, pubkey, "");
-  if (!event) return undefined;
+**File: `src/services/loaders.ts`**
 
-  const relays = getRelaysFromList(event, "all");
-  if (relays.length === 0) return undefined;
+- In `eventLoader()`: after `mergeRelaySets()` (line ~163), apply `blockedRelays.filterAndLog(allRelays, "event-loader")`
 
-  return blockedRelays.filter(relays);
-}
-```
+### 7. Wire into publishing
+
+**File: `src/services/hub.ts`**
+
+- `publishEvent()` already calls `selectRelaysForPublish()` which will filter internally — no change needed
+- In `publishEventToRelays()` (explicit relays): apply `blockedRelays.filterAndLog(relays, "publish")`, throw if all blocked
+
+### 8. EventLogViewer BLOCK rendering
+
+**File: `src/components/EventLogViewer.tsx`**
+
+- Import `BlockLogEntry` type
+- Add `"BLOCK"` to the `connect` tab filter: `connect: ["CONNECT", "DISCONNECT", "ERROR", "BLOCK"]`
+- Add `BlockEntry` component: shield/ban icon + `RelayLink` + context label
+- Add case to log entry renderer switch
+
+### 9. ReqViewer blocked relay section
 
 **File: `src/components/ReqViewer.tsx`**
 
-In the relay selection logic (around line 795-812), when no explicit relays are provided and the filter has `.search`:
+The `blockedRelays` field flows automatically: `selectRelaysForFilter` → `useOutboxRelays` (via `RelaySelectionResult` spread) → ReqViewer destructure.
 
-```ts
-// If search query and user has search relays configured, use those
-if (filter.search && !explicitRelays) {
-  const searchRelays = await getSearchRelays(pubkey);
-  if (searchRelays?.length) {
-    return searchRelays;
-  }
-  // Fall through to normal relay selection if no search relays configured
-}
-```
+- Destructure `blockedRelays` from `useOutboxRelays` result
+- Add "Blocked" section after "Disconnected" in relay dropdown (lines ~1430-1438):
+  - Strikethrough text, reduced opacity, shield/ban icon
+  - Not interactive (no tooltip — we never connected)
 
-This also applies to `useOutboxRelays` or wherever REQ relay selection happens — need to check if the filter contains a search term and short-circuit to search relays.
+### 10. Tests
 
-### Part 5: Testing
+**New file: `src/services/blocked-relays.test.ts`**
 
-**New test file: `src/services/blocked-relays.test.ts`**
+- `isBlocked()` returns false when no account set (fail open)
+- `isBlocked()` returns true for blocked URLs after kind 10006 loaded
+- URL normalization works (`relay.example.com` → `wss://relay.example.com/`)
+- `filter()` correctly splits allowed/blocked
+- `setAccount(undefined)` clears blocked set
+- Deduplication cooldown works for `filterAndLog()`
 
-- `isBlocked()` returns false when no account is set
-- `isBlocked()` correctly identifies blocked URLs after event loaded
-- `filter()` removes blocked relays from a list
-- URL normalization: blocking `relay.example.com` also blocks `wss://relay.example.com/`
-- Handles empty/missing kind 10006 gracefully (fail open)
+## Edge Cases
 
-**New test file: `src/services/relay-selection.test.ts`** (additions)
-
-- `selectRelaysForFilter()` excludes blocked relays
-- `getSearchRelays()` returns search relays when kind 10007 exists
-- `getSearchRelays()` returns undefined when no kind 10007
-
-## Edge Cases & Considerations
-
-### Blocked relays
-- **NIP-29 chat groups**: Do NOT filter group relay — the group IS the relay. If user blocks a relay that hosts a group, they simply won't join that group.
-- **Explicit relay args in REQ command**: Should we honor the block? Recommendation: YES, still filter. If the user explicitly types `req -r wss://blocked.relay`, we should warn them but respect the block. They can unblock in settings.
-- **Race condition on login**: Kind 10006 may not be loaded yet when first queries fire. Fail open (don't block anything until the event is loaded). This is the safe default.
-- **Publishing own kind 10006**: When saving the blocked relay list itself, we publish to the user's outbox relays — which won't include blocked relays (they wouldn't be in kind 10002 typically). No special handling needed.
-
-### Search relays
-- **No search relays configured**: Fall through to normal NIP-65 relay selection. The user's regular relays may support NIP-50 search.
-- **Search relays + explicit relays**: If user provides `-r` flag in REQ command, respect explicit relays over search relays.
-- **Non-search queries**: Kind 10007 only applies when `filter.search` is set. Normal queries are unaffected.
+- **NIP-29 chat groups**: NOT filtered — the group IS the relay
+- **Explicit `-r` relay args in REQ**: Still filtered. User can unblock in Settings.
+- **Race on login**: Fail open until kind 10006 loads
+- **Publishing kind 10006 itself**: No special handling — outbox relays won't include blocked ones
 
 ## File Change Summary
 
 | File | Change |
 |------|--------|
-| `src/services/blocked-relays.ts` | **NEW** — Singleton service for blocked relay filtering |
+| `src/services/blocked-relays.ts` | **NEW** — Singleton service |
 | `src/services/blocked-relays.test.ts` | **NEW** — Tests |
-| `src/services/relay-selection.ts` | Add blocked relay filter + `getSearchRelays()` |
-| `src/services/loaders.ts` | Filter relay hints through blocked list |
-| `src/services/hub.ts` | Filter publish relays through blocked list |
-| `src/hooks/useAccountSync.ts` | Wire blocked relay service to account lifecycle |
-| `src/components/ReqViewer.tsx` | Use search relays for NIP-50 queries |
+| `src/services/event-log.ts` | Add BLOCK type + `logBlock()` method |
+| `src/types/relay-selection.ts` | Add `blockedRelays?` field |
+| `src/hooks/useAccountSync.ts` | Wire service to account lifecycle |
+| `src/services/relay-selection.ts` | Apply filtering in all exported functions |
+| `src/services/loaders.ts` | Filter in `eventLoader()` |
+| `src/services/hub.ts` | Filter in `publishEventToRelays()` |
+| `src/components/EventLogViewer.tsx` | Add BlockEntry renderer + tab filter |
+| `src/components/ReqViewer.tsx` | Add blocked relay section to dropdown |
 
-## Order of Implementation
+## Implementation Order
 
-1. `blocked-relays.ts` service + tests (foundation)
-2. Wire into `useAccountSync.ts` (lifecycle)
-3. Filter in `relay-selection.ts` (main query path)
-4. Filter in `loaders.ts` (event loading)
-5. Filter in `hub.ts` (publishing)
-6. `getSearchRelays()` + ReqViewer integration (search)
-7. Full integration test
+1. `event-log.ts` — BLOCK type (foundation for logging)
+2. `relay-selection.ts` types — `blockedRelays?` field
+3. `blocked-relays.ts` + tests — core service
+4. `useAccountSync.ts` — lifecycle wiring
+5. `relay-selection.ts` — filtering integration
+6. `loaders.ts` — event loader filtering
+7. `hub.ts` — publish filtering
+8. `EventLogViewer.tsx` — BLOCK entry rendering
+9. `ReqViewer.tsx` — blocked relay UI section
+
+## Verification
+
+1. `npm run test:run` — all tests pass (including new blocked-relays tests)
+2. `npm run lint` — no new lint errors
+3. `npm run build` — build succeeds
+4. Manual: Add a relay to kind 10006 blocked list in Settings → verify it no longer appears in REQ subscription relays → verify BLOCK entry in event log → verify it shows in ReqViewer relay dropdown as "Blocked"
