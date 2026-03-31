@@ -116,6 +116,13 @@ export function MessageReactions({ messageId, relays }: MessageReactionsProps) {
           existing.count++;
           existing.pubkeys.push(reaction.pubkey);
         }
+        // Prefer oldest event's emoji tag (timeline is newest-first, so
+        // later iterations are older). Some clients copy the shortcode
+        // content but omit the emoji tag, so keep overwriting until we
+        // reach the oldest event that has the full tag.
+        if (customEmoji) {
+          existing.customEmoji = customEmoji;
+        }
       } else {
         map.set(emojiKey, {
           emoji: content,
