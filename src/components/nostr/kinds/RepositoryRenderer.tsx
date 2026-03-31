@@ -61,7 +61,7 @@ export function RepositoryRenderer({ event }: BaseEventProps) {
                 className="flex items-center gap-1 text-muted-foreground underline decoration-dotted cursor-crosshair line-clamp-1"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Globe className="size-3" />
+                <Globe className="size-3 flex-shrink-0" />
                 <span className="truncate line-clamp-1">{webUrls[0]}</span>
               </a>
             )}

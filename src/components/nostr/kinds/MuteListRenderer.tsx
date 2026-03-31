@@ -1,6 +1,5 @@
 import { VolumeX, Users, Hash, Type, FileText } from "lucide-react";
-import { getTagValues } from "@/lib/nostr-utils";
-import { getEventPointerFromETag } from "applesauce-core/helpers";
+import { getTagValues, getEventPointers } from "@/lib/nostr-utils";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -13,23 +12,6 @@ import {
   EventRefListFull,
 } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
-import type { EventPointer } from "nostr-tools/nip19";
-
-/**
- * Extract event pointers from e tags
- */
-function getEventPointers(event: NostrEvent): EventPointer[] {
-  const pointers: EventPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "e" && tag[1]) {
-      const pointer = getEventPointerFromETag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
 
 /**
  * Kind 10000 Renderer - Mute List (Feed View)

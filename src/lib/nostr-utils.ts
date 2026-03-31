@@ -5,6 +5,11 @@ import { getNip10References } from "applesauce-common/helpers/threading";
 import { getCommentReplyPointer } from "applesauce-common/helpers/comment";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import { isSafeRelayURL } from "applesauce-core/helpers/relays";
+import {
+  getEventPointerFromETag,
+  getAddressPointerFromATag,
+  getOrComputeCachedValue,
+} from "applesauce-core/helpers";
 
 export function derivePlaceholderName(pubkey: string): string {
   return `${pubkey.slice(0, 4)}:${pubkey.slice(-4)}`;
@@ -61,6 +66,45 @@ export function getTagValues(event: NostrEvent, tagName: string): string[] {
   return event.tags
     .filter((tag) => tag[0] === tagName && tag[1])
     .map((tag) => tag[1]);
+}
+
+const EventPointersSymbol = Symbol("eventPointers");
+const AddressPointersSymbol = Symbol("addressPointers");
+
+/**
+ * Extract all EventPointers from e tags on an event (cached)
+ */
+export function getEventPointers(event: NostrEvent): EventPointer[] {
+  return getOrComputeCachedValue(event, EventPointersSymbol, () => {
+    const pointers: EventPointer[] = [];
+    for (const tag of event.tags) {
+      if (tag[0] === "e" && tag[1]) {
+        const pointer = getEventPointerFromETag(tag);
+        if (pointer) {
+          pointers.push(pointer);
+        }
+      }
+    }
+    return pointers;
+  });
+}
+
+/**
+ * Extract all AddressPointers from a tags on an event (cached)
+ */
+export function getAddressPointers(event: NostrEvent): AddressPointer[] {
+  return getOrComputeCachedValue(event, AddressPointersSymbol, () => {
+    const pointers: AddressPointer[] = [];
+    for (const tag of event.tags) {
+      if (tag[0] === "a" && tag[1]) {
+        const pointer = getAddressPointerFromATag(tag);
+        if (pointer) {
+          pointers.push(pointer);
+        }
+      }
+    }
+    return pointers;
+  });
 }
 
 /**

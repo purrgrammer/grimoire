@@ -1,8 +1,5 @@
 import { Pin, FileText } from "lucide-react";
-import {
-  getEventPointerFromETag,
-  getAddressPointerFromATag,
-} from "applesauce-core/helpers";
+import { getEventPointers, getAddressPointers } from "@/lib/nostr-utils";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -10,39 +7,6 @@ import {
 } from "./BaseEventRenderer";
 import { EventRefListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
-import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-
-/**
- * Extract event pointers from e tags
- */
-function getEventPointers(event: NostrEvent): EventPointer[] {
-  const pointers: EventPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "e" && tag[1]) {
-      const pointer = getEventPointerFromETag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
-
-/**
- * Extract address pointers from a tags
- */
-function getAddressPointers(event: NostrEvent): AddressPointer[] {
-  const pointers: AddressPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "a" && tag[1]) {
-      const pointer = getAddressPointerFromATag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
 
 /**
  * Kind 10001 Renderer - Pin List (Feed View)

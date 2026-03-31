@@ -1,9 +1,9 @@
 import { Bookmark, FileText, Link } from "lucide-react";
-import { getTagValues } from "@/lib/nostr-utils";
 import {
-  getEventPointerFromETag,
-  getAddressPointerFromATag,
-} from "applesauce-core/helpers";
+  getTagValues,
+  getEventPointers,
+  getAddressPointers,
+} from "@/lib/nostr-utils";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -11,39 +11,6 @@ import {
 } from "./BaseEventRenderer";
 import { EventRefListFull, UrlListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
-import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
-
-/**
- * Extract event pointers from e tags
- */
-function getEventPointers(event: NostrEvent): EventPointer[] {
-  const pointers: EventPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "e" && tag[1]) {
-      const pointer = getEventPointerFromETag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
-
-/**
- * Extract address pointers from a tags
- */
-function getAddressPointers(event: NostrEvent): AddressPointer[] {
-  const pointers: AddressPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "a" && tag[1]) {
-      const pointer = getAddressPointerFromATag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
 
 /**
  * Kind 10003 Renderer - Bookmark List (Feed View)

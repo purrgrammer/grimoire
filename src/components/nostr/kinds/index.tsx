@@ -105,6 +105,14 @@ import {
   InterestSetDetailRenderer,
 } from "./InterestListRenderer";
 import {
+  FavoriteReposRenderer,
+  FavoriteReposDetailRenderer,
+} from "./FavoriteReposRenderer";
+import {
+  GitAuthorsRenderer,
+  GitAuthorsDetailRenderer,
+} from "./GitAuthorsRenderer";
+import {
   MediaFollowListRenderer,
   MediaFollowListDetailRenderer,
 } from "./MediaFollowListRenderer";
@@ -238,6 +246,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10009: PublicChatsRenderer, // User Groups List (NIP-51)
   10012: GenericRelayListRenderer, // Favorite Relays (NIP-51)
   10015: InterestListRenderer, // Interest List (NIP-51)
+  10017: GitAuthorsRenderer, // Git Authors (NIP-51)
+  10018: FavoriteReposRenderer, // Favorite Repositories (NIP-51)
   10020: MediaFollowListRenderer, // Media Follow List (NIP-51)
   10030: EmojiListRenderer, // User Emoji List (NIP-51)
   10040: TrustedProviderListRenderer, // Trusted Provider List (NIP-85)
@@ -359,6 +369,8 @@ const detailRenderers: Record<
   10004: CommunityListDetailRenderer, // Community List Detail (NIP-51)
   10005: ChannelListDetailRenderer, // Channel List Detail (NIP-51)
   10015: InterestListDetailRenderer, // Interest List Detail (NIP-51)
+  10017: GitAuthorsDetailRenderer, // Git Authors Detail (NIP-34)
+  10018: FavoriteReposDetailRenderer, // Favorite Repositories Detail (NIP-34)
   10040: TrustedProviderListDetailRenderer, // Trusted Provider List Detail (NIP-85)
   10020: MediaFollowListDetailRenderer, // Media Follow List Detail (NIP-51)
   10030: EmojiListDetailRenderer, // User Emoji List Detail (NIP-51)

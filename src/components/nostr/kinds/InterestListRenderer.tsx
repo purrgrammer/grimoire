@@ -1,7 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { getTagValue } from "applesauce-core/helpers";
-import { getTagValues } from "@/lib/nostr-utils";
-import { getAddressPointerFromATag } from "applesauce-core/helpers";
+import { getTagValues, getAddressPointers } from "@/lib/nostr-utils";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -13,23 +12,6 @@ import {
   EventRefListFull,
 } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
-import type { AddressPointer } from "nostr-tools/nip19";
-
-/**
- * Extract address pointers from a tags (for interest sets references)
- */
-function getAddressPointers(event: NostrEvent): AddressPointer[] {
-  const pointers: AddressPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "a" && tag[1]) {
-      const pointer = getAddressPointerFromATag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
 
 /**
  * Kind 10015 Renderer - Interest List (Feed View)

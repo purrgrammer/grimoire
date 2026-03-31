@@ -1,5 +1,5 @@
 import { MessageCircle, Hash } from "lucide-react";
-import { getEventPointerFromETag } from "applesauce-core/helpers";
+import { getEventPointers } from "@/lib/nostr-utils";
 import {
   BaseEventProps,
   BaseEventContainer,
@@ -7,24 +7,6 @@ import {
 } from "./BaseEventRenderer";
 import { EventRefListFull } from "../lists";
 import type { NostrEvent } from "@/types/nostr";
-import type { EventPointer } from "nostr-tools/nip19";
-
-/**
- * Extract event pointers from e tags (for channel references)
- * Channels are kind 40 events
- */
-function getChannelPointers(event: NostrEvent): EventPointer[] {
-  const pointers: EventPointer[] = [];
-  for (const tag of event.tags) {
-    if (tag[0] === "e" && tag[1]) {
-      const pointer = getEventPointerFromETag(tag);
-      if (pointer) {
-        pointers.push(pointer);
-      }
-    }
-  }
-  return pointers;
-}
 
 /**
  * Kind 10005 Renderer - Public Chats List (Feed View)
@@ -32,7 +14,7 @@ function getChannelPointers(event: NostrEvent): EventPointer[] {
  * Note: This is different from kind 10009 which is for NIP-29 groups
  */
 export function ChannelListRenderer({ event }: BaseEventProps) {
-  const channels = getChannelPointers(event);
+  const channels = getEventPointers(event);
 
   if (channels.length === 0) {
     return (
@@ -66,7 +48,7 @@ export function ChannelListRenderer({ event }: BaseEventProps) {
  * Kind 10005 Detail View - Full channel list
  */
 export function ChannelListDetailRenderer({ event }: { event: NostrEvent }) {
-  const channels = getChannelPointers(event);
+  const channels = getEventPointers(event);
 
   return (
     <div className="flex flex-col gap-6 p-4">

@@ -825,6 +825,20 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "51",
     icon: Heart,
   },
+  10017: {
+    kind: 10017,
+    name: "Git Authors",
+    description: "Code follow list (NIP-34 event producers)",
+    nip: "51",
+    icon: FileCode,
+  },
+  10018: {
+    kind: 10018,
+    name: "Favorite Repositories",
+    description: "Favorite git repositories list",
+    nip: "51",
+    icon: FolderGit2,
+  },
   10019: {
     kind: 10019,
     name: "Nutzap Mint Rec",
