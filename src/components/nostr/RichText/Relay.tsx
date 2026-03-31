@@ -12,9 +12,9 @@ export function Relay({ node }: RelayNodeProps) {
   return (
     <RelayLink
       url={node.url}
-      className="inline-flex underline decoration-dotted cursor-crosshair hover:text-foreground"
+      className="inline-flex underline decoration-dotted cursor-crosshair hover:text-foreground [&>div]:items-baseline"
       urlClassname="text-[length:inherit]"
-      iconClassname="size-3.5"
+      iconClassname="size-3.5 self-center"
     />
   );
 }
