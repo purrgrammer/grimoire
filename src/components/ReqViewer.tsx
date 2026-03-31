@@ -1135,12 +1135,14 @@ export default function ReqViewer({
   }, [events, exportFilename]);
 
   const handleViewModeUpdate = () => {
+    const newViewMode = viewMode == "compact" ? "list" : "compact";
+    setViewMode(newViewMode);
+
+    // Update global state if window exists (not available in pop-out mode)
     const windowState = state.windows[windowId];
     if (!windowState) return;
 
     let { commandString } = windowState;
-
-    const newViewMode = viewMode == "compact" ? "list" : "compact";
 
     if (commandString && commandString.indexOf("--view") > -1) {
       if (newViewMode == "list") {
@@ -1158,8 +1160,6 @@ export default function ReqViewer({
         view: newViewMode,
       },
     });
-
-    setViewMode(newViewMode);
   };
 
   return (

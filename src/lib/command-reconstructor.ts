@@ -302,6 +302,11 @@ function reconstructReqCommand(props: any): string {
     parts.push("--search", filter.search);
   }
 
+  // View mode
+  if (props.view && props.view !== "list") {
+    parts.push("--view", props.view);
+  }
+
   // Close on EOSE
   if (props.closeOnEose) {
     parts.push("--close-on-eose");
