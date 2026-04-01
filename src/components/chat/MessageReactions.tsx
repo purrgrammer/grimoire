@@ -29,6 +29,7 @@ interface ReactionSummary {
   emoji: string;
   count: number;
   pubkeys: string[];
+  firstSeen: number;
   customEmoji?: {
     shortcode: string;
     url: string;
@@ -128,6 +129,7 @@ export function MessageReactions({
           existing.count++;
           existing.pubkeys.push(reaction.pubkey);
         }
+        existing.firstSeen = Math.min(existing.firstSeen, reaction.created_at);
         // Prefer oldest event's emoji tag (timeline is newest-first, so
         // later iterations are older). Some clients copy the shortcode
         // content but omit the emoji tag, so keep overwriting until we
@@ -140,13 +142,14 @@ export function MessageReactions({
           emoji: content,
           count: 1,
           pubkeys: [reaction.pubkey],
+          firstSeen: reaction.created_at,
           customEmoji,
         });
       }
     }
 
-    // Reverse so oldest emoji is first (left) and new reactions append to the right
-    return Array.from(map.values()).reverse();
+    // Sort by first-seen timestamp so group order is stable regardless of arrival order
+    return Array.from(map.values()).sort((a, b) => a.firstSeen - b.firstSeen);
   }, [reactions]);
 
   const activeAccount = use$(accountManager.active$);
