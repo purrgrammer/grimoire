@@ -9,9 +9,11 @@ import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFactory } from "applesauce-core/event-factory";
 import eventStore from "@/services/event-store";
 import accountManager from "@/services/accounts";
+import settingsManager from "@/services/settings";
 import { publishEvent } from "@/services/hub";
 import { useAccount } from "@/hooks/useAccount";
 import { isAddressableKind } from "@/lib/nostr-kinds";
+import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 import type { FavoriteListConfig } from "@/config/favorite-lists";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -141,6 +143,11 @@ export function useFavoriteList(config: FavoriteListConfig) {
           );
         } else {
           newTags = [...currentTags, buildTag(targetEvent, tagType)];
+        }
+
+        if (settingsManager.getSetting("post", "includeClientTag")) {
+          newTags = newTags.filter((t) => t[0] !== "client");
+          newTags.push(GRIMOIRE_CLIENT_TAG);
         }
 
         const factory = new EventFactory({ signer: account.signer });

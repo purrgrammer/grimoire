@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { useAccount } from "./useAccount";
+import { useUserRelays } from "./useUserRelays";
+import { useStableArray } from "./useStable";
 import { ALL_FAVORITE_LIST_KINDS } from "@/config/favorite-lists";
 import { addressLoader } from "@/services/loaders";
 
@@ -9,14 +11,21 @@ import { addressLoader } from "@/services/loaders";
  */
 export function useFavoriteListsSync() {
   const { pubkey } = useAccount();
+  const { outboxRelays } = useUserRelays(pubkey);
+  const stableRelays = useStableArray(outboxRelays ?? []);
 
   useEffect(() => {
     if (!pubkey) return;
 
     const subs = ALL_FAVORITE_LIST_KINDS.map((listKind) =>
-      addressLoader({ kind: listKind, pubkey, identifier: "" }).subscribe(),
+      addressLoader({
+        kind: listKind,
+        pubkey,
+        identifier: "",
+        relays: stableRelays,
+      }).subscribe(),
     );
 
     return () => subs.forEach((s) => s.unsubscribe());
-  }, [pubkey]);
+  }, [pubkey, stableRelays]);
 }
