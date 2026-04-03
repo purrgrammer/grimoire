@@ -3,9 +3,7 @@ import { use$ } from "applesauce-react/hooks";
 import {
   getEventPointerFromETag,
   getAddressPointerFromATag,
-  getTagValue,
 } from "applesauce-core/helpers";
-import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { EventFactory } from "applesauce-core/event-factory";
 import eventStore from "@/services/event-store";
 import accountManager from "@/services/accounts";
@@ -13,18 +11,16 @@ import { settingsManager } from "@/services/settings";
 import { publishEvent } from "@/services/hub";
 import { useAccount } from "@/hooks/useAccount";
 import { isAddressableKind } from "@/lib/nostr-kinds";
+import { eTagStrategy, aTagStrategy } from "@/lib/favorite-tag-strategies";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
+import type { TagStrategy } from "@/lib/favorite-tag-strategies";
 import type { FavoriteListConfig } from "@/config/favorite-lists";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 
-/** Compute the identity key for an event based on tag type */
-function getItemKey(event: NostrEvent, tagType: "e" | "a"): string {
-  if (tagType === "a") {
-    const dTag = getTagValue(event, "d") || "";
-    return `${event.kind}:${event.pubkey}:${dTag}`;
-  }
-  return event.id;
+export function resolveStrategy(config: FavoriteListConfig): TagStrategy {
+  if (config.tagStrategy) return config.tagStrategy;
+  return isAddressableKind(config.elementKind) ? aTagStrategy : eTagStrategy;
 }
 
 /** Extract pointers from tags of a given type */
@@ -59,31 +55,19 @@ export function getListPointers(
   return pointers;
 }
 
-/** Build a tag for adding an item to a favorite list */
-function buildTag(event: NostrEvent, tagType: "e" | "a"): string[] {
-  const seenRelays = getSeenRelays(event);
-  const relayHint = seenRelays ? Array.from(seenRelays)[0] || "" : "";
-
-  if (tagType === "a") {
-    const dTag = getTagValue(event, "d") || "";
-    const coordinate = `${event.kind}:${event.pubkey}:${dTag}`;
-    return relayHint ? ["a", coordinate, relayHint] : ["a", coordinate];
-  }
-
-  return relayHint ? ["e", event.id, relayHint] : ["e", event.id];
-}
-
 /**
  * Generic hook to read and manage a NIP-51-style favorite list.
  *
- * Tag type ("e" vs "a") is derived from the element kind using isAddressableKind().
+ * Tag format is determined by the config's tagStrategy (defaults to "e"/"a"
+ * based on isAddressableKind). Pass a custom TagStrategy for non-standard
+ * tag formats like NIP-29 "group" tags.
  */
 export function useFavoriteList(config: FavoriteListConfig) {
   const { pubkey, canSign } = useAccount();
   const [isUpdating, setIsUpdating] = useState(false);
   const isUpdatingRef = useRef(false);
 
-  const tagType = isAddressableKind(config.elementKind) ? "a" : "e";
+  const strategy = resolveStrategy(config);
 
   // Subscribe to the user's replaceable list event
   const event = use$(
@@ -92,30 +76,33 @@ export function useFavoriteList(config: FavoriteListConfig) {
     [pubkey, config.listKind],
   );
 
-  // Extract pointers from matching tags
-  const items = useMemo(
-    () => (event ? getListPointers(event, tagType) : []),
-    [event, tagType],
-  );
+  // Extract pointers from matching tags (only meaningful for e/a strategies)
+  const items = useMemo(() => {
+    if (!event) return [];
+    if (strategy.tagName === "e") return getListPointers(event, "e");
+    if (strategy.tagName === "a") return getListPointers(event, "a");
+    return [];
+  }, [event, strategy.tagName]);
 
   // Quick lookup set of item identity keys
   const itemIds = useMemo(() => {
     if (!event) return new Set<string>();
     const ids = new Set<string>();
     for (const tag of event.tags) {
-      if (tag[0] === tagType && tag[1]) {
-        ids.add(tag[1]);
+      if (tag[0] === strategy.tagName && tag[1]) {
+        const key = strategy.keyFromTag(tag);
+        if (key) ids.add(key);
       }
     }
     return ids;
-  }, [event, tagType]);
+  }, [event, strategy]);
 
   const isFavorite = useCallback(
     (targetEvent: NostrEvent) => {
-      const key = getItemKey(targetEvent, tagType);
-      return itemIds.has(key);
+      const key = strategy.getItemKey(targetEvent);
+      return key !== "" && itemIds.has(key);
     },
-    [tagType, itemIds],
+    [strategy, itemIds],
   );
 
   const toggleFavorite = useCallback(
@@ -131,18 +118,18 @@ export function useFavoriteList(config: FavoriteListConfig) {
         const currentTags = event ? event.tags.map((t) => [...t]) : [];
         const currentContent = event?.content ?? "";
 
-        const itemKey = getItemKey(targetEvent, tagType);
-        const alreadyFavorited = currentTags.some(
-          (t) => t[0] === tagType && t[1] === itemKey,
+        const itemKey = strategy.getItemKey(targetEvent);
+        if (!itemKey) return;
+
+        const alreadyFavorited = currentTags.some((t) =>
+          strategy.matchesKey(t, itemKey),
         );
 
         let newTags: string[][];
         if (alreadyFavorited) {
-          newTags = currentTags.filter(
-            (t) => !(t[0] === tagType && t[1] === itemKey),
-          );
+          newTags = currentTags.filter((t) => !strategy.matchesKey(t, itemKey));
         } else {
-          newTags = [...currentTags, buildTag(targetEvent, tagType)];
+          newTags = [...currentTags, strategy.buildTag(targetEvent)];
         }
 
         if (settingsManager.getSetting("post", "includeClientTag")) {
@@ -168,7 +155,7 @@ export function useFavoriteList(config: FavoriteListConfig) {
         setIsUpdating(false);
       }
     },
-    [canSign, config, event, tagType],
+    [canSign, config, event, strategy],
   );
 
   return {

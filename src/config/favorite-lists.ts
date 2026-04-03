@@ -1,4 +1,6 @@
 import { SPELL_KIND } from "@/constants/kinds";
+import type { TagStrategy } from "@/lib/favorite-tag-strategies";
+import { groupTagStrategy } from "@/lib/favorite-tag-strategies";
 
 export interface FavoriteListConfig {
   /** The replaceable list kind that stores favorites (e.g., 10777) */
@@ -7,12 +9,15 @@ export interface FavoriteListConfig {
   elementKind: number;
   /** Human-readable label for UI */
   label: string;
+  /** Override the default e/a tag strategy (derived from isAddressableKind) */
+  tagStrategy?: TagStrategy;
 }
 
 /**
  * Maps event kind → favorite list configuration.
  *
- * Tag type ("e" vs "a") is derived at runtime from isAddressableKind(elementKind).
+ * Tag type ("e" vs "a") is derived at runtime from isAddressableKind(elementKind)
+ * unless a custom tagStrategy is provided.
  * To add a new favoritable kind, just add an entry here.
  */
 export const FAVORITE_LISTS: Record<number, FavoriteListConfig> = {
@@ -30,6 +35,12 @@ export const FAVORITE_LISTS: Record<number, FavoriteListConfig> = {
     listKind: 10030,
     elementKind: 30030,
     label: "Emoji Sets",
+  },
+  39000: {
+    listKind: 10009,
+    elementKind: 39000,
+    label: "Favorite Groups",
+    tagStrategy: groupTagStrategy,
   },
 };
 
