@@ -1,449 +1,283 @@
 ---
 name: nostr
-description: This skill should be used when working with the Nostr protocol, implementing Nostr clients or relays, handling Nostr events, or discussing Nostr Implementation Possibilities (NIPs). Provides comprehensive knowledge of Nostr's decentralized protocol, event structure, cryptographic operations, and all standard NIPs.
+description: Use this skill whenever working with the Nostr protocol — event creation, signing, filtering, relay communication, NIP implementations, key encoding (NIP-19), encryption (NIP-04/NIP-44), or nostr-tools library APIs. Activate for any code importing nostr-tools, handling Nostr events, or discussing NIPs.
 ---
 
-# Nostr Protocol Expert
+# Nostr Protocol & nostr-tools
 
-## Purpose
+Comprehensive reference for the Nostr protocol and the nostr-tools JavaScript library.
 
-This skill provides expert-level assistance with the Nostr protocol, a simple, open protocol for global, decentralized, and censorship-resistant social networks. The protocol is built on relays and cryptographic keys, enabling direct peer-to-peer communication without central servers.
+## Protocol Fundamentals
 
-## When to Use
+### Events
 
-Activate this skill when:
-- Implementing Nostr clients or relays
-- Working with Nostr events and messages
-- Handling cryptographic signatures and keys (schnorr signatures on secp256k1)
-- Implementing any Nostr Implementation Possibility (NIP)
-- Building social networking features on Nostr
-- Querying or filtering Nostr events
-- Discussing Nostr protocol architecture
-- Implementing WebSocket communication with relays
-
-## Core Concepts
-
-### The Protocol Foundation
-
-Nostr operates on two main components:
-1. **Clients** - Applications users run to read/write data
-2. **Relays** - Servers that store and forward messages
-
-Key principles:
-- Everyone runs a client
-- Anyone can run a relay
-- Users identified by public keys
-- Messages signed with private keys
-- No central authority or trusted servers
-
-### Events Structure
-
-All data in Nostr is represented as events. An event is a JSON object with this structure:
+All data in Nostr is an event — a signed JSON object:
 
 ```json
 {
-  "id": "<32-bytes lowercase hex-encoded sha256 of the serialized event data>",
-  "pubkey": "<32-bytes lowercase hex-encoded public key of the event creator>",
+  "id": "<32-byte hex SHA256 of serialized event>",
+  "pubkey": "<32-byte hex public key>",
   "created_at": "<unix timestamp in seconds>",
-  "kind": "<integer identifying event type>",
-  "tags": [
-    ["<tag name>", "<tag value>", "<optional third param>", "..."]
-  ],
-  "content": "<arbitrary string>",
-  "sig": "<64-bytes lowercase hex of the schnorr signature of the sha256 hash of the serialized event data>"
+  "kind": "<integer>",
+  "tags": [["<name>", "<value>", "..."]],
+  "content": "<string>",
+  "sig": "<64-byte hex schnorr signature of id>"
 }
 ```
 
-### Event Kinds
+**ID calculation**: `SHA256(JSON.stringify([0, pubkey, created_at, kind, tags, content]))` — compact JSON, no spaces.
 
-Standard event kinds (from various NIPs):
-- `0` - Metadata (user profile)
-- `1` - Text note (short post)
-- `2` - Recommend relay
-- `3` - Contacts (following list)
-- `4` - Encrypted direct messages
-- `5` - Event deletion
-- `6` - Repost
-- `7` - Reaction (like, emoji reaction)
-- `40` - Channel creation
-- `41` - Channel metadata
-- `42` - Channel message
-- `43` - Channel hide message
-- `44` - Channel mute user
-- `1000-9999` - Regular events
-- `10000-19999` - Replaceable events
-- `20000-29999` - Ephemeral events
-- `30000-39999` - Parameterized replaceable events
+**Signature**: Schnorr (BIP-340) on secp256k1, signing the 32-byte event ID.
+
+### Event Kind Ranges
+
+| Range | Type | Behavior |
+|-------|------|----------|
+| 0-999 | Core | Varies per kind |
+| 1000-9999 | Regular | Immutable, all kept |
+| 10000-19999 | Replaceable | Latest per pubkey+kind wins |
+| 20000-29999 | Ephemeral | Not stored, forwarded only |
+| 30000-39999 | Parameterized Replaceable | Latest per pubkey+kind+d-tag wins |
+
+Common kinds: `0` metadata, `1` text note, `3` contacts, `5` deletion, `6` repost, `7` reaction, `9` group message (NIP-29), `9735` zap receipt, `10002` relay list, `30023` article.
+
+See **references/event-kinds.md** for the full list.
 
 ### Tags
 
-Common tag types:
-- `["e", "<event-id>", "<relay-url>", "<marker>"]` - Reference to an event
-- `["p", "<pubkey>", "<relay-url>"]` - Reference to a user
-- `["a", "<kind>:<pubkey>:<d-tag>", "<relay-url>"]` - Reference to a replaceable event
-- `["d", "<identifier>"]` - Identifier for parameterized replaceable events
-- `["r", "<url>"]` - Reference/link to a web resource
-- `["t", "<hashtag>"]` - Hashtag
-- `["g", "<geohash>"]` - Geolocation
-- `["nonce", "<number>", "<difficulty>"]` - Proof of work
-- `["subject", "<subject>"]` - Subject/title
-- `["client", "<client-name>"]` - Client application used
-
-## Key NIPs Reference
-
-For detailed specifications, refer to **references/nips-overview.md**.
-
-### Core Protocol NIPs
-
-#### NIP-01: Basic Protocol Flow
-The foundation of Nostr. Defines:
-- Event structure and validation
-- Event ID calculation (SHA256 of serialized event)
-- Signature verification (schnorr signatures)
-- Client-relay communication via WebSocket
-- Message types: EVENT, REQ, CLOSE, EOSE, OK, NOTICE
-
-#### NIP-02: Contact List and Petnames
-Event kind `3` for following lists:
-- Each `p` tag represents a followed user
-- Optional relay URL and petname in tag
-- Replaceable event (latest overwrites)
-
-#### NIP-04: Encrypted Direct Messages
-Event kind `4` for private messages:
-- Content encrypted with shared secret (ECDH)
-- `p` tag for recipient pubkey
-- Deprecated in favor of NIP-44
-
-#### NIP-05: Mapping Nostr Keys to DNS
-Internet identifier format: `name@domain.com`
-- `.well-known/nostr.json` endpoint
-- Maps names to pubkeys
-- Optional relay list
-
-#### NIP-09: Event Deletion
-Event kind `5` to request deletion:
-- Contains `e` tags for events to delete
-- Relays should delete referenced events
-- Only works for own events
-
-#### NIP-10: Text Note References (Threads)
-Conventions for `e` and `p` tags in replies:
-- Root event reference
-- Reply event reference
-- Mentions
-- Marker types: "root", "reply", "mention"
-
-#### NIP-11: Relay Information Document
-HTTP endpoint for relay metadata:
-- GET request to relay URL
-- Returns JSON with relay information
-- Supported NIPs, software, limitations
-
-### Social Features NIPs
-
-#### NIP-25: Reactions
-Event kind `7` for reactions:
-- Content usually "+" (like) or emoji
-- `e` tag for reacted event
-- `p` tag for event author
-
-#### NIP-42: Authentication
-Client authentication to relays:
-- AUTH message from relay
-- Client responds with event kind `22242`
-- Proves key ownership
-
-#### NIP-50: Search
-Query filter extension for full-text search:
-- `search` field in REQ filters
-- Implementation-defined behavior
-
-### Advanced NIPs
-
-#### NIP-19: bech32-encoded Entities
-Human-readable identifiers:
-- `npub`: public key
-- `nsec`: private key (sensitive!)
-- `note`: note/event ID
-- `nprofile`: profile with relay hints
-- `nevent`: event with relay hints
-- `naddr`: replaceable event coordinate
-
-#### NIP-44: Encrypted Payloads
-Improved encryption for direct messages:
-- Versioned encryption scheme
-- Better security than NIP-04
-- ChaCha20-Poly1305 AEAD
-
-#### NIP-65: Relay List Metadata
-Event kind `10002` for relay lists:
-- Read/write relay preferences
-- Optimizes relay discovery
-- Replaceable event
-
-## Client-Relay Communication
-
-### WebSocket Messages
-
-#### From Client to Relay
-
-**EVENT** - Publish an event:
-```json
-["EVENT", <event JSON>]
+```
+["e", "<event-id>", "<relay-url>", "<marker>"]  — event reference
+["p", "<pubkey>", "<relay-url>"]                 — profile reference
+["a", "<kind>:<pubkey>:<d-tag>", "<relay-url>"]  — replaceable event ref
+["d", "<identifier>"]                            — parameterized replaceable ID
+["t", "<hashtag>"]                               — hashtag
+["r", "<url>"]                                   — web resource / relay
 ```
 
-**REQ** - Request events (subscription):
-```json
-["REQ", <subscription_id>, <filters JSON>, <filters JSON>, ...]
-```
+NIP-10 markers for threading: `"root"`, `"reply"`, `"mention"`.
 
-**CLOSE** - Stop a subscription:
-```json
-["CLOSE", <subscription_id>]
-```
+### Client-Relay Communication (WebSocket)
 
-**AUTH** - Respond to auth challenge:
-```json
-["AUTH", <signed event kind 22242>]
-```
+**Client sends**: `["EVENT", <event>]`, `["REQ", <sub_id>, <filter>, ...]`, `["CLOSE", <sub_id>]`, `["AUTH", <event>]`
 
-#### From Relay to Client
+**Relay sends**: `["EVENT", <sub_id>, <event>]`, `["OK", <event_id>, <bool>, <msg>]`, `["EOSE", <sub_id>]`, `["CLOSED", <sub_id>, <msg>]`, `["NOTICE", <msg>]`, `["AUTH", <challenge>]`
 
-**EVENT** - Send event to client:
-```json
-["EVENT", <subscription_id>, <event JSON>]
-```
-
-**OK** - Acceptance/rejection notice:
-```json
-["OK", <event_id>, <true|false>, <message>]
-```
-
-**EOSE** - End of stored events:
-```json
-["EOSE", <subscription_id>]
-```
-
-**CLOSED** - Subscription closed:
-```json
-["CLOSED", <subscription_id>, <message>]
-```
-
-**NOTICE** - Human-readable message:
-```json
-["NOTICE", <message>]
-```
-
-**AUTH** - Authentication challenge:
-```json
-["AUTH", <challenge>]
-```
-
-### Filter Objects
-
-Filters select events in REQ messages:
+### Filters
 
 ```json
 {
-  "ids": ["<event-id>", ...],
-  "authors": ["<pubkey>", ...],
-  "kinds": [<kind number>, ...],
-  "#e": ["<event-id>", ...],
-  "#p": ["<pubkey>", ...],
-  "#a": ["<coordinate>", ...],
-  "#t": ["<hashtag>", ...],
-  "since": <unix timestamp>,
-  "until": <unix timestamp>,
-  "limit": <max number of events>
+  "ids": ["<hex>"],
+  "authors": ["<hex>"],
+  "kinds": [1, 7],
+  "#e": ["<event-id>"],
+  "#p": ["<pubkey>"],
+  "#t": ["<hashtag>"],
+  "since": 1704067200,
+  "until": 1704153600,
+  "limit": 50,
+  "search": "query"
 }
 ```
 
-Filtering rules:
-- Arrays are ORed together
-- Different fields are ANDed
-- Tag filters: `#<single-letter>` matches tag values
-- Prefix matching allowed for `ids` and `authors`
+- Array fields are OR'd; different fields are AND'd
+- `ids` and `authors` support prefix matching
+- Always set reasonable `limit` (50-500)
 
-## Cryptographic Operations
+## nostr-tools Library
 
-### Key Management
+### Key Management & Encoding (NIP-19)
 
-- **Private Key**: 32-byte random value, keep secure
-- **Public Key**: Derived via secp256k1
-- **Encoding**: Hex (lowercase) or bech32
+```typescript
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { nip19 } from 'nostr-tools';
 
-### Event Signing (schnorr)
+const sk = generateSecretKey();          // Uint8Array
+const pk = getPublicKey(sk);             // hex string
 
-Steps to create a signed event:
-1. Set all fields except `id` and `sig`
-2. Serialize event data to JSON (specific order)
-3. Calculate SHA256 hash → `id`
-4. Sign `id` with schnorr signature → `sig`
+// Encode
+const npub = nip19.npubEncode(pk);       // npub1...
+const nsec = nip19.nsecEncode(sk);       // nsec1...
+const note = nip19.noteEncode(eventId);  // note1...
 
-Serialization format for ID calculation:
-```json
-[
-  0,
-  <pubkey>,
-  <created_at>,
-  <kind>,
-  <tags>,
-  <content>
-]
+const nprofile = nip19.nprofileEncode({ pubkey: pk, relays: ['wss://...'] });
+const nevent = nip19.neventEncode({ id, relays, author, kind });
+const naddr = nip19.naddrEncode({ identifier, pubkey, kind, relays });
+
+// Decode
+const { type, data } = nip19.decode(npub); // type: 'npub', data: hex
 ```
 
-### Event Verification
+### Creating & Signing Events
 
-Steps to verify an event:
-1. Verify ID matches SHA256 of serialized data
-2. Verify signature is valid schnorr signature
-3. Check created_at is reasonable (not far future)
-4. Validate event structure and required fields
+```typescript
+import { finalizeEvent, verifyEvent } from 'nostr-tools/pure';
 
-## Implementation Best Practices
+const event = finalizeEvent({
+  kind: 1,
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [['t', 'nostr']],
+  content: 'Hello Nostr!'
+}, secretKey);
 
-### For Clients
+const valid = verifyEvent(event); // true/false
+```
 
-1. **Connect to Multiple Relays**: Don't rely on single relay
-2. **Cache Events**: Reduce redundant relay queries
-3. **Verify Signatures**: Always verify event signatures
-4. **Handle Replaceable Events**: Keep only latest version
-5. **Respect User Privacy**: Careful with sensitive data
-6. **Implement NIP-65**: Use user's preferred relays
-7. **Proper Error Handling**: Handle relay disconnections
-8. **Pagination**: Use `limit`, `since`, `until` for queries
+### Relay Communication (SimplePool)
 
-### For Relays
+```typescript
+import { SimplePool } from 'nostr-tools/pool';
 
-1. **Validate Events**: Check signatures, IDs, structure
-2. **Rate Limiting**: Prevent spam and abuse
-3. **Storage Management**: Ephemeral events, retention policies
-4. **Implement NIP-11**: Provide relay information
-5. **WebSocket Optimization**: Handle many connections
-6. **Filter Optimization**: Efficient event querying
-7. **Consider NIP-42**: Authentication for write access
-8. **Performance**: Index by pubkey, kind, tags, timestamp
+const pool = new SimplePool();
+const relays = ['wss://relay.damus.io', 'wss://nos.lol'];
 
-### Security Considerations
+// Subscribe
+const sub = pool.subscribeMany(relays, [filter], {
+  onevent(event) { /* handle event */ },
+  oneose() { /* end of stored events */ }
+});
+sub.close(); // always close when done
 
-1. **Never Expose Private Keys**: Handle nsec carefully
-2. **Validate All Input**: Prevent injection attacks
-3. **Use NIP-44**: For encrypted messages (not NIP-04)
-4. **Check Event Timestamps**: Reject far-future events
-5. **Implement Proof of Work**: NIP-13 for spam prevention
-6. **Sanitize Content**: XSS prevention in displayed content
-7. **Relay Trust**: Don't trust single relay for critical data
+// Query (returns Promise)
+const events = await pool.querySync(relays, filter);
+const event = await pool.get(relays, { ids: [eventId] });
+
+// Publish
+await Promise.allSettled(pool.publish(relays, signedEvent));
+
+// Cleanup
+pool.close(relays);
+```
+
+### Direct Relay Connection
+
+```typescript
+import { Relay } from 'nostr-tools/relay';
+
+const relay = await Relay.connect('wss://relay.damus.io');
+
+const sub = relay.subscribe([filter], {
+  onevent(event) { /* ... */ },
+  oneose() { sub.close(); }
+});
+
+await relay.publish(signedEvent);
+relay.close();
+```
+
+### Encryption
+
+```typescript
+// NIP-44 (preferred)
+import { nip44 } from 'nostr-tools';
+
+const conversationKey = nip44.getConversationKey(secretKey, recipientPubkey);
+const ciphertext = nip44.encrypt('Hello!', conversationKey);
+const plaintext = nip44.decrypt(ciphertext, conversationKey);
+
+// NIP-04 (legacy, avoid for new code)
+import { nip04 } from 'nostr-tools';
+
+const ct = await nip04.encrypt(secretKey, recipientPubkey, 'Hello!');
+const pt = await nip04.decrypt(secretKey, senderPubkey, ct);
+```
+
+### NIP-05 DNS Identifiers
+
+```typescript
+import { nip05 } from 'nostr-tools';
+
+const profile = await nip05.queryProfile('alice@example.com');
+// { pubkey: '...', relays: ['wss://...'] }
+```
+
+### NIP-10 Thread Parsing
+
+```typescript
+import { nip10 } from 'nostr-tools';
+
+const parsed = nip10.parse(event);
+// { root, reply, mentions, profiles }
+```
+
+## Key NIPs Reference
+
+| NIP | Topic | Key Points |
+|-----|-------|------------|
+| 01 | Basic protocol | Event structure, WebSocket messages, filters |
+| 02 | Contacts | Kind 3, `p` tags for following list |
+| 05 | DNS identifiers | `name@domain` via `.well-known/nostr.json` |
+| 09 | Deletion | Kind 5, `e` tags for events to delete |
+| 10 | Threading | `e` tag markers: root, reply, mention |
+| 11 | Relay info | HTTP GET relay URL for NIP-11 document |
+| 19 | bech32 entities | npub, nsec, note, nprofile, nevent, naddr |
+| 25 | Reactions | Kind 7, content "+" or emoji |
+| 42 | Auth | Relay challenges, kind 22242 response |
+| 44 | Encryption | ChaCha20-Poly1305 AEAD (replaces NIP-04) |
+| 50 | Search | `search` field in filters |
+| 57 | Zaps | Kind 9734 request, 9735 receipt |
+| 65 | Relay list | Kind 10002, read/write relay preferences |
+
+See **references/nips-overview.md** for comprehensive NIP documentation.
 
 ## Common Patterns
 
-### Publishing a Note
+### Reply with NIP-10 threading
 
-```javascript
-const event = {
-  pubkey: userPublicKey,
+```typescript
+const reply = finalizeEvent({
+  kind: 1,
   created_at: Math.floor(Date.now() / 1000),
-  kind: 1,
-  tags: [],
-  content: "Hello Nostr!",
-}
-// Calculate ID and sign
-event.id = calculateId(event)
-event.sig = signEvent(event, privateKey)
-// Publish to relay
-ws.send(JSON.stringify(["EVENT", event]))
-```
-
-### Subscribing to Notes
-
-```javascript
-const filter = {
-  kinds: [1],
-  authors: [followedPubkey1, followedPubkey2],
-  limit: 50
-}
-ws.send(JSON.stringify(["REQ", "my-sub", filter]))
-```
-
-### Replying to a Note
-
-```javascript
-const reply = {
-  kind: 1,
   tags: [
-    ["e", originalEventId, relayUrl, "root"],
-    ["p", originalAuthorPubkey]
+    ['e', rootEventId, '', 'root'],
+    ['e', parentEventId, '', 'reply'],
+    ['p', parentAuthorPubkey]
   ],
-  content: "Great post!",
-  // ... other fields
+  content: 'Great post!'
+}, secretKey);
+```
+
+### NIP-65 relay list
+
+```typescript
+// Fetch user's relay preferences
+const [relayList] = await pool.querySync(relays, {
+  kinds: [10002], authors: [pubkey]
+});
+
+const readRelays = [], writeRelays = [];
+for (const [tag, url, mode] of relayList.tags) {
+  if (tag !== 'r') continue;
+  if (!mode || mode === 'read') readRelays.push(url);
+  if (!mode || mode === 'write') writeRelays.push(url);
 }
 ```
 
-### Reacting to a Note
+### Reconnection with backoff
 
-```javascript
-const reaction = {
-  kind: 7,
-  tags: [
-    ["e", eventId],
-    ["p", eventAuthorPubkey]
-  ],
-  content: "+", // or emoji
-  // ... other fields
-}
+```typescript
+let delay = 1000;
+const connect = () => {
+  const ws = new WebSocket(relayUrl);
+  ws.onopen = () => { delay = 1000; resubscribe(); };
+  ws.onclose = () => {
+    setTimeout(connect, delay);
+    delay = Math.min(delay * 2, 30000);
+  };
+};
 ```
 
-## Development Resources
+## Security Essentials
 
-### Essential NIPs for Beginners
+- **Never expose nsec** in code, logs, or network requests
+- **Always verify signatures** before trusting event data
+- **Use NIP-44** for encryption (NIP-04 is deprecated)
+- **Sanitize content** before rendering (XSS prevention)
+- **Prefer NIP-07** (browser extensions) over handling raw keys
 
-Start with these NIPs in order:
-1. **NIP-01** - Basic protocol (MUST read)
-2. **NIP-19** - Bech32 identifiers
-3. **NIP-02** - Following lists
-4. **NIP-10** - Threaded conversations
-5. **NIP-25** - Reactions
-6. **NIP-65** - Relay lists
-
-### Testing and Development
-
-- **Relay Implementations**: nostream, strfry, relay.py
-- **Test Relays**: wss://relay.damus.io, wss://nos.lol
-- **Libraries**: nostr-tools (JS), rust-nostr (Rust), python-nostr (Python)
-- **Development Tools**: NostrDebug, Nostr Army Knife, nostril
-- **Reference Clients**: Damus (iOS), Amethyst (Android), Snort (Web)
-
-### Key Repositories
-
-- **NIPs Repository**: https://github.com/nostr-protocol/nips
-- **Awesome Nostr**: https://github.com/aljazceru/awesome-nostr
-- **Nostr Resources**: https://nostr.how
+See **references/common-mistakes.md** for a comprehensive list of pitfalls.
 
 ## Reference Files
 
-For comprehensive NIP details, see:
-- **references/nips-overview.md** - Detailed descriptions of all standard NIPs
-- **references/event-kinds.md** - Complete event kinds reference
-- **references/common-mistakes.md** - Pitfalls and how to avoid them
-
-## Quick Checklist
-
-When implementing Nostr:
-- [ ] Events have all required fields (id, pubkey, created_at, kind, tags, content, sig)
-- [ ] Event IDs calculated correctly (SHA256 of serialization)
-- [ ] Signatures verified (schnorr on secp256k1)
-- [ ] WebSocket messages properly formatted
-- [ ] Filter queries optimized with appropriate limits
-- [ ] Handling replaceable events correctly
-- [ ] Connected to multiple relays for redundancy
-- [ ] Following relevant NIPs for features implemented
-- [ ] Private keys never exposed or transmitted
-- [ ] Event timestamps validated
-
-## Official Resources
-
-- **NIPs Repository**: https://github.com/nostr-protocol/nips
-- **Nostr Website**: https://nostr.com
-- **Nostr Documentation**: https://nostr.how
-- **NIP Status**: https://nostr-nips.com
-
+- **references/nips-overview.md** — Detailed descriptions of all standard NIPs
+- **references/event-kinds.md** — Complete event kinds reference with examples
+- **references/common-mistakes.md** — 30 common implementation mistakes and fixes

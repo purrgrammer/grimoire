@@ -81,7 +81,49 @@ Read the current file, then apply changes carefully.
 - Every NIP in `VALID_NIPS` should have a corresponding entry in `NIP_METADATA` (`src/lib/nip-icons.ts`)
 - Flag and fix any inconsistencies
 
-## Step 6: Verify
+## Step 6: Update the Nostr skill
+
+Using the upstream data fetched in Step 1, update the Nostr protocol skill files in `.claude/skills/nostr/`.
+
+### Update `references/event-kinds.md`
+
+Regenerate this file from the upstream Event Kinds table. For each kind:
+- Kind number, name, NIP reference
+- Replaceability behavior (based on kind range)
+- Brief description of purpose and key tags
+
+Preserve the existing document structure:
+- Section grouping: Core Events (0-999), Regular (1000-9999), Replaceable (10000-19999), Ephemeral (20000-29999), Parameterized Replaceable (30000-39999)
+- The "Event Kind Ranges Summary" table
+- The "Common Patterns" section with JSON examples for frequently-used kinds (kinds 0, 1, 7, 10002, 30023)
+- The "Event Kind Selection Guide" section
+
+### Update `references/nips-overview.md`
+
+Update NIP entries to match upstream:
+- Add new NIPs with a brief description of purpose and key details
+- Update titles/descriptions that changed upstream
+- Mark deprecated NIPs with their status
+- Maintain the existing grouping structure (Core Protocol, Social Features, Advanced, etc.)
+- Place new NIPs in the appropriate section based on their topic
+
+### Update the Key NIPs table in `SKILL.md`
+
+Update the "Key NIPs Reference" table in `.claude/skills/nostr/SKILL.md`:
+- Keep it as a curated summary (15-20 most important NIPs), not an exhaustive list
+- Add any newly-important NIPs (final status, widely implemented)
+- Remove deprecated NIPs from the table
+- Update descriptions if they changed upstream
+
+Also update the "Common kinds" one-liner in the "Event Kind Ranges" section if new widely-used kinds were added.
+
+### Do NOT change in `SKILL.md`:
+- The protocol fundamentals sections (event structure, tags, filters, WebSocket messages)
+- The nostr-tools code examples
+- The "Common Patterns" code examples
+- The "Security Essentials" section
+
+## Step 7: Verify
 
 ```bash
 npm run lint && npm run test:run && npm run build
@@ -89,11 +131,12 @@ npm run lint && npm run test:run && npm run build
 
 Fix any lint/type/build issues before reporting.
 
-## Step 7: Report
+## Step 8: Report
 
 Summarize:
 - NIPs added / removed / title-updated
 - NIP icons added / updated in `nip-icons.ts`
 - Kinds added / updated (with icon choices explained for new ones)
+- Nostr skill files updated (which reference files changed, what was added/removed)
 - Inconsistencies found and resolved
 - Verification results (lint/test/build)
