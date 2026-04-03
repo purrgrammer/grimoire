@@ -152,6 +152,7 @@ import {
   MediaStarterPackRenderer,
   MediaStarterPackDetailRenderer,
 } from "./StarterPackRenderer";
+import { memo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
 import { P2pOrderRenderer } from "./P2pOrderRenderer";
@@ -310,7 +311,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
  * Shows basic event info with raw content
  * Right-click or tap menu button to access event menu
  */
-function DefaultKindRenderer({ event }: BaseEventProps) {
+const DefaultKindRenderer = memo(function DefaultKindRenderer({
+  event,
+}: BaseEventProps) {
   return (
     <BaseEventContainer event={event}>
       <div className="text-sm text-muted-foreground">
@@ -320,13 +323,13 @@ function DefaultKindRenderer({ event }: BaseEventProps) {
       </div>
     </BaseEventContainer>
   );
-}
+});
 
 /**
  * Main KindRenderer component
  * Automatically selects the appropriate renderer based on event kind
  */
-export function KindRenderer({
+export const KindRenderer = memo(function KindRenderer({
   event,
   depth = 0,
 }: {
@@ -335,7 +338,7 @@ export function KindRenderer({
 }) {
   const Renderer = kindRenderers[event.kind] || DefaultKindRenderer;
   return <Renderer event={event} depth={depth} />;
-}
+});
 
 /**
  * Registry of kind-specific detail renderers (for detail views)
@@ -426,19 +429,27 @@ const detailRenderers: Record<
  * Default detail renderer for kinds without custom detail implementations
  * Falls back to the feed renderer
  */
-function DefaultDetailRenderer({ event }: { event: NostrEvent }) {
+const DefaultDetailRenderer = memo(function DefaultDetailRenderer({
+  event,
+}: {
+  event: NostrEvent;
+}) {
   return <KindRenderer event={event} depth={0} />;
-}
+});
 
 /**
  * Main DetailKindRenderer component
  * Automatically selects the appropriate detail renderer based on event kind
  * Falls back to feed renderer if no detail renderer exists
  */
-export function DetailKindRenderer({ event }: { event: NostrEvent }) {
+export const DetailKindRenderer = memo(function DetailKindRenderer({
+  event,
+}: {
+  event: NostrEvent;
+}) {
   const Renderer = detailRenderers[event.kind] || DefaultDetailRenderer;
   return <Renderer event={event} />;
-}
+});
 
 /**
  * Export kind renderers registry for dynamic kind detection

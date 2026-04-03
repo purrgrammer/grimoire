@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { UserName } from "../UserName";
 import {
@@ -129,17 +129,10 @@ function ReplyPreview({
 */
 
 /**
- * Event menu - universal actions for any event
+ * Shared event action state — used by both EventMenu and EventContextMenu
+ * to avoid duplicate hook subscriptions when both are rendered together.
  */
-export function EventMenu({
-  event,
-  onReactClick,
-  canSign,
-}: {
-  event: NostrEvent;
-  onReactClick?: () => void;
-  canSign?: boolean;
-}) {
+function useEventActions(event: NostrEvent) {
   const addWindow = useAddWindow();
   const { copy, copied } = useCopy();
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
@@ -149,11 +142,9 @@ export function EventMenu({
   );
   const favorited = favoriteConfig ? isFavorite(event) : false;
 
-  const openEventDetail = () => {
+  const openEventDetail = useCallback(() => {
     let pointer;
-    // For replaceable/parameterized replaceable events, use AddressPointer
     if (isAddressableKind(event.kind)) {
-      // Find d-tag for identifier
       const dTag = getTagValue(event, "d") || "";
       pointer = {
         kind: event.kind,
@@ -161,51 +152,43 @@ export function EventMenu({
         identifier: dTag,
       };
     } else {
-      // For regular events, use EventPointer
-      pointer = {
-        id: event.id,
-      };
+      pointer = { id: event.id };
     }
-
     addWindow("open", { pointer });
-  };
+  }, [event, addWindow]);
 
-  const copyEventId = () => {
-    // Get relay hints from where the event has been seen
+  const copyEventId = useCallback(() => {
     const seenRelaysSet = getSeenRelays(event);
     const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-    // For replaceable/parameterized replaceable events, encode as naddr
     if (isAddressableKind(event.kind)) {
-      // Find d-tag for identifier
       const dTag = getTagValue(event, "d") || "";
-      const naddr = nip19.naddrEncode({
-        kind: event.kind,
-        pubkey: event.pubkey,
-        identifier: dTag,
-        relays: relays,
-      });
-      copy(naddr);
+      copy(
+        nip19.naddrEncode({
+          kind: event.kind,
+          pubkey: event.pubkey,
+          identifier: dTag,
+          relays,
+        }),
+      );
     } else {
-      // For regular events, encode as nevent
-      const nevent = nip19.neventEncode({
-        id: event.id,
-        author: event.pubkey,
-        relays: relays,
-      });
-      copy(nevent);
+      copy(
+        nip19.neventEncode({
+          id: event.id,
+          author: event.pubkey,
+          relays,
+        }),
+      );
     }
-  };
+  }, [event, copy]);
 
-  const viewEventJson = () => {
+  const viewEventJson = useCallback(() => {
     setJsonDialogOpen(true);
-  };
+  }, []);
 
-  const zapEvent = () => {
-    // Get semantic author (e.g., zapper for zaps, host for streams)
+  const zapEvent = useCallback(() => {
     const recipientPubkey = getSemanticAuthor(event);
 
-    // For addressable events, use addressPointer; for regular events, use eventPointer
     if (isAddressableKind(event.kind)) {
       const dTag = getTagValue(event, "d") || "";
       addWindow("zap", {
@@ -223,15 +206,13 @@ export function EventMenu({
         eventPointer: { id: event.id },
       });
     }
-  };
+  }, [event, addWindow]);
 
-  const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
+  const openChatWindow = useCallback(() => {
     if (event.kind === 1) {
       const seenRelaysSet = getSeenRelays(event);
       const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
 
-      // Open chat with NIP-10 thread protocol
       addWindow("chat", {
         protocol: "nip-10",
         identifier: {
@@ -246,8 +227,117 @@ export function EventMenu({
         },
       });
     }
-  };
+  }, [event, addWindow]);
 
+  const handleToggleFavorite = useCallback(() => {
+    toggleFavorite(event);
+  }, [toggleFavorite, event]);
+
+  return {
+    openEventDetail,
+    copyEventId,
+    viewEventJson,
+    zapEvent,
+    openChatWindow,
+    handleToggleFavorite,
+    copied,
+    jsonDialogOpen,
+    setJsonDialogOpen,
+    favoriteConfig,
+    favorited,
+    isUpdating,
+  };
+}
+
+type EventActions = ReturnType<typeof useEventActions>;
+
+interface EventMenuItemsProps {
+  event: NostrEvent;
+  actions: EventActions;
+  onReactClick?: () => void;
+  canSign?: boolean;
+}
+
+/**
+ * Shared menu items rendered as either DropdownMenuItems or ContextMenuItems
+ */
+function EventMenuItems({
+  Item,
+  Separator,
+  event,
+  actions,
+  onReactClick,
+  canSign,
+}: EventMenuItemsProps & {
+  Item: typeof DropdownMenuItem;
+  Separator: typeof DropdownMenuSeparator;
+}) {
+  return (
+    <>
+      <Item onClick={actions.openEventDetail}>
+        <ExternalLink className="size-4 mr-2" />
+        Open
+      </Item>
+      <Item onClick={actions.zapEvent}>
+        <Zap className="size-4 mr-2 text-yellow-500" />
+        Zap
+      </Item>
+      {event.kind === 1 && (
+        <Item onClick={actions.openChatWindow}>
+          <MessageSquare className="size-4 mr-2" />
+          Chat
+        </Item>
+      )}
+      {canSign && onReactClick && (
+        <Item onClick={onReactClick}>
+          <SmilePlus className="size-4 mr-2" />
+          React
+        </Item>
+      )}
+      {canSign && actions.favoriteConfig && (
+        <Item
+          onClick={actions.handleToggleFavorite}
+          disabled={actions.isUpdating}
+        >
+          {actions.isUpdating ? (
+            <Loader2 className="size-4 mr-2 animate-spin" />
+          ) : (
+            <Bookmark
+              className={cn(
+                "size-4 mr-2",
+                actions.favorited && "text-yellow-500 fill-current",
+              )}
+            />
+          )}
+          {actions.favorited ? "Unbookmark" : "Bookmark"}
+        </Item>
+      )}
+      <Separator />
+      <Item onClick={actions.copyEventId}>
+        {actions.copied ? (
+          <CopyCheck className="size-4 mr-2 text-success" />
+        ) : (
+          <Copy className="size-4 mr-2" />
+        )}
+        {actions.copied ? "Copied!" : "Copy ID"}
+      </Item>
+      <Item onClick={actions.viewEventJson}>
+        <FileJson className="size-4 mr-2" />
+        View JSON
+      </Item>
+    </>
+  );
+}
+
+/**
+ * Event menu - universal actions for any event (dropdown trigger)
+ */
+export function EventMenu({
+  event,
+  actions,
+  onReactClick,
+  canSign,
+}: EventMenuItemsProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -256,251 +346,42 @@ export function EventMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={openEventDetail}>
-          <ExternalLink className="size-4 mr-2" />
-          Open
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={zapEvent}>
-          <Zap className="size-4 mr-2 text-yellow-500" />
-          Zap
-        </DropdownMenuItem>
-        {event.kind === 1 && (
-          <DropdownMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </DropdownMenuItem>
-        )}
-        {canSign && onReactClick && (
-          <DropdownMenuItem onClick={onReactClick}>
-            <SmilePlus className="size-4 mr-2" />
-            React
-          </DropdownMenuItem>
-        )}
-        {canSign && favoriteConfig && (
-          <DropdownMenuItem
-            onClick={() => toggleFavorite(event)}
-            disabled={isUpdating}
-          >
-            {isUpdating ? (
-              <Loader2 className="size-4 mr-2 animate-spin" />
-            ) : (
-              <Bookmark
-                className={cn(
-                  "size-4 mr-2",
-                  favorited && "text-yellow-500 fill-current",
-                )}
-              />
-            )}
-            {favorited ? "Unbookmark" : "Bookmark"}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={copyEventId}>
-          {copied ? (
-            <CopyCheck className="size-4 mr-2 text-success" />
-          ) : (
-            <Copy className="size-4 mr-2" />
-          )}
-          {copied ? "Copied!" : "Copy ID"}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={viewEventJson}>
-          <FileJson className="size-4 mr-2" />
-          View JSON
-        </DropdownMenuItem>
+        <EventMenuItems
+          Item={DropdownMenuItem}
+          Separator={DropdownMenuSeparator}
+          event={event}
+          actions={actions}
+          onReactClick={onReactClick}
+          canSign={canSign}
+        />
       </DropdownMenuContent>
-      <EventJsonDialog
-        event={event}
-        open={jsonDialogOpen}
-        onOpenChange={setJsonDialogOpen}
-      />
     </DropdownMenu>
   );
 }
 
 /**
  * Event context menu - same actions as EventMenu but triggered by right-click
- * Used for generic event renderers that don't have a built-in menu button
  */
 export function EventContextMenu({
   event,
   children,
+  actions,
   onReactClick,
   canSign,
-}: {
-  event: NostrEvent;
-  children: React.ReactNode;
-  onReactClick?: () => void;
-  canSign?: boolean;
-}) {
-  const addWindow = useAddWindow();
-  const { copy, copied } = useCopy();
-  const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
-  const favoriteConfig = getFavoriteConfig(event.kind);
-  const { isFavorite, toggleFavorite, isUpdating } = useFavoriteList(
-    favoriteConfig ?? FALLBACK_FAVORITE_CONFIG,
-  );
-  const favorited = favoriteConfig ? isFavorite(event) : false;
-
-  const openEventDetail = () => {
-    let pointer;
-    // For replaceable/parameterized replaceable events, use AddressPointer
-    if (isAddressableKind(event.kind)) {
-      // Find d-tag for identifier
-      const dTag = getTagValue(event, "d") || "";
-      pointer = {
-        kind: event.kind,
-        pubkey: event.pubkey,
-        identifier: dTag,
-      };
-    } else {
-      // For regular events, use EventPointer
-      pointer = {
-        id: event.id,
-      };
-    }
-
-    addWindow("open", { pointer });
-  };
-
-  const copyEventId = () => {
-    // Get relay hints from where the event has been seen
-    const seenRelaysSet = getSeenRelays(event);
-    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-
-    // For replaceable/parameterized replaceable events, encode as naddr
-    if (isAddressableKind(event.kind)) {
-      // Find d-tag for identifier
-      const dTag = getTagValue(event, "d") || "";
-      const naddr = nip19.naddrEncode({
-        kind: event.kind,
-        pubkey: event.pubkey,
-        identifier: dTag,
-        relays: relays,
-      });
-      copy(naddr);
-    } else {
-      // For regular events, encode as nevent
-      const nevent = nip19.neventEncode({
-        id: event.id,
-        author: event.pubkey,
-        relays: relays,
-      });
-      copy(nevent);
-    }
-  };
-
-  const viewEventJson = () => {
-    setJsonDialogOpen(true);
-  };
-
-  const zapEvent = () => {
-    // Get semantic author (e.g., zapper for zaps, host for streams)
-    const recipientPubkey = getSemanticAuthor(event);
-
-    // For addressable events, use addressPointer; for regular events, use eventPointer
-    if (isAddressableKind(event.kind)) {
-      const dTag = getTagValue(event, "d") || "";
-      addWindow("zap", {
-        recipientPubkey,
-        eventPointer: { id: event.id },
-        addressPointer: {
-          kind: event.kind,
-          pubkey: event.pubkey,
-          identifier: dTag,
-        },
-      });
-    } else {
-      addWindow("zap", {
-        recipientPubkey,
-        eventPointer: { id: event.id },
-      });
-    }
-  };
-
-  const openChatWindow = () => {
-    // Only kind 1 notes support NIP-10 thread chat
-    if (event.kind === 1) {
-      const seenRelaysSet = getSeenRelays(event);
-      const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-
-      // Open chat with NIP-10 thread protocol
-      addWindow("chat", {
-        protocol: "nip-10",
-        identifier: {
-          type: "thread",
-          value: {
-            id: event.id,
-            relays,
-            author: event.pubkey,
-            kind: event.kind,
-          },
-          relays,
-        },
-      });
-    }
-  };
-
+}: EventMenuItemsProps & { children: React.ReactNode }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={openEventDetail}>
-          <ExternalLink className="size-4 mr-2" />
-          Open
-        </ContextMenuItem>
-        <ContextMenuItem onClick={zapEvent}>
-          <Zap className="size-4 mr-2 text-yellow-500" />
-          Zap
-        </ContextMenuItem>
-        {event.kind === 1 && (
-          <ContextMenuItem onClick={openChatWindow}>
-            <MessageSquare className="size-4 mr-2" />
-            Chat
-          </ContextMenuItem>
-        )}
-        {canSign && onReactClick && (
-          <ContextMenuItem onClick={onReactClick}>
-            <SmilePlus className="size-4 mr-2" />
-            React
-          </ContextMenuItem>
-        )}
-        {canSign && favoriteConfig && (
-          <ContextMenuItem
-            onClick={() => toggleFavorite(event)}
-            disabled={isUpdating}
-          >
-            {isUpdating ? (
-              <Loader2 className="size-4 mr-2 animate-spin" />
-            ) : (
-              <Bookmark
-                className={cn(
-                  "size-4 mr-2",
-                  favorited && "text-yellow-500 fill-current",
-                )}
-              />
-            )}
-            {favorited ? "Unbookmark" : "Bookmark"}
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={copyEventId}>
-          {copied ? (
-            <CopyCheck className="size-4 mr-2 text-success" />
-          ) : (
-            <Copy className="size-4 mr-2" />
-          )}
-          {copied ? "Copied!" : "Copy ID"}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={viewEventJson}>
-          <FileJson className="size-4 mr-2" />
-          View JSON
-        </ContextMenuItem>
+        <EventMenuItems
+          Item={ContextMenuItem}
+          Separator={ContextMenuSeparator}
+          event={event}
+          actions={actions}
+          onReactClick={onReactClick}
+          canSign={canSign}
+        />
       </ContextMenuContent>
-      <EventJsonDialog
-        event={event}
-        open={jsonDialogOpen}
-        onOpenChange={setJsonDialogOpen}
-      />
     </ContextMenu>
   );
 }
@@ -585,57 +466,55 @@ export function BaseEventContainer({
   const { canSign, signer, pubkey } = useAccount();
   const { settings } = useSettings();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const actions = useEventActions(event);
 
-  const handleReactClick = () => {
+  const handleReactClick = useCallback(() => {
     setEmojiPickerOpen(true);
-  };
+  }, []);
 
-  const handleEmojiSelect = async (emoji: string, customEmoji?: EmojiTag) => {
-    if (!signer || !pubkey) return;
+  const handleEmojiSelect = useCallback(
+    async (emoji: string, customEmoji?: EmojiTag) => {
+      if (!signer || !pubkey) return;
 
-    try {
-      const factory = new EventFactory();
-      factory.setSigner(signer);
+      try {
+        const factory = new EventFactory();
+        factory.setSigner(signer);
 
-      const emojiArg = customEmoji
-        ? {
-            shortcode: customEmoji.shortcode,
-            url: customEmoji.url,
-            address: customEmoji.address,
-          }
-        : emoji;
+        const emojiArg = customEmoji
+          ? {
+              shortcode: customEmoji.shortcode,
+              url: customEmoji.url,
+              address: customEmoji.address,
+            }
+          : emoji;
 
-      const draft = await factory.create(ReactionBlueprint, event, emojiArg);
-      const signed = await factory.sign(draft);
+        const draft = await factory.create(ReactionBlueprint, event, emojiArg);
+        const signed = await factory.sign(draft);
 
-      // Select relays per NIP-65: author's outbox + target's inbox
-      // Use semantic author (e.g., zapper for zaps, host for streams)
-      const targetPubkey = getSemanticAuthor(event);
-      const relays = await selectRelaysForInteraction(pubkey, targetPubkey);
-      await publishEventToRelays(signed, relays);
-    } catch (err) {
-      console.error("[BaseEventContainer] Failed to send reaction:", err);
-    }
-  };
+        const targetPubkey = getSemanticAuthor(event);
+        const relays = await selectRelaysForInteraction(pubkey, targetPubkey);
+        await publishEventToRelays(signed, relays);
+      } catch (err) {
+        console.error("[BaseEventContainer] Failed to send reaction:", err);
+      }
+    },
+    [signer, pubkey, event],
+  );
 
-  // Format relative time for display
   const relativeTime = formatTimestamp(
     event.created_at,
     "relative",
     locale.locale,
   );
 
-  // Format absolute timestamp for hover (ISO-8601 style)
   const absoluteTime = formatTimestamp(
     event.created_at,
     "absolute",
     locale.locale,
   );
 
-  // Use author override if provided, otherwise use event author
   const displayPubkey = authorOverride?.pubkey || event.pubkey;
 
-  // Get client tag if present: ["client", "<name>", "<31990:pubkey:d-tag>"]
   const clientTag = event.tags.find((t) => t[0] === "client");
   const clientName = clientTag?.[1];
   const clientAddress = clientTag?.[2];
@@ -649,6 +528,7 @@ export function BaseEventContainer({
     <>
       <EventContextMenu
         event={event}
+        actions={actions}
         onReactClick={handleReactClick}
         canSign={canSign}
       >
@@ -665,6 +545,7 @@ export function BaseEventContainer({
             </div>
             <EventMenu
               event={event}
+              actions={actions}
               onReactClick={handleReactClick}
               canSign={canSign}
             />
@@ -679,6 +560,11 @@ export function BaseEventContainer({
           />
         </div>
       </EventContextMenu>
+      <EventJsonDialog
+        event={event}
+        open={actions.jsonDialogOpen}
+        onOpenChange={actions.setJsonDialogOpen}
+      />
       <EmojiPickerDialog
         open={emojiPickerOpen}
         onOpenChange={setEmojiPickerOpen}
