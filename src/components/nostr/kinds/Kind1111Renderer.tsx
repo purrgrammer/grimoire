@@ -117,6 +117,7 @@ function ScopeRow({
  */
 function NostrEventContent({ nostrEvent }: { nostrEvent: NostrEvent }) {
   const title = getEventDisplayTitle(nostrEvent, false);
+  const hasStructuredTitle = title !== nostrEvent.content;
   return (
     <>
       <KindBadge
@@ -128,9 +129,17 @@ function NostrEventContent({ nostrEvent }: { nostrEvent: NostrEvent }) {
         pubkey={nostrEvent.pubkey}
         className="text-accent font-semibold flex-shrink-0"
       />
-      <span className="truncate min-w-0">
-        {title || nostrEvent.content.slice(0, 80)}
-      </span>
+      {hasStructuredTitle ? (
+        <span className="truncate min-w-0">{title}</span>
+      ) : (
+        <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
+          <RichText
+            className="truncate line-clamp-1 text-xs [&_img]:size-3.5"
+            event={nostrEvent}
+            options={{ showMedia: false, showEventEmbeds: false }}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -220,10 +229,17 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
             pubkey={replyEvent.pubkey}
             className="text-accent font-semibold flex-shrink-0"
           />
-          <span className="truncate min-w-0">
-            {getEventDisplayTitle(replyEvent, false) ||
-              replyEvent.content.slice(0, 80)}
-          </span>
+          <div className="text-muted-foreground truncate line-clamp-1 min-w-0 flex-1">
+            {getEventDisplayTitle(replyEvent, false) !== replyEvent.content ? (
+              getEventDisplayTitle(replyEvent, false)
+            ) : (
+              <RichText
+                className="truncate line-clamp-1 text-xs [&_img]:size-3.5"
+                event={replyEvent}
+                options={{ showMedia: false, showEventEmbeds: false }}
+              />
+            )}
+          </div>
         </ScopeRow>
       )}
 
