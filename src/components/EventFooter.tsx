@@ -1,6 +1,6 @@
 import { NostrEvent } from "@/types/nostr";
 import { KindBadge } from "./KindBadge";
-import { Wifi } from "lucide-react";
+import { Wifi, ShieldCheck } from "lucide-react";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { useAddWindow } from "@/core/state";
 import { getKindName } from "@/constants/kinds";
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RelayLink } from "./nostr/RelayLink";
+import { isProtectedEvent } from "@/lib/nip70-helpers";
 
 interface EventFooterProps {
   event: NostrEvent;
@@ -38,6 +39,7 @@ export function EventFooter({
   const seenRelaysSet = getSeenRelays(event);
   const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
   const kindName = getKindName(event.kind);
+  const isProtected = isProtectedEvent(event);
 
   const handleKindClick = () => {
     // Open KIND command to show NIP documentation for this kind
@@ -84,36 +86,47 @@ export function EventFooter({
           )}
         </div>
 
-        {/* Right: Relay Dropdown */}
-        {relays.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center gap-2 md:gap-1 min-h-[44px] md:min-h-0 px-1 -mx-1 cursor-pointer hover:text-foreground transition-colors"
-                title={`Seen on ${relays.length} relay${relays.length > 1 ? "s" : ""}`}
-              >
-                <Wifi className="size-4 md:size-3" />
-                <span className="text-xs md:text-[10px] md:leading-[10px]">
-                  {relays.length}
-                </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="max-h-64 overflow-y-auto p-1"
+        {/* Right: Protected + Relay Dropdown */}
+        <div className="flex items-center gap-3 md:gap-2">
+          {isProtected && (
+            <button
+              onClick={() => addWindow("nip", { number: 70 }, "NIP 70")}
+              className="flex items-center min-h-[44px] md:min-h-0 px-1 -mx-1 cursor-crosshair hover:text-foreground transition-colors"
+              title="Protected event (NIP-70)"
             >
-              <DropdownMenuLabel>Seen on</DropdownMenuLabel>
-              {relays.map((relay) => (
-                <RelayLink
-                  key={relay}
-                  url={relay}
-                  showInboxOutbox={false}
-                  className="px-2 py-1 rounded-sm"
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+              <ShieldCheck className="size-4 md:size-3" />
+            </button>
+          )}
+          {relays.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-2 md:gap-1 min-h-[44px] md:min-h-0 px-1 -mx-1 cursor-pointer hover:text-foreground transition-colors"
+                  title={`Seen on ${relays.length} relay${relays.length > 1 ? "s" : ""}`}
+                >
+                  <Wifi className="size-4 md:size-3" />
+                  <span className="text-xs md:text-[10px] md:leading-[10px]">
+                    {relays.length}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="max-h-64 overflow-y-auto p-1"
+              >
+                <DropdownMenuLabel>Seen on</DropdownMenuLabel>
+                {relays.map((relay) => (
+                  <RelayLink
+                    key={relay}
+                    url={relay}
+                    showInboxOutbox={false}
+                    className="px-2 py-1 rounded-sm"
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
     </div>
   );
