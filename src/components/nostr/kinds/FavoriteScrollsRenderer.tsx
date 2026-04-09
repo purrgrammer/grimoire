@@ -56,9 +56,12 @@ function ScrollRefItem({
     <div className="flex items-center gap-3 p-3 border border-border/50 rounded group hover:bg-muted/30 transition-colors">
       <ScrollIconImage iconUrl={iconUrl} className="size-4" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">
+        <ClickableEventTitle
+          event={scrollEvent}
+          className="text-sm font-medium truncate flex items-center gap-1.5"
+        >
           {name || "Unnamed Scroll"}
-        </div>
+        </ClickableEventTitle>
         <div className="text-xs text-muted-foreground mt-0.5">
           {params.length > 0 && (
             <span>
