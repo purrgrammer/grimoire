@@ -190,6 +190,11 @@ import {
   NsiteNamedRenderer,
   NsiteLegacyRenderer,
 } from "./NsiteRenderer";
+import { ScrollRenderer, ScrollDetailRenderer } from "./ScrollRenderer";
+import {
+  FavoriteScrollsRenderer,
+  FavoriteScrollsDetailRenderer,
+} from "./FavoriteScrollsRenderer";
 import {
   NsiteRootDetailRenderer,
   NsiteNamedDetailRenderer,
@@ -222,6 +227,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   1111: Kind1111Renderer, // Post (NIP-22)
   1222: VoiceMessageRenderer, // Voice Message (NIP-A0)
   1311: LiveChatMessageRenderer, // Live Chat Message (NIP-53)
+  1227: ScrollRenderer, // Scroll (NIP-5C)
   1244: VoiceMessageRenderer, // Voice Message Reply (NIP-A0)
   1337: Kind1337Renderer, // Code Snippet (NIP-C0)
   3367: ColorMomentRenderer, // Color Moment
@@ -253,6 +259,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10017: GitAuthorsRenderer, // Git Authors (NIP-51)
   10018: FavoriteReposRenderer, // Favorite Repositories (NIP-51)
   10020: MediaFollowListRenderer, // Media Follow List (NIP-51)
+  10027: FavoriteScrollsRenderer, // Favorite Scrolls (NIP-5C)
   10030: EmojiListRenderer, // User Emoji List (NIP-51)
   10040: TrustedProviderListRenderer, // Trusted Provider List (NIP-85)
   10050: GenericRelayListRenderer, // DM Relay List (NIP-51)
@@ -356,6 +363,7 @@ const detailRenderers: Record<
   8: BadgeAwardDetailRenderer, // Badge Award Detail (NIP-58)
   777: SpellDetailRenderer, // Spell Detail
   1068: PollDetailRenderer, // Poll Detail (NIP-88)
+  1227: ScrollDetailRenderer, // Scroll Detail (NIP-5C)
   1337: Kind1337DetailRenderer, // Code Snippet Detail (NIP-C0)
   3367: ColorMomentDetailRenderer, // Color Moment Detail
   1617: PatchDetailRenderer, // Patch Detail (NIP-34)
@@ -381,6 +389,7 @@ const detailRenderers: Record<
   10018: FavoriteReposDetailRenderer, // Favorite Repositories Detail (NIP-34)
   10040: TrustedProviderListDetailRenderer, // Trusted Provider List Detail (NIP-85)
   10020: MediaFollowListDetailRenderer, // Media Follow List Detail (NIP-51)
+  10027: FavoriteScrollsDetailRenderer, // Favorite Scrolls Detail (NIP-5C)
   10030: EmojiListDetailRenderer, // User Emoji List Detail (NIP-51)
   10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
   10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)

@@ -75,6 +75,7 @@ import {
   WandSparkles,
   XCircle,
   Zap,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,6 +97,7 @@ export interface EventKind {
 
 export const SPELL_KIND = 777;
 export const SPELLBOOK_KIND = 30777;
+export const SCROLL_KIND = 1227;
 
 export const EVENT_KINDS: Record<number | string, EventKind> = {
   // Core protocol kinds
@@ -472,6 +474,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Voice Message",
     nip: "A0",
     icon: Mic,
+  },
+  1227: {
+    kind: 1227,
+    name: "Scroll",
+    description: "WebAssembly Scroll Program",
+    nip: "5C",
+    icon: ScrollText,
   },
   1311: {
     kind: 1311,
@@ -867,6 +876,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Media follows",
     nip: "51",
     icon: Play,
+  },
+  10027: {
+    kind: 10027,
+    name: "Favorite Scrolls",
+    description: "Favorite scrolls list",
+    nip: "5C",
+    icon: ScrollText,
   },
   10030: {
     kind: 10030,

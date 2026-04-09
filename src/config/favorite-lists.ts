@@ -1,4 +1,4 @@
-import { SPELL_KIND } from "@/constants/kinds";
+import { SPELL_KIND, SCROLL_KIND } from "@/constants/kinds";
 import type { TagStrategy } from "@/lib/favorite-tag-strategies";
 import { groupTagStrategy } from "@/lib/favorite-tag-strategies";
 
@@ -35,6 +35,11 @@ export const FAVORITE_LISTS: Record<number, FavoriteListConfig> = {
     listKind: 10030,
     elementKind: 30030,
     label: "Emoji Sets",
+  },
+  [SCROLL_KIND]: {
+    listKind: 10027,
+    elementKind: SCROLL_KIND,
+    label: "Favorite Scrolls",
   },
   39000: {
     listKind: 10009,

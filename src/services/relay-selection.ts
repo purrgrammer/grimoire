@@ -87,6 +87,38 @@ function sanitizeRelays(relays: string[]): string[] {
 }
 
 /**
+ * Derives author pubkeys from event references in a filter.
+ * Looks up events by ids, #e tags, and #a tags in the EventStore
+ * to extract their author pubkeys for relay selection.
+ */
+function deriveAuthorsFromEventRefs(
+  store: IEventStore,
+  filter: NostrFilter,
+): string[] {
+  const pubkeys = new Set<string>();
+
+  // From ids filter — look up events directly
+  for (const id of filter.ids || []) {
+    const event = store.getEvent(id);
+    if (event) pubkeys.add(event.pubkey);
+  }
+
+  // From #e tag filter — same lookup
+  for (const id of filter["#e"] || []) {
+    const event = store.getEvent(id);
+    if (event) pubkeys.add(event.pubkey);
+  }
+
+  // From #a tag filter — parse as replaceable address
+  for (const addr of filter["#a"] || []) {
+    const parsed = parseReplaceableAddress(addr);
+    if (parsed) pubkeys.add(parsed.pubkey);
+  }
+
+  return [...pubkeys];
+}
+
+/**
  * Gets outbox (write) relays for a pubkey
  * Checks cache first, falls back to EventStore
  *
@@ -388,15 +420,23 @@ export async function selectRelaysForFilter(
   } = options;
 
   // Extract pubkeys from filter
-  const authors = filter.authors || [];
+  let authors = filter.authors || [];
   const pTags = filter["#p"] || [];
 
-  // If no pubkeys, return fallback immediately
+  // If no authors or p-tags, try to derive authors from referenced events
   if (authors.length === 0 && pTags.length === 0) {
-    console.debug(
-      "[RelaySelection] No authors or #p tags, using fallback relays",
-    );
-    return createFallbackResult(fallbackRelays);
+    const derivedAuthors = deriveAuthorsFromEventRefs(eventStore, filter);
+    if (derivedAuthors.length > 0) {
+      console.debug(
+        `[RelaySelection] Derived ${derivedAuthors.length} authors from event refs`,
+      );
+      authors = derivedAuthors;
+    } else {
+      console.debug(
+        "[RelaySelection] No authors, #p tags, or event refs, using fallback relays",
+      );
+      return createFallbackResult(fallbackRelays);
+    }
   }
 
   console.debug(
