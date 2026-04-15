@@ -57,6 +57,19 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
 
   const isActive = runtimeState === "loading" || runtimeState === "running";
 
+  // Sync "me" param with active account pubkey
+  useEffect(() => {
+    const hasMeParam = params.some(
+      (p) => p.name === "me" && p.type === "public_key",
+    );
+    if (!hasMeParam || isActive) return;
+
+    setParamValues((prev) => ({
+      ...prev,
+      me: pubkey || "",
+    }));
+  }, [pubkey, params, isActive]);
+
   // Sorted, deduplicated display events (newest first)
   const displayedEvents = useMemo(
     () =>
