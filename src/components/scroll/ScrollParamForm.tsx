@@ -2,7 +2,75 @@ import { Settings } from "lucide-react";
 import { PARAM_CONFIG } from "@/components/nostr/kinds/ScrollRenderer";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { formatTimestamp } from "@/hooks/useLocale";
 import type { ScrollParam } from "@/lib/nip5c-helpers";
+
+const TIMESTAMP_PRESETS = [
+  { label: "1h ago", offset: 3600 },
+  { label: "1d ago", offset: 86400 },
+  { label: "1w ago", offset: 604800 },
+  { label: "1mo ago", offset: 2592000 },
+] as const;
+
+function unixToDatetimeLocal(unixSeconds: number): string {
+  const date = new Date(unixSeconds * 1000);
+  // toISOString gives UTC; adjust to local time for datetime-local input
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function TimestampInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const numericValue = value ? parseInt(value, 10) : null;
+  const datetimeValue =
+    numericValue && !isNaN(numericValue)
+      ? unixToDatetimeLocal(numericValue)
+      : "";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-1">
+        {TIMESTAMP_PRESETS.map(({ label, offset }) => (
+          <button
+            key={label}
+            type="button"
+            disabled={disabled}
+            onClick={() =>
+              onChange(String(Math.floor(Date.now() / 1000) - offset))
+            }
+            className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <Input
+        type="datetime-local"
+        value={datetimeValue}
+        onChange={(e) => {
+          const parsed = new Date(e.target.value).getTime();
+          if (!isNaN(parsed)) {
+            onChange(String(Math.floor(parsed / 1000)));
+          }
+        }}
+        disabled={disabled}
+        className="h-8 text-xs"
+      />
+      {numericValue && !isNaN(numericValue) && (
+        <span className="text-xs text-muted-foreground">
+          {formatTimestamp(numericValue, "datetime")}
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface ScrollParamFormProps {
   params: ScrollParam[];
@@ -90,6 +158,12 @@ export function ScrollParamForm({
                     className="flex-1 h-8 text-xs"
                   />
                 </div>
+              ) : param.type === "timestamp" ? (
+                <TimestampInput
+                  value={values[param.name] || ""}
+                  onChange={(v) => setValue(param.name, v)}
+                  disabled={disabled}
+                />
               ) : (
                 <Input
                   type={inputType}
