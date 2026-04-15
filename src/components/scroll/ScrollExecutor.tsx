@@ -21,9 +21,48 @@ interface ScrollExecutorProps {
   params: ScrollParam[];
   /** Base64-encoded WASM binary */
   wasmBase64: string;
+  /** Event ID used as localStorage key for persisting settings */
+  eventId?: string;
 }
 
-export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
+const SCROLL_STORAGE_PREFIX = "scroll_settings_";
+
+function loadScrollSettings(eventId: string): {
+  paramValues?: Record<string, string>;
+  endianness?: "LE" | "BE";
+  presenceBytes?: boolean;
+} {
+  try {
+    const stored = localStorage.getItem(SCROLL_STORAGE_PREFIX + eventId);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveScrollSettings(
+  eventId: string,
+  settings: {
+    paramValues: Record<string, string>;
+    endianness: "LE" | "BE";
+    presenceBytes: boolean;
+  },
+) {
+  try {
+    localStorage.setItem(
+      SCROLL_STORAGE_PREFIX + eventId,
+      JSON.stringify(settings),
+    );
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+}
+
+export function ScrollExecutor({
+  params,
+  wasmBase64,
+  eventId,
+}: ScrollExecutorProps) {
   const { pubkey } = useAccount();
   const { relays: relayStates } = useRelayState();
 
@@ -31,17 +70,28 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
     .filter(([, state]) => state.connectionState === "connected")
     .map(([url]) => url);
 
-  // Pre-fill "me" params with logged-in pubkey
+  // Load persisted settings
+  const stored = eventId ? loadScrollSettings(eventId) : {};
+
+  // Pre-fill "me" params with logged-in pubkey, then overlay persisted values
   const defaultValues: Record<string, string> = {};
   for (const p of params) {
     if (p.name === "me" && p.type === "public_key" && pubkey) {
       defaultValues[p.name] = pubkey;
     }
   }
+  // Filter stored values to only include current params (remove stale keys)
+  const validParamNames = new Set(params.map((p) => p.name));
+  const filteredStored = Object.fromEntries(
+    Object.entries(stored.paramValues || {}).filter(([k]) =>
+      validParamNames.has(k),
+    ),
+  );
+  const initialValues = { ...defaultValues, ...filteredStored };
 
   const [runtimeState, setRuntimeState] = useState<ScrollRuntimeState>("idle");
   const [paramValues, setParamValues] =
-    useState<Record<string, string>>(defaultValues);
+    useState<Record<string, string>>(initialValues);
   const [displayedEventsMap, setDisplayedEventsMap] = useState<
     Map<string, NostrEvent>
   >(new Map());
@@ -50,10 +100,15 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
   const [activeSubs, setActiveSubs] = useState<SubscriptionInfo[]>([]);
   const [eventCount, setEventCount] = useState(0);
   const controllerRef = useRef<ScrollRuntimeController | null>(null);
+  const isInitialMount = useRef(true);
 
   // Encoding options
-  const [endianness, setEndianness] = useState<"LE" | "BE">("BE");
-  const [presenceBytes, setPresenceBytes] = useState(false);
+  const [endianness, setEndianness] = useState<"LE" | "BE">(
+    stored.endianness || "BE",
+  );
+  const [presenceBytes, setPresenceBytes] = useState(
+    stored.presenceBytes ?? false,
+  );
 
   const isActive = runtimeState === "loading" || runtimeState === "running";
 
@@ -69,6 +124,16 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
   const requiredParamsMissing = params.some(
     (p) => p.required && !paramValues[p.name]?.trim(),
   );
+
+  // Persist settings to localStorage when they change (skip initial mount)
+  useEffect(() => {
+    if (!eventId) return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    saveScrollSettings(eventId, { paramValues, endianness, presenceBytes });
+  }, [eventId, paramValues, endianness, presenceBytes]);
 
   useEffect(() => {
     return () => {
