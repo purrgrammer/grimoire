@@ -148,7 +148,11 @@ export function ScrollDetailRenderer({ event }: { event: NostrEvent }) {
         )}
       </div>
 
-      <ScrollExecutor params={params} wasmBase64={event.content} />
+      <ScrollExecutor
+        params={params}
+        wasmBase64={event.content}
+        eventId={event.id}
+      />
     </div>
   );
 }
