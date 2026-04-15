@@ -50,6 +50,7 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
   const [activeSubs, setActiveSubs] = useState<SubscriptionInfo[]>([]);
   const [eventCount, setEventCount] = useState(0);
   const controllerRef = useRef<ScrollRuntimeController | null>(null);
+  const hasHadSubsRef = useRef(false);
 
   // Encoding options
   const [endianness, setEndianness] = useState<"LE" | "BE">("BE");
@@ -76,6 +77,30 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
     };
   }, []);
 
+  // Auto-stop after 3 seconds of inactivity (no open subscriptions)
+  useEffect(() => {
+    // Track if we've ever had subscriptions
+    if (activeSubs.some((s) => !s.closed)) {
+      hasHadSubsRef.current = true;
+    }
+
+    // Only auto-stop if: running, has had subs before, and no open subs now
+    const openSubs = activeSubs.filter((s) => !s.closed).length;
+    if (runtimeState !== "running" || !hasHadSubsRef.current || openSubs > 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      controllerRef.current?.stop();
+      setLogEntries((prev) => [
+        ...prev,
+        "Auto-stopped: no active subscriptions for 3 seconds",
+      ]);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [activeSubs, runtimeState]);
+
   const handleRun = useCallback(async () => {
     controllerRef.current?.stop();
 
@@ -85,6 +110,7 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
     setActiveSubs([]);
     setEventCount(0);
     setRuntimeState("loading");
+    hasHadSubsRef.current = false;
 
     // Resolve param values — fetch all event params before running
     const resolved = new Map<string, ParamValue>();
