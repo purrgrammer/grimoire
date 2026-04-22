@@ -178,6 +178,8 @@ import { TrustedAssertionRenderer } from "./TrustedAssertionRenderer";
 import { TrustedAssertionDetailRenderer } from "./TrustedAssertionDetailRenderer";
 import { TrustedProviderListRenderer } from "./TrustedProviderListRenderer";
 import { TrustedProviderListDetailRenderer } from "./TrustedProviderListDetailRenderer";
+import { AttestationRenderer } from "./AttestationRenderer";
+import { AttestationDetailRenderer } from "./AttestationDetailRenderer";
 import {
   MusicTrackRenderer,
   MusicTrackDetailRenderer,
@@ -294,6 +296,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30383: TrustedAssertionRenderer, // Event Assertion (NIP-85)
   30384: TrustedAssertionRenderer, // Address Assertion (NIP-85)
   30385: TrustedAssertionRenderer, // External Assertion (NIP-85)
+  31871: AttestationRenderer, // Attestation
   34139: PlaylistRenderer, // Music Playlist
   34235: Kind21Renderer, // Horizontal Video (NIP-71 legacy)
   34236: Kind22Renderer, // Vertical Video (NIP-71 legacy)
@@ -420,6 +423,7 @@ const detailRenderers: Record<
   30383: TrustedAssertionDetailRenderer, // Event Assertion Detail (NIP-85)
   30384: TrustedAssertionDetailRenderer, // Address Assertion Detail (NIP-85)
   30385: TrustedAssertionDetailRenderer, // External Assertion Detail (NIP-85)
+  31871: AttestationDetailRenderer, // Attestation Detail
   34128: NsiteLegacyDetailRenderer, // Legacy Nsite Detail (NIP-5A, deprecated)
   35128: NsiteNamedDetailRenderer, // Named Nsite Detail (NIP-5A)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
