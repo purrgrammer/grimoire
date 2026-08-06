@@ -17,7 +17,11 @@ import type {
   Participant,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import type { EmojiTag } from "@/lib/emoji-helpers";
+import {
+  toApplesauceEmoji,
+  toApplesauceEmojis,
+  type EmojiTag,
+} from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
@@ -28,8 +32,7 @@ import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import { getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
-import { EventFactory } from "applesauce-core/event-factory";
-import { NoteReplyBlueprint, ReactionBlueprint } from "@/lib/blueprints";
+import { NoteFactory, ReactionFactory } from "applesauce-common/factories";
 import { getNip10References } from "applesauce-common/helpers";
 import {
   getZapAmount,
@@ -383,23 +386,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       );
     }
 
-    // Create event factory
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
-    // Use NoteReplyBlueprint - automatically handles NIP-10 tags and p-tag copying!
-    const draft = await factory.create(
-      NoteReplyBlueprint,
-      parentEvent,
-      content,
-      {
-        emojis: options?.emojiTags?.map((e) => ({
-          shortcode: e.shortcode,
-          url: e.url,
-          address: e.address,
-        })),
-      },
-    );
+    // Tags applesauce doesn't generate for us
+    const extraTags: string[][] = [];
 
     // Add NIP-92 imeta tags for blob attachments (not yet handled by applesauce)
     if (options?.blobAttachments) {
@@ -408,17 +396,23 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
-        draft.tags.push(["imeta", ...imetaParts]);
+        extraTags.push(["imeta", ...imetaParts]);
       }
     }
 
     // Add client tag if enabled in settings
     if (settingsManager.getSetting("post", "includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
+      extraTags.push(GRIMOIRE_CLIENT_TAG);
     }
 
-    // Sign the event
-    const event = await factory.sign(draft);
+    // NoteFactory.reply automatically handles NIP-10 tags and p-tag copying
+    const event = await NoteFactory.reply(parentEvent, content, {
+      emojis: options?.emojiTags
+        ? toApplesauceEmojis(options.emojiTags)
+        : undefined,
+    })
+      .modifyPublicTags((tags) => [...tags, ...extraTags])
+      .sign(activeSigner);
 
     // Publish to conversation relays
     await publishEventToRelays(event, relays);
@@ -451,26 +445,17 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       throw new Error("Message event not found");
     }
 
-    // Create event factory
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
+    // ReactionFactory auto-handles e-tag, k-tag, p-tag and custom emoji
+    const emojiArg = customEmoji ? toApplesauceEmoji(customEmoji) : emoji;
 
-    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
-    const emojiArg = customEmoji ?? emoji;
-
-    const draft = await factory.create(
-      ReactionBlueprint,
-      messageEvent,
-      emojiArg,
-    );
-
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("post", "includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
-    // Sign the event
-    const event = await factory.sign(draft);
+    const event = await ReactionFactory.create(messageEvent, emojiArg)
+      // Add client tag if enabled in settings
+      .modifyPublicTags((tags) =>
+        settingsManager.getSetting("post", "includeClientTag")
+          ? [...tags, GRIMOIRE_CLIENT_TAG]
+          : tags,
+      )
+      .sign(activeSigner);
 
     // Publish to conversation relays
     await publishEventToRelays(event, relays);

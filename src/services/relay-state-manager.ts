@@ -1,4 +1,4 @@
-import type { IRelay } from "applesauce-relay";
+import type { Relay } from "applesauce-relay";
 import { combineLatest } from "rxjs";
 import { map, startWith } from "rxjs/operators";
 import type {
@@ -98,7 +98,7 @@ class RelayStateManager {
   /**
    * Subscribe to a single relay's observables
    */
-  private monitorRelay(relay: IRelay) {
+  private monitorRelay(relay: Relay) {
     const url = relay.url;
 
     // Initialize state if not exists

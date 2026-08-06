@@ -24,3 +24,8 @@ dist-ssr
 *.sln
 *.sw?
 .playwright-mcp
+
+# Claude Code local artifacts (agent scratch, not shared state)
+.claude/plans/
+.claude/worktrees/
+.claude/settings.local.json

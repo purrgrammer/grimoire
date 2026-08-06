@@ -1,6 +1,6 @@
 import { ActionRunner } from "applesauce-actions";
 import eventStore from "./event-store";
-import { EventFactory } from "applesauce-core/event-factory";
+import type { EventSigner } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools/core";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { getDefaultStore } from "jotai";
@@ -48,7 +48,32 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
   }
 }
 
-const factory = new EventFactory();
+/**
+ * Signer that always delegates to the currently active account.
+ *
+ * applesauce v6's ActionRunner takes an EventSigner directly (the old
+ * EventFactory indirection was removed), and its `signer` field is read at
+ * action time. Delegating keeps the hub pointed at whichever account is
+ * active without reassigning it on every account switch.
+ */
+function requireActiveSigner() {
+  const signer = accountManager.active?.signer;
+  if (!signer) throw new Error("No active account signer available");
+  return signer;
+}
+
+const activeAccountSigner: EventSigner = {
+  getPublicKey: async () => requireActiveSigner().getPublicKey(),
+  signEvent: async (draft) => requireActiveSigner().signEvent(draft),
+  // Delegated as getters so capability detection (`signer.nip44 !== undefined`)
+  // still reflects what the active account actually supports.
+  get nip04() {
+    return accountManager.active?.signer?.nip04;
+  },
+  get nip44() {
+    return accountManager.active?.signer?.nip44;
+  },
+};
 
 /**
  * Global action runner for Grimoire
@@ -56,16 +81,14 @@ const factory = new EventFactory();
  *
  * Configured with:
  * - EventStore: Single source of truth for Nostr events
- * - EventFactory: Creates and signs events
+ * - EventSigner: Signs events using the active account
  * - publishEvent: Publishes events via outbox relay selection + PublishService
  */
-export const hub = new ActionRunner(eventStore, factory, publishEvent);
-
-// Sync factory signer with active account
-// This ensures the hub can sign events when an account is active
-accountManager.active$.subscribe((account) => {
-  factory.setSigner(account?.signer || undefined);
-});
+export const hub = new ActionRunner(
+  eventStore,
+  activeAccountSigner,
+  publishEvent,
+);
 
 /**
  * Publishes a Nostr event to specific relays

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "applesauce": {
+      "type": "http",
+      "url": "https://mcp.applesauce.build/mcp"
+    },
+    "nostrbook": {
+      "type": "http",
+      "url": "https://nostrbook.dev/mcp"
+    }
+  }
+}

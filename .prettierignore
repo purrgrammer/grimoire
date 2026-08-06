@@ -1,6 +1,7 @@
 dist
 node_modules
 .claude
+.agents
 *.md
 package-lock.json
 src/data/nostr-kinds-schema.yaml

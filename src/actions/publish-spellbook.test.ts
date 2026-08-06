@@ -23,24 +23,14 @@ const mockAccount = {
   signer: mockSigner,
 };
 
-const mockFactory = {
-  build: vi.fn(async (props: any) => ({
-    ...props,
-    pubkey: mockAccount.pubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    id: "test-event-id",
-  })),
-  sign: vi.fn(async (draft: any) => ({
-    ...draft,
-    sig: "test-signature",
-  })),
-};
-
 // Track published events
 const publishedEvents: NostrEvent[] = [];
 
+// A real signer stamps the pubkey and signature onto the draft
 const mockSign = vi.fn(async (draft: any) => ({
   ...draft,
+  pubkey: mockAccount.pubkey,
+  id: "test-event-id",
   sig: "test-signature",
 }));
 
@@ -56,7 +46,6 @@ const mockPublish = vi.fn(
 );
 
 const mockContext: ActionContext = {
-  factory: mockFactory as any,
   events: {} as any,
   self: "test-pubkey",
   user: {} as any,
@@ -275,17 +264,18 @@ describe("PublishSpellbook action", () => {
     });
   });
 
-  describe("factory integration", () => {
-    it("should call factory.build with correct props", async () => {
+  describe("draft assembly", () => {
+    it("should sign a draft with correct props", async () => {
       await runAction({
         state: mockState,
         title: "Test",
       });
 
-      expect(mockFactory.build).toHaveBeenCalledWith(
+      expect(mockSign).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 30777,
           content: expect.any(String),
+          created_at: expect.any(Number),
           tags: expect.arrayContaining([
             ["d", expect.any(String)],
             ["title", "Test"],

@@ -36,11 +36,12 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "npx prettier --write \"$FILEPATH\" 2>/dev/null || true"
+            "command": "jq -r '.tool_input.file_path // empty' | grep -Ev '^$|/(node_modules|dist|\\.agents|\\.claude)/' | xargs -r npx prettier --ignore-unknown --write >/dev/null 2>&1 || true",
+            "timeout": 30
           }
         ]
       }

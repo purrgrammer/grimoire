@@ -42,11 +42,10 @@ import { EventFooter } from "@/components/EventFooter";
 import { cn } from "@/lib/utils";
 import { isAddressableKind } from "@/lib/nostr-kinds";
 import { getSemanticAuthor } from "@/lib/semantic-author";
-import { EventFactory } from "applesauce-core/event-factory";
-import { ReactionBlueprint } from "@/lib/blueprints";
+import { ReactionFactory } from "applesauce-common/factories";
 import { publishEventToRelays } from "@/services/hub";
 import { selectRelaysForInteraction } from "@/services/relay-selection";
-import type { EmojiTag } from "@/lib/emoji-helpers";
+import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import { useFavoriteList } from "@/hooks/useFavoriteList";
 import {
   getFavoriteConfig,
@@ -506,19 +505,11 @@ export function BaseEventContainer({
       if (!signer || !pubkey) return;
 
       try {
-        const factory = new EventFactory();
-        factory.setSigner(signer);
+        const emojiArg = customEmoji ? toApplesauceEmoji(customEmoji) : emoji;
 
-        const emojiArg = customEmoji
-          ? {
-              shortcode: customEmoji.shortcode,
-              url: customEmoji.url,
-              address: customEmoji.address,
-            }
-          : emoji;
-
-        const draft = await factory.create(ReactionBlueprint, event, emojiArg);
-        const signed = await factory.sign(draft);
+        const signed = await ReactionFactory.create(event, emojiArg).sign(
+          signer,
+        );
 
         const targetPubkey = getSemanticAuthor(event);
         const relays = await selectRelaysForInteraction(pubkey, targetPubkey);

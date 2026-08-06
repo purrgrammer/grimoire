@@ -19,7 +19,11 @@ import type {
   ParticipantRole,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import type { EmojiTag } from "@/lib/emoji-helpers";
+import {
+  toApplesauceEmoji,
+  toApplesauceEmojis,
+  type EmojiTag,
+} from "@/lib/emoji-helpers";
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
@@ -29,8 +33,10 @@ import { getQuotePointer } from "@/lib/nostr-utils";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import { normalizeRelayURL } from "@/lib/relay-url";
-import { EventFactory } from "applesauce-core/event-factory";
-import { GroupMessageBlueprint, ReactionBlueprint } from "@/lib/blueprints";
+import {
+  GroupMessageFactory,
+  ReactionFactory,
+} from "applesauce-common/factories";
 import { resolveGroupMetadata } from "@/lib/chat/group-metadata-helpers";
 
 /**
@@ -411,24 +417,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Group ID and relay URL required");
     }
 
-    // Create event factory
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
-    // Use GroupMessageBlueprint - auto-handles h-tag, hashtags, mentions, emojis
-    const draft = await factory.create(
-      GroupMessageBlueprint,
-      { id: groupId, relay: relayUrl },
-      content,
-      {
-        previous: [], // No threading for now
-        emojis: options?.emojiTags?.map((e) => ({
-          shortcode: e.shortcode,
-          url: e.url,
-          address: e.address,
-        })),
-      },
-    );
+    // Tags applesauce doesn't generate for us
+    const extraTags: string[][] = [];
 
     // Add q-tag for replies (quote tag format)
     // Format: ["q", eventId, relayUrl, pubkey]
@@ -437,10 +427,10 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       const replyEvent = eventStore.getEvent(options.replyTo);
       if (replyEvent) {
         // Full q-tag with relay hint and author pubkey
-        draft.tags.push(["q", options.replyTo, relayUrl, replyEvent.pubkey]);
+        extraTags.push(["q", options.replyTo, relayUrl, replyEvent.pubkey]);
       } else {
         // Fallback: at minimum include the relay hint since we know it
-        draft.tags.push(["q", options.replyTo, relayUrl]);
+        extraTags.push(["q", options.replyTo, relayUrl]);
       }
     }
 
@@ -451,12 +441,23 @@ export class Nip29Adapter extends ChatProtocolAdapter {
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
-        draft.tags.push(["imeta", ...imetaParts]);
+        extraTags.push(["imeta", ...imetaParts]);
       }
     }
 
-    // Sign the event
-    const event = await factory.sign(draft);
+    // GroupMessageFactory auto-handles h-tag, hashtags, mentions and emojis
+    const event = await GroupMessageFactory.create(
+      { id: groupId, relay: relayUrl },
+      content,
+      {
+        // No threading for now, so no .previous() refs are set
+        emojis: options?.emojiTags
+          ? toApplesauceEmojis(options.emojiTags)
+          : undefined,
+      },
+    )
+      .modifyPublicTags((tags) => [...tags, ...extraTags])
+      .sign(activeSigner);
 
     // Publish only to the group relay
     await publishEventToRelays(event, [relayUrl]);
@@ -494,24 +495,13 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       throw new Error("Message event not found");
     }
 
-    // Create event factory
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
+    // ReactionFactory auto-handles e-tag, k-tag, p-tag and custom emoji
+    const emojiArg = customEmoji ? toApplesauceEmoji(customEmoji) : emoji;
 
-    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
-    const emojiArg = customEmoji ?? emoji;
-
-    const draft = await factory.create(
-      ReactionBlueprint,
-      messageEvent,
-      emojiArg,
-    );
-
-    // Add h-tag for group context (NIP-29 specific)
-    draft.tags.push(["h", groupId]);
-
-    // Sign the event
-    const event = await factory.sign(draft);
+    const event = await ReactionFactory.create(messageEvent, emojiArg)
+      // Add h-tag for group context (NIP-29 specific)
+      .modifyPublicTags((tags) => [...tags, ["h", groupId]])
+      .sign(activeSigner);
 
     // Publish only to the group relay
     await publishEventToRelays(event, [relayUrl]);
@@ -851,20 +841,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Create join request (kind 9021)
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
     const tags: string[][] = [
       ["h", groupId],
       ["relay", relayUrl],
     ];
 
-    const draft = await factory.build({
+    const event = await activeSigner.signEvent({
       kind: 9021,
       content: "",
       tags,
+      created_at: Math.floor(Date.now() / 1000),
     });
-    const event = await factory.sign(draft);
     await publishEventToRelays(event, [relayUrl]);
   }
 
@@ -887,20 +874,17 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Create leave request (kind 9022)
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
     const tags: string[][] = [
       ["h", groupId],
       ["relay", relayUrl],
     ];
 
-    const draft = await factory.build({
+    const event = await activeSigner.signEvent({
       kind: 9022,
       content: "",
       tags,
+      created_at: Math.floor(Date.now() / 1000),
     });
-    const event = await factory.sign(draft);
     await publishEventToRelays(event, [relayUrl]);
   }
 
@@ -976,15 +960,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     tags.push(["group", groupId, normalizedRelayUrl]);
 
     // Create and publish the updated event
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
-    const draft = await factory.build({
+    const event = await activeSigner.signEvent({
       kind: 10009,
       content: "",
       tags,
+      created_at: Math.floor(Date.now() / 1000),
     });
-    const event = await factory.sign(draft);
     await publishEvent(event);
   }
 
@@ -1032,15 +1013,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     }
 
     // Create and publish the updated event
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
-    const draft = await factory.build({
+    const event = await activeSigner.signEvent({
       kind: 10009,
       content: "",
       tags,
+      created_at: Math.floor(Date.now() / 1000),
     });
-    const event = await factory.sign(draft);
     await publishEvent(event);
   }
 

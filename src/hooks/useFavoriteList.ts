@@ -4,7 +4,6 @@ import {
   getEventPointerFromETag,
   getAddressPointerFromATag,
 } from "applesauce-core/helpers";
-import { EventFactory } from "applesauce-core/event-factory";
 import eventStore from "@/services/event-store";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
@@ -137,13 +136,12 @@ export function useFavoriteList(config: FavoriteListConfig) {
           newTags.push(GRIMOIRE_CLIENT_TAG);
         }
 
-        const factory = new EventFactory({ signer: account.signer });
-        const built = await factory.build({
+        const signed = await account.signer.signEvent({
           kind: config.listKind,
           content: currentContent,
           tags: newTags,
+          created_at: Math.floor(Date.now() / 1000),
         });
-        const signed = await factory.sign(built);
         await publishEvent(signed);
       } catch (err) {
         console.error(

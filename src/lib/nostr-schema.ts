@@ -1,4 +1,4 @@
-import yaml from "js-yaml";
+import { load as loadYaml } from "js-yaml";
 import schemaYaml from "@/data/nostr-kinds-schema.yaml?raw";
 
 /**
@@ -40,7 +40,7 @@ export function loadSchema(): NostrSchema {
   if (parsedSchema) return parsedSchema;
 
   try {
-    const data = yaml.load(schemaYaml) as any;
+    const data = loadYaml(schemaYaml) as any;
     parsedSchema = {};
 
     // The kinds are nested under a "kinds" key

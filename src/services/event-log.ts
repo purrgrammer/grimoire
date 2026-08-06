@@ -21,7 +21,7 @@ import publishService, {
 } from "./publish-service";
 import pool from "./relay-pool";
 import relayAuthManager from "./relay-auth";
-import type { IRelay } from "applesauce-relay";
+import type { Relay } from "applesauce-relay";
 
 // ============================================================================
 // Types
@@ -262,7 +262,7 @@ class EventLogService {
   /**
    * Monitor a relay for connection, error, auth, and notice events
    */
-  private monitorRelay(relay: IRelay): void {
+  private monitorRelay(relay: Relay): void {
     const url = relay.url;
 
     if (this.relaySubscriptions.has(url)) return;

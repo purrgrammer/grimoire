@@ -23,7 +23,11 @@ import type {
   Participant,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import type { EmojiTag } from "@/lib/emoji-helpers";
+import {
+  toApplesauceEmoji,
+  toApplesauceEmojis,
+  type EmojiTag,
+} from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
@@ -39,7 +43,7 @@ import {
 } from "applesauce-core/helpers/event";
 import { getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
-import { EventFactory } from "applesauce-core/event-factory";
+
 import {
   getCommentRootPointer,
   getCommentReplyPointer,
@@ -52,7 +56,7 @@ import {
   getZapSender,
   getZapRecipient,
 } from "applesauce-common/helpers";
-import { CommentBlueprint, ReactionBlueprint } from "@/lib/blueprints";
+import { CommentFactory, ReactionFactory } from "applesauce-common/factories";
 import {
   getExternalIdentifierLabel,
   inferExternalIdentifierType,
@@ -610,35 +614,29 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       }
     }
 
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
+    const commentOptions = {
+      emojis: options?.emojiTags
+        ? toApplesauceEmojis(options.emojiTags)
+        : undefined,
+    };
 
     let draft;
     if (parentEvent) {
-      // Use CommentBlueprint with the parent event
-      draft = await factory.create(CommentBlueprint, parentEvent, content, {
-        emojis: options?.emojiTags?.map((e) => ({
-          shortcode: e.shortcode,
-          url: e.url,
-          address: e.address,
-        })),
-      });
+      // CommentFactory with the parent event
+      draft = CommentFactory.create(parentEvent, content, commentOptions);
     } else if (meta?.commentRootExternal) {
       // External root — create CommentPointer
       const pointer = this.buildExternalCommentPointer(meta);
       if (!pointer) {
         throw new Error("Cannot build comment pointer for external root");
       }
-      draft = await factory.create(CommentBlueprint, pointer, content, {
-        emojis: options?.emojiTags?.map((e) => ({
-          shortcode: e.shortcode,
-          url: e.url,
-          address: e.address,
-        })),
-      });
+      draft = CommentFactory.create(pointer, content, commentOptions);
     } else {
       throw new Error("No parent event or external root available");
     }
+
+    // Tags applesauce doesn't generate for us
+    const extraTags: string[][] = [];
 
     // Add NIP-92 imeta tags for blob attachments
     if (options?.blobAttachments) {
@@ -647,16 +645,18 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         if (blob.sha256) imetaParts.push(`x ${blob.sha256}`);
         if (blob.mimeType) imetaParts.push(`m ${blob.mimeType}`);
         if (blob.size) imetaParts.push(`size ${blob.size}`);
-        draft.tags.push(["imeta", ...imetaParts]);
+        extraTags.push(["imeta", ...imetaParts]);
       }
     }
 
     // Add client tag if enabled
     if (settingsManager.getSetting("post", "includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
+      extraTags.push(GRIMOIRE_CLIENT_TAG);
     }
 
-    const event = await factory.sign(draft);
+    const event = await draft
+      .modifyPublicTags((tags) => [...tags, ...extraTags])
+      .sign(activeSigner);
     await publishEventToRelays(event, relays);
   }
 
@@ -686,21 +686,15 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       throw new Error("Message event not found");
     }
 
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
+    const emojiArg = customEmoji ? toApplesauceEmoji(customEmoji) : emoji;
 
-    const emojiArg = customEmoji ?? emoji;
-    const draft = await factory.create(
-      ReactionBlueprint,
-      messageEvent,
-      emojiArg,
-    );
-
-    if (settingsManager.getSetting("post", "includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
-    const event = await factory.sign(draft);
+    const event = await ReactionFactory.create(messageEvent, emojiArg)
+      .modifyPublicTags((tags) =>
+        settingsManager.getSetting("post", "includeClientTag")
+          ? [...tags, GRIMOIRE_CLIENT_TAG]
+          : tags,
+      )
+      .sign(activeSigner);
     await publishEventToRelays(event, relays);
   }
 

@@ -486,7 +486,7 @@ describe("RelayAuthManager", () => {
 
       // Set challenge directly on relay without triggering observable state transition
       // (In production, relay.challenge is a getter synced with challenge$)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (relay as any).challenge = "retry-challenge";
 
       // Retry succeeds (default mock behavior restores after mockRejectedValueOnce)
@@ -546,7 +546,7 @@ describe("RelayAuthManager", () => {
 
       // Remove signer and set challenge directly (without triggering state transition)
       signer$.next(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (relay as any).challenge = "retry-challenge";
 
       await expect(manager.retry("wss://relay.example.com")).rejects.toThrow(

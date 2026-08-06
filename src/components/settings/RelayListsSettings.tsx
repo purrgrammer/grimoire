@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { use$, useEventStore } from "applesauce-react/hooks";
-import { EventFactory } from "applesauce-core/event-factory";
 import { toast } from "sonner";
 import { X, Plus, Loader2, Save, Undo2, CircleDot } from "lucide-react";
 import type { NostrEvent } from "nostr-tools";
@@ -474,19 +473,17 @@ export function RelayListsSettings() {
     setSaving(true);
 
     try {
-      const factory = new EventFactory({ signer: account.signer });
-
       for (const config of RELAY_LIST_KINDS) {
         if (!dirtyKinds.has(config.kind)) continue;
 
         const draft = drafts[config.kind] ?? [];
         const tags = buildRelayListTags(draft, config);
-        const built = await factory.build({
+        const signed = await account.signer.signEvent({
           kind: config.kind,
           content: "",
           tags,
+          created_at: Math.floor(Date.now() / 1000),
         });
-        const signed = await factory.sign(built);
         await publishEvent(signed);
       }
 

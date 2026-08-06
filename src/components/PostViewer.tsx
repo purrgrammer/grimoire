@@ -40,8 +40,8 @@ import pool from "@/services/relay-pool";
 import publishService, {
   type RelayPublishStatus,
 } from "@/services/publish-service";
-import { EventFactory } from "applesauce-core/event-factory";
-import { NoteBlueprint } from "@/lib/blueprints";
+import { NoteFactory } from "applesauce-common/factories";
+import { toApplesauceEmojis } from "@/lib/emoji-helpers";
 import { useGrimoire } from "@/core/state";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
@@ -351,17 +351,9 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       // Create and sign event first
       let event;
       try {
-        // Create event factory with signer
-        const factory = new EventFactory();
-        factory.setSigner(signer);
-
-        // Use NoteBlueprint - it auto-extracts hashtags, mentions, and quotes from content!
-        const draft = await factory.create(NoteBlueprint, content.trim(), {
-          emojis: emojiTags.map((e) => ({
-            shortcode: e.shortcode,
-            url: e.url,
-            address: e.address,
-          })),
+        // NoteFactory auto-extracts hashtags, mentions and quotes from content
+        const noteDraft = NoteFactory.create(content.trim(), {
+          emojis: toApplesauceEmojis(emojiTags),
         });
 
         // Add tags that applesauce doesn't handle yet
@@ -395,11 +387,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           additionalTags.push(imetaTag);
         }
 
-        // Merge additional tags with blueprint tags
-        draft.tags.push(...additionalTags);
-
-        // Sign the event
-        event = await factory.sign(draft);
+        // Merge additional tags with the factory-generated tags and sign
+        event = await noteDraft
+          .modifyPublicTags((tags) => [...tags, ...additionalTags])
+          .sign(signer);
       } catch (error) {
         // Signing failed - user might have rejected it
         console.error("Failed to sign event:", error);

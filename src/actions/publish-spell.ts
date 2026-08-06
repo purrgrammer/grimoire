@@ -4,7 +4,6 @@ import publishService from "@/services/publish-service";
 import { selectRelaysForPublish } from "@/services/relay-selection";
 import { encodeSpell } from "@/lib/spell-conversion";
 import { markSpellPublished } from "@/services/spell-storage";
-import { EventFactory } from "applesauce-core/event-factory";
 import { SpellEvent } from "@/types/spell";
 import { settingsManager } from "@/services/settings";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
@@ -34,21 +33,18 @@ export class PublishSpellAction {
         description: spell.description,
       });
 
-      const factory = new EventFactory({ signer });
-
       // Add client tag if enabled in settings
       const tags = [...encoded.tags];
       if (settingsManager.getSetting("post", "includeClientTag")) {
         tags.push(GRIMOIRE_CLIENT_TAG);
       }
 
-      const draft = await factory.build({
+      event = (await signer.signEvent({
         kind: 777,
         content: encoded.content,
         tags,
-      });
-
-      event = (await factory.sign(draft)) as SpellEvent;
+        created_at: Math.floor(Date.now() / 1000),
+      })) as SpellEvent;
     }
 
     // Determine relays: explicit target relays or outbox selection with hints

@@ -1,4 +1,6 @@
 import { getOrComputeCachedValue } from "applesauce-core/helpers";
+import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
+import type { Emoji } from "applesauce-common/helpers/emoji";
 import type { NostrEvent } from "@/types/nostr";
 
 /**
@@ -15,6 +17,34 @@ export interface EmojiTag {
   url: string;
   /** NIP-30 optional 4th tag: "30030:pubkey:identifier" address of the emoji set */
   address?: string;
+}
+
+/**
+ * Convert a Grimoire {@link EmojiTag} to an applesauce `Emoji`.
+ *
+ * Grimoire carries the NIP-30 emoji set address as the raw
+ * "30030:pubkey:identifier" string; applesauce expects a parsed
+ * `AddressPointer`. An unparseable address is dropped rather than throwing —
+ * the emoji is still valid without it.
+ */
+export function toApplesauceEmoji(emoji: EmojiTag): Emoji {
+  if (!emoji.address) {
+    return { shortcode: emoji.shortcode, url: emoji.url };
+  }
+
+  try {
+    const address = parseReplaceableAddress(emoji.address);
+    return address
+      ? { shortcode: emoji.shortcode, url: emoji.url, address }
+      : { shortcode: emoji.shortcode, url: emoji.url };
+  } catch {
+    return { shortcode: emoji.shortcode, url: emoji.url };
+  }
+}
+
+/** Convert an array of Grimoire emoji tags to applesauce `Emoji` objects */
+export function toApplesauceEmojis(emojis: EmojiTag[]): Emoji[] {
+  return emojis.map(toApplesauceEmoji);
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   type SuggestionListHandle,
   type SuggestionListProps,
 } from "./useSuggestionRenderer";
+import type { SuggestionProps } from "@tiptap/suggestion";
 
 // floating-ui requires layout APIs jsdom lacks
 beforeAll(() => {
@@ -38,8 +39,12 @@ const MockList = forwardRef<SuggestionListHandle, SuggestionListProps<string>>(
 );
 MockList.displayName = "MockList";
 
-/** Build the minimal props shape Tiptap passes to onStart/onUpdate/onExit */
-function makeProps(items: string[]) {
+/**
+ * Build the minimal props shape Tiptap passes to onStart/onUpdate/onExit.
+ * Cast because the real SuggestionProps also carries floating-ui positioning
+ * fields (placement, offset, flip, floatingUi, ...) the hook never reads.
+ */
+function makeProps(items: string[]): SuggestionProps<string> {
   return {
     items,
     command: vi.fn(),
@@ -50,7 +55,7 @@ function makeProps(items: string[]) {
     text: "",
     decorationNode: null,
     event: null,
-  };
+  } as unknown as SuggestionProps<string>;
 }
 
 describe("useSuggestionRenderer", () => {

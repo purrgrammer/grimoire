@@ -20,7 +20,7 @@ export interface PublishSpellbookOptions {
  * This action:
  * 1. Validates inputs (title, account, signer)
  * 2. Creates spellbook event from state or explicit content
- * 3. Signs the event using the action runner's factory
+ * 3. Signs the event using the action runner's signer
  * 4. Publishes the signed event via ActionRunner
  *
  * NOTE: This action does NOT mark the local spellbook as published.
@@ -45,11 +45,7 @@ export interface PublishSpellbookOptions {
 export function PublishSpellbook(options: PublishSpellbookOptions) {
   const { state, title, description, workspaceIds, content } = options;
 
-  return async function ({
-    factory,
-    sign,
-    publish,
-  }: ActionContext): Promise<void> {
+  return async function ({ sign, publish }: ActionContext): Promise<void> {
     // 1. Validate inputs
     if (!title || !title.trim()) {
       throw new Error("Title is required");
@@ -95,12 +91,14 @@ export function PublishSpellbook(options: PublishSpellbookOptions) {
       eventProps = encoded.eventProps;
     }
 
-    // 3. Build draft using factory from context
-    const draft = await factory.build({
+    // 3. Assemble the draft template. applesauce v6 removed the context factory;
+    // `sign` accepts a plain EventTemplate directly.
+    const draft = {
       kind: eventProps.kind,
       content: eventProps.content,
       tags: eventProps.tags,
-    });
+      created_at: Math.floor(Date.now() / 1000),
+    };
 
     // 4. Sign and publish the event
     const event = (await sign(draft)) as SpellbookEvent;

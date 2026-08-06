@@ -22,8 +22,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    /* Path aliases */
-    "baseUrl": ".",
+    /* Path aliases — no baseUrl (deprecated in TS 6, removed in TS 7);
+       paths resolve relative to this tsconfig's directory. */
     "paths": {
       "@/*": ["./src/*"],
       "relay-auth-manager": ["./packages/relay-auth-manager/src/index.ts"]

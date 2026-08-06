@@ -2,7 +2,6 @@
  * Create NIP-57 zap request (kind 9734)
  */
 
-import { EventFactory } from "applesauce-core/event-factory";
 import type { ISigner } from "applesauce-signers";
 import type { NostrEvent } from "@/types/nostr";
 import type { EventPointer, AddressPointer } from "./open-parser";
@@ -143,9 +142,10 @@ export async function createZapRequest(
   };
 
   // Sign the event
-  const factory = new EventFactory({ signer });
-  const draft = await factory.build(template);
-  const signedEvent = await factory.sign(draft);
+  const signedEvent = await signer.signEvent({
+    ...template,
+    created_at: Math.floor(Date.now() / 1000),
+  });
 
   return signedEvent as NostrEvent;
 }

@@ -23,7 +23,7 @@ import type {
   ParticipantRole,
 } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
-import type { EmojiTag } from "@/lib/emoji-helpers";
+import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
 import { publishEventToRelays } from "@/services/hub";
@@ -42,8 +42,7 @@ import {
   getZapSender,
   isValidZap,
 } from "applesauce-common/helpers/zap";
-import { EventFactory } from "applesauce-core/event-factory";
-import { ReactionBlueprint } from "@/lib/blueprints";
+import { ReactionFactory } from "applesauce-common/factories";
 
 /**
  * NIP-53 Adapter - Live Activity Chat
@@ -422,10 +421,6 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("No relays available for sending message");
     }
 
-    // Create event factory and sign event
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
-
     // Build tags: a tag is required, e tag for replies
     const tags: string[][] = [["a", aTagValue, relays[0] || ""]];
 
@@ -457,8 +452,12 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     // Use kind 1311 for live chat messages
-    const draft = await factory.build({ kind: 1311, content, tags });
-    const event = await factory.sign(draft);
+    const event = await activeSigner.signEvent({
+      kind: 1311,
+      content,
+      tags,
+      created_at: Math.floor(Date.now() / 1000),
+    });
 
     // Publish to all activity relays
     await publishEventToRelays(event, relays);
@@ -515,24 +514,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       throw new Error("Message event not found");
     }
 
-    // Create event factory
-    const factory = new EventFactory();
-    factory.setSigner(activeSigner);
+    // ReactionFactory auto-handles e-tag, k-tag, p-tag and custom emoji
+    const emojiArg = customEmoji ? toApplesauceEmoji(customEmoji) : emoji;
 
-    // Use ReactionBlueprint - auto-handles e-tag, k-tag, p-tag, custom emoji
-    const emojiArg = customEmoji ?? emoji;
-
-    const draft = await factory.create(
-      ReactionBlueprint,
-      messageEvent,
-      emojiArg,
-    );
-
-    // Add a-tag for activity context (NIP-53 specific)
-    draft.tags.push(["a", aTagValue, relays[0] || ""]);
-
-    // Sign the event
-    const event = await factory.sign(draft);
+    const event = await ReactionFactory.create(messageEvent, emojiArg)
+      // Add a-tag for activity context (NIP-53 specific)
+      .modifyPublicTags((tags) => [...tags, ["a", aTagValue, relays[0] || ""]])
+      .sign(activeSigner);
 
     // Publish to all activity relays
     await publishEventToRelays(event, relays);

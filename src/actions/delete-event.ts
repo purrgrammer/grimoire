@@ -1,7 +1,7 @@
 import accountManager from "@/services/accounts";
 import publishService from "@/services/publish-service";
 import { selectRelaysForPublish } from "@/services/relay-selection";
-import { EventFactory } from "applesauce-core/event-factory";
+import { DeleteFactory } from "applesauce-core/factories";
 import { NostrEvent } from "@/types/nostr";
 import { settingsManager } from "@/services/settings";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
@@ -22,16 +22,14 @@ export class DeleteEventAction {
     const signer = account.signer;
     if (!signer) throw new Error("No signer available");
 
-    const factory = new EventFactory({ signer });
-
-    const draft = await factory.delete([item.event], reason);
-
-    // Add client tag if enabled in settings
-    if (settingsManager.getSetting("post", "includeClientTag")) {
-      draft.tags.push(GRIMOIRE_CLIENT_TAG);
-    }
-
-    const event = await factory.sign(draft);
+    const event = await DeleteFactory.fromEvents([item.event], reason)
+      // Add client tag if enabled in settings
+      .modifyPublicTags((tags) =>
+        settingsManager.getSetting("post", "includeClientTag")
+          ? [...tags, GRIMOIRE_CLIENT_TAG]
+          : tags,
+      )
+      .sign(signer);
 
     // Select relays and publish
     const relays = await selectRelaysForPublish(account.pubkey);
