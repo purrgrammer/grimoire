@@ -1,0 +1,64 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Majors are opened individually so each gets its own review; minors and
+    # patches are grouped to keep the PR count low.
+    groups:
+      applesauce:
+        patterns: ["applesauce-*"]
+        update-types: ["minor", "patch"]
+      radix:
+        patterns: ["@radix-ui/*"]
+        update-types: ["minor", "patch"]
+      tiptap:
+        patterns: ["@tiptap/*"]
+        update-types: ["minor", "patch"]
+      lint-and-format:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "prettier"
+        update-types: ["minor", "patch"]
+      build-and-test:
+        patterns:
+          ["vite", "@vitejs/*", "vitest", "@vitest/*", "jsdom", "happy-dom"]
+        update-types: ["minor", "patch"]
+      types:
+        patterns: ["@types/*"]
+        update-types: ["minor", "patch"]
+      other-minor-patch:
+        patterns: ["*"]
+        exclude-patterns:
+          - "applesauce-*"
+          - "@radix-ui/*"
+          - "@tiptap/*"
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "prettier"
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
+          - "@types/*"
+        update-types: ["minor", "patch"]
+    ignore:
+      # Blocked or deliberately deferred — see "Deferred upgrades" in CLAUDE.md.
+      - dependency-name: react-mosaic-component
+        update-types: ["version-update:semver-major"]
+      - dependency-name: blossom-client-sdk
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

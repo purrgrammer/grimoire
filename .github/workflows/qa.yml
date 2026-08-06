@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [lint, test, build]
+        task: [lint, typecheck, test, build]
     steps:
       - uses: actions/checkout@v6
 
@@ -34,6 +34,10 @@ jobs:
       - name: Lint
         if: matrix.task == 'lint'
         run: npm run lint
+
+      - name: Typecheck
+        if: matrix.task == 'typecheck'
+        run: npm run typecheck
 
       - name: Test
         if: matrix.task == 'test'

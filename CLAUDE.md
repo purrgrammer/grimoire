@@ -121,6 +121,25 @@ Use `Intl.NumberFormat` for numbers and currencies.
 - **`NIPBadge`** — a NIP reference; clickable to open the NIP document. Shows
   deprecation state.
 
+## Deferred upgrades
+
+Attempted and backed out for specific reasons. Dependabot is configured to skip
+their majors (`.github/dependabot.yml`) — confirm the reason no longer holds
+before retrying.
+
+- **`react-mosaic-component` 7** — replaces the binary `{first, second}` layout
+  tree with an n-ary `{type, children}` shape. That tree is a **wire format**
+  (spellbooks publish it inside kind 30777 `content`), so this needs a versioned
+  spellbook format plus a migration for persisted layouts. Would also clear the
+  `element.ref` React 19 warning `<MosaicWindow>` emits, and a moderate `uuid`
+  advisory.
+- **`blossom-client-sdk` 5** — pins `@cashu/cashu-ts` `^2.4.3`, conflicting with
+  applesauce 6's `^4.5.1`; npm `overrides` doesn't clear it. The migration itself
+  is easy (client class → `Actions` namespace with `onAuth` callbacks). Blocked
+  on upstream widening that peer.
+- **TypeScript 7** — no `typescript-eslint` release accepts TS ≥ 6.1, so lint
+  breaks. On 6.0.x until it does.
+
 ## applesauce v6 relay gotchas
 
 These bit us during the v6 upgrade and the compiler cannot catch them.
@@ -207,6 +226,19 @@ npm run lint && npm run test:run && npm run build
 
 Or `/verify`. All three must pass — don't leave a failing build or broken tests.
 
+**Passing all three does not mean the app works.** These failures all shipped
+green: a duplicate React crashed at module init, chat rendered no messages, and
+timelines hung in `LOADING`. Nothing here executes the app. So also **run it**
+(`/run`, or `npm run dev` and drive the UI) whenever a change touches:
+
+- relay subscriptions, EOSE handling, or the event store
+- dependencies (a single `npm install` can nest a second React)
+- the React tree, providers, or lazily-imported windows
+- the service worker or anything that caches modules
+
+Check the browser console, not just the screen — a shell can render while every
+subscription underneath it is dead.
+
 Lint must report **0 errors**. It does report warnings: a set of rules newly
 promoted by eslint 10 and `eslint-plugin-react-hooks` 7 (the React Compiler set:
 `set-state-in-effect`, `error-boundaries`, `refs`, `purity`, …) is pinned to
@@ -225,3 +257,17 @@ standalone change.
 - Dark mode is the default, set via a class on `<html>`
 - `.agents/` holds vendored agent skills, symlinked into `.claude/skills/`.
   It's excluded from eslint, prettier, and vitest — don't lint or test it.
+- **Exactly one copy of React and react-dom.** Deps with peers capped at React
+  18 (e.g. `react-dnd-multi-backend` via `react-mosaic-component`) make npm nest
+  a second copy; the old one reaches for internals React 19 removed and the app
+  dies at module init. Guarded by an npm `override` and `resolve.dedupe` in
+  `vite.config.ts`. After adding a dependency, check:
+  `find node_modules -path "*/node_modules/react-dom/package.json"` — any hit is
+  a bug.
+- **The service worker registers in production only** (`src/main.tsx`). In dev it
+  caches Vite's hashed module URLs, which die on the next dependency change and
+  break dynamic imports. Don't make registration unconditional.
+- **Vite can't statically analyze template-literal dynamic imports.**
+  ``import(`pkg/${name}.mjs`)`` warns and is never bundled, so it fails in
+  production while appearing to work in dev. Use the library's own lazy registry
+  or `import.meta.glob`.

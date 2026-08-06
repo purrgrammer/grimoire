@@ -38,6 +38,18 @@ export default tseslint.config(
       ],
       "prettier/prettier": "error",
 
+      // applesauce v6: pool.subscription() defaults to a throwaway event store,
+      // so omitting options silently drops events. See CLAUDE.md.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            'CallExpression[callee.object.name="pool"][callee.property.name="subscription"][arguments.length<3]',
+          message:
+            "pool.subscription() needs an options argument: pass { eventStore } so events reach the store, or use subscriptionWithEose() from @/lib/relay-subscription if you need an EOSE signal.",
+        },
+      ],
+
       // --- Rules newly promoted to error by eslint 10 / react-hooks 7 ---
       // These flag real issues in pre-existing code, but fixing them all is a
       // separate refactor (~140 sites). Kept at "warn" so the signal stays
