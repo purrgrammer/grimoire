@@ -244,10 +244,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const conversationId = `nip-10:${rootEventId}`;
     this.cleanup(conversationId);
 
-    // Start persistent subscription.
-    // The event store must be passed explicitly: applesauce defaults to a
-    // throwaway in-memory store, so without this the events are deduped into
-    // nowhere and the eventStore.timeline() below stays empty.
+    // eventStore must be passed explicitly — applesauce defaults to a
+    // throwaway store, leaving the eventStore.timeline() below empty.
     const subscription = pool
       .subscription(relays, filters, { eventStore })
       .subscribe({

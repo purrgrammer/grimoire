@@ -15,11 +15,8 @@ import { deriveOverallState } from "@/lib/req-state-machine";
 /** Maximum events kept in memory during streaming before eviction */
 const MAX_STREAMING_EVENTS = 2000;
 
-/**
- * How long to wait for a relay's EOSE before treating it as finished.
- * Replaces applesauce v5's Relay.eoseTimeout, removed in v6.
- */
-const EOSE_TIMEOUT_MS = 10_000;
+/** Replaces applesauce v5's Relay.eoseTimeout, removed in v6. */
+const EOSE_TIMEOUT_MS = 15_000;
 /** Fraction of events to evict when cap is hit (evict oldest 25%) */
 const EVICTION_FRACTION = 0.25;
 
@@ -342,13 +339,8 @@ export function useReqTimelineEnhanced(
         );
     });
 
-    // A relay may accept a REQ and then never send EOSE. applesauce v5 papered
-    // over that with Relay.eoseTimeout, which v6 removed — so without a bound
-    // here, one silent relay pins the whole timeline in LOADING forever even
-    // though every other relay finished and events are rendering.
-    //
-    // After the deadline, treat still-loading relays as done so the aggregate
-    // state can settle. Their subscriptions stay open; late events still arrive.
+    // Without a bound, one silent relay pins the timeline in LOADING forever.
+    // Subscriptions stay open, so late events still arrive.
     const eoseDeadline = setTimeout(() => {
       setRelayStates((prev) => {
         let changed = false;

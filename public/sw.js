@@ -1,8 +1,5 @@
 // Grimoire Service Worker - v2.0.0
-//
-// Bump BOTH names when the cache contents need invalidating. The activate
-// handler deletes every cache not named here, so a version bump is what purges
-// a stale or poisoned runtime cache from existing installs.
+// Bump BOTH names to invalidate: activate deletes every cache not named here.
 const CACHE_NAME = "grimoire-v2";
 const RUNTIME_CACHE = "grimoire-runtime-v2";
 
@@ -49,10 +46,7 @@ self.addEventListener("fetch", (event) => {
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
 
-  // Never cache dev-server or build-tool URLs. These carry hashes that change
-  // whenever dependencies change, so a cached copy becomes a dead link and
-  // breaks dynamic imports. Registration is production-only, but a stale
-  // registration can outlive that — so refuse them here too.
+  // Never cache dev-server URLs; their hashes change and cached copies rot.
   const { pathname } = new URL(event.request.url);
   if (
     pathname.startsWith("/@vite") ||

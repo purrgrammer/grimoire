@@ -40,13 +40,9 @@ createRoot(document.getElementById("root")!).render(
   </ErrorBoundary>,
 );
 
-// Register the service worker for PWA functionality — production only.
-//
-// In dev the SW would cache Vite's hashed module URLs
-// (/node_modules/.vite/deps/*.js?v=<hash>). Vite recomputes that hash whenever
-// dependencies change, so the cached URLs go dead and dynamic imports start
-// failing with "Failed to fetch dynamically imported module" until the user
-// manually clears storage. Never register it against a dev server.
+// Register the service worker — production only. In dev it would cache Vite's
+// hashed module URLs, which go dead whenever dependencies change and break
+// dynamic imports.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch((error) => {
@@ -54,8 +50,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     });
   });
 } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
-  // Tear down any SW previously registered against this origin by an older
-  // build, and drop its caches — otherwise it keeps serving stale modules.
+  // Tear down any SW left over from an older build, and drop its caches.
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) registration.unregister();
   });

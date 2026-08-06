@@ -4,50 +4,21 @@ import type { GroupReqOptions, RelayPool } from "applesauce-relay";
 import defaultPool from "@/services/relay-pool";
 import defaultEventStore from "@/services/event-store";
 
-/**
- * Options for {@link subscriptionWithEose}.
- */
 export type SubscriptionWithEoseOptions = GroupReqOptions & {
-  /**
-   * How long to wait, in ms, before signalling EOSE even though some relays
-   * have not sent one. Relays that accept a REQ and then stay silent would
-   * otherwise stall the initial load forever. Default 8000.
-   */
+  /** Backstop for relays that never send EOSE. Default 20s. */
   eoseTimeout?: number;
-  /**
-   * Pool to subscribe through. Defaults to the app singleton; pass an explicit
-   * pool for isolated flows (e.g. the scroll runtime's private pool).
-   */
+  /** Pool to subscribe through. Defaults to the app singleton. */
   pool?: RelayPool;
-  /**
-   * Where to put received events. Defaults to the app EventStore. Pass `null`
-   * to keep events out of the shared store — isolated callers rely on that.
-   */
+  /** Where to put events. `null` keeps them out of the shared store. */
   store?: typeof defaultEventStore | null;
 };
 
 /**
- * A pool subscription that still signals end-of-stored-events.
+ * A pool subscription that still signals end-of-stored-events, which
+ * applesauce v6 dropped. See "applesauce v6 relay gotchas" in CLAUDE.md.
  *
- * applesauce v6 changed `RelayPool.subscription()` to emit only `NostrEvent` —
- * the v5 virtual `"EOSE"` string is gone, and `Relay.eoseTimeout` was removed
- * with it. Callers that gated their initial render on that string silently
- * stopped rendering, because `typeof response === "string"` is now never true
- * (and is not a type error, so the compiler can't flag it).
- *
- * This restores the `NostrEvent | "EOSE"` shape on top of v6's structured
- * `pool.req()` messages:
- *
- * - `EVENT` messages are added to the shared EventStore (which dedupes and
- *   handles replaceables) and re-emitted as plain events.
- * - `"EOSE"` is emitted exactly once, when every relay has settled — sent an
- *   EOSE, closed the subscription, or errored. Counting CLOSED and ERROR as
- *   settled matters: a relay that rejects the REQ outright (`restricted: this
- *   relay does not accept REQs`) never sends an EOSE, and must not be able to
- *   stall the batch.
- * - If some relays never settle, `"EOSE"` is emitted after `eoseTimeout`.
- *
- * The subscription stays open for live events after EOSE, as before.
+ * Emits `"EOSE"` once, when every relay has settled (EOSE, CLOSED or ERROR)
+ * or the timeout fires. Stays open for live events afterwards.
  */
 export function subscriptionWithEose(
   relays: string[],
@@ -55,7 +26,7 @@ export function subscriptionWithEose(
   options?: SubscriptionWithEoseOptions,
 ): Observable<NostrEvent | "EOSE"> {
   const {
-    eoseTimeout = 8000,
+    eoseTimeout = 20_000,
     pool = defaultPool,
     store = defaultEventStore,
     ...reqOptions
@@ -73,7 +44,6 @@ export function subscriptionWithEose(
       subscriber.next("EOSE");
     };
 
-    // Safety net: never let a silent relay stall the initial batch.
     const timer = setTimeout(emitEose, eoseTimeout);
 
     const sub = pool.req(relays, filters, reqOptions).subscribe({
@@ -84,8 +54,8 @@ export function subscriptionWithEose(
             subscriber.next(message.event);
             break;
 
-          // A relay is "settled" once it can produce no more stored events —
-          // whether it finished normally, closed, or failed.
+          // CLOSED and ERROR count as settled: a relay that rejects the REQ
+          // never sends EOSE and must not stall the batch.
           case "EOSE":
           case "CLOSED":
           case "ERROR":
@@ -104,8 +74,6 @@ export function subscriptionWithEose(
         subscriber.error(error);
       },
       complete: () => {
-        // The stream ended, so nothing further is coming — make sure callers
-        // waiting on EOSE are released rather than left hanging.
         emitEose();
         subscriber.complete();
       },

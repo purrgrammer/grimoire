@@ -45,11 +45,7 @@ export interface ReqRelayState {
   // Timing
   connectedAt?: number;
   eoseAt?: number;
-  /**
-   * True when the relay never sent EOSE and was marked done by the client-side
-   * deadline instead. Distinguishes "the relay finished" from "we stopped
-   * waiting", which matters when reading a timeline's state.
-   */
+  /** Marked done by the client deadline rather than a real EOSE. */
   eoseTimedOut?: boolean;
   disconnectedAt?: number;
 

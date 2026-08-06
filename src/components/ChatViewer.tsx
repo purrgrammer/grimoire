@@ -1319,6 +1319,13 @@ export function ChatViewer({
             }}
             style={{ height: "100%" }}
           />
+        ) : messages === undefined ? (
+          // Adapters don't emit until EOSE, so undefined means still loading —
+          // not empty.
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+            <span className="text-xs">Loading messages...</span>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No messages yet. Start the conversation!

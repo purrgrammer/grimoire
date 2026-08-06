@@ -10,10 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    // Force a single copy of React. Some transitive deps (e.g. react-dnd-multi-backend
-    // via react-mosaic-component) declare react-dom peers capped at ^18, which makes npm
-    // nest a React 18 copy. Bundling two Reacts fails at runtime, not build time:
-    // the older copy reaches for internals like ReactCurrentDispatcher that React 19 removed.
+    // Force a single React copy; a nested React 18 fails at runtime only.
     dedupe: ["react", "react-dom"],
     alias: {
       "@": path.resolve(__dirname, "./src"),

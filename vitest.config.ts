@@ -6,9 +6,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
-    // .claude/worktrees holds git worktrees with full source copies, and
-    // .agents holds vendored agent skills with example code. Without this,
-    // vitest collects their tests and runs them against the root node_modules.
+    // .claude/worktrees (git worktrees) and .agents (vendored skills) contain
+    // source copies whose tests would run against the root node_modules.
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

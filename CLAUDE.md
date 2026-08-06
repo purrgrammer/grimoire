@@ -121,6 +121,37 @@ Use `Intl.NumberFormat` for numbers and currencies.
 - **`NIPBadge`** — a NIP reference; clickable to open the NIP document. Shows
   deprecation state.
 
+## applesauce v6 relay gotchas
+
+These bit us during the v6 upgrade and the compiler cannot catch them.
+
+**`pool.subscription()` no longer emits `"EOSE"`.** In v5 it returned
+`NostrEvent | "EOSE"`; in v6 it returns `NostrEvent` only, and
+`Relay.eoseTimeout` was removed too. Any code doing
+`typeof response === "string"` silently never fires — that check is valid
+narrowing against `NostrEvent`, just always false, so nothing type-errors and
+the UI just stops rendering.
+
+- Need an end-of-stored-events signal? Use **`subscriptionWithEose()`**
+  (`src/lib/relay-subscription.ts`), not `pool.subscription()`.
+- Only consuming events? `pool.subscription()` is fine — don't switch it, or it
+  will hand you an `"EOSE"` string to treat as an event.
+- A single `relay.subscription()` **does** still emit `"EOSE"`. Only the
+  pool/group lost it.
+
+**Always pass `{ eventStore }` to `pool.subscription()`.** It defaults to a
+throwaway in-memory store, so omitting it silently drops events and any
+`eventStore.timeline()` you read afterwards stays empty.
+
+**Never wait on all relays without a deadline.** Relays can accept a REQ and
+never EOSE, which pins a timeline in `LOADING` forever. Treat `CLOSED` and
+`ERROR` as settled, and keep a timeout backstop. EOSE can legitimately take
+several seconds, so keep deadlines generous (≥15s) — events stream in well
+before it.
+
+**Event creation uses factory classes**, not the removed `EventFactory` /
+`blueprint()`. See `docs/applesauce.md`.
+
 ## Important Patterns
 
 ### Adding a command

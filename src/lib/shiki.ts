@@ -4,6 +4,7 @@ import {
   type HighlighterCore,
 } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import { bundledLanguages, type BundledLanguage } from "shiki/langs";
 
 // Singleton highlighter instance
 let highlighter: HighlighterCore | null = null;
@@ -217,8 +218,14 @@ async function loadLanguage(lang: string): Promise<boolean> {
   const hl = await getHighlighter();
 
   try {
-    // Dynamic import for the language
-    const langModule = await import(`shiki/langs/${lang}.mjs`);
+    // Use shiki's own registry rather than a template-literal import, which
+    // Vite can't statically analyze (so it warns and never bundles the chunk).
+    const loader = bundledLanguages[lang as BundledLanguage];
+    if (!loader) {
+      failedLanguages.add(lang);
+      return false;
+    }
+    const langModule = await loader();
     await hl.loadLanguage(langModule.default || langModule);
     loadedLanguages.add(lang);
     return true;
