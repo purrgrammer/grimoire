@@ -1,8 +1,8 @@
 import {
+  BehaviorSubject,
+  combineLatest,
   Observable,
   firstValueFrom,
-  combineLatest,
-  BehaviorSubject,
 } from "rxjs";
 import { map, first, toArray, filter as filterOp } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
@@ -26,7 +26,11 @@ import type { NostrEvent } from "@/types/nostr";
 import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import {
+  requestEvent,
+  requestEvents,
+  streamWithEose,
+} from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
@@ -129,34 +133,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    const activityEvents: NostrEvent[] = [];
-    const activityObs = subscriptionWithEose(relays, [activityFilter]);
-
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 5000);
-
-      const sub = activityObs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            activityEvents.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error("[NIP-53] Activity fetch error:", err);
-          sub.unsubscribe();
-          reject(err);
-        },
-      });
-    });
+    const activityEvents = await requestEvents(relays, [activityFilter]);
 
     const activityEvent = activityEvents[0];
 
@@ -272,24 +249,19 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     // Clean up any existing subscription for this conversation
     this.cleanup(conversation.id);
 
-    // Track EOSE state - don't emit until initial batch is loaded
+    // Chat needs a stable bottom anchor, so hold rendering until the initial
+    // batch has landed. See "streaming chat" in CLAUDE.md.
     const eoseReceived$ = new BehaviorSubject<boolean>(false);
 
-    // Start a persistent subscription to the relays
-    const subscription = subscriptionWithEose(relays, [filter]).subscribe({
-      next: (response) => {
-        if (typeof response === "string") {
-          eoseReceived$.next(true);
-        }
-      },
-    });
+    const subscription = streamWithEose(relays, [filter], {
+      onEose: () => eoseReceived$.next(true),
+    }).subscribe();
 
     // Store subscription for cleanup
     this.subscriptions.set(conversation.id, subscription);
 
-    // Return observable that only emits after EOSE (prevents partial renders during initial load)
     return combineLatest([eventStore.timeline(filter), eoseReceived$]).pipe(
-      filterOp(([, eose]) => eose), // Only emit after EOSE received
+      filterOp(([, eose]) => eose),
       map(([events]) => {
         const messages = events
           .map((event) => {
@@ -651,34 +623,12 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    const events: NostrEvent[] = [];
-    const obs = subscriptionWithEose(relays, [filter]);
-
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 3000);
-
-      const sub = obs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            events.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error(`[NIP-53] Reply message fetch error:`, err);
-          sub.unsubscribe();
-          resolve();
-        },
-      });
-    });
-
-    return events[0] || null;
+    try {
+      return await requestEvent(relays, filter);
+    } catch (err) {
+      console.error("[NIP-53] Reply message fetch error:", err);
+      return null;
+    }
   }
 
   /**

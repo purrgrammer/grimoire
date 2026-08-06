@@ -24,7 +24,7 @@ import {
 } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import { requestEvent } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
@@ -721,36 +721,12 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    const events: NostrEvent[] = [];
-    const obs = subscriptionWithEose(relays, [filter]);
-
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 5000);
-
-      const sub = obs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            events.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error(`[NIP-10] Fetch error:`, err);
-          sub.unsubscribe();
-          resolve();
-        },
-      });
-    });
-
-    return events[0] || null;
+    try {
+      return await requestEvent(relays, filter);
+    } catch (err) {
+      console.error("[NIP-10] Fetch error:", err);
+      return null;
+    }
   }
 
   /**

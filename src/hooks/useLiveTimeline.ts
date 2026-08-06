@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import { streamWithEose } from "@/lib/relay-subscription";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
-import { isNostrEvent } from "@/lib/type-guards";
 import { useStableValue, useStableArray } from "./useStable";
 
 interface UseLiveTimelineOptions {
@@ -19,7 +18,7 @@ interface UseLiveTimelineReturn {
 
 /**
  * Hook that combines REQ streaming (like useReqTimeline) with EventStore reactivity (like useTimeline).
- * - Subscribes to relays using subscriptionWithEose (populating the EventStore).
+ * - Subscribes to relays using streamWithEose (populating the EventStore).
  * - Returns a memoized observable from eventStore using eventStore.timeline(filter).
  * @param id - Unique identifier for this timeline (for debugging/logging)
  * @param filters - Nostr filter object
@@ -63,25 +62,19 @@ export function useLiveTimeline(
       limit: limit || f.limit,
     }));
 
-    const observable = subscriptionWithEose(relays, filtersWithLimit, {
-      reconnect: 5, // v5: retries renamed to reconnect
-      resubscribe: true,
-    });
-
-    const subscription = observable.subscribe(
-      (response) => {
-        // Response can be an event or 'EOSE' string
-        if (typeof response === "string") {
-          setEoseReceived(true);
-          if (!stream) {
-            setLoading(false);
-          }
-        } else if (isNostrEvent(response)) {
-          // Event already added to the EventStore by subscriptionWithEose
-        } else {
-          console.warn("LiveTimeline: Unexpected response type:", response);
+    const observable = streamWithEose(relays, filtersWithLimit, {
+      onEose: () => {
+        setEoseReceived(true);
+        if (!stream) {
+          setLoading(false);
         }
       },
+    });
+
+    // Events are added to the EventStore by streamWithEose; the timeline query
+    // below picks them up.
+    const subscription = observable.subscribe(
+      () => {},
       (err: Error) => {
         console.error("LiveTimeline: Error", err);
         setError(err);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import { streamWithEose } from "@/lib/relay-subscription";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
@@ -72,30 +72,23 @@ export function useReqTimeline(
       limit: limit || f.limit,
     }));
 
-    const observable = subscriptionWithEose(relays, filtersWithLimit, {
-      reconnect: 5, // v5: retries renamed to reconnect
-      resubscribe: true,
+    const observable = streamWithEose(relays, filtersWithLimit, {
+      onEose: () => {
+        setEoseReceived(true);
+        if (!stream) {
+          setLoading(false);
+        }
+      },
     });
 
     const subscription = observable.subscribe(
       (response) => {
-        // Response can be an event or 'EOSE' string
-        if (typeof response === "string") {
-          console.log("REQ: EOSE received");
-          setEoseReceived(true);
-          if (!stream) {
-            setLoading(false);
-          }
-        } else if (isNostrEvent(response)) {
-          // It's an event - store in memory, deduplicate by ID
-          eventStore.add(response);
+        if (isNostrEvent(response)) {
           setEventsMap((prev) => {
             const next = new Map(prev);
             next.set(response.id, response);
             return next;
           });
-        } else {
-          console.warn("REQ: Unexpected response type:", response);
         }
       },
       (err: Error) => {

@@ -168,6 +168,26 @@ never EOSE, which pins a timeline in `LOADING` forever. Treat `CLOSED` and
 several seconds, so keep deadlines generous (≥15s) — events stream in well
 before it.
 
+**Which primitive to reach for:**
+
+| Need | Use |
+| --- | --- |
+| One-shot fetch | `requestEvents()` / `requestEvent()` — `pool.request()` completes itself |
+| Stream, don't care about EOSE | `pool.subscription(relays, filters, { eventStore })` |
+| Stream and need the EOSE boundary | `streamWithEose()` (`src/lib/relay-subscription.ts`) |
+| Per-relay state tracking | subscribe to each `relay.subscription()` individually |
+
+Never hand-roll "collect events until EOSE, with a timeout" again — that's what
+`requestEvents()` is for.
+
+**Streaming chat is a known follow-up.** The chat adapters withhold all messages
+until EOSE, which was measured at ~6.8s on a live relay while events arrive from
+~830ms. Rendering as they stream is better, but it isn't a matter of deleting the
+gate: `eventStore.timeline()` emits growing *subsets*, so the list grows at the
+top and Virtuoso's `initialTopMostItemIndex` / `followOutput` anchor to a stale
+index — the messages render offscreen. Doing this properly means giving the list
+a stable bottom anchor first. Tried and reverted; don't retry without that part.
+
 **Event creation uses factory classes**, not the removed `EventFactory` /
 `blueprint()`. See `docs/applesauce.md`.
 

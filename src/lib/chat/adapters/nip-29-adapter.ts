@@ -1,8 +1,8 @@
 import {
-  Observable,
-  firstValueFrom,
   BehaviorSubject,
   combineLatest,
+  Observable,
+  firstValueFrom,
 } from "rxjs";
 import { map, first, toArray, filter as filterOp } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
@@ -27,7 +27,7 @@ import {
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getQuotePointer } from "@/lib/nostr-utils";
@@ -146,36 +146,13 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    // Fetch the group metadata from the relay
-    const metadataEvents: NostrEvent[] = [];
-    const metadataObs = subscriptionWithEose([relayUrl], [metadataFilter]);
-
-    // Subscribe and wait for EOSE
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 5000);
-
-      const sub = metadataObs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            metadataEvents.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error("[NIP-29] Metadata fetch error:", err);
-          sub.unsubscribe();
-          reject(err);
-        },
-      });
-    });
+    // request() completes on its own once the relays are done
+    const metadataEvents = await firstValueFrom(
+      pool
+        .request([relayUrl], [metadataFilter], { eventStore })
+        .pipe(toArray()),
+      { defaultValue: [] as NostrEvent[] },
+    );
 
     const metadataEvent = metadataEvents[0];
 
@@ -312,24 +289,19 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const conversationId = `nip-29:${relayUrl}'${groupId}`;
     this.cleanup(conversationId);
 
-    // Track EOSE state - don't emit until initial batch is loaded
+    // Chat needs a stable bottom anchor, so hold rendering until the initial
+    // batch has landed. See "streaming chat" in CLAUDE.md.
     const eoseReceived$ = new BehaviorSubject<boolean>(false);
 
-    // Start a persistent subscription to the group relay
-    const subscription = subscriptionWithEose([relayUrl], [filter]).subscribe({
-      next: (response) => {
-        if (typeof response === "string") {
-          eoseReceived$.next(true);
-        }
-      },
-    });
+    const subscription = streamWithEose([relayUrl], [filter], {
+      onEose: () => eoseReceived$.next(true),
+    }).subscribe();
 
     // Store subscription for cleanup
     this.subscriptions.set(conversationId, subscription);
 
-    // Return observable that only emits after EOSE (prevents partial renders during initial load)
     return combineLatest([eventStore.timeline(filter), eoseReceived$]).pipe(
-      filterOp(([, eose]) => eose), // Only emit after EOSE received
+      filterOp(([, eose]) => eose),
       map(([events]) => {
         const messages = events.map((event) => {
           // Convert nutzaps (kind 9321) using nutzapToMessage
@@ -783,36 +755,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    const events: NostrEvent[] = [];
-    const obs = subscriptionWithEose(relays, [filter]);
-
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 3000);
-
-      const sub = obs.subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            // EOSE received
-            clearTimeout(timeout);
-            sub.unsubscribe();
-            resolve();
-          } else {
-            // Event received
-            events.push(response);
-          }
-        },
-        error: (err) => {
-          clearTimeout(timeout);
-          console.error(`[NIP-29] Reply message fetch error:`, err);
-          sub.unsubscribe();
-          resolve();
-        },
-      });
-    });
-
-    return events[0] || null;
+    try {
+      return await requestEvent(relays, filter);
+    } catch (err) {
+      console.error("[NIP-29] Reply message fetch error:", err);
+      return null;
+    }
   }
 
   /**

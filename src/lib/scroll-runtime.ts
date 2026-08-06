@@ -16,7 +16,7 @@ import { RelayPool } from "applesauce-relay";
 import { EventStore } from "applesauce-core";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 import globalEventStore from "@/services/event-store";
-import { subscriptionWithEose } from "@/lib/relay-subscription";
+import { streamWithEose } from "@/lib/relay-subscription";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import { AGGREGATOR_RELAYS, eventLoader } from "@/services/loaders";
 import type { ScrollParam, ParamValue } from "@/lib/nip5c-helpers";
@@ -442,32 +442,35 @@ export async function runScroll(
 
         // Scrolls get their own pool and deliberately stay out of the shared
         // EventStore, so pass both explicitly.
-        const observable = subscriptionWithEose(relays, [reqData.filter], {
+        const observable = streamWithEose(relays, [reqData.filter], {
           pool: privatePool,
           store: null,
+          onEose: () => {
+            if (stopped || !handles.has(subHandle)) return;
+
+            eosed = true;
+            const se = handles.get(subHandle);
+            if (se?.type === "sub") se.data.eosed = true;
+            trace("host", "on_eose", { sub: subHandle });
+            on_eose(subHandle);
+
+            if (reqData.closeOnEose) {
+              const entry = handles.get(subHandle);
+              if (entry?.type === "sub") {
+                entry.data.rxSubscription?.unsubscribe();
+                closedSubs.push(snapshotSub(subHandle, entry.data, true));
+              }
+              handles.delete(subHandle);
+              notifySubsChanged();
+              trace("host", "sub:closed_on_eose", { sub: subHandle });
+            }
+          },
         });
         const rxSub = observable.subscribe({
           next: (response) => {
             if (stopped || !handles.has(subHandle)) return;
 
-            if (typeof response === "string" && response === "EOSE") {
-              eosed = true;
-              const se = handles.get(subHandle);
-              if (se?.type === "sub") se.data.eosed = true;
-              trace("host", "on_eose", { sub: subHandle });
-              on_eose(subHandle);
-
-              if (reqData.closeOnEose) {
-                const entry = handles.get(subHandle);
-                if (entry?.type === "sub") {
-                  entry.data.rxSubscription?.unsubscribe();
-                  closedSubs.push(snapshotSub(subHandle, entry.data, true));
-                }
-                handles.delete(subHandle);
-                notifySubsChanged();
-                trace("host", "sub:closed_on_eose", { sub: subHandle });
-              }
-            } else if (isNostrEvent(response)) {
+            if (isNostrEvent(response)) {
               privateEventStore.add(response);
               totalEventsReceived++;
               const se2 = handles.get(subHandle);
