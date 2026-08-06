@@ -26,6 +26,7 @@ import type { NostrEvent } from "@/types/nostr";
 import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { AGGREGATOR_RELAYS } from "@/services/loaders";
@@ -129,9 +130,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     };
 
     const activityEvents: NostrEvent[] = [];
-    const activityObs = pool.subscription(relays, [activityFilter], {
-      eventStore,
-    });
+    const activityObs = subscriptionWithEose(relays, [activityFilter]);
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -277,17 +276,13 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     const eoseReceived$ = new BehaviorSubject<boolean>(false);
 
     // Start a persistent subscription to the relays
-    const subscription = pool
-      .subscription(relays, [filter], {
-        eventStore,
-      })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            eoseReceived$.next(true);
-          }
-        },
-      });
+    const subscription = subscriptionWithEose(relays, [filter]).subscribe({
+      next: (response) => {
+        if (typeof response === "string") {
+          eoseReceived$.next(true);
+        }
+      },
+    });
 
     // Store subscription for cleanup
     this.subscriptions.set(conversation.id, subscription);
@@ -361,7 +356,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+      pool.request(relays, [filter]).pipe(toArray()),
     );
 
     // Convert events to messages
@@ -657,7 +652,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription(relays, [filter], { eventStore });
+    const obs = subscriptionWithEose(relays, [filter]);
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {

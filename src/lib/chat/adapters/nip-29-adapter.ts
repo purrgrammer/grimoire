@@ -27,6 +27,7 @@ import {
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getQuotePointer } from "@/lib/nostr-utils";
@@ -145,11 +146,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    // Use pool.subscription to fetch from the relay
+    // Fetch the group metadata from the relay
     const metadataEvents: NostrEvent[] = [];
-    const metadataObs = pool.subscription([relayUrl], [metadataFilter], {
-      eventStore, // Automatically add to store
-    });
+    const metadataObs = subscriptionWithEose([relayUrl], [metadataFilter]);
 
     // Subscribe and wait for EOSE
     await new Promise<void>((resolve, reject) => {
@@ -207,9 +206,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // Use pool.request with both filters to fetch and auto-close on EOSE
     const participantEvents = await firstValueFrom(
-      pool
-        .request([relayUrl], [adminsFilter, membersFilter], { eventStore })
-        .pipe(toArray()),
+      pool.request([relayUrl], [adminsFilter, membersFilter]).pipe(toArray()),
     );
 
     const adminEvents = participantEvents.filter((e) => e.kind === 39001);
@@ -319,17 +316,13 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     const eoseReceived$ = new BehaviorSubject<boolean>(false);
 
     // Start a persistent subscription to the group relay
-    const subscription = pool
-      .subscription([relayUrl], [filter], {
-        eventStore,
-      })
-      .subscribe({
-        next: (response) => {
-          if (typeof response === "string") {
-            eoseReceived$.next(true);
-          }
-        },
-      });
+    const subscription = subscriptionWithEose([relayUrl], [filter]).subscribe({
+      next: (response) => {
+        if (typeof response === "string") {
+          eoseReceived$.next(true);
+        }
+      },
+    });
 
     // Store subscription for cleanup
     this.subscriptions.set(conversationId, subscription);
@@ -379,7 +372,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
+      pool.request([relayUrl], [filter]).pipe(toArray()),
     );
 
     // Convert events to messages
@@ -791,7 +784,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription(relays, [filter], { eventStore });
+    const obs = subscriptionWithEose(relays, [filter]);
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {

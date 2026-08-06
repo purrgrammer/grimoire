@@ -24,6 +24,7 @@ import {
 } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
@@ -243,12 +244,15 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     const conversationId = `nip-10:${rootEventId}`;
     this.cleanup(conversationId);
 
-    // Start persistent subscription
+    // Start persistent subscription.
+    // The event store must be passed explicitly: applesauce defaults to a
+    // throwaway in-memory store, so without this the events are deduped into
+    // nowhere and the eventStore.timeline() below stays empty.
     const subscription = pool
       .subscription(relays, filters, { eventStore })
       .subscribe({
-        next: (_response) => {
-          // EOSE or event - both handled by EventStore
+        next: () => {
+          // Events are added to the store by the subscription itself
         },
       });
 
@@ -338,7 +342,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request(relays, filters, { eventStore }).pipe(toArray()),
+      pool.request(relays, filters).pipe(toArray()),
     );
 
     const conversationId = `nip-10:${rootEventId}`;
@@ -526,7 +530,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     };
 
     const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
+      pool.request(relays, [filter]).pipe(toArray()),
     );
 
     return events[0] || null;
@@ -720,7 +724,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     };
 
     const events: NostrEvent[] = [];
-    const obs = pool.subscription(relays, [filter], { eventStore });
+    const obs = subscriptionWithEose(relays, [filter]);
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {

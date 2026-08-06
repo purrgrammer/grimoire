@@ -16,6 +16,7 @@ import { RelayPool } from "applesauce-relay";
 import { EventStore } from "applesauce-core";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 import globalEventStore from "@/services/event-store";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import { AGGREGATOR_RELAYS, eventLoader } from "@/services/loaders";
 import type { ScrollParam, ParamValue } from "@/lib/nip5c-helpers";
@@ -439,7 +440,12 @@ export async function runScroll(
 
         let eosed = false;
 
-        const observable = privatePool.subscription(relays, [reqData.filter]);
+        // Scrolls get their own pool and deliberately stay out of the shared
+        // EventStore, so pass both explicitly.
+        const observable = subscriptionWithEose(relays, [reqData.filter], {
+          pool: privatePool,
+          store: null,
+        });
         const rxSub = observable.subscribe({
           next: (response) => {
             if (stopped || !handles.has(subHandle)) return;

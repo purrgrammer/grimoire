@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import pool from "@/services/relay-pool";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
@@ -19,7 +19,7 @@ interface UseLiveTimelineReturn {
 
 /**
  * Hook that combines REQ streaming (like useReqTimeline) with EventStore reactivity (like useTimeline).
- * - Subscribes to relays using pool.subscription (populating the EventStore).
+ * - Subscribes to relays using subscriptionWithEose (populating the EventStore).
  * - Returns a memoized observable from eventStore using eventStore.timeline(filter).
  * @param id - Unique identifier for this timeline (for debugging/logging)
  * @param filters - Nostr filter object
@@ -63,10 +63,9 @@ export function useLiveTimeline(
       limit: limit || f.limit,
     }));
 
-    const observable = pool.subscription(relays, filtersWithLimit, {
+    const observable = subscriptionWithEose(relays, filtersWithLimit, {
       reconnect: 5, // v5: retries renamed to reconnect
       resubscribe: true,
-      eventStore, // Automatically add events to store
     });
 
     const subscription = observable.subscribe(
@@ -78,7 +77,7 @@ export function useLiveTimeline(
             setLoading(false);
           }
         } else if (isNostrEvent(response)) {
-          // Event automatically added to store by pool.subscription (via options.eventStore)
+          // Event already added to the EventStore by subscriptionWithEose
         } else {
           console.warn("LiveTimeline: Unexpected response type:", response);
         }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import pool from "@/services/relay-pool";
+import { subscriptionWithEose } from "@/lib/relay-subscription";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
@@ -18,7 +18,7 @@ interface UseReqTimelineReturn {
 }
 
 /**
- * Hook for REQ command - queries ONLY specified relays using pool.req()
+ * Hook for REQ command - queries ONLY specified relays
  * Stores results in memory (not EventStore) and returns them sorted by created_at
  * @param id - Unique identifier for this timeline (for caching)
  * @param filters - Nostr filter object
@@ -72,10 +72,9 @@ export function useReqTimeline(
       limit: limit || f.limit,
     }));
 
-    const observable = pool.subscription(relays, filtersWithLimit, {
+    const observable = subscriptionWithEose(relays, filtersWithLimit, {
       reconnect: 5, // v5: retries renamed to reconnect
       resubscribe: true,
-      eventStore,
     });
 
     const subscription = observable.subscribe(
