@@ -125,5 +125,10 @@
     "typescript-eslint": "^8.66.0",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "react-dnd-multi-backend": {
+      "react-dom": "$react-dom"
+    }
   }
 }
