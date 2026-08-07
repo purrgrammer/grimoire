@@ -74,6 +74,9 @@ const AiViewer = lazy(() => import("./AiViewer"));
 const NappletViewer = lazy(() =>
   import("./NappletViewer").then((m) => ({ default: m.NappletViewer })),
 );
+const NappletsViewer = lazy(() =>
+  import("./NappletsViewer").then((m) => ({ default: m.NappletsViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -178,6 +181,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
     switch (browser ? "concord" : window.appId) {
       case "nip":
         content = <NipRenderer nipId={window.props.number} />;
+        break;
+      case "napplets":
+        content = <NappletsViewer />;
         break;
       case "app":
         content = (

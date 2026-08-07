@@ -26,6 +26,7 @@ import {
   requestLaunchConsent,
   grantLaunchCapabilities,
 } from "@/services/napplet-consent";
+import { recordNappletRun } from "@/services/napplet-library";
 import {
   capabilitiesForDomains,
   unenforceableDomains,
@@ -248,6 +249,17 @@ function NappletFrame({
       frame.className = "w-full h-full border-0 bg-background";
       frame.title = view.title ?? view.identity.dTag ?? "Napplet";
       container.appendChild(frame);
+
+      // Only after verification and consent, so the launcher can never list a
+      // napplet that failed its checks.
+      void recordNappletRun({
+        pointer,
+        kind: view.manifestEvent.kind,
+        pubkey: view.manifestEvent.pubkey,
+        identifier: view.identity.dTag,
+        title: view.title || view.identity.dTag || "Napplet",
+        description: view.description,
+      });
 
       registerNappletIdentity(windowId, {
         dTag: view.identity.dTag,

@@ -595,12 +595,33 @@ export async function resolveNappletFromEvent(
   const authorServers =
     (await blossomServerCache.getServers(event.pubkey)) ?? [];
 
-  const resolved = await resolveNapplet({
-    event,
-    cache: await getArtifactCache(),
-    fetchBlob: (sha256Hex, servers) =>
-      grimoireFetchBlob(sha256Hex, servers, authorServers),
-  });
+  // Remember what was actually tried, so an unavailable blob can say where we
+  // looked instead of just that we failed.
+  const tried = new Set<string>();
+
+  let resolved;
+  try {
+    resolved = await resolveNapplet({
+      event,
+      cache: await getArtifactCache(),
+      fetchBlob: (sha256Hex, servers) => {
+        for (const server of [...servers, ...authorServers]) tried.add(server);
+        return grimoireFetchBlob(sha256Hex, servers, authorServers);
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof NappletResolutionError &&
+      error.code === "blob-unavailable" &&
+      tried.size > 0
+    ) {
+      throw new NappletResolutionError(
+        error.code,
+        `${error.message}. Tried ${[...tried].join(", ")}.`,
+      );
+    }
+    throw error;
+  }
 
   return {
     identity: Object.freeze({

@@ -668,6 +668,21 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[]) => parseConcordCommand(args),
   },
+  napplets: {
+    name: "napplets",
+    section: "1",
+    synopsis: "napplets",
+    description:
+      "Find and launch napplets. Lists the ones you have already run \u2014 recorded only after they passed verification \u2014 and the ones published by people you follow, discovered over the outbox model.",
+    options: [],
+    examples: [
+      "napplets                                          Open the launcher",
+    ],
+    seeAlso: ["app", "nip"],
+    appId: "napplets",
+    category: "Nostr",
+    defaultProps: {},
+  },
   app: {
     name: "app",
     section: "1",

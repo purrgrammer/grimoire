@@ -517,6 +517,28 @@ export interface AiConversation {
   updatedAt: number;
 }
 
+/**
+ * A napplet the user has run, so it can be found again.
+ *
+ * Local rather than a NIP-51 set because nothing specs a kind for a napplet
+ * list. Keyed on the addressable coordinate so it survives updates — the
+ * aggregate hash is deliberately not part of the key, since a new version of
+ * the same napplet is still the same entry in the launcher.
+ */
+export interface InstalledNapplet {
+  /** `<kind>:<pubkey>:<dTag>`, or `id:<eventId>` for a pinned snapshot. */
+  coordinate: string;
+  kind: number;
+  pubkey: string;
+  identifier: string;
+  title: string;
+  description?: string;
+  lastRunAt: number;
+  runCount: number;
+  /** 1 when the user pinned it. Dexie cannot index booleans. */
+  pinned: number;
+}
+
 /** Exported for the migration tests, which open a throwaway database name. */
 export class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
@@ -548,6 +570,7 @@ export class GrimoireDb extends Dexie {
   dmSeenWraps!: Table<DmSeenWrapRow>;
   dmKv!: Table<DmKvRow>;
   aiConversations!: Table<AiConversation>;
+  napplets!: Table<InstalledNapplet>;
 
   constructor(name: string) {
     super(name);
@@ -833,6 +856,7 @@ export class GrimoireDb extends Dexie {
     });
 
     // Version 20: Concord — decrypted membership vault, rumor store, snapshots
+    // Version 20: napplets the user has run
     this.version(20).stores({
       profiles: "&pubkey",
       nip05: "&nip05",
@@ -1103,6 +1127,11 @@ export class GrimoireDb extends Dexie {
     // Version 28: AI conversations, one row per window
     this.version(28).stores({
       aiConversations: "&windowId, updatedAt",
+    });
+
+    // Version 29: napplets the user has run
+    this.version(29).stores({
+      napplets: "&coordinate, lastRunAt, pinned",
     });
   }
 }

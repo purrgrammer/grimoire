@@ -31,7 +31,8 @@ export type AppId =
   | "log"
   | "ai"
   | "win"
-  | "app";
+  | "app"
+  | "napplets";
 
 export interface WindowInstance {
   id: string;
