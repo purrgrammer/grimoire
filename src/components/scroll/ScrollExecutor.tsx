@@ -23,6 +23,9 @@ interface ScrollExecutorProps {
   wasmBase64: string;
 }
 
+/** Stop a running scroll this long after its last subscription closes. */
+const INACTIVITY_STOP_MS = 3000;
+
 export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
   const { pubkey } = useAccount();
   const { relays: relayStates } = useRelayState();
@@ -77,26 +80,30 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
     };
   }, []);
 
-  // Auto-stop after 3 seconds of inactivity (no open subscriptions)
+  // Auto-stop once every subscription has closed and nothing else happens.
+  // Gated on having had a subscription at all, so a program isn't killed during
+  // startup before it opens its first REQ.
   useEffect(() => {
-    // Track if we've ever had subscriptions
     if (activeSubs.some((s) => !s.closed)) {
       hasHadSubsRef.current = true;
     }
 
-    // Only auto-stop if: running, has had subs before, and no open subs now
-    const openSubs = activeSubs.filter((s) => !s.closed).length;
-    if (runtimeState !== "running" || !hasHadSubsRef.current || openSubs > 0) {
+    const hasOpenSubs = activeSubs.some((s) => !s.closed);
+    if (runtimeState !== "running" || !hasHadSubsRef.current || hasOpenSubs) {
       return;
     }
 
+    // Capture the controller for this run: if the user starts another run
+    // before the timer fires, this must not stop the new one.
+    const controller = controllerRef.current;
+
     const timer = setTimeout(() => {
-      controllerRef.current?.stop();
+      controller?.stop();
       setLogEntries((prev) => [
         ...prev,
-        "Auto-stopped: no active subscriptions for 3 seconds",
+        `Auto-stopped: no active subscriptions for ${INACTIVITY_STOP_MS / 1000}s`,
       ]);
-    }, 3000);
+    }, INACTIVITY_STOP_MS);
 
     return () => clearTimeout(timer);
   }, [activeSubs, runtimeState]);
