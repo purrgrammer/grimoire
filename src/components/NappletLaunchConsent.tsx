@@ -50,8 +50,18 @@ function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
             <span className="truncate">{title}</span>
           </DialogTitle>
           <DialogDescription>
-            Published by <UserName pubkey={request.pubkey} /> and verified. It
-            asks for the following before it runs.
+            {request.undeclared ? (
+              <>
+                Published by <UserName pubkey={request.pubkey} /> and verified.
+                It is asking for something its manifest never declared, so it
+                was refused. Allowing re-runs it.
+              </>
+            ) : (
+              <>
+                Published by <UserName pubkey={request.pubkey} /> and verified.
+                It asks for the following before it runs.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -105,20 +115,23 @@ function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
 
         <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="ghost" onClick={() => request.resolve(null)}>
-            Don&apos;t run
+            {request.undeclared ? "Cancel" : "Don't run"}
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => request.resolve([])}>
-              Run with none
+              {request.undeclared ? "Deny all" : "Run with none"}
             </Button>
             <Button onClick={() => request.resolve([...allowed])}>
-              Run{allowed.size > 0 && ` with ${allowed.size}`}
+              {request.undeclared ? "Allow" : "Run"}
+              {allowed.size > 0 && ` ${allowed.size}`}
             </Button>
           </div>
         </DialogFooter>
 
         <p className="text-[11px] text-muted-foreground/70">
           Your answer applies to this exact version. An update re-asks.
+          {request.undeclared &&
+            " A napplet should declare what it needs in its manifest."}
         </p>
       </DialogContent>
     </Dialog>

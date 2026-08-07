@@ -23,10 +23,6 @@ import {
   type AclCheckEvent,
 } from "./napplet-host";
 import {
-  capabilitiesForDomains,
-  getDeclaredDomains,
-} from "./napplet-capabilities";
-import {
   setNappletWindowTitle,
   clearNappletWindowTitle,
 } from "./napplet-attribution";
@@ -37,27 +33,6 @@ import {
   forgetNappletDecision,
   forgetNappletDecisions,
 } from "./napplet-acl";
-
-export interface NappletConsentRequest {
-  key: string;
-  windowId: string;
-  dTag: string;
-  aggregateHash: string;
-  capability: string;
-  /**
-   * Title from the manifest. Signed by the author, but author-chosen — treat it
-   * as a label, never as proof of who is asking. `pubkey` is the identity that
-   * actually verified.
-   */
-  title: string;
-  pubkey: string;
-  /**
-   * True when the manifest never declared the domain this capability belongs
-   * to. Under manifest-first consent that should not happen for a well-formed
-   * napplet, so it is worth showing the user.
-   */
-  undeclared: boolean;
-}
 
 /** A signing confirmation, resolved by the user answering the prompt. */
 export interface NappletSigningRequest {
@@ -107,25 +82,10 @@ interface RegisteredIdentity {
 }
 
 const identities = new Map<string, RegisteredIdentity>();
-const pending = new Map<string, NappletConsentRequest>();
 /** Triples already answered or asked this session — never re-prompt. */
 const settled = new Set<string>();
 
-type Listener = (requests: NappletConsentRequest[]) => void;
-const listeners = new Set<Listener>();
 const reloadListeners = new Set<(windowId: string) => void>();
-
-function emit(): void {
-  const snapshot = [...pending.values()];
-  listeners.forEach((listener) => listener(snapshot));
-}
-
-/** Subscribe to the pending consent queue. Returns an unsubscribe function. */
-export function subscribeNappletConsent(listener: Listener): () => void {
-  listeners.add(listener);
-  listener([...pending.values()]);
-  return () => listeners.delete(listener);
-}
 
 /** Subscribe to "this window needs to re-run" signals. */
 export function subscribeNappletReload(
@@ -150,49 +110,62 @@ export function registerNappletIdentity(
 export function unregisterNappletIdentity(windowId: string): void {
   identities.delete(windowId);
   clearNappletWindowTitle(windowId);
-  for (const [key, request] of pending) {
-    if (request.windowId === windowId) pending.delete(key);
+  for (const [key, group] of buffered) {
+    if (group.windowId !== windowId) continue;
+    clearTimeout(group.timer);
+    buffered.delete(key);
   }
-  emit();
-}
-
-/**
- * Whether a capability falls outside what the manifest declared.
- *
- * Under manifest-first consent every declared capability is answered before the
- * frame runs, so anything reaching the per-use path was undeclared — a spec
- * violation by the napplet, and worth telling the user about.
- */
-function isUndeclared(
-  dTag: string,
-  aggregateHash: string,
-  capability: string,
-): boolean {
-  const declared = getDeclaredDomains(dTag, aggregateHash);
-  if (!declared || declared.length === 0) return false;
-  return !capabilitiesForDomains(declared).includes(capability);
 }
 
 function triple(event: AclCheckEvent): string {
   return `${event.identity.dTag}:${event.identity.hash}:${event.capability}`;
 }
 
+/**
+ * Group denials before asking.
+ *
+ * A napplet that did not declare its capabilities gets refused once per
+ * capability, and each of those arrives as a separate ACL check within a few
+ * milliseconds of the others. Prompting per denial produced a stack of toasts
+ * that reflowed as they resolved — easy to mis-click — and a frame reload per
+ * answer. Buffering briefly turns that into one dialog and one reload.
+ */
+const DENIAL_GROUPING_MS = 250;
+
+interface Buffered {
+  windowId: string;
+  title: string;
+  pubkey: string;
+  capabilities: Set<string>;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const buffered = new Map<string, Buffered>();
+
 function handleDenial(event: AclCheckEvent): void {
   if (event.decision !== "deny") return;
 
+  const { dTag, hash } = {
+    dTag: event.identity.dTag,
+    hash: event.identity.hash,
+  };
   const key = triple(event);
-  if (settled.has(key) || pending.has(key)) return;
+  if (settled.has(key)) return;
+
+  // A remembered deny means never ask again for this exact version.
+  const remembered = getNappletDecision(dTag, hash, event.capability);
+  if (remembered && !remembered.allowed) {
+    settled.add(key);
+    return;
+  }
 
   // Find the live window running this identity. Without one there is nothing
-  // to reload after granting, so asking would be pointless.
+  // to re-run after granting, so asking would be pointless.
   let windowId: string | undefined;
-  let title = event.identity.dTag;
+  let title = dTag;
   let pubkey = "";
   for (const [id, identity] of identities) {
-    if (
-      identity.dTag === event.identity.dTag &&
-      identity.aggregateHash === event.identity.hash
-    ) {
+    if (identity.dTag === dTag && identity.aggregateHash === hash) {
       windowId = id;
       title = identity.title;
       pubkey = identity.pubkey;
@@ -201,32 +174,72 @@ function handleDenial(event: AclCheckEvent): void {
   }
   if (!windowId) return;
 
-  // A remembered deny means never ask again for this exact version.
-  const remembered = getNappletDecision(
-    event.identity.dTag,
-    event.identity.hash,
-    event.capability,
-  );
-  if (remembered && !remembered.allowed) {
-    settled.add(key);
+  // Mark settled now: further denials for the same capability while the dialog
+  // is open must not queue a second ask.
+  settled.add(key);
+
+  const groupKey = `${dTag}:${hash}`;
+  const existing = buffered.get(groupKey);
+  if (existing) {
+    existing.capabilities.add(event.capability);
     return;
   }
 
-  pending.set(key, {
-    key,
+  const group: Buffered = {
     windowId,
-    dTag: event.identity.dTag,
-    aggregateHash: event.identity.hash,
-    capability: event.capability,
     title,
     pubkey,
-    undeclared: isUndeclared(
-      event.identity.dTag,
-      event.identity.hash,
-      event.capability,
-    ),
+    capabilities: new Set([event.capability]),
+    timer: setTimeout(() => {
+      buffered.delete(groupKey);
+      void askForUndeclared(dTag, hash, group);
+    }, DENIAL_GROUPING_MS),
+  };
+  buffered.set(groupKey, group);
+}
+
+async function askForUndeclared(
+  dTag: string,
+  aggregateHash: string,
+  group: Buffered,
+): Promise<void> {
+  const capabilities = [...group.capabilities];
+  const allowed = await new Promise<string[] | null>((resolveAsk) => {
+    const key = `undeclared-${++launchCounter}`;
+    launchRequests.set(key, {
+      key,
+      dTag,
+      aggregateHash,
+      title: group.title,
+      pubkey: group.pubkey,
+      capabilities,
+      unenforceable: [],
+      undeclared: true,
+      windowId: group.windowId,
+      resolve: (answer) => {
+        launchRequests.delete(key);
+        emitLaunch();
+        resolveAsk(answer);
+      },
+    });
+    emitLaunch();
   });
-  emit();
+
+  if (allowed === null) return;
+
+  for (const capability of capabilities) {
+    rememberNappletDecision({
+      dTag,
+      aggregateHash,
+      capability,
+      allowed: allowed.includes(capability),
+    });
+  }
+  if (allowed.length > 0) {
+    grantLaunchCapabilities(dTag, aggregateHash, allowed);
+    // One reload for the whole group rather than one per capability.
+    reloadListeners.forEach((listener) => listener(group.windowId));
+  }
 }
 
 let wired = false;
@@ -236,70 +249,6 @@ export function startNappletConsent(): void {
   if (wired) return;
   wired = true;
   onNappletAclCheck(handleDenial);
-}
-
-function resolve(request: NappletConsentRequest): void {
-  pending.delete(request.key);
-  settled.add(request.key);
-  emit();
-}
-
-/**
- * Grant the capability and re-run the napplet.
- *
- * `remember` is the difference between a durable ACL grant and a one-shot: the
- * grant is keyed on the aggregate hash either way, so a napplet update
- * re-prompts regardless.
- */
-export function allowNappletCapability(
-  request: NappletConsentRequest,
-  remember: boolean,
-): void {
-  const bridge = getNappletBridge();
-  bridge.runtime.aclState.grant(
-    "",
-    request.dTag,
-    request.aggregateHash,
-    request.capability as Parameters<typeof bridge.runtime.aclState.grant>[3],
-  );
-  // Never call aclState.persist(): it serializes the whole live state, which
-  // would make an un-remembered grant durable. Remembering is recorded in our
-  // own store and replayed on the next boot instead.
-  if (remember) {
-    rememberNappletDecision({
-      dTag: request.dTag,
-      aggregateHash: request.aggregateHash,
-      capability: request.capability,
-      allowed: true,
-    });
-  }
-  resolve(request);
-  reloadListeners.forEach((listener) => listener(request.windowId));
-}
-
-/**
- * Refuse the capability.
- *
- * A remembered deny is recorded as a decision, not as a firewall policy. The
- * firewall keys on dTag alone — version-agnostic and author-agnostic — so
- * `setPolicy(dTag, 'deny')` would permanently brick every napplet anyone
- * publishes under that identifier, and it rejects every operation rather than
- * the one capability that was refused. Under a restrictive default, simply not
- * granting is the whole deny; the record just stops us asking again.
- */
-export function denyNappletCapability(
-  request: NappletConsentRequest,
-  remember: boolean,
-): void {
-  if (remember) {
-    rememberNappletDecision({
-      dTag: request.dTag,
-      aggregateHash: request.aggregateHash,
-      capability: request.capability,
-      allowed: false,
-    });
-  }
-  resolve(request);
 }
 
 /**
@@ -359,10 +308,18 @@ export interface NappletLaunchRequest {
   aggregateHash: string;
   title: string;
   pubkey: string;
-  /** Capabilities implied by the manifest's declared domains. */
+  /** Capabilities to decide. */
   capabilities: string[];
   /** Declared domains Kehto defines no capability for. */
   unenforceable: string[];
+  /**
+   * True when these capabilities were never declared in the manifest, i.e. the
+   * napplet was refused once and this is the catch-up ask. A well-formed
+   * napplet never reaches this path.
+   */
+  undeclared: boolean;
+  /** Set for the undeclared path: the window to re-run once granted. */
+  windowId?: string;
   resolve: (allowed: string[] | null) => void;
 }
 
@@ -435,6 +392,7 @@ export function requestLaunchConsent(input: {
       pubkey: input.pubkey,
       capabilities: undecided,
       unenforceable: input.unenforceable,
+      undeclared: false,
       resolve: (allowed) => {
         launchRequests.delete(key);
         emitLaunch();
