@@ -37,7 +37,17 @@ function loadScrollSettings(eventId: string): {
 } {
   try {
     const stored = localStorage.getItem(SCROLL_STORAGE_PREFIX + eventId);
-    return stored ? JSON.parse(stored) : {};
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    return {
+      paramValues:
+        typeof parsed?.paramValues === "object" && parsed.paramValues !== null
+          ? parsed.paramValues
+          : undefined,
+      // Don't trust storage: anything else would reach the WASM runtime.
+      endianness: parsed?.endianness === "LE" ? "LE" : "BE",
+      presenceBytes: parsed?.presenceBytes === true,
+    };
   } catch {
     return {};
   }
@@ -73,28 +83,27 @@ export function ScrollExecutor({
     .filter(([, state]) => state.connectionState === "connected")
     .map(([url]) => url);
 
-  // Load persisted settings
-  const stored = eventId ? loadScrollSettings(eventId) : {};
-
-  // Pre-fill "me" params with logged-in pubkey, then overlay persisted values
-  const defaultValues: Record<string, string> = {};
-  for (const p of params) {
-    if (p.name === "me" && p.type === "public_key" && pubkey) {
-      defaultValues[p.name] = pubkey;
-    }
-  }
-  // Filter stored values to only include current params (remove stale keys)
-  const validParamNames = new Set(params.map((p) => p.name));
-  const filteredStored = Object.fromEntries(
-    Object.entries(stored.paramValues || {}).filter(([k]) =>
-      validParamNames.has(k),
-    ),
-  );
-  const initialValues = { ...defaultValues, ...filteredStored };
+  // Read storage once. This component re-renders on every received event, so
+  // reading and parsing per render would be wasted work — and the values are
+  // only ever used to seed initial state.
+  const [stored] = useState(() => (eventId ? loadScrollSettings(eventId) : {}));
 
   const [runtimeState, setRuntimeState] = useState<ScrollRuntimeState>("idle");
-  const [paramValues, setParamValues] =
-    useState<Record<string, string>>(initialValues);
+  const [paramValues, setParamValues] = useState<Record<string, string>>(() => {
+    // Pre-fill "me" with the logged-in pubkey, then overlay persisted values,
+    // dropping any that no longer correspond to a declared param.
+    const defaults: Record<string, string> = {};
+    for (const p of params) {
+      if (p.name === "me" && p.type === "public_key" && pubkey) {
+        defaults[p.name] = pubkey;
+      }
+    }
+    const declared = new Set(params.map((p) => p.name));
+    const restored = Object.entries(stored.paramValues ?? {}).filter(([k]) =>
+      declared.has(k),
+    );
+    return { ...defaults, ...Object.fromEntries(restored) };
+  });
   const [displayedEventsMap, setDisplayedEventsMap] = useState<
     Map<string, NostrEvent>
   >(new Map());
@@ -108,7 +117,7 @@ export function ScrollExecutor({
 
   // Encoding options
   const [endianness, setEndianness] = useState<"LE" | "BE">(
-    stored.endianness || "BE",
+    stored.endianness ?? "BE",
   );
   const [presenceBytes, setPresenceBytes] = useState(
     stored.presenceBytes ?? false,
