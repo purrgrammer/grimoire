@@ -25,8 +25,10 @@ import {
   subscribeNappletReload,
   requestLaunchConsent,
   grantLaunchCapabilities,
+  describeCapability,
 } from "@/services/napplet-consent";
 import { recordNappletRun } from "@/services/napplet-library";
+import { getNappletDecisions } from "@/services/napplet-acl";
 import {
   capabilitiesForDomains,
   unenforceableDomains,
@@ -147,6 +149,21 @@ function NappletFrame({
   } | null>(null);
   const { theme } = useTheme();
   const { copied, copy } = useCopy();
+
+  // What this napplet actually holds right now — the header should not make the
+  // user open a popover to find out.
+  const [granted, refused] = useMemo(() => {
+    if (!resolved) return [[], []] as [string[], string[]];
+    const decisions = getNappletDecisions().filter(
+      (d) =>
+        d.dTag === resolved.identity.dTag &&
+        d.aggregateHash === resolved.identity.aggregateHash,
+    );
+    return [
+      decisions.filter((d) => d.allowed).map((d) => d.capability),
+      decisions.filter((d) => !d.allowed).map((d) => d.capability),
+    ];
+  }, [resolved]);
 
   useEffect(() => {
     const cancelled = { current: false };
@@ -323,7 +340,7 @@ function NappletFrame({
       {/* Same single-line shape as the req and profile headers. */}
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 font-mono text-xs">
         {resolved ? (
-          <div className="flex min-w-0 items-center gap-1 truncate">
+          <div className="flex min-w-0 items-center gap-2 truncate">
             <UserName
               pubkey={resolved.manifestEvent.pubkey}
               className="text-inherit"
@@ -332,6 +349,33 @@ function NappletFrame({
             <span className="truncate">
               {resolved.title || resolved.identity.dTag || "Napplet"}
             </span>
+            {/* Makes the security posture legible without opening a popover. */}
+            {granted.length > 0 && (
+              <span className="hidden shrink-0 items-center gap-1 md:flex">
+                {granted.slice(0, 4).map((capability) => (
+                  <span
+                    key={capability}
+                    className="rounded border border-border/60 px-1 text-[10px] text-muted-foreground"
+                    title={describeCapability(capability)}
+                  >
+                    {capability.split(":")[0]}
+                  </span>
+                ))}
+                {granted.length > 4 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    +{granted.length - 4}
+                  </span>
+                )}
+              </span>
+            )}
+            {refused.length > 0 && (
+              <span
+                className="shrink-0 text-[10px] text-warning"
+                title={`Refused: ${refused.join(", ")}`}
+              >
+                {refused.length} refused
+              </span>
+            )}
           </div>
         ) : (
           <span className="text-muted-foreground">…</span>

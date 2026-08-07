@@ -77,6 +77,11 @@ const NappletViewer = lazy(() =>
 const NappletsViewer = lazy(() =>
   import("./NappletsViewer").then((m) => ({ default: m.NappletsViewer })),
 );
+const NappletPermissionsViewer = lazy(() =>
+  import("./NappletPermissionsViewer").then((m) => ({
+    default: m.NappletPermissionsViewer,
+  })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -184,6 +189,9 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
         break;
       case "napplets":
         content = <NappletsViewer />;
+        break;
+      case "permissions":
+        content = <NappletPermissionsViewer />;
         break;
       case "app":
         content = (

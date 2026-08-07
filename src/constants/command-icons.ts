@@ -22,6 +22,7 @@ import {
   Hash,
   Zap,
   Boxes,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,6 +83,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   napplets: {
     icon: Boxes,
     description: "Find and launch napplets",
+  },
+  permissions: {
+    icon: ShieldCheck,
+    description: "Review what napplets are allowed to do",
   },
   profile: {
     icon: User,

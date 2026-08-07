@@ -668,6 +668,21 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[]) => parseConcordCommand(args),
   },
+  permissions: {
+    name: "permissions",
+    section: "1",
+    synopsis: "permissions",
+    description:
+      "Review and revoke what napplets are allowed to do. Answers are remembered per napplet version, so an update re-asks; revoking takes effect on the napplet's next run.",
+    options: [],
+    examples: [
+      "permissions                                       Review napplet permissions",
+    ],
+    seeAlso: ["napplets", "app"],
+    appId: "permissions",
+    category: "Nostr",
+    defaultProps: {},
+  },
   napplets: {
     name: "napplets",
     section: "1",

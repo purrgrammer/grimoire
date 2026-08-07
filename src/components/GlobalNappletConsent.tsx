@@ -55,9 +55,11 @@ function ConsentToast({
   const [remember, setRemember] = useState(false);
 
   return (
-    <div className="min-w-[350px] max-w-[500px] overflow-hidden border border-border bg-background p-4 shadow-lg">
+    // Left accent and icon distinguish this from grimoire's own relay-auth
+    // prompts, which share the corner and would otherwise look identical.
+    <div className="min-w-[350px] max-w-[500px] overflow-hidden border border-l-4 border-border border-l-primary bg-background p-4 shadow-lg">
       <div className="flex items-start gap-3">
-        <Boxes className="mt-0.5 size-5 flex-shrink-0 text-muted-foreground" />
+        <Boxes className="mt-0.5 size-5 flex-shrink-0 text-primary" />
         <div className="min-w-0 flex-1 space-y-3">
           <div>
             <div className="mb-1 text-sm font-semibold text-foreground">
@@ -131,7 +133,7 @@ function SigningToast({
   onAnswer: (allowed: boolean) => void;
 }) {
   return (
-    <div className="min-w-[350px] max-w-[500px] overflow-hidden border border-border bg-background p-4 shadow-lg">
+    <div className="min-w-[350px] max-w-[500px] overflow-hidden border border-l-4 border-border border-l-warning bg-background p-4 shadow-lg">
       <div className="flex items-start gap-3">
         <PenLine className="mt-0.5 size-5 flex-shrink-0 text-warning" />
         <div className="min-w-0 flex-1 space-y-3">
