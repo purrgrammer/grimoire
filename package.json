@@ -105,7 +105,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/shell-quote": "^1.7.5",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/ui": "^4.1.10",
