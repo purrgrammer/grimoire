@@ -57,7 +57,11 @@ import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import { createNappletSigner } from "./napplet-signer";
-import { isSigningEnvelope, setCurrentWriter } from "./napplet-attribution";
+import {
+  isSigningEnvelope,
+  setCurrentWriter,
+  getNappletWindowTitle,
+} from "./napplet-attribution";
 import { createBlossomUploader } from "./napplet-upload";
 import {
   createNappletCommonService,
@@ -193,13 +197,11 @@ function buildAdapter(): ShellAdapter {
   const notifyService = createNotifyService({
     defaultGrant: true,
     onSend: (windowId, payload) => {
-      void import("./napplet-consent").then(({ getNappletWindowTitle }) => {
-        const source = getNappletWindowTitle(windowId) ?? "A napplet";
-        const note = payload as { title?: string; body?: string };
-        toast(`${source}${note.title ? `: ${note.title}` : ""}`, {
-          description: note.body,
-          duration: 6000,
-        });
+      const source = getNappletWindowTitle(windowId) ?? "A napplet";
+      const note = payload as { title?: string; body?: string };
+      toast(`${source}${note.title ? `: ${note.title}` : ""}`, {
+        description: note.body,
+        duration: 6000,
       });
     },
   });

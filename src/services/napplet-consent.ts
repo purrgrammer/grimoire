@@ -23,6 +23,10 @@ import {
   type AclCheckEvent,
 } from "./napplet-host";
 import {
+  setNappletWindowTitle,
+  clearNappletWindowTitle,
+} from "./napplet-attribution";
+import {
   rememberNappletDecision,
   getNappletDecision,
   getNappletDecisions,
@@ -127,15 +131,12 @@ export function registerNappletIdentity(
   identity: RegisteredIdentity,
 ): void {
   identities.set(windowId, identity);
-}
-
-/** The human label for whatever is running in a window, if anything is. */
-export function getNappletWindowTitle(windowId: string): string | undefined {
-  return identities.get(windowId)?.title;
+  setNappletWindowTitle(windowId, identity.title);
 }
 
 export function unregisterNappletIdentity(windowId: string): void {
   identities.delete(windowId);
+  clearNappletWindowTitle(windowId);
   for (const [key, request] of pending) {
     if (request.windowId === windowId) pending.delete(key);
   }

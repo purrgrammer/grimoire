@@ -22,6 +22,27 @@
  * both use it without a cycle.
  */
 
+/**
+ * Human labels for live napplet windows, written by the consent layer.
+ *
+ * Kept here rather than in `napplet-consent` so the host can attribute a
+ * notification without importing that module — which imports the host back.
+ */
+const titles = new Map<string, string>();
+
+export function setNappletWindowTitle(windowId: string, title: string): void {
+  titles.set(windowId, title);
+}
+
+export function clearNappletWindowTitle(windowId: string): void {
+  titles.delete(windowId);
+}
+
+/** The label for whatever is running in a window, if anything is. */
+export function getNappletWindowTitle(windowId: string): string | undefined {
+  return titles.get(windowId);
+}
+
 export interface NappletWriter {
   windowId: string;
   dTag: string;
