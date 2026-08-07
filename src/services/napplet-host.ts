@@ -29,9 +29,9 @@ import {
 import {
   createThemeService,
   createConfigService,
-  createKeysService,
   createIdentityService,
   createNotifyService,
+  createKeysService,
   createOutboxService,
   createRelayPoolOutboxRouter,
   createUploadService,
@@ -57,7 +57,14 @@ import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import { createNappletSigner } from "./napplet-signer";
+import { isSigningEnvelope, setCurrentWriter } from "./napplet-attribution";
 import { createBlossomUploader } from "./napplet-upload";
+import {
+  createNappletCommonService,
+  createNappletListsService,
+  createNappletLinkService,
+} from "./napplet-social";
+import { createNappletResourceService } from "./napplet-devices";
 import { toast } from "sonner";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
@@ -92,23 +99,14 @@ export type { ShellEnvironment, OriginIdentity, NapTheme };
  * `notify.permission.request` with `granted: true` when no service is
  * registered, i.e. it lies that delivery succeeded.
  *
- * Nothing is withheld now that each domain has real backing. `relay:write`
- * reaches `getSigner().signEvent`, which is why every napplet-originated
- * signature goes through `napplet-signer.ts` rather than the raw account.
+ * `relay:write` reaches `getSigner().signEvent`, which is why every
+ * napplet-originated signature goes through `napplet-signer.ts` rather than the
+ * raw account.
+ *
+ * `keys` is offered with its listener detached from the host document — see
+ * the service construction below.
  */
 const DISABLED_DOMAINS: readonly string[] = [];
-
-/**
- * Chords grimoire owns. A napplet holding `keys:forward` can synthesize
- * host-level keystrokes, so the command palette and workspace switches must
- * not be bindable or drivable from inside a frame.
- */
-const RESERVED_CHORDS = [
-  "Cmd+K",
-  "Ctrl+K",
-  ...Array.from({ length: 9 }, (_, i) => `Cmd+${i + 1}`),
-  ...Array.from({ length: 9 }, (_, i) => `Ctrl+${i + 1}`),
-] as const;
 
 /** Config snapshot handed to napplets. Non-sensitive, shell-owned, read-only. */
 function readConfigValues(): Record<string, unknown> {
@@ -158,13 +156,25 @@ function adaptRelayPool(): RelayPoolLike {
   };
 }
 
+/**
+ * Chords grimoire owns. Reserved so a napplet cannot bind the command palette
+ * or a workspace switch even though its listener is already isolated.
+ */
+const RESERVED_CHORDS = [
+  "Cmd+K",
+  "Ctrl+K",
+  ...Array.from({ length: 9 }, (_, i) => `Cmd+${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `Ctrl+${i + 1}`),
+] as const;
+
+let keysService: ReturnType<typeof createKeysService> | null = null;
+
 const nappletSigner = createNappletSigner();
 
 /** Relay subscription cleanups the runtime asked us to hold. */
 const trackedSubscriptions = new Map<string, () => void>();
 
 let themeService: ReturnType<typeof createThemeService> | null = null;
-let keysService: ReturnType<typeof createKeysService> | null = null;
 
 function buildAdapter(): ShellAdapter {
   themeService = createThemeService({
@@ -175,13 +185,6 @@ function buildAdapter(): ShellAdapter {
 
   const configService = createConfigService({
     getValues: () => readConfigValues(),
-  });
-
-  // No onForward: a napplet must not be able to drive grimoire's own hotkey
-  // table. The service still answers registerAction/bindings so napplets can
-  // own chords inside their own frame.
-  keysService = createKeysService({
-    reservedChords: RESERVED_CHORDS,
   });
 
   // Without a service the runtime answers notify.send with a fabricated id and
@@ -247,6 +250,19 @@ function buildAdapter(): ShellAdapter {
     }),
   });
 
+  // The listener target is the whole security story for this domain. Kehto
+  // defaults to the host `document`, and `parseChord` accepts modifier-less
+  // chords that `isReservedKeyChord` does not block — so a napplet granted
+  // keys:bind could register every letter and digit and receive a keys.action
+  // for each one, reading anything typed into grimoire's palette or composer.
+  // reservedChords only stops chords being *bound*. An isolated EventTarget
+  // never receives a real keydown, so registerAction still answers and nothing
+  // typed into the host can reach a frame.
+  keysService = createKeysService({
+    listenerTarget: new EventTarget(),
+    reservedChords: RESERVED_CHORDS,
+  });
+
   const uploadService = createUploadService({
     uploader: createBlossomUploader(),
     uploadInfo: { rails: [{ rail: "blossom", enabled: true }] },
@@ -304,6 +320,10 @@ function buildAdapter(): ShellAdapter {
     // Liveness gate for the upload domain: Kehto only advertises it when a
     // rail is actually configured.
     upload: { getUploader: () => ({ rails: ["blossom"] }) },
+    // Liveness gates. Kehto only advertises these when the host says so.
+    common: { isAvailable: () => true },
+    lists: { isAvailable: () => true },
+    link: { isAvailable: () => true },
     // Napplets cannot spawn grimoire windows yet; null is the "refuse" contract.
     windowManager: { createWindow: () => null },
     auth: {
@@ -328,19 +348,37 @@ function buildAdapter(): ShellAdapter {
     services: {
       theme: themeService.handler,
       config: configService.handler,
-      keys: keysService,
       identity: identityService,
       notify: notifyService,
+      keys: keysService,
+      resource: createNappletResourceService((windowId) => {
+        const entry = bridge?.runtime.sessionRegistry
+          .getAllEntries()
+          .find((e) => e.windowId === windowId);
+        return entry
+          ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash }
+          : null;
+      }),
+      common: createNappletCommonService(),
+      lists: createNappletListsService(),
+      link: createNappletLinkService(),
       outbox: outboxService,
       upload: uploadService,
     },
     onAclCheck: (event) => {
       // Both allows and denials arrive here. Denials are the interesting half:
       // under a restrictive default they are how a missing grant surfaces.
-      if (event.decision === "allow" && event.capability === "relay:write") {
-        void import("./napplet-consent").then((m) =>
-          m.noteRelayWriteAllowed(event.identity.dTag, event.identity.hash),
-        );
+      // Synchronous and narrowed to publish envelopes — see napplet-attribution.
+      if (
+        event.decision === "allow" &&
+        event.capability === "relay:write" &&
+        isSigningEnvelope(event.message)
+      ) {
+        setCurrentWriter({
+          windowId: "",
+          dTag: event.identity.dTag,
+          aggregateHash: event.identity.hash,
+        });
       }
       if (event.decision === "deny") {
         // `reason` is sent by @kehto/runtime 0.21 but absent from
@@ -400,6 +438,8 @@ export function getNappletBridge(): ShellBridge {
     // deserialize() fails open to permissive. Carrying on would mean every
     // napplet holds every capability, so refuse to run any of them.
     bridge.destroy();
+    keysService?.destroy();
+    keysService = null;
     bridge = null;
     adapter = null;
     throw new Error(
@@ -435,12 +475,10 @@ export function destroyNappletBridge(): void {
   // runtime.destroy() persists the whole live ACL state, one-shot grants
   // included. Scrub it; remembered decisions live in our own store.
   resetKehtoAclStore();
-  keysService?.destroy();
   originRegistry.clear();
   bridge = null;
   adapter = null;
   themeService = null;
-  keysService = null;
 }
 
 /** Resolve the frozen per-frame environment for a verified identity. */

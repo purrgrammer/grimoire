@@ -225,7 +225,13 @@ export function restoreFirewall(firewall: FirewallStateContainer): void {
   if (!snapshot?.napplets) return;
 
   for (const [dTag, rules] of Object.entries(snapshot.napplets)) {
-    if (rules.policy) firewall.setPolicy(dTag, rules.policy);
+    // `policy` is deliberately never replayed. An earlier build wrote
+    // setPolicy(dTag, 'deny') for a remembered refusal; the firewall keys on
+    // dTag alone and rejects every operation, so those users would otherwise
+    // stay permanently bricked for that identifier — across versions and
+    // authors — with nothing in the permissions UI able to clear it, and
+    // persistFirewall would rewrite the deny every session. Nothing writes
+    // policy any more, so dropping it on read is also the migration.
     if (rules.globalRate) {
       firewall.setGlobalRate(
         dTag,
