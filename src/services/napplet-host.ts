@@ -75,6 +75,7 @@ import { skip } from "rxjs/operators";
 import type { Subscription } from "rxjs";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
+import { getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
@@ -545,8 +546,8 @@ export async function fetchManifestEvent(
 ): Promise<NostrEvent> {
   const filter = buildManifestFilter(pointer);
 
-  const cached = defaultEventStore.getTimeline(filter)?.[0];
-  if (cached) return assertManifestEvent(cached, pointer);
+  const inStore = defaultEventStore.getTimeline(filter)?.[0];
+  if (inStore) return assertManifestEvent(inStore, pointer);
 
   const selection = await selectRelaysForFilter(defaultEventStore, filter);
   const relays = [
@@ -554,13 +555,18 @@ export async function fetchManifestEvent(
   ];
 
   const event = await requestEvent(relays, filter);
-  if (!event) {
-    throw new NappletLookupError(
-      "manifest-not-found",
-      "No relay returned a manifest for this pointer.",
-    );
-  }
-  return assertManifestEvent(event, pointer);
+  if (event) return assertManifestEvent(event, pointer);
+
+  // Relays can simply not answer — slow, offline, or the event has aged out of
+  // their retention. A previously verified copy is a better answer than a dead
+  // window, and it is re-verified downstream like any other.
+  const cached = await getCachedManifest(pointer);
+  if (cached) return assertManifestEvent(cached, pointer);
+
+  throw new NappletLookupError(
+    "manifest-not-found",
+    "No relay returned a manifest for this pointer, and nothing was cached.",
+  );
 }
 
 export interface ResolvedNappletView {

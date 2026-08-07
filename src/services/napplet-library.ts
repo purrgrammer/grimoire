@@ -10,6 +10,7 @@
 
 import db, { type InstalledNapplet } from "./db";
 import type { AddressPointer, EventPointer } from "@/lib/open-parser";
+import type { NostrEvent } from "@/types/nostr";
 
 /** The stable identity of a launcher entry. */
 export function nappletCoordinate(
@@ -45,6 +46,7 @@ export async function recordNappletRun(input: {
   identifier: string;
   title: string;
   description?: string;
+  manifest?: NostrEvent;
 }): Promise<void> {
   const coordinate = nappletCoordinate(input.pointer);
   try {
@@ -57,6 +59,7 @@ export async function recordNappletRun(input: {
       // Titles come from the manifest and can change between versions.
       title: input.title,
       description: input.description,
+      manifest: input.manifest ?? existing?.manifest,
       lastRunAt: Date.now(),
       runCount: (existing?.runCount ?? 0) + 1,
       pinned: existing?.pinned ?? 0,
@@ -64,6 +67,24 @@ export async function recordNappletRun(input: {
   } catch (error) {
     // The launcher is a convenience; never let it break a working napplet.
     console.warn("[napplet] could not record run", error);
+  }
+}
+
+/**
+ * The last verified manifest for a pointer, if one was cached.
+ *
+ * Used only when relays do not answer. `resolveNapplet` re-verifies it, so a
+ * stale copy is either still valid or rejected — never trusted on account of
+ * having been cached.
+ */
+export async function getCachedManifest(
+  pointer: EventPointer | AddressPointer,
+): Promise<NostrEvent | undefined> {
+  try {
+    const row = await db.napplets.get(nappletCoordinate(pointer));
+    return row?.manifest;
+  } catch {
+    return undefined;
   }
 }
 

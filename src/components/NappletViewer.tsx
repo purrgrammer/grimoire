@@ -283,6 +283,7 @@ function NappletFrame({
         identifier: view.identity.dTag,
         title: view.title || view.identity.dTag || "Napplet",
         description: view.description,
+        manifest: view.manifestEvent,
       });
 
       registerNappletIdentity(windowId, {

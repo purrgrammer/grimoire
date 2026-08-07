@@ -535,6 +535,13 @@ export interface InstalledNapplet {
   description?: string;
   lastRunAt: number;
   runCount: number;
+  /**
+   * The verified manifest event, kept so a reload does not depend on relays
+   * answering again. It is re-verified by `resolveNapplet` on every use, so
+   * caching it cannot weaken anything — a stale copy either still verifies or
+   * is rejected. Not indexed.
+   */
+  manifest?: NostrEvent;
   /** 1 when the user pinned it. Dexie cannot index booleans. */
   pinned: number;
 }
