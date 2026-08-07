@@ -50,15 +50,25 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     });
   });
 } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
-  // Tear down any SW left over from an older build, and drop its caches.
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) registration.unregister();
-  });
-  if ("caches" in window) {
-    caches.keys().then((names) => {
-      for (const name of names) {
-        if (name.startsWith("grimoire-")) caches.delete(name);
-      }
-    });
-  }
+  // Tear down any SW left over from an older build. An already-controlling
+  // worker keeps serving this client until unload, so reload once after
+  // unregistering — otherwise the first dev session still gets stale modules.
+  void (async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    if (registrations.length === 0) return;
+
+    const wasControlled = Boolean(navigator.serviceWorker.controller);
+    await Promise.all(registrations.map((r) => r.unregister()));
+
+    if ("caches" in window) {
+      const names = await caches.keys();
+      await Promise.all(
+        names
+          .filter((name) => name.startsWith("grimoire-"))
+          .map((name) => caches.delete(name)),
+      );
+    }
+
+    if (wasControlled) location.reload();
+  })();
 }

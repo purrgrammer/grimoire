@@ -340,7 +340,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request(relays, filters).pipe(toArray()),
+      pool.request(relays, filters, { eventStore }).pipe(toArray()),
     );
 
     const conversationId = `nip-10:${rootEventId}`;
@@ -528,7 +528,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     };
 
     const events = await firstValueFrom(
-      pool.request(relays, [filter]).pipe(toArray()),
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
     );
 
     return events[0] || null;

@@ -44,9 +44,9 @@ export default tseslint.config(
         "error",
         {
           selector:
-            'CallExpression[callee.object.name="pool"][callee.property.name="subscription"][arguments.length<3]',
+            'CallExpression[callee.object.name="pool"][callee.property.name=/^(subscription|request)$/][arguments.length<3]',
           message:
-            "pool.subscription() needs an options argument: pass { eventStore } so events reach the store, or use subscriptionWithEose() from @/lib/relay-subscription if you need an EOSE signal.",
+            "pool.subscription()/pool.request() need an options argument: pass { eventStore } so events reach the shared store (applesauce defaults to a throwaway one). For an EOSE signal use streamWithEose(), and for one-shot fetches requestEvents()/requestEvent(), from @/lib/relay-subscription.",
         },
       ],
 

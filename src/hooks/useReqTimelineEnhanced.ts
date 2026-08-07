@@ -342,15 +342,21 @@ export function useReqTimelineEnhanced(
     // Without a bound, one silent relay pins the timeline in LOADING forever.
     // Subscriptions stay open, so late events still arrive.
     const eoseDeadline = setTimeout(() => {
+      // Mark stragglers done. Keep this a pure updater — React may invoke it
+      // twice — and settle `loading` outside it, unconditionally: if every
+      // relay already errored there is nothing to change here, but the caller
+      // must still stop showing a spinner.
       setRelayStates((prev) => {
-        let changed = false;
         const next = new Map(prev);
+        let changed = false;
 
         for (const [url, state] of prev) {
-          const unresolved =
-            state.subscriptionState !== "eose" &&
-            state.subscriptionState !== "error";
-          if (!unresolved) continue;
+          if (
+            state.subscriptionState === "eose" ||
+            state.subscriptionState === "error"
+          ) {
+            continue;
+          }
 
           next.set(url, {
             ...state,
@@ -361,15 +367,13 @@ export function useReqTimelineEnhanced(
           changed = true;
         }
 
-        if (!changed) return prev;
-
-        if (!eoseReceivedRef.current) {
-          setEoseReceived(true);
-          if (!stream) setLoading(false);
-        }
-
-        return next;
+        return changed ? next : prev;
       });
+
+      if (!eoseReceivedRef.current) {
+        setEoseReceived(true);
+        if (!stream) setLoading(false);
+      }
     }, EOSE_TIMEOUT_MS);
 
     // Cleanup: unsubscribe from all relays

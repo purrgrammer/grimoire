@@ -183,7 +183,9 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // Use pool.request with both filters to fetch and auto-close on EOSE
     const participantEvents = await firstValueFrom(
-      pool.request([relayUrl], [adminsFilter, membersFilter]).pipe(toArray()),
+      pool
+        .request([relayUrl], [adminsFilter, membersFilter], { eventStore })
+        .pipe(toArray()),
     );
 
     const adminEvents = participantEvents.filter((e) => e.kind === 39001);
@@ -344,7 +346,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request([relayUrl], [filter]).pipe(toArray()),
+      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
     );
 
     // Convert events to messages

@@ -328,7 +328,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     // One-shot request to fetch older messages
     const events = await firstValueFrom(
-      pool.request(relays, [filter]).pipe(toArray()),
+      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
     );
 
     // Convert events to messages

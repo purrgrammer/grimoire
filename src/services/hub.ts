@@ -52,9 +52,9 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
  * Signer that always delegates to the currently active account.
  *
  * applesauce v6's ActionRunner takes an EventSigner directly (the old
- * EventFactory indirection was removed), and its `signer` field is read at
- * action time. Delegating keeps the hub pointed at whichever account is
- * active without reassigning it on every account switch.
+ * EventFactory indirection was removed). Delegation keeps *signing* on the
+ * active account, but ActionRunner memoizes its context — including `self` and
+ * `user` — on first use, so the cache is also cleared on account change below.
  */
 function requireActiveSigner() {
   const signer = accountManager.active?.signer;
@@ -89,6 +89,13 @@ export const hub = new ActionRunner(
   activeAccountSigner,
   publishEvent,
 );
+
+// ActionRunner caches `self`/`user` from the first getContext() call, so an
+// account switch would otherwise leave actions building tags for the old
+// pubkey even though signing follows the new one.
+accountManager.active$.subscribe(() => {
+  (hub as unknown as { _context?: unknown })._context = undefined;
+});
 
 /**
  * Publishes a Nostr event to specific relays
