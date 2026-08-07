@@ -26,7 +26,12 @@ import {
   type OriginIdentity,
   type RelayPoolLike,
 } from "@kehto/shell";
-import { createThemeService, createConfigService } from "@kehto/services";
+import {
+  createThemeService,
+  createConfigService,
+  createKeysService,
+  createIdentityService,
+} from "@kehto/services";
 import {
   resolveNapplet,
   fetchBlob,
@@ -48,6 +53,7 @@ import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
+import { getProfileContent } from "applesauce-core/helpers";
 import { selectRelaysForFilter } from "./relay-selection";
 import { requestEvent } from "@/lib/relay-subscription";
 import {
@@ -67,22 +73,31 @@ export type { NappletLookupErrorCode } from "@/lib/napplet-parser";
 export type { ShellEnvironment, OriginIdentity, NapTheme };
 
 /**
- * Domains this shell exposes to napplets.
+ * Domains this shell refuses to advertise.
  *
- * Kehto advertises `RUNTIME_NATIVE_DOMAINS` (relay, identity, storage, inc,
- * theme, keys, media, notify) unconditionally, so restricting the surface means
- * naming everything we do NOT want in `capabilities.disabledDomains`. v1 keeps
- * only `theme` and `config` — nothing that discloses the user's identity, keys,
- * or relays.
+ * Kehto advertises all of `RUNTIME_NATIVE_DOMAINS` unconditionally, so
+ * restricting the surface means naming what we do NOT back. Advertising a
+ * domain we cannot honour is worse than withholding it — `notify` in
+ * particular answers `notify.send` with a fabricated id and
+ * `notify.permission.request` with `granted: true` when no service is
+ * registered, i.e. it lies that delivery succeeded.
+ *
+ * `relay` stays off until the signer is wrapped with a destructive-kind
+ * prompt: `relay:write` reaches `getSigner().signEvent` and the runtime has no
+ * consent gate of its own on that path.
  */
-const DISABLED_DOMAINS = [
-  "relay",
-  "identity",
-  "storage",
-  "inc",
-  "keys",
-  "media",
-  "notify",
+const DISABLED_DOMAINS = ["relay", "notify"] as const;
+
+/**
+ * Chords grimoire owns. A napplet holding `keys:forward` can synthesize
+ * host-level keystrokes, so the command palette and workspace switches must
+ * not be bindable or drivable from inside a frame.
+ */
+const RESERVED_CHORDS = [
+  "Cmd+K",
+  "Ctrl+K",
+  ...Array.from({ length: 9 }, (_, i) => `Cmd+${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `Ctrl+${i + 1}`),
 ] as const;
 
 /** Config snapshot handed to napplets. Non-sensitive, shell-owned, read-only. */
@@ -134,6 +149,7 @@ function adaptRelayPool(): RelayPoolLike {
 }
 
 let themeService: ReturnType<typeof createThemeService> | null = null;
+let keysService: ReturnType<typeof createKeysService> | null = null;
 
 function buildAdapter(): ShellAdapter {
   themeService = createThemeService({
@@ -144,6 +160,30 @@ function buildAdapter(): ShellAdapter {
 
   const configService = createConfigService({
     getValues: () => readConfigValues(),
+  });
+
+  // No onForward: a napplet must not be able to drive grimoire's own hotkey
+  // table. The service still answers registerAction/bindings so napplets can
+  // own chords inside their own frame.
+  keysService = createKeysService({
+    reservedChords: RESERVED_CHORDS,
+  });
+
+  const identityService = createIdentityService({
+    getSigner: () => accountManager.active ?? null,
+    getProfile: (pubkey) => {
+      if (!pubkey) return null;
+      const event = defaultEventStore.getReplaceable(0, pubkey);
+      return event ? (getProfileContent(event) ?? null) : null;
+    },
+    getFollows: (pubkey) => {
+      if (!pubkey) return [];
+      const event = defaultEventStore.getReplaceable(3, pubkey);
+      if (!event) return [];
+      return event.tags
+        .filter((t) => t[0] === "p" && t[1]?.length === 64)
+        .map((t) => t[1]);
+    },
   });
 
   return {
@@ -190,6 +230,8 @@ function buildAdapter(): ShellAdapter {
     services: {
       theme: themeService.handler,
       config: configService.handler,
+      keys: keysService,
+      identity: identityService,
     },
     onAclCheck: (event) => {
       // Both allows and denials arrive here. Denials are the interesting half:
@@ -280,10 +322,12 @@ export function destroyNappletBridge(): void {
   persistFirewall(bridge.runtime.firewallState);
   window.removeEventListener("message", bridge.handleMessage);
   bridge.destroy();
+  keysService?.destroy();
   originRegistry.clear();
   bridge = null;
   adapter = null;
   themeService = null;
+  keysService = null;
 }
 
 /** Resolve the frozen per-frame environment for a verified identity. */
