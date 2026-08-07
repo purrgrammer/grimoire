@@ -180,6 +180,13 @@ before it.
 Never hand-roll "collect events until EOSE, with a timeout" again — that's what
 `requestEvents()` is for.
 
+**Nothing consumes `authRequiredForRead$` / `authRequiredForPublish$` yet.** A
+relay that answers a REQ with `auth-required` but never sends a NIP-42 `AUTH`
+frame emits no EVENT, EOSE, CLOSED or ERROR — it just blocks. The auth prompt
+fires off `challenge$`, so that case produces no prompt and the read looks
+complete-but-empty once the EOSE backstop fires. See issue #273 before adding
+anything that assumes a silent relay is a finished one.
+
 **Streaming chat is a known follow-up.** The chat adapters withhold all messages
 until EOSE, which was measured at ~6.8s on a live relay while events arrive from
 ~830ms. Rendering as they stream is better, but it isn't a matter of deleting the
