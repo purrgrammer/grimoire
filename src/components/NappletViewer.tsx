@@ -243,7 +243,7 @@ function NappletFrame({
           <>
             <UserName pubkey={resolved.manifestEvent.pubkey} />
             <KindBadge kind={resolved.manifestEvent.kind} variant="compact" />
-            <NIPBadge nipNumber="5D" />
+            <NIPBadge nipNumber="5D" showName={false} />
             <Timestamp timestamp={resolved.manifestEvent.created_at} />
             <span
               className="font-mono text-muted-foreground"

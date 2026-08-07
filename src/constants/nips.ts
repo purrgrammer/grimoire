@@ -107,6 +107,7 @@ export const VALID_NIPS = [
   "99",
   // Hexadecimal NIPs
   "5A",
+  "5D",
   "7D",
   "A0",
   "A4",
@@ -210,6 +211,7 @@ export const NIP_TITLES: Record<string, string> = {
   "98": "HTTP Auth",
   "99": "Classified Listings",
   "5A": "Static Websites (nsites)",
+  "5D": "Nostr Web Applets (napplets)",
   A0: "Voice Messages",
   A4: "Public Messages",
   B0: "Web Bookmarks",

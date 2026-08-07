@@ -22,6 +22,7 @@ import {
   Flag,
   AlertCircle,
   Globe,
+  Boxes,
   Server,
   Database,
   Eye,
@@ -498,6 +499,12 @@ export const NIP_METADATA: Record<string, NIPInfo> = {
     name: "Static Websites",
     description: "Static Websites (nsites)",
     icon: Globe,
+  },
+  "5D": {
+    id: "5D",
+    name: "Web Applets",
+    description: "Nostr Web Applets (napplets)",
+    icon: Boxes,
   },
   "7D": {
     id: "7D",

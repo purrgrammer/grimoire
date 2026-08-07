@@ -31,6 +31,7 @@ import {
   GitBranch,
   GitMerge,
   Globe,
+  Boxes,
   GitPullRequest,
   GraduationCap,
   BookHeart,
@@ -702,6 +703,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     nip: "5A",
     icon: Globe,
   },
+  5129: {
+    kind: 5129,
+    name: "Napplet Snapshot",
+    description: "Napplet manifest snapshot",
+    nip: "5D",
+    icon: Boxes,
+  },
 
   // Cashu
   7374: {
@@ -1080,6 +1088,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Membership Lists",
     nip: "43",
     icon: Users,
+  },
+  15129: {
+    kind: 15129,
+    name: "Napplet Manifest",
+    description: "Root napplet manifest",
+    nip: "5D",
+    icon: Boxes,
   },
   15128: {
     kind: 15128,
@@ -1707,6 +1722,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Named nsite manifest",
     nip: "5A",
     icon: Globe,
+  },
+  35129: {
+    kind: 35129,
+    name: "Named Napplet",
+    description: "Named napplet manifest",
+    nip: "5D",
+    icon: Boxes,
   },
   36787: {
     kind: 36787,

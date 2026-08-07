@@ -203,6 +203,11 @@ import {
   NsiteLegacyRenderer,
   NsiteSnapshotRenderer,
 } from "./NsiteRenderer";
+import {
+  NappletRootRenderer,
+  NappletNamedRenderer,
+  NappletSnapshotRenderer,
+} from "./NappletRenderer";
 import { ScrollRenderer, ScrollDetailRenderer } from "./ScrollRenderer";
 import {
   FavoriteScrollsRenderer,
@@ -214,6 +219,11 @@ import {
   NsiteLegacyDetailRenderer,
   NsiteSnapshotDetailRenderer,
 } from "./NsiteDetailRenderer";
+import {
+  NappletRootDetailRenderer,
+  NappletNamedDetailRenderer,
+  NappletSnapshotDetailRenderer,
+} from "./NappletDetailRenderer";
 import { ColorMomentRenderer } from "./ColorMomentRenderer";
 import { ColorMomentDetailRenderer } from "./ColorMomentDetailRenderer";
 
@@ -286,7 +296,9 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10777: FavoriteSpellsRenderer, // Favorite Spells (Grimoire)
   13534: RelayMembersRenderer, // Relay Members (NIP-43)
   5128: NsiteSnapshotRenderer, // Nsite Manifest Snapshot (NIP-5A)
+  5129: NappletSnapshotRenderer, // Napplet Manifest Snapshot (NIP-5D)
   15128: NsiteRootRenderer, // Root Nsite Manifest (NIP-5A)
+  15129: NappletRootRenderer, // Root Napplet Manifest (NIP-5D)
   30000: FollowSetRenderer, // Follow Sets (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
   30003: BookmarkSetRenderer, // Bookmark Sets (NIP-51)
@@ -320,6 +332,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   36787: MusicTrackRenderer, // Music Track
   34128: NsiteLegacyRenderer, // Legacy Nsite (NIP-5A, deprecated)
   35128: NsiteNamedRenderer, // Named Nsite Manifest (NIP-5A)
+  35129: NappletNamedRenderer, // Named Napplet Manifest (NIP-5D)
   30617: RepositoryRenderer, // Repository (NIP-34)
   30618: RepositoryStateRenderer, // Repository State (NIP-34)
   30777: SpellbookRenderer, // Spellbook (Grimoire)
@@ -436,7 +449,9 @@ const detailRenderers: Record<
   10777: FavoriteSpellsDetailRenderer, // Favorite Spells Detail (Grimoire)
   13534: RelayMembersDetailRenderer, // Relay Members Detail (NIP-43)
   5128: NsiteSnapshotDetailRenderer, // Nsite Manifest Snapshot Detail (NIP-5A)
+  5129: NappletSnapshotDetailRenderer, // Napplet Manifest Snapshot Detail (NIP-5D)
   15128: NsiteRootDetailRenderer, // Root Nsite Manifest Detail (NIP-5A)
+  15129: NappletRootDetailRenderer, // Root Napplet Manifest Detail (NIP-5D)
   30000: FollowSetDetailRenderer, // Follow Sets Detail (NIP-51)
   30003: BookmarkSetDetailRenderer, // Bookmark Sets Detail (NIP-51)
   30004: ArticleCurationSetDetailRenderer, // Article Curation Sets Detail (NIP-51)
@@ -462,6 +477,7 @@ const detailRenderers: Record<
   30385: TrustedAssertionDetailRenderer, // External Assertion Detail (NIP-85)
   34128: NsiteLegacyDetailRenderer, // Legacy Nsite Detail (NIP-5A, deprecated)
   35128: NsiteNamedDetailRenderer, // Named Nsite Detail (NIP-5A)
+  35129: NappletNamedDetailRenderer, // Named Napplet Detail (NIP-5D)
   30617: RepositoryDetailRenderer, // Repository Detail (NIP-34)
   30618: RepositoryStateDetailRenderer, // Repository State Detail (NIP-34)
   30777: SpellbookDetailRenderer, // Spellbook Detail (Grimoire)
