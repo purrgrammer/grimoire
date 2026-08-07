@@ -1,71 +1,150 @@
 /**
- * ACL and firewall policy plumbing for the napplet runtime.
+ * ACL policy and durable capability decisions for the napplet runtime.
  *
- * Two Kehto gaps are worked around here, both without forking the shell layer:
+ * Three Kehto behaviours shape this, none of them optional to work around:
  *
  *  1. `createRuntime` hardcodes `createAclState(persistence, 'permissive')` and
- *     never exposes the policy argument. But it *does* call `aclState.load()`
- *     during init, and `deserialize` honours a persisted
- *     `defaultPolicy: "restrictive"`. So seeding the store before the bridge is
- *     constructed is enough to bring the whole container up restrictive.
+ *     never exposes the policy argument — but it does call `aclState.load()`
+ *     during init, and `deserialize` honours a persisted `defaultPolicy`. So
+ *     seeding the store before the bridge is built brings the container up
+ *     restrictive without forking the shell layer.
  *
- *  2. `adaptHooks` never supplies `firewallPersistence`, so the runtime's
- *     `firewallState.persist()`/`load()` are silent no-ops and every policy
- *     decision — including remembered consent answers — evaporates on reload.
- *     The container's getters and setters *are* reachable via
- *     `bridge.runtime.firewallState`, so we snapshot and replay it ourselves.
+ *  2. `aclState.persist()` serializes the *whole* live state, and
+ *     `runtime.destroy()` calls it unconditionally. Anything granted for a
+ *     single operation would therefore land on disk and outlive the session —
+ *     making the "Remember my choice" checkbox decorative on the Allow path.
+ *     So Kehto's store is never trusted as the source of truth: we keep our own
+ *     record of remembered decisions, wipe Kehto's blob on every boot, and
+ *     replay only what the user actually chose to remember.
+ *
+ *  3. `adaptHooks` never supplies `firewallPersistence`, so the runtime's
+ *     firewall `persist()`/`load()` are no-ops. The container's setters are
+ *     reachable via `bridge.runtime.firewallState`, so we drive them ourselves.
  */
 
 import type { AclStateContainer, FirewallStateContainer } from "@kehto/runtime";
+import type { Capability } from "@kehto/shell";
 
 /** The key `adaptHooks`' built-in ACL persistence reads and writes. */
 const ACL_STORAGE_KEY = "napplet:acl";
 
-/** Our own key — the firewall config Kehto declines to persist. */
+/** Our own record of what the user chose to remember. The real source of truth. */
+const DECISIONS_STORAGE_KEY = "napplet:decisions";
+
 const FIREWALL_STORAGE_KEY = "napplet:firewall";
 
-interface SerializedAcl {
-  defaultPolicy: "permissive" | "restrictive";
-  entries: Record<string, unknown>;
+/** An empty restrictive state — what Kehto's store is always reset to. */
+const EMPTY_RESTRICTIVE = JSON.stringify({
+  defaultPolicy: "restrictive",
+  entries: {},
+});
+
+export interface NappletDecision {
+  dTag: string;
+  aggregateHash: string;
+  capability: string;
+  allowed: boolean;
+}
+
+type DecisionMap = Record<string, NappletDecision>;
+
+export function decisionKey(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): string {
+  return `${dTag}:${aggregateHash}:${capability}`;
+}
+
+function readDecisions(): DecisionMap {
+  try {
+    const raw = localStorage.getItem(DECISIONS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as DecisionMap;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDecisions(decisions: DecisionMap): void {
+  try {
+    localStorage.setItem(DECISIONS_STORAGE_KEY, JSON.stringify(decisions));
+  } catch {
+    // Failing to remember is safe: the user is asked again.
+  }
+}
+
+/** Every remembered decision, for the permissions UI. */
+export function getNappletDecisions(): NappletDecision[] {
+  return Object.values(readDecisions());
+}
+
+/** Look up a remembered decision, if the user made one. */
+export function getNappletDecision(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): NappletDecision | undefined {
+  return readDecisions()[decisionKey(dTag, aggregateHash, capability)];
+}
+
+/** Record a remembered allow or deny. */
+export function rememberNappletDecision(decision: NappletDecision): void {
+  const decisions = readDecisions();
+  decisions[
+    decisionKey(decision.dTag, decision.aggregateHash, decision.capability)
+  ] = decision;
+  writeDecisions(decisions);
+}
+
+/** Forget one decision. The napplet will be asked again next time. */
+export function forgetNappletDecision(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): void {
+  const decisions = readDecisions();
+  delete decisions[decisionKey(dTag, aggregateHash, capability)];
+  writeDecisions(decisions);
+}
+
+/** Forget every decision for one napplet version. */
+export function forgetNappletDecisions(
+  dTag: string,
+  aggregateHash: string,
+): void {
+  const decisions = readDecisions();
+  for (const [key, decision] of Object.entries(decisions)) {
+    if (decision.dTag === dTag && decision.aggregateHash === aggregateHash) {
+      delete decisions[key];
+    }
+  }
+  writeDecisions(decisions);
 }
 
 /**
- * Ensure the persisted ACL state is restrictive before the runtime loads it.
+ * Reset Kehto's ACL blob to an empty restrictive state.
  *
- * Must run before `createShellBridge`. Under a permissive policy the first
- * `grant()` on a fresh napplet calls `ensureRuntimeDefaultEntry`, which grants
- * `RUNTIME_CAP_ALL` before applying the requested capability — so prompting for
- * one capability would silently hand over every capability. Flipping the
- * default is a precondition for consent, not a hardening extra.
+ * Called before the bridge is built and again after it is destroyed. The
+ * runtime persists its whole live state on destroy, which would otherwise turn
+ * every one-shot grant into a durable one.
  */
-export function seedRestrictiveAcl(): void {
-  let existing: SerializedAcl | null = null;
+export function resetKehtoAclStore(): void {
   try {
-    const raw = localStorage.getItem(ACL_STORAGE_KEY);
-    if (raw) existing = JSON.parse(raw) as SerializedAcl;
+    localStorage.setItem(ACL_STORAGE_KEY, EMPTY_RESTRICTIVE);
   } catch {
-    // A corrupt blob is replaced below rather than trusted.
+    // If this throws the store is unwritable, so nothing can leak to disk.
   }
-
-  if (existing?.defaultPolicy === "restrictive" && existing.entries) return;
-
-  const seeded: SerializedAcl = {
-    defaultPolicy: "restrictive",
-    // Existing grants were made under a permissive default, where the first
-    // grant silently widened to every capability. They cannot be trusted, so
-    // they are dropped rather than migrated.
-    entries: {},
-  };
-  localStorage.setItem(ACL_STORAGE_KEY, JSON.stringify(seeded));
 }
 
 /**
  * Confirm the restrictive policy actually took effect.
  *
  * `deserialize` fails open: any parse failure, and the `catch` inside
- * `aclState.load()`, both fall back to `createState('permissive')`. A silent
- * fallback would mean every napplet gets every capability, so this probes a
- * capability no napplet has been granted and reports whether it was allowed.
+ * `aclState.load()`, both fall back to `createState('permissive')`. Probing a
+ * capability no real napplet identity can hold turns a silent fallback into a
+ * loud one.
  */
 export function isAclRestrictive(acl: AclStateContainer): boolean {
   return !acl.check(
@@ -76,16 +155,33 @@ export function isAclRestrictive(acl: AclStateContainer): boolean {
   );
 }
 
+/**
+ * Replay remembered allows into the freshly-loaded ACL state.
+ *
+ * Denials are deliberately not replayed as ACL state: under a restrictive
+ * default, "not granted" already means denied. They are consulted by the
+ * consent layer purely to avoid re-asking.
+ */
+export function replayRememberedGrants(acl: AclStateContainer): void {
+  for (const decision of getNappletDecisions()) {
+    if (!decision.allowed) continue;
+    acl.grant(
+      "",
+      decision.dTag,
+      decision.aggregateHash,
+      decision.capability as Capability,
+    );
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Firewall persistence                                                       */
 /* -------------------------------------------------------------------------- */
 
 /**
- * The replayable slice of a `FirewallConfig`.
- *
- * `burstGuard`, `defaultRate` and `unfocusedMultiplier` are global defaults
- * with no setters on the container, so they are neither saved nor restored —
- * we never change them.
+ * The replayable slice of a `FirewallConfig`. `burstGuard`, `defaultRate` and
+ * `unfocusedMultiplier` are global defaults with no container setters, so they
+ * are neither saved nor restored.
  */
 interface PersistedFirewall {
   napplets: Record<
@@ -109,16 +205,14 @@ export function persistFirewall(firewall: FirewallStateContainer): void {
     };
     localStorage.setItem(FIREWALL_STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
-    // Losing firewall state degrades tuning, never safety — the ACL is the gate.
+    // Losing firewall state degrades rate tuning, never the ACL gate.
   }
 }
 
 /**
- * Replay a persisted firewall config through the container's setters.
- *
- * There is no whole-config setter, so each per-napplet rule and matcher is
- * re-applied individually. Counters are deliberately not restored: a reload
- * should not carry a napplet's spent rate budget with it.
+ * Replay a persisted firewall config through the container's setters. Counters
+ * are deliberately not restored — a reload should not carry a napplet's spent
+ * rate budget with it.
  */
 export function restoreFirewall(firewall: FirewallStateContainer): void {
   let snapshot: PersistedFirewall | null = null;

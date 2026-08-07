@@ -22,7 +22,13 @@ import {
   onNappletAclCheck,
   type AclCheckEvent,
 } from "./napplet-host";
-import { persistFirewall } from "./napplet-acl";
+import {
+  rememberNappletDecision,
+  getNappletDecision,
+  getNappletDecisions,
+  forgetNappletDecision,
+  forgetNappletDecisions,
+} from "./napplet-acl";
 
 export interface NappletConsentRequest {
   key: string;
@@ -30,8 +36,24 @@ export interface NappletConsentRequest {
   dTag: string;
   aggregateHash: string;
   capability: string;
-  /** Human title from the verified manifest, when the frame registered one. */
+  /**
+   * Title from the manifest. Signed by the author, but author-chosen — treat it
+   * as a label, never as proof of who is asking. `pubkey` is the identity that
+   * actually verified.
+   */
   title: string;
+  pubkey: string;
+}
+
+/** A signing confirmation, resolved by the user answering the prompt. */
+export interface NappletSigningRequest {
+  key: string;
+  summary: string;
+  detail: string;
+  /** Best-effort attribution — see `noteRelayWriteAllowed`. */
+  title?: string;
+  pubkey?: string;
+  resolve: (allowed: boolean) => void;
 }
 
 /** What a capability actually lets a napplet do, in the user's terms. */
@@ -64,6 +86,7 @@ interface RegisteredIdentity {
   dTag: string;
   aggregateHash: string;
   title: string;
+  pubkey: string;
 }
 
 const identities = new Map<string, RegisteredIdentity>();
@@ -128,6 +151,7 @@ function handleDenial(event: AclCheckEvent): void {
   // to reload after granting, so asking would be pointless.
   let windowId: string | undefined;
   let title = event.identity.dTag;
+  let pubkey = "";
   for (const [id, identity] of identities) {
     if (
       identity.dTag === event.identity.dTag &&
@@ -135,10 +159,22 @@ function handleDenial(event: AclCheckEvent): void {
     ) {
       windowId = id;
       title = identity.title;
+      pubkey = identity.pubkey;
       break;
     }
   }
   if (!windowId) return;
+
+  // A remembered deny means never ask again for this exact version.
+  const remembered = getNappletDecision(
+    event.identity.dTag,
+    event.identity.hash,
+    event.capability,
+  );
+  if (remembered && !remembered.allowed) {
+    settled.add(key);
+    return;
+  }
 
   pending.set(key, {
     key,
@@ -147,6 +183,7 @@ function handleDenial(event: AclCheckEvent): void {
     aggregateHash: event.identity.hash,
     capability: event.capability,
     title,
+    pubkey,
   });
   emit();
 }
@@ -184,7 +221,17 @@ export function allowNappletCapability(
     request.aggregateHash,
     request.capability as Parameters<typeof bridge.runtime.aclState.grant>[3],
   );
-  if (remember) bridge.runtime.aclState.persist();
+  // Never call aclState.persist(): it serializes the whole live state, which
+  // would make an un-remembered grant durable. Remembering is recorded in our
+  // own store and replayed on the next boot instead.
+  if (remember) {
+    rememberNappletDecision({
+      dTag: request.dTag,
+      aggregateHash: request.aggregateHash,
+      capability: request.capability,
+      allowed: true,
+    });
+  }
   resolve(request);
   reloadListeners.forEach((listener) => listener(request.windowId));
 }
@@ -192,17 +239,145 @@ export function allowNappletCapability(
 /**
  * Refuse the capability.
  *
- * Remembering writes a firewall `deny` policy for the napplet's dTag, which is
- * version-agnostic — the deny survives an update, unlike a grant.
+ * A remembered deny is recorded as a decision, not as a firewall policy. The
+ * firewall keys on dTag alone — version-agnostic and author-agnostic — so
+ * `setPolicy(dTag, 'deny')` would permanently brick every napplet anyone
+ * publishes under that identifier, and it rejects every operation rather than
+ * the one capability that was refused. Under a restrictive default, simply not
+ * granting is the whole deny; the record just stops us asking again.
  */
 export function denyNappletCapability(
   request: NappletConsentRequest,
   remember: boolean,
 ): void {
   if (remember) {
-    const bridge = getNappletBridge();
-    bridge.runtime.firewallState.setPolicy(request.dTag, "deny");
-    persistFirewall(bridge.runtime.firewallState);
+    rememberNappletDecision({
+      dTag: request.dTag,
+      aggregateHash: request.aggregateHash,
+      capability: request.capability,
+      allowed: false,
+    });
   }
   resolve(request);
+}
+
+/**
+ * Take a permission back.
+ *
+ * Forgetting the stored decision only stops it being replayed next boot — the
+ * bridge outlives individual frames, so the live ACL state still holds the
+ * grant. Revoke there too, and clear the session dedupe so the napplet can ask
+ * again rather than silently failing.
+ */
+export function revokeNappletCapability(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): void {
+  const bridge = getNappletBridge();
+  bridge.runtime.aclState.revoke(
+    "",
+    dTag,
+    aggregateHash,
+    capability as Parameters<typeof bridge.runtime.aclState.revoke>[3],
+  );
+  forgetNappletDecision(dTag, aggregateHash, capability);
+  settled.delete(`${dTag}:${aggregateHash}:${capability}`);
+}
+
+/** Take back every remembered permission for one napplet version. */
+export function revokeAllNappletCapabilities(
+  dTag: string,
+  aggregateHash: string,
+): void {
+  for (const decision of getNappletDecisions()) {
+    if (decision.dTag !== dTag || decision.aggregateHash !== aggregateHash) {
+      continue;
+    }
+    const bridge = getNappletBridge();
+    bridge.runtime.aclState.revoke(
+      "",
+      dTag,
+      aggregateHash,
+      decision.capability as Parameters<
+        typeof bridge.runtime.aclState.revoke
+      >[3],
+    );
+    settled.delete(`${dTag}:${aggregateHash}:${decision.capability}`);
+  }
+  forgetNappletDecisions(dTag, aggregateHash);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Signing confirmations                                                      */
+/* -------------------------------------------------------------------------- */
+
+const signingRequests = new Map<string, NappletSigningRequest>();
+const signingListeners = new Set<(r: NappletSigningRequest[]) => void>();
+let signingCounter = 0;
+
+/**
+ * Best-effort attribution for signing prompts.
+ *
+ * `auth.getSigner()` takes no window context, so the signer cannot know which
+ * napplet is asking. The ACL check for `relay:write` happens synchronously
+ * immediately before the publish path calls it, so the last window to pass that
+ * check is the caller in practice. Stale entries are discarded rather than
+ * shown, so a wrong name is never displayed — only a missing one.
+ */
+let lastWriter: { title: string; pubkey: string; at: number } | null = null;
+const WRITER_ATTRIBUTION_WINDOW_MS = 2000;
+
+export function noteRelayWriteAllowed(dTag: string, hash: string): void {
+  for (const identity of identities.values()) {
+    if (identity.dTag === dTag && identity.aggregateHash === hash) {
+      lastWriter = {
+        title: identity.title,
+        pubkey: identity.pubkey,
+        at: Date.now(),
+      };
+      return;
+    }
+  }
+}
+
+function emitSigning(): void {
+  const snapshot = [...signingRequests.values()];
+  signingListeners.forEach((listener) => listener(snapshot));
+}
+
+export function subscribeNappletSigning(
+  listener: (requests: NappletSigningRequest[]) => void,
+): () => void {
+  signingListeners.add(listener);
+  listener([...signingRequests.values()]);
+  return () => signingListeners.delete(listener);
+}
+
+/** Ask the user to confirm a signing operation. Resolves false on refusal. */
+export function requestSigningConsent(input: {
+  summary: string;
+  detail: string;
+}): Promise<boolean> {
+  const attribution =
+    lastWriter && Date.now() - lastWriter.at < WRITER_ATTRIBUTION_WINDOW_MS
+      ? lastWriter
+      : null;
+
+  return new Promise<boolean>((resolveConsent) => {
+    const key = `sign-${++signingCounter}`;
+    signingRequests.set(key, {
+      key,
+      summary: input.summary,
+      detail: input.detail,
+      title: attribution?.title,
+      pubkey: attribution?.pubkey,
+      resolve: (allowed) => {
+        signingRequests.delete(key);
+        emitSigning();
+        resolveConsent(allowed);
+      },
+    });
+    emitSigning();
+  });
 }

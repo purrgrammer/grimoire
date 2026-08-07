@@ -43,14 +43,16 @@ import type { Theme as NapTheme } from "@napplet/nap/theme/types";
 import type { Theme as GrimoireTheme } from "@/lib/themes";
 
 import {
-  seedRestrictiveAcl,
+  resetKehtoAclStore,
   isAclRestrictive,
+  replayRememberedGrants,
   persistFirewall,
   restoreFirewall,
 } from "./napplet-acl";
 import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
+import { createNappletSigner } from "./napplet-signer";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
 import { getProfileContent } from "applesauce-core/helpers";
@@ -148,6 +150,8 @@ function adaptRelayPool(): RelayPoolLike {
   };
 }
 
+const nappletSigner = createNappletSigner();
+
 let themeService: ReturnType<typeof createThemeService> | null = null;
 let keysService: ReturnType<typeof createKeysService> | null = null;
 
@@ -170,7 +174,7 @@ function buildAdapter(): ShellAdapter {
   });
 
   const identityService = createIdentityService({
-    getSigner: () => accountManager.active ?? null,
+    getSigner: () => (accountManager.active ? nappletSigner : null),
     getProfile: (pubkey) => {
       if (!pubkey) return null;
       const event = defaultEventStore.getReplaceable(0, pubkey);
@@ -212,7 +216,9 @@ function buildAdapter(): ShellAdapter {
     windowManager: { createWindow: () => null },
     auth: {
       getUserPubkey: () => accountManager.active?.pubkey ?? null,
-      getSigner: () => accountManager.active ?? null,
+      // Never hand a napplet the raw account signer: the runtime has no
+      // consent gate on relay.publish or relay.publishEncrypted.
+      getSigner: () => (accountManager.active ? nappletSigner : null),
     },
     config: { getNappUpdateBehavior: () => "banner" },
     hotkeys: { executeHotkeyFromForward: () => {} },
@@ -236,6 +242,11 @@ function buildAdapter(): ShellAdapter {
     onAclCheck: (event) => {
       // Both allows and denials arrive here. Denials are the interesting half:
       // under a restrictive default they are how a missing grant surfaces.
+      if (event.decision === "allow" && event.capability === "relay:write") {
+        void import("./napplet-consent").then((m) =>
+          m.noteRelayWriteAllowed(event.identity.dTag, event.identity.hash),
+        );
+      }
       if (event.decision === "deny") {
         // `reason` is sent by @kehto/runtime 0.21 but absent from
         // @kehto/shell 0.19's AclCheckEvent type — package version drift.
@@ -282,8 +293,10 @@ export function getNappletBridge(): ShellBridge {
 
   // Must precede createShellBridge: createRuntime calls aclState.load() during
   // init, and that load is the only reachable way to install a restrictive
-  // default policy.
-  seedRestrictiveAcl();
+  // default policy. Resetting unconditionally also discards whatever the
+  // previous session's runtime.destroy() persisted — the live state includes
+  // one-shot grants that must not survive a reload.
+  resetKehtoAclStore();
 
   adapter = buildAdapter();
   bridge = createShellBridge(adapter);
@@ -299,6 +312,8 @@ export function getNappletBridge(): ShellBridge {
     );
   }
 
+  // Only decisions the user chose to remember are reinstated.
+  replayRememberedGrants(bridge.runtime.aclState);
   restoreFirewall(bridge.runtime.firewallState);
 
   window.addEventListener("message", bridge.handleMessage);
@@ -322,6 +337,9 @@ export function destroyNappletBridge(): void {
   persistFirewall(bridge.runtime.firewallState);
   window.removeEventListener("message", bridge.handleMessage);
   bridge.destroy();
+  // runtime.destroy() persists the whole live ACL state, one-shot grants
+  // included. Scrub it; remembered decisions live in our own store.
+  resetKehtoAclStore();
   keysService?.destroy();
   originRegistry.clear();
   bridge = null;

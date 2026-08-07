@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
+import { NappletPermissions } from "@/components/NappletPermissions";
 import { useTheme } from "@/lib/themes";
 import { useCopy } from "@/hooks/useCopy";
 import { getMissingRequiredNaps } from "@/lib/napplet-parser";
@@ -209,6 +210,7 @@ function NappletFrame({
         dTag: view.identity.dTag,
         aggregateHash: view.identity.aggregateHash,
         title: view.title || view.identity.dTag || "Napplet",
+        pubkey: view.manifestEvent.pubkey,
       });
 
       const register = () => {
@@ -275,6 +277,15 @@ function NappletFrame({
         )}
 
         <div className="flex flex-shrink-0 items-center gap-3">
+          {resolved && (
+            <NappletPermissions
+              dTag={resolved.identity.dTag}
+              aggregateHash={resolved.identity.aggregateHash}
+              // Forgetting a grant only takes effect on a fresh run — the
+              // runtime's live ACL state still holds it.
+              onChanged={onReload}
+            />
+          )}
           {resolved && (
             <button
               onClick={() => copy(resolved.identity.aggregateHash)}
