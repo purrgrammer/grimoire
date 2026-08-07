@@ -18,11 +18,18 @@ import { getMissingRequiredNaps } from "@/lib/napplet-parser";
 import type { AddressPointer, EventPointer } from "@/lib/open-parser";
 import type { NostrEvent } from "@/types/nostr";
 import {
+  registerNappletIdentity,
+  unregisterNappletIdentity,
+  startNappletConsent,
+  subscribeNappletReload,
+} from "@/services/napplet-consent";
+import {
   fetchManifestEvent,
   getNappletBridge,
   getNappletEnvironment,
   injectCspMeta,
   injectNappletNamespacePrelude,
+  destroyNappletWindow,
   originRegistry,
   publishNappletTheme,
   toNapTheme,
@@ -98,6 +105,14 @@ export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
   const key = useMemo(() => pointerKey(pointer), [pointer]);
 
+  // Granting a capability only takes effect on a fresh run — the ACL is
+  // consulted synchronously and the napplet has already been refused once.
+  useEffect(() => {
+    return subscribeNappletReload((reloadedWindowId) => {
+      if (reloadedWindowId === windowId) reload();
+    });
+  }, [windowId, reload]);
+
   return (
     <NappletFrame
       key={`${key}:${reloadNonce}`}
@@ -132,6 +147,7 @@ function NappletFrame({
         // Create the bridge before any frame exists so the message listener is
         // installed by the time a napplet posts shell.ready.
         getNappletBridge();
+        startNappletConsent();
         manifest = await fetchManifestEvent(pointer);
         if (cancelled.current) return;
         setStage("resolving");
@@ -189,6 +205,12 @@ function NappletFrame({
       frame.title = view.title ?? view.identity.dTag ?? "Napplet";
       container.appendChild(frame);
 
+      registerNappletIdentity(windowId, {
+        dTag: view.identity.dTag,
+        aggregateHash: view.identity.aggregateHash,
+        title: view.title || view.identity.dTag || "Napplet",
+      });
+
       const register = () => {
         if (!frame?.contentWindow) return;
         originRegistry.register(frame.contentWindow, windowId, view.identity);
@@ -215,7 +237,8 @@ function NappletFrame({
 
     return () => {
       cancelled.current = true;
-      originRegistry.unregister(windowId);
+      unregisterNappletIdentity(windowId);
+      destroyNappletWindow(windowId);
       if (frame) {
         if (onLoad) frame.removeEventListener("load", onLoad);
         frame.src = "about:blank";

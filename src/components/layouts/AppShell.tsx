@@ -12,6 +12,7 @@ import { TabBar } from "../TabBar";
 import { CallAudioHost } from "../call/CallAudioHost";
 import CommandLauncher from "../CommandLauncher";
 import { GlobalAuthPrompt } from "../GlobalAuthPrompt";
+import { GlobalNappletConsent } from "../GlobalNappletConsent";
 import { SpellbookDropdown } from "../SpellbookDropdown";
 import { FavoriteSpellsDropdown } from "../FavoriteSpellsDropdown";
 import { CallPill } from "../call/CallPill";
@@ -77,6 +78,7 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
         onOpenChange={setCommandLauncherOpen}
       />
       <GlobalAuthPrompt />
+      <GlobalNappletConsent />
       <main className="h-dvh w-screen flex flex-col bg-background text-foreground">
         <header className="flex flex-row items-center px-1 border-b border-border">
           <div className="flex-1 flex items-center">

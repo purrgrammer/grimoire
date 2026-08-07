@@ -37,6 +37,12 @@ import {
 import type { Theme as NapTheme } from "@napplet/nap/theme/types";
 import type { Theme as GrimoireTheme } from "@/lib/themes";
 
+import {
+  seedRestrictiveAcl,
+  isAclRestrictive,
+  persistFirewall,
+  restoreFirewall,
+} from "./napplet-acl";
 import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
@@ -185,6 +191,20 @@ function buildAdapter(): ShellAdapter {
       theme: themeService.handler,
       config: configService.handler,
     },
+    onAclCheck: (event) => {
+      // Both allows and denials arrive here. Denials are the interesting half:
+      // under a restrictive default they are how a missing grant surfaces.
+      if (event.decision === "deny") {
+        // `reason` is sent by @kehto/runtime 0.21 but absent from
+        // @kehto/shell 0.19's AclCheckEvent type — package version drift.
+        const reason =
+          (event as { reason?: string }).reason ?? "capability-missing";
+        console.debug(
+          `[napplet] denied ${event.capability} to "${event.identity.dTag}" (${reason})`,
+        );
+      }
+      aclCheckListeners.forEach((listener) => listener(event));
+    },
     onHashMismatch: (dTag, claimed, computed) =>
       console.warn(
         `[napplet] aggregate mismatch for "${dTag}": claimed ${claimed}, computed ${computed}`,
@@ -197,23 +217,67 @@ function buildAdapter(): ShellAdapter {
 let bridge: ShellBridge | null = null;
 let adapter: ShellAdapter | null = null;
 
+export type AclCheckEvent = Parameters<
+  NonNullable<ShellAdapter["onAclCheck"]>
+>[0];
+
+const aclCheckListeners = new Set<(event: AclCheckEvent) => void>();
+
+/** Observe every ACL decision. Returns an unsubscribe function. */
+export function onNappletAclCheck(
+  listener: (event: AclCheckEvent) => void,
+): () => void {
+  aclCheckListeners.add(listener);
+  return () => aclCheckListeners.delete(listener);
+}
+
 /**
  * The shell bridge, created on first use. The adapter instance must stay
  * stable — every frame freezes its `ShellEnvironment` from it.
  */
 export function getNappletBridge(): ShellBridge {
   if (bridge) return bridge;
+
+  // Must precede createShellBridge: createRuntime calls aclState.load() during
+  // init, and that load is the only reachable way to install a restrictive
+  // default policy.
+  seedRestrictiveAcl();
+
   adapter = buildAdapter();
   bridge = createShellBridge(adapter);
+
+  if (!isAclRestrictive(bridge.runtime.aclState)) {
+    // deserialize() fails open to permissive. Carrying on would mean every
+    // napplet holds every capability, so refuse to run any of them.
+    bridge.destroy();
+    bridge = null;
+    adapter = null;
+    throw new Error(
+      "Napplet ACL failed to initialise as restrictive; refusing to run napplets.",
+    );
+  }
+
+  restoreFirewall(bridge.runtime.firewallState);
+
   window.addEventListener("message", bridge.handleMessage);
   window.addEventListener("pagehide", destroyNappletBridge, { once: true });
   return bridge;
+}
+
+/** Tear down one napplet window. The bridge outlives it. */
+export function destroyNappletWindow(windowId: string): void {
+  // Kehto's ShellBridge has no destroyWindow, so the runtime call and the
+  // registry call are both ours to make. Skipping the first leaks that
+  // window's subscriptions and INC state.
+  bridge?.runtime.destroyWindow(windowId);
+  originRegistry.unregister(windowId);
 }
 
 /** Tear the bridge down. Not called when a napplet window closes — frames are
  * unregistered individually and the bridge outlives them. */
 export function destroyNappletBridge(): void {
   if (!bridge) return;
+  persistFirewall(bridge.runtime.firewallState);
   window.removeEventListener("message", bridge.handleMessage);
   bridge.destroy();
   originRegistry.clear();
