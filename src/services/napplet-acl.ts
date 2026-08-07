@@ -67,12 +67,24 @@ function readDecisions(): DecisionMap {
   }
 }
 
+/**
+ * Anything showing remembered decisions needs to know when they change, or it
+ * snapshots at mount and silently goes stale.
+ */
+const decisionListeners = new Set<() => void>();
+
+export function subscribeNappletDecisions(listener: () => void): () => void {
+  decisionListeners.add(listener);
+  return () => decisionListeners.delete(listener);
+}
+
 function writeDecisions(decisions: DecisionMap): void {
   try {
     localStorage.setItem(DECISIONS_STORAGE_KEY, JSON.stringify(decisions));
   } catch {
     // Failing to remember is safe: the user is asked again.
   }
+  decisionListeners.forEach((listener) => listener());
 }
 
 /** Every remembered decision, for the permissions UI. */

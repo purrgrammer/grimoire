@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
 import {
   getNappletDecisions,
+  subscribeNappletDecisions,
   type NappletDecision,
 } from "@/services/napplet-acl";
 import {
@@ -42,6 +43,9 @@ export function NappletPermissionsViewer() {
   const refresh = useCallback(() => {
     setDecisions(getNappletDecisions());
   }, []);
+
+  // Answers given in another window must show up here without a reopen.
+  useEffect(() => subscribeNappletDecisions(refresh), [refresh]);
 
   // Names come from the launcher's record of what was run, so a revoked
   // napplet is still identifiable rather than a bare d-tag.
