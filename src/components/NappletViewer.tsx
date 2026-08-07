@@ -141,6 +141,10 @@ function NappletFrame({
   const [stage, setStage] = useState<Stage>("fetching-manifest");
   const [error, setError] = useState<NappletError | null>(null);
   const [resolved, setResolved] = useState<ResolvedNappletView | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const { theme } = useTheme();
   const { copied, copy } = useCopy();
 
@@ -160,7 +164,9 @@ function NappletFrame({
         manifest = await fetchManifestEvent(pointer);
         if (cancelled.current) return;
         setStage("resolving");
-        view = await resolveNappletFromEvent(manifest);
+        view = await resolveNappletFromEvent(manifest, (p) => {
+          if (!cancelled.current) setProgress(p);
+        });
       } catch (caught) {
         if (cancelled.current) return;
         const failure = toNappletError(caught);
@@ -380,7 +386,9 @@ function NappletFrame({
               <span>
                 {stage === "fetching-manifest"
                   ? "Fetching manifest…"
-                  : "Verifying files…"}
+                  : progress
+                    ? `Verifying files… ${progress.done}/${progress.total}`
+                    : "Verifying files…"}
               </span>
             </div>
           )}

@@ -71,6 +71,8 @@ import {
 import { createNappletResourceService } from "./napplet-devices";
 import { narrowEnvironment } from "./napplet-capabilities";
 import { toast } from "sonner";
+import { skip } from "rxjs/operators";
+import type { Subscription } from "rxjs";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
 import relayListCache from "./relay-list-cache";
@@ -412,6 +414,7 @@ function buildAdapter(): ShellAdapter {
 
 let bridge: ShellBridge | null = null;
 let adapter: ShellAdapter | null = null;
+let identitySubscription: Subscription | null = null;
 
 export type AclCheckEvent = Parameters<
   NonNullable<ShellAdapter["onAclCheck"]>
@@ -463,6 +466,19 @@ export function getNappletBridge(): ShellBridge {
 
   window.addEventListener("message", bridge.handleMessage);
   window.addEventListener("pagehide", destroyNappletBridge, { once: true });
+
+  // NAP-IDENTITY: "The shell MUST emit identity.changed to loaded napplets
+  // whenever the shell-user identity changes", and with an empty pubkey when it
+  // is cleared. Without this a napplet holding identity:read keeps showing a
+  // stale user after a sign-out or account switch. skip(1) because the
+  // BehaviorSubject replays the current value, which the napplet already gets
+  // from its own identity.getPublicKey at startup.
+  identitySubscription = accountManager.active$
+    .pipe(skip(1))
+    .subscribe((account) =>
+      bridge?.publishIdentityChanged(account?.pubkey ?? ""),
+    );
+
   return bridge;
 }
 
@@ -480,8 +496,12 @@ export function destroyNappletWindow(windowId: string): void {
 export function destroyNappletBridge(): void {
   if (!bridge) return;
   persistFirewall(bridge.runtime.firewallState);
+  identitySubscription?.unsubscribe();
+  identitySubscription = null;
   window.removeEventListener("message", bridge.handleMessage);
   bridge.destroy();
+  keysService?.destroy();
+  keysService = null;
   // runtime.destroy() persists the whole live ACL state, one-shot grants
   // included. Scrub it; remembered decisions live in our own store.
   resetKehtoAclStore();
@@ -589,8 +609,16 @@ async function grimoireFetchBlob(
  * recomputes the NIP-5A aggregate and asserts it matches the `x` tag. Identity
  * is computed here from the verified bytes, never accepted from a caller.
  */
+export interface NappletResolveProgress {
+  /** Blobs verified so far. */
+  done: number;
+  /** Blobs the manifest declares. */
+  total: number;
+}
+
 export async function resolveNappletFromEvent(
   event: NostrEvent,
+  onProgress?: (progress: NappletResolveProgress) => void,
 ): Promise<ResolvedNappletView> {
   const authorServers =
     (await blossomServerCache.getServers(event.pubkey)) ?? [];
@@ -598,15 +626,23 @@ export async function resolveNappletFromEvent(
   // Remember what was actually tried, so an unavailable blob can say where we
   // looked instead of just that we failed.
   const tried = new Set<string>();
+  const total = event.tags.filter((t) => t[0] === "path" && t[1]).length;
+  let verified = 0;
 
   let resolved;
   try {
     resolved = await resolveNapplet({
       event,
       cache: await getArtifactCache(),
-      fetchBlob: (sha256Hex, servers) => {
+      fetchBlob: async (sha256Hex, servers) => {
         for (const server of [...servers, ...authorServers]) tried.add(server);
-        return grimoireFetchBlob(sha256Hex, servers, authorServers);
+        const bytes = await grimoireFetchBlob(
+          sha256Hex,
+          servers,
+          authorServers,
+        );
+        onProgress?.({ done: ++verified, total });
+        return bytes;
       },
     });
   } catch (error) {
