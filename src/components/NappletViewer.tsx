@@ -29,6 +29,7 @@ import {
 } from "@/services/napplet-consent";
 import { recordNappletRun } from "@/services/napplet-library";
 import { getNappletDecisions } from "@/services/napplet-acl";
+import { getGrantedOrigins } from "@/services/napplet-origins";
 import {
   capabilitiesForDomains,
   unenforceableDomains,
@@ -309,8 +310,13 @@ function NappletFrame({
       };
       frame.addEventListener("load", onLoad);
 
+      // connect-src is exactly what the user granted this version — not a
+      // wildcard, and empty for the overwhelming majority of napplets.
       frame.srcdoc = injectNappletNamespacePrelude(
-        injectCspMeta(view.indexHtml, []),
+        injectCspMeta(
+          view.indexHtml,
+          getGrantedOrigins(view.identity.dTag, view.identity.aggregateHash),
+        ),
         environment.capabilities,
       );
     })();

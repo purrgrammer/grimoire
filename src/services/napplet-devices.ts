@@ -20,6 +20,11 @@
 
 import { createResourceService } from "@kehto/services";
 import { getBlobUrl } from "./blossom";
+import {
+  getGrantedOrigins,
+  isOriginGranted,
+  canonicalOrigin,
+} from "./napplet-origins";
 
 /** Matches the artifact cache ceiling; a napplet cannot pull more in one go. */
 const MAX_RESOURCE_BYTES = 10 * 1024 * 1024;
@@ -33,6 +38,7 @@ async function fetchAllowedResource(
     headers?: Record<string, string>;
     signal: AbortSignal;
   },
+  grants: readonly string[] = [],
 ): Promise<Response> {
   if (url.startsWith("data:")) {
     return fetch(url, { signal: init.signal });
@@ -68,8 +74,38 @@ async function fetchAllowedResource(
     throw new Error("blob unavailable or failed verification");
   }
 
+  // Exactly the origins the user granted this napplet version. Re-checked
+  // here rather than relying on the CSP alone: the CSP constrains the frame's
+  // own requests, not what the host fetches on its behalf.
+  if (isOriginGranted(url, grants)) {
+    const res = await fetch(url, {
+      method: init.method ?? "GET",
+      // Napplet-supplied headers are not forwarded — they could carry
+      // credentials the napplet should not be able to make the host send.
+      signal: init.signal,
+      credentials: "omit",
+      redirect: "follow",
+      cache: "no-store",
+    });
+    const bytes = await res.arrayBuffer();
+    if (bytes.byteLength > MAX_RESOURCE_BYTES) {
+      throw new Error("resource exceeds the size limit");
+    }
+    // A redirect can leave the granted origin; the final URL decides.
+    if (res.redirected && !isOriginGranted(res.url, grants)) {
+      throw new Error("redirected outside the granted origins");
+    }
+    return new Response(bytes, {
+      status: res.status,
+      headers: { "content-type": res.headers.get("content-type") ?? "" },
+    });
+  }
+
+  const origin = canonicalOrigin(url);
   throw new Error(
-    "only data: and blossom:sha256: resources can be fetched; arbitrary network access is not offered",
+    origin
+      ? `${origin} is not granted to this napplet`
+      : "only data:, blossom:sha256: and granted https origins can be fetched",
   );
 }
 
@@ -78,14 +114,26 @@ export function createNappletResourceService(
     windowId: string,
   ) => { dTag: string; aggregateHash: string } | null,
 ) {
+  // Kehto calls getConnectGrants immediately before fetch for the same
+  // request, so this carries the caller's grants across that pair. It is only
+  // ever a narrowing: an empty list refuses everything.
+  let currentGrants: readonly string[] = [];
+
   return createResourceService({
-    fetch: fetchAllowedResource,
-    // No origin is ever granted: no scheme here reaches a napplet-chosen host.
-    isOriginGranted: () => false,
-    getConnectGrants: () => [],
+    // The grants belong to the requesting napplet, so the fetch has to be
+    // resolved per call rather than closed over a fixed policy.
+    fetch: (url, init) => fetchAllowedResource(url, init, currentGrants),
+    isOriginGranted: (origin, grants) => isOriginGranted(origin, grants),
+    getConnectGrants: (dTag, aggregateHash) => {
+      currentGrants = getGrantedOrigins(dTag, aggregateHash);
+      return currentGrants;
+    },
     resolveIdentity,
     resourceInfo: {
-      schemes: ALLOWED_SCHEMES.map((scheme) => ({ scheme, enabled: true })),
+      schemes: [...ALLOWED_SCHEMES, "https:"].map((scheme) => ({
+        scheme,
+        enabled: true,
+      })),
       maxBytes: MAX_RESOURCE_BYTES,
     },
   });
