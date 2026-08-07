@@ -201,6 +201,7 @@ import {
   NsiteRootRenderer,
   NsiteNamedRenderer,
   NsiteLegacyRenderer,
+  NsiteSnapshotRenderer,
 } from "./NsiteRenderer";
 import { ScrollRenderer, ScrollDetailRenderer } from "./ScrollRenderer";
 import {
@@ -211,6 +212,7 @@ import {
   NsiteRootDetailRenderer,
   NsiteNamedDetailRenderer,
   NsiteLegacyDetailRenderer,
+  NsiteSnapshotDetailRenderer,
 } from "./NsiteDetailRenderer";
 import { ColorMomentRenderer } from "./ColorMomentRenderer";
 import { ColorMomentDetailRenderer } from "./ColorMomentDetailRenderer";
@@ -283,6 +285,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
   10777: FavoriteSpellsRenderer, // Favorite Spells (Grimoire)
   13534: RelayMembersRenderer, // Relay Members (NIP-43)
+  5128: NsiteSnapshotRenderer, // Nsite Manifest Snapshot (NIP-5A)
   15128: NsiteRootRenderer, // Root Nsite Manifest (NIP-5A)
   30000: FollowSetRenderer, // Follow Sets (NIP-51)
   30002: GenericRelayListRenderer, // Relay Sets (NIP-51)
@@ -432,6 +435,7 @@ const detailRenderers: Record<
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   10777: FavoriteSpellsDetailRenderer, // Favorite Spells Detail (Grimoire)
   13534: RelayMembersDetailRenderer, // Relay Members Detail (NIP-43)
+  5128: NsiteSnapshotDetailRenderer, // Nsite Manifest Snapshot Detail (NIP-5A)
   15128: NsiteRootDetailRenderer, // Root Nsite Manifest Detail (NIP-5A)
   30000: FollowSetDetailRenderer, // Follow Sets Detail (NIP-51)
   30003: BookmarkSetDetailRenderer, // Bookmark Sets Detail (NIP-51)

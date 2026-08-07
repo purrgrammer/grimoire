@@ -17,11 +17,34 @@ export const DEFAULT_NSITE_GATEWAY = "nsite.lol";
 const NsitePathsSymbol = Symbol("nsitePaths");
 const NsiteServersSymbol = Symbol("nsiteServers");
 const NsiteRelaysSymbol = Symbol("nsiteRelays");
-const NsiteGatewayUrlSymbol = Symbol("nsiteGatewayUrl");
 
 export interface NsitePath {
   path: string;
   hash: string;
+}
+
+/** A parsed `a`/`A` lineage coordinate (`<kind>:<pubkey>:<d>`) */
+export interface NsiteLineage {
+  coordinate: string;
+  kind: number;
+  pubkey: string;
+  identifier: string;
+  relay?: string;
+}
+
+function parseLineageTag(tag: string[]): NsiteLineage | undefined {
+  const coordinate = tag[1];
+  if (!coordinate) return undefined;
+  const [kindStr, pubkey, ...rest] = coordinate.split(":");
+  const kind = Number(kindStr);
+  if (!Number.isInteger(kind) || !pubkey) return undefined;
+  return {
+    coordinate,
+    kind,
+    pubkey,
+    identifier: rest.join(":"),
+    relay: tag[2] || undefined,
+  };
 }
 
 /**
@@ -102,8 +125,32 @@ export function getNsiteIdentifier(event: NostrEvent): string | undefined {
 }
 
 /**
- * Convert a hex pubkey to base36 (50 chars, zero-padded)
- * Used for named site subdomain construction per NIP-5A spec
+ * Get the aggregate hash of the manifest (`x` tag), which identifies the site
+ * version independently of who published it
+ */
+export function getNsiteAggregateHash(event: NostrEvent): string | undefined {
+  return event.tags.find((t) => t[0] === "x" && t[1])?.[1];
+}
+
+/**
+ * Get the immediate parent nsite of a copied site (`a` tag)
+ */
+export function getNsiteParent(event: NostrEvent): NsiteLineage | undefined {
+  const tag = event.tags.find((t) => t[0] === "a" && t[1]);
+  return tag ? parseLineageTag(tag) : undefined;
+}
+
+/**
+ * Get the origin nsite of a copied site's lineage (`A` tag)
+ */
+export function getNsiteOrigin(event: NostrEvent): NsiteLineage | undefined {
+  const tag = event.tags.find((t) => t[0] === "A" && t[1]);
+  return tag ? parseLineageTag(tag) : undefined;
+}
+
+/**
+ * Convert a raw 32-byte hex value to base36, lowercase, exactly 50 characters.
+ * Used for nsite subdomain construction per NIP-5A.
  */
 function hexToBase36(hex: string): string {
   const num = BigInt("0x" + hex);
@@ -114,20 +161,24 @@ function hexToBase36(hex: string): string {
  * Get the gateway URL to view this site
  * Root sites (15128): https://<npub>.nsite.lol
  * Named sites (35128): https://<pubkeyB36><dTag>.nsite.lol
+ * Snapshots (5128):    https://v<snapshotIdB36>.nsite.lol
+ *
+ * Not memoized: callers may pass different gateways for the same event, and
+ * the whole computation is one bech32 encode.
  */
 export function getNsiteGatewayUrl(
   event: NostrEvent,
   gateway: string = DEFAULT_NSITE_GATEWAY,
 ): string {
-  return getOrComputeCachedValue(event, NsiteGatewayUrlSymbol, () => {
-    if (event.kind === 35128) {
-      const dTag = getNsiteIdentifier(event);
-      if (dTag) {
-        const pubkeyB36 = hexToBase36(event.pubkey);
-        return `https://${pubkeyB36}${dTag}.${gateway}`;
-      }
+  if (event.kind === 5128) {
+    return `https://v${hexToBase36(event.id)}.${gateway}`;
+  }
+  if (event.kind === 35128) {
+    const dTag = getNsiteIdentifier(event);
+    if (dTag) {
+      return `https://${hexToBase36(event.pubkey)}${dTag}.${gateway}`;
     }
-    const npub = nip19.npubEncode(event.pubkey);
-    return `https://${npub}.${gateway}`;
-  });
+  }
+  const npub = nip19.npubEncode(event.pubkey);
+  return `https://${npub}.${gateway}`;
 }

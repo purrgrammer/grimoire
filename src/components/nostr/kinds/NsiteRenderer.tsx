@@ -44,8 +44,8 @@ function NsiteIcon({
  */
 function NsiteRendererInner({
   event,
-  legacy = false,
-}: BaseEventProps & { legacy?: boolean }) {
+  variant,
+}: BaseEventProps & { variant?: "legacy" | "snapshot" }) {
   const paths = getNsitePaths(event);
   const servers = getNsiteServers(event);
   const identifier = getNsiteIdentifier(event);
@@ -63,9 +63,9 @@ function NsiteRendererInner({
         >
           <NsiteIcon faviconUrl={faviconUrl} className="size-4" />
           <span>{displayTitle}</span>
-          {legacy && (
+          {variant && (
             <span className="text-xs text-muted-foreground font-normal">
-              (legacy)
+              ({variant})
             </span>
           )}
         </ClickableEventTitle>
@@ -121,5 +121,12 @@ export function NsiteNamedRenderer({ event }: BaseEventProps) {
  * Kind 34128 Renderer - Legacy Nsite (Feed View, deprecated)
  */
 export function NsiteLegacyRenderer({ event }: BaseEventProps) {
-  return <NsiteRendererInner event={event} legacy />;
+  return <NsiteRendererInner event={event} variant="legacy" />;
+}
+
+/**
+ * Kind 5128 Renderer - Nsite Manifest Snapshot (Feed View)
+ */
+export function NsiteSnapshotRenderer({ event }: BaseEventProps) {
+  return <NsiteRendererInner event={event} variant="snapshot" />;
 }

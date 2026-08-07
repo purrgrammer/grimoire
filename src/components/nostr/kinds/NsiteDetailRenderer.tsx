@@ -6,7 +6,10 @@ import {
   ExternalLink,
   Code,
   Radio,
+  GitBranch,
+  Fingerprint,
 } from "lucide-react";
+import { nip19 } from "nostr-tools";
 import {
   getNsitePaths,
   getNsiteServers,
@@ -14,6 +17,10 @@ import {
   getNsiteIdentifier,
   getNsiteSource,
   getNsiteGatewayUrl,
+  getNsiteAggregateHash,
+  getNsiteParent,
+  getNsiteOrigin,
+  type NsiteLineage,
 } from "@/lib/nip5a-helpers";
 import { useNsiteMetadata } from "@/hooks/useNsiteMetadata";
 import { useAddWindow } from "@/core/state";
@@ -79,14 +86,56 @@ function NsiteFileRow({
 }
 
 /**
+ * A parent (`a`) or origin (`A`) coordinate, opening the referenced nsite
+ */
+function NsiteLineageRow({
+  label,
+  lineage,
+}: {
+  label: string;
+  lineage: NsiteLineage;
+}) {
+  const addWindow = useAddWindow();
+
+  const handleClick = () => {
+    const pointer = {
+      kind: lineage.kind,
+      pubkey: lineage.pubkey,
+      identifier: lineage.identifier,
+      relays: lineage.relay ? [lineage.relay] : undefined,
+    };
+    addWindow(
+      "open",
+      { pointer },
+      `open ${nip19.naddrEncode(pointer)}`,
+      undefined,
+    );
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2 py-0.5 px-1 -mx-1 text-xs rounded hover:bg-muted/30 cursor-pointer"
+      onClick={handleClick}
+    >
+      <GitBranch className="size-3.5 text-muted-foreground shrink-0" />
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-mono underline decoration-dotted truncate">
+        {lineage.kind}:{lineage.pubkey.slice(0, 8)}…
+        {lineage.identifier ? `:${lineage.identifier}` : ""}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Shared detail view for all nsite kinds
  */
 function NsiteDetailView({
   event,
-  legacy = false,
+  variant,
 }: {
   event: NostrEvent;
-  legacy?: boolean;
+  variant?: "legacy" | "snapshot";
 }) {
   const paths = getNsitePaths(event);
   const servers = getNsiteServers(event);
@@ -94,6 +143,9 @@ function NsiteDetailView({
   const identifier = getNsiteIdentifier(event);
   const source = getNsiteSource(event);
   const gatewayUrl = getNsiteGatewayUrl(event);
+  const aggregateHash = getNsiteAggregateHash(event);
+  const parent = getNsiteParent(event);
+  const origin = getNsiteOrigin(event);
   const { title, description, faviconUrl } = useNsiteMetadata(event);
   const addWindow = useAddWindow();
 
@@ -120,13 +172,35 @@ function NsiteDetailView({
         {description && (
           <p className="text-sm text-muted-foreground">{description}</p>
         )}
-        {legacy && (
+        {variant === "legacy" && (
           <p className="text-xs text-yellow-500">
             This is a legacy nsite event (kind 34128). New sites should use kind
             15128 or 35128.
           </p>
         )}
+        {variant === "snapshot" && (
+          <p className="text-xs text-muted-foreground">
+            A manifest snapshot (kind 5128) pinning one version of a site.
+          </p>
+        )}
+        {aggregateHash && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Fingerprint className="size-3.5 shrink-0" />
+            <span>aggregate</span>
+            <span className="font-mono truncate">
+              {aggregateHash.slice(0, 12)}…{aggregateHash.slice(-6)}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Lineage */}
+      {(parent || origin) && (
+        <div className="flex flex-col gap-0.5">
+          {origin && <NsiteLineageRow label="origin" lineage={origin} />}
+          {parent && <NsiteLineageRow label="parent" lineage={parent} />}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-2">
@@ -239,5 +313,12 @@ export function NsiteNamedDetailRenderer({ event }: { event: NostrEvent }) {
  * Kind 34128 Detail Renderer - Legacy Nsite (deprecated)
  */
 export function NsiteLegacyDetailRenderer({ event }: { event: NostrEvent }) {
-  return <NsiteDetailView event={event} legacy />;
+  return <NsiteDetailView event={event} variant="legacy" />;
+}
+
+/**
+ * Kind 5128 Detail Renderer - Nsite Manifest Snapshot
+ */
+export function NsiteSnapshotDetailRenderer({ event }: { event: NostrEvent }) {
+  return <NsiteDetailView event={event} variant="snapshot" />;
 }
