@@ -4,7 +4,7 @@ import {
   Observable,
   firstValueFrom,
 } from "rxjs";
-import { map, first, toArray, filter as filterOp } from "rxjs/operators";
+import { map, first, filter as filterOp } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -26,8 +26,11 @@ import {
 } from "@/lib/emoji-helpers";
 import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
-import pool from "@/services/relay-pool";
-import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
+import {
+  requestEvent,
+  requestEvents,
+  streamWithEose,
+} from "@/lib/relay-subscription";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { getQuotePointer } from "@/lib/nostr-utils";
@@ -146,29 +149,8 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    // request() completes on its own once the relays are done
-    const metadataEvents = await firstValueFrom(
-      pool
-        .request([relayUrl], [metadataFilter], { eventStore })
-        .pipe(toArray()),
-      { defaultValue: [] as NostrEvent[] },
-    );
-
-    const metadataEvent = metadataEvents[0];
-
-    // Resolve group metadata with profile fallback
-    const resolved = await resolveGroupMetadata(
-      groupId,
-      relayUrl,
-      metadataEvent,
-    );
-
-    const title = resolved.name || groupId;
-    const description = resolved.description;
-    const icon = resolved.icon;
-
-    // Fetch admins (kind 39001) and members (kind 39002) in parallel
-    // Both use d tag (addressable events signed by relay)
+    // Admins (kind 39001) and members (kind 39002) — both keyed by d tag on
+    // addressable events signed by the relay.
     const adminsFilter: Filter = {
       kinds: [39001],
       "#d": [groupId],
@@ -181,12 +163,24 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    // Use pool.request with both filters to fetch and auto-close on EOSE
-    const participantEvents = await firstValueFrom(
-      pool
-        .request([relayUrl], [adminsFilter, membersFilter], { eventStore })
-        .pipe(toArray()),
+    // Independent requests, so run them concurrently: each is bounded
+    // separately, and awaiting in sequence doubles the wait on a relay that
+    // never answers.
+    const [metadataEvents, participantEvents] = await Promise.all([
+      requestEvents([relayUrl], [metadataFilter]),
+      requestEvents([relayUrl], [adminsFilter, membersFilter]),
+    ]);
+
+    // Resolve group metadata with profile fallback
+    const resolved = await resolveGroupMetadata(
+      groupId,
+      relayUrl,
+      metadataEvents[0],
     );
+
+    const title = resolved.name || groupId;
+    const description = resolved.description;
+    const icon = resolved.icon;
 
     const adminEvents = participantEvents.filter((e) => e.kind === 39001);
     const memberEvents = participantEvents.filter((e) => e.kind === 39002);
@@ -345,9 +339,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
     };
 
     // One-shot request to fetch older messages
-    const events = await firstValueFrom(
-      pool.request([relayUrl], [filter], { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents([relayUrl], [filter]);
 
     // Convert events to messages
     const messages = events.map((event) => {

@@ -1,5 +1,5 @@
 import { Observable, firstValueFrom, combineLatest } from "rxjs";
-import { map, first, toArray } from "rxjs/operators";
+import { map, first } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -24,7 +24,7 @@ import {
 } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { requestEvent } from "@/lib/relay-subscription";
+import { requestEvent, requestEvents } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
@@ -339,9 +339,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     ];
 
     // One-shot request to fetch older messages
-    const events = await firstValueFrom(
-      pool.request(relays, filters, { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents(relays, filters);
 
     const conversationId = `nip-10:${rootEventId}`;
 
@@ -527,9 +525,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       limit: 1,
     };
 
-    const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents(relays, [filter]);
 
     return events[0] || null;
   }

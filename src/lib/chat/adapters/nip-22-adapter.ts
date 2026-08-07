@@ -30,6 +30,7 @@ import {
 } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
+import { requestEvents } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
@@ -271,14 +272,9 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         "#d": [address.identifier],
         limit: 1,
       };
-      const events = await firstValueFrom(
-        pool
-          .request(
-            relayHints.length > 0 ? relayHints : AGGREGATOR_RELAYS,
-            [filter],
-            { eventStore },
-          )
-          .pipe(toArray()),
+      const events = await requestEvents(
+        relayHints.length > 0 ? relayHints : AGGREGATOR_RELAYS,
+        [filter],
       );
       fetchedEvent = events[0];
     }
@@ -563,9 +559,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       limit: 50,
     });
 
-    const events = await firstValueFrom(
-      pool.request(relays, [commentFilter], { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents(relays, [commentFilter]);
 
     const messages = events
       .map((event) => this.eventToMessage(event, conversation.id, meta))
@@ -746,9 +740,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     if (relays.length === 0) return null;
 
     const filter: Filter = { ids: [eventId], limit: 1 };
-    const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents(relays, [filter]);
 
     return events[0] || null;
   }

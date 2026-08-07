@@ -4,7 +4,7 @@ import {
   Observable,
   firstValueFrom,
 } from "rxjs";
-import { map, first, toArray, filter as filterOp } from "rxjs/operators";
+import { map, first, filter as filterOp } from "rxjs/operators";
 import type { Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -25,7 +25,6 @@ import type {
 import type { NostrEvent } from "@/types/nostr";
 import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
-import pool from "@/services/relay-pool";
 import {
   requestEvent,
   requestEvents,
@@ -327,9 +326,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     };
 
     // One-shot request to fetch older messages
-    const events = await firstValueFrom(
-      pool.request(relays, [filter], { eventStore }).pipe(toArray()),
-    );
+    const events = await requestEvents(relays, [filter]);
 
     // Convert events to messages
     const messages = events
