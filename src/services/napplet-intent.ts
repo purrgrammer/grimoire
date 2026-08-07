@@ -147,18 +147,69 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
 /*  Resolver                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export interface IntentChooser {
-  /** Ask the user which candidate should handle an archetype. */
-  choose(
-    archetype: string,
-    candidates: { dTag: string; title?: string }[],
-    sender: string,
-  ): Promise<string | undefined>;
+export interface IntentChooserCandidate {
+  dTag: string;
+  title?: string;
+}
+
+export interface NappletIntentChoice {
+  key: string;
+  archetype: string;
+  sender: string;
+  candidates: IntentChooserCandidate[];
+  resolve: (choice: { dTag: string; remember: boolean } | null) => void;
+}
+
+const choices = new Map<string, NappletIntentChoice>();
+const choiceListeners = new Set<(c: NappletIntentChoice[]) => void>();
+let choiceCounter = 0;
+
+function emitChoices(): void {
+  const snapshot = [...choices.values()];
+  choiceListeners.forEach((listener) => listener(snapshot));
+}
+
+export function subscribeNappletIntentChoice(
+  listener: (choices: NappletIntentChoice[]) => void,
+): () => void {
+  choiceListeners.add(listener);
+  listener([...choices.values()]);
+  return () => choiceListeners.delete(listener);
+}
+
+/**
+ * "The shell SHOULD offer an 'open with…' chooser when handler: 'choose', or
+ * when no default exists and more than one candidate is available."
+ *
+ * Remembering here is a user action setting a default, which is the only way a
+ * default may ever change — a napplet must not be able to.
+ */
+function askUserToChoose(
+  archetype: string,
+  candidates: IntentChooserCandidate[],
+  sender: string,
+): Promise<string | undefined> {
+  return new Promise((resolveChoice) => {
+    const key = `choice-${++choiceCounter}`;
+    choices.set(key, {
+      key,
+      archetype,
+      sender,
+      candidates,
+      resolve: (choice) => {
+        choices.delete(key);
+        emitChoices();
+        if (!choice) return resolveChoice(undefined);
+        if (choice.remember) setDefaultHandler(archetype, choice.dTag);
+        resolveChoice(choice.dTag);
+      },
+    });
+    emitChoices();
+  });
 }
 
 export function createNappletIntentResolver(options: {
   targets: IntentTargetController;
-  chooser: IntentChooser;
 }) {
   return createCatalogIntentResolver({
     loadCatalog: loadIntentCatalog,
@@ -166,7 +217,7 @@ export function createNappletIntentResolver(options: {
     getDefaultHandler,
 
     chooseHandler: (archetype, candidates, sender) =>
-      options.chooser.choose(
+      askUserToChoose(
         archetype,
         candidates.map((c) => ({ dTag: c.dTag, title: c.title })),
         sender,

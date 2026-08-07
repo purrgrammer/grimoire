@@ -35,6 +35,7 @@ import {
   createOutboxService,
   createRelayPoolOutboxRouter,
   createUploadService,
+  createIntentService,
 } from "@kehto/services";
 import {
   resolveNapplet,
@@ -70,6 +71,8 @@ import {
 } from "./napplet-social";
 import { createNappletResourceService } from "./napplet-devices";
 import { narrowEnvironment } from "./napplet-capabilities";
+import { createNappletIntentResolver } from "./napplet-intent";
+import { createNappletTargetController } from "./napplet-targets";
 import { toast } from "sonner";
 import { skip } from "rxjs/operators";
 import type { Subscription } from "rxjs";
@@ -328,6 +331,7 @@ function buildAdapter(): ShellAdapter {
     upload: { getUploader: () => ({ rails: ["blossom"] }) },
     // Liveness gates. Kehto only advertises these when the host says so.
     common: { isAvailable: () => true },
+    intent: { isAvailable: () => true },
     lists: { isAvailable: () => true },
     link: { isAvailable: () => true },
     // Napplets cannot spawn grimoire windows yet; null is the "refuse" contract.
@@ -371,6 +375,11 @@ function buildAdapter(): ShellAdapter {
         return entry
           ? { dTag: entry.dTag, aggregateHash: entry.aggregateHash }
           : null;
+      }),
+      intent: createIntentService({
+        resolver: createNappletIntentResolver({
+          targets: createNappletTargetController(),
+        }),
       }),
       common: createNappletCommonService(),
       lists: createNappletListsService(),
