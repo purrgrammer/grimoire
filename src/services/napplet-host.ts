@@ -34,6 +34,7 @@ import {
   createNotifyService,
   createOutboxService,
   createRelayPoolOutboxRouter,
+  createUploadService,
 } from "@kehto/services";
 import {
   resolveNapplet,
@@ -56,6 +57,7 @@ import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import { createNappletSigner } from "./napplet-signer";
+import { createBlossomUploader } from "./napplet-upload";
 import { toast } from "sonner";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
@@ -245,6 +247,11 @@ function buildAdapter(): ShellAdapter {
     }),
   });
 
+  const uploadService = createUploadService({
+    uploader: createBlossomUploader(),
+    uploadInfo: { rails: [{ rail: "blossom", enabled: true }] },
+  });
+
   const identityService = createIdentityService({
     getSigner: () => (accountManager.active ? nappletSigner : null),
     getProfile: (pubkey) => {
@@ -294,6 +301,9 @@ function buildAdapter(): ShellAdapter {
       }),
       getNip66Suggestions: () => [],
     },
+    // Liveness gate for the upload domain: Kehto only advertises it when a
+    // rail is actually configured.
+    upload: { getUploader: () => ({ rails: ["blossom"] }) },
     // Napplets cannot spawn grimoire windows yet; null is the "refuse" contract.
     windowManager: { createWindow: () => null },
     auth: {
@@ -322,6 +332,7 @@ function buildAdapter(): ShellAdapter {
       identity: identityService,
       notify: notifyService,
       outbox: outboxService,
+      upload: uploadService,
     },
     onAclCheck: (event) => {
       // Both allows and denials arrive here. Denials are the interesting half:
