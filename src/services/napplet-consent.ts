@@ -23,6 +23,10 @@ import {
   type AclCheckEvent,
 } from "./napplet-host";
 import {
+  capabilitiesForDomains,
+  getDeclaredDomains,
+} from "./napplet-capabilities";
+import {
   setNappletWindowTitle,
   clearNappletWindowTitle,
 } from "./napplet-attribution";
@@ -47,6 +51,12 @@ export interface NappletConsentRequest {
    */
   title: string;
   pubkey: string;
+  /**
+   * True when the manifest never declared the domain this capability belongs
+   * to. Under manifest-first consent that should not happen for a well-formed
+   * napplet, so it is worth showing the user.
+   */
+  undeclared: boolean;
 }
 
 /** A signing confirmation, resolved by the user answering the prompt. */
@@ -69,6 +79,8 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "config:read": "read your locale settings",
   "relay:read": "read events from your relays",
   "relay:write": "publish events signed as you",
+  "outbox:read": "read events from the right relays for each author",
+  "outbox:write": "publish events signed as you",
   "keys:forward": "send keystrokes to grimoire",
   "keys:bind": "register keyboard shortcuts",
   "media:control": "control media playback",
@@ -80,6 +92,7 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "intent:write": "open other napplets",
   "dm:read": "read your private messages",
   "dm:write": "send private messages as you",
+  "cvm:call": "call external tool servers over Nostr",
 };
 
 export function describeCapability(capability: string): string {
@@ -143,6 +156,23 @@ export function unregisterNappletIdentity(windowId: string): void {
   emit();
 }
 
+/**
+ * Whether a capability falls outside what the manifest declared.
+ *
+ * Under manifest-first consent every declared capability is answered before the
+ * frame runs, so anything reaching the per-use path was undeclared — a spec
+ * violation by the napplet, and worth telling the user about.
+ */
+function isUndeclared(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): boolean {
+  const declared = getDeclaredDomains(dTag, aggregateHash);
+  if (!declared || declared.length === 0) return false;
+  return !capabilitiesForDomains(declared).includes(capability);
+}
+
 function triple(event: AclCheckEvent): string {
   return `${event.identity.dTag}:${event.identity.hash}:${event.capability}`;
 }
@@ -190,6 +220,11 @@ function handleDenial(event: AclCheckEvent): void {
     capability: event.capability,
     title,
     pubkey,
+    undeclared: isUndeclared(
+      event.identity.dTag,
+      event.identity.hash,
+      event.capability,
+    ),
   });
   emit();
 }
@@ -312,6 +347,136 @@ export function revokeAllNappletCapabilities(
     settled.delete(`${dTag}:${aggregateHash}:${decision.capability}`);
   }
   forgetNappletDecisions(dTag, aggregateHash);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Launch consent                                                             */
+/* -------------------------------------------------------------------------- */
+
+export interface NappletLaunchRequest {
+  key: string;
+  dTag: string;
+  aggregateHash: string;
+  title: string;
+  pubkey: string;
+  /** Capabilities implied by the manifest's declared domains. */
+  capabilities: string[];
+  /** Declared domains Kehto defines no capability for. */
+  unenforceable: string[];
+  resolve: (allowed: string[] | null) => void;
+}
+
+const launchRequests = new Map<string, NappletLaunchRequest>();
+const launchListeners = new Set<(r: NappletLaunchRequest[]) => void>();
+let launchCounter = 0;
+
+function emitLaunch(): void {
+  const snapshot = [...launchRequests.values()];
+  launchListeners.forEach((listener) => listener(snapshot));
+}
+
+export function subscribeNappletLaunch(
+  listener: (requests: NappletLaunchRequest[]) => void,
+): () => void {
+  launchListeners.add(listener);
+  listener([...launchRequests.values()]);
+  return () => launchListeners.delete(listener);
+}
+
+export interface LaunchDecision {
+  /** Capabilities to grant before the frame is created. */
+  granted: string[];
+  /** True when the user refused outright and the napplet must not render. */
+  cancelled: boolean;
+}
+
+/**
+ * Ask once, up front, for everything the verified manifest declared.
+ *
+ * This is what keeps a well-behaved napplet from ever reloading: the grants are
+ * applied before `srcdoc`, so its first call succeeds. Capabilities already
+ * answered are reused without asking, and if nothing is left undecided the
+ * promise resolves synchronously with no dialog at all.
+ */
+export function requestLaunchConsent(input: {
+  dTag: string;
+  aggregateHash: string;
+  title: string;
+  pubkey: string;
+  capabilities: string[];
+  unenforceable: string[];
+}): Promise<LaunchDecision> {
+  const remembered: string[] = [];
+  const undecided: string[] = [];
+
+  for (const capability of input.capabilities) {
+    const decision = getNappletDecision(
+      input.dTag,
+      input.aggregateHash,
+      capability,
+    );
+    if (decision?.allowed) remembered.push(capability);
+    else if (decision)
+      continue; // remembered deny — never re-ask
+    else undecided.push(capability);
+  }
+
+  if (undecided.length === 0 && input.unenforceable.length === 0) {
+    return Promise.resolve({ granted: remembered, cancelled: false });
+  }
+
+  return new Promise<LaunchDecision>((resolveLaunch) => {
+    const key = `launch-${++launchCounter}`;
+    launchRequests.set(key, {
+      key,
+      dTag: input.dTag,
+      aggregateHash: input.aggregateHash,
+      title: input.title,
+      pubkey: input.pubkey,
+      capabilities: undecided,
+      unenforceable: input.unenforceable,
+      resolve: (allowed) => {
+        launchRequests.delete(key);
+        emitLaunch();
+        if (allowed === null) {
+          resolveLaunch({ granted: [], cancelled: true });
+          return;
+        }
+        // Everything shown is answered, so nothing re-prompts later.
+        for (const capability of undecided) {
+          rememberNappletDecision({
+            dTag: input.dTag,
+            aggregateHash: input.aggregateHash,
+            capability,
+            allowed: allowed.includes(capability),
+          });
+          settled.add(`${input.dTag}:${input.aggregateHash}:${capability}`);
+        }
+        resolveLaunch({
+          granted: [...remembered, ...allowed],
+          cancelled: false,
+        });
+      },
+    });
+    emitLaunch();
+  });
+}
+
+/** Apply a launch decision to the live ACL, before the frame exists. */
+export function grantLaunchCapabilities(
+  dTag: string,
+  aggregateHash: string,
+  capabilities: readonly string[],
+): void {
+  const bridge = getNappletBridge();
+  for (const capability of capabilities) {
+    bridge.runtime.aclState.grant(
+      "",
+      dTag,
+      aggregateHash,
+      capability as Parameters<typeof bridge.runtime.aclState.grant>[3],
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */

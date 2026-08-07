@@ -69,6 +69,7 @@ import {
   createNappletLinkService,
 } from "./napplet-social";
 import { createNappletResourceService } from "./napplet-devices";
+import { narrowEnvironment } from "./napplet-capabilities";
 import { toast } from "sonner";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
@@ -343,7 +344,14 @@ function buildAdapter(): ShellAdapter {
         return verifyEvent(event as Parameters<typeof verifyEvent>[0]);
       },
     },
-    capabilities: { disabledDomains: DISABLED_DOMAINS },
+    capabilities: {
+      disabledDomains: DISABLED_DOMAINS,
+      // A napplet's declared `requires` becomes its whole surface. Kehto
+      // otherwise advertises every live domain to everyone, which would make
+      // granting capabilities up front unsafe — see napplet-capabilities.
+      resolveEnvironment: (identity, available) =>
+        narrowEnvironment(identity.dTag, identity.aggregateHash, available),
+    },
     // Services must be present BEFORE createShellBridge: buildShellCapabilities
     // snapshots this map, so anything registered later via
     // runtime.registerService() is routed but never advertised in shell.init.

@@ -23,7 +23,14 @@ import {
   unregisterNappletIdentity,
   startNappletConsent,
   subscribeNappletReload,
+  requestLaunchConsent,
+  grantLaunchCapabilities,
 } from "@/services/napplet-consent";
+import {
+  capabilitiesForDomains,
+  unenforceableDomains,
+  setDeclaredDomains,
+} from "@/services/napplet-capabilities";
 import {
   fetchManifestEvent,
   getNappletBridge,
@@ -168,6 +175,42 @@ function NappletFrame({
       }
 
       if (cancelled.current) return;
+
+      // Record the declaration before resolving the environment: the adapter's
+      // resolveEnvironment narrows this napplet's domains to what it declared.
+      setDeclaredDomains(
+        view.identity.dTag,
+        view.identity.aggregateHash,
+        view.requires,
+      );
+
+      // Ask once, up front, for everything the manifest declared — and grant it
+      // before srcdoc, so a well-behaved napplet never has to be re-run.
+      const declaredCapabilities = capabilitiesForDomains(view.requires);
+      const decision = await requestLaunchConsent({
+        dTag: view.identity.dTag,
+        aggregateHash: view.identity.aggregateHash,
+        title: view.title || view.identity.dTag || "Napplet",
+        pubkey: view.manifestEvent.pubkey,
+        capabilities: declaredCapabilities,
+        unenforceable: unenforceableDomains(view.requires),
+      });
+      if (cancelled.current) return;
+      if (decision.cancelled) {
+        setResolved(view);
+        setError({
+          code: "declined",
+          message: "You chose not to run this napplet.",
+          integrity: false,
+        });
+        setStage("error");
+        return;
+      }
+      grantLaunchCapabilities(
+        view.identity.dTag,
+        view.identity.aggregateHash,
+        decision.granted,
+      );
 
       const environment = getNappletEnvironment(view.identity);
       const missing = getMissingRequiredNaps(
