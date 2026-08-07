@@ -129,6 +129,11 @@ export function registerNappletIdentity(
   identities.set(windowId, identity);
 }
 
+/** The human label for whatever is running in a window, if anything is. */
+export function getNappletWindowTitle(windowId: string): string | undefined {
+  return identities.get(windowId)?.title;
+}
+
 export function unregisterNappletIdentity(windowId: string): void {
   identities.delete(windowId);
   for (const [key, request] of pending) {

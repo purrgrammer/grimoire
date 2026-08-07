@@ -31,6 +31,9 @@ import {
   createConfigService,
   createKeysService,
   createIdentityService,
+  createNotifyService,
+  createOutboxService,
+  createRelayPoolOutboxRouter,
 } from "@kehto/services";
 import {
   resolveNapplet,
@@ -53,8 +56,11 @@ import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import { createNappletSigner } from "./napplet-signer";
+import { toast } from "sonner";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
+import relayListCache from "./relay-list-cache";
+import { AGGREGATOR_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
 import { selectRelaysForFilter } from "./relay-selection";
 import { requestEvent } from "@/lib/relay-subscription";
@@ -84,11 +90,11 @@ export type { ShellEnvironment, OriginIdentity, NapTheme };
  * `notify.permission.request` with `granted: true` when no service is
  * registered, i.e. it lies that delivery succeeded.
  *
- * `relay` stays off until the signer is wrapped with a destructive-kind
- * prompt: `relay:write` reaches `getSigner().signEvent` and the runtime has no
- * consent gate of its own on that path.
+ * Nothing is withheld now that each domain has real backing. `relay:write`
+ * reaches `getSigner().signEvent`, which is why every napplet-originated
+ * signature goes through `napplet-signer.ts` rather than the raw account.
  */
-const DISABLED_DOMAINS = ["relay", "notify"] as const;
+const DISABLED_DOMAINS: readonly string[] = [];
 
 /**
  * Chords grimoire owns. A napplet holding `keys:forward` can synthesize
@@ -152,6 +158,9 @@ function adaptRelayPool(): RelayPoolLike {
 
 const nappletSigner = createNappletSigner();
 
+/** Relay subscription cleanups the runtime asked us to hold. */
+const trackedSubscriptions = new Map<string, () => void>();
+
 let themeService: ReturnType<typeof createThemeService> | null = null;
 let keysService: ReturnType<typeof createKeysService> | null = null;
 
@@ -171,6 +180,69 @@ function buildAdapter(): ShellAdapter {
   // own chords inside their own frame.
   keysService = createKeysService({
     reservedChords: RESERVED_CHORDS,
+  });
+
+  // Without a service the runtime answers notify.send with a fabricated id and
+  // notify.permission.request with granted: true — it lies that delivery
+  // succeeded. A real toast is the minimum bar for advertising the domain.
+  const notifyService = createNotifyService({
+    defaultGrant: true,
+    onSend: (windowId, payload) => {
+      void import("./napplet-consent").then(({ getNappletWindowTitle }) => {
+        const source = getNappletWindowTitle(windowId) ?? "A napplet";
+        const note = payload as { title?: string; body?: string };
+        toast(`${source}${note.title ? `: ${note.title}` : ""}`, {
+          description: note.body,
+          duration: 6000,
+        });
+      });
+    },
+  });
+
+  // NAP-OUTBOX: relay-list-aware routing. Publishing goes through the same
+  // wrapped signer as relay.publish, so destructive kinds are still confirmed.
+  const outboxService = createOutboxService({
+    router: createRelayPoolOutboxRouter({
+      relayPool: {
+        subscribe: (filters, relayUrls, callback) => {
+          const sub = pool
+            .subscription(
+              relayUrls,
+              filters as Parameters<typeof pool.subscription>[1],
+              {
+                eventStore: defaultEventStore,
+              },
+            )
+            .subscribe((event) => callback(event as NostrEvent));
+          return { unsubscribe: () => sub.unsubscribe() };
+        },
+        publish: async (event, relayUrls) => {
+          const responses = await pool.publish(relayUrls, event);
+          return Object.fromEntries(
+            responses.map((r) => [r.from, r.ok] as const),
+          );
+        },
+        isAvailable: () => true,
+      },
+      loadRelayLists: async (pubkeys) => {
+        const entries = await Promise.all(
+          pubkeys.map(async (pubkey) => {
+            const [write, read] = await Promise.all([
+              relayListCache.getOutboxRelays(pubkey),
+              relayListCache.getInboxRelays(pubkey),
+            ]);
+            return [pubkey, { read: read ?? [], write: write ?? [] }] as const;
+          }),
+        );
+        return new Map(entries);
+      },
+      fallbackRelays: AGGREGATOR_RELAYS,
+      signEvent: (template) => nappletSigner.signEvent(template),
+      verifyEvent: async (event) => {
+        const { verifyEvent } = await import("nostr-tools/pure");
+        return verifyEvent(event as Parameters<typeof verifyEvent>[0]);
+      },
+    }),
   });
 
   const identityService = createIdentityService({
@@ -193,13 +265,23 @@ function buildAdapter(): ShellAdapter {
   return {
     relayPool: {
       getRelayPool: () => adaptRelayPool(),
-      // No relay domain is exposed in v1, so nothing can reach these.
-      trackSubscription: () => {},
-      untrackSubscription: () => {},
+      trackSubscription: (subKey, cleanup) => {
+        trackedSubscriptions.get(subKey)?.();
+        trackedSubscriptions.set(subKey, cleanup);
+      },
+      untrackSubscription: (subKey) => {
+        trackedSubscriptions.get(subKey)?.();
+        trackedSubscriptions.delete(subKey);
+      },
+      // NIP-29 scoped relays are not wired. Kehto expects the host to own the
+      // socket and post frames back itself; refusing is honest, and no
+      // currently published napplet uses it.
       openScopedRelay: () => {},
       closeScopedRelay: () => {},
       publishToScopedRelay: () => false,
-      selectRelayTier: () => [],
+      // Must be synchronous, so this is the live relay set rather than
+      // grimoire's async outbox selection.
+      selectRelayTier: () => Object.keys(relayStateManager.getState().relays),
     },
     relayConfig: {
       // A napplet must not mutate the user's relay list.
@@ -238,6 +320,8 @@ function buildAdapter(): ShellAdapter {
       config: configService.handler,
       keys: keysService,
       identity: identityService,
+      notify: notifyService,
+      outbox: outboxService,
     },
     onAclCheck: (event) => {
       // Both allows and denials arrive here. Denials are the interesting half:
