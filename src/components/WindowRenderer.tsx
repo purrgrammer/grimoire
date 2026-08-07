@@ -70,6 +70,10 @@ const EventLogViewer = lazy(() =>
   import("./EventLogViewer").then((m) => ({ default: m.EventLogViewer })),
 );
 const AiViewer = lazy(() => import("./AiViewer"));
+// Keeps the whole @kehto/* graph out of the main bundle.
+const NappletViewer = lazy(() =>
+  import("./NappletViewer").then((m) => ({ default: m.NappletViewer })),
+);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -174,6 +178,11 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
     switch (browser ? "concord" : window.appId) {
       case "nip":
         content = <NipRenderer nipId={window.props.number} />;
+        break;
+      case "app":
+        content = (
+          <NappletViewer pointer={window.props.pointer} windowId={window.id} />
+        );
         break;
       case "kind":
         content = <KindRenderer kind={parseInt(window.props.number)} />;

@@ -4,6 +4,7 @@ import { parseCountCommand } from "../lib/count-parser";
 import type { AppId } from "./app";
 
 import { parseOpenCommand } from "@/lib/open-parser";
+import { parseAppCommand } from "@/lib/napplet-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
@@ -666,6 +667,29 @@ export const manPages: Record<string, ManPageEntry> = {
     appId: "concord",
     category: "Nostr",
     argParser: async (args: string[]) => parseConcordCommand(args),
+  },
+  app: {
+    name: "app",
+    section: "1",
+    synopsis: "app <identifier>",
+    description:
+      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in an isolated iframe with no access to your keys, relays, or identity.",
+    options: [
+      {
+        flag: "<identifier>",
+        description:
+          "naddr, nevent, note, hex event id, or kind:pubkey:d-tag pointing at a napplet manifest (kind 5129, 15129, or 35129)",
+      },
+    ],
+    examples: [
+      "app naddr1...                                     Run a named napplet",
+      "app 35129:7fa56f5d6962ab1e...:calculator          Run by address pointer",
+      "app nevent1...                                    Run a specific manifest event",
+    ],
+    seeAlso: ["open", "blossom", "nip"],
+    appId: "app",
+    category: "Nostr",
+    argParser: (args: string[]) => parseAppCommand(args),
   },
   chat: {
     name: "chat",

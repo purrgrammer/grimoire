@@ -21,6 +21,7 @@ import {
   Phone,
   Hash,
   Zap,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -73,6 +74,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   open: {
     icon: ExternalLink,
     description: "Open and view a Nostr event",
+  },
+  app: {
+    icon: Boxes,
+    description: "Run a sandboxed NIP-5D napplet",
   },
   profile: {
     icon: User,

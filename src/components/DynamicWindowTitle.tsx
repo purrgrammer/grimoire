@@ -184,6 +184,30 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "open";
 
+    case "app":
+      if (props.pointer) {
+        try {
+          if ("id" in props.pointer) {
+            return `app ${nip19.neventEncode({
+              id: props.pointer.id,
+              kind: props.pointer.kind,
+              author: props.pointer.author,
+              relays: props.pointer.relays,
+            })}`;
+          }
+          if ("kind" in props.pointer && "pubkey" in props.pointer) {
+            return `app ${nip19.naddrEncode({
+              kind: props.pointer.kind,
+              pubkey: props.pointer.pubkey,
+              identifier: props.pointer.identifier || "",
+            })}`;
+          }
+        } catch {
+          // Fall through to the bare command.
+        }
+      }
+      return "app";
+
     case "encode":
       if (props.args && props.args[0]) {
         return `encode ${props.args[0]}`;
@@ -400,6 +424,20 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
 
     return `Profile ${profilePubkey.slice(0, 8)}...`;
   }, [appId, profilePubkey, rawProfilePubkey, profile]);
+
+  // Napplet titles - prefer the manifest `title` tag, then the `d` tag
+  const nappletPointer: EventPointer | AddressPointer | undefined =
+    appId === "app" ? props.pointer : undefined;
+  const nappletManifest = useNostrEvent(nappletPointer);
+  const nappletTitle = useMemo(() => {
+    if (appId !== "app") return null;
+    if (!nappletManifest) return "Napplet";
+    return (
+      getTagValues(nappletManifest, "title")[0] ||
+      getTagValues(nappletManifest, "d")[0] ||
+      "Napplet"
+    );
+  }, [appId, nappletManifest]);
 
   // Event titles - use unified title extraction
   const eventPointer: EventPointer | AddressPointer | undefined =
@@ -911,6 +949,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
         icon = getCommandIcon("open");
       }
       tooltip = rawCommand;
+    } else if (nappletTitle && appId === "app") {
+      title = nappletTitle;
+      icon = getCommandIcon("app");
+      tooltip = rawCommand;
     } else if (kindTitle && appId === "kind") {
       title = kindTitle;
       const kindNum = parseInt(props.number);
@@ -1005,6 +1047,7 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     zapTitle,
     profileTitle,
     eventTitle,
+    nappletTitle,
     kindTitle,
     relayTitle,
     reqTitle,

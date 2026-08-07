@@ -98,18 +98,23 @@ function NsiteLineageRow({
   const addWindow = useAddWindow();
 
   const handleClick = () => {
+    const relays = lineage.relay ? [lineage.relay] : undefined;
+    // A root-site coordinate is `15128:<pubkey>:` — an empty identifier. Passing
+    // "" through builds a `#d: [""]` filter that no relay can ever match, since
+    // a root manifest carries no d tag. Omit it so the loader drops #d entirely.
     const pointer = {
       kind: lineage.kind,
       pubkey: lineage.pubkey,
-      identifier: lineage.identifier,
-      relays: lineage.relay ? [lineage.relay] : undefined,
+      ...(lineage.identifier ? { identifier: lineage.identifier } : {}),
+      relays,
     };
-    addWindow(
-      "open",
-      { pointer },
-      `open ${nip19.naddrEncode(pointer)}`,
-      undefined,
-    );
+    const naddr = nip19.naddrEncode({
+      kind: lineage.kind,
+      pubkey: lineage.pubkey,
+      identifier: lineage.identifier,
+      relays,
+    });
+    addWindow("open", { pointer }, `open ${naddr}`, undefined);
   };
 
   return (

@@ -27,6 +27,11 @@
   "dependencies": {
     "@fiatjaf/git-natural-api": "npm:@jsr/fiatjaf__git-natural-api@^0.2.5",
     "@floating-ui/react-dom": "^2.1.9",
+    "@kehto/nip": "^0.5.2",
+    "@kehto/services": "^0.19.0",
+    "@kehto/shell": "^0.19.2",
+    "@napplet/core": "^0.31.1",
+    "@napplet/nap": "^0.31.2",
     "@noble/ciphers": "^2.1.1",
     "@noble/hashes": "^1.8.0",
     "@radix-ui/react-accordion": "^1.2.20",
@@ -87,11 +92,13 @@
     "ipa-tools": "^0.3.1",
     "jotai": "^2.20.2",
     "js-yaml": "^5.3.0",
+    "json-schema-to-ts": "^3.1.1",
     "livekit-client": "^2.21.0",
     "lucide-react": "^1.31.0",
     "media-chrome": "^4.19.2",
     "motion": "^13.1.0",
     "nanoid": "^6.0.1",
+    "nostr-tools": "^2.24.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -144,6 +151,7 @@
   "overrides": {
     "react-dnd-multi-backend": {
       "react-dom": "$react-dom"
-    }
+    },
+    "nostr-tools": "$nostr-tools"
   }
 }
