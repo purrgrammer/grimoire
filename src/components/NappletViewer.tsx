@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
-  Boxes,
+  Copy,
+  CopyCheck,
   Loader2,
   RotateCw,
   ShieldAlert,
@@ -11,10 +12,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
-import { KindBadge } from "@/components/KindBadge";
-import { NIPBadge } from "@/components/NIPBadge";
-import Timestamp from "@/components/Timestamp";
 import { useTheme } from "@/lib/themes";
+import { useCopy } from "@/hooks/useCopy";
 import { getMissingRequiredNaps } from "@/lib/napplet-parser";
 import type { AddressPointer, EventPointer } from "@/lib/open-parser";
 import type { NostrEvent } from "@/types/nostr";
@@ -119,6 +118,7 @@ function NappletFrame({
   const [error, setError] = useState<NappletError | null>(null);
   const [resolved, setResolved] = useState<ResolvedNappletView | null>(null);
   const { theme } = useTheme();
+  const { copied, copy } = useCopy();
 
   useEffect(() => {
     const cancelled = { current: false };
@@ -234,34 +234,51 @@ function NappletFrame({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs">
-        <Boxes className="size-4 text-muted-foreground" />
-        <span className="font-medium">
-          {resolved?.title ?? resolved?.identity.dTag ?? "Napplet"}
-        </span>
-        {resolved && (
-          <>
-            <UserName pubkey={resolved.manifestEvent.pubkey} />
-            <KindBadge kind={resolved.manifestEvent.kind} variant="compact" />
-            <NIPBadge nipNumber="5D" showName={false} />
-            <Timestamp timestamp={resolved.manifestEvent.created_at} />
-            <span
-              className="font-mono text-muted-foreground"
-              title={resolved.identity.aggregateHash}
-            >
-              {resolved.identity.aggregateHash.slice(0, 8)}…
+      {/* Same single-line shape as the req and profile headers. */}
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 font-mono text-xs">
+        {resolved ? (
+          <div className="flex min-w-0 items-center gap-1 truncate">
+            <UserName
+              pubkey={resolved.manifestEvent.pubkey}
+              className="text-inherit"
+            />
+            <span className="text-muted-foreground"> - </span>
+            <span className="truncate">
+              {resolved.title || resolved.identity.dTag || "Napplet"}
             </span>
-          </>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">…</span>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto size-6"
-          onClick={onReload}
-          title="Re-resolve and verify"
-        >
-          <RotateCw className="size-3.5" />
-        </Button>
+
+        <div className="flex flex-shrink-0 items-center gap-3">
+          {resolved && (
+            <button
+              onClick={() => copy(resolved.identity.aggregateHash)}
+              className="flex items-center gap-1 truncate text-muted-foreground transition-colors hover:text-foreground"
+              title={`Verified content address ${resolved.identity.aggregateHash}`}
+              aria-label="Copy the verified content address"
+            >
+              {copied ? (
+                <CopyCheck className="size-3 flex-shrink-0" />
+              ) : (
+                <Copy className="size-3 flex-shrink-0" />
+              )}
+              <code className="truncate">
+                {resolved.identity.aggregateHash.slice(0, 12)}…
+                {resolved.identity.aggregateHash.slice(-6)}
+              </code>
+            </button>
+          )}
+          <button
+            className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            onClick={onReload}
+            title="Re-resolve and verify"
+            aria-label="Re-resolve and verify"
+          >
+            <RotateCw className="size-3" />
+          </button>
+        </div>
       </header>
 
       {stage !== "ready" && (

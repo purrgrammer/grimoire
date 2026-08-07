@@ -2,11 +2,11 @@ import { Boxes, FileText, HardDrive, Play } from "lucide-react";
 import { useRunNapplet } from "@/hooks/useRunNapplet";
 import {
   getNappletTitle,
+  getNappletDescription,
   getNappletIdentifier,
   getNappletPaths,
   getNappletServers,
   getNappletRequires,
-  getNappletAggregateHash,
 } from "@/lib/nip5d-helpers";
 import { Label } from "@/components/ui/label";
 import type { NostrEvent } from "@/types/nostr";
@@ -41,9 +41,9 @@ function NappletRendererInner({
   const paths = getNappletPaths(event);
   const servers = getNappletServers(event);
   const requires = getNappletRequires(event);
-  const aggregate = getNappletAggregateHash(event);
   const identifier = getNappletIdentifier(event);
   const title = getNappletTitle(event);
+  const description = getNappletDescription(event);
 
   const displayTitle = title || identifier || "Napplet";
 
@@ -62,6 +62,10 @@ function NappletRendererInner({
             </span>
           )}
         </ClickableEventTitle>
+
+        {description && (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        )}
 
         {requires.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
@@ -87,11 +91,6 @@ function NappletRendererInner({
                 {servers.length} server{servers.length !== 1 ? "s" : ""}
               </span>
             </div>
-          )}
-          {aggregate && (
-            <span className="font-mono" title={aggregate}>
-              {aggregate.slice(0, 8)}…
-            </span>
           )}
           <div className="ml-auto">
             <RunButton event={event} />

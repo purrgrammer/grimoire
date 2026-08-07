@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertManifestEvent } from "@/lib/napplet-parser";
+import { assertManifestEvent, buildManifestFilter } from "@/lib/napplet-parser";
 import type { NostrEvent } from "@/types/nostr";
 
 const PUBKEY = "a".repeat(64);
@@ -97,5 +97,26 @@ describe("assertManifestEvent", () => {
         }).kind,
       ).toBe(15129);
     });
+  });
+});
+
+/**
+ * Root and named manifests are replaceable/addressable, so they must be
+ * addressed by coordinate — an event id goes stale the moment the author
+ * republishes, and that pointer persists to localStorage and into spellbooks.
+ * Snapshots pin a version by design and are correctly addressed by id.
+ */
+describe("root manifest pointers", () => {
+  it("resolves a coordinate with an empty identifier", () => {
+    const rootPointer = { kind: 15129, pubkey: PUBKEY, identifier: "" };
+    expect(buildManifestFilter(rootPointer)).toEqual({
+      kinds: [15129],
+      authors: [PUBKEY],
+      limit: 1,
+    });
+    expect(
+      assertManifestEvent(manifest({ kind: 15129, tags: [] }), rootPointer)
+        .kind,
+    ).toBe(15129);
   });
 });

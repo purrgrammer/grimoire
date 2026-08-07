@@ -9,7 +9,14 @@ import type { NostrEvent } from "@/types/nostr";
  * libraries into the startup path. `napplet-parser.test.ts` asserts these stay
  * equal to Kehto's `NAPPLET_KINDS`.
  */
-export const NAPPLET_KINDS = [5129, 15129, 35129] as const;
+export const NAPPLET_KIND_SNAPSHOT = 5129;
+export const NAPPLET_KIND_ROOT = 15129;
+export const NAPPLET_KIND_NAMED = 35129;
+export const NAPPLET_KINDS = [
+  NAPPLET_KIND_SNAPSHOT,
+  NAPPLET_KIND_ROOT,
+  NAPPLET_KIND_NAMED,
+] as const;
 import {
   parseOpenCommand,
   type AddressPointer,

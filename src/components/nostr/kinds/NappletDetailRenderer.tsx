@@ -102,10 +102,8 @@ function NappletDetailView({
             </span>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          These values are read straight off the manifest tags and are not
-          verified. Grimoire checks the signature, every file hash, and the
-          aggregate when it runs the napplet.
+        <p className="text-xs text-muted-foreground/70">
+          Unverified manifest tags — checked when the napplet runs.
         </p>
       </div>
 
