@@ -31,11 +31,11 @@ import {
   resolveNapplet,
   fetchBlob,
   openNappletArtifactCache,
-  isNappletManifestKind,
   NappletResolutionError,
   type NappletArtifactCache,
 } from "@kehto/nip/5d";
 import type { Theme as NapTheme } from "@napplet/nap/theme/types";
+import type { Theme as GrimoireTheme } from "@/lib/themes";
 
 import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
@@ -44,13 +44,20 @@ import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
 import { selectRelaysForFilter } from "./relay-selection";
 import { requestEvent } from "@/lib/relay-subscription";
-import { buildManifestFilter, getPointerRelays } from "@/lib/napplet-parser";
+import {
+  buildManifestFilter,
+  getPointerRelays,
+  assertManifestEvent,
+  NappletLookupError,
+} from "@/lib/napplet-parser";
 import type { AddressPointer, EventPointer } from "@/lib/open-parser";
 import type { NostrEvent } from "@/types/nostr";
 
-export { originRegistry, injectNappletNamespacePrelude, isNappletManifestKind };
+export { originRegistry, injectNappletNamespacePrelude };
 export { injectCspMeta } from "@/lib/napplet-csp";
 export { NappletResolutionError };
+export { NappletLookupError } from "@/lib/napplet-parser";
+export type { NappletLookupErrorCode } from "@/lib/napplet-parser";
 export type { ShellEnvironment, OriginIdentity, NapTheme };
 
 /**
@@ -81,21 +88,21 @@ function readConfigValues(): Record<string, unknown> {
 }
 
 /**
- * Read grimoire's live theme off the document root and map it to the NAP
- * `Theme` shape. Grimoire stores HSL triples without the wrapper, so each value
- * has to be wrapped before a napplet can use it as a CSS color.
+ * Map a grimoire theme to the NAP `Theme` shape. Grimoire stores HSL triples
+ * without the wrapper, so each value is wrapped before a napplet can use it as
+ * a CSS color.
+ *
+ * Read from the theme object rather than computed CSS variables: ThemeProvider
+ * writes those variables in its own passive effect, and React flushes passive
+ * effects children-before-parents, so a consumer effect would always observe
+ * the previous theme's values.
  */
-function readCurrentNapTheme(): NapTheme {
-  const styles = getComputedStyle(document.documentElement);
-  const hsl = (name: string, fallback: string) => {
-    const raw = styles.getPropertyValue(name).trim();
-    return raw ? `hsl(${raw})` : fallback;
-  };
+export function toNapTheme(theme: GrimoireTheme): NapTheme {
   return {
     colors: {
-      background: hsl("--background", "#0a0a0a"),
-      text: hsl("--foreground", "#e0e0e0"),
-      primary: hsl("--primary", "#7aa2f7"),
+      background: `hsl(${theme.colors.background})`,
+      text: `hsl(${theme.colors.foreground})`,
+      primary: `hsl(${theme.colors.primary})`,
     },
   };
 }
@@ -124,7 +131,6 @@ let themeService: ReturnType<typeof createThemeService> | null = null;
 
 function buildAdapter(): ShellAdapter {
   themeService = createThemeService({
-    initialTheme: readCurrentNapTheme(),
     // bridge.publishTheme builds its own `theme.changed` envelope and fans out
     // directly; it never calls back into this service, so there is no loop.
     onBroadcast: (envelope) => bridge?.publishTheme(envelope.theme),
@@ -229,9 +235,6 @@ export function publishNappletTheme(theme: NapTheme): void {
   themeService?.publishTheme(theme);
 }
 
-/** Map a grimoire theme's CSS variables to the NAP `Theme` shape. */
-export { readCurrentNapTheme };
-
 if (import.meta.hot) {
   import.meta.hot.dispose(() => destroyNappletBridge());
 }
@@ -269,47 +272,6 @@ export async function fetchManifestEvent(
     );
   }
   return assertManifestEvent(event, pointer);
-}
-
-/** Grimoire-side failures, distinct from Kehto's verification failures. */
-export type NappletLookupErrorCode =
-  "manifest-not-found" | "wrong-kind" | "pointer-mismatch";
-
-export class NappletLookupError extends Error {
-  constructor(
-    readonly code: NappletLookupErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "NappletLookupError";
-  }
-}
-
-/**
- * Guard a fetched event before it reaches `resolveNapplet`. Skipping the author
- * and identifier checks is how a relay substitutes a different napplet for the
- * one that was asked for.
- */
-function assertManifestEvent(
-  event: NostrEvent,
-  pointer: EventPointer | AddressPointer,
-): NostrEvent {
-  if (!isNappletManifestKind(event.kind)) {
-    throw new NappletLookupError(
-      "wrong-kind",
-      `Kind ${event.kind} is not a napplet manifest.`,
-    );
-  }
-  if (!("id" in pointer)) {
-    const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
-    if (event.pubkey !== pointer.pubkey || dTag !== pointer.identifier) {
-      throw new NappletLookupError(
-        "pointer-mismatch",
-        "The relay returned a manifest for a different napplet.",
-      );
-    }
-  }
-  return event;
 }
 
 export interface ResolvedNappletView {

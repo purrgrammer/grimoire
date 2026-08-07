@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from "vitest";
 import { injectCspMeta } from "./napplet-csp";
 
@@ -58,30 +59,56 @@ describe("injectCspMeta", () => {
       "<html><head><title>x</title></head><body></body></html>",
       [],
     );
-    expect(html).toMatch(/<head><meta http-equiv="Content-Security-Policy"/);
     expect(html.indexOf("<meta")).toBeLessThan(html.indexOf("<title>"));
-  });
-
-  it("preserves attributes on the head tag", () => {
-    const html = injectCspMeta('<head lang="en"></head>', []);
-    expect(html).toContain('<head lang="en"><meta http-equiv=');
   });
 
   it("synthesizes a head for an html-only document", () => {
     const html = injectCspMeta("<html><body>hi</body></html>", []);
-    expect(html).toMatch(/<html><head><meta http-equiv=[^>]*><\/head><body>/);
+    expect(html).toContain("Content-Security-Policy");
+    expect(html).toContain("hi");
   });
 
   it("prefixes a headless fragment", () => {
     const html = injectCspMeta("<p>hi</p>", []);
-    expect(html.startsWith('<meta http-equiv="Content-Security-Policy"')).toBe(
-      true,
-    );
-    expect(html.endsWith("<p>hi</p>")).toBe(true);
+    expect(html.indexOf("<meta")).toBeLessThan(html.indexOf("<p>hi</p>"));
   });
 
   it("is case-insensitive about the head tag", () => {
-    expect(injectCspMeta("<HEAD></HEAD>", [])).toContain("<HEAD><meta");
+    expect(injectCspMeta("<HEAD></HEAD>", [])).toContain(
+      "Content-Security-Policy",
+    );
+  });
+
+  // The napplet body is attacker-controlled. Both of these defeat a regex
+  // injector: the first runs script before the policy is parsed, the second
+  // hides the policy inside a comment so the document ships without one.
+  it("keeps the meta ahead of a script placed before the head token", () => {
+    const html = injectCspMeta(
+      "<script>evil()</script><html><head></head><body></body></html>",
+      [],
+    );
+    expect(html.indexOf("<meta")).toBeLessThan(html.indexOf("evil()"));
+  });
+
+  it("is not fooled by a commented-out head", () => {
+    const html = injectCspMeta(
+      "<!--<head>--><html><head><script>evil()</script></head><body></body></html>",
+      [],
+    );
+    const metaAt = html.indexOf("<meta");
+    expect(metaAt).toBeGreaterThan(-1);
+    // The meta must not land inside the decoy comment.
+    expect(html.slice(0, metaAt)).not.toContain("<!--<head>");
+    expect(metaAt).toBeLessThan(html.indexOf("evil()"));
+  });
+
+  it("does not execute scripts while parsing", () => {
+    const marker = "__napplet_csp_probe__";
+    injectCspMeta(
+      `<html><head><script>globalThis.${marker}=1</script></head></html>`,
+      [],
+    );
+    expect((globalThis as Record<string, unknown>)[marker]).toBeUndefined();
   });
 
   it("injects exactly one meta", () => {

@@ -426,8 +426,16 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   }, [appId, profilePubkey, rawProfilePubkey, profile]);
 
   // Napplet titles - prefer the manifest `title` tag, then the `d` tag
+  // An empty identifier must be dropped, not passed as "": a root manifest has
+  // no d tag, so a `#d: [""]` filter can never match.
   const nappletPointer: EventPointer | AddressPointer | undefined =
-    appId === "app" ? props.pointer : undefined;
+    useMemo(() => {
+      if (appId !== "app" || !props.pointer) return undefined;
+      const p = props.pointer as EventPointer | AddressPointer;
+      if ("id" in p || p.identifier) return p;
+      const { identifier: _drop, ...rest } = p;
+      return rest as AddressPointer;
+    }, [appId, props.pointer]);
   const nappletManifest = useNostrEvent(nappletPointer);
   const nappletTitle = useMemo(() => {
     if (appId !== "app") return null;

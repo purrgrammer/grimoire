@@ -1,4 +1,5 @@
 import type { Filter } from "nostr-tools";
+import type { NostrEvent } from "@/types/nostr";
 
 /**
  * NIP-5D manifest kinds: snapshot, root, named.
@@ -52,7 +53,13 @@ export function parseAppCommand(args: string[]): ParsedAppCommand {
   return { pointer };
 }
 
-/** Build the relay filter that fetches the manifest event for a pointer. */
+/**
+ * Build the relay filter that fetches the manifest event for a pointer.
+ *
+ * A root manifest (15129) carries no `d` tag, so a `#d: [""]` filter matches
+ * nothing on any relay. Omit the tag filter entirely when the identifier is
+ * empty and let the kind plus author narrow it.
+ */
 export function buildManifestFilter(
   pointer: EventPointer | AddressPointer,
 ): Filter {
@@ -60,7 +67,7 @@ export function buildManifestFilter(
     return {
       kinds: [pointer.kind],
       authors: [pointer.pubkey],
-      "#d": [pointer.identifier],
+      ...(pointer.identifier ? { "#d": [pointer.identifier] } : {}),
       limit: 1,
     };
   }
@@ -84,4 +91,68 @@ export function getMissingRequiredNaps(
 ): string[] {
   const available = new Set(domains);
   return [...new Set(requires)].filter((nap) => !available.has(nap));
+}
+
+/** Grimoire-side failures, distinct from Kehto's verification failures. */
+export type NappletLookupErrorCode =
+  "manifest-not-found" | "wrong-kind" | "pointer-mismatch";
+
+export class NappletLookupError extends Error {
+  constructor(
+    readonly code: NappletLookupErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "NappletLookupError";
+  }
+}
+
+/**
+ * Guard a fetched event before it reaches `resolveNapplet`.
+ *
+ * This is load-bearing. `requestEvent` takes the first event any relay in the
+ * fan-out returns, applesauce does not re-match inbound frames against the
+ * filter, and `resolveNapplet` only proves that *some* validly signed manifest
+ * arrived — it has no idea which one was asked for. Without these checks a
+ * single hostile relay in the selection can answer with its own correctly
+ * signed napplet and have grimoire render it as the requested one.
+ */
+export function assertManifestEvent(
+  event: NostrEvent,
+  pointer: EventPointer | AddressPointer,
+): NostrEvent {
+  if (!(NAPPLET_KINDS as readonly number[]).includes(event.kind)) {
+    throw new NappletLookupError(
+      "wrong-kind",
+      `Kind ${event.kind} is not a napplet manifest.`,
+    );
+  }
+
+  const mismatch = () => {
+    throw new NappletLookupError(
+      "pointer-mismatch",
+      "The relay returned a manifest for a different napplet.",
+    );
+  };
+
+  if ("id" in pointer) {
+    if (event.id !== pointer.id) mismatch();
+    if (pointer.author && event.pubkey !== pointer.author) mismatch();
+    // nevent may carry a kind hint even though EventPointer does not type one.
+    const hintedKind = (pointer as { kind?: number }).kind;
+    if (hintedKind !== undefined && event.kind !== hintedKind) mismatch();
+    return event;
+  }
+
+  // A root manifest carries no d tag, so `35129:<pk>:` would otherwise be
+  // satisfied by a 15129 event from the same author — hence the kind check.
+  const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
+  if (
+    event.kind !== pointer.kind ||
+    event.pubkey !== pointer.pubkey ||
+    dTag !== pointer.identifier
+  ) {
+    mismatch();
+  }
+  return event;
 }

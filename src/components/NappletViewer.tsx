@@ -26,7 +26,7 @@ import {
   injectNappletNamespacePrelude,
   originRegistry,
   publishNappletTheme,
-  readCurrentNapTheme,
+  toNapTheme,
   resolveNappletFromEvent,
   NappletLookupError,
   NappletResolutionError,
@@ -229,7 +229,7 @@ function NappletFrame({
   // Follow grimoire's theme. Only reaches napplets that were granted `theme`.
   useEffect(() => {
     if (stage !== "ready") return;
-    publishNappletTheme(readCurrentNapTheme());
+    publishNappletTheme(toNapTheme(theme));
   }, [theme, stage]);
 
   return (

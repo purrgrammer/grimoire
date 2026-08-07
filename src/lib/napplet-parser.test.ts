@@ -111,6 +111,12 @@ describe("buildManifestFilter", () => {
     });
   });
 
+  it("omits #d for a root manifest, which carries no d tag", () => {
+    expect(
+      buildManifestFilter({ kind: 15129, pubkey: PUBKEY, identifier: "" }),
+    ).toEqual({ kinds: [15129], authors: [PUBKEY], limit: 1 });
+  });
+
   it("filters an event pointer by id", () => {
     expect(buildManifestFilter({ id: EVENT_ID })).toEqual({ ids: [EVENT_ID] });
   });
