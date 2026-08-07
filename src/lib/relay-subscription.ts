@@ -1,5 +1,5 @@
-import { firstValueFrom, Observable, of } from "rxjs";
-import { catchError, take, tap, toArray } from "rxjs/operators";
+import { firstValueFrom, Observable, of, timer } from "rxjs";
+import { catchError, take, takeUntil, tap, toArray } from "rxjs/operators";
 import type { Filter, NostrEvent } from "nostr-tools";
 import type {
   GroupRequestOptions,
@@ -15,11 +15,19 @@ export type RequestEventsOptions = GroupRequestOptions & {
 };
 
 /**
- * `pool.request()` throws a TimeoutError after 30s by default. Callers here
- * want "what the relays had", not an exception, so cap it lower and resolve
- * with whatever arrived.
+ * Hard ceiling on a one-shot request.
+ *
+ * This is enforced with `takeUntil`, not the `timeout` option: applesauce
+ * applies `timeout({ first })` upstream of its EVENT filter, and a relay emits
+ * an OPEN message the instant the REQ is written, which satisfies `first` and
+ * disarms the timeout permanently. A relay that connects and then answers
+ * `auth-required` sends no EVENT, EOSE, CLOSED or ERROR, so nothing else ever
+ * completes the stream.
  */
 const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Backoff before reopening a subscription the relay closed cleanly. */
+const RESUBSCRIBE_DELAY_MS = 5_000;
 
 /** Upper bound on the per-subscription dedupe set. */
 const MAX_SEEN_IDS = 20_000;
@@ -27,9 +35,9 @@ const MAX_SEEN_IDS = 20_000;
 /**
  * Fetch stored events and resolve once the relays are done.
  *
- * `pool.request()` completes on its own, so this needs no EOSE bookkeeping or
- * manual timeout. Use it for one-shot lookups; use `pool.subscription()` with
- * `{ eventStore }` for anything that should keep streaming.
+ * Use for one-shot lookups; use `pool.subscription()` with `{ eventStore }`
+ * for anything that should keep streaming. Resolves with whatever arrived if
+ * the relays never finish — see REQUEST_TIMEOUT_MS.
  */
 export async function requestEvents(
   relays: string[],
@@ -45,10 +53,10 @@ export async function requestEvents(
     pool
       .request(relays, filters, {
         eventStore: defaultEventStore,
-        timeout: REQUEST_TIMEOUT_MS,
         ...requestOptions,
       })
       .pipe(
+        takeUntil(timer(REQUEST_TIMEOUT_MS)),
         tap((event) => collected.push(event)),
         toArray(),
         catchError((error) => {
@@ -77,10 +85,10 @@ export async function requestEvent(
     pool
       .request(relays, [filter], {
         eventStore: defaultEventStore,
-        timeout: REQUEST_TIMEOUT_MS,
         ...requestOptions,
       })
       .pipe(
+        takeUntil(timer(REQUEST_TIMEOUT_MS)),
         take(1),
         catchError((error) => {
           console.warn("[relay] event request failed:", error);
@@ -112,7 +120,12 @@ export function streamWithEose(
     onEose?: () => void;
     /** Backstop for relays that connect but never EOSE. Default 15s. */
     eoseTimeout?: number;
-    /** Reopen after a clean CLOSED. Defaults to true for long-lived streams. */
+    /**
+     * Reopen after a clean CLOSED. Defaults to reopening after a delay.
+     * Never pass `true`: applesauce turns that into `repeat({ delay: of(null) })`,
+     * a synchronous loop — measured at >20k REQ frames per second against a
+     * relay that CLOSEs after EOSE.
+     */
     resubscribe?: RelayReqOptions["resubscribe"];
     /** Retry connection errors. */
     reconnect?: RelayReqOptions["reconnect"];
@@ -123,7 +136,7 @@ export function streamWithEose(
     store = defaultEventStore,
     onEose,
     eoseTimeout = 15_000,
-    resubscribe = true,
+    resubscribe = { delay: RESUBSCRIBE_DELAY_MS },
     reconnect = 5,
   } = options ?? {};
 
@@ -149,11 +162,11 @@ export function streamWithEose(
     const emitEose = () => {
       if (eoseEmitted) return;
       eoseEmitted = true;
-      clearTimeout(timer);
+      clearTimeout(eoseTimer);
       onEose?.();
     };
 
-    const timer = setTimeout(emitEose, eoseTimeout);
+    const eoseTimer = setTimeout(emitEose, eoseTimeout);
 
     const sub = pool
       .req(targets, filters, { resubscribe, reconnect })
@@ -209,7 +222,7 @@ export function streamWithEose(
           }
         },
         error: (error) => {
-          clearTimeout(timer);
+          clearTimeout(eoseTimer);
           subscriber.error(error);
         },
         complete: () => {
@@ -219,7 +232,7 @@ export function streamWithEose(
       });
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(eoseTimer);
       sub.unsubscribe();
     };
   });
