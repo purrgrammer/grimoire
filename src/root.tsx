@@ -4,10 +4,18 @@ import DashboardPage from "./components/pages/DashboardPage";
 import SpellbookPage from "./components/pages/SpellbookPage";
 import Nip19PreviewRouter from "./components/pages/Nip19PreviewRouter";
 import RunCommandPage from "./components/pages/RunCommandPage";
+import RouteErrorPage from "./components/pages/RouteErrorPage";
+
+const errorElement = (
+  <AppShell hideBottomBar>
+    <RouteErrorPage />
+  </AppShell>
+);
 
 const router = createBrowserRouter([
   {
     path: "/",
+    errorElement,
     element: (
       <AppShell>
         <DashboardPage />
@@ -16,6 +24,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/run",
+    errorElement,
     element: (
       <AppShell hideBottomBar>
         <RunCommandPage />
@@ -24,6 +33,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/preview/:actor/:identifier",
+    errorElement,
     element: (
       <AppShell>
         <SpellbookPage />
@@ -33,6 +43,7 @@ const router = createBrowserRouter([
   // NIP-19 identifier preview route - must come before /:actor/:identifier catch-all
   {
     path: "/:identifier",
+    errorElement,
     element: (
       <AppShell hideBottomBar>
         <Nip19PreviewRouter />
@@ -58,11 +69,23 @@ const router = createBrowserRouter([
   // Catch-all for two-segment paths (spellbooks, etc.)
   {
     path: "/:actor/:identifier",
+    errorElement,
     element: (
       <AppShell>
         <SpellbookPage />
       </AppShell>
     ),
+  },
+  // Anything that matches no route above (3+ segments, etc.). Throwing from
+  // the loader routes it through errorElement as a real 404 rather than
+  // rendering the error page with no error to report.
+  {
+    path: "*",
+    errorElement,
+    loader: () => {
+      throw new Response("Not Found", { status: 404 });
+    },
+    element: null,
   },
 ]);
 

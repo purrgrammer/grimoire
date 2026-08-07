@@ -1,5 +1,5 @@
-import { firstValueFrom, Observable } from "rxjs";
-import { toArray } from "rxjs/operators";
+import { firstValueFrom, Observable, of } from "rxjs";
+import { catchError, take, tap, toArray } from "rxjs/operators";
 import type { Filter, NostrEvent } from "nostr-tools";
 import type {
   GroupRequestOptions,
@@ -15,6 +15,16 @@ export type RequestEventsOptions = GroupRequestOptions & {
 };
 
 /**
+ * `pool.request()` throws a TimeoutError after 30s by default. Callers here
+ * want "what the relays had", not an exception, so cap it lower and resolve
+ * with whatever arrived.
+ */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Upper bound on the per-subscription dedupe set. */
+const MAX_SEEN_IDS = 20_000;
+
+/**
  * Fetch stored events and resolve once the relays are done.
  *
  * `pool.request()` completes on its own, so this needs no EOSE bookkeeping or
@@ -28,25 +38,57 @@ export async function requestEvents(
 ): Promise<NostrEvent[]> {
   const { pool = defaultPool, ...requestOptions } = options ?? {};
 
+  // Collect as we go so a timeout still yields what did arrive.
+  const collected: NostrEvent[] = [];
+
   return firstValueFrom(
     pool
       .request(relays, filters, {
         eventStore: defaultEventStore,
+        timeout: REQUEST_TIMEOUT_MS,
         ...requestOptions,
       })
-      .pipe(toArray()),
+      .pipe(
+        tap((event) => collected.push(event)),
+        toArray(),
+        catchError((error) => {
+          console.warn("[relay] request did not complete cleanly:", error);
+          return of(collected);
+        }),
+      ),
     { defaultValue: [] as NostrEvent[] },
   );
 }
 
-/** Fetch a single event, or null if no relay had it. */
+/**
+ * Fetch a single event, or null if no relay had it.
+ *
+ * Returns on the first match rather than waiting for every relay to finish,
+ * so a hit on a fast relay isn't held up by the slowest one.
+ */
 export async function requestEvent(
   relays: string[],
   filter: Filter,
   options?: RequestEventsOptions,
 ): Promise<NostrEvent | null> {
-  const events = await requestEvents(relays, [filter], options);
-  return events[0] ?? null;
+  const { pool = defaultPool, ...requestOptions } = options ?? {};
+
+  return firstValueFrom(
+    pool
+      .request(relays, [filter], {
+        eventStore: defaultEventStore,
+        timeout: REQUEST_TIMEOUT_MS,
+        ...requestOptions,
+      })
+      .pipe(
+        take(1),
+        catchError((error) => {
+          console.warn("[relay] event request failed:", error);
+          return of(null);
+        }),
+      ),
+    { defaultValue: null },
+  );
 }
 
 /**
@@ -98,6 +140,9 @@ export function streamWithEose(
     }
 
     const settled = new Set<string>();
+    // Scoped to this subscription on purpose: deduping against the shared
+    // EventStore would drop events it already holds from another source, and
+    // those would never reach the caller.
     const seen = new Set<string>();
     let eoseEmitted = false;
 
@@ -131,6 +176,11 @@ export function streamWithEose(
               // per relay, unlike pool.subscription().
               if (seen.has(message.event.id)) break;
               seen.add(message.event.id);
+              // Bounded so a long-lived stream can't grow without limit. Sets
+              // keep insertion order, so this evicts the oldest id.
+              if (seen.size > MAX_SEEN_IDS) {
+                seen.delete(seen.values().next().value as string);
+              }
               subscriber.next(message.event);
               break;
             case "EOSE":
