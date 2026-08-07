@@ -17,22 +17,13 @@ export const CHAT_KINDS = [
  * Chat protocol identifier
  */
 export type ChatProtocol =
-  | "nip-17"
-  | "nip-28"
-  | "nip-29"
-  | "nip-53"
-  | "nip-10"
-  | "nip-22";
+  "nip-17" | "nip-28" | "nip-29" | "nip-53" | "nip-10" | "nip-22";
 
 /**
  * Conversation type
  */
 export type ConversationType =
-  | "dm"
-  | "channel"
-  | "group"
-  | "live-chat"
-  | "comment-thread";
+  "dm" | "channel" | "group" | "live-chat" | "comment-thread";
 
 /**
  * Participant role in a conversation

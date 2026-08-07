@@ -154,8 +154,7 @@ async function getOutboxRelaysForPubkey(
 
     // Cache miss - get from EventStore
     const event = eventStore.getReplaceable(10002, pubkey, "") as
-      | NostrEvent
-      | undefined;
+      NostrEvent | undefined;
     if (!event) {
       console.debug(
         `[RelaySelection] No relay list found for ${pubkey.slice(0, 8)} (not in cache or store)`,
@@ -252,8 +251,7 @@ async function getInboxRelaysForPubkey(
 
     // Cache miss - get from EventStore
     const event = eventStore.getReplaceable(10002, pubkey, "") as
-      | NostrEvent
-      | undefined;
+      NostrEvent | undefined;
     if (!event) {
       console.debug(
         `[RelaySelection] No relay list found for ${pubkey.slice(0, 8)} (not in cache or store)`,

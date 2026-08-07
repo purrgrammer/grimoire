@@ -29,12 +29,7 @@ import type { IRelay } from "applesauce-relay";
 
 /** Types of events tracked in the log */
 export type EventLogType =
-  | "PUBLISH"
-  | "CONNECT"
-  | "DISCONNECT"
-  | "ERROR"
-  | "AUTH"
-  | "NOTICE";
+  "PUBLISH" | "CONNECT" | "DISCONNECT" | "ERROR" | "AUTH" | "NOTICE";
 
 /** Per-relay status with timing */
 export interface RelayStatusEntry {

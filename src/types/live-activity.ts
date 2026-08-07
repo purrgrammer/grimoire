@@ -3,11 +3,7 @@ import type { NostrEvent } from "./nostr";
 export type LiveStatus = "planned" | "live" | "ended";
 
 export type ParticipantRole =
-  | "Host"
-  | "Speaker"
-  | "Moderator"
-  | "Participant"
-  | string;
+  "Host" | "Speaker" | "Moderator" | "Participant" | string;
 
 export interface LiveParticipant {
   pubkey: string;

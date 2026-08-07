@@ -15,12 +15,7 @@ import { isValidRelayURL } from "@/lib/relay-url";
  */
 
 export type ScrollParamType =
-  | "public_key"
-  | "event"
-  | "string"
-  | "number"
-  | "timestamp"
-  | "relay";
+  "public_key" | "event" | "string" | "number" | "timestamp" | "relay";
 
 export interface ScrollParam {
   name: string;

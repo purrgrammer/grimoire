@@ -77,8 +77,7 @@ function getPasteHandler(editor: Editor) {
     (p as any).key?.startsWith("nostrPasteHandler$"),
   );
   return plugin?.props?.handlePaste as
-    | ((view: any, event: any, slice: any) => boolean | void)
-    | undefined;
+    ((view: any, event: any, slice: any) => boolean | void) | undefined;
 }
 
 /** Create a mock ClipboardEvent with text */

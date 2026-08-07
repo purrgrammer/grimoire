@@ -61,8 +61,7 @@ export interface ServerCheckResult {
  * Compatible with blossom-client-sdk's signer interface
  */
 function getActiveSigner():
-  | ((event: EventTemplate) => Promise<SignedEvent>)
-  | null {
+  ((event: EventTemplate) => Promise<SignedEvent>) | null {
   const account = accountManager.active;
   if (!account?.signer) return null;
 

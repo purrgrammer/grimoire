@@ -1,10 +1,7 @@
 // Types for global relay state management
 
 export type ConnectionState =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "error";
+  "disconnected" | "connecting" | "connected" | "error";
 
 export type AuthStatus =
   | "none" // No auth interaction yet

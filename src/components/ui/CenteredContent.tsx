@@ -8,16 +8,7 @@ interface CenteredContentProps {
    * @default '3xl' (48rem / 768px)
    */
   maxWidth?:
-    | "sm"
-    | "md"
-    | "lg"
-    | "xl"
-    | "2xl"
-    | "3xl"
-    | "4xl"
-    | "5xl"
-    | "6xl"
-    | "full";
+    "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "full";
   /**
    * Vertical spacing between child elements
    * @default '6' (1.5rem)

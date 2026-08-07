@@ -106,12 +106,7 @@ export function getAppPlatforms(event: NostrEvent): string[] {
  * Platform names for display
  */
 export type Platform =
-  | "android"
-  | "ios"
-  | "web"
-  | "linux"
-  | "windows"
-  | "macos";
+  "android" | "ios" | "web" | "linux" | "windows" | "macos";
 
 /**
  * Detect unique platforms from f tags

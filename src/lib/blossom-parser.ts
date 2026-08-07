@@ -16,13 +16,7 @@ import { isNip05, resolveNip05 } from "./nip05";
 import { isValidHexPubkey, normalizeHex } from "./nostr-validation";
 
 export type BlossomSubcommand =
-  | "servers"
-  | "server"
-  | "upload"
-  | "list"
-  | "blob"
-  | "mirror"
-  | "delete";
+  "servers" | "server" | "upload" | "list" | "blob" | "mirror" | "delete";
 
 export interface BlossomCommandResult {
   subcommand: BlossomSubcommand;

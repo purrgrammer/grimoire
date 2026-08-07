@@ -63,12 +63,7 @@ interface SpellDialogProps {
 }
 
 type PublishingState =
-  | "idle"
-  | "validating"
-  | "signing"
-  | "publishing"
-  | "saving"
-  | "error";
+  "idle" | "validating" | "signing" | "publishing" | "saving" | "error";
 
 export function SpellDialog({
   open,

@@ -23,10 +23,7 @@ export interface NostrFilter {
 
 // Relay connection state
 export type RelayConnectionState =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+  "connecting" | "connected" | "disconnected" | "error";
 
 // Relay message types
 export type RelayMessage =

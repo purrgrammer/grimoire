@@ -634,12 +634,10 @@ export function ChatViewer({
   const conversationResult = use$(
     () =>
       from(adapter.resolveConversation(identifier)).pipe(
-        map(
-          (conv): ConversationResult => ({
-            status: "success",
-            conversation: conv,
-          }),
-        ),
+        map((conv): ConversationResult => ({
+          status: "success",
+          conversation: conv,
+        })),
         catchError((err) => {
           console.error("[Chat] Failed to resolve conversation:", err);
           const errorMessage =

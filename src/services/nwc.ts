@@ -35,10 +35,7 @@ let supportSubscription: Subscription | null = null;
  * Connection status for the NWC wallet
  */
 export type NWCConnectionStatus =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "error";
+  "disconnected" | "connecting" | "connected" | "error";
 
 // ============================================================================
 // Observables - All state is exposed reactively

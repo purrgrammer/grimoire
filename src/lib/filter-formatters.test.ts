@@ -411,19 +411,17 @@ describe("formatProfileNames", () => {
   it("should truncate when more than maxDisplay", () => {
     const profiles = Array(5)
       .fill(null)
-      .map(
-        (_, i): ProfileMetadata => ({
-          name: `User${i}`,
-          display_name: "",
-          about: "",
-          picture: "",
-          banner: "",
-          nip05: "",
-          lud06: "",
-          lud16: "",
-          website: "",
-        }),
-      );
+      .map((_, i): ProfileMetadata => ({
+        name: `User${i}`,
+        display_name: "",
+        about: "",
+        picture: "",
+        banner: "",
+        nip05: "",
+        lud06: "",
+        lud16: "",
+        website: "",
+      }));
     const result = formatProfileNames(profiles, 2);
 
     expect(result).toBe("User0, User1 & 3 more");

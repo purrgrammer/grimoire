@@ -44,12 +44,7 @@ export async function fetchEventParam(
 // --- Types ---
 
 export type ScrollRuntimeState =
-  | "idle"
-  | "loading"
-  | "running"
-  | "stopped"
-  | "completed"
-  | "error";
+  "idle" | "loading" | "running" | "stopped" | "completed" | "error";
 
 export type TraceDirection = "program" | "host";
 
