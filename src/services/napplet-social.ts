@@ -24,7 +24,8 @@ import {
 import { FollowUser, UnfollowUser } from "applesauce-actions/actions";
 import { getProfileContent } from "applesauce-core/helpers";
 
-import { getHub } from "./hub";
+import { getHub, publishEvent } from "./hub";
+import { createNappletSigner } from "./napplet-signer";
 import accountManager from "./accounts";
 import defaultEventStore from "./event-store";
 import { requestSigningConsent } from "./napplet-consent";
@@ -33,6 +34,8 @@ import { requestSigningConsent } from "./napplet-consent";
 function shortPubkey(pubkey: string): string {
   return `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`;
 }
+
+const nappletSigner = createNappletSigner();
 
 function activePubkey(): string | null {
   return accountManager.active?.pubkey ?? null;
@@ -88,13 +91,32 @@ export function createNappletCommonService() {
     },
 
     react: async (targetEventId, reaction) => {
+      const target = defaultEventStore.getEvent(targetEventId);
+      if (!target) {
+        return { ok: false, error: "target event not found" };
+      }
+
+      const symbol = String(reaction || "+").slice(0, 32);
       const allowed = await requestSigningConsent({
-        summary: `react "${String(reaction).slice(0, 16)}" as you`,
-        detail: `On event ${targetEventId.slice(0, 12)}…`,
+        summary: `react "${symbol}" as you`,
+        detail: `On a kind ${target.kind} event by ${shortPubkey(target.pubkey)}.`,
       });
       if (!allowed) return { ok: false, error: "refused" };
-      // Reactions are not wired to a publish path yet; refusing is honest.
-      return { ok: false, error: "reactions are not implemented yet" };
+
+      // NIP-25: e and p identify the target, k carries its kind so clients can
+      // route the reaction without fetching the event first.
+      const signed = await nappletSigner.signEvent({
+        kind: 7,
+        content: symbol,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["e", target.id],
+          ["p", target.pubkey],
+          ["k", String(target.kind)],
+        ],
+      });
+      await publishEvent(signed);
+      return { ok: true, eventId: signed.id, event: signed };
     },
 
     report: async () => {
@@ -106,19 +128,37 @@ export function createNappletCommonService() {
 }
 
 /**
+ * Lists whose semantics are unambiguous enough to expose. Private items are
+ * excluded: they need NIP-44 encryption of the list content, which is a
+ * different consent question from adding a public entry.
+ */
+const SUPPORTED_LISTS = [
+  { kind: 10000, type: "mute", addressable: false, privateItems: false },
+  { kind: 10003, type: "bookmarks", addressable: false, privateItems: false },
+  { kind: 30003, type: "bookmark-set", addressable: true, privateItems: false },
+] as const;
+
+/**
  * NAP-LISTS. Every mutation is a signed edit of a list the user relies on
  * (mutes, bookmarks, relay sets), so each one is confirmed.
  */
 export function createNappletListsService() {
   return createListsService({
-    supported: () => [],
+    // Report only what is genuinely handled. An empty list said nothing was
+    // supported; claiming everything would be worse.
+    supported: () => SUPPORTED_LISTS,
     add: async (list) => {
       const allowed = await requestSigningConsent({
         summary: `add to your "${String(list?.kind ?? "list")}" list`,
         detail: "This edits a list published under your identity.",
       });
       if (!allowed) return { ok: false, error: "refused" };
-      return { ok: false, error: "list edits are not implemented yet" };
+      return {
+        ok: false,
+        error: "unsupported",
+        reason: "grimoire cannot edit lists from a napplet yet",
+        supported: [...SUPPORTED_LISTS],
+      };
     },
     remove: async (list) => {
       const allowed = await requestSigningConsent({
@@ -126,7 +166,12 @@ export function createNappletListsService() {
         detail: "This edits a list published under your identity.",
       });
       if (!allowed) return { ok: false, error: "refused" };
-      return { ok: false, error: "list edits are not implemented yet" };
+      return {
+        ok: false,
+        error: "unsupported",
+        reason: "grimoire cannot edit lists from a napplet yet",
+        supported: [...SUPPORTED_LISTS],
+      };
     },
   });
 }
