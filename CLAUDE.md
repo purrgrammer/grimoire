@@ -121,25 +121,6 @@ Use `Intl.NumberFormat` for numbers and currencies.
 - **`NIPBadge`** — a NIP reference; clickable to open the NIP document. Shows
   deprecation state.
 
-## Deferred upgrades
-
-Attempted and backed out for specific reasons. Dependabot is configured to skip
-their majors (`.github/dependabot.yml`) — confirm the reason no longer holds
-before retrying.
-
-- **`react-mosaic-component` 7** — replaces the binary `{first, second}` layout
-  tree with an n-ary `{type, children}` shape. That tree is a **wire format**
-  (spellbooks publish it inside kind 30777 `content`), so this needs a versioned
-  spellbook format plus a migration for persisted layouts. Would also clear the
-  `element.ref` React 19 warning `<MosaicWindow>` emits, and a moderate `uuid`
-  advisory.
-- **`blossom-client-sdk` 5** — pins `@cashu/cashu-ts` `^2.4.3`, conflicting with
-  applesauce 6's `^4.5.1`; npm `overrides` doesn't clear it. The migration itself
-  is easy (client class → `Actions` namespace with `onAuth` callbacks). Blocked
-  on upstream widening that peer.
-- **TypeScript 7** — no `typescript-eslint` release accepts TS ≥ 6.1, so lint
-  breaks. On 6.0.x until it does.
-
 ## applesauce v6 relay gotchas
 
 These bit us during the v6 upgrade and the compiler cannot catch them.
@@ -180,20 +161,13 @@ before it.
 Never hand-roll "collect events until EOSE, with a timeout" again — that's what
 `requestEvents()` is for.
 
-**Nothing consumes `authRequiredForRead$` / `authRequiredForPublish$` yet.** A
-relay that answers a REQ with `auth-required` but never sends a NIP-42 `AUTH`
-frame emits no EVENT, EOSE, CLOSED or ERROR — it just blocks. The auth prompt
-fires off `challenge$`, so that case produces no prompt and the read looks
-complete-but-empty once the EOSE backstop fires. See issue #273 before adding
-anything that assumes a silent relay is a finished one.
+**A silent relay is not a finished relay.** One that answers `auth-required`
+without sending a NIP-42 `AUTH` frame emits no EVENT, EOSE, CLOSED or ERROR at
+all — it blocks. Don't treat absence of messages as completion.
 
-**Streaming chat is a known follow-up.** The chat adapters withhold all messages
-until EOSE, which was measured at ~6.8s on a live relay while events arrive from
-~830ms. Rendering as they stream is better, but it isn't a matter of deleting the
-gate: `eventStore.timeline()` emits growing *subsets*, so the list grows at the
-top and Virtuoso's `initialTopMostItemIndex` / `followOutput` anchor to a stale
-index — the messages render offscreen. Doing this properly means giving the list
-a stable bottom anchor first. Tried and reverted; don't retry without that part.
+**Chat rendering is gated on EOSE deliberately.** The list needs a stable bottom
+anchor before it can render as events stream in; `eventStore.timeline()` emits
+growing subsets, so removing the gate renders messages offscreen.
 
 **Event creation uses factory classes**, not the removed `EventFactory` /
 `blueprint()`. See `docs/applesauce.md`.
@@ -270,8 +244,7 @@ Lint must report **0 errors**. It does report warnings: a set of rules newly
 promoted by eslint 10 and `eslint-plugin-react-hooks` 7 (the React Compiler set:
 `set-state-in-effect`, `error-boundaries`, `refs`, `purity`, …) is pinned to
 `warn` in `eslint.config.js`, with the reasoning inline there. Don't add new
-violations; clearing one rule's backlog and promoting it to `error` is a welcome
-standalone change.
+violations — the current count is the ceiling.
 
 ## Slash Commands
 

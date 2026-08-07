@@ -50,7 +50,7 @@ updates:
           - "@types/*"
         update-types: ["minor", "patch"]
     ignore:
-      # Blocked or deliberately deferred — see "Deferred upgrades" in CLAUDE.md.
+      # Blocked or deliberately deferred. Reasons and blockers: #274, #275, #276.
       - dependency-name: react-mosaic-component
         update-types: ["version-update:semver-major"]
       - dependency-name: blossom-client-sdk

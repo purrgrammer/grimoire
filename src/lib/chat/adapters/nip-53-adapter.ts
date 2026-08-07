@@ -250,7 +250,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     this.cleanup(conversation.id);
 
     // Chat needs a stable bottom anchor, so hold rendering until the initial
-    // batch has landed. See "streaming chat" in CLAUDE.md.
+    // batch has landed. Streaming instead needs a stable list anchor: #277.
     const eoseReceived$ = new BehaviorSubject<boolean>(false);
 
     const subscription = streamWithEose(relays, [filter], {
