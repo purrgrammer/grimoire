@@ -61,17 +61,19 @@ export function ScrollExecutor({ params, wasmBase64 }: ScrollExecutorProps) {
 
   const isActive = runtimeState === "loading" || runtimeState === "running";
 
-  // Sync "me" param with active account pubkey
+  // Sync the "me" param on login/logout only. Syncing on every render pass
+  // would clobber a pubkey the user typed in by hand — including on run/stop,
+  // since that flips isActive.
+  const syncedPubkeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const hasMeParam = params.some(
       (p) => p.name === "me" && p.type === "public_key",
     );
     if (!hasMeParam || isActive) return;
+    if (syncedPubkeyRef.current === pubkey) return;
 
-    setParamValues((prev) => ({
-      ...prev,
-      me: pubkey || "",
-    }));
+    syncedPubkeyRef.current = pubkey;
+    setParamValues((prev) => ({ ...prev, me: pubkey || "" }));
   }, [pubkey, params, isActive]);
 
   // Sorted, deduplicated display events (newest first)
