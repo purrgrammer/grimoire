@@ -24,7 +24,7 @@ export interface PublishSpellbookOptions {
  * 4. Publishes the signed event via ActionRunner
  *
  * NOTE: This action does NOT mark the local spellbook as published.
- * The caller should use hub.exec() and call markSpellbookPublished()
+ * The caller should use getHub().exec() and call markSpellbookPublished()
  * AFTER successful publish to ensure data consistency.
  *
  * @param options - Spellbook publishing options
@@ -35,7 +35,7 @@ export interface PublishSpellbookOptions {
  * @example
  * ```typescript
  * // Publish via ActionRunner with proper side-effect handling
- * const event = await lastValueFrom(hub.exec(PublishSpellbook, options));
+ * const event = await lastValueFrom(getHub().exec(PublishSpellbook, options));
  * if (event) {
  *   // Only mark as published AFTER successful relay publish
  *   await markSpellbookPublished(localId, event as SpellbookEvent);

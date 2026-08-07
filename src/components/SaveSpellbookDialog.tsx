@@ -19,7 +19,7 @@ import {
   markSpellbookPublished,
 } from "@/services/spellbook-storage";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
-import { hub, publishEvent } from "@/services/hub";
+import { getHub, publishEvent } from "@/services/hub";
 import { createSpellbook } from "@/lib/spellbook-manager";
 import { Loader2, Save, Send } from "lucide-react";
 import type { SpellbookEvent } from "@/types/spell";
@@ -114,7 +114,7 @@ export function SaveSpellbookDialog({
       if (shouldPublish) {
         const localId = existingSpellbook?.localId || localSpellbook.id;
         const event = await lastValueFrom(
-          hub.exec(PublishSpellbook, {
+          getHub().exec(PublishSpellbook, {
             state,
             title,
             description,

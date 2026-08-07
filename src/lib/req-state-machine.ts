@@ -39,6 +39,10 @@ export function deriveOverallState(
   const disconnectedCount = states.filter(
     (s) => s.connectionState === "disconnected",
   ).length;
+  // Relays that never answered the REQ and were marked done by the client
+  // deadline. They stay connectionState "connected", so without counting them
+  // a relay that returned nothing would be reported as a healthy completion.
+  const eoseTimedOutCount = states.filter((s) => s.eoseTimedOut).length;
 
   // Calculate flags
   const hasReceivedEvents = states.some((s) => s.eventCount > 0);
@@ -115,7 +119,10 @@ export function deriveOverallState(
     }
 
     // EOSE received, but some relays have issues (check this before "live")
-    if (overallEoseReceived && (errorCount > 0 || disconnectedCount > 0)) {
+    if (
+      overallEoseReceived &&
+      (errorCount > 0 || disconnectedCount > 0 || eoseTimedOutCount > 0)
+    ) {
       if (hasActiveRelays) {
         return "partial"; // Some working, some not
       } else {

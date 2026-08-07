@@ -49,12 +49,10 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
 }
 
 /**
- * Signer that always delegates to the currently active account.
+ * Signer that delegates to the currently active account.
  *
- * applesauce v6's ActionRunner takes an EventSigner directly (the old
- * EventFactory indirection was removed). Delegation keeps *signing* on the
- * active account, but ActionRunner memoizes its context — including `self` and
- * `user` — on first use, so the cache is also cleared on account change below.
+ * applesauce v6's ActionRunner takes an EventSigner directly; the old
+ * EventFactory indirection was removed.
  */
 function requireActiveSigner() {
   const signer = accountManager.active?.signer;
@@ -75,27 +73,33 @@ const activeAccountSigner: EventSigner = {
   },
 };
 
+let runner: ActionRunner | undefined;
+let runnerPubkey: string | undefined;
+
 /**
- * Global action runner for Grimoire
- * Used to register and execute actions throughout the application
+ * The action runner for the active account.
+ *
+ * ActionRunner memoizes its context — including `self` and `user` — on first
+ * use, so a single long-lived instance would keep handing actions the pubkey
+ * that was active when it was first run, even though signing follows the
+ * current account. Keying the instance to the active pubkey makes that
+ * impossible rather than papering over it.
  *
  * Configured with:
  * - EventStore: Single source of truth for Nostr events
  * - EventSigner: Signs events using the active account
  * - publishEvent: Publishes events via outbox relay selection + PublishService
  */
-export const hub = new ActionRunner(
-  eventStore,
-  activeAccountSigner,
-  publishEvent,
-);
+export function getHub(): ActionRunner {
+  const pubkey = accountManager.active?.pubkey;
 
-// ActionRunner caches `self`/`user` from the first getContext() call, so an
-// account switch would otherwise leave actions building tags for the old
-// pubkey even though signing follows the new one.
-accountManager.active$.subscribe(() => {
-  (hub as unknown as { _context?: unknown })._context = undefined;
-});
+  if (!runner || runnerPubkey !== pubkey) {
+    runner = new ActionRunner(eventStore, activeAccountSigner, publishEvent);
+    runnerPubkey = pubkey;
+  }
+
+  return runner;
+}
 
 /**
  * Publishes a Nostr event to specific relays

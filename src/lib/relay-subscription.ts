@@ -116,14 +116,21 @@ export function streamWithEose(
         next: (message) => {
           switch (message.type) {
             case "EVENT":
-              // pool.req() delivers one copy per relay
-              if (seen.has(message.event.id)) break;
-              seen.add(message.event.id);
+              // Store every copy before deduping: each relay stamps its own
+              // seen-relay symbol, and EventStore.add merges those onto the
+              // retained event. Skipping duplicates here would leave every
+              // event looking like it came from one relay, thinning the relay
+              // hints built from getSeenRelays().
               try {
                 store?.add(message.event);
               } catch (error) {
                 console.error("[relay] failed to store event:", error);
               }
+
+              // ...but only emit once per event; pool.req() delivers one copy
+              // per relay, unlike pool.subscription().
+              if (seen.has(message.event.id)) break;
+              seen.add(message.event.id);
               subscriber.next(message.event);
               break;
             case "EOSE":

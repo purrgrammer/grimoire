@@ -35,7 +35,7 @@ import {
 import type { LocalSpellbook } from "@/services/db";
 import { PublishSpellbook } from "@/actions/publish-spellbook";
 import { DeleteEventAction } from "@/actions/delete-event";
-import { hub, publishEvent } from "@/services/hub";
+import { getHub, publishEvent } from "@/services/hub";
 import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import { useReqTimeline } from "@/hooks/useReqTimeline";
@@ -415,9 +415,9 @@ export function SpellbooksViewer() {
 
   const handlePublish = async (spellbook: LocalSpellbook) => {
     try {
-      // Use hub.exec() to get the event and handle side effects after successful publish
+      // Use getHub().exec() to get the event and handle side effects after successful publish
       const event = await lastValueFrom(
-        hub.exec(PublishSpellbook, {
+        getHub().exec(PublishSpellbook, {
           state,
           title: spellbook.title,
           description: spellbook.description,
