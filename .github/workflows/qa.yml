@@ -13,12 +13,8 @@ concurrency:
 
 jobs:
   qa:
-    name: ${{ matrix.task }}
+    name: QA
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, typecheck, test, build]
     steps:
       - uses: actions/checkout@v6
 
@@ -31,18 +27,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Each step runs even if an earlier one failed, so one push reports
+      # every problem instead of only the first.
       - name: Lint
-        if: matrix.task == 'lint'
         run: npm run lint
 
       - name: Typecheck
-        if: matrix.task == 'typecheck'
+        if: "!cancelled()"
         run: npm run typecheck
 
       - name: Test
-        if: matrix.task == 'test'
+        if: "!cancelled()"
         run: npm run test:run
 
       - name: Build
-        if: matrix.task == 'build'
+        if: "!cancelled()"
         run: npm run build

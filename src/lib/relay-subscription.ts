@@ -160,29 +160,44 @@ export function streamWithEose(
       .subscribe({
         next: (message) => {
           switch (message.type) {
-            case "EVENT":
-              // Store every copy before deduping: each relay stamps its own
-              // seen-relay symbol, and EventStore.add merges those onto the
-              // retained event. Skipping duplicates here would leave every
-              // event looking like it came from one relay, thinning the relay
-              // hints built from getSeenRelays().
-              try {
-                store?.add(message.event);
-              } catch (error) {
-                console.error("[relay] failed to store event:", error);
+            case "EVENT": {
+              // Mirrors what pool.subscription({ eventStore }) did via
+              // mapEventsToStore: add every copy, emit the instance the store
+              // retained, and drop what the store rejects.
+              let event = message.event;
+
+              if (store) {
+                let retained: NostrEvent | null;
+                try {
+                  // Every relay's copy is added, not just the first: each
+                  // carries its own seen-relay symbol and add() merges them
+                  // onto the retained event. Deduping first would leave events
+                  // looking like they came from one relay, thinning the relay
+                  // hints built from getSeenRelays().
+                  retained = store.add(event);
+                } catch (error) {
+                  console.error("[relay] failed to store event:", error);
+                  retained = event;
+                }
+
+                // null means the store refused it (e.g. expired). Upstream
+                // filtered these out, so don't emit them.
+                if (retained === null) break;
+                event = retained;
               }
 
-              // ...but only emit once per event; pool.req() delivers one copy
-              // per relay, unlike pool.subscription().
-              if (seen.has(message.event.id)) break;
-              seen.add(message.event.id);
+              // Emit once per event; pool.req() delivers one copy per relay,
+              // unlike pool.subscription().
+              if (seen.has(event.id)) break;
+              seen.add(event.id);
               // Bounded so a long-lived stream can't grow without limit. Sets
               // keep insertion order, so this evicts the oldest id.
               if (seen.size > MAX_SEEN_IDS) {
                 seen.delete(seen.values().next().value as string);
               }
-              subscriber.next(message.event);
+              subscriber.next(event);
               break;
+            }
             case "EOSE":
             case "CLOSED":
             case "ERROR":
