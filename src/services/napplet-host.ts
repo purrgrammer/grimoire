@@ -72,7 +72,7 @@ import relayListCache from "./relay-list-cache";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
 import { selectRelaysForFilter } from "./relay-selection";
-import { requestEvent } from "@/lib/relay-subscription";
+import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
 import {
   buildManifestFilter,
   getPointerRelays,
@@ -209,16 +209,16 @@ function buildAdapter(): ShellAdapter {
   const outboxService = createOutboxService({
     router: createRelayPoolOutboxRouter({
       relayPool: {
+        // The router waits for an explicit "EOSE" marker before it considers
+        // relay-list discovery finished. applesauce v6's pool.subscription()
+        // never emits one, so forwarding it alone leaves every publish hanging
+        // until the router's timeout — "outbox.publish timed out".
         subscribe: (filters, relayUrls, callback) => {
-          const sub = pool
-            .subscription(
-              relayUrls,
-              filters as Parameters<typeof pool.subscription>[1],
-              {
-                eventStore: defaultEventStore,
-              },
-            )
-            .subscribe((event) => callback(event as NostrEvent));
+          const sub = streamWithEose(
+            relayUrls,
+            filters as Parameters<typeof streamWithEose>[1],
+            { onEose: () => callback("EOSE") },
+          ).subscribe((event) => callback(event));
           return { unsubscribe: () => sub.unsubscribe() };
         },
         publish: async (event, relayUrls) => {
