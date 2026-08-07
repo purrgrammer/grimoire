@@ -183,7 +183,9 @@ function NappletFrame({
       frame = document.createElement("iframe");
       frame.sandbox.add("allow-scripts");
       frame.setAttribute("allow", "");
-      frame.className = "w-full h-full border-0 bg-white";
+      // Match the host surface: a napplet with no background of its own should not
+      // punch a white hole through a dark theme.
+      frame.className = "w-full h-full border-0 bg-background";
       frame.title = view.title ?? view.identity.dTag ?? "Napplet";
       container.appendChild(frame);
 
@@ -294,20 +296,24 @@ function NappletErrorPanel({
   error: NappletError;
   onRetry: () => void;
 }) {
-  const tone = error.integrity
-    ? "border-red-500 bg-red-50 dark:bg-red-950"
-    : "border-yellow-500 bg-yellow-50 dark:bg-yellow-950";
+  // Body text stays on the card surface rather than on a saturated fill, so
+  // contrast holds in every theme. The tone only colors the border and icon,
+  // and it comes from the theme's semantic tokens, not a fixed Tailwind scale.
+  const accent = error.integrity ? "border-l-destructive" : "border-l-warning";
+  const iconTone = error.integrity ? "text-destructive" : "text-warning";
 
   return (
-    <div className={`max-w-md rounded-md border p-4 ${tone}`}>
+    <div
+      className={`max-w-md rounded-md border border-l-4 bg-card p-4 text-card-foreground ${accent}`}
+    >
       <div className="flex items-start gap-3">
         {error.integrity ? (
-          <ShieldAlert className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400" />
+          <ShieldAlert className={`mt-0.5 size-5 shrink-0 ${iconTone}`} />
         ) : (
-          <AlertCircle className="mt-0.5 size-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+          <AlertCircle className={`mt-0.5 size-5 shrink-0 ${iconTone}`} />
         )}
         <div className="flex-1 space-y-2">
-          <h3 className="text-sm font-semibold">
+          <h3 className="text-sm font-semibold text-foreground">
             {error.integrity
               ? "Verification failed — nothing was rendered"
               : "Could not open this napplet"}
