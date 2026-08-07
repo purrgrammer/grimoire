@@ -19,6 +19,13 @@ function unixToDatetimeLocal(unixSeconds: number): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+/** Parse a stored param value, rejecting anything that isn't a whole number. */
+function parseUnixSeconds(value: string): number | null {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 function TimestampInput({
   value,
   onChange,
@@ -28,11 +35,9 @@ function TimestampInput({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
-  const numericValue = value ? parseInt(value, 10) : null;
+  const numericValue = parseUnixSeconds(value);
   const datetimeValue =
-    numericValue && !isNaN(numericValue)
-      ? unixToDatetimeLocal(numericValue)
-      : "";
+    numericValue === null ? "" : unixToDatetimeLocal(numericValue);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -55,6 +60,12 @@ function TimestampInput({
         type="datetime-local"
         value={datetimeValue}
         onChange={(e) => {
+          // An empty input means "no timestamp" — propagate it, otherwise the
+          // field can be set but never cleared.
+          if (e.target.value === "") {
+            onChange("");
+            return;
+          }
           const parsed = new Date(e.target.value).getTime();
           if (!isNaN(parsed)) {
             onChange(String(Math.floor(parsed / 1000)));
@@ -63,7 +74,7 @@ function TimestampInput({
         disabled={disabled}
         className="h-8 text-xs"
       />
-      {numericValue && !isNaN(numericValue) && (
+      {numericValue !== null && (
         <span className="text-xs text-muted-foreground">
           {formatTimestamp(numericValue, "datetime")}
         </span>
