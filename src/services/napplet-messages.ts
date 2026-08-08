@@ -66,6 +66,26 @@ export function isNappletMessageRecording(windowId: string): boolean {
   return recording.has(windowId);
 }
 
+/**
+ * Windows whose outbound tap the host has switched on.
+ *
+ * Tracked separately from `recording` because the tap lives in the napplet's
+ * document: a reload builds a fresh one, dormant again, and the enable message
+ * has to be re-sent. Without this the drawer keeps logging inbound traffic after
+ * a reload and silently shows no replies — which reads as "the host stopped
+ * answering" rather than "the tap went away".
+ */
+const tapWanted = new Set<string>();
+
+export function setNappletTapWanted(windowId: string, on: boolean): void {
+  if (on) tapWanted.add(windowId);
+  else tapWanted.delete(windowId);
+}
+
+export function isNappletTapWanted(windowId: string): boolean {
+  return tapWanted.has(windowId);
+}
+
 export function subscribeNappletMessages(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

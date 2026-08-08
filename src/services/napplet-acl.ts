@@ -229,6 +229,47 @@ interface PersistedFirewall {
   matchers: unknown[];
 }
 
+/**
+ * How many operations a napplet may issue in its first `windowMs`.
+ *
+ * Kehto's default is 20 in 3s, which is mis-tuned for anything that renders
+ * media: a profile or feed napplet legitimately asks for a dozen avatars plus
+ * post images the moment it boots, trips the guard, and shows broken images with
+ * `firewall: napplet <x> exceeded init-burst limit` as the only trace. 200 still
+ * catches the runaway case — a napplet retrying a failing fetch in a loop —
+ * which is what the guard is actually for.
+ */
+const INIT_BURST_MAX_OPS = 200;
+
+/**
+ * Widen the init-burst allowance.
+ *
+ * `burstGuard` is the one part of `FirewallConfig` with no container setter and
+ * no entry in `RuntimeConfigOverrides`, and `adaptHooks` supplies no
+ * `firewallPersistence`, so `load()` — the only path that would replace the
+ * whole config — is a no-op. That leaves mutating the live object `getConfig()`
+ * hands back. It survives the setters because each one shallow-spreads the
+ * config and so keeps the same `burstGuard` reference.
+ *
+ * Reaching into a library's state deserves a check that it worked, so the result
+ * is read back: on a future version that freezes the config this warns instead of
+ * silently leaving image-heavy napplets broken. Worth an upstream ask to make
+ * `burstGuard` configurable.
+ */
+export function relaxInitBurst(firewall: FirewallStateContainer): void {
+  try {
+    const guard = firewall.getConfig().burstGuard as { maxOps: number };
+    guard.maxOps = INIT_BURST_MAX_OPS;
+    if (firewall.getConfig().burstGuard.maxOps !== INIT_BURST_MAX_OPS) {
+      console.warn(
+        "[napplet] could not widen the init-burst guard; media-heavy napplets may be throttled at startup",
+      );
+    }
+  } catch {
+    console.warn("[napplet] init-burst guard is not writable");
+  }
+}
+
 /** Snapshot the firewall config to storage. Best-effort; never throws. */
 export function persistFirewall(firewall: FirewallStateContainer): void {
   try {

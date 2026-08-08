@@ -53,6 +53,7 @@ import {
   replayRememberedGrants,
   persistFirewall,
   restoreFirewall,
+  relaxInitBurst,
 } from "./napplet-acl";
 import pool from "./relay-pool";
 import defaultEventStore from "./event-store";
@@ -74,6 +75,8 @@ import { narrowEnvironment } from "./napplet-capabilities";
 import {
   recordNappletMessage,
   isNappletMessageRecording,
+  setNappletTapWanted,
+  isNappletTapWanted,
   TAP_MESSAGE,
   TAP_CONTROL,
 } from "./napplet-messages";
@@ -283,6 +286,12 @@ function buildAdapter(): ShellAdapter {
         return new Map(entries);
       },
       fallbackRelays: AGGREGATOR_RELAYS,
+      // Kehto defaults this to 4s, which is under the floor the rest of grimoire
+      // uses: a relay can legitimately take several seconds to EOSE, and a
+      // bounded query that gives up first reports "no events" rather than "not
+      // finished". Same 15s deadline as `streamWithEose`, so the two halves of a
+      // publish do not disagree about when a relay has stopped answering.
+      defaultTimeoutMs: 15_000,
       signEvent: (template) => nappletSigner.signEvent(template),
       verifyEvent: async (event) => {
         const { verifyEvent } = await import("nostr-tools/pure");
@@ -526,7 +535,16 @@ function handleNappletWindowMessage(event: MessageEvent): void {
  * napplet already knows every message it sends.
  */
 export function setNappletTapEnabled(windowId: string, on: boolean): void {
+  setNappletTapWanted(windowId, on);
   originRegistry.getIframeWindow(windowId)?.postMessage([TAP_CONTROL, on], "*");
+}
+
+/** Re-arm the tap after a frame reload, which resets it to dormant. */
+export function resyncNappletTap(windowId: string): void {
+  if (!isNappletTapWanted(windowId)) return;
+  originRegistry
+    .getIframeWindow(windowId)
+    ?.postMessage([TAP_CONTROL, true], "*");
 }
 
 /**
@@ -562,6 +580,7 @@ export function getNappletBridge(): ShellBridge {
   // Only decisions the user chose to remember are reinstated.
   replayRememberedGrants(bridge.runtime.aclState);
   restoreFirewall(bridge.runtime.firewallState);
+  relaxInitBurst(bridge.runtime.firewallState);
 
   window.addEventListener("message", handleNappletWindowMessage);
   window.addEventListener("pagehide", destroyNappletBridge, { once: true });

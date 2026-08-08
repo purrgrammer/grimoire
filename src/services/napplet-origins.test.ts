@@ -7,6 +7,7 @@ import {
   revokeOrigins,
   isOriginGranted,
   requestedOrigins,
+  contentAddressedSha256,
 } from "./napplet-origins";
 
 const D = "calc";
@@ -165,5 +166,49 @@ describe("requestedOrigins", () => {
         ["connect"],
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("contentAddressedSha256", () => {
+  const H64 =
+    "4f28865934e178a79ac2230b9076ca1b445320384df083a8470ae6a187a760be";
+
+  it("reads the hash from a Blossom url, with or without an extension", () => {
+    expect(contentAddressedSha256(`https://blossom.example/${H64}.jpeg`)).toBe(
+      H64,
+    );
+    expect(contentAddressedSha256(`https://blossom.example/${H64}`)).toBe(H64);
+  });
+
+  it("lowercases so the digest comparison is case-insensitive", () => {
+    expect(
+      contentAddressedSha256(`https://blossom.example/${H64.toUpperCase()}`),
+    ).toBe(H64);
+  });
+
+  // Every one of these would turn the gate into plain `https:` for anyone able
+  // to get 64 hex characters into a URL.
+  it("refuses anything that is not exactly one hash-shaped segment", () => {
+    expect(contentAddressedSha256(`https://e.example/a/${H64}`)).toBeNull();
+    expect(contentAddressedSha256(`https://e.example/${H64}/x`)).toBeNull();
+    expect(contentAddressedSha256(`https://e.example/${H64}?u=1`)).toBeNull();
+    expect(contentAddressedSha256(`https://e.example/${H64}#f`)).toBeNull();
+    expect(contentAddressedSha256(`https://e.example/${H64}x`)).toBeNull();
+    expect(
+      contentAddressedSha256(`https://e.example/${H64.slice(1)}`),
+    ).toBeNull();
+    expect(
+      contentAddressedSha256(`https://e.example/${H64}.verylongext`),
+    ).toBeNull();
+  });
+
+  it("refuses http and credentialed urls, like canonicalOrigin does", () => {
+    expect(contentAddressedSha256(`http://e.example/${H64}`)).toBeNull();
+    expect(contentAddressedSha256(`https://u:p@e.example/${H64}`)).toBeNull();
+  });
+
+  it("refuses garbage", () => {
+    expect(contentAddressedSha256("not a url")).toBeNull();
+    expect(contentAddressedSha256("")).toBeNull();
   });
 });

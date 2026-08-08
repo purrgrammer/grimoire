@@ -112,6 +112,34 @@ export function isOriginGranted(
   return canonical !== null && grants.includes(canonical);
 }
 
+/**
+ * The sha256 a URL names itself by, if it is content-addressed.
+ *
+ * A Blossom URL is `https://<host>/<sha256>[.ext]`, and bytes that hash to their
+ * own name need no trust in the host that served them: either the digest matches
+ * or the response is discarded. So these are fetchable without any origin grant —
+ * the verification, not the user, is what makes it safe. Nearly all media on
+ * Nostr is addressed this way, which is why this exists instead of a prompt per
+ * avatar host.
+ *
+ * Deliberately strict: exactly one path segment, exactly 64 hex, at most one
+ * extension, no query and no fragment. A loose match here would quietly turn the
+ * gate into `https:` for anyone able to put 64 hex characters in a URL.
+ */
+export function contentAddressedSha256(candidate: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  if (url.search || url.hash) return null;
+  const match = /^\/([0-9a-f]{64})(\.[0-9a-z]{1,8})?$/i.exec(url.pathname);
+  return match ? match[1].toLowerCase() : null;
+}
+
 /** Origins a manifest asks for, from `connect` tags. Unverified until granted. */
 export function requestedOrigins(tags: string[][]): string[] {
   const out = new Set<string>();

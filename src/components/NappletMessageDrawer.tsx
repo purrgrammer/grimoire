@@ -88,9 +88,21 @@ export function NappletMessageDrawer({
   onClose: () => void;
 }) {
   const [entries, setEntries] = useState<NappletMessageEntry[]>([]);
+  const [filter, setFilter] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { locale } = useLocale();
+
+  // A napplet streaming a timeline fills the whole buffer with `relay.event`
+  // inside a second, which buries the four messages anyone is ever looking for.
+  // Without this the log is unreadable on exactly the napplets worth debugging.
+  const shown = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return entries;
+    return entries.filter((entry) =>
+      entry.label.toLowerCase().includes(needle),
+    );
+  }, [entries, filter]);
 
   // Seconds, unlike the shared `Timestamp`: a handshake and the burst behind it
   // land inside the same minute, and rows are already in arrival order.
@@ -104,10 +116,31 @@ export function NappletMessageDrawer({
     [locale],
   );
 
+  // Scrolling away from the tail freezes the view; scrolling back resumes it.
+  //
+  // Recording never stops — only what is displayed is held still. Without this
+  // the list is unreadable on a chatty napplet for two compounding reasons: new
+  // rows push the view, and the ring dropping its oldest entries shifts every
+  // row up underneath the pointer. Either one is enough to make a payload
+  // impossible to open, which is the only thing a message log is for.
+  // Read from the element rather than mirroring `paused` into a ref: the scroll
+  // position is the truth, and a ref written during render is a lint violation
+  // for a reason.
+  const [paused, setPaused] = useState(false);
+  const isAtTail = () => {
+    const list = listRef.current;
+    if (!list) return true;
+    return (
+      list.scrollHeight - list.scrollTop - list.clientHeight < ATTACH_SLACK_PX
+    );
+  };
+
   useEffect(() => {
     setNappletMessageRecording(windowId, true);
     setNappletTapEnabled(windowId, true);
-    const read = () => setEntries(getNappletMessages(windowId));
+    const read = () => {
+      if (isAtTail()) setEntries(getNappletMessages(windowId));
+    };
     read();
     const unsubscribe = subscribeNappletMessages(read);
     return () => {
@@ -120,25 +153,42 @@ export function NappletMessageDrawer({
     };
   }, [windowId]);
 
-  // Follow the tail, but only while the user is already at it. A napplet that
-  // retries a failing call streams fast enough that unconditional autoscroll
-  // pulls a row out from under the pointer before it can be expanded.
+  const onScroll = () => {
+    const atTail = isAtTail();
+    setPaused(!atTail);
+    if (atTail) setEntries(getNappletMessages(windowId));
+  };
+
+  // Follow the tail only while attached to it.
   useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const atBottom =
-      list.scrollHeight - list.scrollTop - list.clientHeight < ATTACH_SLACK_PX;
-    if (atBottom) endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length]);
+    if (!paused) endRef.current?.scrollIntoView({ block: "nearest" });
+  }, [shown.length, paused]);
 
   return (
     <div className="flex h-56 shrink-0 flex-col border-t border-border font-mono text-xs">
       <div className="flex items-center gap-2 border-b border-border/50 px-2 py-1 text-[10px] text-muted-foreground">
         <span className="uppercase tracking-wide">messages</span>
-        <span>{entries.length}</span>
+        <span>
+          {filter.trim() ? `${shown.length}/${entries.length}` : entries.length}
+        </span>
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="filter"
+          aria-label="Filter messages by type"
+          className="min-w-0 flex-1 border-0 bg-transparent text-[10px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+        />
+        {paused && (
+          <span
+            className="shrink-0 text-warning"
+            title="Scroll to the bottom to resume"
+          >
+            paused
+          </span>
+        )}
         <button
           type="button"
-          className="ml-auto transition-colors hover:text-foreground"
+          className="transition-colors hover:text-foreground"
           onClick={() => clearNappletMessages(windowId)}
           title="Clear"
           aria-label="Clear messages"
@@ -155,9 +205,10 @@ export function NappletMessageDrawer({
         </button>
       </div>
 
-      <div ref={listRef} className="flex-1 overflow-y-auto">
-        {entries.length === 0 ? (
+      <div ref={listRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+        {shown.length === 0 ? (
           <p className="p-2 text-[10px] text-muted-foreground">
+            {filter.trim() ? `Nothing matching "${filter.trim()}" yet. ` : ""}
             Recording from now on. ↑ is the napplet talking to grimoire, ↓ is
             grimoire answering, and a shield is a permission decision. Outbound
             messages are reported by the napplet's own document, so a
@@ -165,7 +216,7 @@ export function NappletMessageDrawer({
           </p>
         ) : (
           <ul>
-            {entries.map((entry) => (
+            {shown.map((entry) => (
               <MessageRow key={entry.seq} entry={entry} clock={clock} />
             ))}
           </ul>

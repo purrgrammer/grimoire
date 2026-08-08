@@ -47,6 +47,7 @@ import {
   injectCspMeta,
   injectNappletNamespacePrelude,
   destroyNappletWindow,
+  resyncNappletTap,
   originRegistry,
   publishNappletTheme,
   toNapTheme,
@@ -341,6 +342,8 @@ function NappletFrame({
         ) {
           register();
         }
+        // The document is new, so its message tap booted dormant.
+        resyncNappletTap(windowId);
       };
       frame.addEventListener("load", onLoad);
 
