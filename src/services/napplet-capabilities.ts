@@ -51,12 +51,18 @@ const DOMAIN_CAPABILITIES: Record<string, readonly string[]> = {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Permission to load images, video and fonts from the web.
+ * Permission to load remote media, by either route a napplet has.
  *
  * Not a Kehto capability and not a NAP domain — nothing on the wire consults it.
  * It exists because the sandbox CSP, not the ACL, is what decides whether a
  * napplet's `<img src="https://…">` resolves, and that decision deserves the
  * same per-version consent and the same revoke path as everything else.
+ *
+ * It governs both routes deliberately: the frame's own `img-src`/`media-src`/
+ * `font-src`, and shell-mediated NAP-RESOURCE fetches. Gating only the first left
+ * every napplet that asks the shell for bytes — which is most of them, and all of
+ * the ones rendering custom emoji — with broken images for no security gain the
+ * CSP was not already conceding.
  *
  * No manifest declares it (NIP-5D has no vocabulary for it), so it is offered on
  * every launch rather than derived from `requires`.

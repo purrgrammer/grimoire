@@ -8,6 +8,7 @@ import {
   isOriginGranted,
   requestedOrigins,
   contentAddressedSha256,
+  resourceAllowance,
 } from "./napplet-origins";
 
 const D = "calc";
@@ -210,5 +211,62 @@ describe("contentAddressedSha256", () => {
   it("refuses garbage", () => {
     expect(contentAddressedSha256("not a url")).toBeNull();
     expect(contentAddressedSha256("")).toBeNull();
+  });
+});
+
+describe("resourceAllowance", () => {
+  const H64 =
+    "4f28865934e178a79ac2230b9076ca1b445320384df083a8470ae6a187a760be";
+  const STRICT = { remoteMedia: false, grants: [] as string[] };
+
+  it("lets a content-addressed url through with nothing granted", () => {
+    expect(resourceAllowance(`https://any.example/${H64}.jpg`, STRICT)).toBe(
+      "content-addressed",
+    );
+  });
+
+  it("prefers the digest over a grant that would also cover it", () => {
+    expect(
+      resourceAllowance(`https://a.example/${H64}`, {
+        remoteMedia: true,
+        grants: ["https://a.example"],
+      }),
+    ).toBe("content-addressed");
+  });
+
+  it("allows an explicitly granted origin", () => {
+    expect(
+      resourceAllowance("https://a.example/logo.png", {
+        remoteMedia: false,
+        grants: ["https://a.example"],
+      }),
+    ).toBe("granted-origin");
+  });
+
+  // Custom emoji and proxied images are not content-addressed, and no manifest
+  // names their hosts. This is the path that makes them render.
+  it("allows any https origin once remote media is granted", () => {
+    expect(
+      resourceAllowance("https://emoji.example/pepe.png", {
+        remoteMedia: true,
+        grants: [],
+      }),
+    ).toBe("remote-media");
+  });
+
+  it("refuses a non-addressed url on an ungranted origin", () => {
+    expect(resourceAllowance("https://a.example/logo.png", STRICT)).toBeNull();
+  });
+
+  // The media grant widens origins, never schemes: bytes over http are
+  // attacker-modifiable in transit whatever the user agreed to.
+  it("still refuses anything that is not plain https", () => {
+    const permissive = { remoteMedia: true, grants: [] as string[] };
+    expect(resourceAllowance("http://a.example/x.png", permissive)).toBeNull();
+    expect(
+      resourceAllowance("https://u:p@a.example/x.png", permissive),
+    ).toBeNull();
+    expect(resourceAllowance("file:///etc/passwd", permissive)).toBeNull();
+    expect(resourceAllowance("not a url", permissive)).toBeNull();
   });
 });

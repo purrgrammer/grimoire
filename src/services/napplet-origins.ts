@@ -140,6 +140,46 @@ export function contentAddressedSha256(candidate: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
+/**
+ * Whether a shell-mediated fetch of this URL is allowed, and why.
+ *
+ * Three ways in, in order of how much trust each needs:
+ *
+ *  - `content-addressed` — the path is the sha256, so the digest decides and the
+ *    serving host is irrelevant. Needs nothing granted.
+ *  - `granted-origin` — this exact origin was granted to this napplet version.
+ *  - `remote-media` — the napplet holds `media:remote`, so it may reach any
+ *    https origin through the shell.
+ *
+ * `remote-media` exists because the alternative was incoherent, not because it is
+ * free. With that grant the frame's CSP already permits `img-src https:`, so the
+ * napplet can load any remote image directly; refusing the shell-mediated path
+ * for the same image only broke the napplets that ask for bytes rather than
+ * setting `<img src>` — which is most of them, and all of the ones rendering
+ * custom emoji, whose URLs are almost never content-addressed.
+ *
+ * What it does add over `<img>` is the bytes themselves: a cross-origin image
+ * taints a canvas, a shell fetch does not, so this reads responses CORS would
+ * otherwise withhold. Mitigated but not eliminated by `canonicalOrigin` refusing
+ * anything but plain https, credentials being omitted, napplet headers never
+ * being forwarded, and the size cap. It is a per-version grant the user can
+ * revoke for exactly that reason.
+ */
+export type ResourceAllowance =
+  "content-addressed" | "granted-origin" | "remote-media" | null;
+
+export function resourceAllowance(
+  url: string,
+  policy: { remoteMedia: boolean; grants: readonly string[] },
+): ResourceAllowance {
+  if (contentAddressedSha256(url)) return "content-addressed";
+  if (isOriginGranted(url, policy.grants)) return "granted-origin";
+  // Still requires plain https with no credentials — `canonicalOrigin` is the
+  // scheme gate, not a formatting helper.
+  if (policy.remoteMedia && canonicalOrigin(url)) return "remote-media";
+  return null;
+}
+
 /** Origins a manifest asks for, from `connect` tags. Unverified until granted. */
 export function requestedOrigins(tags: string[][]): string[] {
   const out = new Set<string>();

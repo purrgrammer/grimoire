@@ -5,12 +5,17 @@
  * post-DNS private-IP blocking per redirect hop (including
  * 169.254.169.254), byte-sniffed MIME, SVG rasterisation in a worker, redirect
  * and size caps, and a scheme allowlist. A browser cannot resolve DNS or see
- * the peer address, so the private-IP rule is *unimplementable here* — which
- * means arbitrary https fetching cannot be offered conformantly at all. What is
- * safe is the subset where the bytes prove themselves: `data:`, `blossom:sha256:`
- * blobs, and any https URL whose path *is* a sha256 — for all of these the digest
- * decides and the serving host is never trusted. Anything else still needs an
- * explicit per-origin grant.
+ * the peer address, so the private-IP rule is *unimplementable here*. What we can
+ * offer is graded by how much trust each path needs — see `resourceAllowance` in
+ * `napplet-origins.ts`, which is the whole policy in one function:
+ *
+ *  - `data:` and `blossom:sha256:` and any https URL whose path *is* a sha256:
+ *    the digest decides, the serving host is never trusted, nothing is granted.
+ *  - an explicitly granted origin.
+ *  - any https origin, once the napplet holds `media:remote` — because the CSP
+ *    already lets that frame load remote images directly, so refusing the
+ *    shell-mediated path for the same image broke napplets rather than
+ *    protecting anyone.
  *
  * `serial`, `ble` and `webrtc` are deliberately not registered. Their browser
  * APIs require transient user activation, which a `postMessage` handler does
@@ -27,7 +32,9 @@ import {
   isOriginGranted,
   canonicalOrigin,
   contentAddressedSha256,
+  resourceAllowance,
 } from "./napplet-origins";
+import { isRemoteMediaGranted } from "./napplet-acl";
 
 /** Matches the artifact cache ceiling; a napplet cannot pull more in one go. */
 const MAX_RESOURCE_BYTES = 10 * 1024 * 1024;
@@ -42,6 +49,7 @@ async function fetchAllowedResource(
     signal: AbortSignal;
   },
   grants: readonly string[] = [],
+  remoteMedia = false,
 ): Promise<Response> {
   if (url.startsWith("data:")) {
     return fetch(url, { signal: init.signal });
@@ -77,69 +85,53 @@ async function fetchAllowedResource(
     throw new Error("blob unavailable or failed verification");
   }
 
-  // A URL that names its own sha256 needs no trust in the host that serves it:
-  // fetch it and let the digest decide. This is what makes Blossom-hosted
-  // avatars and post images work without a prompt per host, which is the
-  // overwhelmingly common case on Nostr.
-  const addressed = contentAddressedSha256(url);
-  if (addressed) {
-    const res = await fetch(url, {
-      signal: init.signal,
-      credentials: "omit",
-      redirect: "follow",
-      cache: "no-store",
-    });
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.byteLength > MAX_RESOURCE_BYTES) {
-      throw new Error("resource exceeds the size limit");
-    }
+  const allowance = resourceAllowance(url, { remoteMedia, grants });
+  if (!allowance) {
+    const origin = canonicalOrigin(url);
+    throw new Error(
+      origin
+        ? `${origin} is not granted to this napplet`
+        : "only data:, blossom:sha256: and https resources can be fetched",
+    );
+  }
+
+  const res = await fetch(url, {
+    method: init.method ?? "GET",
+    // Napplet-supplied headers are never forwarded — they could carry
+    // credentials the napplet should not be able to make the host send.
+    signal: init.signal,
+    credentials: "omit",
+    redirect: "follow",
+    cache: "no-store",
+  });
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > MAX_RESOURCE_BYTES) {
+    throw new Error("resource exceeds the size limit");
+  }
+
+  if (allowance === "content-addressed") {
+    // Only the digest decides, so a redirect needs no separate check — where the
+    // bytes came from is irrelevant once they hash to the name that was asked for.
+    const sha256 = contentAddressedSha256(url);
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const hex = [...new Uint8Array(digest)]
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-    // Redirects need no separate check here, unlike the granted-origin path
-    // below: only the hash decides, so where the bytes came from is irrelevant.
-    if (hex !== addressed) {
+    if (hex !== sha256) {
       throw new Error("content-addressed fetch failed verification");
     }
-    return new Response(bytes, {
-      headers: { "content-type": res.headers.get("content-type") ?? "" },
-    });
-  }
-
-  // Exactly the origins the user granted this napplet version. Re-checked
-  // here rather than relying on the CSP alone: the CSP constrains the frame's
-  // own requests, not what the host fetches on its behalf.
-  if (isOriginGranted(url, grants)) {
-    const res = await fetch(url, {
-      method: init.method ?? "GET",
-      // Napplet-supplied headers are not forwarded — they could carry
-      // credentials the napplet should not be able to make the host send.
-      signal: init.signal,
-      credentials: "omit",
-      redirect: "follow",
-      cache: "no-store",
-    });
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength > MAX_RESOURCE_BYTES) {
-      throw new Error("resource exceeds the size limit");
-    }
-    // A redirect can leave the granted origin; the final URL decides.
-    if (res.redirected && !isOriginGranted(res.url, grants)) {
+  } else if (allowance === "granted-origin" && res.redirected) {
+    // A redirect can leave the granted origin; the final URL decides. Not needed
+    // on the remote-media path, where every https origin is already permitted.
+    if (!isOriginGranted(res.url, grants)) {
       throw new Error("redirected outside the granted origins");
     }
-    return new Response(bytes, {
-      status: res.status,
-      headers: { "content-type": res.headers.get("content-type") ?? "" },
-    });
   }
 
-  const origin = canonicalOrigin(url);
-  throw new Error(
-    origin
-      ? `${origin} is not granted to this napplet`
-      : "only data:, blossom:sha256: and granted https origins can be fetched",
-  );
+  return new Response(bytes, {
+    status: res.status,
+    headers: { "content-type": res.headers.get("content-type") ?? "" },
+  });
 }
 
 export function createNappletResourceService(
@@ -151,11 +143,15 @@ export function createNappletResourceService(
   // request, so this carries the caller's grants across that pair. It is only
   // ever a narrowing: an empty list refuses everything.
   let currentGrants: readonly string[] = [];
+  // Same trick for the media grant: `getConnectGrants` is the only hook that sees
+  // the identity, and Kehto calls it immediately before `fetch` for that request.
+  let currentRemoteMedia = false;
 
   return createResourceService({
-    // The grants belong to the requesting napplet, so the fetch has to be
-    // resolved per call rather than closed over a fixed policy.
-    fetch: (url, init) => fetchAllowedResource(url, init, currentGrants),
+    // The policy belongs to the requesting napplet, so the fetch has to be
+    // resolved per call rather than closed over a fixed one.
+    fetch: (url, init) =>
+      fetchAllowedResource(url, init, currentGrants, currentRemoteMedia),
     // Deliberately open, with the real gate one level down in `fetch`.
     //
     // Kehto calls this with the *origin* only, so it cannot tell
@@ -168,6 +164,7 @@ export function createNappletResourceService(
     // just moves to where the information exists.
     isOriginGranted: () => true,
     getConnectGrants: (dTag, aggregateHash) => {
+      currentRemoteMedia = isRemoteMediaGranted(dTag, aggregateHash);
       currentGrants = getGrantedOrigins(dTag, aggregateHash);
       return currentGrants;
     },

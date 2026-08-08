@@ -72,7 +72,7 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "dm:read": "read your private messages",
   "dm:write": "send private messages as you",
   "cvm:call": "call external tool servers over Nostr",
-  [REMOTE_MEDIA_CAPABILITY]: "load images, video and fonts from the web",
+  [REMOTE_MEDIA_CAPABILITY]: "load images, video and fonts from any website",
 };
 
 export function describeCapability(capability: string): string {
