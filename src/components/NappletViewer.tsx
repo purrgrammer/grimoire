@@ -6,13 +6,14 @@ import {
   Loader2,
   RotateCw,
   ShieldAlert,
+  Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { UserName } from "@/components/nostr/UserName";
 import { NappletPermissions } from "@/components/NappletPermissions";
+import { NappletMessageDrawer } from "@/components/NappletMessageDrawer";
 import { useTheme } from "@/lib/themes";
 import { useCopy } from "@/hooks/useCopy";
 import { getMissingRequiredNaps } from "@/lib/napplet-parser";
@@ -25,15 +26,19 @@ import {
   subscribeNappletReload,
   requestLaunchConsent,
   grantLaunchCapabilities,
-  describeCapability,
 } from "@/services/napplet-consent";
 import { recordNappletRun } from "@/services/napplet-library";
-import { getNappletDecisions } from "@/services/napplet-acl";
+import {
+  getNappletDecisions,
+  isRemoteMediaGranted,
+} from "@/services/napplet-acl";
 import { getGrantedOrigins } from "@/services/napplet-origins";
+import { injectNappletTap } from "@/services/napplet-messages";
 import {
   capabilitiesForDomains,
   unenforceableDomains,
   setDeclaredDomains,
+  REMOTE_MEDIA_CAPABILITY,
 } from "@/services/napplet-capabilities";
 import {
   fetchManifestEvent,
@@ -117,6 +122,12 @@ export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
   const key = useMemo(() => pointerKey(pointer), [pointer]);
 
+  // Deliberately above the remount key: a reload is the most useful moment to be
+  // watching the wire, so the drawer has to survive one. Keeping it open across
+  // the reload is also what lets it record the `shell.ready` handshake, which
+  // happens before a drawer opened afterwards could have started.
+  const [showMessages, setShowMessages] = useState(false);
+
   // Granting a capability only takes effect on a fresh run — the ACL is
   // consulted synchronously and the napplet has already been refused once.
   useEffect(() => {
@@ -131,6 +142,8 @@ export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
       pointer={pointer}
       windowId={windowId}
       onReload={reload}
+      showMessages={showMessages}
+      onToggleMessages={() => setShowMessages((open) => !open)}
     />
   );
 }
@@ -139,7 +152,13 @@ function NappletFrame({
   pointer,
   windowId,
   onReload,
-}: NappletViewerProps & { onReload: () => void }) {
+  showMessages,
+  onToggleMessages,
+}: NappletViewerProps & {
+  onReload: () => void;
+  showMessages: boolean;
+  onToggleMessages: () => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<Stage>("fetching-manifest");
   const [error, setError] = useState<NappletError | null>(null);
@@ -151,19 +170,18 @@ function NappletFrame({
   const { theme } = useTheme();
   const { copied, copy } = useCopy();
 
-  // What this napplet actually holds right now — the header should not make the
-  // user open a popover to find out.
-  const [granted, refused] = useMemo(() => {
-    if (!resolved) return [[], []] as [string[], string[]];
-    const decisions = getNappletDecisions().filter(
-      (d) =>
-        d.dTag === resolved.identity.dTag &&
-        d.aggregateHash === resolved.identity.aggregateHash,
-    );
-    return [
-      decisions.filter((d) => d.allowed).map((d) => d.capability),
-      decisions.filter((d) => !d.allowed).map((d) => d.capability),
-    ];
+  // Grants are listed in the permissions popover; a refusal is worth surfacing
+  // without one, because it is why the napplet is misbehaving.
+  const refused = useMemo(() => {
+    if (!resolved) return [];
+    return getNappletDecisions()
+      .filter(
+        (d) =>
+          !d.allowed &&
+          d.dTag === resolved.identity.dTag &&
+          d.aggregateHash === resolved.identity.aggregateHash,
+      )
+      .map((d) => d.capability);
   }, [resolved]);
 
   useEffect(() => {
@@ -211,7 +229,12 @@ function NappletFrame({
 
       // Ask once, up front, for everything the manifest declared — and grant it
       // before srcdoc, so a well-behaved napplet never has to be re-run.
-      const declaredCapabilities = capabilitiesForDomains(view.requires);
+      // Remote media rides along: no manifest can declare it, and the CSP that
+      // enforces it is written at frame creation, so it has to be answered here.
+      const declaredCapabilities = [
+        ...capabilitiesForDomains(view.requires),
+        REMOTE_MEDIA_CAPABILITY,
+      ];
       const decision = await requestLaunchConsent({
         dTag: view.identity.dTag,
         aggregateHash: view.identity.aggregateHash,
@@ -267,7 +290,17 @@ function NappletFrame({
       // is also why the iframe cannot be JSX with a srcDoc prop.
       frame = document.createElement("iframe");
       frame.sandbox.add("allow-scripts");
-      frame.setAttribute("allow", "");
+      // `allow-scripts` alone, always — never `allow-same-origin`, which would
+      // hand the napplet grimoire's origin and every credential in it.
+      //
+      // The permissions policy delegates exactly one feature. `clipboard-write`
+      // requires a user gesture, so a napplet cannot write unprompted, and
+      // without it every copy button inside a napplet fails: Chrome denies both
+      // `navigator.clipboard.writeText` and the `execCommand("copy")` fallback.
+      // The residual hazard is clipboard hijacking — a napplet writing something
+      // other than what the user thought they copied — which is the same risk
+      // any web page carries.
+      frame.setAttribute("allow", "clipboard-write");
       // Match the host surface: a napplet with no background of its own should not
       // punch a white hole through a dark theme.
       frame.className = "w-full h-full border-0 bg-background";
@@ -313,12 +346,23 @@ function NappletFrame({
 
       // connect-src is exactly what the user granted this version — not a
       // wildcard, and empty for the overwhelming majority of napplets.
-      frame.srcdoc = injectNappletNamespacePrelude(
-        injectCspMeta(
-          view.indexHtml,
-          getGrantedOrigins(view.identity.dTag, view.identity.aggregateHash),
+      // The tap goes last so it observes the finished document, and it is
+      // dormant until a drawer switches it on. Note it is inside the CSP that
+      // was already injected — an inline script, which `script-src` allows.
+      frame.srcdoc = injectNappletTap(
+        injectNappletNamespacePrelude(
+          injectCspMeta(
+            view.indexHtml,
+            getGrantedOrigins(view.identity.dTag, view.identity.aggregateHash),
+            {
+              remoteMedia: isRemoteMediaGranted(
+                view.identity.dTag,
+                view.identity.aggregateHash,
+              ),
+            },
+          ),
+          environment.capabilities,
         ),
-        environment.capabilities,
       );
     })();
 
@@ -344,87 +388,64 @@ function NappletFrame({
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Same single-line shape as the req and profile headers. */}
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 font-mono text-xs">
-        {resolved ? (
-          <div className="flex min-w-0 items-center gap-2 truncate">
-            <UserName
-              pubkey={resolved.manifestEvent.pubkey}
-              className="text-inherit"
-            />
-            <span className="text-muted-foreground"> - </span>
-            <span className="truncate">
-              {resolved.title || resolved.identity.dTag || "Napplet"}
-            </span>
-            {/* Makes the security posture legible without opening a popover. */}
-            {granted.length > 0 && (
-              <span className="hidden shrink-0 items-center gap-1 md:flex">
-                {granted.slice(0, 4).map((capability) => (
-                  <span
-                    key={capability}
-                    className="rounded border border-border/60 px-1 text-[10px] text-muted-foreground"
-                    title={describeCapability(capability)}
-                  >
-                    {capability.split(":")[0]}
-                  </span>
-                ))}
-                {granted.length > 4 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{granted.length - 4}
-                  </span>
-                )}
-              </span>
-            )}
-            {refused.length > 0 && (
-              <span
-                className="shrink-0 text-[10px] text-warning"
-                title={`Refused: ${refused.join(", ")}`}
-              >
-                {refused.length} refused
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-muted-foreground">…</span>
-        )}
-
-        <div className="flex flex-shrink-0 items-center gap-3">
-          {resolved && (
-            <NappletPermissions
-              dTag={resolved.identity.dTag}
-              aggregateHash={resolved.identity.aggregateHash}
-              // Forgetting a grant only takes effect on a fresh run — the
-              // runtime's live ACL state still holds it.
-              onChanged={onReload}
-            />
-          )}
-          {resolved && (
-            <button
-              onClick={() => copy(resolved.identity.aggregateHash)}
-              className="flex items-center gap-1 truncate text-muted-foreground transition-colors hover:text-foreground"
-              title={`Verified content address ${resolved.identity.aggregateHash}`}
-              aria-label="Copy the verified content address"
-            >
-              {copied ? (
-                <CopyCheck className="size-3 flex-shrink-0" />
-              ) : (
-                <Copy className="size-3 flex-shrink-0" />
-              )}
-              <code className="truncate">
-                {resolved.identity.aggregateHash.slice(0, 12)}…
-                {resolved.identity.aggregateHash.slice(-6)}
-              </code>
-            </button>
-          )}
-          <button
-            className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-            onClick={onReload}
-            title="Re-resolve and verify"
-            aria-label="Re-resolve and verify"
+      {/* Controls only. The author and the napplet's name live in the window
+          title, where every other app puts them — repeating them here was the
+          crowding. What stays is what has nowhere else to go. */}
+      <header className="flex items-center justify-end gap-3 border-b border-border px-4 py-2 font-mono text-xs">
+        {refused.length > 0 && (
+          <span
+            className="mr-auto shrink-0 text-[10px] text-warning"
+            title={`Refused: ${refused.join(", ")}`}
           >
-            <RotateCw className="size-3" />
+            {refused.length} refused
+          </span>
+        )}
+        {resolved && (
+          <NappletPermissions
+            dTag={resolved.identity.dTag}
+            aggregateHash={resolved.identity.aggregateHash}
+            // Forgetting a grant only takes effect on a fresh run — the
+            // runtime's live ACL state still holds it.
+            onChanged={onReload}
+          />
+        )}
+        <button
+          className={`flex items-center gap-1 transition-colors hover:text-foreground ${
+            showMessages ? "text-foreground" : "text-muted-foreground"
+          }`}
+          onClick={onToggleMessages}
+          title="Show messages between grimoire and this napplet"
+          aria-label="Show messages between grimoire and this napplet"
+          aria-pressed={showMessages}
+        >
+          <Terminal className="size-3" />
+        </button>
+        {resolved && (
+          <button
+            onClick={() => copy(resolved.identity.aggregateHash)}
+            className="flex items-center gap-1 truncate text-muted-foreground transition-colors hover:text-foreground"
+            title={`Verified content address ${resolved.identity.aggregateHash}`}
+            aria-label="Copy the verified content address"
+          >
+            {copied ? (
+              <CopyCheck className="size-3 flex-shrink-0" />
+            ) : (
+              <Copy className="size-3 flex-shrink-0" />
+            )}
+            <code className="truncate">
+              {resolved.identity.aggregateHash.slice(0, 12)}…
+              {resolved.identity.aggregateHash.slice(-6)}
+            </code>
           </button>
-        </div>
+        )}
+        <button
+          className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          onClick={onReload}
+          title="Re-resolve and verify"
+          aria-label="Re-resolve and verify"
+        >
+          <RotateCw className="size-3" />
+        </button>
       </header>
 
       {stage !== "ready" && (
@@ -450,6 +471,10 @@ function NappletFrame({
         ref={containerRef}
         className={stage === "ready" ? "relative flex-1" : "hidden"}
       />
+
+      {showMessages && (
+        <NappletMessageDrawer windowId={windowId} onClose={onToggleMessages} />
+      )}
     </div>
   );
 }

@@ -437,13 +437,22 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       return rest as AddressPointer;
     }, [appId, props.pointer]);
   const nappletManifest = useNostrEvent(nappletPointer);
+  // The author belongs here rather than inside the pane: a napplet is untrusted
+  // third-party code, and who signed it is the first thing worth knowing about
+  // it. Same treatment other kinds get in their titles.
   const nappletTitle = useMemo(() => {
     if (appId !== "app") return null;
     if (!nappletManifest) return "Napplet";
-    return (
+    const name =
       getTagValues(nappletManifest, "title")[0] ||
       getTagValues(nappletManifest, "d")[0] ||
-      "Napplet"
+      "Napplet";
+    return (
+      <div className="flex items-center gap-1">
+        <UserName pubkey={nappletManifest.pubkey} className="text-inherit" />
+        <span> - </span>
+        <span className="truncate">{name}</span>
+      </div>
     );
   }, [appId, nappletManifest]);
 

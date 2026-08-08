@@ -8,23 +8,43 @@
  * directive string is asserted in the tests; treat a diff there as a security
  * review, not a formatting change.
  */
-export function buildCspPolicy(origins: readonly string[]): string {
+/**
+ * What a napplet may load, beyond its own verified bytes.
+ *
+ * `remoteMedia` widens `img-src`/`media-src`/`font-src` to `https:`. It is a
+ * genuine loosening and not a cosmetic one: a media load is an outbound GET, so
+ * a napplet holding this can signal out without ever being granted network
+ * access. That is why it is a per-`(dTag, aggregateHash)` grant the user can
+ * revoke rather than part of the baseline — see `napplet-media.ts`.
+ *
+ * The alternative was leaving every feed and profile napplet with broken images,
+ * which is not a defensible default either.
+ */
+export interface CspGrants {
+  remoteMedia?: boolean;
+}
+
+export function buildCspPolicy(
+  origins: readonly string[],
+  grants: CspGrants = {},
+): string {
   const grantedOrigins = [...new Set(origins)].sort();
   const connectSrc =
     grantedOrigins.length > 0
       ? `connect-src ${grantedOrigins.join(" ")}`
       : "connect-src 'none'";
+  const media = grants.remoteMedia;
   return [
     "default-src 'none'",
     "script-src 'unsafe-inline'",
     "style-src 'unsafe-inline'",
-    "img-src data: blob:",
-    "font-src data:",
+    media ? "img-src data: blob: https:" : "img-src data: blob:",
+    media ? "media-src data: blob: https:" : "media-src 'none'",
+    media ? "font-src data: https:" : "font-src data:",
     connectSrc,
     "worker-src 'none'",
     "child-src 'none'",
     "frame-src 'none'",
-    "media-src 'none'",
     "object-src 'none'",
     "manifest-src 'none'",
     "prefetch-src 'none'",
@@ -53,11 +73,12 @@ export function buildCspPolicy(origins: readonly string[]): string {
 export function injectCspMeta(
   html: string,
   origins: readonly string[],
+  grants: CspGrants = {},
 ): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const meta = doc.createElement("meta");
   meta.setAttribute("http-equiv", "Content-Security-Policy");
-  meta.setAttribute("content", buildCspPolicy(origins));
+  meta.setAttribute("content", buildCspPolicy(origins, grants));
   doc.head.prepend(meta);
   return `<!doctype html>${doc.documentElement.outerHTML}`;
 }

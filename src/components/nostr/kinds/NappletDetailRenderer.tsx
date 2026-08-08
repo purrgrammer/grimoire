@@ -108,8 +108,8 @@ function NappletDetailView({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={run}>
-          <Play className="size-3.5" />
+        <Button onClick={run}>
+          <Play className="size-4" />
           Run
         </Button>
         {source && (

@@ -25,6 +25,11 @@
 import type { AclStateContainer, FirewallStateContainer } from "@kehto/runtime";
 import type { Capability } from "@kehto/shell";
 
+import {
+  isHostCapability,
+  REMOTE_MEDIA_CAPABILITY,
+} from "./napplet-capabilities";
+
 /** The key `adaptHooks`' built-in ACL persistence reads and writes. */
 const ACL_STORAGE_KEY = "napplet:acl";
 
@@ -90,6 +95,22 @@ function writeDecisions(decisions: DecisionMap): void {
 /** Every remembered decision, for the permissions UI. */
 export function getNappletDecisions(): NappletDecision[] {
   return Object.values(readDecisions());
+}
+
+/**
+ * Whether this napplet version may load remote images, video and fonts.
+ *
+ * Read at frame creation to build the CSP, so a change only takes effect on the
+ * napplet's next run — the policy is baked into `srcdoc`.
+ */
+export function isRemoteMediaGranted(
+  dTag: string,
+  aggregateHash: string,
+): boolean {
+  return (
+    readDecisions()[decisionKey(dTag, aggregateHash, REMOTE_MEDIA_CAPABILITY)]
+      ?.allowed === true
+  );
 }
 
 /** Look up a remembered decision, if the user made one. */
@@ -177,6 +198,7 @@ export function isAclRestrictive(acl: AclStateContainer): boolean {
 export function replayRememberedGrants(acl: AclStateContainer): void {
   for (const decision of getNappletDecisions()) {
     if (!decision.allowed) continue;
+    if (isHostCapability(decision.capability)) continue;
     acl.grant(
       "",
       decision.dTag,

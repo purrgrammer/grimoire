@@ -132,7 +132,7 @@ function NappletRow({
             <Trash2 className="size-3.5" />
           </button>
         )}
-        <Button variant="outline" size="sm" className="h-7" onClick={onRun}>
+        <Button size="sm" className="h-7" onClick={onRun}>
           <Play className="size-3.5" />
           Run
         </Button>

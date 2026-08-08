@@ -9,6 +9,7 @@ import {
   getNappletRequires,
 } from "@/lib/nip5d-helpers";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import type { NostrEvent } from "@/types/nostr";
 import {
   BaseEventProps,
@@ -20,17 +21,19 @@ function RunButton({ event }: { event: NostrEvent }) {
   const run = useRunNapplet(event);
 
   return (
-    <button
-      type="button"
-      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+    // Running the thing is the point of the card, so it reads as the primary
+    // action rather than as one more piece of metadata.
+    <Button
+      size="sm"
+      className="h-7"
       onClick={(e) => {
         e.stopPropagation();
         run();
       }}
     >
       <Play className="size-3.5" />
-      <span>Run</span>
-    </button>
+      Run
+    </Button>
   );
 }
 

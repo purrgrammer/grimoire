@@ -71,6 +71,12 @@ import {
 } from "./napplet-social";
 import { createNappletResourceService } from "./napplet-devices";
 import { narrowEnvironment } from "./napplet-capabilities";
+import {
+  recordNappletMessage,
+  isNappletMessageRecording,
+  TAP_MESSAGE,
+  TAP_CONTROL,
+} from "./napplet-messages";
 import { createNappletIntentResolver } from "./napplet-intent";
 import { createNappletTargetController } from "./napplet-targets";
 import { toast } from "sonner";
@@ -186,6 +192,32 @@ const nappletSigner = createNappletSigner();
 const trackedSubscriptions = new Map<string, () => void>();
 
 let themeService: ReturnType<typeof createThemeService> | null = null;
+
+/**
+ * Which pane is running a given verified identity.
+ *
+ * `AclCheckEvent` carries the identity but not the window, and the message log is
+ * per-pane. Two panes running the same version are indistinguishable here, so the
+ * first match wins — good enough for a debug log, and the reason this lookup is
+ * not used for anything that must be exact.
+ */
+function windowIdForIdentity(
+  dTag: string,
+  aggregateHash: string,
+): string | undefined {
+  for (const windowId of originRegistry.getAllWindowIds()) {
+    const frame = originRegistry.getIframeWindow(windowId);
+    const identity = frame ? originRegistry.getIdentity(frame) : undefined;
+    if (
+      identity?.dTag === dTag &&
+      identity.aggregateHash === aggregateHash &&
+      isNappletMessageRecording(windowId)
+    ) {
+      return windowId;
+    }
+  }
+  return undefined;
+}
 
 function buildAdapter(): ShellAdapter {
   themeService = createThemeService({
@@ -402,6 +434,22 @@ function buildAdapter(): ShellAdapter {
           aggregateHash: event.identity.hash,
         });
       }
+      // An ACL decision is the single most useful thing in the message log: it
+      // is the difference between "the napplet never asked" and "the napplet
+      // asked and we refused", which look identical from inside the frame.
+      const subject = windowIdForIdentity(
+        event.identity.dTag,
+        event.identity.hash,
+      );
+      if (subject) {
+        recordNappletMessage({
+          windowId: subject,
+          direction: "acl",
+          label: event.capability,
+          allowed: event.decision === "allow",
+          data: event.message ?? null,
+        });
+      }
       if (event.decision === "deny") {
         // `reason` is sent by @kehto/runtime 0.21 but absent from
         // @kehto/shell 0.19's AclCheckEvent type — package version drift.
@@ -441,6 +489,47 @@ export function onNappletAclCheck(
 }
 
 /**
+ * The single `message` listener, wrapping `bridge.handleMessage`.
+ *
+ * Wrapping rather than registering Kehto's handler directly is what makes the
+ * inbound half of the message log truthful: it sees every envelope the runtime
+ * sees, including the ones the runtime goes on to drop. It also consumes the
+ * in-frame tap's echoes, which are host bookkeeping and must never reach the
+ * runtime — it would report them as unroutable.
+ */
+function handleNappletWindowMessage(event: MessageEvent): void {
+  const source = event.source as Window | null;
+  const windowId = source ? originRegistry.getWindowId(source) : undefined;
+
+  if (Array.isArray(event.data) && event.data[0] === TAP_MESSAGE) {
+    if (windowId) {
+      recordNappletMessage({
+        windowId,
+        direction: "out",
+        data: event.data[1],
+      });
+    }
+    return;
+  }
+
+  if (windowId) {
+    recordNappletMessage({ windowId, direction: "in", data: event.data });
+  }
+  bridge?.handleMessage(event);
+}
+
+/**
+ * Turn the in-frame outbound tap on or off for one window.
+ *
+ * The control message is visible to the napplet, which is unavoidable — the tap
+ * lives in the napplet's own document — and harmless: it carries no data and the
+ * napplet already knows every message it sends.
+ */
+export function setNappletTapEnabled(windowId: string, on: boolean): void {
+  originRegistry.getIframeWindow(windowId)?.postMessage([TAP_CONTROL, on], "*");
+}
+
+/**
  * The shell bridge, created on first use. The adapter instance must stay
  * stable — every frame freezes its `ShellEnvironment` from it.
  */
@@ -474,7 +563,7 @@ export function getNappletBridge(): ShellBridge {
   replayRememberedGrants(bridge.runtime.aclState);
   restoreFirewall(bridge.runtime.firewallState);
 
-  window.addEventListener("message", bridge.handleMessage);
+  window.addEventListener("message", handleNappletWindowMessage);
   window.addEventListener("pagehide", destroyNappletBridge, { once: true });
 
   // NAP-IDENTITY: "The shell MUST emit identity.changed to loaded napplets
@@ -508,7 +597,7 @@ export function destroyNappletBridge(): void {
   persistFirewall(bridge.runtime.firewallState);
   identitySubscription?.unsubscribe();
   identitySubscription = null;
-  window.removeEventListener("message", bridge.handleMessage);
+  window.removeEventListener("message", handleNappletWindowMessage);
   bridge.destroy();
   keysService?.destroy();
   keysService = null;

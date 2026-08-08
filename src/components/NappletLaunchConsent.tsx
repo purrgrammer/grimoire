@@ -17,6 +17,7 @@ import {
   describeCapability,
   type NappletLaunchRequest,
 } from "@/services/napplet-consent";
+import { REMOTE_MEDIA_CAPABILITY } from "@/services/napplet-capabilities";
 
 /** Author-chosen and unbounded — clamp it and pair it with the signing pubkey. */
 const MAX_TITLE = 48;
@@ -24,6 +25,17 @@ const MAX_TITLE = 48;
 /** Writes go above reads: the consequential ones should be read first. */
 function isWrite(capability: string): boolean {
   return /:(write|send|forward|bind|call|control|channel)$/.test(capability);
+}
+
+/**
+ * The one-line consequence, where there is one worth spelling out.
+ *
+ * Remote media is not a write, but a media load is still an outbound request, so
+ * it is the one read that can carry data out of the sandbox.
+ */
+function consequence(capability: string): string | null {
+  if (capability === REMOTE_MEDIA_CAPABILITY) return " · can signal out";
+  return isWrite(capability) ? " · acts as you" : null;
 }
 
 function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
@@ -89,7 +101,7 @@ function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
                 </span>
                 <span className="block font-mono text-[11px] text-muted-foreground/70">
                   {capability}
-                  {isWrite(capability) && " · acts as you"}
+                  {consequence(capability)}
                 </span>
               </span>
             </label>
@@ -113,19 +125,13 @@ function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="ghost" onClick={() => request.resolve(null)}>
-            {request.undeclared ? "Cancel" : "Don't run"}
+        {/* One button. Unticking everything is how you run with nothing, and
+            Esc or the close control is how you decline — so a "Deny all" and a
+            "Don't run" were three ways to express two choices. */}
+        <DialogFooter>
+          <Button onClick={() => request.resolve([...allowed])}>
+            {request.undeclared ? "Allow" : "Run"}
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => request.resolve([])}>
-              {request.undeclared ? "Deny all" : "Run with none"}
-            </Button>
-            <Button onClick={() => request.resolve([...allowed])}>
-              {request.undeclared ? "Allow" : "Run"}
-              {allowed.size > 0 && ` ${allowed.size}`}
-            </Button>
-          </div>
         </DialogFooter>
 
         <p className="text-[11px] text-muted-foreground/70">

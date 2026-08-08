@@ -46,6 +46,37 @@ const DOMAIN_CAPABILITIES: Record<string, readonly string[]> = {
   lists: [],
 };
 
+/* -------------------------------------------------------------------------- */
+/*  Host-only capabilities                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Permission to load images, video and fonts from the web.
+ *
+ * Not a Kehto capability and not a NAP domain — nothing on the wire consults it.
+ * It exists because the sandbox CSP, not the ACL, is what decides whether a
+ * napplet's `<img src="https://…">` resolves, and that decision deserves the
+ * same per-version consent and the same revoke path as everything else.
+ *
+ * No manifest declares it (NIP-5D has no vocabulary for it), so it is offered on
+ * every launch rather than derived from `requires`.
+ */
+export const REMOTE_MEDIA_CAPABILITY = "media:remote";
+
+/**
+ * Capabilities the host enforces itself.
+ *
+ * These must never be written into Kehto's ACL: the runtime would be holding a
+ * grant for a capability no envelope can ever name, which is noise at best and a
+ * capability-shaped hole in someone's audit at worst. They live only in our own
+ * decision store.
+ */
+const HOST_CAPABILITIES = new Set<string>([REMOTE_MEDIA_CAPABILITY]);
+
+export function isHostCapability(capability: string): boolean {
+  return HOST_CAPABILITIES.has(capability);
+}
+
 /** Capabilities implied by a set of declared domains, deduped and ordered. */
 export function capabilitiesForDomains(domains: readonly string[]): string[] {
   const out = new Set<string>();

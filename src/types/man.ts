@@ -678,23 +678,25 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: [
       "permissions                                       Review napplet permissions",
     ],
-    seeAlso: ["napplets", "app"],
+    seeAlso: ["apps", "app"],
     appId: "permissions",
     category: "Nostr",
     defaultProps: {},
   },
-  napplets: {
-    name: "napplets",
+  // Plural of `app`, the way `nips` is of `nip`: one runs a napplet, the other
+  // lists them.
+  apps: {
+    name: "apps",
     section: "1",
-    synopsis: "napplets",
+    synopsis: "apps",
     description:
       "Find and launch napplets. Lists the ones you have already run \u2014 recorded only after they passed verification \u2014 and the ones published by people you follow, discovered over the outbox model.",
     options: [],
     examples: [
-      "napplets                                          Open the launcher",
+      "apps                                              Open the launcher",
     ],
-    seeAlso: ["app", "nip"],
-    appId: "napplets",
+    seeAlso: ["app", "permissions", "nip"],
+    appId: "apps",
     category: "Nostr",
     defaultProps: {},
   },
@@ -716,7 +718,7 @@ export const manPages: Record<string, ManPageEntry> = {
       "app 35129:7fa56f5d6962ab1e...:calculator          Run by address pointer",
       "app nevent1...                                    Run a specific manifest event",
     ],
-    seeAlso: ["open", "blossom", "nip"],
+    seeAlso: ["apps", "permissions", "open", "blossom", "nip"],
     appId: "app",
     category: "Nostr",
     argParser: (args: string[]) => parseAppCommand(args),

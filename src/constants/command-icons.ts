@@ -80,7 +80,7 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
     icon: Boxes,
     description: "Run a sandboxed NIP-5D napplet",
   },
-  napplets: {
+  apps: {
     icon: Boxes,
     description: "Find and launch napplets",
   },

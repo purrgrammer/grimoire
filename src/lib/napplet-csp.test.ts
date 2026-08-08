@@ -11,12 +11,12 @@ const EXPECTED_POLICY = [
   "script-src 'unsafe-inline'",
   "style-src 'unsafe-inline'",
   "img-src data: blob:",
+  "media-src 'none'",
   "font-src data:",
   "connect-src 'none'",
   "worker-src 'none'",
   "child-src 'none'",
   "frame-src 'none'",
-  "media-src 'none'",
   "object-src 'none'",
   "manifest-src 'none'",
   "prefetch-src 'none'",
@@ -24,6 +24,12 @@ const EXPECTED_POLICY = [
   "form-action 'none'",
   "frame-ancestors 'self'",
 ].join("; ");
+
+/** The only difference the `media:remote` grant may make. */
+const EXPECTED_POLICY_WITH_MEDIA = EXPECTED_POLICY.replace(
+  "img-src data: blob:; media-src 'none'; font-src data:",
+  "img-src data: blob: https:; media-src data: blob: https:; font-src data: https:",
+);
 
 function policyOf(html: string): string {
   const match = /content="([^"]*)"/.exec(html);
@@ -34,6 +40,19 @@ function policyOf(html: string): string {
 describe("injectCspMeta", () => {
   it("emits the exact Class-1 policy when no origins are granted", () => {
     const html = injectCspMeta("<html><head></head><body></body></html>", []);
+    expect(policyOf(html)).toBe(EXPECTED_POLICY);
+  });
+
+  // The grant must widen media and nothing else. In particular it must never
+  // touch connect-src, script-src or frame-ancestors: it exists so images
+  // render, not to open a network.
+  it("widens only media directives when remote media is granted", () => {
+    const html = injectCspMeta("<head></head>", [], { remoteMedia: true });
+    expect(policyOf(html)).toBe(EXPECTED_POLICY_WITH_MEDIA);
+  });
+
+  it("keeps the strict policy when remote media is explicitly withheld", () => {
+    const html = injectCspMeta("<head></head>", [], { remoteMedia: false });
     expect(policyOf(html)).toBe(EXPECTED_POLICY);
   });
 

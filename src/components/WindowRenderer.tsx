@@ -187,7 +187,7 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
       case "nip":
         content = <NipRenderer nipId={window.props.number} />;
         break;
-      case "napplets":
+      case "apps":
         content = <NappletsViewer />;
         break;
       case "permissions":

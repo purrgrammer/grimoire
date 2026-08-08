@@ -33,6 +33,10 @@ import {
   forgetNappletDecision,
   forgetNappletDecisions,
 } from "./napplet-acl";
+import {
+  isHostCapability,
+  REMOTE_MEDIA_CAPABILITY,
+} from "./napplet-capabilities";
 
 /** A signing confirmation, resolved by the user answering the prompt. */
 export interface NappletSigningRequest {
@@ -68,6 +72,7 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "dm:read": "read your private messages",
   "dm:write": "send private messages as you",
   "cvm:call": "call external tool servers over Nostr",
+  [REMOTE_MEDIA_CAPABILITY]: "load images, video and fonts from the web",
 };
 
 export function describeCapability(capability: string): string {
@@ -264,13 +269,15 @@ export function revokeNappletCapability(
   aggregateHash: string,
   capability: string,
 ): void {
-  const bridge = getNappletBridge();
-  bridge.runtime.aclState.revoke(
-    "",
-    dTag,
-    aggregateHash,
-    capability as Parameters<typeof bridge.runtime.aclState.revoke>[3],
-  );
+  if (!isHostCapability(capability)) {
+    const bridge = getNappletBridge();
+    bridge.runtime.aclState.revoke(
+      "",
+      dTag,
+      aggregateHash,
+      capability as Parameters<typeof bridge.runtime.aclState.revoke>[3],
+    );
+  }
   forgetNappletDecision(dTag, aggregateHash, capability);
   settled.delete(`${dTag}:${aggregateHash}:${capability}`);
 }
@@ -284,6 +291,7 @@ export function revokeAllNappletCapabilities(
     if (decision.dTag !== dTag || decision.aggregateHash !== aggregateHash) {
       continue;
     }
+    if (isHostCapability(decision.capability)) continue;
     const bridge = getNappletBridge();
     bridge.runtime.aclState.revoke(
       "",
@@ -428,6 +436,8 @@ export function grantLaunchCapabilities(
 ): void {
   const bridge = getNappletBridge();
   for (const capability of capabilities) {
+    // Host-enforced capabilities are ours alone; the runtime must not hold them.
+    if (isHostCapability(capability)) continue;
     bridge.runtime.aclState.grant(
       "",
       dTag,
