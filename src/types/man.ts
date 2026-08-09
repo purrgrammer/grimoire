@@ -703,20 +703,26 @@ export const manPages: Record<string, ManPageEntry> = {
   app: {
     name: "app",
     section: "1",
-    synopsis: "app <identifier>",
+    synopsis: "app <identifier|archetype>",
     description:
-      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in an isolated iframe with no access to your keys, relays, or identity.",
+      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in an isolated iframe with no access to your keys, relays, or identity. An archetype names a role rather than an app — it resolves to whichever installed napplet you made the default for it.",
     options: [
       {
         flag: "<identifier>",
         description:
           "naddr, nevent, note, hex event id, or kind:pubkey:d-tag pointing at a napplet manifest (kind 5129, 15129, or 35129)",
       },
+      {
+        flag: "<archetype>",
+        description:
+          "a NAP-INTENT archetype slug, resolved through your installed napplets: the default handler, or the only one that declares it",
+      },
     ],
     examples: [
       "app naddr1...                                     Run a named napplet",
       "app 35129:7fa56f5d6962ab1e...:calculator          Run by address pointer",
       "app nevent1...                                    Run a specific manifest event",
+      "app profile                                       Run your default profile napplet",
     ],
     seeAlso: ["apps", "permissions", "open", "blossom", "nip"],
     appId: "app",

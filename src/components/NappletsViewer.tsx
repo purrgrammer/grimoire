@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Boxes, Pin, Play, Search, Trash2, Users } from "lucide-react";
+import { Boxes, Pin, Play, Search, Shapes, Trash2, Users } from "lucide-react";
 import { nip19 } from "nostr-tools";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,20 @@ import {
   nappletCoordinate,
   type InstalledNapplet,
 } from "@/services/napplet-library";
+import {
+  listArchetypeRoles,
+  type ArchetypeCandidate,
+  type ArchetypeRole,
+} from "@/services/napplet-archetype";
+import {
+  setDefaultHandler,
+  clearDefaultHandler,
+} from "@/services/napplet-intent-defaults";
+import {
+  openBuiltinArchetype,
+  builtinNeedsTarget,
+  builtinUsage,
+} from "@/services/napplet-builtins";
 import { requestEvent, requestEvents } from "@/lib/relay-subscription";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import defaultEventStore from "@/services/event-store";
@@ -142,6 +157,95 @@ function NappletRow({
 }
 
 /**
+ * One archetype and the napplets competing for it.
+ *
+ * The point of showing this is that `app <archetype>` refuses to guess: with two
+ * handlers and no default the command errors, and the only place the user can
+ * settle it is here. So the row states what the command would do, not just what
+ * is installed.
+ */
+function RoleRow({
+  role,
+  onRun,
+  onChoose,
+}: {
+  role: ArchetypeRole;
+  onRun: (candidate: ArchetypeCandidate) => void;
+  onChoose: (dTag: string | null) => void;
+}) {
+  const contested = role.candidates.length > 1;
+  // `app note` alone cannot open anything — say what it wants instead of
+  // offering a button that only ever produces an error.
+  const usage =
+    role.resolved?.kind === "builtin" && builtinNeedsTarget(role.archetype)
+      ? builtinUsage(role.archetype)
+      : undefined;
+
+  return (
+    <div className="flex items-start gap-3 rounded border border-border/40 p-3">
+      <Shapes className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <code className="font-mono text-sm">app {role.archetype}</code>
+          {usage ? (
+            <span className="truncate text-xs text-muted-foreground">
+              → {role.resolved?.title} ·{" "}
+              <code className="font-mono">{usage}</code>
+            </span>
+          ) : role.resolved ? (
+            <span className="truncate text-xs text-muted-foreground">
+              → {role.resolved.title}
+              {role.defaultDTag && " (default)"}
+            </span>
+          ) : (
+            <span className="text-xs text-amber-500">
+              {role.candidates.filter((c) => c.kind === "napplet").length}{" "}
+              napplets · pick one
+            </span>
+          )}
+        </div>
+        {contested && (
+          <div className="flex flex-wrap items-center gap-1">
+            {role.candidates.map((candidate) => {
+              const isDefault = role.defaultDTag === candidate.dTag;
+              return (
+                <button
+                  key={candidate.dTag}
+                  className={`rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors ${
+                    isDefault
+                      ? "border-primary text-primary"
+                      : "border-border/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={
+                    isDefault
+                      ? "Clear this default"
+                      : `Make "${candidate.title}" the default`
+                  }
+                  onClick={() => onChoose(isDefault ? null : candidate.dTag)}
+                >
+                  {candidate.kind === "builtin" ? "grimoire" : candidate.dTag}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {role.resolved && !usage && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0"
+          onClick={() => onRun(role.resolved!)}
+        >
+          <Play className="size-3.5" />
+          Run
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
  * Find and launch napplets.
  *
  * Two sources: what the user has already run — recorded only after
@@ -157,8 +261,16 @@ export function NappletsViewer() {
   const [discovered, setDiscovered] = useState<Candidate[] | null>(null);
   const [query, setQuery] = useState("");
 
+  const [roles, setRoles] = useState<ArchetypeRole[]>([]);
+
   const refreshInstalled = useCallback(
-    () => listNapplets().then((rows) => setInstalled(rows.map(fromInstalled))),
+    () =>
+      Promise.all([
+        listNapplets().then((rows) => setInstalled(rows.map(fromInstalled))),
+        // Roles are derived from the same rows, so they can never be staler
+        // than the list they describe.
+        listArchetypeRoles().then(setRoles),
+      ]).then(() => undefined),
     [],
   );
 
@@ -166,6 +278,9 @@ export function NappletsViewer() {
     let cancelled = false;
     listNapplets().then((rows) => {
       if (!cancelled) setInstalled(rows.map(fromInstalled));
+    });
+    listArchetypeRoles().then((next) => {
+      if (!cancelled) setRoles(next);
     });
     return () => {
       cancelled = true;
@@ -320,6 +435,46 @@ export function NappletsViewer() {
             ))
           )}
         </section>
+
+        {roles.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Shapes className="size-3.5" />
+              Roles ({roles.length})
+            </h2>
+            {roles.map((role) => (
+              <RoleRow
+                key={role.archetype}
+                role={role}
+                onRun={(candidate) => {
+                  // The command string records the role, not the resolved
+                  // napplet: re-running it later should honour whatever the
+                  // default is then. The props still pin this exact napplet, so
+                  // a restored window is not silently a different one.
+                  if (candidate.kind === "napplet") {
+                    addWindow(
+                      "app",
+                      { pointer: candidate.pointer },
+                      `app ${role.archetype}`,
+                      undefined,
+                    );
+                    return;
+                  }
+                  openBuiltinArchetype(role.archetype, "open").catch((error) =>
+                    toast.error(
+                      error instanceof Error ? error.message : String(error),
+                    ),
+                  );
+                }}
+                onChoose={async (dTag) => {
+                  if (dTag) setDefaultHandler(role.archetype, dTag);
+                  else clearDefaultHandler(role.archetype);
+                  await refreshInstalled();
+                }}
+              />
+            ))}
+          </section>
+        )}
 
         <section className="space-y-2">
           <h2 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">

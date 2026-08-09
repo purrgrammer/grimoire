@@ -125,6 +125,9 @@ export default function CommandLauncher({
     }
 
     if (result.error || !result.props) {
+      // A parser message is often the whole answer — "2 installed napplets
+      // handle 'profile': pick one" is the reply, not a malfunction — so it
+      // goes to the palette's own footer, which stays open to be read.
       const message = result.error || "Failed to parse command arguments";
       console.error("Failed to parse command:", message);
       setError(message);

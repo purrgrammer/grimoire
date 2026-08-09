@@ -75,3 +75,29 @@ describe("explicit cross-napplet targeting", () => {
     expect(isExplicitTargetingAuthorized("caller", "other")).toBe(false);
   });
 });
+
+/**
+ * "MUST source available()/handlers() from the installed-napplet catalog" — plus
+ * grimoire itself, for the roles it fills natively, so a fresh install with no
+ * napplets can still answer `intent.available("profile")` truthfully.
+ */
+describe("intent catalog", () => {
+  it("advertises grimoire's built-in roles when nothing is installed", async () => {
+    const { loadIntentCatalog } = await import("./napplet-intent");
+    const { BUILTIN_ARCHETYPE_SLUGS, builtinHandlerDTag } =
+      await import("./napplet-builtins");
+
+    const entries = await loadIntentCatalog();
+    expect(entries.map((entry) => entry.dTag)).toEqual(
+      BUILTIN_ARCHETYPE_SLUGS.map(builtinHandlerDTag),
+    );
+
+    // Each advertises exactly its own slug, with `open` derived from the
+    // `napplet:<archetype>/open` convention.
+    for (const entry of entries) {
+      const [slug] = Object.keys(entry.archetypes);
+      expect(entry.dTag).toBe(builtinHandlerDTag(slug));
+      expect(entry.archetypes[slug].actions).toEqual(["open"]);
+    }
+  });
+});

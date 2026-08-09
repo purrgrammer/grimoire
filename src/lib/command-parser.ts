@@ -1,5 +1,6 @@
 import { parse as parseShellTokens } from "shell-quote";
 import { manPages } from "@/types/man";
+import type { AppId } from "@/types/app";
 import { extractGlobalFlagsFromTokens, type GlobalFlags } from "./global-flags";
 
 export interface ParsedCommand {
@@ -125,6 +126,17 @@ export function parseCommandInput(input: string): ParsedCommand {
 }
 
 /**
+ * Key an argParser may return alongside its props to open a different app.
+ *
+ * `app <archetype>` needs it: an archetype nothing installed handles falls back
+ * to grimoire's own built-in, which is a different appId with different props.
+ * The key is lifted out here, so no window or spellbook ever sees it, and the
+ * returned `command` is a copy carrying the substituted appId — every consumer
+ * already reads `parsed.command.appId`, so none of them needs to know.
+ */
+export const APP_ID_OVERRIDE = "$appId";
+
+/**
  * Executes the argParser for a command and returns complete parsed command data.
  * This is async to support commands like profile that use NIP-05 resolution.
  */
@@ -138,15 +150,22 @@ export async function executeCommandParser(
 
   try {
     // Use argParser if available, otherwise use defaultProps
-    const props = parsed.command.argParser
+    const parsedProps = parsed.command.argParser
       ? await Promise.resolve(
           parsed.command.argParser(parsed.args, activeAccountPubkey),
         )
       : parsed.command.defaultProps || {};
 
+    const override = parsedProps?.[APP_ID_OVERRIDE];
+    if (typeof override !== "string") return { ...parsed, props: parsedProps };
+
+    const { [APP_ID_OVERRIDE]: _dropped, ...props } = parsedProps;
     return {
       ...parsed,
       props,
+      // Host-side only: the override is produced by an argParser in this repo,
+      // never by anything on the wire.
+      command: { ...parsed.command, appId: override as AppId },
     };
   } catch (error) {
     return {

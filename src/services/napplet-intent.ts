@@ -14,8 +14,9 @@
  *    except through this resolution" — explicit `handler: "<dTag>"` goes
  *    through `authorizeExplicitHandler`, which requires a stored authorization.
  *  - "MUST deliver payload to the resolved handler only after that handler is
- *    ready" — the target controller waits for the frame's session before
- *    dispatching.
+ *    ready" — the target controller waits for the target to subscribe to the
+ *    intent topic, then delivers over NAP-INC. See `napplet-readiness` for why
+ *    a live session is not readiness.
  *
  * Archetype and convention are orthogonal (N:M): the archetype routes, the
  * convention shapes the payload. Kehto's `createCatalogIntentResolver` handles
@@ -30,77 +31,35 @@ import {
 } from "@kehto/services";
 
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
+import { BUILTIN_ARCHETYPES, builtinHandlerDTag } from "./napplet-builtins";
 import defaultEventStore from "./event-store";
 import { getNappletArchetypes, getNappletTitle } from "@/lib/nip5d-helpers";
-
-const DEFAULTS_KEY = "napplet:intent-defaults";
-const AUTHORIZED_KEY = "napplet:intent-authorized";
 
 /* -------------------------------------------------------------------------- */
 /*  User state                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function readMap(key: string): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    return typeof parsed === "object" && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeMap(key: string, value: Record<string, string>): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // A lost preference just means the chooser appears again.
-  }
-}
-
-/** The user's default handler for an archetype, if they picked one. */
-export function getDefaultHandler(archetype: string): string | undefined {
-  return readMap(DEFAULTS_KEY)[archetype];
-}
-
-/** Set from host UI only — a napplet must never reach this. */
-export function setDefaultHandler(archetype: string, dTag: string): void {
-  writeMap(DEFAULTS_KEY, { ...readMap(DEFAULTS_KEY), [archetype]: dTag });
-}
-
-export function clearDefaultHandler(archetype: string): void {
-  const defaults = readMap(DEFAULTS_KEY);
-  delete defaults[archetype];
-  writeMap(DEFAULTS_KEY, defaults);
-}
-
-export function getIntentDefaults(): Record<string, string> {
-  return readMap(DEFAULTS_KEY);
-}
-
 /**
- * Whether the user has allowed one napplet to name another directly.
- *
- * Naming a handler bypasses archetype resolution, so the spec asks that it be
- * user-authorized. Absent an authorization, an explicit handler falls back to
- * ordinary resolution rather than being honoured.
+ * Defaults and explicit-targeting authorizations live in
+ * `napplet-intent-defaults`, which imports nothing — the command layer reads a
+ * default to resolve `app <archetype>` and must not pull Kehto in to do it.
+ * Re-exported here so this module stays the one place the intent surface is
+ * described.
  */
-export function isExplicitTargetingAuthorized(
-  sender: string,
-  handler: string,
-): boolean {
-  return readMap(AUTHORIZED_KEY)[`${sender}->${handler}`] === "1";
-}
+export {
+  getDefaultHandler,
+  setDefaultHandler,
+  clearDefaultHandler,
+  getIntentDefaults,
+  isExplicitTargetingAuthorized,
+  authorizeExplicitTargeting,
+} from "./napplet-intent-defaults";
 
-export function authorizeExplicitTargeting(
-  sender: string,
-  handler: string,
-): void {
-  writeMap(AUTHORIZED_KEY, {
-    ...readMap(AUTHORIZED_KEY),
-    [`${sender}->${handler}`]: "1",
-  });
-}
+import {
+  getDefaultHandler,
+  setDefaultHandler,
+  isExplicitTargetingAuthorized,
+} from "./napplet-intent-defaults";
 
 /* -------------------------------------------------------------------------- */
 /*  Catalog                                                                    */
@@ -136,6 +95,28 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
         dTag: pointer.identifier,
         title: getNappletTitle(event) ?? row.title,
         archetypes,
+      }),
+    );
+  }
+
+  // Grimoire itself, for the roles it fills natively. Added last so a napplet is
+  // always the earlier candidate, and skipped for any archetype a napplet
+  // already claims — a built-in must never turn one installed handler into an
+  // ambiguity the user has to resolve. This is also what makes
+  // `intent.available("profile")` honest on a fresh install with no napplets.
+  const claimed = new Set(
+    entries.flatMap((entry) => Object.keys(entry.archetypes)),
+  );
+  for (const builtin of BUILTIN_ARCHETYPES) {
+    if (claimed.has(builtin.archetype)) continue;
+    entries.push(
+      manifestToIntentCatalogEntry({
+        dTag: builtinHandlerDTag(builtin.archetype),
+        title: builtin.title,
+        archetypes: builtin.actions.map((action) => ({
+          slug: builtin.archetype,
+          convention: `napplet:${builtin.archetype}/${action}`,
+        })),
       }),
     );
   }

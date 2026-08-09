@@ -41,12 +41,37 @@ function isAddressPointer(
  * Parse APP command arguments into a napplet manifest pointer.
  *
  * Accepts the same identifier forms as `open` — note1/nevent1/naddr1, a 64-char
- * hex event id, and `kind:pubkey:d-tag`. An address pointer's kind is checked
- * here; an event pointer's kind is unknowable until the event is fetched, so
- * that check happens at resolution time.
+ * hex event id, and `kind:pubkey:d-tag` — plus an archetype slug and optional
+ * target (`app note nevent1…`), which resolves through the user's installed
+ * napplets or grimoire's own built-in. An address pointer's kind is checked here;
+ * an event pointer's kind is unknowable until the event is fetched, so that check
+ * happens at resolution time.
+ *
+ * Pointer forms win. The slug branch is only reached when nothing addressable
+ * parsed, so an archetype named `notes` cannot shadow a `note1…` identifier.
+ *
+ * `napplet-archetype` is the one deliberate dynamic import in this chain, and it
+ * is load-bearing rather than a size optimization: this module is imported
+ * eagerly by the command registry, and `napplet-archetype` reaches back to
+ * `command-parser` → `man.ts` → here. A static edge would close that cycle and
+ * leave whichever module initialized first holding an undefined binding.
  */
-export function parseAppCommand(args: string[]): ParsedAppCommand {
-  const { pointer } = parseOpenCommand(args);
+export async function parseAppCommand(
+  args: string[],
+): Promise<ParsedAppCommand | Record<string, unknown>> {
+  let pointer: EventPointer | AddressPointer;
+  try {
+    pointer = parseOpenCommand(args).pointer;
+  } catch (error) {
+    const token = args[0] ?? "";
+    if (!token) throw error;
+    const { looksLikeArchetype, resolveArchetypeCommand } =
+      await import("@/services/napplet-archetype");
+    if (!looksLikeArchetype(token)) throw error;
+    // May resolve to a built-in, which comes back with an appId override
+    // rather than a pointer.
+    return resolveArchetypeCommand(token, args.slice(1));
+  }
 
   if (
     isAddressPointer(pointer) &&

@@ -22,35 +22,40 @@ describe("NAPPLET_KINDS", () => {
 });
 
 describe("parseAppCommand", () => {
-  it("requires an identifier", () => {
-    expect(() => parseAppCommand([])).toThrow();
+  it("requires an identifier", async () => {
+    await expect(parseAppCommand([])).rejects.toThrow();
   });
 
-  it.each([5129, 15129, 35129])("accepts an naddr for kind %i", (kind) => {
-    const naddr = nip19.naddrEncode({
-      kind,
-      pubkey: PUBKEY,
-      identifier: "calculator",
-    });
-    const { pointer } = parseAppCommand([naddr]) as {
-      pointer: AddressPointer;
-    };
-    expect(pointer.kind).toBe(kind);
-    expect(pointer.pubkey).toBe(PUBKEY);
-    expect(pointer.identifier).toBe("calculator");
-  });
+  it.each([5129, 15129, 35129])(
+    "accepts an naddr for kind %i",
+    async (kind) => {
+      const naddr = nip19.naddrEncode({
+        kind,
+        pubkey: PUBKEY,
+        identifier: "calculator",
+      });
+      const { pointer } = (await parseAppCommand([naddr])) as {
+        pointer: AddressPointer;
+      };
+      expect(pointer.kind).toBe(kind);
+      expect(pointer.pubkey).toBe(PUBKEY);
+      expect(pointer.identifier).toBe("calculator");
+    },
+  );
 
-  it("rejects an naddr for a non-napplet kind", () => {
+  it("rejects an naddr for a non-napplet kind", async () => {
     const naddr = nip19.naddrEncode({
       kind: 35128,
       pubkey: PUBKEY,
       identifier: "blog",
     });
-    expect(() => parseAppCommand([naddr])).toThrow(/not a napplet manifest/i);
+    await expect(parseAppCommand([naddr])).rejects.toThrow(
+      /not a napplet manifest/i,
+    );
   });
 
-  it("accepts kind:pubkey:dtag", () => {
-    const { pointer } = parseAppCommand([`35129:${PUBKEY}:calc`]) as {
+  it("accepts kind:pubkey:dtag", async () => {
+    const { pointer } = (await parseAppCommand([`35129:${PUBKEY}:calc`])) as {
       pointer: AddressPointer;
     };
     expect(pointer).toMatchObject({
@@ -60,38 +65,58 @@ describe("parseAppCommand", () => {
     });
   });
 
-  it("rejects kind:pubkey:dtag for a non-napplet kind", () => {
-    expect(() => parseAppCommand([`1:${PUBKEY}:x`])).toThrow(
+  it("rejects kind:pubkey:dtag for a non-napplet kind", async () => {
+    await expect(parseAppCommand([`1:${PUBKEY}:x`])).rejects.toThrow(
       /not a napplet manifest/i,
     );
   });
 
-  it("accepts a bare hex event id", () => {
-    const { pointer } = parseAppCommand([EVENT_ID]) as {
+  it("accepts a bare hex event id", async () => {
+    const { pointer } = (await parseAppCommand([EVENT_ID])) as {
       pointer: EventPointer;
     };
     expect(pointer.id).toBe(EVENT_ID);
   });
 
-  it("accepts note1", () => {
-    const { pointer } = parseAppCommand([nip19.noteEncode(EVENT_ID)]) as {
+  it("accepts note1", async () => {
+    const { pointer } = (await parseAppCommand([
+      nip19.noteEncode(EVENT_ID),
+    ])) as {
       pointer: EventPointer;
     };
     expect(pointer.id).toBe(EVENT_ID);
   });
 
-  it("accepts nevent and preserves relay hints", () => {
+  it("accepts nevent and preserves relay hints", async () => {
     const nevent = nip19.neventEncode({
       id: EVENT_ID,
       relays: ["wss://relay.example.com"],
     });
-    const { pointer } = parseAppCommand([nevent]) as { pointer: EventPointer };
+    const { pointer } = (await parseAppCommand([nevent])) as {
+      pointer: EventPointer;
+    };
     expect(pointer.id).toBe(EVENT_ID);
     expect(pointer.relays).toEqual(["wss://relay.example.com/"]);
   });
 
-  it("rejects malformed bech32", () => {
-    expect(() => parseAppCommand(["naddr1notreallybech32"])).toThrow();
+  it("rejects malformed bech32 rather than reading it as an archetype", async () => {
+    await expect(parseAppCommand(["naddr1notreallybech32"])).rejects.toThrow(
+      /invalid|decode|identifier/i,
+    );
+  });
+
+  it("falls back to grimoire's built-in for a role it fills", async () => {
+    // No napplet installed in this environment, so `profile` resolves to the
+    // built-in profile viewer and carries the appId override with it.
+    await expect(parseAppCommand(["profile"])).resolves.toMatchObject({
+      $appId: "profile",
+    });
+  });
+
+  it("reports an archetype nothing handles in its own terms", async () => {
+    await expect(parseAppCommand(["wallet"])).rejects.toThrow(
+      /nothing handles the "wallet" archetype/i,
+    );
   });
 });
 

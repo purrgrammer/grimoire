@@ -80,6 +80,10 @@ import {
   TAP_MESSAGE,
   TAP_CONTROL,
 } from "./napplet-messages";
+import {
+  observeNappletReadiness,
+  clearNappletReadiness,
+} from "./napplet-readiness";
 import { createNappletIntentResolver } from "./napplet-intent";
 import { createNappletTargetController } from "./napplet-targets";
 import { toast } from "sonner";
@@ -523,6 +527,10 @@ function handleNappletWindowMessage(event: MessageEvent): void {
 
   if (windowId) {
     recordNappletMessage({ windowId, direction: "in", data: event.data });
+    // Before the runtime, deliberately: readiness must be seen even for
+    // envelopes the runtime drops, and an `inc.emit` with no subscribers is
+    // dropped. See napplet-readiness.
+    observeNappletReadiness(windowId, event.data);
   }
   bridge?.handleMessage(event);
 }
@@ -607,6 +615,7 @@ export function destroyNappletWindow(windowId: string): void {
   // window's subscriptions and INC state.
   bridge?.runtime.destroyWindow(windowId);
   originRegistry.unregister(windowId);
+  clearNappletReadiness(windowId);
 }
 
 /** Tear the bridge down. Not called when a napplet window closes — frames are
