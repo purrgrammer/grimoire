@@ -162,6 +162,9 @@ export interface NappletIntentChoice {
   resolve: (choice: { dTag: string; remember: boolean } | null) => void;
 }
 
+/** Long enough to be a real decision, short enough not to be a leak. */
+const CHOOSER_TIMEOUT_MS = 120_000;
+
 const choices = new Map<string, NappletIntentChoice>();
 const choiceListeners = new Set<(c: NappletIntentChoice[]) => void>();
 let choiceCounter = 0;
@@ -193,12 +196,23 @@ function askUserToChoose(
 ): Promise<string | undefined> {
   return new Promise((resolveChoice) => {
     const key = `choice-${++choiceCounter}`;
+    // A chooser nobody answers must not hold the calling napplet's
+    // `intent.invoke` open forever: the chooser is mounted globally, so an
+    // unmount without an answer would leave the promise unresolved with nothing
+    // left on screen to resolve it. Unanswered means "no handler chosen".
+    const timer = setTimeout(() => {
+      choices.delete(key);
+      emitChoices();
+      resolveChoice(undefined);
+    }, CHOOSER_TIMEOUT_MS);
+
     choices.set(key, {
       key,
       archetype,
       sender,
       candidates,
       resolve: (choice) => {
+        clearTimeout(timer);
         choices.delete(key);
         emitChoices();
         if (!choice) return resolveChoice(undefined);

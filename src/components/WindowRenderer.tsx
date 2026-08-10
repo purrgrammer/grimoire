@@ -164,9 +164,17 @@ class WindowErrorBoundary extends Component<
   }
 }
 
-export function WindowRenderer({ window, onClose }: WindowRendererProps) {
-  let content: ReactNode;
-
+/**
+ * The app for one window.
+ *
+ * A component rather than a `content` variable built in the caller, because JSX
+ * constructed in a `try` is not covered by that `try`: React renders it later, so
+ * every error the catch appeared to handle actually reached the parent. Rendering
+ * the switch *inside* `WindowErrorBoundary` puts both kinds of failure — a throw
+ * in a prop expression here, and a throw inside the app's own render — behind the
+ * one mechanism that can catch them.
+ */
+function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
   /**
    * Bare `chat` names no conversation, so it is the browser — the same
    * component `concord` mounts, listing private conversations, relay groups and
@@ -182,227 +190,171 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
     window.appId === "chat" &&
     (!window.props.identifier || window.props.identifier.type === "browser");
 
-  try {
-    switch (browser ? "concord" : window.appId) {
-      case "nip":
-        content = <NipRenderer nipId={window.props.number} />;
-        break;
-      case "apps":
-        content = <NappletsViewer />;
-        break;
-      case "permissions":
-        content = <NappletPermissionsViewer />;
-        break;
-      case "app":
-        content = (
-          <NappletViewer pointer={window.props.pointer} windowId={window.id} />
-        );
-        break;
-      case "kind":
-        content = <KindRenderer kind={parseInt(window.props.number)} />;
-        break;
-      case "kinds":
-        content = <KindsViewer />;
-        break;
-      case "nips":
-        content = <NipsViewer />;
-        break;
-      case "man":
-        content = <ManPage cmd={window.props.cmd} />;
-        break;
-      case "req":
-        content = (
-          <ReqViewer
-            windowId={window.id}
-            filter={window.props.filter}
-            relays={window.props.relays}
-            closeOnEose={window.props.closeOnEose}
-            view={window.props.view}
-            follow={window.props.follow}
-            nip05Authors={window.props.nip05Authors}
-            nip05PTags={window.props.nip05PTags}
-            domainAuthors={window.props.domainAuthors}
-            domainPTags={window.props.domainPTags}
-            needsAccount={window.props.needsAccount}
-          />
-        );
-        break;
-      case "count":
-        content = (
-          <CountViewer
-            filter={window.props.filter}
-            relays={window.props.relays}
-            needsAccount={window.props.needsAccount}
-          />
-        );
-        break;
-      case "open":
-        content = <EventDetailViewer pointer={window.props.pointer} />;
-        break;
-      case "profile":
-        content = <ProfileViewer pubkey={window.props.pubkey} />;
-        break;
-      case "encode":
-        content = <EncodeViewer args={window.props.args} />;
-        break;
-      case "decode":
-        content = <DecodeViewer args={window.props.args} />;
-        break;
-      case "relay":
-        content = <RelayViewer url={window.props.url} />;
-        break;
-      case "debug":
-        content = <DebugViewer />;
-        break;
-      case "conn":
-        content = <ConnViewer />;
-        break;
-      case "chat":
-        // Bare `chat`: no conversation named, so this is the browser — private
-        // conversations, relay groups and Concord communities in one sidebar.
-        // The same component `concord` mounts; only the command it writes back
-        // differs, and that difference matters because `chat <identifier>` is a
-        // single-conversation window.
-        // Check if this is a group list (kind 10009) - render multi-room interface
-        if (window.props.identifier?.type === "group-list") {
-          content = <GroupListViewer identifier={window.props.identifier} />;
-        } else {
-          content = (
-            <ChatViewer
-              protocol={window.props.protocol}
-              identifier={window.props.identifier}
-              customTitle={window.customTitle}
-            />
-          );
-        }
-        break;
-      case "agent":
-        content = (
-          <AgentSessionViewer
-            agent={window.props.agent}
-            session={window.props.session}
-          />
-        );
-        break;
-      case "concord":
-        content = (
-          <ConcordViewer
-            command={browser ? "chat" : "concord"}
-            communityId={window.props.communityId}
-            channelId={window.props.channelId}
-            dmPeer={window.props.dmPeer}
-            groupId={window.props.groupId}
-            groupRelay={window.props.groupRelay}
-            windowId={window.id}
-          />
-        );
-        break;
-      // One appId, two spaces — a Concord channel's call and a NIP-29 group's.
-      // `CallWindow` picks; see the note there.
-      case "call":
-        content = (
-          <CallWindow
+  switch (browser ? "concord" : window.appId) {
+    case "nip":
+      return <NipRenderer nipId={window.props.number} />;
+    case "apps":
+      return <NappletsViewer />;
+    case "permissions":
+      return <NappletPermissionsViewer />;
+    case "app":
+      return (
+        <NappletViewer pointer={window.props.pointer} windowId={window.id} />
+      );
+    case "kind":
+      return <KindRenderer kind={parseInt(window.props.number)} />;
+    case "kinds":
+      return <KindsViewer />;
+    case "nips":
+      return <NipsViewer />;
+    case "man":
+      return <ManPage cmd={window.props.cmd} />;
+    case "req":
+      return (
+        <ReqViewer
+          windowId={window.id}
+          filter={window.props.filter}
+          relays={window.props.relays}
+          closeOnEose={window.props.closeOnEose}
+          view={window.props.view}
+          follow={window.props.follow}
+          nip05Authors={window.props.nip05Authors}
+          nip05PTags={window.props.nip05PTags}
+          domainAuthors={window.props.domainAuthors}
+          domainPTags={window.props.domainPTags}
+          needsAccount={window.props.needsAccount}
+        />
+      );
+    case "count":
+      return (
+        <CountViewer
+          filter={window.props.filter}
+          relays={window.props.relays}
+          needsAccount={window.props.needsAccount}
+        />
+      );
+    case "open":
+      return <EventDetailViewer pointer={window.props.pointer} />;
+    case "profile":
+      return <ProfileViewer pubkey={window.props.pubkey} />;
+    case "encode":
+      return <EncodeViewer args={window.props.args} />;
+    case "decode":
+      return <DecodeViewer args={window.props.args} />;
+    case "relay":
+      return <RelayViewer url={window.props.url} />;
+    case "debug":
+      return <DebugViewer />;
+    case "conn":
+      return <ConnViewer />;
+    case "chat":
+      // Check if this is a group list (kind 10009) - render multi-room interface
+      if (window.props.identifier?.type === "group-list") {
+        return <GroupListViewer identifier={window.props.identifier} />;
+      } else {
+        return (
+          <ChatViewer
             protocol={window.props.protocol}
-            communityId={window.props.communityId}
-            channelId={window.props.channelId}
-            relayUrl={window.props.relayUrl}
-            groupId={window.props.groupId}
-            windowId={window.id}
+            identifier={window.props.identifier}
+            customTitle={window.customTitle}
           />
         );
-        break;
-      case "spells":
-        content = <SpellsViewer />;
-        break;
-      case "spellbooks":
-        content = <SpellbooksViewer />;
-        break;
-      case "blossom":
-        content = (
-          <BlossomViewer
-            subcommand={window.props.subcommand}
-            serverUrl={window.props.serverUrl}
-            pubkey={window.props.pubkey}
-            sourceUrl={window.props.sourceUrl}
-            targetServer={window.props.targetServer}
-            sha256={window.props.sha256}
-            blobUrl={window.props.blobUrl}
-            mediaType={window.props.mediaType}
-          />
-        );
-        break;
-      case "wallet":
-        content = <WalletViewer />;
-        break;
-      case "zap":
-        content = (
-          <ZapWindow
-            recipientPubkey={window.props.recipientPubkey}
-            eventPointer={window.props.eventPointer}
-            addressPointer={window.props.addressPointer}
-            customTags={window.props.customTags}
-            relays={window.props.relays}
-            zapTarget={window.props.zapTarget}
-            onClose={onClose}
-          />
-        );
-        break;
-      case "post":
-        content = <PostViewer windowId={window.id} />;
-        break;
-      case "settings":
-        content = <SettingsViewer />;
-        break;
-      case "log":
-        content = <EventLogViewer />;
-        break;
-      case "ai":
-        content = (
-          <AiViewer
-            conversation={window.props.conversation}
-            prompt={window.props.prompt}
-            system={window.props.system}
-            target={window.props.target}
-            windowId={window.id}
-          />
-        );
-        break;
-      default:
-        content = (
-          <div className="p-4 text-muted-foreground">
-            Unknown app: {window.appId}
-          </div>
-        );
-    }
-  } catch (error) {
-    content = (
-      <div className="p-4">
-        <div className="border border-red-500 bg-red-50 dark:bg-red-950 rounded-md p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-red-900 dark:text-red-100">
-                Failed to render window
-              </h3>
-              <p className="text-sm text-red-800 dark:text-red-200 mt-1">
-                {error instanceof Error
-                  ? error.message
-                  : "An unexpected error occurred"}
-              </p>
-            </div>
-          </div>
+      }
+    case "spells":
+      return <SpellsViewer />;
+    case "spellbooks":
+      return <SpellbooksViewer />;
+    case "blossom":
+      return (
+        <BlossomViewer
+          subcommand={window.props.subcommand}
+          serverUrl={window.props.serverUrl}
+          pubkey={window.props.pubkey}
+          sourceUrl={window.props.sourceUrl}
+          targetServer={window.props.targetServer}
+          sha256={window.props.sha256}
+          blobUrl={window.props.blobUrl}
+          mediaType={window.props.mediaType}
+        />
+      );
+    case "wallet":
+      return <WalletViewer />;
+    case "zap":
+      return (
+        <ZapWindow
+          recipientPubkey={window.props.recipientPubkey}
+          eventPointer={window.props.eventPointer}
+          addressPointer={window.props.addressPointer}
+          customTags={window.props.customTags}
+          relays={window.props.relays}
+          onClose={onClose}
+        />
+      );
+    case "post":
+      return <PostViewer windowId={window.id} />;
+    case "settings":
+      return <SettingsViewer />;
+    case "agent":
+      return (
+        <AgentSessionViewer
+          agent={window.props.agent}
+          session={window.props.session}
+        />
+      );
+    case "call":
+      return (
+        <CallWindow
+          protocol={window.props.protocol}
+          communityId={window.props.communityId}
+          channelId={window.props.channelId}
+          relayUrl={window.props.relayUrl}
+          groupId={window.props.groupId}
+          windowId={window.id}
+        />
+      );
+    case "concord":
+      return (
+        <ConcordViewer
+          command={browser ? "chat" : "concord"}
+          communityId={window.props.communityId}
+          channelId={window.props.channelId}
+          dmPeer={window.props.dmPeer}
+          groupId={window.props.groupId}
+          groupRelay={window.props.groupRelay}
+          windowId={window.id}
+        />
+      );
+    case "ai":
+      return (
+        <AiViewer
+          conversation={window.props.conversation}
+          prompt={window.props.prompt}
+          system={window.props.system}
+          target={window.props.target}
+          windowId={window.id}
+        />
+      );
+    case "log":
+      return <EventLogViewer />;
+    default:
+      return (
+        <div className="p-4 text-muted-foreground">
+          Unknown app: {window.appId}
         </div>
-      </div>
-    );
+      );
   }
+}
 
+export function WindowRenderer({ window, onClose }: WindowRendererProps) {
   return (
     <WindowErrorBoundary
       windowTitle={window.title || window.appId.toUpperCase()}
       onClose={onClose}
     >
       <Suspense fallback={<ViewerLoading />}>
-        <div className="h-full w-full overflow-auto">{content}</div>
+        <div className="h-full w-full overflow-auto">
+          <WindowContent window={window} onClose={onClose} />
+        </div>
       </Suspense>
     </WindowErrorBoundary>
   );

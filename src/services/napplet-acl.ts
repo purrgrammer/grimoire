@@ -78,6 +78,10 @@ function readDecisions(): DecisionMap {
  */
 const decisionListeners = new Set<() => void>();
 
+/** Rebuilt when the stored text changes — see `getNappletDecisions`. */
+let decisionsSnapshot: NappletDecision[] = [];
+let decisionsSnapshotRaw: string | null = null;
+
 export function subscribeNappletDecisions(listener: () => void): () => void {
   decisionListeners.add(listener);
   return () => decisionListeners.delete(listener);
@@ -93,8 +97,26 @@ function writeDecisions(decisions: DecisionMap): void {
 }
 
 /** Every remembered decision, for the permissions UI. */
+/**
+ * Every remembered decision.
+ *
+ * The array is cached because `useSyncExternalStore` requires a stable snapshot —
+ * a fresh array on every call re-renders forever. Keyed on the stored text rather
+ * than invalidated on write, so a change that did not go through `writeDecisions`
+ * (another tab, a test, `resetKehtoAclStore`) is still picked up.
+ */
 export function getNappletDecisions(): NappletDecision[] {
-  return Object.values(readDecisions());
+  let raw: string;
+  try {
+    raw = localStorage.getItem(DECISIONS_STORAGE_KEY) ?? "";
+  } catch {
+    return decisionsSnapshot;
+  }
+  if (raw !== decisionsSnapshotRaw) {
+    decisionsSnapshotRaw = raw;
+    decisionsSnapshot = Object.values(readDecisions());
+  }
+  return decisionsSnapshot;
 }
 
 /**

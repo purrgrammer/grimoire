@@ -127,6 +127,14 @@ export function unregisterNappletIdentity(windowId: string): void {
     clearTimeout(group.timer);
     buffered.delete(key);
   }
+
+  // A dialog naming a napplet that is gone is worse than no dialog: answering it
+  // grants a capability to something the user just closed, and leaving it there
+  // means the promise behind it never settles — one leak per occurrence, plus a
+  // viewer waiting on a decision that can no longer arrive.
+  for (const request of [...launchRequests.values()]) {
+    if (request.windowId === windowId) request.resolve(null);
+  }
 }
 
 function triple(event: AclCheckEvent): string {
@@ -186,8 +194,10 @@ function handleDenial(event: AclCheckEvent): void {
   }
   if (!windowId) return;
 
-  // Mark settled now: further denials for the same capability while the dialog
-  // is open must not queue a second ask.
+  // Marked as *asked*, so further denials for the same capability while the
+  // dialog is open do not queue a second one. Cleared again if the question is
+  // never answered — dismissing by closing the window used to mean grimoire
+  // never asked about that capability again for the rest of the session.
   settled.add(key);
 
   const groupKey = `${dTag}:${hash}`;
@@ -237,7 +247,14 @@ async function askForUndeclared(
     emitLaunch();
   });
 
-  if (allowed === null) return;
+  if (allowed === null) {
+    // Dismissed or the window went away: the question stands, so let it be asked
+    // again rather than treating silence as a decision.
+    for (const capability of capabilities) {
+      settled.delete(`${dTag}:${aggregateHash}:${capability}`);
+    }
+    return;
+  }
 
   for (const capability of capabilities) {
     rememberNappletDecision({

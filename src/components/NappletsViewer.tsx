@@ -261,6 +261,7 @@ export function NappletsViewer() {
   const [query, setQuery] = useState("");
 
   const [roles, setRoles] = useState<ArchetypeRole[]>([]);
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
 
   const refreshInstalled = useCallback(
     () =>
@@ -350,8 +351,14 @@ export function NappletsViewer() {
         }
         setDiscovered([...newest.values()].map(fromEvent));
       })
-      .catch(() => {
-        if (!cancelled) setDiscovered([]);
+      .catch((error) => {
+        // Not `[]`: "the relays did not answer" and "your contacts publish no
+        // napplets" look identical rendered as an empty list, and the first is
+        // the one worth acting on.
+        if (cancelled) return;
+        console.warn("[napplet] discovery failed", error);
+        setDiscoveryFailed(true);
+        setDiscovered([]);
       });
 
     return () => {
@@ -481,6 +488,11 @@ export function NappletsViewer() {
             From your contacts ({theirs.length})
             {discovered === null && (authors?.length ?? 0) > 0 && (
               <span className="font-normal">· searching…</span>
+            )}
+            {discoveryFailed && (
+              <span className="font-normal text-warning">
+                · relays did not answer
+              </span>
             )}
           </h2>
           {!account?.pubkey ? (

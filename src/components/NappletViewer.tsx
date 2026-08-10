@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   AlertCircle,
   Copy,
@@ -30,6 +37,7 @@ import {
 import { recordNappletRun } from "@/services/napplet-library";
 import {
   getNappletDecisions,
+  subscribeNappletDecisions,
   isRemoteMediaGranted,
 } from "@/services/napplet-acl";
 import { getGrantedOrigins } from "@/services/napplet-origins";
@@ -207,9 +215,17 @@ function NappletFrame({
 
   // Grants are listed in the permissions popover; a refusal is worth surfacing
   // without one, because it is why the napplet is misbehaving.
+  //
+  // Subscribed rather than snapshotted: a refusal is *recorded while the napplet
+  // runs*, with no reload, so a value memoized on `resolved` went stale on
+  // exactly the path this badge exists for.
+  const decisions = useSyncExternalStore(
+    subscribeNappletDecisions,
+    getNappletDecisions,
+  );
   const refused = useMemo(() => {
     if (!resolved) return [];
-    return getNappletDecisions()
+    return decisions
       .filter(
         (d) =>
           !d.allowed &&
@@ -217,7 +233,7 @@ function NappletFrame({
           d.aggregateHash === resolved.identity.aggregateHash,
       )
       .map((d) => d.capability);
-  }, [resolved]);
+  }, [resolved, decisions]);
 
   useEffect(() => {
     const cancelled = { current: false };

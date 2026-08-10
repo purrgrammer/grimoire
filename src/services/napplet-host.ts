@@ -98,6 +98,7 @@ import { AGGREGATOR_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
 import { selectRelaysForFilter } from "./relay-selection";
 import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import {
   buildManifestFilter,
   getPointerRelays,
@@ -176,6 +177,15 @@ let keysService: ReturnType<typeof createKeysService> | null = null;
 
 const nappletSigner = createNappletSigner();
 
+/** Relay URLs compare equal only once normalized, and a bad one must not throw. */
+function safeNormalizeRelay(url: string): string {
+  try {
+    return normalizeRelayURL(url);
+  } catch {
+    return url;
+  }
+}
+
 /** Relay subscription cleanups the runtime asked us to hold. */
 const trackedSubscriptions = new Map<string, () => void>();
 
@@ -252,8 +262,22 @@ function buildAdapter(): ShellAdapter {
         },
         publish: async (event, relayUrls) => {
           const responses = await pool.publish(relayUrls, event);
+          // Keyed by the exact strings Kehto passed, not by `r.from`.
+          // `normalizePublishResult` looks up `result[url]` for each url *it*
+          // supplied and defaults a miss to `false`, while applesauce reports the
+          // normalized URL — so an unslashed input made a fully successful
+          // publish come back as every relay having refused it.
+          const byNormalized = new Map(
+            responses.map((r) => [safeNormalizeRelay(r.from), r.ok] as const),
+          );
           return Object.fromEntries(
-            responses.map((r) => [r.from, r.ok] as const),
+            relayUrls.map(
+              (url) =>
+                [
+                  url,
+                  byNormalized.get(safeNormalizeRelay(url)) ?? false,
+                ] as const,
+            ),
           );
         },
         isAvailable: () => true,
@@ -572,7 +596,18 @@ export function getNappletBridge(): ShellBridge {
   relaxInitBurst(bridge.runtime.firewallState);
 
   window.addEventListener("message", handleNappletWindowMessage);
-  window.addEventListener("pagehide", destroyNappletBridge, { once: true });
+  // Not `pagehide` unconditionally: a bfcache'd page fires it with
+  // `persisted: true` and then comes back alive, and tearing the bridge down
+  // there left every mounted napplet silently dead after a back-navigation —
+  // no viewer re-calls `getNappletBridge()` on restore. `{ once: true }` made it
+  // permanent. Firewall state is persisted either way so nothing is lost.
+  window.addEventListener("pagehide", (event) => {
+    if (event.persisted) {
+      if (bridge) persistFirewall(bridge.runtime.firewallState);
+      return;
+    }
+    destroyNappletBridge();
+  });
 
   // NAP-IDENTITY: "The shell MUST emit identity.changed to loaded napplets
   // whenever the shell-user identity changes", and with an empty pubkey when it
