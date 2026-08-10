@@ -39,8 +39,17 @@ function consequence(capability: string): string | null {
 }
 
 function LaunchDialog({ request }: { request: NappletLaunchRequest }) {
+  // Reads start ticked, writes do not. Pre-ticking "publish events signed as
+  // you" behind a single button makes the dialog a formality, and it is worst on
+  // the `undeclared` path — a napplet that asked for something its manifest never
+  // declared, where one click would grant a standing publish-as-you right.
   const [allowed, setAllowed] = useState<Set<string>>(
-    () => new Set(request.capabilities),
+    () =>
+      new Set(
+        request.undeclared
+          ? []
+          : request.capabilities.filter((capability) => !isWrite(capability)),
+      ),
   );
 
   const ordered = [...request.capabilities].sort((a, b) => {

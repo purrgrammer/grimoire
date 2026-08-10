@@ -135,11 +135,16 @@ export default function CommandLauncher({
     }
 
     // Edit mode: update existing window
+    // `result.command`, not `recognizedCommand`: an argParser may redirect to a
+    // different app (see APP_ID_OVERRIDE), and `recognizedCommand` is the
+    // pre-parse snapshot that predates the substitution.
+    const appId = result.command?.appId ?? recognizedCommand.appId;
+
     if (editMode) {
       updateWindow(editMode.windowId, {
         props: result.props,
         commandString: activeSpell ? effectiveParsed.fullInput : input.trim(),
-        appId: recognizedCommand.appId,
+        appId,
         customTitle: result.globalFlags?.windowProps?.title,
       });
       setEditMode(null); // Clear edit mode
@@ -152,7 +157,7 @@ export default function CommandLauncher({
 
       // Normal mode: create new window
       addWindow(
-        recognizedCommand.appId,
+        appId,
         result.props,
         activeSpell ? effectiveParsed.fullInput : input.trim(),
         result.globalFlags?.windowProps?.title,

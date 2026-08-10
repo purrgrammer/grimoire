@@ -25,7 +25,7 @@
  * bypasses `connect-src` entirely and carries no capability the ACL can check.
  */
 
-import { createResourceService } from "@kehto/services";
+import { createResourceService } from "./kehto";
 import { getBlobUrl } from "./blossom";
 import {
   getGrantedOrigins,

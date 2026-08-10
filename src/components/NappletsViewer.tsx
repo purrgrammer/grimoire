@@ -14,7 +14,6 @@ import {
   setNappletPinned,
   forgetNapplet,
   pointerFromCoordinate,
-  nappletCoordinate,
   type InstalledNapplet,
 } from "@/services/napplet-library";
 import {
@@ -504,6 +503,3 @@ export function NappletsViewer() {
 }
 
 export default NappletsViewer;
-
-/** Re-exported so the launcher and the viewer agree on identity. */
-export { nappletCoordinate };

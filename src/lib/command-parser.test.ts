@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseCommandInput, executeCommandParser } from "./command-parser";
+import {
+  parseCommandInput,
+  executeCommandParser,
+  APP_ID_OVERRIDE,
+} from "./command-parser";
+import { manPages } from "@/types/man";
 
 /**
  * Regression tests for parseCommandInput
@@ -294,5 +299,41 @@ describe("executeCommandParser - alias resolution", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.props.pubkey).toBe("$me");
+  });
+});
+
+/**
+ * An argParser may redirect to a different app: `app <archetype>` falls back to
+ * grimoire's own built-in when no napplet handles the role, and a built-in is a
+ * different appId with different props.
+ *
+ * Both halves matter. The appId has to reach the window — the launcher read a
+ * pre-parse snapshot once, and created an `app` window holding profile props,
+ * which crashed on render. And the key must never reach the window, because
+ * props are persisted to localStorage and published inside kind-30777
+ * spellbooks: a reserved key in a wire format is a migration nobody wants.
+ */
+describe("APP_ID_OVERRIDE", () => {
+  it("substitutes the appId and strips the key from props", async () => {
+    // No napplets installed in this environment, so `profile` resolves to the
+    // built-in profile viewer rather than to a napplet pointer.
+    const result = await executeCommandParser(parseCommandInput("app profile"));
+
+    expect(result.error).toBeUndefined();
+    expect(result.command?.appId).toBe("profile");
+    expect(result.props).not.toHaveProperty(APP_ID_OVERRIDE);
+    expect(JSON.stringify(result.props)).not.toContain("$appId");
+  });
+
+  it("leaves the man page itself untouched", async () => {
+    // `command` is a copy: mutating the shared registry entry would make one
+    // `app profile` permanently redefine what `app` opens.
+    await executeCommandParser(parseCommandInput("app profile"));
+    expect(manPages.app.appId).toBe("app");
+  });
+
+  it("keeps the declared appId when no override is returned", async () => {
+    const result = await executeCommandParser(parseCommandInput("nip 01"));
+    expect(result.command?.appId).toBe("nip");
   });
 });

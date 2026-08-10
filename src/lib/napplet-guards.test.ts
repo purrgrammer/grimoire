@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { assertManifestEvent, buildManifestFilter } from "@/lib/napplet-parser";
+import {
+  assertManifestEvent,
+  buildManifestFilter,
+  isReservedNappletIdentifier,
+} from "@/lib/napplet-parser";
 import type { NostrEvent } from "@/types/nostr";
 
 const PUBKEY = "a".repeat(64);
@@ -118,5 +122,52 @@ describe("root manifest pointers", () => {
       assertManifestEvent(manifest({ kind: 15129, tags: [] }), rootPointer)
         .kind,
     ).toBe(15129);
+  });
+});
+
+/**
+ * `shell` is the `sender` grimoire puts on every intent it delivers over
+ * NAP-INC, and `grimoire:builtin:*` is how a resolved handler says "grimoire
+ * itself". Kehto reserves neither: it derives `sender` from the emitting
+ * napplet's own `d` tag, so a napplet published under either name is
+ * indistinguishable from the host. Refusing to resolve them at all is the fix.
+ */
+describe("reserved identifiers", () => {
+  it("refuses a napplet whose d tag is `shell`", () => {
+    const event = manifest({ tags: [["d", "shell"]] });
+    expect(() =>
+      assertManifestEvent(event, {
+        kind: 35129,
+        pubkey: event.pubkey,
+        identifier: "shell",
+      }),
+    ).toThrow(/reserved for the shell/i);
+  });
+
+  it("refuses a napplet impersonating a built-in handler", () => {
+    const dTag = "grimoire:builtin:profile";
+    const event = manifest({ tags: [["d", dTag]] });
+    expect(() =>
+      assertManifestEvent(event, {
+        kind: 35129,
+        pubkey: event.pubkey,
+        identifier: dTag,
+      }),
+    ).toThrow(/reserved for the shell/i);
+  });
+
+  it("refuses it on the event-pointer path too", () => {
+    // A nevent/note/hex pointer resolves without a coordinate, so the check
+    // cannot live in the address-pointer branch.
+    const event = manifest({ tags: [["d", "shell"]] });
+    expect(() => assertManifestEvent(event, { id: event.id })).toThrow(
+      /reserved for the shell/i,
+    );
+  });
+
+  it("leaves ordinary identifiers alone", () => {
+    expect(isReservedNappletIdentifier("profile")).toBe(false);
+    expect(isReservedNappletIdentifier("shellfish")).toBe(false);
+    expect(isReservedNappletIdentifier("")).toBe(false);
   });
 });

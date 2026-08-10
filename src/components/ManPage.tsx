@@ -1,4 +1,6 @@
+import { toast } from "sonner";
 import { manPages, type ManPageEntry } from "@/types/man";
+import { parseAndExecuteCommand } from "@/lib/command-parser";
 import { useAddWindow } from "@/core/state";
 import { CenteredContent } from "./ui/CenteredContent";
 import { cn } from "@/lib/utils";
@@ -25,20 +27,24 @@ export function ExecutableCommand({
 }) {
   const addWindow = useAddWindow();
 
+  // Through the real pipeline, not a hand-rolled parse: `executeCommandParser`
+  // is the only place global flags are honoured and the only place an appId
+  // override is applied and its reserved key stripped. Calling `argParser`
+  // directly put `$appId` straight into window props, and from there into
+  // localStorage and any published spellbook.
   const handleClick = async () => {
-    const parts = commandLine.trim().split(/\s+/);
-    const commandName = parts[0]?.toLowerCase();
-    const cmdArgs = parts.slice(1);
-
-    const command = manPages[commandName];
-    if (command) {
-      // argParser can be async
-      const cmdProps = command.argParser
-        ? await Promise.resolve(command.argParser(cmdArgs))
-        : command.defaultProps || {};
-
-      addWindow(command.appId, cmdProps, undefined, undefined, spellId);
+    const parsed = await parseAndExecuteCommand(commandLine.trim());
+    if (parsed.error || !parsed.command || !parsed.props) {
+      toast.error(parsed.error ?? `Could not run \`${commandLine.trim()}\``);
+      return;
     }
+    addWindow(
+      parsed.command.appId,
+      parsed.props,
+      undefined,
+      parsed.globalFlags?.windowProps?.title,
+      spellId,
+    );
   };
 
   return (

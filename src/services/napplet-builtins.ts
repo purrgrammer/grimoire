@@ -26,17 +26,17 @@ import { getDefaultStore } from "jotai";
 import { grimoireStateAtom } from "@/core/state";
 import * as Logic from "@/core/logic";
 import { parseAndExecuteCommand } from "@/lib/command-parser";
+import { BUILTIN_HANDLER_PREFIX } from "@/lib/napplet-parser";
 
 /**
  * Marks a handler as grimoire rather than a napplet.
  *
- * Present on the wire only as the resolved handler id inside an intent result,
- * and `:` makes an accidental collision with a real `d` tag implausible. The
- * catalog also filters out any built-in whose slug a real napplet claims, so a
- * napplet cannot impersonate one.
+ * A napplet cannot hold one of these: `assertManifestEvent` refuses to resolve
+ * any manifest whose `d` tag is reserved, which is what makes stripping the
+ * prefix safe here. Suppressing the built-in when a napplet claims the same
+ * *archetype* is a separate, weaker thing — it prevents an ambiguity, not an
+ * impersonation.
  */
-export const BUILTIN_HANDLER_PREFIX = "grimoire:builtin:";
-
 export function builtinHandlerDTag(archetype: string): string {
   return `${BUILTIN_HANDLER_PREFIX}${archetype}`;
 }
@@ -86,6 +86,20 @@ interface BuiltinArchetype {
   actions: readonly BuiltinAction[];
   /** Payload keys that may carry the identifier, most specific first. */
   keys: readonly string[];
+  /**
+   * Whether a value is an identifier this role can accept **from a napplet**.
+   *
+   * Narrower than what the built-in's own parser takes, and deliberately so. A
+   * payload from a napplet is attacker-controlled, and every one of these roles
+   * ends in a network request to a host derived from it: the profile viewer
+   * resolves NIP-05 with a GET to `https://<domain>/.well-known/nostr.json?name=…`,
+   * the relay viewer fetches NIP-11 from the URL. Accepting a NIP-05 address or a
+   * pathful relay URL there hands a napplet an outbound channel with attacker
+   * control of hostname *and* query — a way around `connect-src 'none'` that
+   * needs no grant. Typing `app profile alice@example.com` yourself is a
+   * different act, so the command line is not held to this.
+   */
+  acceptsFromNapplet(target: string): boolean;
   /** How to ask for a target, when one is required. */
   usage: string;
   /**
@@ -95,6 +109,29 @@ interface BuiltinArchetype {
    * one; returning null then is how a role says it needs an argument.
    */
   build(target?: string): string | null;
+}
+
+/** A bech32 pointer of one of the given kinds, or a bare 64-char hex id. */
+function isPointerLike(value: string, prefixes: readonly string[]): boolean {
+  if (/^[0-9a-f]{64}$/i.test(value)) return true;
+  return prefixes.some((prefix) =>
+    new RegExp(`^${prefix}1[023456789acdefghjklmnpqrstuvwxyz]{20,}$`).test(
+      value,
+    ),
+  );
+}
+
+/** A relay URL with nothing after the host: no path, query or fragment. */
+function isBareRelayUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "wss:" && url.protocol !== "ws:") return false;
+  if (url.username || url.password || url.search || url.hash) return false;
+  return url.pathname === "/" || url.pathname === "";
 }
 
 function pick(payload: unknown, keys: readonly string[]): string | undefined {
@@ -121,6 +158,7 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
     actions: ["open"],
     keys: ["pubkey", "npub", "nprofile", "profile", "address", "nip05"],
     usage: "app profile <npub|nip-05>",
+    acceptsFromNapplet: (target) => isPointerLike(target, ["npub", "nprofile"]),
     // `$me` is grimoire's own alias for the signed-in account, and the right
     // answer for `app profile` with nothing to point at.
     build: (target) => `profile ${target ?? "$me"}`,
@@ -131,6 +169,8 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
     actions: ["open"],
     keys: ["id", "note", "nevent", "event", "naddr", "address"],
     usage: "app note <note|nevent>",
+    acceptsFromNapplet: (target) =>
+      isPointerLike(target, ["note", "nevent", "naddr"]),
     build: (target) => (target ? `open ${target}` : null),
   },
   event: {
@@ -139,6 +179,8 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
     actions: ["open"],
     keys: ["id", "nevent", "note", "event", "naddr", "address"],
     usage: "app event <nevent|naddr>",
+    acceptsFromNapplet: (target) =>
+      isPointerLike(target, ["note", "nevent", "naddr"]),
     build: (target) => (target ? `open ${target}` : null),
   },
   relay: {
@@ -147,6 +189,7 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
     actions: ["open"],
     keys: ["url", "relay", "uri"],
     usage: "app relay <wss://…>",
+    acceptsFromNapplet: isBareRelayUrl,
     build: (target) => (target ? `relay ${target}` : null),
   },
 };
@@ -178,13 +221,20 @@ export interface BuiltinWindow {
   commandString: string;
 }
 
-/** Resolve a built-in archetype into a window, through the ordinary command pipeline. */
+/**
+ * Resolve a built-in archetype into a window, through the ordinary command
+ * pipeline.
+ *
+ * `fromNapplet` marks the target as attacker-controlled, which narrows what an
+ * identifier may be — see `acceptsFromNapplet`.
+ */
 export async function buildBuiltinWindow(
   archetype: string,
   action: string,
   payload?: unknown,
   /** A positional identifier from the command line, when there is no payload. */
   positional?: string,
+  fromNapplet = false,
 ): Promise<BuiltinWindow> {
   const builtin = findBuiltinArchetype(archetype);
   if (!builtin) throw new Error(`no built-in handler for "${archetype}"`);
@@ -194,6 +244,11 @@ export async function buildBuiltinWindow(
   }
 
   const target = pick(payload, builtin.keys) ?? positional?.trim();
+  if (fromNapplet && target && !builtin.acceptsFromNapplet(target)) {
+    throw new Error(
+      `a napplet may not point the built-in "${archetype}" handler at "${target}"`,
+    );
+  }
   const commandString = builtin.build(target);
   if (!commandString) {
     throw new Error(
@@ -227,7 +282,17 @@ export async function openBuiltinArchetype(
     payload,
     positional,
   );
+  return openBuiltinWindow(window);
+}
 
+/**
+ * Add the window for an already-built built-in target.
+ *
+ * Split from `buildBuiltinWindow` so a caller can interpose a decision between
+ * the two — see `napplet-targets`, where a napplet-originated intent must be
+ * confirmed before grimoire opens anything.
+ */
+export function openBuiltinWindow(window: BuiltinWindow): string {
   const store = getDefaultStore();
   const before = new Set(Object.keys(store.get(grimoireStateAtom).windows));
   store.set(grimoireStateAtom, (prev) =>

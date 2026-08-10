@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   getDefaultHandler,
   setDefaultHandler,
@@ -82,6 +82,39 @@ describe("explicit cross-napplet targeting", () => {
  * napplets can still answer `intent.available("profile")` truthfully.
  */
 describe("intent catalog", () => {
+  it("skips a napplet with malformed archetype tags instead of failing the batch", async () => {
+    // Kehto's manifestToIntentCatalogEntry *throws* on a convention that is not
+    // `napplet:<slug>/<action>` or a slug outside [a-z0-9][a-z0-9-]*. Those tags
+    // are third-party input, and the resolver reloads the catalog for every
+    // available/handlers/dispatch — so one bad tag in one installed napplet used
+    // to disable NAP-INTENT for all of them.
+    const { loadIntentCatalog } = await import("./napplet-intent");
+    const library = await import("./napplet-library");
+    const rows = [
+      {
+        coordinate: `35129:${"a".repeat(64)}:broken`,
+        title: "Broken",
+        manifest: { tags: [["archetype", "profile"]] },
+      },
+      {
+        coordinate: `35129:${"a".repeat(64)}:underscored`,
+        title: "Underscored",
+        manifest: { tags: [["archetype", "my_role", "napplet:my_role/open"]] },
+      },
+    ];
+    const spy = vi
+      .spyOn(library, "listNapplets")
+      .mockResolvedValue(rows as never);
+
+    const entries = await loadIntentCatalog();
+    spy.mockRestore();
+
+    expect(entries.map((e) => e.dTag)).not.toContain("broken");
+    expect(entries.map((e) => e.dTag)).not.toContain("underscored");
+    // The built-ins still made it, which is the point: the batch survived.
+    expect(entries.length).toBeGreaterThan(0);
+  });
+
   it("advertises grimoire's built-in roles when nothing is installed", async () => {
     const { loadIntentCatalog } = await import("./napplet-intent");
     const { BUILTIN_ARCHETYPE_SLUGS, builtinHandlerDTag } =

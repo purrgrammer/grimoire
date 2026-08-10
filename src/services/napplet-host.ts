@@ -1,10 +1,11 @@
 /**
  * NIP-5D napplet host — the single seam between grimoire and Kehto.
  *
- * Every `@kehto/*` and `@napplet/*` import in the app lives here, apart from
- * the three kind constants imported by `src/lib/napplet-parser.ts`. Kehto is
- * pre-1.0 and NIP-5D is a draft, so keeping the surface in one file bounds what
- * an upstream break can touch.
+ * Kehto reaches the app only through `./kehto`, which re-exports every value we
+ * use and is enforced by `no-restricted-imports`. This file is where those
+ * values are *wired*: it owns the adapter, the bridge and manifest resolution.
+ * Kehto is pre-1.0 and NIP-5D is a draft, so bounding both the imports and the
+ * wiring is what keeps an upstream break from spreading.
  *
  * Responsibilities:
  *  - build a `ShellAdapter` over grimoire's existing singletons,
@@ -24,8 +25,7 @@ import {
   type ShellBridge,
   type ShellEnvironment,
   type OriginIdentity,
-  type RelayPoolLike,
-} from "@kehto/shell";
+} from "./kehto";
 import {
   createThemeService,
   createConfigService,
@@ -36,15 +36,15 @@ import {
   createRelayPoolOutboxRouter,
   createUploadService,
   createIntentService,
-} from "@kehto/services";
+} from "./kehto";
 import {
   resolveNapplet,
   fetchBlob,
   openNappletArtifactCache,
   NappletResolutionError,
   type NappletArtifactCache,
-} from "@kehto/nip/5d";
-import type { Theme as NapTheme } from "@napplet/nap/theme/types";
+} from "./kehto";
+import type { NapTheme } from "./kehto";
 import type { Theme as GrimoireTheme } from "@/lib/themes";
 
 import {
@@ -56,6 +56,7 @@ import {
   relaxInitBurst,
 } from "./napplet-acl";
 import pool from "./relay-pool";
+import { createNappletRelayPool } from "./napplet-relay";
 import defaultEventStore from "./event-store";
 import accountManager from "./accounts";
 import { createNappletSigner } from "./napplet-signer";
@@ -157,26 +158,6 @@ export function toNapTheme(theme: GrimoireTheme): NapTheme {
       text: `hsl(${theme.colors.foreground})`,
       primary: `hsl(${theme.colors.primary})`,
     },
-  };
-}
-
-/**
- * Adapt applesauce's `RelayPool` to Kehto's structural `RelayPoolLike`.
- *
- * `subscription()` must carry `{ eventStore }` — the v6 default is a throwaway
- * in-memory store, which silently drops events. Nothing reads an `"EOSE"`
- * sentinel here: v6 pool subscriptions no longer emit one.
- */
-function adaptRelayPool(): RelayPoolLike {
-  return {
-    subscription: (relayUrls, filters) =>
-      pool.subscription(relayUrls, filters, {
-        eventStore: defaultEventStore,
-      }),
-    publish: (relayUrls, event) =>
-      pool.publish(relayUrls, event).then(() => undefined),
-    request: (relayUrls, filters) =>
-      pool.request(relayUrls, filters, { eventStore: defaultEventStore }),
   };
 }
 
@@ -341,7 +322,7 @@ function buildAdapter(): ShellAdapter {
 
   return {
     relayPool: {
-      getRelayPool: () => adaptRelayPool(),
+      getRelayPool: () => createNappletRelayPool(),
       trackSubscription: (subKey, cleanup) => {
         trackedSubscriptions.get(subKey)?.();
         trackedSubscriptions.set(subKey, cleanup);
@@ -626,6 +607,11 @@ export function destroyNappletBridge(): void {
   identitySubscription?.unsubscribe();
   identitySubscription = null;
   window.removeEventListener("message", handleNappletWindowMessage);
+  // runtime.destroy() clears its own subscription map without calling the
+  // cleanups it handed us, so an HMR dispose left every napplet-opened REQ
+  // subscribed. Per-window teardown is fine — destroyWindow untracks by prefix.
+  for (const cleanup of trackedSubscriptions.values()) cleanup();
+  trackedSubscriptions.clear();
   bridge.destroy();
   keysService?.destroy();
   keysService = null;

@@ -54,6 +54,14 @@ export function buildCspPolicy(
   ].join("; ");
 }
 
+/** A napplet document whose policy could not be placed where it takes effect. */
+export class CspInjectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CspInjectionError";
+  }
+}
+
 /**
  * Inject the CSP `<meta http-equiv>` as the first element of `<head>`.
  *
@@ -69,16 +77,48 @@ export function buildCspPolicy(
  * structurally true for any input. `DOMParser` does not execute scripts, and
  * the parser hoists stray leading content into the head/body it synthesizes,
  * so nothing can sit ahead of the policy in the serialized output.
+ *
+ * **This must be the last thing written into a napplet document.** Attribute
+ * serialization escapes `&` and `"` but not `<`, so a decoy
+ * `<meta http-equiv="Content-Security-Policy">` inside an attribute on `<html>`
+ * survives this pass verbatim and sits *ahead* of the real one in the output.
+ * Anything that string-matches the policy meta afterwards — Kehto's own prelude
+ * injector does exactly that — hits the decoy and splices its payload into the
+ * attribute value, whose first quote and `>` then terminate the tag. The
+ * remainder becomes character data before `<head>`, which forces an implicit
+ * empty head, and the real meta lands in `<body>` where a `http-equiv` policy
+ * is ignored. The document then ships with no CSP at all. Verified with a
+ * spec-compliant tree builder; the reparse below is what makes it loud rather
+ * than silent if the ordering is ever changed back.
  */
 export function injectCspMeta(
   html: string,
   origins: readonly string[],
   grants: CspGrants = {},
 ): string {
+  const policy = buildCspPolicy(origins, grants);
   const doc = new DOMParser().parseFromString(html, "text/html");
   const meta = doc.createElement("meta");
   meta.setAttribute("http-equiv", "Content-Security-Policy");
-  meta.setAttribute("content", buildCspPolicy(origins, grants));
+  meta.setAttribute("content", policy);
   doc.head.prepend(meta);
-  return `<!doctype html>${doc.documentElement.outerHTML}`;
+  const out = `<!doctype html>${doc.documentElement.outerHTML}`;
+
+  // Prepending to `doc.head` is not the same claim as "the browser will parse
+  // this string back into a document whose head holds the policy". Check the
+  // output rather than trusting the tree we built it from.
+  assertPolicyInHead(out, policy);
+  return out;
+}
+
+function assertPolicyInHead(html: string, policy: string): void {
+  const head = new DOMParser().parseFromString(html, "text/html").head;
+  const applied = head?.querySelector(
+    'meta[http-equiv="Content-Security-Policy"]',
+  );
+  if (applied?.getAttribute("content") !== policy) {
+    throw new CspInjectionError(
+      "the napplet's HTML displaced the Content-Security-Policy out of <head>, where it would not take effect",
+    );
+  }
 }

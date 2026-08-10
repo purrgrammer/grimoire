@@ -1,5 +1,5 @@
-import { manPages } from "@/types/man";
 import type { AppId } from "@/types/app";
+import { parseAndExecuteCommand } from "./command-parser";
 
 /**
  * Parse and execute a spell command string, returning the appId and props
@@ -10,16 +10,15 @@ import type { AppId } from "@/types/app";
 export async function parseSpellCommand(
   commandLine: string,
 ): Promise<{ appId: AppId; props: any; commandString: string } | null> {
-  const parts = commandLine.trim().split(/\s+/);
-  const commandName = parts[0]?.toLowerCase();
-  const cmdArgs = parts.slice(1);
+  // The whole pipeline, not `argParser` alone: it is what honours global flags
+  // and what applies (and strips) an appId override. Hand-rolling the parse also
+  // meant losing shell-quote tokenization, so a quoted argument split on spaces.
+  const parsed = await parseAndExecuteCommand(commandLine.trim());
+  if (parsed.error || !parsed.command || !parsed.props) return null;
 
-  const command = manPages[commandName];
-  if (!command) return null;
-
-  const props = command.argParser
-    ? await Promise.resolve(command.argParser(cmdArgs))
-    : command.defaultProps || {};
-
-  return { appId: command.appId, props, commandString: commandLine };
+  return {
+    appId: parsed.command.appId,
+    props: parsed.props,
+    commandString: commandLine,
+  };
 }

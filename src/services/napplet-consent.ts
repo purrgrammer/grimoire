@@ -25,6 +25,7 @@ import {
 import {
   setNappletWindowTitle,
   clearNappletWindowTitle,
+  takeCurrentWriter,
 } from "./napplet-attribution";
 import {
   rememberNappletDecision,
@@ -38,9 +39,15 @@ import {
   REMOTE_MEDIA_CAPABILITY,
 } from "./napplet-capabilities";
 
-/** A signing confirmation, resolved by the user answering the prompt. */
+/** A per-operation confirmation, resolved by the user answering the prompt. */
 export interface NappletSigningRequest {
   key: string;
+  /**
+   * `sign` puts the user's signature on something; `action` is any other
+   * operation that needs a decision. The toast must say which — labelling a
+   * window-opening request "Sign" would train the user to ignore the word.
+   */
+  kind: "sign" | "action";
   summary: string;
   detail: string;
   /** Best-effort attribution — see `noteRelayWriteAllowed`. */
@@ -456,28 +463,30 @@ const signingListeners = new Set<(r: NappletSigningRequest[]) => void>();
 let signingCounter = 0;
 
 /**
- * Best-effort attribution for signing prompts.
+ * Who is asking, for the prompt.
  *
- * `auth.getSigner()` takes no window context, so the signer cannot know which
- * napplet is asking. The ACL check for `relay:write` happens synchronously
- * immediately before the publish path calls it, so the last window to pass that
- * check is the caller in practice. Stale entries are discarded rather than
- * shown, so a wrong name is never displayed — only a missing one.
+ * `auth.getSigner()` takes no window context, so the signer cannot know its
+ * caller. `napplet-attribution` is written synchronously at the `relay:write`
+ * ACL check that immediately precedes the signature, in the same turn, and is
+ * read here before any `await` — so the name is exact rather than a guess.
+ *
+ * There used to be a second copy of this in this file, populated by a function
+ * nobody called, which meant every prompt said "A napplet" no matter how many
+ * were open. With two panes running, that is the spoofing surface the
+ * attribution exists to close.
  */
-let lastWriter: { title: string; pubkey: string; at: number } | null = null;
-const WRITER_ATTRIBUTION_WINDOW_MS = 2000;
-
-export function noteRelayWriteAllowed(dTag: string, hash: string): void {
+function currentAttribution(): { title: string; pubkey: string } | null {
+  const writer = takeCurrentWriter();
+  if (!writer) return null;
   for (const identity of identities.values()) {
-    if (identity.dTag === dTag && identity.aggregateHash === hash) {
-      lastWriter = {
-        title: identity.title,
-        pubkey: identity.pubkey,
-        at: Date.now(),
-      };
-      return;
+    if (
+      identity.dTag === writer.dTag &&
+      identity.aggregateHash === writer.aggregateHash
+    ) {
+      return { title: identity.title, pubkey: identity.pubkey };
     }
   }
+  return null;
 }
 
 function emitSigning(): void {
@@ -498,15 +507,36 @@ export function requestSigningConsent(input: {
   summary: string;
   detail: string;
 }): Promise<boolean> {
-  const attribution =
-    lastWriter && Date.now() - lastWriter.at < WRITER_ATTRIBUTION_WINDOW_MS
-      ? lastWriter
-      : null;
+  return requestConfirmation({ ...input, kind: "sign" });
+}
+
+/**
+ * Ask the user to confirm an operation that is not a signature.
+ *
+ * Shares the signing queue and its toast, because the shape is identical: one
+ * napplet-originated operation, one decision, never remembered.
+ */
+export function requestActionConsent(input: {
+  summary: string;
+  detail: string;
+}): Promise<boolean> {
+  return requestConfirmation({ ...input, kind: "action" });
+}
+
+function requestConfirmation(input: {
+  kind: "sign" | "action";
+  summary: string;
+  detail: string;
+}): Promise<boolean> {
+  // Only a signature has a synchronous ACL check in front of it; an `action`
+  // confirmation is requested by host code that already knows its own context.
+  const attribution = input.kind === "sign" ? currentAttribution() : null;
 
   return new Promise<boolean>((resolveConsent) => {
     const key = `sign-${++signingCounter}`;
     signingRequests.set(key, {
       key,
+      kind: input.kind,
       summary: input.summary,
       detail: input.detail,
       title: attribution?.title,

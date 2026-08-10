@@ -38,9 +38,11 @@ import { getDeclaredDomains } from "./napplet-capabilities";
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
 import { intentTopic, waitForNappletReady } from "./napplet-readiness";
 import {
-  openBuiltinArchetype,
+  buildBuiltinWindow,
+  openBuiltinWindow,
   parseBuiltinHandlerDTag,
 } from "./napplet-builtins";
+import { requestActionConsent } from "./napplet-consent";
 
 /**
  * How long to wait for a target to become able to receive.
@@ -115,6 +117,37 @@ function readinessFailure(dTag: string, windowId: string): string {
   return `"${dTag}" did not become ready to receive`;
 }
 
+/**
+ * Hand an intent to grimoire's own built-in, with the user's say-so.
+ *
+ * Kehto auto-selects a sole candidate with no chooser, and on a fresh install
+ * grimoire *is* the sole candidate for every role it fills. Without a decision
+ * here, a napplet holding `intent` could open host windows — and reach the
+ * network through the requests they make — with no user interaction at all.
+ * `fromNapplet` additionally narrows what the payload may name.
+ */
+async function openBuiltinForNapplet(
+  archetype: string,
+  action: string,
+  payload: unknown,
+): Promise<string> {
+  const window = await buildBuiltinWindow(
+    archetype,
+    action,
+    payload,
+    undefined,
+    true,
+  );
+
+  const allowed = await requestActionConsent({
+    summary: `open ${archetype} in grimoire`,
+    detail: `Runs \`${window.commandString}\`. No napplet you have run handles "${archetype}", so grimoire would.`,
+  });
+  if (!allowed) throw new Error("refused");
+
+  return openBuiltinWindow(window);
+}
+
 export function createNappletTargetController() {
   return {
     async dispatch(params: {
@@ -126,13 +159,14 @@ export function createNappletTargetController() {
     }): Promise<{ windowId: string }> {
       const { handler, archetype, action, payload, behavior } = params;
 
-      // Grimoire itself resolved as the handler: open the native window and
-      // skip the readiness dance entirely. There is no frame to wait for, and
-      // the built-in's own parser is what validates the payload.
+      // Grimoire itself resolved as the handler: confirm, then open the native
+      // window. No readiness dance — there is no frame to wait for — but this
+      // path leaves the napplet sandbox, so it needs a decision the sandbox
+      // cannot make for the user.
       const builtin = parseBuiltinHandlerDTag(handler);
       if (builtin) {
         return {
-          windowId: await openBuiltinArchetype(builtin, action, payload),
+          windowId: await openBuiltinForNapplet(builtin, action, payload),
         };
       }
 

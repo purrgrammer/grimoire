@@ -35,8 +35,15 @@ import {
   buildBuiltinWindow,
 } from "./napplet-builtins";
 
-/** An archetype slug: lowercase, hyphen or underscore separated. */
-const ARCHETYPE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+/**
+ * An archetype slug.
+ *
+ * Deliberately identical to Kehto's `[a-z0-9][a-z0-9-]*` (plus a length bound):
+ * this used to allow `_`, so `my_profile` passed here and then threw inside
+ * `manifestToIntentCatalogEntry`. A slug this accepts must be one the intent
+ * catalog can also hold, or the two disagree about what exists.
+ */
+const ARCHETYPE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
  * A bech32 identifier that failed to decode.
@@ -188,7 +195,18 @@ export async function resolveArchetypeCommand(
   rest: string[] = [],
 ): Promise<Record<string, unknown>> {
   const target = await resolveArchetype(archetype);
-  if (target.kind === "napplet") return { pointer: target.pointer };
+  if (target.kind === "napplet") {
+    // Silently dropping it would be the worse failure: the user asked to open
+    // something specific and would get an empty napplet with no explanation. A
+    // napplet receives its target over NAP-INTENT, whose payload shape only the
+    // napplet's declared convention defines — the shell cannot invent one.
+    if (rest.length > 0) {
+      throw new Error(
+        `"${target.dTag}" handles "${archetype}", and a napplet cannot be given a target on the command line. Run \`app ${archetype}\` and open it from inside, or address the napplet directly.`,
+      );
+    }
+    return { pointer: target.pointer };
+  }
 
   const builtin = await buildBuiltinWindow(
     archetype,

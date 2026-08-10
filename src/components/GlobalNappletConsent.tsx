@@ -49,7 +49,7 @@ function SigningToast({
         <div className="min-w-0 flex-1 space-y-3">
           <div>
             <div className="mb-1 text-sm font-semibold text-foreground">
-              Signing request
+              {request.kind === "sign" ? "Signing request" : "Napplet request"}
             </div>
             <p className="line-clamp-3 text-xs text-muted-foreground">
               {request.title ? (
@@ -72,7 +72,7 @@ function SigningToast({
               onClick={() => onAnswer(true)}
               className="h-8 flex-1 bg-green-500 text-white hover:bg-green-600"
             >
-              Sign
+              {request.kind === "sign" ? "Sign" : "Allow"}
             </Button>
             <Button
               size="sm"

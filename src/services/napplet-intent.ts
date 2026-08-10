@@ -28,7 +28,7 @@ import {
   manifestToIntentCatalogEntry,
   type IntentCatalogEntry,
   type IntentTargetController,
-} from "@kehto/services";
+} from "./kehto";
 
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
 import { BUILTIN_ARCHETYPES, builtinHandlerDTag } from "./napplet-builtins";
@@ -66,11 +66,20 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Build the intent catalog from verified manifests.
+ * Build the intent catalog from installed manifests.
  *
- * The library records the coordinate; the manifest event carrying the
- * `archetype` tags is read back from the shared EventStore, which only holds
- * events that arrived through a verified path.
+ * The library records the coordinate; the `archetype` tags are read from the
+ * manifest event. Only a napplet the user has actually run is listed, which is
+ * the spec's "installed-napplet catalog" — and it was verified (signature,
+ * aggregate, every blob hash) before the library recorded it.
+ *
+ * **Per-row, and defensively.** `manifestToIntentCatalogEntry` *throws* on a
+ * convention that is not exactly `napplet:<slug>/<action>` or a slug outside
+ * `[a-z0-9][a-z0-9-]*`, and those tags are third-party input. Building the batch
+ * in one expression meant one malformed tag — `["archetype","profile"]` with no
+ * convention is an easy authoring slip — rejected the whole catalog, and the
+ * resolver reloads it for every `available`, `handlers` and `dispatch`. So a
+ * single bad tag in any installed napplet disabled NAP-INTENT for all of them.
  */
 export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
   const rows = await listNapplets();
@@ -80,23 +89,35 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
     const pointer = pointerFromCoordinate(row.coordinate);
     if (!pointer || "id" in pointer) continue;
 
-    const event = defaultEventStore.getReplaceable(
-      pointer.kind,
-      pointer.pubkey,
-      pointer.identifier || undefined,
-    );
+    // The manifest recorded with the row is the verified one. The EventStore is
+    // only a fallback: it holds every event from every feed and `req`, so a
+    // coordinate can resolve there to a version the user never ran.
+    const event =
+      row.manifest ??
+      defaultEventStore.getReplaceable(
+        pointer.kind,
+        pointer.pubkey,
+        pointer.identifier || undefined,
+      );
     if (!event) continue;
 
     const archetypes = getNappletArchetypes(event);
     if (archetypes.length === 0) continue;
 
-    entries.push(
-      manifestToIntentCatalogEntry({
-        dTag: pointer.identifier,
-        title: getNappletTitle(event) ?? row.title,
-        archetypes,
-      }),
-    );
+    try {
+      entries.push(
+        manifestToIntentCatalogEntry({
+          dTag: pointer.identifier,
+          title: getNappletTitle(event) ?? row.title,
+          archetypes,
+        }),
+      );
+    } catch (error) {
+      console.warn(
+        `[napplet] skipping "${pointer.identifier}" in the intent catalog: malformed archetype tags`,
+        error,
+      );
+    }
   }
 
   // Grimoire itself, for the roles it fills natively. Added last so a napplet is

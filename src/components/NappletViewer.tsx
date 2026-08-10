@@ -55,6 +55,7 @@ import {
   NappletLookupError,
   NappletResolutionError,
   type ResolvedNappletView,
+  type ShellEnvironment,
 } from "@/services/napplet-host";
 
 export interface NappletViewerProps {
@@ -111,6 +112,39 @@ function pointerKey(pointer: EventPointer | AddressPointer): string {
   return "id" in pointer
     ? pointer.id
     : `${pointer.kind}:${pointer.pubkey}:${pointer.identifier}`;
+}
+
+/**
+ * The full `srcdoc` for a verified napplet.
+ *
+ * The CSP is injected **last**, and that ordering is a security property, not a
+ * style: Kehto's prelude injector places itself by string-matching a policy
+ * meta, so a decoy meta hidden in an attribute on `<html>` — which survives a
+ * DOM pass, since attribute serialization does not escape `<` — would let the
+ * napplet's own HTML displace the real policy out of `<head>` and ship with no
+ * CSP. `injectCspMeta` reparses its output and throws if the policy did not
+ * land, which is why this is built before any frame exists.
+ *
+ * Both injected scripts are inline, which `script-src 'unsafe-inline'` allows.
+ * The tap remains last in the body, so it still observes the finished document,
+ * and stays dormant until a drawer switches it on.
+ */
+function buildNappletDocument(
+  view: ResolvedNappletView,
+  environment: ShellEnvironment,
+): string {
+  // `getGrantedOrigins` is empty for every napplet today: nothing grants an
+  // origin, so `connect-src` is `'none'` in practice. Threaded through anyway,
+  // because the alternative is a hardcoded policy that quietly diverges from the
+  // store the moment a grant surface exists.
+  const { dTag, aggregateHash } = view.identity;
+  return injectCspMeta(
+    injectNappletTap(
+      injectNappletNamespacePrelude(view.indexHtml, environment.capabilities),
+    ),
+    getGrantedOrigins(dTag, aggregateHash),
+    { remoteMedia: isRemoteMediaGranted(dTag, aggregateHash) },
+  );
 }
 
 /**
@@ -279,6 +313,27 @@ function NappletFrame({
         return;
       }
 
+      // Built before the frame exists, so a document whose policy could not be
+      // placed fails closed with no napplet running — see `injectCspMeta`.
+      let srcdoc: string;
+      try {
+        srcdoc = buildNappletDocument(view, environment);
+      } catch (caught) {
+        console.warn("[napplet] refusing to render without a CSP", caught);
+        toast.error("Napplet refused", {
+          description: "Its HTML displaced the sandbox policy.",
+        });
+        setResolved(view);
+        setError({
+          code: "csp-displaced",
+          message:
+            "This napplet's HTML displaces the sandbox security policy, so it was not run.",
+          integrity: true,
+        });
+        setStage("error");
+        return;
+      }
+
       const container = containerRef.current;
       if (!container) return;
 
@@ -347,26 +402,7 @@ function NappletFrame({
       };
       frame.addEventListener("load", onLoad);
 
-      // connect-src is exactly what the user granted this version — not a
-      // wildcard, and empty for the overwhelming majority of napplets.
-      // The tap goes last so it observes the finished document, and it is
-      // dormant until a drawer switches it on. Note it is inside the CSP that
-      // was already injected — an inline script, which `script-src` allows.
-      frame.srcdoc = injectNappletTap(
-        injectNappletNamespacePrelude(
-          injectCspMeta(
-            view.indexHtml,
-            getGrantedOrigins(view.identity.dTag, view.identity.aggregateHash),
-            {
-              remoteMedia: isRemoteMediaGranted(
-                view.identity.dTag,
-                view.identity.aggregateHash,
-              ),
-            },
-          ),
-          environment.capabilities,
-        ),
-      );
+      frame.srcdoc = srcdoc;
     })();
 
     return () => {

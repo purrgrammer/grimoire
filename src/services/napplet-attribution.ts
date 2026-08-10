@@ -69,7 +69,16 @@ export function setCurrentWriter(writer: NappletWriter | null): void {
   current = writer;
 }
 
-/** The napplet currently publishing, if this is being read in the same turn. */
-export function getCurrentWriter(): NappletWriter | null {
-  return current;
+/**
+ * The napplet currently publishing, consumed on read.
+ *
+ * Clearing is what keeps a wrong name off the screen. Not every prompt has an
+ * ACL check in front of it — a NIP-44 encrypt confirmation does not — and a
+ * slot that persisted would attribute those to whoever published last. Missing
+ * attribution is acceptable; wrong attribution is the spoof this prevents.
+ */
+export function takeCurrentWriter(): NappletWriter | null {
+  const writer = current;
+  current = null;
+  return writer;
 }

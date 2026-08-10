@@ -125,9 +125,37 @@ export function getMissingRequiredNaps(
   return [...new Set(requires)].filter((nap) => !available.has(nap));
 }
 
+/**
+ * Identifier prefix marking grimoire itself as an intent handler.
+ *
+ * Lives here, with the reserved-name check, because both the built-in table and
+ * the manifest guard need it and this module imports nothing from `services/`.
+ */
+export const BUILTIN_HANDLER_PREFIX = "grimoire:builtin:";
+
+/**
+ * `d` tags a napplet may not use, because the shell uses them to mean itself.
+ *
+ * `shell` is the `sender` on every intent the host delivers over NAP-INC. Kehto
+ * derives `sender` from the emitting napplet's `d` tag, and reserves nothing —
+ * so a napplet published with `d: "shell"` emits messages a receiver cannot
+ * distinguish from a shell-delivered intent. `grimoire:builtin:*` is the same
+ * problem one layer up: such a napplet resolves as a built-in handler, and the
+ * host then runs a *different* built-in with the caller's payload.
+ *
+ * Refusing to run them at all is the narrow fix. Both are cheap for an honest
+ * author to avoid and neither has a legitimate use.
+ */
+export function isReservedNappletIdentifier(dTag: string): boolean {
+  return dTag === "shell" || dTag.startsWith(BUILTIN_HANDLER_PREFIX);
+}
+
 /** Grimoire-side failures, distinct from Kehto's verification failures. */
 export type NappletLookupErrorCode =
-  "manifest-not-found" | "wrong-kind" | "pointer-mismatch";
+  | "manifest-not-found"
+  | "wrong-kind"
+  | "pointer-mismatch"
+  | "reserved-identifier";
 
 export class NappletLookupError extends Error {
   constructor(
@@ -160,6 +188,14 @@ export function assertManifestEvent(
     );
   }
 
+  const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
+  if (isReservedNappletIdentifier(dTag)) {
+    throw new NappletLookupError(
+      "reserved-identifier",
+      `"${dTag}" is reserved for the shell itself and cannot be a napplet.`,
+    );
+  }
+
   const mismatch = () => {
     throw new NappletLookupError(
       "pointer-mismatch",
@@ -178,7 +214,6 @@ export function assertManifestEvent(
 
   // A root manifest carries no d tag, so `35129:<pk>:` would otherwise be
   // satisfied by a 15129 event from the same author — hence the kind check.
-  const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
   if (
     event.kind !== pointer.kind ||
     event.pubkey !== pointer.pubkey ||

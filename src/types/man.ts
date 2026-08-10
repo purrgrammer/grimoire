@@ -673,7 +673,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "permissions",
     description:
-      "Review and revoke what napplets are allowed to do. Answers are remembered per napplet version, so an update re-asks; revoking takes effect on the napplet's next run.",
+      "Review and revoke what napplets are allowed to do. Answers are remembered per napplet version, so an update re-asks; revoking applies to the live napplet at once, and it is re-run so it can notice.",
     options: [],
     examples: [
       "permissions                                       Review napplet permissions",
@@ -703,9 +703,9 @@ export const manPages: Record<string, ManPageEntry> = {
   app: {
     name: "app",
     section: "1",
-    synopsis: "app <identifier|archetype>",
+    synopsis: "app <identifier|archetype> [target]",
     description:
-      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in an isolated iframe with no access to your keys, relays, or identity. An archetype names a role rather than an app — it resolves to whichever installed napplet you made the default for it.",
+      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in a sandboxed iframe that can reach nothing except what you grant it — your keys are never exposed, and every capability its manifest asks for is listed before it runs. An archetype names a role rather than an app: it resolves to the napplet you made the default for that role, or to grimoire's own viewer when no installed napplet handles it.",
     options: [
       {
         flag: "<identifier>",
@@ -715,14 +715,20 @@ export const manPages: Record<string, ManPageEntry> = {
       {
         flag: "<archetype>",
         description:
-          "a NAP-INTENT archetype slug, resolved through your installed napplets: the default handler, or the only one that declares it",
+          "a NAP-INTENT archetype slug (profile, note, event, relay, or one a napplet declares), resolved to your default handler, the only napplet that declares it, or grimoire's built-in viewer",
+      },
+      {
+        flag: "[target]",
+        description:
+          "what the archetype should open — an npub for `profile`, a note or nevent for `note`, a relay URL for `relay`. Ignored when the role resolves to a napplet, which receives its target over NAP-INTENT instead.",
       },
     ],
     examples: [
       "app naddr1...                                     Run a named napplet",
-      "app 35129:7fa56f5d6962ab1e...:calculator          Run by address pointer",
+      "app 35129:3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d:calculator   Run by address pointer",
       "app nevent1...                                    Run a specific manifest event",
-      "app profile                                       Run your default profile napplet",
+      "app profile                                       Open the profile role — your default napplet, or grimoire's viewer",
+      "app relay wss://relay.damus.io                    Open a relay through the relay role",
     ],
     seeAlso: ["apps", "permissions", "open", "blossom", "nip"],
     appId: "app",

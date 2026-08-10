@@ -20,7 +20,7 @@ import {
   createCommonService,
   createListsService,
   createLinkService,
-} from "@kehto/services";
+} from "./kehto";
 import { FollowUser, UnfollowUser } from "applesauce-actions/actions";
 import { getProfileContent } from "applesauce-core/helpers";
 
@@ -128,51 +128,29 @@ export function createNappletCommonService() {
 }
 
 /**
- * Lists whose semantics are unambiguous enough to expose. Private items are
- * excluded: they need NIP-44 encryption of the list content, which is a
- * different consent question from adding a public entry.
- */
-const SUPPORTED_LISTS = [
-  { kind: 10000, type: "mute", addressable: false, privateItems: false },
-  { kind: 10003, type: "bookmarks", addressable: false, privateItems: false },
-  { kind: 30003, type: "bookmark-set", addressable: true, privateItems: false },
-] as const;
-
-/**
- * NAP-LISTS. Every mutation is a signed edit of a list the user relies on
- * (mutes, bookmarks, relay sets), so each one is confirmed.
+ * NAP-LISTS, which grimoire does not implement.
+ *
+ * `supported: []` rather than a list of kinds, because refusing every mutation
+ * while advertising three of them is the same lie as `notify` fabricating a
+ * delivery id. The confirmation prompt is gone with it: asking the user to
+ * approve a signed edit to their mute list and *then* refusing unconditionally
+ * is worse than either half alone — it spends the user's attention and teaches
+ * them the prompt is noise.
+ *
+ * Restoring this means implementing the edits; the shape is already here in
+ * `follow`/`unfollow` above, which do go through the hub.
  */
 export function createNappletListsService() {
+  const unsupported = {
+    ok: false,
+    error: "unsupported" as const,
+    reason: "grimoire cannot edit lists from a napplet",
+    supported: [],
+  };
   return createListsService({
-    // Report only what is genuinely handled. An empty list said nothing was
-    // supported; claiming everything would be worse.
-    supported: () => SUPPORTED_LISTS,
-    add: async (list) => {
-      const allowed = await requestSigningConsent({
-        summary: `add to your "${String(list?.kind ?? "list")}" list`,
-        detail: "This edits a list published under your identity.",
-      });
-      if (!allowed) return { ok: false, error: "refused" };
-      return {
-        ok: false,
-        error: "unsupported",
-        reason: "grimoire cannot edit lists from a napplet yet",
-        supported: [...SUPPORTED_LISTS],
-      };
-    },
-    remove: async (list) => {
-      const allowed = await requestSigningConsent({
-        summary: `remove from your "${String(list?.kind ?? "list")}" list`,
-        detail: "This edits a list published under your identity.",
-      });
-      if (!allowed) return { ok: false, error: "refused" };
-      return {
-        ok: false,
-        error: "unsupported",
-        reason: "grimoire cannot edit lists from a napplet yet",
-        supported: [...SUPPORTED_LISTS],
-      };
-    },
+    supported: () => [],
+    add: async () => unsupported,
+    remove: async () => unsupported,
   });
 }
 

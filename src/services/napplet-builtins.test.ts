@@ -121,3 +121,61 @@ describe("buildBuiltinWindow", () => {
     expect(window.props).toMatchObject({ url: "wss://not-a-relay-url/" });
   });
 });
+
+/**
+ * A payload from a napplet is attacker-controlled, and every built-in role ends
+ * in a network request to a host derived from it — NIP-05 resolution for
+ * `profile`, NIP-11 for `relay`. Accepting a NIP-05 address or a pathful relay
+ * URL from the wire hands a napplet an outbound channel with control of hostname
+ * *and* query, which is a way around `connect-src 'none'` that needs no grant.
+ */
+describe("payload targets from a napplet", () => {
+  const npub = nip19.npubEncode(PUBKEY);
+  const fromNapplet = (archetype: string, payload: unknown) =>
+    buildBuiltinWindow(archetype, "open", payload, undefined, true);
+
+  it("accepts a pointer", async () => {
+    await expect(fromNapplet("profile", { npub })).resolves.toMatchObject({
+      appId: "profile",
+    });
+    await expect(
+      fromNapplet("profile", { pubkey: PUBKEY }),
+    ).resolves.toBeTruthy();
+    await expect(
+      fromNapplet("note", { nevent: nip19.neventEncode({ id: EVENT_ID }) }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("refuses a NIP-05 address, which would be an outbound GET to any host", async () => {
+    await expect(
+      fromNapplet("profile", { nip05: "exfil@attacker.example" }),
+    ).rejects.toThrow(/may not point the built-in "profile"/);
+  });
+
+  it("refuses a relay URL carrying a path or query", async () => {
+    await expect(
+      fromNapplet("relay", { url: "wss://attacker.example/leak?d=secret" }),
+    ).rejects.toThrow(/may not point the built-in "relay"/);
+    await expect(
+      fromNapplet("relay", { url: "https://attacker.example" }),
+    ).rejects.toThrow(/may not point the built-in "relay"/);
+  });
+
+  it("still accepts a bare relay URL", async () => {
+    await expect(
+      fromNapplet("relay", { url: "wss://relay.example.com" }),
+    ).resolves.toMatchObject({ appId: "relay" });
+  });
+
+  it("holds the command line to a looser standard, deliberately", async () => {
+    // Typing a target yourself is a different act from a napplet naming one, so
+    // the narrow check applies to the wire only.
+    const url = "wss://relay.example.com/inbox";
+    await expect(fromNapplet("relay", { url })).rejects.toThrow(
+      /may not point/,
+    );
+    await expect(
+      buildBuiltinWindow("relay", "open", undefined, url),
+    ).resolves.toMatchObject({ commandString: `relay ${url}` });
+  });
+});

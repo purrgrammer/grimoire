@@ -75,7 +75,15 @@ export function getGrantedOrigins(
   return readOrigins()[identityKey(dTag, aggregateHash)] ?? [];
 }
 
-/** Grant exact origins. Anything not canonicalisable is dropped, not coerced. */
+/**
+ * Grant exact origins. Anything not canonicalisable is dropped, not coerced.
+ *
+ * No UI calls this yet, so in practice every napplet runs with
+ * `connect-src 'none'` and the granted-origin branches downstream are unreached.
+ * The mechanism is kept — tested, and the enforcement side is what makes the
+ * content-addressed path safe — but nothing here should be described as a
+ * feature the user has until a grant surface exists.
+ */
 export function grantOrigins(
   dTag: string,
   aggregateHash: string,

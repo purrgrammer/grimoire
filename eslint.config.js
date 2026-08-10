@@ -59,7 +59,7 @@ export default tseslint.config(
         {
           // Vite cannot statically analyse these: it warns, never emits the
           // chunk, and the import fails in production while working in dev.
-          selector: 'ImportExpression > TemplateLiteral[expressions.length>0]',
+          selector: "ImportExpression > TemplateLiteral[expressions.length>0]",
           message:
             "Vite cannot analyse a template-literal dynamic import, so the chunk is never bundled and it fails in production. Use the library's own lazy registry or import.meta.glob.",
         },
@@ -74,6 +74,39 @@ export default tseslint.config(
             'Property[key.name="waitForAuth"][value.value=true], Property[key.name="waitForAuth"][value.type="Identifier"]',
           message:
             "Concord plane reads must keep waitForAuth: false — applesauce re-authenticates as the USER, which never satisfies a stream-authored filter. Go through planeRequest() in @/lib/concord/plane-request.",
+        },
+        {
+          // Kehto's prelude injector finds its insertion point by string-matching
+          // a policy meta. A decoy meta hidden in an attribute on <html> survives
+          // our DOM pass (attribute serialization does not escape `<`), so
+          // anything that runs after us matches the decoy, splices into the
+          // attribute value, and the real policy ends up in <body> where it does
+          // nothing. Shipped exactly that way once.
+          // Narrow to injector wrappers: reading the result, e.g. in a test, is
+          // fine — only *writing more document around it* is the hazard.
+          selector:
+            'CallExpression[callee.name=/^inject/] > CallExpression[callee.name="injectCspMeta"]',
+          message:
+            "injectCspMeta must be the outermost injection: anything applied after it can displace the policy out of <head>, and the document then ships with no CSP.",
+        },
+      ],
+
+      // The whole containment argument for a pre-1.0 dependency is that a
+      // breaking change lands in one file. It leaked to five before this rule
+      // existed. Type-only imports are exempt below — they are erased at build
+      // and a breaking type change fails tsc loudly.
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@kehto/*", "@napplet/*"],
+              importNames: undefined,
+              allowTypeImports: true,
+              message:
+                "Import Kehto only through src/services/kehto.ts, the single seam. Add what you need to its re-exports.",
+            },
+          ],
         },
       ],
 
@@ -96,6 +129,11 @@ export default tseslint.config(
       "react-hooks/purity": "warn",
       "react-hooks/immutability": "warn",
     },
+  },
+  {
+    // The seam itself, and the tests that pin our constants to Kehto's.
+    files: ["src/services/kehto.ts", "**/*.test.{ts,tsx}"],
+    rules: { "no-restricted-imports": "off" },
   },
   prettierConfig,
 );
