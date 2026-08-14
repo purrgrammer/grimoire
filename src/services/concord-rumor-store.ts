@@ -35,6 +35,7 @@
  * level as the membership vault beside it. Wiped on logout.
  */
 
+import type { FoldedControl } from "@/lib/concord/control";
 import { isExpired } from "@/lib/concord/disappearing";
 import { PLANE_KINDS, PLANE_RULES, type Plane } from "@/lib/concord/kinds";
 import type { OpenedEvent, OpenedWireEvent } from "@/lib/concord/stream";
@@ -343,6 +344,79 @@ export async function queryChannelRumors(
   );
 
   return [...timeline, ...side].map(rowToOpened);
+}
+
+// ── The materialized fold ────────────────────────────────────────────────────
+//
+// Re-deriving the whole fold at every boot is wasted work: parsing every stored
+// edition and replaying the delegation fixpoint costs real time on a community
+// with thousands of them, and the answer is identical until an edition arrives.
+// So the fold is PERSISTED and read back as the first paint.
+//
+// It is a pure cache. Rejecting it costs one re-fold from editions already on
+// disk, so a snapshot this build cannot read is simply a miss.
+
+const foldKey = (communityId: string, epoch: bigint) =>
+  `concordFold:${communityId}@${epoch}`;
+
+/**
+ * Whether a fold decoded off disk still has the shape this build reads.
+ *
+ * Dexie rehydrates behind an unchecked cast, so a snapshot written by an older
+ * build arrives TYPED as current and is then dereferenced as current. Every Map
+ * and Set has to be checked, not a representative sample: a snapshot from a
+ * build that predates a field passes every check that field is missing from and
+ * then throws on first read. Extend this whenever the persisted shape gains a
+ * field a reader assumes is there.
+ */
+function isCurrentFold(value: unknown): value is FoldedControl {
+  const fold = value as FoldedControl | undefined;
+  if (!fold || typeof fold.ownerHex !== "string") return false;
+  if (!(fold.channels instanceof Map)) return false;
+  if (!(fold.heads instanceof Map)) return false;
+  if (!(fold.bannedAt instanceof Map)) return false;
+  if (!(fold.banned instanceof Set)) return false;
+  if (!Array.isArray(fold.incomplete)) return false;
+  if (!fold.roster || !Array.isArray(fold.roster.roles)) return false;
+  if (!Array.isArray(fold.roster.grants)) return false;
+  for (const def of fold.channels.values()) {
+    if (!def || typeof def.metadata !== "object" || def.metadata === null) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The persisted fold for this community at this epoch, or undefined on a miss.
+ *
+ * Keyed by EPOCH as well as community: a Refounding replaces the authoritative
+ * edition set, so a fold from a superseded founding must never be served for the
+ * new one.
+ */
+export async function readFoldedControl(
+  communityId: string,
+  epoch: bigint,
+): Promise<FoldedControl | undefined> {
+  try {
+    const row = await db.concordKv.get(foldKey(communityId, epoch));
+    return isCurrentFold(row?.value) ? row.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Persist the fold. Best-effort: it is a cache, never a source of truth. */
+export async function writeFoldedControl(
+  communityId: string,
+  epoch: bigint,
+  fold: FoldedControl,
+): Promise<void> {
+  try {
+    await db.concordKv.put({ key: foldKey(communityId, epoch), value: fold });
+  } catch {
+    // Storage pressure must not become a sync problem.
+  }
 }
 
 /** Wipe one community's stored rumors and snapshots. */

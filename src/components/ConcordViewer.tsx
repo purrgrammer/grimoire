@@ -72,7 +72,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="size-6 animate-spin" />
-        <span>Reading your community list…</span>
+        <span>Loading your communities…</span>
       </div>
     );
   }
@@ -125,7 +125,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           variant="ghost"
           size="icon"
           className="size-6"
-          title="Re-read the control plane"
+          title="Refresh channels"
           onClick={() => {
             refreshList();
             refresh();
@@ -188,8 +188,8 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         ) : (
           <Empty>
             {loading
-              ? "Reading the control plane…"
-              : "No channel here is readable with the keys you hold."}
+              ? "Loading channels…"
+              : "No channels here can be opened with the keys you hold."}
           </Empty>
         )}
       </div>
@@ -264,7 +264,7 @@ function ChannelList({
       {error && <p className="px-2 py-1 text-xs text-destructive">{error}</p>}
       {loading && channels.length === 0 && (
         <p className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" /> sweeping…
+          <Loader2 className="size-3 animate-spin" /> loading…
         </p>
       )}
       {uncategorized.map((ch) => (

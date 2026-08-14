@@ -161,12 +161,16 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         // Paint from the store first, then backfill and repaint. A user
         // reopening a channel should not stare at an empty pane while a relay
         // round-trips.
-        this.publish(
-          conversation.id,
-          emitter,
-          await this.read(identifier, options),
-        );
+        // Paint the store's answer — but ONLY if there is one. An empty first
+        // read is indistinguishable from an empty channel to the reader, so
+        // emitting it puts "No messages yet" over a channel whose history is
+        // still on the wire. Staying silent leaves the stream undefined, which
+        // is what ChatViewer reads as "still loading".
+        const stored = await this.read(identifier, options);
+        if (stored.length > 0) this.publish(conversation.id, emitter, stored);
         await this.backfill(identifier);
+        // After the backfill an empty answer IS the answer: the channel is
+        // empty, and saying so is now honest.
         this.publish(
           conversation.id,
           emitter,
@@ -305,7 +309,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       // yet. Folding by old-root contiguity would anchor on a superseded
       // fragment, so there is nothing safe to resolve against.
       throw new Error(
-        "Waiting for this community's compaction snapshot — try again in a moment.",
+        "Still catching up with this community — try again in a moment.",
       );
     }
     const channel = channelsView(community, folded).find(

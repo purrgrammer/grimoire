@@ -25,7 +25,11 @@ import {
 } from "@/services/concord-rumor-store";
 import { heldControlPlanes } from "@/lib/concord/control-address";
 
-import { _resetConcordStateForTests, foldStoredControl } from "./concord-state";
+import {
+  _resetConcordStateForTests,
+  foldStoredControl,
+  readStoredState,
+} from "./concord-state";
 
 const owner = getPublicKey(generateSecretKey());
 const salt = random32();
@@ -106,6 +110,7 @@ function hashOf(entityId: Uint8Array, version: bigint, content: unknown) {
 beforeEach(async () => {
   await db.concordRumors.clear();
   await db.concordSnapshots.clear();
+  await db.concordKv.clear();
   _resetConcordStateForTests();
   _resetControlMemosForTests();
 });
@@ -239,6 +244,89 @@ describe("the carried head floor", () => {
     const after = await foldStoredControl(c1);
     // No floor carried across the epoch, so nothing reports unaccounted-for.
     expect(after!.incomplete).toEqual([]);
+  });
+});
+
+describe("the materialized fold", () => {
+  it("is served on the next read without replaying the editions", async () => {
+    const c = community();
+    await writeOpened(
+      c.idHex,
+      [
+        edition({
+          vsk: "2",
+          entityId: random32(),
+          content: { name: "general", private: false },
+        }),
+      ],
+      "control",
+      { refounded: false },
+    );
+
+    const first = await readStoredState(c);
+    expect(first!.channels.map((ch) => ch.name)).toEqual(["general"]);
+
+    // Drop the editions entirely. A read that still answers proves it came from
+    // the materialized fold rather than from replaying what is on disk.
+    await db.concordRumors.clear();
+    _resetControlMemosForTests();
+    const second = await readStoredState(c);
+    expect(second!.channels.map((ch) => ch.name)).toEqual(["general"]);
+  });
+
+  it("is not served across a Refounding", async () => {
+    // A rotation replaces the authoritative edition set, so a fold from the
+    // superseded founding must never answer for the new epoch.
+    const c0 = community({ rootEpoch: 0n });
+    await writeOpened(
+      c0.idHex,
+      [
+        edition({
+          vsk: "2",
+          entityId: random32(),
+          content: { name: "general", private: false },
+        }),
+      ],
+      "control",
+      { refounded: false },
+    );
+    expect((await readStoredState(c0))!.channels).toHaveLength(1);
+
+    const newRoot = random32();
+    const c1 = community({
+      rootEpoch: 1n,
+      root: newRoot,
+      heldRoots: [{ epoch: 1n, key: newRoot }],
+    });
+    // No snapshot recorded for the new epoch yet, so this must WAIT rather than
+    // hand back the old epoch's cached fold.
+    expect(await readStoredState(c1)).toBeUndefined();
+  });
+
+  it("rejects a snapshot whose shape this build cannot read", async () => {
+    // Dexie rehydrates behind an unchecked cast, so a fold written by an older
+    // build arrives typed as current. A miss costs one re-fold; a wrong read
+    // throws on first dereference.
+    const c = community();
+    await db.concordKv.put({
+      key: `concordFold:${c.idHex}@0`,
+      value: { ownerHex: owner, channels: new Map() },
+    });
+    await writeOpened(
+      c.idHex,
+      [
+        edition({
+          vsk: "2",
+          entityId: random32(),
+          content: { name: "recovered", private: false },
+        }),
+      ],
+      "control",
+      { refounded: false },
+    );
+    expect((await readStoredState(c))!.channels.map((ch) => ch.name)).toEqual([
+      "recovered",
+    ]);
   });
 });
 

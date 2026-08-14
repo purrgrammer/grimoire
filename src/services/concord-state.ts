@@ -32,6 +32,8 @@ import {
   pruneControlSnapshots,
   queryPlane,
   readControlSnapshot,
+  readFoldedControl,
+  writeFoldedControl,
 } from "@/services/concord-rumor-store";
 
 export interface CommunityState {
@@ -124,6 +126,13 @@ export async function foldStoredControl(
     const prior = floor.get(eid);
     if (!prior || head.version > prior.version) floor.set(eid, head);
   }
+
+  // Materialize it, so the next boot paints without replaying the fixpoint over
+  // every stored edition. Display only — the refuse-downgrade FLOOR above stays
+  // session-only on purpose (a persisted floor outlives the held-epoch set it
+  // was minted under, and an entity floored under keys we no longer hold can
+  // never be re-served, so it would report `incomplete` forever).
+  void writeFoldedControl(community.idHex, community.rootEpoch, folded);
   return folded;
 }
 
@@ -143,6 +152,13 @@ export async function foldStoredControl(
 export async function readStoredState(
   community: Community,
 ): Promise<CommunityState | undefined> {
+  // The materialized fold first: it is the same answer the replay would produce
+  // for an unchanged edition set, without parsing every edition and re-running
+  // the delegation fixpoint to find that out.
+  const cached = await readFoldedControl(community.idHex, community.rootEpoch);
+  if (cached)
+    return { folded: cached, channels: channelsView(community, cached) };
+
   const folded = await foldStoredControl(community);
   if (!folded) return undefined;
   return { folded, channels: channelsView(community, folded) };
@@ -170,7 +186,7 @@ export async function syncCommunityState(
     // safe to fold, and rendering an empty channel list beats rendering a stale
     // one anchored on an old-epoch fragment.
     throw new Error(
-      "Waiting for this community's compaction snapshot — try again in a moment.",
+      "Still catching up with this community — try again in a moment.",
     );
   }
   if (folded.incomplete.length > 0) {
