@@ -89,6 +89,7 @@ function listEvent(list: CommunityList, createdAt = 1_700_000_000): NostrEvent {
 
 beforeEach(async () => {
   await db.concordCommunities.clear();
+  await db.concordKv.clear();
   _resetDecryptMemoForTests();
   requestEvents.mockReset();
 });
@@ -158,7 +159,9 @@ describe("syncCommunities", () => {
     expect(communities.map((c) => c.name)).toEqual(["Fresh"]);
   });
 
-  it("decrypts a given list event only once", async () => {
+  it("memoizes the decrypt of a given list event", async () => {
+    // Independently of the mirror floor below: a remote signer round-trip on a
+    // few KB of NIP-44 is the one cost worth never paying twice.
     const decrypt = vi.fn(signer.nip44.decrypt);
     const event = listEvent({
       entries: [entry(joinMaterial("Alpha"))],
@@ -166,6 +169,7 @@ describe("syncCommunities", () => {
     });
     requestEvents.mockResolvedValue([event]);
     await syncCommunities(pubkey, { nip44: { decrypt } });
+    await db.concordKv.clear(); // drop the floor, so only the memo can save us
     await syncCommunities(pubkey, { nip44: { decrypt } });
     expect(decrypt).toHaveBeenCalledTimes(1);
   });
@@ -235,6 +239,59 @@ describe("syncCommunities", () => {
     expect(result.communities.map((c) => c.name)).toEqual(["Alpha"]);
   });
 
+  it("refuses an OLDER list served by a lagging relay", async () => {
+    // Armada gets this from its merge ("a transient short relay read can't
+    // drop rooms"). With no merge, monotonicity is the substitute: a relay
+    // behind on a replaceable serves a genuine, decryptable, older 13302, and
+    // taking it deletes the rows — keys and all — for everything joined since.
+    const alpha = joinMaterial("Alpha");
+    const beta = joinMaterial("Beta");
+    requestEvents.mockResolvedValue([
+      listEvent(
+        { entries: [entry(alpha), entry(beta)], tombstones: [] },
+        1_700_000_500,
+      ),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(alpha)], tombstones: [] }, 1_700_000_100),
+    ]);
+    const result = await syncCommunities(pubkey, signer);
+    expect(result.status).toBe("ok");
+    expect(result.communities.map((c) => c.name)).toEqual(["Alpha", "Beta"]);
+  });
+
+  it("does not re-decrypt the list event already mirrored", async () => {
+    const event = listEvent({
+      entries: [entry(joinMaterial("Alpha"))],
+      tombstones: [],
+    });
+    requestEvents.mockResolvedValue([event]);
+    const decrypt = vi.fn(signer.nip44.decrypt);
+    await syncCommunities(pubkey, { nip44: { decrypt } });
+    _resetDecryptMemoForTests(); // even with a cold memo
+    await syncCommunities(pubkey, { nip44: { decrypt } });
+    expect(decrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the floor for a viewer whose list is legitimately empty", async () => {
+    // The floor lives beside the rows, not on them, so an empty vault still
+    // refuses a rollback to an older document.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [], tombstones: [] }, 1_700_000_500),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    requestEvents.mockResolvedValue([
+      listEvent(
+        { entries: [entry(joinMaterial("Ghost"))], tombstones: [] },
+        1_700_000_100,
+      ),
+    ]);
+    expect((await syncCommunities(pubkey, signer)).communities).toEqual([]);
+  });
+
   it("keeps one account's vault out of another's", async () => {
     // The rows carry decrypted community_roots, so they are keyed by viewer.
     requestEvents.mockResolvedValue([
@@ -248,6 +305,10 @@ describe("syncCommunities", () => {
     expect(await loadStoredCommunities(pubkey)).toHaveLength(1);
     await clearCommunities(pubkey);
     expect(await loadStoredCommunities(pubkey)).toEqual([]);
+    // And the floor goes with the rows, so a re-login re-mirrors from scratch.
+    expect(
+      await db.concordKv.get(`concordListState:${pubkey}`),
+    ).toBeUndefined();
   });
 
   it("drops a stored row whose owner commitment no longer verifies", async () => {

@@ -50,6 +50,7 @@ import {
   GRIMOIRE_LIGHTNING_ADDRESS,
 } from "@/lib/grimoire-members";
 import { MONTHLY_GOAL_SATS } from "@/services/supporters";
+import { clearCommunities } from "@/services/concord-communities";
 
 function UserAvatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -152,6 +153,11 @@ export default function UserMenu() {
 
   async function logout() {
     if (!account) return;
+    // The Concord vault holds this account's decrypted community roots and
+    // channel keys — removing the account has to take them too.
+    await clearCommunities(account.pubkey).catch((error) => {
+      console.warn("[concord] could not clear the vault on logout:", error);
+    });
     accounts.removeAccount(account);
   }
 

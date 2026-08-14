@@ -23,7 +23,10 @@ import {
   type CommunityList,
   type CommunityListEntry,
 } from "@/lib/concord/community-list";
-import { initGroupKeyPersistence } from "@/lib/concord/group-key-persist";
+import {
+  clearGroupKeyPersistence,
+  initGroupKeyPersistence,
+} from "@/lib/concord/group-key-persist";
 import type { Community } from "@/lib/concord/types";
 import { requestEvents } from "@/lib/relay-subscription";
 import db, { type ConcordCommunityRow } from "@/services/db";
@@ -101,6 +104,35 @@ async function decryptList(
   return work;
 }
 
+/** Which 13302 the mirror currently reflects. Survives an empty vault. */
+interface VaultState {
+  eventId: string;
+  createdAt: number;
+}
+
+const vaultStateKey = (pubkey: string) => `concordListState:${pubkey}`;
+
+/**
+ * Whether `event` may replace what the mirror already reflects.
+ *
+ * Armada gets this for free from its merge — "a transient short relay read
+ * can't drop rooms". Grimoire has no merge, so the same protection has to come
+ * from monotonicity instead: a relay lagging behind on a replaceable will serve
+ * a genuine, decryptable, older 13302, and taking it would delete the rows for
+ * every community joined since — keys and all — until a fresh relay answers.
+ * That is the wrongful-empty failure by a different route.
+ *
+ * The state is kept beside the rows rather than on them, so the floor still
+ * exists for a viewer whose list is legitimately empty.
+ */
+async function mayReplace(pubkey: string, event: NostrEvent): Promise<boolean> {
+  const row = await db.concordKv.get(vaultStateKey(pubkey));
+  const prev = row?.value as VaultState | undefined;
+  if (!prev) return true;
+  if (prev.eventId === event.id) return false; // already mirrored
+  return event.created_at >= prev.createdAt;
+}
+
 /**
  * Replace this viewer's mirrored memberships with exactly `entries`.
  *
@@ -124,9 +156,13 @@ async function replaceVault(
     listCreatedAt: event.created_at,
     updatedAt: now,
   }));
-  await db.transaction("rw", db.concordCommunities, async () => {
+  await db.transaction("rw", db.concordCommunities, db.concordKv, async () => {
     await db.concordCommunities.where("pubkey").equals(pubkey).delete();
     if (rows.length > 0) await db.concordCommunities.bulkPut(rows);
+    await db.concordKv.put({
+      key: vaultStateKey(pubkey),
+      value: { eventId: event.id, createdAt: event.created_at } as VaultState,
+    });
   });
 }
 
@@ -181,6 +217,11 @@ export async function syncCommunities(
     return { status: "ok", communities: stored };
   }
 
+  // Checked before the decrypt so a lagging relay costs no signer round-trip.
+  if (!(await mayReplace(pubkey, event))) {
+    return { status: "ok", communities: stored };
+  }
+
   const list = await decryptList(event, signer, pubkey);
   if (!list) return { status: "decrypt-failed", communities: stored };
 
@@ -189,9 +230,20 @@ export async function syncCommunities(
   return { status: "ok", communities: await loadStoredCommunities(pubkey) };
 }
 
-/** Wipe one account's mirrored memberships (account removal). */
+/**
+ * Wipe one account's Concord state: the mirrored memberships, the floor that
+ * tracks them, and the shared derivation cache.
+ *
+ * The rows hold decrypted `community_root`s and private-channel keys and the
+ * memo holds the stream secrets derived from them, so removing an account has
+ * to take both. The memo is global rather than per-account — a derivation is
+ * pure, so the only cost of clearing another account's entries with it is
+ * re-deriving them.
+ */
 export async function clearCommunities(pubkey: string): Promise<void> {
   await db.concordCommunities.where("pubkey").equals(pubkey).delete();
+  await db.concordKv.delete(vaultStateKey(pubkey));
+  await clearGroupKeyPersistence();
 }
 
 /** Test seam: forget which list events have already been decrypted. */
