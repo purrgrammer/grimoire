@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConcordCommunities, useConcordCommunity } from "@/hooks/useConcord";
+import { useConcordWire } from "@/hooks/useConcordWire";
 import {
   channelCategory,
   groupChannelsByCategory,
@@ -53,6 +54,11 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
 
   const { state, loading, error, refresh } = useConcordCommunity(community);
   const channels = useMemo(() => state?.channels ?? [], [state]);
+
+  // Live delivery for EVERY community in the list, not just the open one: a
+  // channel you are not looking at is exactly the case pull-on-open could not
+  // serve. Refcounted, so several Concord windows share one set of sockets.
+  useConcordWire(communities);
 
   // The OPEN channel is derived, not stored: falling back to the first one keeps
   // the pane filled the moment the fold lands, with no effect writing state

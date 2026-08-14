@@ -425,7 +425,8 @@ describe("cursors", () => {
     // Force a fresh round and read what it asked for.
     const before = r.reqFilters().length;
     await until("a rotated round", () => r.reqFilters().length > before, 4_000);
-    const since = r.reqFilters().at(-1)?.since as number;
+    const filters = r.reqFilters();
+    const since = filters[filters.length - 1].since as number;
     // The cursor, minus the 60s skew overlap.
     expect(since).toBeGreaterThanOrEqual(at - 61);
     expect(since).toBeLessThanOrEqual(at);

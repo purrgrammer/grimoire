@@ -5,7 +5,10 @@
  * messages. Concord traffic is opaque kind-1059 wraps, so a wrap is decrypted
  * once at ingest and the recovered rumor is stored; the timeline then reads back
  * out of Dexie as an ordinary indexed query with no crypto. `loadMessages`
- * therefore emits from the STORE and kicks a backfill alongside it.
+ * therefore emits from the STORE, and live delivery arrives as a doorbell from
+ * the wire (`c2:<channel>`) rather than as events on a socket this adapter owns.
+ * The backfill it kicks alongside is for HISTORY — paging backwards — not for
+ * new messages.
  *
  * The read half only: `sendMessage` and `sendReaction` land in phase 6. They
  * throw for now rather than no-op, so a composer wired up early fails loudly
@@ -25,6 +28,7 @@ import { channelsView } from "@/lib/concord/channels";
 import { KIND_COMMENT } from "@/lib/concord/kinds";
 import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import type { Channel, Community } from "@/lib/concord/types";
+import { channelScope, onWireScope } from "@/lib/concord/wire-bus";
 import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
 import { syncChannel } from "@/services/concord-channel-sync";
 import { loadStoredCommunities } from "@/services/concord-communities";
@@ -80,6 +84,9 @@ export class ConcordAdapter extends ChatProtocolAdapter {
 
   /** Last emitted timeline signature per conversation (see {@link publish}). */
   private lastEmitted = new Map<string, string>();
+
+  /** Wire-bus unsubscribes, one per live conversation. */
+  private doorbells = new Map<string, () => void>();
 
   /**
    * A Concord channel is never addressed by a typed string.
@@ -155,6 +162,19 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     // flashes: every emission is a fresh array, which re-anchors the virtualizer.
     if (this.started.has(conversation.id)) return emitter.asObservable();
     this.started.add(conversation.id);
+
+    // Live delivery. The wire has already decrypted and stored whatever caused
+    // the ring, so the response is a local re-read — no relay in the path, and
+    // `publish` stays silent if the timeline did not actually change.
+    this.doorbells.get(conversation.id)?.();
+    this.doorbells.set(
+      conversation.id,
+      onWireScope(channelScope(identifier.channelId), () => {
+        void this.read(identifier, options)
+          .then((next) => this.publish(conversation.id, emitter, next))
+          .catch(() => undefined);
+      }),
+    );
 
     void (async () => {
       try {
@@ -282,14 +302,18 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     this.timelines.delete(conversationId);
     this.started.delete(conversationId);
     this.lastEmitted.delete(conversationId);
+    this.doorbells.get(conversationId)?.();
+    this.doorbells.delete(conversationId);
   }
 
   cleanupAll(): void {
     super.cleanupAll();
     for (const subject of this.timelines.values()) subject.complete();
+    for (const off of this.doorbells.values()) off();
     this.timelines.clear();
     this.started.clear();
     this.lastEmitted.clear();
+    this.doorbells.clear();
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────

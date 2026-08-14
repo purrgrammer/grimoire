@@ -124,7 +124,10 @@ async function ingestChat(
         opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
       );
       if (!written) continue;
-      for (const ev of opened) stored.add(ev.wrapId);
+      // `wrapId` is an envelope fact, present only while the wrap is in hand —
+      // which it is here. A row without one simply never gets acked, and the
+      // age prune is what eventually clears it.
+      for (const ev of opened) if (ev.wrapId) stored.add(ev.wrapId);
       scopes.add(channelScope(channel.idHex));
     } catch (error) {
       console.warn("[concord] wire chat ingest failed:", error);

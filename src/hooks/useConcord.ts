@@ -4,9 +4,10 @@
  * Two hooks, matching the two things a viewer needs: the member's communities
  * (from their own Community List) and one community's folded channel list.
  *
- * Both fetch on mount and then leave it alone. Concord's read path is polled
- * rather than streamed — the Control Plane is swept, not subscribed — so a
- * refresh is an explicit act rather than something a render triggers.
+ * Both fetch on mount. The community hook additionally listens on the wire bus
+ * for its own control scope, so a channel created in Armada appears in the
+ * sidebar without a manual refresh — that ring means the store already changed,
+ * so the response is a local re-read, never a sweep.
  *
  * Each hook keys its loaded value BY SUBJECT (viewer pubkey, community id)
  * rather than resetting state in an effect. Two things fall out of that: no
@@ -17,6 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 
+import { controlScope, onWireScope } from "@/lib/concord/wire-bus";
 import type { Community } from "@/lib/concord/types";
 import accountManager from "@/services/accounts";
 import {
@@ -180,6 +182,36 @@ export function useConcordCommunity(
     // Keyed on the community's id and epoch, NOT the object: the vault yields a
     // fresh object on every read, and depending on it would resweep the plane on
     // every render. `community` is intentionally excluded for that reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idHex, rootEpoch, nonce]);
+
+  // The wire's doorbell for this community's control plane. It rings only after
+  // the editions are durably stored, so re-reading the fold is enough — and the
+  // fold memoizes on the exact edition set, so a ring that changed nothing costs
+  // a map lookup.
+  useEffect(() => {
+    if (!community) return;
+    let cancelled = false;
+    const off = onWireScope(controlScope(community.idHex), () => {
+      void readStoredState(community).then((next) => {
+        if (cancelled || !next) return;
+        setLoaded((prev) =>
+          prev?.idHex === community.idHex && sameChannels(prev.state, next)
+            ? prev
+            : {
+                idHex: community.idHex,
+                nonce,
+                swept: prev?.swept ?? true,
+                state: next,
+              },
+        );
+      });
+    });
+    return () => {
+      cancelled = true;
+      off();
+    };
+    // Keyed on the id, not the object: the vault yields a fresh object per read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idHex, rootEpoch, nonce]);
 
