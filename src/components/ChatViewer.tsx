@@ -485,6 +485,7 @@ const MessageItem = memo(function MessageItem({
                 relays={relays}
                 adapter={adapter}
                 conversation={conversation}
+                reactions={message.metadata?.reactions}
               />
             </div>
             {shouldShowReplyPreview && zapReplyPointer && (
@@ -523,6 +524,7 @@ const MessageItem = memo(function MessageItem({
             relays={relays}
             adapter={adapter}
             conversation={conversation}
+            reactions={message.metadata?.reactions}
           />
           {canReply && onReply && !isRootMessage && (
             <button
@@ -1300,6 +1302,7 @@ export function ChatViewer({
                         relays={conversationRelays}
                         adapter={adapter}
                         conversation={conversation}
+                        reactions={item.data.metadata?.reactions}
                       />
                     </div>
                   </div>

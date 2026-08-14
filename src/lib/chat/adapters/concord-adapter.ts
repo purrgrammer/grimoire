@@ -15,10 +15,14 @@
 import { BehaviorSubject, Observable } from "rxjs";
 import type { AddressPointer, EventPointer } from "nostr-tools/nip19";
 
-import { foldTimeline, type OpenedChat } from "@/lib/concord/chat";
+import {
+  foldTimeline,
+  type OpenedChat,
+  type ReactionEntry,
+} from "@/lib/concord/chat";
 import { filterEpochCutoff } from "@/lib/concord/chat";
 import { channelsView } from "@/lib/concord/channels";
-import { bytesToHex } from "@/lib/concord/derive";
+import { KIND_COMMENT } from "@/lib/concord/kinds";
 import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import type { Channel, Community } from "@/lib/concord/types";
 import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
@@ -318,18 +322,84 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     });
 
     const conversationId = conversationIdOf(identifier);
-    return timeline.messages.map((ev) => ({
-      id: ev.rumorId,
-      conversationId,
-      author: ev.author,
-      content: ev.content,
-      timestamp: ev.createdAt,
-      type: "user" as const,
-      metadata: { encrypted: true },
-      protocol: "concord" as const,
-      event: toEvent(ev) as NostrEvent,
-    }));
+    return timeline.messages.map((ev) => {
+      const parent = parentPointerOf(ev);
+      return {
+        id: ev.rumorId,
+        conversationId,
+        author: ev.author,
+        content: ev.content,
+        timestamp: ev.createdAt,
+        type: "user" as const,
+        ...(parent ? { replyTo: parent } : {}),
+        metadata: {
+          encrypted: true,
+          // Concord seals reactions inside wraps, so a `#e` relay query can
+          // never find them. The fold already tallied them; hand them over as
+          // the events the reaction UI expects.
+          reactions: reactionEventsFor(ev.rumorId, timeline.reactions),
+        },
+        protocol: "concord" as const,
+        event: toEvent(ev) as NostrEvent,
+      };
+    });
   }
+}
+
+/**
+ * The message a rumor is a reply to, as an event pointer.
+ *
+ * Two distinct shapes, and conflating them is a rendering bug in every other
+ * client: a NIP-22 kind-1111 comment names its IMMEDIATE parent in the
+ * lowercase `e` tag (the uppercase `E` is the thread root, which is not what a
+ * reply preview should show), while a kind-9 message uses `q` for an INLINE
+ * quote-reply per NIP-C7. Both are rumor ids, so no relay hint is meaningful —
+ * the target exists nowhere but this member's own store.
+ */
+function parentPointerOf(ev: {
+  kind: number;
+  tags: string[][];
+}): EventPointer | undefined {
+  const tag =
+    ev.kind === KIND_COMMENT
+      ? ev.tags.find((t) => t[0] === "e" && t[1])
+      : ev.tags.find((t) => t[0] === "q" && t[1]);
+  if (!tag) return undefined;
+  return { id: tag[1], ...(tag[3] ? { author: tag[3] } : {}) };
+}
+
+/**
+ * The fold's reaction tally for one message, as the kind-7 events the reaction
+ * UI aggregates.
+ *
+ * Synthesized rather than stored: the fold has already deduped per reactor and
+ * resolved deletes, so re-deriving from raw rows would undo that work. The ids
+ * are the real reaction rumor ids, so a later self-delete still matches.
+ */
+function reactionEventsFor(
+  targetId: string,
+  reactions: Map<string, Map<string, ReactionEntry>>,
+): NostrEvent[] | undefined {
+  const byEmoji = reactions.get(targetId);
+  if (!byEmoji || byEmoji.size === 0) return undefined;
+  const out: NostrEvent[] = [];
+  for (const [emoji, entry] of byEmoji) {
+    for (const [pubkey, rumorId] of entry.reactors) {
+      out.push({
+        id: rumorId,
+        pubkey,
+        kind: 7,
+        content: entry.url ? `:${emoji}:` : emoji,
+        tags: [
+          ["e", targetId],
+          ...(entry.url ? [["emoji", emoji, entry.url]] : []),
+        ],
+        created_at: 0,
+        sig: "",
+      } as NostrEvent);
+    }
+  }
+  return out;
 }
 
 /**
@@ -358,5 +428,3 @@ function toEvent(ev: {
     sig: "",
   };
 }
-
-export { bytesToHex };

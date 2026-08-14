@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import eventStore from "@/services/event-store";
@@ -6,6 +6,7 @@ import { UserName } from "../nostr/UserName";
 import { RichText } from "../nostr/RichText";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Conversation } from "@/types/chat";
+import type { NostrEvent } from "@/types/nostr";
 
 interface ReplyPreviewProps {
   replyTo: EventPointer | AddressPointer;
@@ -30,22 +31,42 @@ export const ReplyPreview = memo(function ReplyPreview({
   }, [replyTo]);
 
   // Load the event being replied to (reactive - updates when event arrives)
-  const replyEvent = use$(
+  const fromStore = use$(
     () => (eventId ? eventStore.event(eventId) : undefined),
     [eventId],
   );
+  /**
+   * The adapter's own answer, for protocols whose messages never reach the
+   * shared EventStore.
+   *
+   * Concord is the case: its messages are decrypted rumors of a private
+   * community, and putting them in the store shared with every other window
+   * would surface community content in unrelated views. So the adapter's RETURN
+   * VALUE is used rather than a store side effect — which is also one less
+   * round trip for the adapters that do populate the store.
+   */
+  const [fromAdapter, setFromAdapter] = useState<NostrEvent | null>(null);
+  const replyEvent = fromStore ?? fromAdapter ?? undefined;
 
-  // Fetch event from relays if not in store
+  // Fetch the event if it is not already in hand
   useEffect(() => {
-    if (!replyEvent && eventId) {
-      adapter.loadReplyMessage(conversation, replyTo).catch((err) => {
+    if (fromStore || fromAdapter || !eventId) return;
+    let cancelled = false;
+    adapter
+      .loadReplyMessage(conversation, replyTo)
+      .then((event) => {
+        if (!cancelled && event) setFromAdapter(event);
+      })
+      .catch((err) => {
         console.error(
           `[ReplyPreview] Failed to load reply ${eventId.slice(0, 8)}:`,
           err,
         );
       });
-    }
-  }, [replyEvent, adapter, conversation, replyTo, eventId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [fromStore, fromAdapter, adapter, conversation, replyTo, eventId]);
 
   const handleClick = () => {
     if (onScrollToMessage && eventId) {

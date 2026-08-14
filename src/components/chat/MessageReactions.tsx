@@ -8,6 +8,7 @@ import { EMOJI_SHORTCODE_REGEX } from "@/lib/emoji-helpers";
 import type { EmojiTag } from "@/lib/emoji-helpers";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Conversation } from "@/types/chat";
+import type { NostrEvent } from "@/types/nostr";
 import {
   Popover,
   PopoverTrigger,
@@ -23,6 +24,16 @@ interface MessageReactionsProps {
   adapter?: ChatProtocolAdapter;
   /** Conversation context for sending reactions */
   conversation?: Conversation;
+  /**
+   * Reactions supplied by the adapter, for protocols whose reactions are not
+   * plaintext kind-7 events on a relay.
+   *
+   * Concord seals every reaction inside a kind-1059 wrap, so a `#e` query finds
+   * nothing however long it waits — the adapter decrypts them and folds the
+   * tally itself. When this is present the relay subscription below is skipped
+   * entirely: it would be a REQ that can never match.
+   */
+  reactions?: NostrEvent[];
 }
 
 interface ReactionSummary {
@@ -50,9 +61,11 @@ export function MessageReactions({
   relays,
   adapter,
   conversation,
+  reactions: providedReactions,
 }: MessageReactionsProps) {
   // Start relay subscription to fetch reactions for this message
   useEffect(() => {
+    if (providedReactions !== undefined) return; // sealed; nothing to query
     if (relays.length === 0) return;
 
     const filter = {
@@ -82,19 +95,19 @@ export function MessageReactions({
     return () => {
       subscription.unsubscribe();
     };
-  }, [messageId, relays]);
+  }, [messageId, relays, providedReactions]);
 
   // Load reactions for this message from EventStore
   // Filter: kind 7, e-tag pointing to messageId
   // This observable will update automatically as reactions arrive from the subscription above
-  const reactions = use$(
+  const fromStore = use$(
     () =>
-      eventStore.timeline({
-        kinds: [7],
-        "#e": [messageId],
-      }),
-    [messageId],
+      providedReactions === undefined
+        ? eventStore.timeline({ kinds: [7], "#e": [messageId] })
+        : undefined,
+    [messageId, providedReactions],
   );
+  const reactions = providedReactions ?? fromStore;
 
   // Aggregate reactions by emoji
   const aggregated = useMemo(() => {

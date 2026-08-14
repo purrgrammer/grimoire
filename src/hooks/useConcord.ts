@@ -24,6 +24,7 @@ import {
   type ConcordListStatus,
 } from "@/services/concord-communities";
 import {
+  readStoredState,
   syncCommunityState,
   type CommunityState,
 } from "@/services/concord-state";
@@ -112,6 +113,14 @@ export function useConcordCommunity(
     let cancelled = false;
     void (async () => {
       try {
+        // Paint from the store FIRST. Every edition from the last session is
+        // still there, so a warm reload shows the channel list at once and the
+        // full re-sweep — which the fold's refuse-downgrade anchor requires —
+        // runs behind an already-usable sidebar.
+        const stored = await readStoredState(community);
+        if (!cancelled && stored) {
+          setLoaded({ idHex: community.idHex, nonce, state: stored });
+        }
         const next = await syncCommunityState(community);
         if (!cancelled) {
           setLoaded({ idHex: community.idHex, nonce, state: next });
@@ -138,8 +147,9 @@ export function useConcordCommunity(
   const settled = idHex !== undefined && loaded?.idHex === idHex;
   return {
     state: settled ? loaded.state : undefined,
-    // A refresh that has not landed yet still reads as loading, so the spinner
-    // means "a sweep is running" rather than "we have nothing at all".
+    // A sweep still in flight reads as loading even once the stored fold has
+    // painted, so the spinner means "a sweep is running" rather than "we have
+    // nothing at all" — and the sidebar shows channels while it spins.
     loading: idHex !== undefined && (!settled || loaded.nonce !== nonce),
     error: settled ? loaded.error : undefined,
     refresh,

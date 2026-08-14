@@ -127,6 +127,27 @@ export async function foldStoredControl(
 }
 
 /**
+ * The channel view from what the store already holds — no network at all.
+ *
+ * The sweep re-reads the WHOLE control plane at every session start, by design:
+ * the delta floor is session-only because a persisted one starves the fold
+ * (see `plane-sync.ts`). That is a bandwidth cost, not a reason to make the
+ * reader stare at a spinner — every edition from last session is still in the
+ * store, so the sidebar can paint from it immediately and let the sweep refresh
+ * underneath.
+ *
+ * Returns undefined for a Refounded community whose compaction snapshot has not
+ * been recorded yet; see {@link foldStoredControl}.
+ */
+export async function readStoredState(
+  community: Community,
+): Promise<CommunityState | undefined> {
+  const folded = await foldStoredControl(community);
+  if (!folded) return undefined;
+  return { folded, channels: channelsView(community, folded) };
+}
+
+/**
  * Sweep, fold, and return the channel view.
  *
  * `incomplete` is the fold's own completeness signal — floored entities the
