@@ -10,6 +10,11 @@
  * recovered rumor — EXACTLY as its author signed it — is what is stored, so a
  * plane or channel read is an ordinary indexed query with no crypto.
  *
+ * One exception, added by the wire: a wrap the client holds NO key for is parked
+ * (see the parked-wrap section at the bottom). It cannot be opened, so there is
+ * no rumor to store in its place, and a standing subscription has no later
+ * chance to re-fetch it.
+ *
  * ## The plane boundary (do not remove either fence)
  *
  * Armada isolates communities with a database per community. Grimoire has one
@@ -34,6 +39,8 @@
  * Trust note: this persists DECRYPTED plane data at rest, the same device-trust
  * level as the membership vault beside it. Wiped on logout.
  */
+
+import type { NostrEvent } from "nostr-tools";
 
 import type { FoldedControl } from "@/lib/concord/control";
 import { isExpired } from "@/lib/concord/disappearing";
@@ -423,4 +430,133 @@ export async function writeFoldedControl(
 export async function clearCommunityRumors(communityId: string): Promise<void> {
   await db.concordRumors.where("communityId").equals(communityId).delete();
   await db.concordSnapshots.where("communityId").equals(communityId).delete();
+}
+
+// ── Parked wraps ─────────────────────────────────────────────────────────────
+//
+// Ported from armada `bc19d1f` (`parkPendingWraps` / `peekPendingWraps` /
+// `ackPendingWraps`). Armada parks because its native background service
+// receives wraps with no stream keys to open them; grimoire parks because a
+// STANDING subscription delivers wraps for addresses whose keys have not arrived
+// yet — a rekey not caught up with, a channel granted moments ago, a spec that
+// has not refreshed. Same problem, same shape.
+//
+// The invariant that makes it loss-proof: a wrap is never removed before its
+// rumor is durably stored. So peek READS, and the caller acks only what actually
+// decoded and was written. A notified message must never be locally
+// destructible.
+//
+// This is the ONE place a wrap is persisted. See `ConcordPendingWrapRow`.
+
+/** Parked wraps older than this are pruned — the key is never coming. */
+const PENDING_MAX_AGE_SECS = 14 * 24 * 3600;
+
+/** How often (ms) to age-prune. Kept off the per-peek path. */
+const PENDING_PRUNE_INTERVAL_MS = 5 * 60_000;
+let lastPendingPruneAt = 0;
+
+/**
+ * Whether the parked store is known to hold nothing worth peeking at:
+ *
+ * - `true` — provably empty; a peek returns without touching IndexedDB;
+ * - `false` — something is (or may be) parked; a peek does the real read;
+ * - `undefined` — unknown (fresh session); the FIRST peek probes once.
+ *
+ * The probe is what keeps this correct across restarts. Wraps parked in a
+ * PREVIOUS session are durable and nothing re-parks them, so a plain
+ * session-scoped "did we park anything?" boolean would hide them from the drain
+ * forever. One `limit: 1` probe finds them; after that the common case — nothing
+ * ever parked — keeps the drain off the channel-read hot path.
+ */
+let pendingKnownEmpty: boolean | undefined;
+
+/**
+ * Park wraps the client holds no key for.
+ *
+ * Returns a promise so a test (or a drain that wants ordering) can wait, but the
+ * ingest path deliberately does not: parking is a durability backstop, and
+ * blocking live delivery on it would trade the thing that matters for the thing
+ * that recovers.
+ *
+ * The known-empty flag flips SYNCHRONOUSLY, before the write lands — a peek
+ * racing this must do the real read rather than trust a probe that began before
+ * the row existed.
+ */
+export function parkPendingWraps(wraps: NostrEvent[]): Promise<void> {
+  if (wraps.length === 0) return Promise.resolve();
+  // Set BEFORE the write resolves: a peek racing this must do the real read
+  // rather than trust a probe that started before the row landed.
+  pendingKnownEmpty = false;
+  const rows = wraps.map((wrap) => ({
+    id: wrap.id,
+    pubkey: wrap.pubkey,
+    kind: wrap.kind,
+    created_at: wrap.created_at,
+    content: wrap.content,
+    tags: wrap.tags,
+    // `sig` deliberately dropped: signed by a throwaway ephemeral key that
+    // nothing checks (CORD-01), so there is nothing here to preserve.
+  }));
+  return db.concordPendingWraps
+    .bulkPut(rows)
+    .then(() => undefined)
+    .catch(() => undefined);
+}
+
+/**
+ * Read — WITHOUT removing — the wraps parked for these stream addresses.
+ *
+ * The caller decrypts them, writes the recovered rumors, and only then calls
+ * {@link ackPendingWraps} with the ids that made it. Removing here would lose a
+ * wrap whose store write failed, which is the same hazard the plane seen-memo
+ * guards against.
+ */
+export async function peekPendingWraps(
+  streamPks: string[],
+): Promise<NostrEvent[]> {
+  if (streamPks.length === 0) return [];
+  if (pendingKnownEmpty === true) return [];
+  try {
+    if (pendingKnownEmpty === undefined) {
+      const any = await db.concordPendingWraps.limit(1).toArray();
+      // A concurrent park may have flipped this to `false` mid-probe; an empty
+      // probe result must not clobber that.
+      if (pendingKnownEmpty === undefined) pendingKnownEmpty = any.length === 0;
+      if (pendingKnownEmpty === true) return [];
+    }
+    const now = Date.now();
+    if (now - lastPendingPruneAt >= PENDING_PRUNE_INTERVAL_MS) {
+      lastPendingPruneAt = now;
+      const cutoff = Math.floor(now / 1000) - PENDING_MAX_AGE_SECS;
+      void db.concordPendingWraps
+        .where("created_at")
+        .below(cutoff)
+        .delete()
+        .catch(() => undefined);
+    }
+    const rows = await db.concordPendingWraps
+      .where("pubkey")
+      .anyOf(streamPks)
+      .toArray();
+    // `sig` is empty by construction — see `parkPendingWraps`. `openWrap` never
+    // reads it.
+    return rows.map((row) => ({ ...row, sig: "" }) as NostrEvent);
+  } catch {
+    return [];
+  }
+}
+
+/** Drop parked wraps whose rumors are now durably stored. */
+export function ackPendingWraps(wrapIds: string[]): Promise<void> {
+  if (wrapIds.length === 0) return Promise.resolve();
+  return db.concordPendingWraps
+    .bulkDelete(wrapIds)
+    .then(() => undefined)
+    .catch(() => undefined);
+}
+
+/** Test seam: forget the tri-state and the prune clock. */
+export function _resetPendingWrapsForTests(): void {
+  pendingKnownEmpty = undefined;
+  lastPendingPruneAt = 0;
 }

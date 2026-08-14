@@ -180,10 +180,38 @@ export interface ConcordSnapshotRow {
   updatedAt: number;
 }
 
-/** Small opaque Concord blobs (currently only the groupKey derivation memo). */
+/** Small opaque Concord blobs (the groupKey derivation memo, wire cursors). */
 export interface ConcordKvRow {
   key: string;
   value: unknown;
+}
+
+/**
+ * A Concord wrap the wire could not open, held until a key for it arrives.
+ *
+ * **The one place a wrap is persisted.** Everywhere else a wrap is opened at
+ * ingest and only the rumor its author signed is stored (`ConcordRumorRow`).
+ * The exception exists because a standing subscription has no "later": a wrap
+ * authored by a stream address this member holds no key for yet — a rekey not
+ * caught up with, a channel granted moments ago — is ordinary rather than an
+ * error, and dropping it makes that history recoverable only by a backfill that
+ * may never run.
+ *
+ * Stored WITHOUT its signature: a wrap is signed by a throwaway ephemeral key
+ * that nothing ever checks (authorship is proved by the seal sealed inside it,
+ * CORD-01), so there is nothing here worth preserving. Ciphertext at rest, which
+ * is a weaker exposure than the decrypted rumors stored beside it.
+ *
+ * `pubkey` is the stream address, which is the only way a plane finds its own.
+ * `created_at` carries the age prune.
+ */
+export interface ConcordPendingWrapRow {
+  id: string;
+  pubkey: string;
+  kind: number;
+  created_at: number;
+  content: string;
+  tags: string[][];
 }
 
 class GrimoireDb extends Dexie {
@@ -206,6 +234,7 @@ class GrimoireDb extends Dexie {
   concordRumors!: Table<ConcordRumorRow>;
   concordSnapshots!: Table<ConcordSnapshotRow>;
   concordKv!: Table<ConcordKvRow>;
+  concordPendingWraps!: Table<ConcordPendingWrapRow>;
 
   constructor(name: string) {
     super(name);
@@ -513,6 +542,32 @@ class GrimoireDb extends Dexie {
         "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
       concordSnapshots: "&[communityId+controlPk], communityId",
       concordKv: "&key",
+    });
+
+    // Version 21: Concord wire — parked wraps awaiting a key
+    this.version(21).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
+      concordCommunities: "&[pubkey+idHex], pubkey",
+      concordRumors:
+        "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+      concordSnapshots: "&[communityId+controlPk], communityId",
+      concordKv: "&key",
+      concordPendingWraps: "&id, pubkey, created_at",
     });
   }
 }
