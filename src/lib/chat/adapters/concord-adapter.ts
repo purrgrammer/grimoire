@@ -10,9 +10,14 @@
  * The backfill it kicks alongside is for HISTORY — paging backwards — not for
  * new messages.
  *
- * The read half only: `sendMessage` and `sendReaction` land in phase 6. They
- * throw for now rather than no-op, so a composer wired up early fails loudly
- * instead of silently swallowing a message.
+ * Sending is PUBLISH-FIRST: build, seal, wrap, publish, and only then write to
+ * the store. Armada is optimistic instead — it renders the message before the
+ * seal and flips it to a retryable "failed" badge — because a NIP-46 seal is a
+ * remote round-trip that can take seconds. Grimoire has no failed-state or retry
+ * affordance, and a message sitting in the local store that no relay ever took
+ * is a lie the reader cannot see through. So nothing is written until a relay
+ * accepted it, and a failure throws with nothing to reconcile. A deliberate
+ * divergence, narrowing.
  */
 
 import { Observable, ReplaySubject } from "rxjs";
@@ -26,13 +31,31 @@ import {
 import { filterEpochCutoff } from "@/lib/concord/chat";
 import { channelsView } from "@/lib/concord/channels";
 import { KIND_COMMENT } from "@/lib/concord/kinds";
+import type { BlobAttachmentMeta } from "./base-adapter";
 import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import type { Channel, Community } from "@/lib/concord/types";
 import { channelScope, onWireScope } from "@/lib/concord/wire-bus";
 import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
+import {
+  buildChatSend,
+  type BuildChatSendOptions,
+  type ReplyParent,
+} from "@/lib/concord/send";
+import {
+  consumeSend,
+  isRateLimitedKind,
+  SendRateLimitError,
+} from "@/lib/concord/send-rate-limit";
+import { KIND_DELETE, KIND_MESSAGE, KIND_REACTION } from "@/lib/concord/kinds";
+import { messageExpirationOf } from "@/lib/concord/disappearing";
+import { emitWireScopes } from "@/lib/concord/wire-bus";
 import { syncChannel } from "@/services/concord-channel-sync";
+import { publishWrap } from "@/services/concord-publish";
 import { loadStoredCommunities } from "@/services/concord-communities";
-import { queryChannelRumors } from "@/services/concord-rumor-store";
+import {
+  queryChannelRumors,
+  writeChatRumors,
+} from "@/services/concord-rumor-store";
 import { foldStoredControl } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import type {
@@ -253,25 +276,95 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       // A community is joined in Armada. Grimoire enters through the member's
       // own Community List and nothing else.
       canCreateConversations: false,
+      // Self-delete only — see {@link deleteMessage}.
+      supportsDeletion: true,
       requiresRelay: true,
     };
   }
 
   async sendMessage(
-    _conversation: Conversation,
-    _content: string,
-    _options?: SendMessageOptions,
+    conversation: Conversation,
+    content: string,
+    options?: SendMessageOptions,
   ): Promise<void> {
-    throw new Error("Sending to a Concord channel is not wired up yet.");
+    const identifier = this.identifierOf(conversation);
+    const { community, channel, folded } = await this.resolve(identifier);
+
+    // A threaded reply cites its parent's kind, author and root tags, so the
+    // parent has to be resolved rather than guessed. It only ever exists in the
+    // local store — a Concord reply names a RUMOR id — and failing loudly is
+    // right: degrading to an untagged kind-9 would silently post the reply as a
+    // new top-level message.
+    let replyTo: ReplyParent | undefined;
+    if (options?.replyTo) {
+      const parent = await this.findRumor(identifier, options.replyTo);
+      if (!parent) {
+        throw new Error("Can't find the message you're replying to.");
+      }
+      replyTo = parent;
+    }
+
+    const extraTags: string[][] = [
+      ...(options?.emojiTags?.map(emojiTag) ?? []),
+      ...(options?.blobAttachments?.map(imetaTag) ?? []),
+    ];
+
+    await this.send(community, channel, folded, {
+      content,
+      ...(replyTo ? { replyTo } : {}),
+      ...(extraTags.length > 0 ? { extraTags } : {}),
+    });
   }
 
   async sendReaction(
-    _conversation: Conversation,
-    _messageId: string,
-    _emoji: string,
-    _customEmoji?: EmojiTag,
+    conversation: Conversation,
+    messageId: string,
+    emoji: string,
+    customEmoji?: EmojiTag,
   ): Promise<void> {
-    throw new Error("Reacting in a Concord channel is not wired up yet.");
+    const identifier = this.identifierOf(conversation);
+    const { community, channel, folded } = await this.resolve(identifier);
+    const target = await this.findRumor(identifier, messageId);
+    if (!target) throw new Error("Can't find the message you're reacting to.");
+
+    await this.send(community, channel, folded, {
+      // A NIP-30 reaction's content is the shortcode; the `emoji` tag carries
+      // the image. A plain unicode reaction is its own content.
+      content: customEmoji ? `:${customEmoji.shortcode}:` : emoji,
+      kind: KIND_REACTION,
+      target: messageId,
+      targetPubkey: target.pubkey,
+      ...(customEmoji ? { extraTags: [emojiTag(customEmoji)] } : {}),
+    });
+  }
+
+  /**
+   * Delete one of the viewer's OWN messages (NIP-09).
+   *
+   * Self-delete only. Grimoire reads moderation state and honours it but never
+   * issues any — deleting someone else's message is a `MANAGE_MESSAGES` action
+   * that belongs in Armada, and `foldTimeline` already refuses a delete from an
+   * author who does not outrank the target.
+   */
+  async deleteMessage(
+    conversation: Conversation,
+    messageId: string,
+  ): Promise<void> {
+    const identifier = this.identifierOf(conversation);
+    const { community, channel, folded } = await this.resolve(identifier);
+    const pubkey = accountManager.active$.value?.pubkey;
+    const target = await this.findRumor(identifier, messageId);
+    if (!target) throw new Error("Can't find the message you're deleting.");
+    if (!pubkey || target.pubkey !== pubkey) {
+      throw new Error("You can only delete your own messages here.");
+    }
+
+    await this.send(community, channel, folded, {
+      content: "",
+      kind: KIND_DELETE,
+      target: messageId,
+      targetKind: target.kind,
+    });
   }
 
   /**
@@ -355,6 +448,101 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     return { community, channel, folded };
   }
 
+  /**
+   * Build, seal, wrap, publish, store, ring.
+   *
+   * The order matters: nothing reaches the store until a relay accepted the
+   * wrap (see the module docstring), and the doorbell rings only after the write
+   * so the re-read finds it.
+   */
+  private async send(
+    community: Community,
+    channel: Channel,
+    folded: FoldedControl,
+    opts: Omit<BuildChatSendOptions, "channel" | "pubkey" | "timerSecs">,
+  ): Promise<void> {
+    const account = accountManager.active$.value;
+    if (!account?.pubkey) throw new Error("Sign in to send a message.");
+    if (folded.banned.has(account.pubkey)) {
+      throw new Error("You have been banned from this community.");
+    }
+    // TODO(phase 9): refuse when the community carries a dissolution tombstone.
+    // Death is one-way (CORD-02 §9) and armada gates the publish on it; grimoire
+    // has no dissolved-state read yet, so a dissolved community is currently
+    // writable here and inert everywhere else.
+
+    const kind = opts.replyTo ? KIND_COMMENT : (opts.kind ?? KIND_MESSAGE);
+    // Spend the budget BEFORE anything with a side effect, so a refusal leaves
+    // nothing signed, published or stored to unwind.
+    if (isRateLimitedKind(kind)) {
+      const waitMs = consumeSend(community.idHex);
+      if (waitMs > 0) throw new SendRateLimitError(waitMs);
+    }
+
+    const built = await buildChatSend(
+      {
+        ...opts,
+        channel,
+        pubkey: account.pubkey,
+        // The timer as folded AT SEND TIME. A fold that has not landed reads as
+        // off, and the tag as signed governs — so a client behind the head
+        // sends what it knew, rather than guessing.
+        timerSecs: messageExpirationOf(folded.metadata),
+      },
+      account.signer,
+    );
+
+    await publishWrap(community.relays, built.wrap);
+
+    // Accepted somewhere. Store it exactly as an ingested wrap would be, so the
+    // row a reload reads back is identical to the one the wire writes when our
+    // own wrap comes round again.
+    await writeChatRumors(community.idHex, [
+      {
+        rumorId: built.rumor.id,
+        author: account.pubkey,
+        kind: built.rumor.kind,
+        content: built.rumor.content,
+        tags: built.rumor.tags,
+        createdAt: built.createdAt,
+        ms: built.ms,
+        wrapId: built.wrap.id,
+        channel: channel.idHex,
+      },
+    ]);
+    emitWireScopes([channelScope(channel.idHex)]);
+  }
+
+  /** One stored rumor of this channel, by id. */
+  private async findRumor(
+    identifier: ConcordIdentifier,
+    rumorId: string,
+  ): Promise<
+    { pubkey: string; kind: number; tags: string[][]; id: string } | undefined
+  > {
+    const rows = await queryChannelRumors(
+      identifier.communityId,
+      identifier.channelId,
+      { limit: PAGE_ROWS * 4 },
+    );
+    const hit = rows.find((row) => row.rumorId === rumorId);
+    return hit
+      ? {
+          id: hit.rumorId,
+          pubkey: hit.author,
+          kind: hit.kind,
+          tags: hit.tags,
+        }
+      : undefined;
+  }
+
+  /** The identifier behind a conversation, or a refusal naming why not. */
+  private identifierOf(conversation: Conversation): ConcordIdentifier {
+    const identifier = parseConversationId(conversation.id);
+    if (!identifier) throw new Error("That is not a Concord conversation.");
+    return identifier;
+  }
+
   private async backfill(
     identifier: ConcordIdentifier,
     before?: number,
@@ -436,6 +624,25 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       };
     });
   }
+}
+
+/** A NIP-30 `emoji` tag: shortcode, image, and the set it came from. */
+function emojiTag(emoji: EmojiTag): string[] {
+  return [
+    "emoji",
+    emoji.shortcode,
+    emoji.url,
+    ...(emoji.address ? [emoji.address] : []),
+  ];
+}
+
+/** A NIP-92 `imeta` tag for one attachment, in the shape other clients read. */
+function imetaTag(blob: BlobAttachmentMeta): string[] {
+  const parts = [`url ${blob.url}`];
+  if (blob.mimeType) parts.push(`m ${blob.mimeType}`);
+  if (blob.sha256) parts.push(`x ${blob.sha256}`);
+  if (blob.size !== undefined) parts.push(`size ${blob.size}`);
+  return ["imeta", ...parts];
 }
 
 /**

@@ -74,6 +74,8 @@ export interface MockRelay {
    * without a relay that can speak first.
    */
   push: (event: NostrEvent) => void;
+  /** Events this relay accepted, in arrival order. */
+  accepted: () => NostrEvent[];
   /** REQ frames received, for asserting a client isn't flooding. */
   reqCount: () => number;
   /**
@@ -97,6 +99,7 @@ export async function startMockRelay(
 ): Promise<MockRelay> {
   const server = new WebSocketServer({ port: 0 });
   let reqs = 0;
+  const stored: NostrEvent[] = [];
   const seenFilters: Array<Record<string, unknown>> = [];
   const allAuthed = new Set<string>();
 
@@ -149,6 +152,37 @@ export async function startMockRelay(
             ok ? "" : "invalid: bad auth event",
           ]),
         );
+        return;
+      }
+
+      if (message[0] === "EVENT") {
+        // A relay that ignores EVENT frames is not a behaviour worth modelling —
+        // it just hangs every publish on its timeout. `nip42-gated` mirrors what
+        // a ditto relay with kind 1059 in AUTH_KINDS does to a WRITE: the
+        // author must be authenticated on this connection, which for a Concord
+        // wrap means the stream key that signed it.
+        const event = message[1] as NostrEvent | undefined;
+        if (!event || typeof event.id !== "string") return;
+        if (behaviour.kind === "auth-required") {
+          socket.send(
+            JSON.stringify(["OK", event.id, false, "auth-required: need auth"]),
+          );
+          return;
+        }
+        if (behaviour.kind === "nip42-gated" && !authed.has(event.pubkey)) {
+          socket.send(
+            JSON.stringify([
+              "OK",
+              event.id,
+              false,
+              `auth-required: not authenticated as ${event.pubkey}`,
+            ]),
+          );
+          return;
+        }
+        if (behaviour.kind === "silent") return;
+        stored.push(event);
+        socket.send(JSON.stringify(["OK", event.id, true, ""]));
         return;
       }
 
@@ -257,6 +291,7 @@ export async function startMockRelay(
         socket.send(JSON.stringify(["EVENT", subId, event]));
       }
     },
+    accepted: () => [...stored],
     reqCount: () => reqs,
     reqFilters: () => [...seenFilters],
     authedPubkeys: () => [...allAuthed],

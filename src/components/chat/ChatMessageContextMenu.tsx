@@ -18,8 +18,10 @@ import {
   Reply,
   MessageSquare,
   Smile,
+  Trash2,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAddWindow } from "@/core/state";
 import { useCopy } from "@/hooks/useCopy";
 import { EventJsonDialog } from "@/components/EventJsonDialog";
@@ -40,6 +42,8 @@ interface ChatMessageContextMenuProps {
   adapter?: ChatProtocolAdapter;
   /** Message object for protocol-specific actions like zapping */
   message?: Message;
+  /** The viewer, for deciding whether this message is theirs to delete. */
+  activePubkey?: string;
 }
 
 /**
@@ -58,6 +62,7 @@ export function ChatMessageContextMenu({
   conversation,
   adapter,
   message,
+  activePubkey,
 }: ChatMessageContextMenuProps) {
   const addWindow = useAddWindow();
   const { copy, copied } = useCopy();
@@ -72,6 +77,28 @@ export function ChatMessageContextMenu({
     if (!adapter || !message || !conversation) return null;
     return adapter.getZapConfig(message, conversation);
   }, [adapter, message, conversation]);
+
+  // Self-delete only, and only where the protocol offers one. Deleting someone
+  // ELSE's message is moderation — a different capability, and one grimoire does
+  // not issue.
+  const canDelete = Boolean(
+    adapter?.deleteMessage &&
+    adapter.getCapabilities().supportsDeletion &&
+    activePubkey &&
+    event.pubkey === activePubkey,
+  );
+
+  const deleteMessage = async () => {
+    if (!adapter?.deleteMessage || !conversation) return;
+    try {
+      await adapter.deleteMessage(conversation, event.id);
+      toast.success("Message deleted");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not delete the message",
+      );
+    }
+  };
 
   const openEventDetail = () => {
     let pointer;
@@ -199,6 +226,18 @@ export function ChatMessageContextMenu({
                   Zap
                 </ContextMenuItem>
               )}
+              <ContextMenuSeparator />
+            </>
+          )}
+          {canDelete && (
+            <>
+              <ContextMenuItem
+                onClick={() => void deleteMessage()}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="size-4 mr-2" />
+                Delete Message
+              </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}

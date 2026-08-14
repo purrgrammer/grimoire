@@ -373,6 +373,7 @@ const MessageItem = memo(function MessageItem({
   canReply,
   onScrollToMessage,
   isRootMessage,
+  activePubkey,
 }: {
   message: Message;
   adapter: ChatProtocolAdapter;
@@ -381,6 +382,8 @@ const MessageItem = memo(function MessageItem({
   canReply: boolean;
   onScrollToMessage?: (messageId: string) => void;
   isRootMessage?: boolean;
+  /** The viewer, so the menu can offer a self-delete on their own messages. */
+  activePubkey?: string;
 }) {
   // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
   const relays = useMemo(
@@ -571,6 +574,7 @@ const MessageItem = memo(function MessageItem({
         conversation={conversation}
         adapter={adapter}
         message={message}
+        activePubkey={activePubkey}
       >
         {messageContent}
       </ChatMessageContextMenu>
@@ -1319,6 +1323,7 @@ export function ChatViewer({
                   canReply={canSign}
                   onScrollToMessage={handleScrollToMessage}
                   isRootMessage={isRootMessage}
+                  activePubkey={pubkey}
                 />
               );
             }}

@@ -335,6 +335,12 @@ export interface CreateConversationParams {
  */
 export interface ChatCapabilities {
   supportsEncryption: boolean;
+  /**
+   * The viewer can delete their OWN messages through
+   * `ChatProtocolAdapter.deleteMessage`. Absent means the protocol has no
+   * self-delete surface here — not that deletion is impossible in it.
+   */
+  supportsDeletion?: boolean;
   supportsThreading: boolean;
   supportsModeration: boolean;
   supportsRoles: boolean;

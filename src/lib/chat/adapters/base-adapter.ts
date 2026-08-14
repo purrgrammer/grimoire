@@ -173,6 +173,15 @@ export abstract class ChatProtocolAdapter {
   ): Promise<void>;
 
   /**
+   * Delete one of the viewer's OWN messages.
+   *
+   * Optional: only adapters advertising `supportsDeletion` implement it, and the
+   * UI offers it only for the viewer's own messages. Deleting someone ELSE's
+   * message is moderation, which is a different capability.
+   */
+  deleteMessage?(conversation: Conversation, messageId: string): Promise<void>;
+
+  /**
    * Get the capabilities of this protocol
    * Used to determine which UI features to show
    */
