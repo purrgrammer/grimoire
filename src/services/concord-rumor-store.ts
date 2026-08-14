@@ -297,6 +297,54 @@ export async function queryPlane(
   return rows.map(rowToOpened);
 }
 
+/** Chat kinds that occupy a timeline row. */
+const CHAT_ROW_KINDS = [9, 1111, 1068, 31922, 31923, 1740];
+/** Chat kinds that decorate another rumor rather than standing alone. */
+const CHAT_SIDE_KINDS = [7, 5, 3302];
+
+/**
+ * One channel's stored chat rumors, newest first.
+ *
+ * `limit` budgets the ROWS, and the side events (reactions, deletes, edits) are
+ * fetched separately and unbudgeted against it — otherwise a reaction flood on
+ * one message displaces the rows it decorates, and the channel reads empty.
+ */
+export async function queryChannelRumors(
+  communityId: string,
+  channelIdHex: string,
+  opts: { limit: number; until?: number } = { limit: 200 },
+): Promise<OpenedEvent[]> {
+  const channel = channelIdHex.toLowerCase();
+  const inRange = (row: ConcordRumorRow) =>
+    opts.until === undefined || row.created_at <= opts.until;
+
+  const all = await db.concordRumors
+    .where("[communityId+channel]")
+    .equals([communityId, channel])
+    .toArray();
+
+  const rows = all.filter(inRange);
+  const byNewest = (a: ConcordRumorRow, b: ConcordRumorRow) =>
+    b.created_at - a.created_at;
+  const rowKinds = new Set(CHAT_ROW_KINDS);
+  const sideKinds = new Set(CHAT_SIDE_KINDS);
+
+  const timeline = rows
+    .filter((r) => rowKinds.has(r.kind))
+    .sort(byNewest)
+    .slice(0, opts.limit);
+  const oldest =
+    timeline.length > 0 ? timeline[timeline.length - 1].created_at : undefined;
+  // Side events only for the window the rows cover, so an old reaction cannot
+  // resurrect a message that fell outside it.
+  const side = rows.filter(
+    (r) =>
+      sideKinds.has(r.kind) && (oldest === undefined || r.created_at >= oldest),
+  );
+
+  return [...timeline, ...side].map(rowToOpened);
+}
+
 /** Wipe one community's stored rumors and snapshots. */
 export async function clearCommunityRumors(communityId: string): Promise<void> {
   await db.concordRumors.where("communityId").equals(communityId).delete();

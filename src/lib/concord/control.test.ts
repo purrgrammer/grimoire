@@ -422,8 +422,6 @@ describe("the delegation fixpoint (CORD-04 §2)", () => {
   });
 
   it("is a function of the edition SET, not its arrival order", () => {
-    // The freeze latches exist for this. A roster that depends on which
-    // edition folded first is a roster two clients disagree about.
     const events = [
       edition({ vsk: VSK_ROLE, entityId: roleId, content: role }),
       edition({ vsk: VSK_GRANT, entityId: grantEid, content: grant }),
@@ -437,6 +435,251 @@ describe("the delegation fixpoint (CORD-04 §2)", () => {
     expect(reversed.roster.grants.map((g) => g.member)).toEqual(
       forward.roster.grants.map((g) => g.member),
     );
+  });
+});
+
+/**
+ * The three mechanisms in `authorizeDelegation` that look over-engineered and
+ * are not. Each fixture here is built so that REMOVING the mechanism changes the
+ * roster — a suite that folds one role plus one grant of different vsks cannot
+ * distinguish any of them, because roles always settle before grants and a
+ * single-candidate entity has nothing to defer on.
+ */
+describe("authorizeDelegation's load-bearing mechanisms", () => {
+  /** A role whose position and permissions the fixtures vary. */
+  const roleAt = (id: Uint8Array, position: number, perms: bigint) => ({
+    role_id: bytesToHex(id),
+    name: `role-${position}`,
+    position,
+    permissions: perms.toString(),
+  });
+
+  it("the RANKS-FROZEN deferral: a legitimate revoke survives folding out of order", () => {
+    // The admin's own Grant must settle before their revoke of the mod can be
+    // judged — otherwise the revoke drops as "issued by nobody" and the mod
+    // keeps a role an authorized admin took away. Which entity is decided first
+    // is eid-sorted, so this is arranged to be the WRONG order: the target's
+    // grant sorts before the admin's own.
+    // Grant locators are hashes, so the processing order is not ours to choose
+    // — it is ground for. Skipping when the order comes out favourable would
+    // make this test pass without exercising anything.
+    const admin = getPublicKey(generateSecretKey());
+    const adminGrantEid = grantLocator(CID, hex32(admin));
+    let mod = "";
+    let modGrantEid = adminGrantEid;
+    for (let i = 0; i < 5000; i++) {
+      const candidate = getPublicKey(generateSecretKey());
+      const eid = grantLocator(CID, hex32(candidate));
+      if (bytesToHex(eid) < bytesToHex(adminGrantEid)) {
+        mod = candidate;
+        modGrantEid = eid;
+        break;
+      }
+    }
+    expect(bytesToHex(modGrantEid) < bytesToHex(adminGrantEid)).toBe(true);
+
+    const adminRoleId = random32();
+    const modRoleId = random32();
+    const adminRole = roleAt(adminRoleId, 1, Permissions.MANAGE_ROLES);
+    const modRole = roleAt(modRoleId, 5, Permissions.MANAGE_MESSAGES);
+    const adminGrant = { member: admin, role_ids: [adminRole.role_id] };
+    const modGrantV1 = { member: mod, role_ids: [modRole.role_id] };
+    const modGrantV2 = { member: mod, role_ids: [] };
+    const modV1Hash = hashOf(modGrantEid, 1n, modGrantV1);
+
+    const folded = fold([
+      edition({ vsk: VSK_ROLE, entityId: adminRoleId, content: adminRole }),
+      edition({ vsk: VSK_ROLE, entityId: modRoleId, content: modRole }),
+      edition({ vsk: VSK_GRANT, entityId: adminGrantEid, content: adminGrant }),
+      edition({ vsk: VSK_GRANT, entityId: modGrantEid, content: modGrantV1 }),
+      // The admin revokes, citing their own Grant.
+      edition({
+        vsk: VSK_GRANT,
+        entityId: modGrantEid,
+        content: modGrantV2,
+        author: admin,
+        version: 2n,
+        prevHash: modV1Hash,
+        authority: {
+          entityId: adminGrantEid,
+          version: 1n,
+          editionHash: hashOf(adminGrantEid, 1n, adminGrant),
+        },
+      }),
+    ]);
+    const modGrantSeated = folded.roster.grants.find((g) => g.member === mod);
+    expect(modGrantSeated?.roleIds).toEqual([]);
+  });
+
+  it("the REPLACE-RANK rule: a low-rank actor cannot revoke a higher-ranked member", () => {
+    // Without it a revoke is free to anyone holding MANAGE_ROLES, whatever their
+    // position — so the most junior moderator can strip an admin.
+    const junior = getPublicKey(generateSecretKey());
+    const senior = getPublicKey(generateSecretKey());
+    const juniorGrantEid = grantLocator(CID, hex32(junior));
+    const seniorGrantEid = grantLocator(CID, hex32(senior));
+    const juniorRoleId = random32();
+    const seniorRoleId = random32();
+    const juniorRole = roleAt(juniorRoleId, 9, Permissions.MANAGE_ROLES);
+    const seniorRole = roleAt(seniorRoleId, 1, Permissions.MANAGE_ROLES);
+    const juniorGrant = { member: junior, role_ids: [juniorRole.role_id] };
+    const seniorGrantV1 = { member: senior, role_ids: [seniorRole.role_id] };
+    const seniorGrantV2 = { member: senior, role_ids: [] };
+
+    const folded = fold([
+      edition({ vsk: VSK_ROLE, entityId: juniorRoleId, content: juniorRole }),
+      edition({ vsk: VSK_ROLE, entityId: seniorRoleId, content: seniorRole }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: juniorGrantEid,
+        content: juniorGrant,
+      }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: seniorGrantEid,
+        content: seniorGrantV1,
+      }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: seniorGrantEid,
+        content: seniorGrantV2,
+        author: junior,
+        version: 2n,
+        prevHash: hashOf(seniorGrantEid, 1n, seniorGrantV1),
+        authority: {
+          entityId: juniorGrantEid,
+          version: 1n,
+          editionHash: hashOf(juniorGrantEid, 1n, juniorGrant),
+        },
+      }),
+    ]);
+    // The revoke is inadmissible, so the senior keeps their role.
+    expect(
+      folded.roster.grants.find((g) => g.member === senior)?.roleIds,
+    ).toEqual([seniorRole.role_id]);
+  });
+
+  it("AUTHORITY-FIRST sibling ordering beats a GROUND rumor id", () => {
+    // Equal-version fork siblings are ordered by RANK before the rumor-id
+    // tiebreak. The id is grindable and authority is not, so ordering by id
+    // alone lets an attacker mine an id that sorts first and have their edition
+    // displace their superior's.
+    //
+    // BOTH siblings must be independently admissible or the ordering decides
+    // nothing — so the fork mints a position the junior may genuinely mint
+    // (below their own), and the id is ground until it sorts FIRST. That is the
+    // attack, executed.
+    const junior = getPublicKey(generateSecretKey());
+    const juniorGrantEid = grantLocator(CID, hex32(junior));
+    const juniorRoleId = random32();
+    const targetRoleId = random32();
+    const juniorRole = roleAt(juniorRoleId, 9, Permissions.MANAGE_ROLES);
+    const juniorGrant = { member: junior, role_ids: [juniorRole.role_id] };
+    const juniorCitation = {
+      entityId: juniorGrantEid,
+      version: 1n,
+      editionHash: hashOf(juniorGrantEid, 1n, juniorGrant),
+    };
+
+    const ownerVersion = roleAt(targetRoleId, 3, Permissions.MANAGE_MESSAGES);
+    const ownerEdition = edition({
+      vsk: VSK_ROLE,
+      entityId: targetRoleId,
+      content: ownerVersion,
+    });
+
+    // Grind a nonce until the fork's rumor id sorts BELOW the owner's, so an
+    // id-only tiebreak would seat the fork.
+    let forkEdition = ownerEdition;
+    for (let nonce = 0; nonce < 2000; nonce++) {
+      const candidate = edition({
+        vsk: VSK_ROLE,
+        entityId: targetRoleId,
+        // Position 12 is BELOW the junior's own 9, so they may genuinely mint
+        // it — which is what makes both siblings admissible and leaves the
+        // ordering as the only thing deciding.
+        content: { ...roleAt(targetRoleId, 12, 0n), nonce },
+        author: junior,
+        authority: juniorCitation,
+      });
+      if (candidate.rumorId < ownerEdition.rumorId) {
+        forkEdition = candidate;
+        break;
+      }
+    }
+    expect(forkEdition.rumorId < ownerEdition.rumorId).toBe(true);
+
+    const folded = fold([
+      edition({ vsk: VSK_ROLE, entityId: juniorRoleId, content: juniorRole }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: juniorGrantEid,
+        content: juniorGrant,
+      }),
+      ownerEdition,
+      forkEdition,
+    ]);
+    // The owner outranks everyone, so the owner's version wins despite the
+    // fork's lower id.
+    expect(
+      folded.roster.roles.find((r) => r.roleId === bytesToHex(targetRoleId))
+        ?.position,
+    ).toBe(3);
+  });
+
+  it("terminates on a revocation cycle rather than spinning", () => {
+    // Two admins each revoking the other, at the same version. The freeze
+    // latches are what guarantee this settles at all — and settles the SAME way
+    // whichever order the editions arrive in.
+    const a = getPublicKey(generateSecretKey());
+    const b = getPublicKey(generateSecretKey());
+    const aEid = grantLocator(CID, hex32(a));
+    const bEid = grantLocator(CID, hex32(b));
+    const adminRoleId = random32();
+    const adminRole = roleAt(adminRoleId, 1, Permissions.MANAGE_ROLES);
+    const aGrant = { member: a, role_ids: [adminRole.role_id] };
+    const bGrant = { member: b, role_ids: [adminRole.role_id] };
+
+    const events = [
+      edition({ vsk: VSK_ROLE, entityId: adminRoleId, content: adminRole }),
+      edition({ vsk: VSK_GRANT, entityId: aEid, content: aGrant }),
+      edition({ vsk: VSK_GRANT, entityId: bEid, content: bGrant }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: aEid,
+        content: { member: a, role_ids: [] },
+        author: b,
+        version: 2n,
+        prevHash: hashOf(aEid, 1n, aGrant),
+        authority: {
+          entityId: bEid,
+          version: 1n,
+          editionHash: hashOf(bEid, 1n, bGrant),
+        },
+      }),
+      edition({
+        vsk: VSK_GRANT,
+        entityId: bEid,
+        content: { member: b, role_ids: [] },
+        author: a,
+        version: 2n,
+        prevHash: hashOf(bEid, 1n, bGrant),
+        authority: {
+          entityId: aEid,
+          version: 1n,
+          editionHash: hashOf(aEid, 1n, aGrant),
+        },
+      }),
+    ];
+    const forward = fold(events);
+    _resetControlMemosForTests();
+    const reversed = fold([...events].reverse());
+    const shape = (f: typeof forward) =>
+      f.roster.grants
+        .map((g) => `${g.member}:${g.roleIds.join(",")}`)
+        .sort()
+        .join("|");
+    expect(shape(reversed)).toBe(shape(forward));
   });
 });
 

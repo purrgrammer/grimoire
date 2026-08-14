@@ -6,6 +6,7 @@ import { parseOpenCommand } from "@/lib/open-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
+import { parseConcordCommand } from "@/lib/concord-parser";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
 import { parseZapCommand } from "@/lib/zap-parser";
@@ -572,6 +573,30 @@ export const manPages: Record<string, ManPageEntry> = {
       const parsed = parseOpenCommand(args);
       return parsed;
     },
+  },
+  concord: {
+    name: "concord",
+    section: "1",
+    synopsis: "concord [community]",
+    description:
+      "Open a Concord community — end-to-end encrypted community channels (CORD-01…08). Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. A community has no shareable public address to type, because its id is a hex commitment and its channels live at derived pubkeys, so the argument matches against your OWN decrypted community list by name or id prefix. With no argument it opens the first community you hold.",
+    options: [
+      {
+        flag: "[community]",
+        description:
+          "Community name (case-insensitive, prefix-matched) or a community_id prefix. Omit to open the first one.",
+      },
+    ],
+    examples: [
+      "concord                                   Open your first Concord community",
+      "concord Bitcoin Builders                  Open by name",
+      "concord bitcoin                           Open by name prefix",
+      "concord 3fa2c1                            Open by community_id prefix",
+    ],
+    seeAlso: ["chat", "profile"],
+    appId: "concord",
+    category: "Nostr",
+    argParser: async (args: string[]) => parseConcordCommand(args),
   },
   chat: {
     name: "chat",

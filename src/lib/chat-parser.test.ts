@@ -1,6 +1,20 @@
 import { describe, it, expect } from "vitest";
 import { nip19 } from "nostr-tools";
 import { parseChatCommand } from "./chat-parser";
+import type { ProtocolIdentifier } from "@/types/chat";
+
+/**
+ * Narrow a parsed identifier to one of the relay-backed shapes that carry
+ * `value`/`relays`. Not every variant does — a Concord channel id addresses
+ * nothing on its own and carries neither — so reading them off the bare union
+ * would be a lie the compiler is right to reject.
+ */
+function relayBacked(id: ProtocolIdentifier) {
+  if (id.type === "concord") {
+    throw new Error("expected a relay-backed identifier, got concord");
+  }
+  return id;
+}
 
 describe("parseChatCommand", () => {
   describe("NIP-29 relay groups", () => {
@@ -58,8 +72,10 @@ describe("parseChatCommand", () => {
       const result = await parseChatCommand(["relay.example.com'bitcoin-dev"]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("bitcoin-dev");
-      expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      expect(relayBacked(result.identifier).value).toBe("bitcoin-dev");
+      expect(relayBacked(result.identifier).relays).toEqual([
+        "wss://relay.example.com",
+      ]);
     });
 
     it("should parse NIP-29 group with different relay when split", async () => {
@@ -69,16 +85,18 @@ describe("parseChatCommand", () => {
       ]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("bitcoin-dev");
-      expect(result.identifier.relays).toEqual(["wss://relay.example.com"]);
+      expect(relayBacked(result.identifier).value).toBe("bitcoin-dev");
+      expect(relayBacked(result.identifier).relays).toEqual([
+        "wss://relay.example.com",
+      ]);
     });
 
     it("should parse NIP-29 group from nos.lol", async () => {
       const result = await parseChatCommand(["nos.lol'welcome"]);
 
       expect(result.protocol).toBe("nip-29");
-      expect(result.identifier.value).toBe("welcome");
-      expect(result.identifier.relays).toEqual(["wss://nos.lol"]);
+      expect(relayBacked(result.identifier).value).toBe("welcome");
+      expect(relayBacked(result.identifier).relays).toEqual(["wss://nos.lol"]);
     });
   });
 
@@ -146,13 +164,13 @@ describe("parseChatCommand", () => {
       const result = await parseChatCommand([naddr]);
 
       expect(result.protocol).toBe("nip-53");
-      expect(result.identifier.value).toEqual({
+      expect(relayBacked(result.identifier).value).toEqual({
         kind: 30311,
         pubkey:
           "0000000000000000000000000000000000000000000000000000000000000001",
         identifier: "podcast-episode-42",
       });
-      expect(result.identifier.relays).toEqual([
+      expect(relayBacked(result.identifier).relays).toEqual([
         "wss://relay1.example.com",
         "wss://relay2.example.com",
       ]);

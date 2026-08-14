@@ -33,6 +33,9 @@ const ChatViewer = lazy(() =>
 const GroupListViewer = lazy(() =>
   import("./GroupListViewer").then((m) => ({ default: m.GroupListViewer })),
 );
+const ConcordViewer = lazy(() =>
+  import("./ConcordViewer").then((m) => ({ default: m.ConcordViewer })),
+);
 const SpellsViewer = lazy(() =>
   import("./SpellsViewer").then((m) => ({ default: m.SpellsViewer })),
 );
@@ -218,6 +221,14 @@ export function WindowRenderer({ window, onClose }: WindowRendererProps) {
             />
           );
         }
+        break;
+      case "concord":
+        content = (
+          <ConcordViewer
+            communityId={window.props.communityId}
+            channelId={window.props.channelId}
+          />
+        );
         break;
       case "spells":
         content = <SpellsViewer />;

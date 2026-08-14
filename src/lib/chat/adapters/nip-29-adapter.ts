@@ -13,6 +13,7 @@ import type {
   Conversation,
   Message,
   ProtocolIdentifier,
+  GroupIdentifier,
   ChatCapabilities,
   LoadMessagesOptions,
   Participant,
@@ -66,7 +67,10 @@ export class Nip29Adapter extends ChatProtocolAdapter {
    *   - relay.example.com'bitcoin-dev (wss:// prefix is optional)
    *   - naddr1... (kind 39000 group metadata address)
    */
-  parseIdentifier(input: string): ProtocolIdentifier | null {
+  // Narrower than the base signature on purpose: this adapter only ever yields
+  // a group identifier, and saying so lets callers read `.value`/`.relays`
+  // without narrowing a union that now includes shapes carrying neither.
+  parseIdentifier(input: string): GroupIdentifier | null {
     // Try naddr format first (kind 39000 group metadata)
     if (input.startsWith("naddr1")) {
       try {

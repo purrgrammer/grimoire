@@ -29,6 +29,7 @@ import type {
 import { CHAT_KINDS } from "@/types/chat";
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
+import { ConcordAdapter } from "@/lib/chat/adapters/concord-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
@@ -1489,6 +1490,8 @@ function getAdapter(protocol: ChatProtocol): ChatProtocolAdapter {
     //   return new Nip28Adapter();
     case "nip-53":
       return new Nip53Adapter();
+    case "concord":
+      return new ConcordAdapter();
     default:
       throw new Error(`Unsupported protocol: ${protocol}`);
   }

@@ -39,7 +39,7 @@ export interface CommunityState {
 }
 
 /**
- * Per-community head floor, carried between folds IN SESSION MEMORY.
+ * Per-entity head floor, carried between folds IN SESSION MEMORY.
  *
  * This is the refuse-downgrade anchor (CORD-04 §1): with it, a relay that
  * withholds the middle of an entity's chain cannot push a higher dangling
@@ -47,15 +47,35 @@ export interface CommunityState {
  * refetches instead. Without a floor a fresh client legitimately accepts the
  * highest head it is served, which is what makes a compaction bootstrap work.
  *
- * Session-only, deliberately: a persisted floor would outlive the held-epoch set
- * it was minted under, and an entity floored under keys we no longer hold can
- * never be re-served, so it would report `incomplete` forever.
+ * **RAISED, never replaced.** `folded.heads` carries an entry only for entities
+ * whose head PASSED the authority gate this round, so assigning it wholesale
+ * deletes the floor of every entity that was gap-held or authority-rejected —
+ * and the next fold then treats those as a fresh joiner and seats an edition
+ * below the version it already accepted. Concretely: an admin revokes a mod's
+ * grant (v2), the admin is later demoted, so v2 becomes inadmissible and v1 is
+ * below-floor — the entity settles nothing and drops out of `folded.heads`. Lose
+ * the floor and the next fold re-seats the REVOKED v1 grant. `incomplete` does
+ * not catch it either, deliberately: a served-but-rejected entity is not a
+ * data-availability problem.
+ *
+ * **KEYED BY EPOCH.** A Refounding legitimately drops entities, and a floor that
+ * never forgets would flag them `incomplete` forever and re-arm a full sweep
+ * every cycle. Re-keying on `rootEpoch` re-baselines on adoption, so a floor
+ * minted under a superseded founding cannot out-anchor the new epoch's compacted
+ * snapshot.
+ *
+ * Session-only: a persisted floor would outlive the held-epoch set it was minted
+ * under, and an entity floored under keys we no longer hold can never be
+ * re-served.
  */
-const heads = new Map<string, Map<string, EntityHead>>();
+const floors = new Map<string, Map<string, EntityHead>>();
+
+const floorKey = (community: Community) =>
+  `${community.idHex}@${community.rootEpoch}`;
 
 /** Test seam: forget every carried head floor. */
 export function _resetConcordStateForTests(): void {
-  heads.clear();
+  floors.clear();
 }
 
 /**
@@ -67,10 +87,7 @@ export function _resetConcordStateForTests(): void {
 export async function foldStoredControl(
   community: Community,
   plane: ControlPlaneView = currentControlPlane(community),
-): Promise<FoldedControl> {
-  const editions = openControlEditions(
-    await queryPlane(community.idHex, "control"),
-  );
+): Promise<FoldedControl | undefined> {
   // The current epoch's rumor-id set, so a compaction snapshot outranks
   // readable-but-superseded fragments from older epochs. Only a Refounded
   // community has one; for the rest the whole set folds by chain walk.
@@ -78,16 +95,34 @@ export async function foldStoredControl(
     community.rootEpoch > 0n
       ? await readControlSnapshot(community.idHex, plane.group.pk)
       : undefined;
+  // A Refounded community anchors on its compaction snapshot, so WAIT for it
+  // rather than folding once by old-root contiguity and again correctly — the
+  // two disagree about which editions outrank which. Without the wait, an
+  // old-epoch fragment at a lower version anchors the chain walk and is seated
+  // in preference to the compacted head: superseded metadata, a stale banlist,
+  // a revoked grant.
+  if (community.rootEpoch > 0n && !snapshotIds) return undefined;
 
+  const editions = openControlEditions(
+    await queryPlane(community.idHex, "control"),
+  );
+  const key = floorKey(community);
   const folded = foldControlState(
     editions,
     community.id,
     community.owner,
-    heads.get(community.idHex),
+    floors.get(key),
     snapshotIds,
   );
-  // Carry the heads forward as the next fold's floor.
-  heads.set(community.idHex, folded.heads);
+
+  // Raise the floor from this fold's accepted heads — upward only. See the
+  // `floors` docstring for what replacing it would undo.
+  let floor = floors.get(key);
+  if (!floor) floors.set(key, (floor = new Map()));
+  for (const [eid, head] of folded.heads) {
+    const prior = floor.get(eid);
+    if (!prior || head.version > prior.version) floor.set(eid, head);
+  }
   return folded;
 }
 
@@ -107,6 +142,15 @@ export async function syncCommunityState(
   await sweepControl(community, plane.group);
 
   const folded = await foldStoredControl(community, plane);
+  if (!folded) {
+    // A Refounded community with no compaction snapshot recorded yet. The sweep
+    // above records it when a wrap arrives fresh; until then there is nothing
+    // safe to fold, and rendering an empty channel list beats rendering a stale
+    // one anchored on an old-epoch fragment.
+    throw new Error(
+      "Waiting for this community's compaction snapshot — try again in a moment.",
+    );
+  }
   if (folded.incomplete.length > 0) {
     console.debug(
       `[concord] ${community.idHex.slice(0, 8)}: ${folded.incomplete.length} entity(ies) unaccounted for — next sweep re-reads whole`,

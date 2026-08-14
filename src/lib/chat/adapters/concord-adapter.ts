@@ -1,0 +1,362 @@
+/**
+ * Concord chat adapter — one channel of one community (CORD-03).
+ *
+ * Unlike every other adapter here, this one does NOT subscribe to relays for
+ * messages. Concord traffic is opaque kind-1059 wraps, so a wrap is decrypted
+ * once at ingest and the recovered rumor is stored; the timeline then reads back
+ * out of Dexie as an ordinary indexed query with no crypto. `loadMessages`
+ * therefore emits from the STORE and kicks a backfill alongside it.
+ *
+ * The read half only: `sendMessage` and `sendReaction` land in phase 6. They
+ * throw for now rather than no-op, so a composer wired up early fails loudly
+ * instead of silently swallowing a message.
+ */
+
+import { BehaviorSubject, Observable } from "rxjs";
+import type { AddressPointer, EventPointer } from "nostr-tools/nip19";
+
+import { foldTimeline, type OpenedChat } from "@/lib/concord/chat";
+import { filterEpochCutoff } from "@/lib/concord/chat";
+import { channelsView } from "@/lib/concord/channels";
+import { bytesToHex } from "@/lib/concord/derive";
+import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
+import type { Channel, Community } from "@/lib/concord/types";
+import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
+import { syncChannel } from "@/services/concord-channel-sync";
+import { loadStoredCommunities } from "@/services/concord-communities";
+import { queryChannelRumors } from "@/services/concord-rumor-store";
+import { foldStoredControl } from "@/services/concord-state";
+import accountManager from "@/services/accounts";
+import type {
+  ChatCapabilities,
+  ConcordIdentifier,
+  Conversation,
+  LoadMessagesOptions,
+  Message,
+  Participant,
+  ProtocolIdentifier,
+} from "@/types/chat";
+import type { NostrEvent } from "@/types/nostr";
+import type { EmojiTag } from "@/lib/emoji-helpers";
+
+import { ChatProtocolAdapter, type SendMessageOptions } from "./base-adapter";
+
+/** How many timeline rows one page holds. */
+const PAGE_ROWS = 200;
+
+/** `communityId:channelId` — the Conversation id, and the emitter key. */
+const conversationIdOf = (id: ConcordIdentifier) =>
+  `${id.communityId}:${id.channelId}`;
+
+function parseConversationId(conversationId: string): ConcordIdentifier | null {
+  const [communityId, channelId] = conversationId.split(":");
+  if (!/^[0-9a-f]{64}$/.test(communityId ?? "")) return null;
+  if (!/^[0-9a-f]{64}$/.test(channelId ?? "")) return null;
+  return { type: "concord", communityId, channelId };
+}
+
+export class ConcordAdapter extends ChatProtocolAdapter {
+  readonly protocol = "concord" as const;
+  readonly type = "group" as const;
+
+  /** Per-conversation emitters, so a backfill can push into a live timeline. */
+  private timelines = new Map<string, BehaviorSubject<Message[]>>();
+
+  /**
+   * A Concord channel is never addressed by a typed string.
+   *
+   * Both ids are raw hex and both are meaningless without held key material, so
+   * there is nothing a user could usefully type — the community viewer builds
+   * the identifier from the folded channel list instead. Accepting
+   * `<community>:<channel>` here is for round-tripping a Conversation id, not a
+   * user-facing syntax.
+   */
+  parseIdentifier(input: string): ConcordIdentifier | null {
+    return parseConversationId(input.trim().toLowerCase());
+  }
+
+  async resolveConversation(
+    identifier: ProtocolIdentifier,
+  ): Promise<Conversation> {
+    if (identifier.type !== "concord") {
+      throw new Error(
+        `Concord adapter cannot handle identifier type: ${identifier.type}`,
+      );
+    }
+    const { community, channel, folded } = await this.resolve(identifier);
+    const participants: Participant[] = [
+      { pubkey: folded.ownerHex, role: "admin" },
+    ];
+
+    return {
+      id: conversationIdOf(identifier),
+      type: "group",
+      protocol: "concord",
+      title: channel.name,
+      participants,
+      metadata: {
+        // The community's name leads the description: the window title carries
+        // the channel, and the reader needs to know which community it is in.
+        description: [
+          folded.metadata?.name ?? community.name,
+          folded.metadata?.description,
+        ]
+          .filter(Boolean)
+          .join(" — "),
+        encrypted: true,
+      },
+      unreadCount: 0,
+    };
+  }
+
+  /**
+   * Emit this channel's timeline from the store, and backfill alongside.
+   *
+   * The store is the read surface, so the first emission is whatever a previous
+   * session already decrypted — a cold channel paints immediately and fills in.
+   */
+  loadMessages(
+    conversation: Conversation,
+    options?: LoadMessagesOptions,
+  ): Observable<Message[]> {
+    const identifier = parseConversationId(conversation.id);
+    if (!identifier) return new Observable<Message[]>((s) => s.complete());
+
+    let subject = this.timelines.get(conversation.id);
+    if (!subject) {
+      subject = new BehaviorSubject<Message[]>([]);
+      this.timelines.set(conversation.id, subject);
+    }
+    const emitter = subject;
+
+    void (async () => {
+      try {
+        // Paint from the store first, then backfill and repaint. A user
+        // reopening a channel should not stare at an empty pane while a relay
+        // round-trips.
+        emitter.next(await this.read(identifier, options));
+        await this.backfill(identifier);
+        emitter.next(await this.read(identifier, options));
+      } catch (error) {
+        console.warn("[concord] could not load the timeline:", error);
+      }
+    })();
+
+    return emitter.asObservable();
+  }
+
+  async loadMoreMessages(
+    conversation: Conversation,
+    before: number,
+  ): Promise<Message[]> {
+    const identifier = parseConversationId(conversation.id);
+    if (!identifier) return [];
+    // Backfill the relays BELOW the oldest row we hold, then re-read the store:
+    // the page the caller wants may only exist on the wire.
+    await this.backfill(identifier, before);
+    return this.read(identifier, { before });
+  }
+
+  getCapabilities(): ChatCapabilities {
+    return {
+      supportsEncryption: true,
+      supportsThreading: true,
+      // Grimoire reads moderation state and honours it; it never issues any.
+      // Armada stays the client that bans, kicks, promotes and rotates.
+      supportsModeration: false,
+      supportsRoles: true,
+      supportsGroupManagement: false,
+      // A community is joined in Armada. Grimoire enters through the member's
+      // own Community List and nothing else.
+      canCreateConversations: false,
+      requiresRelay: true,
+    };
+  }
+
+  async sendMessage(
+    _conversation: Conversation,
+    _content: string,
+    _options?: SendMessageOptions,
+  ): Promise<void> {
+    throw new Error("Sending to a Concord channel is not wired up yet.");
+  }
+
+  async sendReaction(
+    _conversation: Conversation,
+    _messageId: string,
+    _emoji: string,
+    _customEmoji?: EmojiTag,
+  ): Promise<void> {
+    throw new Error("Reacting in a Concord channel is not wired up yet.");
+  }
+
+  /**
+   * A replied-to message is always already in the store: a Concord reply cites a
+   * RUMOR id, which exists nowhere else. Nothing to fetch, and no relay to fetch
+   * it from — an id we do not hold means a message in a channel or epoch this
+   * member cannot read, which is ordinary rather than an error.
+   */
+  async loadReplyMessage(
+    conversation: Conversation,
+    pointer: EventPointer | AddressPointer,
+  ): Promise<NostrEvent | null> {
+    if (!("id" in pointer)) return null;
+    const identifier = parseConversationId(conversation.id);
+    if (!identifier) return null;
+    const rows = await queryChannelRumors(
+      identifier.communityId,
+      identifier.channelId,
+      { limit: PAGE_ROWS * 4 },
+    );
+    const hit = rows.find((row) => row.rumorId === pointer.id);
+    return hit ? (toEvent(hit) as NostrEvent) : null;
+  }
+
+  cleanup(conversationId: string): void {
+    super.cleanup(conversationId);
+    this.timelines.get(conversationId)?.complete();
+    this.timelines.delete(conversationId);
+  }
+
+  cleanupAll(): void {
+    super.cleanupAll();
+    for (const subject of this.timelines.values()) subject.complete();
+    this.timelines.clear();
+  }
+
+  // ── Internals ──────────────────────────────────────────────────────────────
+
+  /** The community, the channel view, and the control fold behind them. */
+  private async resolve(identifier: ConcordIdentifier): Promise<{
+    community: Community;
+    channel: Channel;
+    folded: FoldedControl;
+  }> {
+    const pubkey = accountManager.active$.value?.pubkey;
+    if (!pubkey) throw new Error("No active account");
+
+    const communities = await loadStoredCommunities(pubkey);
+    const community = communities.find(
+      (c) => c.idHex === identifier.communityId,
+    );
+    if (!community) {
+      throw new Error("That community is not in your Community List");
+    }
+    const folded = await foldStoredControl(community);
+    if (!folded) {
+      // A Refounded community whose compaction snapshot has not been recorded
+      // yet. Folding by old-root contiguity would anchor on a superseded
+      // fragment, so there is nothing safe to resolve against.
+      throw new Error(
+        "Waiting for this community's compaction snapshot — try again in a moment.",
+      );
+    }
+    const channel = channelsView(community, folded).find(
+      (ch) => ch.idHex === identifier.channelId,
+    );
+    if (!channel) {
+      // Either the channel was deleted, or it is private and this member holds
+      // no key for it. Both read the same from here, and both mean the same
+      // thing to the reader: there is nothing to show.
+      throw new Error("That channel is not readable with the keys you hold");
+    }
+    return { community, channel, folded };
+  }
+
+  private async backfill(
+    identifier: ConcordIdentifier,
+    before?: number,
+  ): Promise<void> {
+    const { community, channel } = await this.resolve(identifier);
+    await syncChannel(community, channel, { until: before });
+  }
+
+  /** Read the store, fold, and map to grimoire's `Message` shape. */
+  private async read(
+    identifier: ConcordIdentifier,
+    options?: LoadMessagesOptions,
+  ): Promise<Message[]> {
+    const { community, channel, folded } = await this.resolve(identifier);
+    const rows = await queryChannelRumors(
+      identifier.communityId,
+      identifier.channelId,
+      {
+        limit: options?.limit ?? PAGE_ROWS,
+        ...(options?.before !== undefined ? { until: options.before } : {}),
+      },
+    );
+
+    // The rows carry no epoch — that lives on the wire — so re-attach it from
+    // the channel's current stream for the cutoff filter. Rows sealed under a
+    // retired epoch were already refused at ingest by the decode path; this is
+    // the read-side half, for rows stored before the rotation was adopted.
+    const opened: OpenedChat[] = rows.map((row) => ({
+      ...row,
+      channelIdHex: identifier.channelId,
+      epoch: channel.current.epoch,
+    }));
+
+    const timeline = foldTimeline(filterEpochCutoff(opened, channel), {
+      banned: folded.banned,
+      canDelete: (deleter, author, action) =>
+        deleter !== author &&
+        canActOnMember(
+          folded.roster,
+          deleter,
+          folded.ownerHex,
+          author,
+          Permissions.MANAGE_MESSAGES,
+        ) &&
+        citationSatisfied(folded, community.id, deleter, action?.citation),
+      canSetTimer: (author) =>
+        isAuthorized(
+          folded.roster,
+          author,
+          folded.ownerHex,
+          Permissions.MANAGE_METADATA,
+        ),
+    });
+
+    const conversationId = conversationIdOf(identifier);
+    return timeline.messages.map((ev) => ({
+      id: ev.rumorId,
+      conversationId,
+      author: ev.author,
+      content: ev.content,
+      timestamp: ev.createdAt,
+      type: "user" as const,
+      metadata: { encrypted: true },
+      protocol: "concord" as const,
+      event: toEvent(ev) as NostrEvent,
+    }));
+  }
+}
+
+/**
+ * A stored rumor as grimoire's renderers expect an event.
+ *
+ * `sig` is empty and stays empty: a rumor has none by construction — authorship
+ * was proved by the seal signature at ingest (CORD-01) — and inventing one would
+ * claim a proof that does not exist. Every renderer here reads content, tags,
+ * kind and pubkey; nothing re-verifies.
+ */
+function toEvent(ev: {
+  rumorId: string;
+  author: string;
+  kind: number;
+  content: string;
+  tags: string[][];
+  createdAt: number;
+}) {
+  return {
+    id: ev.rumorId,
+    pubkey: ev.author,
+    kind: ev.kind,
+    content: ev.content,
+    tags: ev.tags,
+    created_at: ev.createdAt,
+    sig: "",
+  };
+}
+
+export { bytesToHex };
