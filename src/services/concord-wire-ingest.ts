@@ -50,13 +50,29 @@ import type { NostrEvent } from "nostr-tools";
  */
 const WRAP_KINDS = new Set([KIND_WRAP]);
 
+/** What one batch actually achieved. */
+export interface WireIngestResult {
+  /**
+   * Wrap ids whose rumors are now DURABLY stored. This is what the parked-wrap
+   * drain acks on, and the reason it is a return value rather than a side
+   * effect: anything absent either failed to open or failed to write, and in
+   * both cases the wrap must stay parked.
+   */
+  stored: Set<string>;
+  /**
+   * A store write was ATTEMPTED and failed.
+   *
+   * Distinct from `stored.size === 0`, which is the ordinary case for a batch of
+   * duplicates the seen-memo already knows about. The caller advances a DURABLE
+   * cursor on this batch, so it needs "we dropped something" rather than
+   * "nothing was new" — conflating them either skips the failed events forever
+   * or stalls the cursor on every replay.
+   */
+  failed: boolean;
+}
+
 /**
  * Decode, store, and announce one relay's batch.
- *
- * Returns the ids of the wraps whose rumors are now DURABLY stored — which is
- * what the parked-wrap drain acks on, and the reason it is a return value rather
- * than a side effect. Anything absent from it either failed to open or failed to
- * write, and in both cases the wrap must stay parked.
  *
  * Never throws: this runs inside a socket loop, and a malformed wrap from one
  * relay must not tear down live delivery from the others.
@@ -64,9 +80,9 @@ const WRAP_KINDS = new Set([KIND_WRAP]);
 export async function ingestWireEvents(
   spec: WireSpec,
   events: NostrEvent[],
-): Promise<Set<string>> {
-  const stored = new Set<string>();
-  if (events.length === 0) return stored;
+): Promise<WireIngestResult> {
+  const result: WireIngestResult = { stored: new Set<string>(), failed: false };
+  if (events.length === 0) return result;
 
   const byChannel = new Map<Channel, NostrEvent[]>();
   const controlWraps: NostrEvent[] = [];
@@ -88,8 +104,8 @@ export async function ingestWireEvents(
   }
 
   const scopes = new Set<WireScope>();
-  await ingestChat(spec, byChannel, scopes, stored);
-  await ingestControl(spec, controlWraps, scopes, stored);
+  await ingestChat(spec, byChannel, scopes, result);
+  await ingestControl(spec, controlWraps, scopes, result);
 
   if (toPark.length > 0) {
     // A wrap for a stream we hold no key for: a rekey not caught up with, a
@@ -100,14 +116,14 @@ export async function ingestWireEvents(
   }
 
   if (scopes.size > 0) emitWireScopes(scopes);
-  return stored;
+  return result;
 }
 
 async function ingestChat(
   spec: WireSpec,
   byChannel: Map<Channel, NostrEvent[]>,
   scopes: Set<WireScope>,
-  stored: Set<string>,
+  result: WireIngestResult,
 ): Promise<void> {
   for (const [channel, wraps] of byChannel) {
     try {
@@ -123,13 +139,17 @@ async function ingestChat(
         communityIdHex,
         opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
       );
-      if (!written) continue;
+      if (!written) {
+        result.failed = true;
+        continue;
+      }
       // `wrapId` is an envelope fact, present only while the wrap is in hand —
       // which it is here. A row without one simply never gets acked, and the
       // age prune is what eventually clears it.
-      for (const ev of opened) if (ev.wrapId) stored.add(ev.wrapId);
+      for (const ev of opened) if (ev.wrapId) result.stored.add(ev.wrapId);
       scopes.add(channelScope(channel.idHex));
     } catch (error) {
+      result.failed = true;
       console.warn("[concord] wire chat ingest failed:", error);
     }
   }
@@ -139,7 +159,7 @@ async function ingestControl(
   spec: WireSpec,
   wraps: NostrEvent[],
   scopes: Set<WireScope>,
-  stored: Set<string>,
+  result: WireIngestResult,
 ): Promise<void> {
   if (wraps.length === 0) return;
 
@@ -169,8 +189,10 @@ async function ingestControl(
           refounded: target.refounded,
         });
         if (written) {
-          for (const ev of opened) stored.add(ev.wrapId);
+          for (const ev of opened) result.stored.add(ev.wrapId);
           scopes.add(controlScope(idHex));
+        } else {
+          result.failed = true;
         }
       }
       // Record the junk BEFORE memoing it: the memo is what stops the sweep ever
@@ -183,6 +205,7 @@ async function ingestControl(
       // being decrypted again, so it must not outrun the store.
       if (written) notePlaneWrapsSeen(unseen.map((w) => w.id));
     } catch (error) {
+      result.failed = true;
       console.warn("[concord] wire control ingest failed:", error);
     }
   }
@@ -204,7 +227,7 @@ export async function drainParkedWraps(spec: WireSpec): Promise<void> {
 
   // Straight back through the same door, so a drained wrap takes exactly the
   // path a live one does — including both plane fences.
-  const stored = await ingestWireEvents(spec, parked);
+  const { stored } = await ingestWireEvents(spec, parked);
 
   // Ack ONLY what is durably stored. A wrap that failed to open, or opened and
   // failed to write, stays parked: the drain is retried on every spec change and

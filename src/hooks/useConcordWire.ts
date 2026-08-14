@@ -102,12 +102,29 @@ export function useConcordWire(communities: Community[]): void {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // The refcount owns the wire's LIFETIME, and nothing else. It deliberately has
+  // no deps: React runs a cleanup before every re-run, so folding this into the
+  // spec effect below would drop the count to zero on each revision bump —
+  // `stopWire` would tear down every relay's standing REQ (and re-auth it on a
+  // gating relay) each time one control edition arrived live, and the per-relay
+  // diff would never get to do its job because `loops` was already cleared.
   useEffect(() => {
     mounted += 1;
+    return () => {
+      mounted -= 1;
+      // The last Concord window closing is the only reason to drop the sockets.
+      if (mounted === 0) stopWire();
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const inputs = await buildInputs(communities);
+        // No teardown here on purpose: `setWireSpec` diffs per relay, so a spec
+        // that did not change costs nothing and one that grew a channel restarts
+        // only the relays that actually gained a filter.
         if (!cancelled) setWireSpec(buildWireSpec(inputs));
       } catch (error) {
         console.warn("[concord] could not start the wire:", error);
@@ -115,9 +132,6 @@ export function useConcordWire(communities: Community[]): void {
     })();
     return () => {
       cancelled = true;
-      mounted -= 1;
-      // The last Concord window closing is the only reason to drop the sockets.
-      if (mounted === 0) stopWire();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, revision]);

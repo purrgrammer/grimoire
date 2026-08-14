@@ -201,12 +201,19 @@ function runRound(
     // before `subscribe()` has returned, if the relay refuses synchronously.
     const held: { sub?: Subscription } = {};
 
+    // The cursor advances ONLY over events the store accepted. It is durable, so
+    // moving it past a write that failed skips those events on this relay
+    // forever — but stalling it on an ordinary batch of duplicates would replay
+    // the same window every round, which is why ingest reports "a write failed"
+    // separately from "nothing was new".
     const flushReplay = async () => {
       if (replay.length === 0) return;
       const batch = replay;
       replay = [];
-      await ingestWireEvents(getSpec(), batch);
-      writeCursor(relay, Math.max(...batch.map((e) => e.created_at)));
+      const { failed } = await ingestWireEvents(getSpec(), batch);
+      if (!failed) {
+        writeCursor(relay, Math.max(...batch.map((e) => e.created_at)));
+      }
     };
 
     const finish = () => {
@@ -248,9 +255,10 @@ function runRound(
         state.sawAnything = true;
         if (eosed) {
           // Live. Ingest immediately — latency is the point.
-          void ingestWireEvents(getSpec(), [message.event]).then(() =>
-            writeCursor(relay, message.event.created_at),
-          );
+          const live = message.event;
+          void ingestWireEvents(getSpec(), [live]).then(({ failed }) => {
+            if (!failed) writeCursor(relay, live.created_at);
+          });
         } else {
           replay.push(message.event);
           if (replay.length >= REPLAY_BATCH_MAX) void flushReplay();

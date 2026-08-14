@@ -18,7 +18,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 
-import { controlScope, onWireScope } from "@/lib/concord/wire-bus";
+import {
+  controlScope,
+  emitWireScopes,
+  onWireScope,
+} from "@/lib/concord/wire-bus";
 import type { Community } from "@/lib/concord/types";
 import accountManager from "@/services/accounts";
 import {
@@ -153,6 +157,16 @@ export function useConcordCommunity(
           });
         }
         const next = await syncCommunityState(community);
+        // Tell the wire the store moved. On a COLD community this is the only
+        // thing that gets it chat filters at all: the wire builds them from the
+        // stored fold, which is empty until this sweep lands, and its own
+        // `c2ctl:` rings only happen once it is already subscribed. Without
+        // this, live delivery for a community you just joined waits for a
+        // control edition to happen by, or for a remount.
+        //
+        // It cannot loop: the ring rebuilds the spec from the store, and only a
+        // later WRITE rings again.
+        emitWireScopes([controlScope(community.idHex)]);
         if (!cancelled) {
           setLoaded((prev) => ({
             idHex: community.idHex,
