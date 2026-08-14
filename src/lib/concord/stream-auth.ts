@@ -279,6 +279,19 @@ export function noteRelayChallenged(url: string): void {
   state.challengedAt = Date.now();
 }
 
+/**
+ * Whether this relay has issued a challenge on its live socket.
+ *
+ * The sweep's post-refusal gate needs this on its own: `streamAuthsSettled`
+ * reports settled for a relay that never challenged, which is right for the
+ * "should I hold this REQ" question and wrong for "has the gate been answered
+ * yet" — the second one is asked only after a refusal has already proved the
+ * relay gates.
+ */
+export function relayHasChallenged(url: string): boolean {
+  return relayAuth.get(keyFor(url))?.challenged === true;
+}
+
 /** Reset a relay's auth state — a reopened socket is a fresh session. */
 export function resetRelayAuth(url: string): void {
   relayAuth.delete(keyFor(url));

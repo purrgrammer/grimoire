@@ -63,6 +63,18 @@ export default tseslint.config(
           message:
             "Vite cannot analyse a template-literal dynamic import, so the chunk is never bundled and it fails in production. Use the library's own lazy registry or import.meta.glob.",
         },
+        {
+          // A Concord plane REQ is authored by DERIVED stream keys, never the
+          // user, so applesauce's auth handling is actively wrong for it: with
+          // waitForAuth on it either deadlocks or resubscribes at round-trip
+          // speed (~17k REQ/s, measured), and requestEvents() swallows the
+          // auth-required CLOSED into an empty array, so the sweep cannot tell
+          // a gated plane from an absent one. Both failures are silent.
+          selector:
+            'Property[key.name="waitForAuth"][value.value=true], Property[key.name="waitForAuth"][value.type="Identifier"]',
+          message:
+            "Concord plane reads must keep waitForAuth: false — applesauce re-authenticates as the USER, which never satisfies a stream-authored filter. Go through planeRequest() in @/lib/concord/plane-request.",
+        },
       ],
 
       // --- Rules newly promoted to error by eslint 10 / react-hooks 7 ---

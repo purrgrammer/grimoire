@@ -35,7 +35,24 @@ export type MockRelayBehaviour =
    * an AUTH for an arbitrary derived pubkey, and serves the re-issued REQ on the
    * same socket.
    */
-  | { kind: "nip42-gated"; events?: NostrEvent[] };
+  | { kind: "nip42-gated"; events?: NostrEvent[] }
+  /**
+   * Serves `events` through REAL filter semantics — `authors`, `kinds`,
+   * `since`, `until` (inclusive), newest-first, capped at `limit` and at the
+   * relay's own `pageLimit`.
+   *
+   * The paged behaviours are what a history walker actually has to survive, and
+   * the other modes here all answer every REQ identically, which cannot
+   * exercise a cursor at all. `pageLimit` models a relay whose page cap is
+   * LOWER than what the client asked for — the case that makes "did that drain
+   * the second?" unanswerable.
+   */
+  | {
+      kind: "paged";
+      events: NostrEvent[];
+      /** The relay's own cap, applied after `limit`. Default: no extra cap. */
+      pageLimit?: number;
+    };
 
 export interface MockRelay {
   url: string;
@@ -133,6 +150,21 @@ export async function startMockRelay(
         return;
       }
 
+      if (behaviour.kind === "paged") {
+        const filters = message.slice(2) as MockFilter[];
+        const matched = new Map<string, NostrEvent>();
+        for (const filter of filters) {
+          for (const event of servePage(behaviour, filter)) {
+            matched.set(event.id, event);
+          }
+        }
+        for (const event of matched.values()) {
+          socket.send(JSON.stringify(["EVENT", subId, event]));
+        }
+        socket.send(JSON.stringify(["EOSE", subId]));
+        return;
+      }
+
       switch (behaviour.kind) {
         case "normal":
         case "close-after-eose":
@@ -167,6 +199,38 @@ export async function startMockRelay(
         server.close(() => resolve());
       }),
   };
+}
+
+interface MockFilter {
+  authors?: string[];
+  kinds?: number[];
+  since?: number;
+  until?: number;
+  limit?: number;
+}
+
+/**
+ * One page for one filter: matching events newest-first, `until` INCLUSIVE
+ * (as NIP-01 has it — the inclusivity is what makes a same-second wall
+ * possible), truncated by the filter's `limit` and then by the relay's own cap.
+ */
+function servePage(
+  behaviour: { events: NostrEvent[]; pageLimit?: number },
+  filter: MockFilter,
+): NostrEvent[] {
+  const matched = behaviour.events
+    .filter((e) => {
+      if (filter.authors && !filter.authors.includes(e.pubkey)) return false;
+      if (filter.kinds && !filter.kinds.includes(e.kind)) return false;
+      if (filter.since !== undefined && e.created_at < filter.since)
+        return false;
+      if (filter.until !== undefined && e.created_at > filter.until)
+        return false;
+      return true;
+    })
+    .sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id));
+  const asked = filter.limit ?? matched.length;
+  return matched.slice(0, Math.min(asked, behaviour.pageLimit ?? asked));
 }
 
 /** An unsigned-but-shaped event, good enough for relay plumbing tests. */

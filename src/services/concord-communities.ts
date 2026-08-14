@@ -23,14 +23,17 @@ import {
   type CommunityList,
   type CommunityListEntry,
 } from "@/lib/concord/community-list";
+import { heldControlPlanes } from "@/lib/concord/control-address";
 import {
   clearGroupKeyPersistence,
   initGroupKeyPersistence,
 } from "@/lib/concord/group-key-persist";
+import { registerStreamKeys } from "@/lib/concord/stream-auth";
 import type { Community } from "@/lib/concord/types";
 import { requestEvents } from "@/lib/relay-subscription";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
+import { startConcordStreamAuth } from "@/services/concord-stream-auth";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -208,6 +211,10 @@ export async function syncCommunities(
   await initGroupKeyPersistence();
 
   const stored = await loadStoredCommunities(pubkey);
+  // Register before the fetch, not after: the vault may already hold every
+  // community, and the stream keys have to be in the registry before anything
+  // sweeps a plane.
+  registerControlAddresses(stored);
   if (!signer?.nip44) return { status: "no-decryptor", communities: stored };
 
   const event = await fetchListEvent(pubkey);
@@ -227,7 +234,35 @@ export async function syncCommunities(
 
   const live = liveEntries(list);
   await replaceVault(pubkey, live, event);
-  return { status: "ok", communities: await loadStoredCommunities(pubkey) };
+  const communities = await loadStoredCommunities(pubkey);
+  registerControlAddresses(communities);
+  return { status: "ok", communities };
+}
+
+/**
+ * Register every held epoch's Control Plane address for NIP-42, scoped to the
+ * community's own relays, and start the socket-lifecycle wiring.
+ *
+ * EVERY held epoch, not just the current one: an address missing from the
+ * registry reports "not yet registered" to the auth gate rather than "accounted
+ * for", which blocks a sweep instead of letting it proceed. A SPLIT epoch
+ * registers ADDRESS-ONLY — its signing secret derives from a `control_root`
+ * only staff hold (CORD-02 §2) — so on a gating relay that plane is simply
+ * unreadable, and reporting that beats waiting forever for an ack that cannot
+ * come.
+ */
+export function registerControlAddresses(communities: Community[]): void {
+  startConcordStreamAuth();
+  for (const community of communities) {
+    if (community.relays.length === 0) continue;
+    const keys = heldControlPlanes(community).map((plane) => ({
+      pk: plane.group.pk,
+      ...(plane.canAuthenticate && plane.group.sk
+        ? { sk: plane.group.sk }
+        : {}),
+    }));
+    registerStreamKeys(keys, community.relays);
+  }
 }
 
 /**
