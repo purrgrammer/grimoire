@@ -126,6 +126,49 @@ describe("publishWrap", () => {
     expect(r.accepted().map((e) => e.id)).toContain(event.id);
   }, 10_000);
 
+  it("keeps publishing on a socket that has already been refused once", async () => {
+    // THE reason this module does not use `relay.event()`.
+    //
+    // applesauce wraps every non-AUTH publish in
+    // `waitForAuth(authRequiredForPublish$, …)`. One `auth-required` OK arms
+    // `receivedAuthRequiredForEvent`, and every later publish on that Relay
+    // then hangs until `authenticated$` turns true — which never happens here,
+    // because Concord answers NIP-42 as the STREAM (`relay.event(evt, "AUTH")`
+    // never sets `authenticationResponse$`). The flag clears only when the
+    // socket reopens, and the wire deliberately keeps it open, so ONE early
+    // refusal would wedge sending for the whole session.
+    //
+    // Measured before the fix: the second publish's EVENT frame never reached
+    // the relay at all. Swap `publishToRelay` back to `relay.event()` and this
+    // goes red.
+    const r = await relay({ kind: "nip42-gated" });
+    registerStreamKeys([group], [r.url]);
+    const socket = concordPool.relay(r.url);
+    const watching = socket.challenge$.subscribe((challenge) => {
+      if (challenge) void authenticateStreams(socket).catch(() => undefined);
+    });
+
+    // Refused: the socket opens on this publish, so the challenge has not been
+    // answered yet. This is the frame that arms the flag.
+    await expect(publishWrap([r.url], wrap(), 1_000)).rejects.toThrow();
+
+    // The challenge arrives on the same socket and the stream answers it —
+    // exactly what `concord-stream-auth.ts` does in the app.
+    await planeRequest(r.url, { kinds: [KIND_WRAP] }, { pool: concordPool });
+    const deadline = Date.now() + 3_000;
+    while (!r.authedPubkeys().includes(group.pk) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    watching.unsubscribe();
+    expect(r.authedPubkeys()).toContain(group.pk);
+
+    // Same Relay instance, now authenticated. The retry must go out.
+    const event = wrap();
+    const outcome = await publishWrap([r.url], event, 3_000);
+    expect(outcome.accepted).toHaveLength(1);
+    expect(r.accepted().map((e) => e.id)).toContain(event.id);
+  }, 15_000);
+
   it("is refused by a gating relay with no stream AUTH", async () => {
     const r = await relay({ kind: "nip42-gated" });
     await expect(publishWrap([r.url], wrap(), 5_000)).rejects.toThrow(

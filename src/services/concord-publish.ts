@@ -29,6 +29,16 @@
  * path. Armada reaches for the raw socket in the same spot and for the same
  * reason.
  *
+ * The cost, and it is a real coupling rather than an aside: `multiplex()`
+ * bypasses applesauce's watchTower, which is the only thing that populates
+ * `challenge$`. On a socket NOTHING ELSE has opened, no challenge is ever
+ * observed, `concord-stream-auth.ts` never answers one, and a gating relay
+ * refuses every send with "still authenticating" forever. In practice the wire
+ * holds a standing REQ on every community relay and sending requires a Concord
+ * window — which is what starts the wire — so the socket is always live by the
+ * time anyone can type. Anything that sends OUTSIDE that arrangement has to
+ * open a plane read first.
+ *
  * **3. First ack wins, not all acks.** A member's relay set is routinely three
  * relays where one is dead, and holding a send open on the dead one is exactly
  * what makes a chat client feel broken.

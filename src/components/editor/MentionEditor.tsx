@@ -34,11 +34,16 @@ export type { EmojiTag, BlobAttachment, SerializedContent } from "./types";
 
 export interface MentionEditorProps {
   placeholder?: string;
+  /**
+   * Called with the composed message. May return a promise: the editor clears
+   * optimistically and RESTORES what was typed if that promise rejects, so a
+   * refused send never costs the user their text.
+   */
   onSubmit?: (
     content: string,
     emojiTags: EmojiTag[],
     blobAttachments: BlobAttachment[],
-  ) => void;
+  ) => void | Promise<void>;
   searchProfiles: (query: string) => Promise<ProfileSearchResult[]>;
   searchEmojis?: (query: string) => Promise<EmojiSearchResult[]>;
   searchCommands?: (query: string) => Promise<ChatAction[]>;
@@ -91,10 +96,25 @@ export const MentionEditor = forwardRef<
 
       const { text, emojiTags, blobAttachments } =
         serializeInlineContent(editorInstance);
-      if (text) {
-        cb(text, emojiTags, blobAttachments);
-        editorInstance.commands.clearContent();
-      }
+      if (!text) return;
+
+      // Clear optimistically — waiting on the send before clearing makes every
+      // message feel laggy — but keep what was typed so a REFUSED send can put
+      // it back. A send can fail for ordinary reasons (a relay that will not
+      // take it, a rate limit, a permission), and losing a paragraph to a
+      // toast is the worst possible answer.
+      const typed = editorInstance.getJSON();
+      const sent = cb(text, emojiTags, blobAttachments);
+      editorInstance.commands.clearContent();
+
+      void Promise.resolve(sent).catch(() => {
+        // Never clobber something typed in the meantime — the message is in the
+        // toast either way, and stealing the composer back would be worse.
+        if (editorInstance.isDestroyed) return;
+        if (serializeInlineContent(editorInstance).text) return;
+        editorInstance.commands.setContent(typed);
+        editorInstance.commands.focus("end");
+      });
     }, []);
 
     const handleSubmitRef = useRef(handleSubmit);

@@ -857,7 +857,9 @@ export function ChatViewer({
       const errorMessage =
         error instanceof Error ? error.message : "Failed to send message";
       toast.error(errorMessage);
-      // Don't clear replyTo so user can retry
+      // Don't clear replyTo so user can retry — and rethrow, which is what puts
+      // the typed text back in the composer (see MentionEditor's handleSubmit).
+      throw error;
     } finally {
       setIsSending(false);
     }
@@ -1383,16 +1385,16 @@ export function ChatViewer({
                 // Open upload dialog with pasted files
                 openUpload(files);
               }}
-              onSubmit={(content, emojiTags, blobAttachments) => {
-                if (content.trim()) {
-                  handleSend(
-                    content,
-                    replyToRef.current,
-                    emojiTags,
-                    blobAttachments,
-                  );
-                }
-              }}
+              onSubmit={(content, emojiTags, blobAttachments) =>
+                content.trim()
+                  ? handleSend(
+                      content,
+                      replyToRef.current,
+                      emojiTags,
+                      blobAttachments,
+                    )
+                  : undefined
+              }
               className="flex-1 min-w-0"
             />
             <Button

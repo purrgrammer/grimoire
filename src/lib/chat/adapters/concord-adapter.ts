@@ -54,6 +54,7 @@ import { publishWrap } from "@/services/concord-publish";
 import { loadStoredCommunities } from "@/services/concord-communities";
 import {
   queryChannelRumors,
+  readChannelRumor,
   writeChatRumors,
 } from "@/services/concord-rumor-store";
 import { foldStoredControl } from "@/services/concord-state";
@@ -380,12 +381,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     if (!("id" in pointer)) return null;
     const identifier = parseConversationId(conversation.id);
     if (!identifier) return null;
-    const rows = await queryChannelRumors(
+    const hit = await readChannelRumor(
       identifier.communityId,
       identifier.channelId,
-      { limit: PAGE_ROWS * 4 },
+      pointer.id,
     );
-    const hit = rows.find((row) => row.rumorId === pointer.id);
     return hit ? (toEvent(hit) as NostrEvent) : null;
   }
 
@@ -497,7 +497,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     // Accepted somewhere. Store it exactly as an ingested wrap would be, so the
     // row a reload reads back is identical to the one the wire writes when our
     // own wrap comes round again.
-    await writeChatRumors(community.idHex, [
+    const written = await writeChatRumors(community.idHex, [
       {
         rumorId: built.rumor.id,
         author: account.pubkey,
@@ -510,22 +510,35 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         channel: channel.idHex,
       },
     ]);
+    // The message IS delivered — a relay took it — but locally invisible, and a
+    // silent resolve here would be the same lie publish-first exists to avoid.
+    // Say so, and let the composer keep the text.
+    if (!written.ok) {
+      throw new Error(
+        "Sent, but this device could not save it — it may not appear here until it is fetched again.",
+      );
+    }
     emitWireScopes([channelScope(channel.idHex)]);
   }
 
-  /** One stored rumor of this channel, by id. */
+  /**
+   * One stored rumor of this channel, by id.
+   *
+   * A direct read, NOT a slice of the timeline: the viewer pages backwards
+   * without limit, so a windowed lookup would refuse to reply to, react to, or
+   * delete exactly the older messages someone scrolled up to reach.
+   */
   private async findRumor(
     identifier: ConcordIdentifier,
     rumorId: string,
   ): Promise<
     { pubkey: string; kind: number; tags: string[][]; id: string } | undefined
   > {
-    const rows = await queryChannelRumors(
+    const hit = await readChannelRumor(
       identifier.communityId,
       identifier.channelId,
-      { limit: PAGE_ROWS * 4 },
+      rumorId,
     );
-    const hit = rows.find((row) => row.rumorId === rumorId);
     return hit
       ? {
           id: hit.rumorId,

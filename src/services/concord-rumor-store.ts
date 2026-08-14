@@ -377,6 +377,33 @@ export async function queryChannelRumors(
   return [...timeline, ...side].map(rowToOpened);
 }
 
+/**
+ * One stored rumor by id, scoped to the channel it must belong to.
+ *
+ * A direct primary-key read rather than a slice of the timeline. Every caller
+ * here is acting on a message the user can SEE — replying to it, reacting to it,
+ * deleting it — and the viewer pages backwards without limit, so any windowed
+ * lookup refuses on exactly the older messages someone scrolled up to find.
+ *
+ * The community and channel are re-checked rather than trusted: the id alone
+ * would let one channel's action name another channel's rumor.
+ */
+export async function readChannelRumor(
+  communityId: string,
+  channelIdHex: string,
+  rumorId: string,
+): Promise<OpenedEvent | undefined> {
+  if (!communityId || !rumorId) return undefined;
+  try {
+    const row = await db.concordRumors.get(rumorId);
+    if (!row || row.communityId !== communityId) return undefined;
+    if (row.channel !== channelIdHex.toLowerCase()) return undefined;
+    return rowToOpened(row);
+  } catch {
+    return undefined;
+  }
+}
+
 // ── The materialized fold ────────────────────────────────────────────────────
 //
 // Re-deriving the whole fold at every boot is wasted work: parsing every stored
