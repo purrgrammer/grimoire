@@ -1,7 +1,8 @@
 /**
  * Concord disappearing messages — CORD-08.
  *
- * Adapted from armada `bc19d1f` (`src/concord/lib/disappearing.ts`), read side
+ * Adapted from armada `bc19d1f` (`src/concord/lib/disappearing.ts`, plus the
+ * NIP-40 helpers it re-exports from `src/lib/nip17/protocol.ts`), read side
  * only: grimoire never sets a community's timer, so the staff mutation and the
  * kind-1740 notice broadcast are not ported. What IS ported is mandatory —
  * CORD-08 §3 obliges every reader to refuse an expired rumor at ingest, never
@@ -25,9 +26,6 @@ import type { CommunityMetadata } from "@/lib/concord/types";
 
 const DAY = 86_400;
 
-/** A plain unsigned integer, the only shape a NIP-40 deadline may take. */
-const DECIMAL = /^(0|[1-9][0-9]*)$/;
-
 /**
  * The community's timer in seconds, 0 = off. Absent, zero, or malformed reads
  * as OFF — a reader MUST NOT guess a default from garbage (CORD-08 §1) — so
@@ -48,32 +46,30 @@ export const NEVER_EXPIRING_CHAT_KINDS: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * The NIP-40 deadline (unix seconds) a rumor carries, `undefined` when it has
- * no `expiration` tag, and `0` when the tag is present but unreadable.
+ * The NIP-40 deadline (unix seconds) carried by these tags, or undefined when
+ * there is none. A malformed / non-finite value is treated as absent rather
+ * than as "expired": a garbage tag must not be able to hide a message.
  *
- * That last case is the deliberate asymmetry with {@link messageExpirationOf},
- * where malformed means OFF. Here the direction of caution reverses: an author
- * who wrote an expiration tag meant the message to disappear, and we cannot
- * tell when, so an unreadable deadline is treated as already past rather than
- * as absent. Failing the other way would display, and persist, content someone
- * asked to have expire.
+ * Parsing is `Number()`-lenient, matching the reference implementation
+ * exactly. Deliberately NOT the strict-decimal treatment `ms` and the edition
+ * machinery get: there the two clients must agree on accept-vs-reject or they
+ * diverge on ordering and on chain identity, whereas here a stricter reader
+ * simply hides a message its peer shows — which is the divergence, not the
+ * fix. Keep this identical to armada.
  */
-export function expirationOf(rumor: {
-  tags: readonly string[][];
-}): number | undefined {
-  const tag = rumor.tags.find((t) => t[0] === "expiration");
-  if (!tag) return undefined;
-  const raw = tag[1];
-  if (raw === undefined || !DECIMAL.test(raw)) return 0;
-  return Number(raw);
+export function expirationOf(tags: readonly string[][]): number | undefined {
+  const raw = tags.find(([name]) => name === "expiration")?.[1];
+  if (raw === undefined) return undefined;
+  const secs = Number(raw);
+  return Number.isFinite(secs) ? secs : undefined;
 }
 
-/** Whether a rumor's own signed deadline has passed at `nowSecs`. */
+/** Whether these tags carry a NIP-40 deadline that has already passed. */
 export function isExpired(
-  rumor: { tags: readonly string[][] },
+  tags: readonly string[][],
   nowSecs: number = Math.floor(Date.now() / 1000),
 ): boolean {
-  const at = expirationOf(rumor);
+  const at = expirationOf(tags);
   return at !== undefined && at <= nowSecs;
 }
 
@@ -100,9 +96,10 @@ export function chatExpiresAt(
 export function timerNoticeSeconds(rumor: {
   tags: readonly string[][];
 }): number | undefined {
-  const raw = rumor.tags.find((t) => t[0] === "timer")?.[1];
-  if (raw === undefined || !DECIMAL.test(raw)) return undefined;
-  return Number(raw);
+  const raw = rumor.tags.find(([name]) => name === "timer")?.[1];
+  if (raw === undefined) return undefined;
+  const secs = Number(raw);
+  return Number.isFinite(secs) && secs >= 0 ? Math.floor(secs) : undefined;
 }
 
 /** Labels for the durations armada's staff UI offers, for rendering a notice. */

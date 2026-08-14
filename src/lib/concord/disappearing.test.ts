@@ -63,28 +63,43 @@ describe("the community timer (CORD-08 §1)", () => {
 
 describe("reading a rumor's own deadline (CORD-08 §3)", () => {
   it("returns undefined when there is no tag", () => {
-    expect(expirationOf({ tags: [] })).toBeUndefined();
-    expect(isExpired({ tags: [] }, 1_000_000)).toBe(false);
+    expect(expirationOf([])).toBeUndefined();
+    expect(isExpired([], 1_000_000)).toBe(false);
   });
 
   it("reads a well-formed deadline and compares inclusively", () => {
-    const rumor = { tags: [["expiration", "1000"]] };
-    expect(expirationOf(rumor)).toBe(1000);
-    expect(isExpired(rumor, 999)).toBe(false);
+    const tags = [["expiration", "1000"]];
+    expect(expirationOf(tags)).toBe(1000);
+    expect(isExpired(tags, 999)).toBe(false);
     // At the boundary the message is gone, not still showing.
-    expect(isExpired(rumor, 1000)).toBe(true);
-    expect(isExpired(rumor, 1001)).toBe(true);
+    expect(isExpired(tags, 1000)).toBe(true);
+    expect(isExpired(tags, 1001)).toBe(true);
   });
 
-  it("treats an UNREADABLE deadline as already past", () => {
-    // The deliberate asymmetry with the community field, where malformed means
-    // off. An author who wrote an expiration tag meant the message to
-    // disappear; we cannot tell when, so we must not keep showing it.
-    for (const bad of ["", "soon", "1e9", "-1", "10.5", " 100 ", "0x64"]) {
-      const rumor = { tags: [["expiration", bad]] };
-      expect(expirationOf(rumor)).toBe(0);
-      expect(isExpired(rumor, 1)).toBe(true);
+  it("treats an UNREADABLE deadline as ABSENT, not as expired", () => {
+    // Armada's rule, and the reason for it: "a garbage tag must not be able to
+    // hide a message". The opposite choice — hiding on a value we cannot read
+    // — makes an unreadable tag into a censorship primitive, and diverges from
+    // every other client's view of the same history.
+    for (const bad of ["soon", "NaN", "later"]) {
+      expect(expirationOf([["expiration", bad]])).toBeUndefined();
+      expect(isExpired([["expiration", bad]], 9_999_999_999)).toBe(false);
     }
+  });
+
+  it("parses leniently, exactly as the reference does", () => {
+    // NOT the strict-decimal treatment `ms` and the edition machinery get.
+    // There, disagreeing on accept-vs-reject forks ordering and chain identity;
+    // here a stricter reader just hides what its peer shows.
+    expect(expirationOf([["expiration", "1e9"]])).toBe(1_000_000_000);
+    expect(expirationOf([["expiration", " 100 "]])).toBe(100);
+    expect(expirationOf([["expiration", "0x64"]])).toBe(100);
+    expect(expirationOf([["expiration", "10.5"]])).toBe(10.5);
+    // `Number("")` is 0, so an empty value reads as a deadline in 1970 and the
+    // message is hidden. Inherited from the reference verbatim; called out
+    // because it is the one input where lenient parsing does hide something.
+    expect(expirationOf([["expiration", ""]])).toBe(0);
+    expect(isExpired([["expiration", ""]], 1)).toBe(true);
   });
 });
 
@@ -123,11 +138,18 @@ describe("the timer notice (CORD-08 §4)", () => {
     expect(timerNoticeSeconds({ tags: [["timer", "0"]] })).toBe(0);
   });
 
-  it("returns undefined for a missing or malformed tag", () => {
+  it("returns undefined for a missing or unreadable tag", () => {
     // An unreadable notice must not be mistaken for "turned it off".
     expect(timerNoticeSeconds({ tags: [] })).toBeUndefined();
     expect(timerNoticeSeconds({ tags: [["timer", "off"]] })).toBeUndefined();
-    expect(timerNoticeSeconds({ tags: [["timer", ""]] })).toBeUndefined();
+    expect(timerNoticeSeconds({ tags: [["timer", "-1"]] })).toBeUndefined();
+  });
+
+  it("floors a fractional value rather than refusing it", () => {
+    // Lenient like the reference: `Number()` then floor, non-negative only.
+    expect(timerNoticeSeconds({ tags: [["timer", "30.9"]] })).toBe(30);
+    // `Number("")` is 0 — an empty value reads as an explicit "off".
+    expect(timerNoticeSeconds({ tags: [["timer", ""]] })).toBe(0);
   });
 
   it("renders the presets the way they were chosen", () => {
