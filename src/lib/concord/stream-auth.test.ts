@@ -157,6 +157,64 @@ describe("stream-key NIP-42", () => {
     expect(gated).toEqual([]);
   });
 
+  it("does not flood a gating relay when some other key is authenticated", async () => {
+    // The sharper half of the same gate, and the reason `waitForAuth: false` is
+    // protection rather than tuning.
+    //
+    // Applesauce's auth retry has no `count`, and its notifier is
+    // `authenticated$.pipe(filter(Boolean), take(1))` over a BehaviorSubject.
+    // So if ANYTHING has authenticated this socket — relay-auth-manager
+    // auto-authenticating the user is the obvious case — the notifier emits
+    // synchronously and the refused REQ resubscribes as fast as the round trip
+    // allows. Measured at ~17k REQ/s against localhost: the same failure class
+    // as the resubscribe loop CLAUDE.md already documents, aimed at someone
+    // else's relay.
+    const streamSk = generateSecretKey();
+    const streamPk = getPublicKey(streamSk);
+    const userSk = generateSecretKey();
+    const r = await relay({ kind: "nip42-gated", events: [] });
+    const p = pool();
+    const rel = p.relay(r.url);
+
+    // Open the socket and take the challenge, then authenticate as the USER —
+    // a key with no bearing on the filter below.
+    await requestEvents([r.url], [{ kinds: [1] }], {
+      pool: p,
+      eventStore: null,
+      timeout: 300,
+      waitForAuth: false,
+    });
+    const challenge = await firstValueFrom(
+      rel.challenge$.pipe(filter(Boolean), timeout(2000)),
+    );
+    await rel.auth(
+      finalizeEvent(
+        {
+          kind: 22242,
+          content: "",
+          tags: [
+            ["relay", r.url],
+            ["challenge", challenge],
+          ],
+          created_at: Math.floor(Date.now() / 1000),
+        },
+        userSk,
+      ),
+    );
+    expect(rel.authenticated).toBe(true);
+
+    // A plane REQ for a stream we have NOT authenticated as. With the opt-out
+    // it is refused once and left alone.
+    const before = r.reqCount();
+    await requestEvents([r.url], [{ kinds: [1059], authors: [streamPk] }], {
+      pool: p,
+      eventStore: null,
+      timeout: 500,
+      waitForAuth: false,
+    });
+    expect(r.reqCount() - before).toBeLessThanOrEqual(2);
+  });
+
   it("does not clobber the socket's single-identity auth state", async () => {
     // applesauce models NIP-42 as ONE identity per socket: `relay.auth()` does
     // `authentication$.next(event)`. Authenticating as N streams through it
