@@ -52,6 +52,14 @@ library and protocol questions — prefer them over recalling API shapes.
 **Never construct your own `EventStore`, `RelayPool`, or `RelayLiveness`** —
 use the singletons in `src/services/`.
 
+> **One exception: Concord plane traffic** (`src/services/concord-relay-pool.ts`).
+> applesauce arms `receivedAuthRequiredForReq` per-`Relay`, before the
+> `!waitForAuth` early return, so a plane REQ that opts out of the auth gate
+> still wedges grimoire's ordinary reads on a shared socket — and the auth
+> manager then re-prompts the signer in a loop. Plane reads therefore get their
+> own pool, and `concord-stream-auth.ts` watches that one. Nothing else may spawn
+> a pool; the kind-13302 Community List stays on the singleton.
+
 ### Window system
 
 Windows render in a recursive binary split layout via `react-mosaic-component`.

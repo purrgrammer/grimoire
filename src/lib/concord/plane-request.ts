@@ -19,6 +19,10 @@
  * So plane reads use `relay.req()` directly, where the CLOSED is a visible
  * message. Nothing here uses `requestEvents`/`pool.request`, and an eslint rule
  * keeps it that way.
+ *
+ * They also use Concord's OWN pool rather than grimoire's singleton — the
+ * auth-required flag that opting out sets is per-`Relay`, so sharing a socket
+ * leaks the refusal into unrelated reads. See `concord-relay-pool.ts`.
  */
 
 import { firstValueFrom, timer } from "rxjs";
@@ -27,7 +31,7 @@ import type { Filter, NostrEvent } from "nostr-tools";
 import { AuthRequiredError, RelayClosedError } from "applesauce-relay";
 import type { RelayPool } from "applesauce-relay";
 
-import defaultPool from "@/services/relay-pool";
+import defaultPool from "@/services/concord-relay-pool";
 
 /** How a plane read ended. */
 export type PlaneReadOutcome =

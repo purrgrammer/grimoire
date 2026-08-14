@@ -39,7 +39,10 @@ import {
   streamPubkeysForRelay,
 } from "@/lib/concord/stream-auth";
 import { normalizeRelayURL } from "@/lib/relay-url";
-import pool from "@/services/relay-pool";
+// Concord's own pool, NOT the singleton: the plane sockets live there, so
+// watching the shared pool would sign 22242s at relays nothing reads Concord
+// from while the plane sockets sat unauthenticated. See `concord-relay-pool.ts`.
+import pool from "@/services/concord-relay-pool";
 
 function safeNormalize(url: string): string {
   try {
