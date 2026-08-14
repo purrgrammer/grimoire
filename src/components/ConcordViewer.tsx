@@ -68,6 +68,24 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     [isMobile],
   );
 
+  // Memoized BY VALUE, not rebuilt per render. ChatViewer keys its conversation
+  // resolution on this object, so a fresh one every render made it re-resolve
+  // and blank the timeline — the flicker on first load, where the community
+  // paints twice (stored fold, then swept).
+  const communityIdHex = community?.idHex;
+  const openChannelIdHex = openChannel?.idHex;
+  const identifier: ConcordIdentifier | undefined = useMemo(
+    () =>
+      communityIdHex && openChannelIdHex
+        ? {
+            type: "concord",
+            communityId: communityIdHex,
+            channelId: openChannelIdHex,
+          }
+        : undefined,
+    [communityIdHex, openChannelIdHex],
+  );
+
   if (status === "loading") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -143,15 +161,6 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
       />
     </div>
   );
-
-  const identifier: ConcordIdentifier | undefined =
-    community && openChannel
-      ? {
-          type: "concord",
-          communityId: community.idHex,
-          channelId: openChannel.idHex,
-        }
-      : undefined;
 
   const headerPrefix = isMobile ? (
     <Button

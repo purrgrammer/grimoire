@@ -168,7 +168,14 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         // is what ChatViewer reads as "still loading".
         const stored = await this.read(identifier, options);
         if (stored.length > 0) this.publish(conversation.id, emitter, stored);
-        await this.backfill(identifier);
+        // Repaint as each relay lands, not once at the end: the first relay to
+        // answer is what the reader is waiting for, and `publish` stays silent
+        // when a page added nothing new.
+        await this.backfill(identifier, undefined, () => {
+          void this.read(identifier, options).then((next) =>
+            this.publish(conversation.id, emitter, next),
+          );
+        });
         // After the backfill an empty answer IS the answer: the channel is
         // empty, and saying so is now honest.
         this.publish(
@@ -327,9 +334,13 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   private async backfill(
     identifier: ConcordIdentifier,
     before?: number,
+    onFresh?: () => void,
   ): Promise<void> {
     const { community, channel } = await this.resolve(identifier);
-    await syncChannel(community, channel, { until: before });
+    await syncChannel(community, channel, {
+      until: before,
+      ...(onFresh ? { onFresh } : {}),
+    });
   }
 
   /** Read the store, fold, and map to grimoire's `Message` shape. */

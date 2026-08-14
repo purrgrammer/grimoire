@@ -43,7 +43,21 @@ export interface ChannelSyncResult {
 export async function syncChannel(
   community: Community,
   channel: Channel,
-  opts: { until?: number; limit?: number; pool?: RelayPool } = {},
+  opts: {
+    until?: number;
+    limit?: number;
+    pool?: RelayPool;
+    /**
+     * Called each time a relay's page has been decoded and stored.
+     *
+     * Progressive on purpose. Waiting for every (relay, stream) pair before
+     * showing anything means the slowest relay sets the time to first message —
+     * and a relay that accepts a REQ and never answers holds the channel on
+     * "Loading messages…" for the full request deadline while another relay
+     * already handed over the history.
+     */
+    onFresh?: (fresh: OpenedChat[]) => void;
+  } = {},
 ): Promise<ChannelSyncResult> {
   const limit = opts.limit ?? PAGE_LIMIT;
   const fresh: OpenedChat[] = [];
@@ -71,21 +85,23 @@ export async function syncChannel(
       }
       if (result.outcome === "eose") answered = true;
       else if (result.outcome === "refused") refused = true;
-      return result.events;
+      if (result.events.length === 0) return;
+
+      // Decode and store THIS page rather than pooling for the round. The decode
+      // memo is keyed by wrap id, so the same wrap served by a second relay
+      // still costs one decrypt.
+      const opened = await openChatBatch(result.events, channel);
+      if (opened.length === 0) return;
+      const stored = await writeChatRumors(
+        community.idHex,
+        opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
+      );
+      if (!stored) return;
+      fresh.push(...opened);
+      opts.onFresh?.(opened);
     }),
   );
 
-  const pages = await Promise.all(reads);
-  // Decode ONCE across the whole round: the memo is keyed by wrap id, so the
-  // same wrap served by three relays costs one decrypt.
-  const opened = await openChatBatch(pages.flat(), channel);
-  if (opened.length > 0) {
-    const stored = await writeChatRumors(
-      community.idHex,
-      opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
-    );
-    if (stored) fresh.push(...opened);
-  }
-
+  await Promise.all(reads);
   return { fresh, answered, refused };
 }

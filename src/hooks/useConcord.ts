@@ -85,6 +85,22 @@ export function useConcordCommunities(): ConcordCommunitiesResult {
   };
 }
 
+/** Whether two folds present the same channel list, in the same order. */
+function sameChannels(
+  a: CommunityState | undefined,
+  b: CommunityState,
+): boolean {
+  if (!a || a.channels.length !== b.channels.length) return false;
+  return a.channels.every(
+    (channel, i) =>
+      channel.idHex === b.channels[i].idHex &&
+      channel.name === b.channels[i].name &&
+      channel.category === b.channels[i].category &&
+      channel.position === b.channels[i].position &&
+      channel.streams.length === b.channels[i].streams.length,
+  );
+}
+
 export interface ConcordCommunityResult {
   state: CommunityState | undefined;
   loading: boolean;
@@ -136,12 +152,16 @@ export function useConcordCommunity(
         }
         const next = await syncCommunityState(community);
         if (!cancelled) {
-          setLoaded({
+          setLoaded((prev) => ({
             idHex: community.idHex,
             nonce,
             swept: true,
-            state: next,
-          });
+            // Reuse the object already painted when the sweep changed nothing.
+            // A fresh `CommunityState` means a fresh `channels` array, which
+            // propagates as new identity to everything downstream — including
+            // the chat identifier — for no actual change.
+            state: sameChannels(prev?.state, next) ? prev!.state : next,
+          }));
         }
       } catch (err) {
         if (!cancelled) {
