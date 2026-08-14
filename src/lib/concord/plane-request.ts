@@ -25,7 +25,7 @@
  * leaks the refusal into unrelated reads. See `concord-relay-pool.ts`.
  */
 
-import { firstValueFrom, timer } from "rxjs";
+import { firstValueFrom, Observable, timer } from "rxjs";
 import { catchError, map, takeUntil, takeWhile, toArray } from "rxjs/operators";
 import type { Filter, NostrEvent } from "nostr-tools";
 import { AuthRequiredError, RelayClosedError } from "applesauce-relay";
@@ -139,4 +139,89 @@ export async function planeRequest(
   );
 
   return { events, outcome, ...(reason !== undefined ? { reason } : {}) };
+}
+
+/** What a standing plane subscription hands its caller. */
+export type PlaneStreamMessage =
+  | { type: "event"; event: NostrEvent }
+  /** Stored history is exhausted; anything after this is a live arrival. */
+  | { type: "eose" }
+  /** The stream is over. Always the last message, whatever ended it. */
+  | { type: "ended"; outcome: PlaneReadOutcome; reason?: string };
+
+/**
+ * The STANDING sibling of {@link planeRequest} — the wire's door.
+ *
+ * Same two disciplines, same reasons (see the module docstring): the auth gate
+ * is opted out of, and a refusal must stay distinguishable from an empty plane.
+ * The difference is that this one does not end at EOSE — EOSE is reported as a
+ * boundary and the subscription keeps running, which is the entire point of a
+ * live subscription.
+ *
+ * Never errors. applesauce THROWS a refused CLOSED rather than emitting it (an
+ * empirical finding, pinned by `plane-request.test.ts`), so the classification
+ * happens here and the caller sees one terminal `ended` message either way — a
+ * loop that has to know applesauce's throw semantics to tell "refused" from
+ * "the relay went away" is a loop that will get it wrong.
+ *
+ * `reconnect` and `resubscribe` stay off, exactly as in the one-shot. Healing is
+ * the round loop's job, with backoff — applesauce's `resubscribe` retries a
+ * CLOSED with no delay and no count, which measured ~17k REQ/s against a relay
+ * that refuses.
+ */
+export function planeStream(
+  relayUrl: string,
+  filters: Filter[],
+  options: PlaneRequestOptions = {},
+): Observable<PlaneStreamMessage> {
+  const pool = options.pool ?? defaultPool;
+
+  return new Observable<PlaneStreamMessage>((subscriber) => {
+    const messages = pool.relay(relayUrl).req(filters, {
+      // See the module docstring. Changing any of these reintroduces a
+      // silent-failure mode that has already been measured.
+      waitForAuth: false,
+      resubscribe: false,
+      reconnect: false,
+    });
+
+    const inner = messages.subscribe({
+      next: (message) => {
+        if (message.type === "EVENT") {
+          subscriber.next({ type: "event", event: message.event });
+        } else if (message.type === "EOSE") {
+          subscriber.next({ type: "eose" });
+        } else if (message.type === "CLOSED") {
+          subscriber.next({
+            type: "ended",
+            outcome: message.reason?.startsWith("auth-required")
+              ? "refused"
+              : "closed",
+            ...(message.reason !== undefined ? { reason: message.reason } : {}),
+          });
+          subscriber.complete();
+        }
+      },
+      error: (error: unknown) => {
+        const outcome: PlaneReadOutcome =
+          error instanceof AuthRequiredError
+            ? "refused"
+            : error instanceof RelayClosedError
+              ? "closed"
+              : "error";
+        subscriber.next({
+          type: "ended",
+          outcome,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        subscriber.complete();
+      },
+      complete: () => {
+        subscriber.next({ type: "ended", outcome: "closed" });
+        subscriber.complete();
+      },
+    });
+
+    return () => inner.unsubscribe();
+  });
 }

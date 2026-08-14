@@ -312,6 +312,20 @@ export function notePlaneWrapsSeen(ids: string[]): void {
   if (seenWraps.size !== before) schedulePersist();
 }
 
+/**
+ * Narrow a batch to the wraps neither transport has already processed.
+ *
+ * Shared with the wire on purpose: a wrap decrypted by the sweep must never be
+ * re-decrypted by a standing subscription, or a quiet rotation's replay re-pays
+ * the full NIP-44 open plus Schnorr verify for every wrap in the overlap window.
+ */
+export async function unseenPlaneWraps(
+  wraps: NostrEvent[],
+): Promise<NostrEvent[]> {
+  await loadMemos();
+  return wraps.filter((w) => !seenWraps.has(w.id) && !junkWraps.has(w.id));
+}
+
 /** Test seam: forget every verdict and memo, session and persisted. */
 export function _resetPlaneSweepForTests(): void {
   seenWraps.clear();
@@ -391,7 +405,10 @@ const AUTH_WAIT_MS = 8_000;
  * `streamAuthsSettled`, which reports settled for a relay that never challenged
  * and would let the retry fire straight back into the same refusal.
  */
-async function whenAuthAnswered(url: string, pubkeys: string[]): Promise<void> {
+export async function whenAuthAnswered(
+  url: string,
+  pubkeys: string[],
+): Promise<void> {
   const deadline = Date.now() + authWaitMs;
   for (;;) {
     if (relayHasChallenged(url) && streamAuthsSettled(url, pubkeys)) return;

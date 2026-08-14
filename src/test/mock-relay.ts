@@ -63,8 +63,25 @@ export type MockRelayBehaviour =
 
 export interface MockRelay {
   url: string;
+  /**
+   * Push an event to every subscription currently open, as a LIVE arrival
+   * (post-EOSE).
+   *
+   * Without this the mock can only answer a one-shot: every behaviour above
+   * serves its stored events and EOSEs. A standing subscription's entire
+   * purpose is what happens after that, so nothing about the wire's live path —
+   * ingest latency, the quiet-rotation watchdog, the bus ring — is testable
+   * without a relay that can speak first.
+   */
+  push: (event: NostrEvent) => void;
   /** REQ frames received, for asserting a client isn't flooding. */
   reqCount: () => number;
+  /**
+   * Every filter this relay has been asked for, in arrival order. A resume
+   * cursor is only observable here — the events a relay serves say nothing
+   * about the `since` that was asked for.
+   */
+  reqFilters: () => Array<Record<string, unknown>>;
   /**
    * Pubkeys that have authenticated, unioned across connections
    * (`nip42-gated` only). Gating itself is per-connection; this is a union
@@ -80,11 +97,15 @@ export async function startMockRelay(
 ): Promise<MockRelay> {
   const server = new WebSocketServer({ port: 0 });
   let reqs = 0;
+  const seenFilters: Array<Record<string, unknown>> = [];
   const allAuthed = new Set<string>();
 
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
+
+  /** Every open subscription, so `push` can reach them. */
+  const live = new Set<{ socket: import("ws").WebSocket; subId: string }>();
 
   server.on("connection", (socket) => {
     // Per-connection auth state. The challenge is minted once and stays valid
@@ -95,6 +116,10 @@ export async function startMockRelay(
     if (behaviour.kind === "nip42-gated") {
       socket.send(JSON.stringify(["AUTH", challenge]));
     }
+
+    socket.on("close", () => {
+      for (const entry of live) if (entry.socket === socket) live.delete(entry);
+    });
 
     socket.on("message", (raw) => {
       let message: unknown;
@@ -127,10 +152,25 @@ export async function startMockRelay(
         return;
       }
 
+      if (message[0] === "CLOSE") {
+        for (const entry of live) {
+          if (entry.socket === socket && entry.subId === message[1]) {
+            live.delete(entry);
+          }
+        }
+        return;
+      }
+
       if (message[0] !== "REQ") return;
 
       reqs++;
-      const subId = message[1];
+      for (const filter of message.slice(2)) {
+        seenFilters.push(filter as Record<string, unknown>);
+      }
+      const subId = message[1] as string;
+      // A REQ that is not refused leaves a standing subscription behind, which
+      // is what `push` delivers to. Refusing branches below return early.
+      live.add({ socket, subId });
 
       if (behaviour.kind === "nip42-gated") {
         // Every `authors` entry must be authenticated on THIS connection —
@@ -141,6 +181,11 @@ export async function startMockRelay(
         ).flatMap((f) => f.authors ?? []);
         const missing = wanted.filter((pk) => !authed.has(pk));
         if (missing.length > 0) {
+          for (const entry of live) {
+            if (entry.socket === socket && entry.subId === subId) {
+              live.delete(entry);
+            }
+          }
           socket.send(
             JSON.stringify([
               "CLOSED",
@@ -189,6 +234,11 @@ export async function startMockRelay(
           break;
 
         case "auth-required":
+          for (const entry of live) {
+            if (entry.socket === socket && entry.subId === subId) {
+              live.delete(entry);
+            }
+          }
           socket.send(
             JSON.stringify(["CLOSED", subId, "auth-required: need auth"]),
           );
@@ -202,7 +252,13 @@ export async function startMockRelay(
 
   return {
     url: `ws://localhost:${port}`,
+    push: (event: NostrEvent) => {
+      for (const { socket, subId } of live) {
+        socket.send(JSON.stringify(["EVENT", subId, event]));
+      }
+    },
     reqCount: () => reqs,
+    reqFilters: () => [...seenFilters],
     authedPubkeys: () => [...allAuthed],
     close: () =>
       new Promise<void>((resolve) => {
