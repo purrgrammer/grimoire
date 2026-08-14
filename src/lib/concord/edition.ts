@@ -153,9 +153,11 @@ export function parseEdition(opened: OpenedEvent): ParsedEdition {
   // that silently vanishes for every fresh joiner at the next Refounding.
   //
   // Checked whenever the seal form is KNOWN, which is any event still holding
-  // its wrap. A stored rumor has no envelope at all and is waved through here
-  // — which is only safe once the store enforces this rule at INGEST. Until
-  // that exists, the plaintext-seal requirement holds on wire events alone.
+  // its wrap. A stored rumor has no envelope at all and is waved through here,
+  // which is safe because `writeOpened` (concord-rumor-store.ts) enforces the
+  // same rule at INGEST against the plane whose keys opened the wrap — so a
+  // rumor of this kind being in the store already means it arrived
+  // plaintext-sealed. Removing that fence re-opens this hole.
   if (
     opened.sealKind !== undefined &&
     opened.sealKind !== KIND_SEAL_PLAINTEXT
