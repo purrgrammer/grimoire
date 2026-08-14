@@ -1,0 +1,269 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  finalizeEvent,
+  generateSecretKey,
+  getPublicKey,
+} from "nostr-tools/pure";
+import { nip44 } from "nostr-tools";
+
+import {
+  bytesToHex,
+  communityIdOf,
+  hex32,
+  random32,
+} from "@/lib/concord/derive";
+import { KIND_COMMUNITY_LIST } from "@/lib/concord/kinds";
+import type {
+  CommunityList,
+  CommunityListEntry,
+  JoinMaterial,
+} from "@/lib/concord/community-list";
+import type { NostrEvent } from "@/types/nostr";
+
+// The vault must be readable with no network and no relay selection at all.
+const requestEvents = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/relay-subscription", () => ({ requestEvents }));
+vi.mock("@/services/relay-selection", () => ({
+  selectRelaysForFilter: vi.fn(async () => ({
+    relays: ["wss://outbox.example"],
+    reasoning: [],
+    isOptimized: true,
+  })),
+}));
+vi.mock("@/services/event-store", () => ({ default: {} }));
+
+const {
+  _resetDecryptMemoForTests,
+  clearCommunities,
+  loadStoredCommunities,
+  syncCommunities,
+} = await import("./concord-communities");
+const { default: db } = await import("./db");
+
+const sk = generateSecretKey();
+const pubkey = getPublicKey(sk);
+const selfKey = nip44.getConversationKey(sk, pubkey);
+/** The real signer capability, exactly as an account exposes it. */
+const signer = {
+  nip44: {
+    decrypt: async (_pk: string, ct: string) => nip44.decrypt(ct, selfKey),
+  },
+};
+
+function joinMaterial(name: string): JoinMaterial {
+  const owner = bytesToHex(random32());
+  const salt = random32();
+  return {
+    community_id: bytesToHex(communityIdOf(hex32(owner), salt)),
+    owner,
+    owner_salt: bytesToHex(salt),
+    community_root: bytesToHex(random32()),
+    root_epoch: 0,
+    channels: [],
+    relays: ["wss://community.example"],
+    name,
+  };
+}
+
+function entry(jm: JoinMaterial, addedAt = 1000): CommunityListEntry {
+  return {
+    community_id: jm.community_id,
+    seed: jm,
+    current: jm,
+    added_at: addedAt,
+  };
+}
+
+/** A genuine kind-13302: the list JSON, NIP-44 self-encrypted, signed. */
+function listEvent(list: CommunityList, createdAt = 1_700_000_000): NostrEvent {
+  return finalizeEvent(
+    {
+      kind: KIND_COMMUNITY_LIST,
+      content: nip44.encrypt(JSON.stringify(list), selfKey),
+      tags: [],
+      created_at: createdAt,
+    },
+    sk,
+  ) as NostrEvent;
+}
+
+beforeEach(async () => {
+  await db.concordCommunities.clear();
+  _resetDecryptMemoForTests();
+  requestEvents.mockReset();
+});
+
+describe("syncCommunities", () => {
+  it("decrypts the list and mirrors the live memberships", async () => {
+    const alpha = joinMaterial("Alpha");
+    const beta = joinMaterial("Beta");
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(alpha), entry(beta)], tombstones: [] }),
+    ]);
+
+    const result = await syncCommunities(pubkey, signer);
+    expect(result.status).toBe("ok");
+    expect(result.communities.map((c) => c.name)).toEqual(["Alpha", "Beta"]);
+    // And they survive without a signer or a relay — the point of mirroring.
+    expect((await loadStoredCommunities(pubkey)).map((c) => c.name)).toEqual([
+      "Alpha",
+      "Beta",
+    ]);
+  });
+
+  it("drops a tombstoned membership from the mirror", async () => {
+    const alpha = joinMaterial("Alpha");
+    const gone = joinMaterial("Gone");
+    requestEvents.mockResolvedValue([
+      listEvent({
+        entries: [entry(alpha), entry(gone)],
+        tombstones: [{ community_id: gone.community_id, removed_at: 5000 }],
+      }),
+    ]);
+    const { communities } = await syncCommunities(pubkey, signer);
+    expect(communities.map((c) => c.name)).toEqual(["Alpha"]);
+  });
+
+  it("removes a community the user has since left", async () => {
+    // The replace is a delete-then-put in one transaction; without the delete
+    // a left community would linger in the vault forever.
+    const alpha = joinMaterial("Alpha");
+    const beta = joinMaterial("Beta");
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(alpha), entry(beta)], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    requestEvents.mockResolvedValue([
+      listEvent(
+        {
+          entries: [entry(alpha), entry(beta)],
+          tombstones: [{ community_id: beta.community_id, removed_at: 9000 }],
+        },
+        1_700_000_100,
+      ),
+    ]);
+    const { communities } = await syncCommunities(pubkey, signer);
+    expect(communities.map((c) => c.name)).toEqual(["Alpha"]);
+  });
+
+  it("takes the newest event when a relay serves two copies", async () => {
+    const old = joinMaterial("Old");
+    const fresh = joinMaterial("Fresh");
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(old)], tombstones: [] }, 1_700_000_000),
+      listEvent({ entries: [entry(fresh)], tombstones: [] }, 1_700_000_500),
+    ]);
+    const { communities } = await syncCommunities(pubkey, signer);
+    expect(communities.map((c) => c.name)).toEqual(["Fresh"]);
+  });
+
+  it("decrypts a given list event only once", async () => {
+    const decrypt = vi.fn(signer.nip44.decrypt);
+    const event = listEvent({
+      entries: [entry(joinMaterial("Alpha"))],
+      tombstones: [],
+    });
+    requestEvents.mockResolvedValue([event]);
+    await syncCommunities(pubkey, { nip44: { decrypt } });
+    await syncCommunities(pubkey, { nip44: { decrypt } });
+    expect(decrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it("NEVER clears the vault when the list will not decrypt", async () => {
+    // The community_root and channel keys live in that document: a wrongful
+    // empty looks exactly like leaving every community at once.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(joinMaterial("Alpha"))], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    requestEvents.mockResolvedValue([
+      {
+        ...listEvent({ entries: [], tombstones: [] }, 1_700_000_900),
+        content: "garbage",
+      },
+    ]);
+    const result = await syncCommunities(pubkey, signer);
+    expect(result.status).toBe("decrypt-failed");
+    expect(result.communities.map((c) => c.name)).toEqual(["Alpha"]);
+  });
+
+  it("retries a transient decrypt failure rather than memoizing it", async () => {
+    const event = listEvent({
+      entries: [entry(joinMaterial("Alpha"))],
+      tombstones: [],
+    });
+    requestEvents.mockResolvedValue([event]);
+    const decrypt = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("signer asleep"))
+      .mockImplementation(signer.nip44.decrypt);
+
+    expect((await syncCommunities(pubkey, { nip44: { decrypt } })).status).toBe(
+      "decrypt-failed",
+    );
+    expect((await syncCommunities(pubkey, { nip44: { decrypt } })).status).toBe(
+      "ok",
+    );
+  });
+
+  it("returns the stored vault untouched with no NIP-44 signer", async () => {
+    // A read-only account, or a remote signer still connecting: the
+    // communities must not blank while it wakes up.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(joinMaterial("Alpha"))], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    const result = await syncCommunities(pubkey, {});
+    expect(result.status).toBe("no-decryptor");
+    expect(result.communities.map((c) => c.name)).toEqual(["Alpha"]);
+    expect(requestEvents).toHaveBeenCalledTimes(1); // no pointless fetch
+  });
+
+  it("keeps the vault when no relay serves a list", async () => {
+    // Silence is not proof of absence — the relays may simply not carry it.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(joinMaterial("Alpha"))], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    requestEvents.mockResolvedValue([]);
+    const result = await syncCommunities(pubkey, signer);
+    expect(result.status).toBe("ok");
+    expect(result.communities.map((c) => c.name)).toEqual(["Alpha"]);
+  });
+
+  it("keeps one account's vault out of another's", async () => {
+    // The rows carry decrypted community_roots, so they are keyed by viewer.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(joinMaterial("Alpha"))], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    const other = getPublicKey(generateSecretKey());
+    expect(await loadStoredCommunities(other)).toEqual([]);
+    await clearCommunities(other);
+    expect(await loadStoredCommunities(pubkey)).toHaveLength(1);
+    await clearCommunities(pubkey);
+    expect(await loadStoredCommunities(pubkey)).toEqual([]);
+  });
+
+  it("drops a stored row whose owner commitment no longer verifies", async () => {
+    const jm = joinMaterial("Alpha");
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(jm)], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    const row = (
+      await db.concordCommunities.where("pubkey").equals(pubkey).toArray()
+    )[0];
+    const tampered = row.entry as CommunityListEntry;
+    tampered.current = { ...tampered.current, owner: bytesToHex(random32()) };
+    await db.concordCommunities.put({ ...row, entry: tampered });
+
+    expect(await loadStoredCommunities(pubkey)).toEqual([]);
+  });
+});

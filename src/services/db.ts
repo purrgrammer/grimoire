@@ -133,6 +133,59 @@ export interface CachedEmojiSet {
   updatedAt: number;
 }
 
+/**
+ * One Concord membership, as decrypted out of the viewer's kind-13302 list.
+ *
+ * Keyed by `[pubkey+idHex]`, never by community id alone: the row holds a
+ * decrypted `community_root` and private-channel keys, so one account must
+ * never read another's vault, and account removal needs a column to wipe by.
+ *
+ * The RAW list entry is stored, not a rehydrated `Community` — the document is
+ * cross-client and carries fields this version doesn't understand, and
+ * rehydration is pure and cheap enough to redo on every read.
+ */
+export interface ConcordCommunityRow {
+  pubkey: string; // The viewer whose list this came from
+  idHex: string; // community_id, lowercase hex
+  entry: unknown; // CommunityListEntry, verbatim
+  name: string; // Join-time preview name, for lookup without rehydrating
+  listEventId: string; // The kind 13302 this was decrypted from
+  listCreatedAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A decrypted Concord rumor. Rumors only, never wraps: the wrap is opened once
+ * at ingest and the rumor its author signed is what persists, so a chat read is
+ * an ordinary indexed query with no crypto. `communityId` is in every index and
+ * MUST be in every query — it is what keeps one community's planes out of
+ * another's. Populated from phase 5.
+ */
+export interface ConcordRumorRow {
+  id: string;
+  communityId: string;
+  kind: number;
+  channel?: string;
+  created_at: number;
+  pubkey: string;
+  content: string;
+  tags: string[][];
+}
+
+/** Control-snapshot rumor-id sets, per community epoch. Populated from phase 4. */
+export interface ConcordSnapshotRow {
+  communityId: string;
+  controlPk: string;
+  rumorIds: string[];
+  updatedAt: number;
+}
+
+/** Small opaque Concord blobs (currently only the groupKey derivation memo). */
+export interface ConcordKvRow {
+  key: string;
+  value: unknown;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -149,6 +202,10 @@ class GrimoireDb extends Dexie {
   grimoireZaps!: Table<GrimoireZap>;
   userEmojiLists!: Table<CachedUserEmojiList>;
   emojiSets!: Table<CachedEmojiSet>;
+  concordCommunities!: Table<ConcordCommunityRow>;
+  concordRumors!: Table<ConcordRumorRow>;
+  concordSnapshots!: Table<ConcordSnapshotRow>;
+  concordKv!: Table<ConcordKvRow>;
 
   constructor(name: string) {
     super(name);
@@ -431,6 +488,31 @@ class GrimoireDb extends Dexie {
       nsiteMetadata: "&hash",
       userEmojiLists: "&pubkey",
       emojiSets: "&address",
+    });
+
+    // Version 20: Concord — decrypted membership vault, rumor store, snapshots
+    this.version(20).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
+      concordCommunities: "&[pubkey+idHex], pubkey",
+      concordRumors:
+        "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+      concordSnapshots: "&[communityId+controlPk], communityId",
+      concordKv: "&key",
     });
   }
 }
