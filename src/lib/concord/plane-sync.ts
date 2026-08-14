@@ -710,17 +710,27 @@ async function runControlScope(
   }
 
   if (outcome.truncated) scopeTruncated.set(scope, true);
-  if (outcome.answered) {
+  // An empty answer from a relay whose stream AUTHs are STILL unacked after the
+  // retry is a refused read, not an exhausted plane — recording it as reached
+  // would report coverage this sweep never established.
+  const settled = streamAuthsSettled(relayUrl, [group.pk]);
+  if (outcome.answered && (settled || outcome.total > 0)) {
     scopeReached.add(scope);
+    // Re-READ the floor here rather than reusing the copy taken at the top of
+    // the sweep. `markControlPlaneStale` deletes it, and a sweep in flight when
+    // that happens must not write its stale copy back: doing so silently undoes
+    // the fold's only escape hatch, and the below-floor edition the fold could
+    // not account for stays invisible until the 6-hour age-out.
+    const prior = completeFloors.get(scope);
+    const high = Math.max(newest, prior?.newest ?? 0);
     // A CLEAN full read (re)establishes the baseline; a truncated one
     // establishes nothing (older plane went unread — the next sweep must re-ask
     // whole); a delta read only raises the floor's high-water mark.
-    const high = Math.max(newest, floor?.newest ?? 0);
     if (deltaSince === undefined) {
       if (outcome.truncated) completeFloors.delete(scope);
       else completeFloors.set(scope, { fullAt: Date.now(), newest: high });
-    } else if (floor) {
-      completeFloors.set(scope, { fullAt: floor.fullAt, newest: high });
+    } else if (prior) {
+      completeFloors.set(scope, { fullAt: prior.fullAt, newest: high });
     }
   }
   bumpVerdicts();

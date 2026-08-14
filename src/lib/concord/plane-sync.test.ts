@@ -301,6 +301,36 @@ describe("sweepControl", () => {
     await sweepControl(c, group, { pool });
     expect(relay.reqCount()).toBeGreaterThan(beforeReqs);
   });
+
+  it("a MID-FLIGHT markControlPlaneStale is not undone by the sweep it interrupts", async () => {
+    // The fold's only escape hatch. A sweep in flight when the fold reports
+    // `incomplete` must not write its stale floor back — doing so leaves the
+    // next sweep on the delta path, and the below-floor edition the fold could
+    // not account for (an unban published while offline) stays invisible until
+    // the 6-hour age-out. Single-flight makes the overlap routine rather than
+    // rare: a fold-triggered re-sweep JOINS the one already running.
+    const events = [controlWrap(1_700_000_500, "recent")];
+    // A SLOW relay, so the stale-mark provably lands mid-sweep. Firing it off a
+    // bare setTimeout(0) is not enough: the round trip can finish first, and
+    // then the sweep simply sees no floor and goes full on its own — the test
+    // passes while testing nothing.
+    relay = await startMockRelay({ kind: "paged", events, delayMs: 250 });
+    pool = new RelayPool();
+    const c = community([relay.url]);
+
+    await sweepControl(c, group, { pool }); // establishes the floor
+    events.push(controlWrap(1_600_000_000, "unban"));
+
+    const inFlight = sweepControl(c, group, { pool });
+    // After the sweep has read its floor, well before it writes one back.
+    await new Promise((r) => setTimeout(r, 60));
+    markControlPlaneStale(c);
+    await inFlight;
+
+    // The next sweep must be FULL and pick up the below-floor edition.
+    await sweepControl(c, group, { pool });
+    expect(await queryPlane(c.idHex, "control")).toHaveLength(2);
+  });
 });
 
 describe("sweepControl on a NIP-42 gating relay", () => {

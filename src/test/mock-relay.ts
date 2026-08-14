@@ -52,6 +52,13 @@ export type MockRelayBehaviour =
       events: NostrEvent[];
       /** The relay's own cap, applied after `limit`. Default: no extra cap. */
       pageLimit?: number;
+      /**
+       * Hold each answer for this long before sending it. A slow relay is the
+       * only way to make "something happened WHILE a read was in flight"
+       * deterministic — without it the round trip can finish before a
+       * `setTimeout(0)` fires, and a race test silently stops testing the race.
+       */
+      delayMs?: number;
     };
 
 export interface MockRelay {
@@ -158,10 +165,14 @@ export async function startMockRelay(
             matched.set(event.id, event);
           }
         }
-        for (const event of matched.values()) {
-          socket.send(JSON.stringify(["EVENT", subId, event]));
-        }
-        socket.send(JSON.stringify(["EOSE", subId]));
+        const answer = () => {
+          for (const event of matched.values()) {
+            socket.send(JSON.stringify(["EVENT", subId, event]));
+          }
+          socket.send(JSON.stringify(["EOSE", subId]));
+        };
+        if (behaviour.delayMs) setTimeout(answer, behaviour.delayMs);
+        else answer();
         return;
       }
 

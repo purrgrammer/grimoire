@@ -128,6 +128,27 @@ describe("the plane boundary — writeChatRumors", () => {
     expect(rows[0].channel).toBe("cc".repeat(32));
   });
 
+  it("refuses an ALREADY-EXPIRED rumor at ingest (CORD-08 §3)", async () => {
+    // Storing one only hands the read filter something to hide and a local
+    // sweep something to delete — and meanwhile it sits in Dexie as plaintext
+    // at rest, which is exactly what the sender asked would not happen.
+    const expired: OpenedEvent & { channel: string } = {
+      ...opened({ kind: KIND_MESSAGE, tags: [["expiration", "1000"]] }),
+      channel: "cc".repeat(32),
+    };
+    const live: OpenedEvent & { channel: string } = {
+      ...opened({ kind: KIND_MESSAGE, tags: [["expiration", "9000"]] }),
+      channel: "cc".repeat(32),
+    };
+    await writeChatRumors(COMMUNITY, [expired, live], 5000);
+    const rows = await db.concordRumors
+      .where("communityId")
+      .equals(COMMUNITY)
+      .toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(live.rumorId);
+  });
+
   it("refuses a chat rumor carrying a PLANE's kind", async () => {
     // The other half of the fence: a holder of any one channel's stream key
     // could otherwise wrap a kind-3308 rumor with a valid channel binding and

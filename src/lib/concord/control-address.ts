@@ -18,7 +18,7 @@
  * replaced by the held address.
  */
 
-import { controlGroupKey } from "@/lib/concord/derive";
+import { controlGroupKey, controlSignerGroupKey } from "@/lib/concord/derive";
 import type { StreamKeyView } from "@/lib/concord/derive";
 import type { Community, HeldRoot } from "@/lib/concord/types";
 
@@ -26,10 +26,11 @@ import type { Community, HeldRoot } from "@/lib/concord/types";
  * The read view of one epoch's Control Plane: the address to query and
  * authenticate at, and the conversation key that opens its wraps.
  *
- * `sk` is the ROOT-derived key. On a legacy epoch it is genuinely the plane's
- * signer, so it can answer a NIP-42 challenge for `pk`. On a split epoch it
- * cannot — `pk` belongs to a secret we do not hold — which is exactly the
- * ADDRESS-ONLY registration `stream-auth.ts` models.
+ * `sk` is present when we can answer a NIP-42 challenge for `pk`: on a legacy
+ * epoch the root-derived key IS the plane's signer, and on a split epoch it is
+ * the `control_root`-derived one, which only staff hold. An ordinary member on
+ * a split epoch gets no `sk` at all — the ADDRESS-ONLY registration
+ * `stream-auth.ts` models, and on a gating relay that plane is unreadable.
  */
 export interface ControlPlaneView {
   epoch: bigint;
@@ -50,6 +51,20 @@ function viewFor(
     // LEGACY: the derived key is the whole plane — address, signer, read key.
     return { epoch, group: derived, canAuthenticate: true };
   }
+  // A STAFF member holds this epoch's `control_root` and can therefore derive
+  // the signer after all. Grimoire never publishes control editions, but the
+  // secret still matters for READING: on a NIP-42 gating relay it is the only
+  // thing that can answer a challenge for this address, and omitting it would
+  // leave a staff member unable to read the very plane they administer.
+  //
+  // A held secret that does not derive to the held address is corrupt state,
+  // not a signer — leave it absent and fail closed to read-only.
+  const signer =
+    community.controlRoot !== undefined && epoch === community.rootEpoch
+      ? controlSignerGroupKey(community.controlRoot, community.id, epoch)
+      : undefined;
+  const canSign = signer?.pk === controlPk;
+
   // SPLIT: the held address, with the root-derived conversation key. The
   // conversation key is a getter on the memoized GroupKey, so it is read
   // through rather than copied.
@@ -66,8 +81,9 @@ function viewFor(
       // with a key every member derives and proves nothing, so verifying there
       // would be theatre; here, skipping it lets any member mint editions.
       restricted: true,
+      ...(canSign && signer ? { sk: signer.sk } : {}),
     },
-    canAuthenticate: false,
+    canAuthenticate: canSign,
   };
 }
 

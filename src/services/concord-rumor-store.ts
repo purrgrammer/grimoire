@@ -35,6 +35,7 @@
  * level as the membership vault beside it. Wiped on logout.
  */
 
+import { isExpired } from "@/lib/concord/disappearing";
 import { PLANE_KINDS, PLANE_RULES, type Plane } from "@/lib/concord/kinds";
 import type { OpenedEvent, OpenedWireEvent } from "@/lib/concord/stream";
 import { resolveMs } from "@/lib/concord/stream";
@@ -251,8 +252,15 @@ export async function writeOpened(
 export async function writeChatRumors(
   communityId: string,
   opened: Array<OpenedEvent & { channel: string }>,
+  nowSecs: number = Math.floor(Date.now() / 1000),
 ): Promise<boolean> {
-  const allowed = opened.filter((o) => !PLANE_KINDS.has(o.kind));
+  // Already-expired rumors are refused at ingest (CORD-08 §3). Storing one only
+  // hands the read filter something to hide and the local sweep something to
+  // delete — and in the meantime it sits in Dexie as plaintext at rest, which is
+  // exactly what the sender asked would not happen.
+  const allowed = opened.filter(
+    (o) => !PLANE_KINDS.has(o.kind) && !isExpired(o.tags, nowSecs),
+  );
   if (allowed.length === 0 || !communityId) return true;
   try {
     await db.concordRumors.bulkPut(
