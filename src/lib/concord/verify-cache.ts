@@ -18,8 +18,9 @@
  *  - Only then may the Schnorr verify be skipped: an identical hash means
  *    identical content, and a valid signature over that content has already
  *    been seen. A duplicate copy carrying a MANGLED sig is thereby accepted,
- *    deliberately — the content is authentic regardless, and the rumor store
- *    never persists a wrap's signature, so the bad copy's sig outlives nothing.
+ *    deliberately — the content is authentic regardless, which is the whole
+ *    claim `openWrap` needs from this. Anything that RE-PUBLISHES an event
+ *    verbatim must not lean on that: check `isSigned` first.
  *  - A FAILED verify is never memoized, so a forged copy cannot poison the id
  *    for the honest copy that arrives later.
  *

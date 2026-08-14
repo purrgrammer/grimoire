@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { RelayPool } from "applesauce-relay";
 import { firstValueFrom, filter, timeout } from "rxjs";
 import {
@@ -13,7 +13,12 @@ import {
   _resetStreamAuthRegistry,
   authenticateStreams,
   canSignAsStream,
+  noteRelayChallenged,
+  noteStreamAuthResult,
+  onStreamAuthStale,
+  onStreamKeysAdded,
   registerStreamKeys,
+  resetRelayAuth,
   signStreamAuths,
   streamAuthsSettled,
 } from "./stream-auth";
@@ -300,7 +305,132 @@ describe("stream-key NIP-42", () => {
     registerStreamKeys([{ pk }], ["wss://a.test"]);
     expect(canSignAsStream(pk)).toBe(false);
 
-    registerStreamKeys([{ pk, sk }], ["wss://a.test"]);
+    // The upgrade MUST be reported. `changed` is what fires the listeners that
+    // re-sign AUTH frames; an unannounced upgrade means nothing ever sends a
+    // 22242 for this address, so every REQ authored by it stays refused until
+    // the socket reopens — visible only as an empty plane.
+    expect(registerStreamKeys([{ pk, sk }], ["wss://a.test"])).toEqual([pk]);
     expect(canSignAsStream(pk)).toBe(true);
+    expect(signStreamAuths("c", "wss://a.test").map((e) => e.pubkey)).toEqual([
+      pk,
+    ]);
+  });
+
+  it("widens the scope in the same call that delivers the secret", async () => {
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    registerStreamKeys([{ pk }], ["wss://a.test"]);
+    registerStreamKeys([{ pk, sk }], ["wss://b.test"]);
+    // Both facts landed: the secret, and the new relay.
+    expect(canSignAsStream(pk)).toBe(true);
+    expect(signStreamAuths("c", "wss://b.test").map((e) => e.pubkey)).toEqual([
+      pk,
+    ]);
+    expect(signStreamAuths("c", "wss://a.test").map((e) => e.pubkey)).toEqual([
+      pk,
+    ]);
+  });
+
+  it("notifies listeners when a key is added or upgraded", async () => {
+    const seen: string[][] = [];
+    const off = onStreamKeysAdded((added) => seen.push(added));
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    registerStreamKeys([{ pk }], ["wss://a.test"]);
+    registerStreamKeys([{ pk, sk }], ["wss://a.test"]);
+    registerStreamKeys([{ pk, sk }], ["wss://a.test"]); // no-op
+    off();
+    expect(seen).toEqual([[pk], [pk]]);
+  });
+});
+
+describe("per-relay ack tracking", () => {
+  const URL = "wss://gate.test";
+
+  it("reports settled when the relay never challenged", () => {
+    const pk = getPublicKey(generateSecretKey());
+    expect(streamAuthsSettled(URL, [pk])).toBe(true);
+  });
+
+  it("holds unsettled until every signable key is acked", () => {
+    const a = generateSecretKey();
+    const b = generateSecretKey();
+    const [pkA, pkB] = [getPublicKey(a), getPublicKey(b)];
+    registerStreamKeys(
+      [
+        { pk: pkA, sk: a },
+        { pk: pkB, sk: b },
+      ],
+      [URL],
+    );
+    noteRelayChallenged(URL);
+    expect(streamAuthsSettled(URL, [pkA, pkB])).toBe(false);
+    noteStreamAuthResult(URL, pkA, true);
+    expect(streamAuthsSettled(URL, [pkA, pkB])).toBe(false);
+    noteStreamAuthResult(URL, pkB, true);
+    expect(streamAuthsSettled(URL, [pkA, pkB])).toBe(true);
+  });
+
+  it("does not count a REFUSED auth as an ack", () => {
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    registerStreamKeys([{ pk, sk }], [URL]);
+    noteRelayChallenged(URL);
+    noteStreamAuthResult(URL, pk, false);
+    expect(streamAuthsSettled(URL, [pk])).toBe(false);
+  });
+
+  it("still waits on a pubkey that is not registered at all", () => {
+    // The distinction that matters: a REGISTERED-but-secretless address (a
+    // split control_pk) is skipped, because no secret can ever answer for it.
+    // An UNREGISTERED pubkey is a registration that has not landed yet, and
+    // skipping it reports settled for a REQ that will simply be refused, with
+    // no gate left to retry behind.
+    const held = generateSecretKey();
+    const heldPk = getPublicKey(held);
+    const addressOnly = getPublicKey(generateSecretKey());
+    const unregistered = getPublicKey(generateSecretKey());
+    registerStreamKeys([{ pk: heldPk, sk: held }, { pk: addressOnly }], [URL]);
+    noteRelayChallenged(URL);
+    noteStreamAuthResult(URL, heldPk, true);
+
+    expect(streamAuthsSettled(URL, [heldPk, addressOnly])).toBe(true);
+    expect(streamAuthsSettled(URL, [heldPk, unregistered])).toBe(false);
+  });
+
+  it("drops the acks when the socket is reset", () => {
+    // A reopened socket is a fresh unauthenticated session; carrying the acks
+    // over would report settled for a connection that knows none of them.
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    registerStreamKeys([{ pk, sk }], [URL]);
+    noteRelayChallenged(URL);
+    noteStreamAuthResult(URL, pk, true);
+    expect(streamAuthsSettled(URL, [pk])).toBe(true);
+
+    resetRelayAuth(URL);
+    expect(streamAuthsSettled(URL, [pk])).toBe(true); // no challenge yet
+    noteRelayChallenged(URL);
+    expect(streamAuthsSettled(URL, [pk])).toBe(false); // the ack is gone
+  });
+
+  it("self-heals a stale challenge instead of blocking forever", async () => {
+    // Past the window an AUTH frame or its OK was lost. Keep reporting
+    // unsettled and every sweep burns its wait cap on a socket that will never
+    // recover without a re-auth.
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    registerStreamKeys([{ pk, sk }], [URL]);
+    noteRelayChallenged(URL);
+    expect(streamAuthsSettled(URL, [pk])).toBe(false);
+
+    const stale: string[] = [];
+    const off = onStreamAuthStale((url) => stale.push(url));
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 13_000);
+    expect(streamAuthsSettled(URL, [pk])).toBe(true);
+    vi.useRealTimers();
+    off();
+    expect(stale).toHaveLength(1);
   });
 });

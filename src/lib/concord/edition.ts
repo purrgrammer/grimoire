@@ -153,8 +153,9 @@ export function parseEdition(opened: OpenedEvent): ParsedEdition {
   // that silently vanishes for every fresh joiner at the next Refounding.
   //
   // Checked whenever the seal form is KNOWN, which is any event still holding
-  // its wrap. A STORED rumor has no envelope at all, and needs none: the store
-  // applied this same rule before it could be written.
+  // its wrap. A stored rumor has no envelope at all and is waved through here
+  // — which is only safe once the store enforces this rule at INGEST. Until
+  // that exists, the plaintext-seal requirement holds on wire events alone.
   if (
     opened.sealKind !== undefined &&
     opened.sealKind !== KIND_SEAL_PLAINTEXT

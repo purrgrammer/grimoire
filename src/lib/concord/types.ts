@@ -5,6 +5,11 @@
  * attachment extension (which needs its own parser) and minus the voice keys
  * (CORD-07 is out of scope). Both are recoverable from the reference if wanted.
  *
+ * Fields grimoire never READS are still carried where the Community List
+ * round-trips them (`Community.controlRoot`): that document is replaceable and
+ * one per user, so dropping a field here deletes it for every other client the
+ * user runs.
+ *
  * Ids and keys are raw 32-byte values in memory (lowercase hex on the wire). A
  * Community's identity (`community_id`) is a self-certifying commitment to its
  * owner; its access (`community_root`) is a separate 32-byte secret so access
@@ -181,6 +186,19 @@ export interface Community {
    * current entry in `heldRoots`, the way `root`/`rootEpoch` do.
    */
   controlPk?: string;
+  /**
+   * The CURRENT epoch's staff write secret (`control_root`, CORD-02 §2), held
+   * only by the owner and staff.
+   *
+   * Grimoire NEVER uses this — it publishes nothing to the Control Plane — and
+   * carries it for one reason: so a Community List write-back preserves it.
+   * Kind 13302 is replaceable, one per user, so a client that rehydrates an
+   * entry without this field and writes the entry back deletes a staff
+   * member's write key in EVERY client they use, recoverable only by a
+   * re-grant from another staffer. Same round-trip discipline as
+   * `MemberGrant.controlWrap`, and the same reason.
+   */
+  controlRoot?: Uint8Array;
   /** Every held root epoch (current + retained priors), newest first. */
   heldRoots: HeldRoot[];
   /** Private-channel keys held (public channels derive from the root). */

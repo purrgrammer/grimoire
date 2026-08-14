@@ -155,11 +155,16 @@ export type Plane = "control" | "guestbook" | "rekey";
  * everything else is encrypted), and the kind sets are disjoint, so the plane a
  * stored rumor belongs to is a property of the rumor itself.
  *
- * Enforced ONCE, at ingest, against the plane whose keys actually opened the
- * wrap. That is what makes the kind sufficient afterwards: without it, a holder
- * of any one plane's stream key could wrap a rumor of another plane's kind and
- * have it read back as that plane's — the read is a kind query, and a kind is
- * just data the wrapper chose.
+ * Meant to be enforced ONCE, at ingest, against the plane whose keys actually
+ * opened the wrap. That is what makes the kind sufficient afterwards: without
+ * it, a holder of any one plane's stream key could wrap a rumor of another
+ * plane's kind and have it read back as that plane's — the read is a kind
+ * query, and a kind is just data the wrapper chose.
+ *
+ * NOTHING ENFORCES THIS YET. These two exports are the contract for the store
+ * that does not exist here; whoever builds it MUST apply both fences, or a
+ * channel keyholder can wrap a kind-3308 rumor carrying a valid channel
+ * binding and have the plane read serve it as a control edition.
  */
 export const PLANE_RULES: Record<Plane, { kinds: number[]; sealKind: number }> =
   {

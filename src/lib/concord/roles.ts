@@ -2,10 +2,12 @@
  * Concord roles & permissions — CORD-04.
  *
  * Ported from armada `bc19d1f` (`src/concord/lib/roles.ts`), read side only:
- * grimoire never mints, reorders or grants a Role, so the publish-side helpers
- * (`roleToJSON`, `grantToJSON`, `mintablePosition`, `accessRolePosition`,
- * `grantRefusal`, `projectReorder`, `normalizeOrder`, the stock role builders)
- * are not ported. Everything the FOLD needs to judge someone else's edition is.
+ * grimoire never mints, reorders or grants a Role, so the publish- and
+ * UI-side helpers are not ported — `roleToJSON`, `grantToJSON`,
+ * `mintablePosition`, `accessRolePosition`, `grantRefusal`, `projectReorder`,
+ * `normalizeOrder`, `rolesMakeStaff`, `hexToColor`, `PERMISSION_LABELS`,
+ * `MODERATOR_ALL`, `adminRole`, `moderatorRole`. Everything armada's control
+ * fold imports IS here; that list was checked symbol by symbol.
  *
  * Two kinds of permission, enforced two ways: READ access is key possession
  * (never a permission bit); WRITE authority is a member's rank in the

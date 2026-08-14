@@ -96,7 +96,18 @@ export function registerStreamKeys(
       changed.push(k.pk);
       continue;
     }
-    if (!existing.sk && k.sk) existing.sk = k.sk;
+    if (existing.sk === undefined && k.sk !== undefined) {
+      // Report it: `changed` is what fires the listeners that re-sign AUTH
+      // frames. A key that gains its secret on a live socket and is NOT
+      // announced never gets a 22242 sent for it, so every REQ authored by
+      // that address stays refused until the socket reopens — and the symptom
+      // is an empty plane, not an error.
+      existing.sk = k.sk;
+      changed.push(k.pk);
+      // No `continue`: the same call may also widen the relay scope, and
+      // skipping that would lose coverage. A pubkey appearing twice in
+      // `changed` is harmless — at worst a listener re-signs for it.
+    }
     if (!existing.relays) continue; // already unscoped — broadest possible
     if (!scope) {
       existing.relays = undefined;
@@ -289,9 +300,16 @@ export function noteStreamAuthResult(
  * challenge hasn't fired and the REQ itself will trigger it), or every pubkey
  * we CAN authenticate as has been acked.
  *
- * Address-only entries are excluded from the requirement. There is no secret to
- * answer their challenge with, so waiting on them would block forever; whether
- * the relay serves such a REQ is the relay's call, not something we can gate on.
+ * Address-only entries — REGISTERED but secretless, i.e. a split Control
+ * Plane's `control_pk` — are excluded from the requirement. There is no secret
+ * to answer their challenge with, so waiting on them would block forever;
+ * whether the relay serves such a REQ is the relay's call, not something we can
+ * gate on.
+ *
+ * A pubkey that is not in the registry AT ALL is a different case and must
+ * still be waited on: it is a key whose registration has not landed yet, and
+ * skipping it reports settled for a REQ that will simply be refused, with no
+ * gate left to retry behind.
  *
  * SELF-HEAL: past {@link AUTH_STALE_MS} an unacked key means a frame or its OK
  * was lost. Stop reporting unsettled and fire a re-auth, re-arming the window so
@@ -305,7 +323,8 @@ export function streamAuthsSettled(
   if (!state?.challenged) return true;
   let allAcked = true;
   for (const pk of pubkeys) {
-    if (!canSignAsStream(pk)) continue;
+    const entry = registry.get(pk);
+    if (entry !== undefined && entry.sk === undefined) continue;
     if (!state.acked.has(pk)) {
       allAcked = false;
       break;
