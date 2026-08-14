@@ -215,7 +215,12 @@ export function useConcordCommunity(
             : {
                 idHex: community.idHex,
                 nonce,
-                swept: prev?.swept ?? true,
+                // NEVER default to swept. A ring can land before the first
+                // paint on a cold community — the wire is already subscribed
+                // while the sweep is still running — and claiming settled there
+                // is exactly what made a cold visit say no channel was readable
+                // before it had finished looking.
+                swept: prev?.swept ?? false,
                 state: next,
               },
         );

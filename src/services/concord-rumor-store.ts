@@ -52,6 +52,30 @@ import db, { type ConcordRumorRow } from "@/services/db";
 /** The chat plane's channel binding (CORD-03 §3) — the tag chat reads index. */
 const TAG_CHANNEL = "channel";
 
+/**
+ * What a write actually achieved.
+ *
+ * `wrapIds` is the wraps whose rumors are now in the store — NOT the wraps that
+ * opened. Both writers REJECT rumors here (a plane rumor carrying a channel tag,
+ * a chat rumor carrying a plane's kind, an already-expired one), and a caller
+ * that treats "it decoded" as "it is stored" will ack a parked wrap that was
+ * refused and delete it for good.
+ *
+ * `ok` is false only when the write itself failed — storage pressure, a blocked
+ * upgrade. A refusal is a successful write of nothing.
+ */
+export interface WriteResult {
+  ok: boolean;
+  wrapIds: string[];
+}
+
+/** The wrap ids among rows the store accepted. Envelope-only, so often empty. */
+function acceptedWrapIds(rows: Array<{ wrapId?: string }>): string[] {
+  const out: string[] = [];
+  for (const row of rows) if (row.wrapId) out.push(row.wrapId);
+  return out;
+}
+
 // ── Codec ────────────────────────────────────────────────────────────────────
 //
 // The stored row IS the recovered rumor: `id` the rumor id (the NIP-01 hash),
@@ -225,7 +249,7 @@ export async function writeOpened(
   opened: OpenedWireEvent[],
   plane: Plane,
   opts: { refounded?: boolean } = {},
-): Promise<boolean> {
+): Promise<WriteResult> {
   const rule = PLANE_RULES[plane];
   const allowed = opened.filter(
     (o) =>
@@ -233,16 +257,16 @@ export async function writeOpened(
       o.sealKind === rule.sealKind &&
       !o.tags.some((t) => t[0] === TAG_CHANNEL),
   );
-  if (allowed.length === 0 || !communityId) return true;
+  if (allowed.length === 0 || !communityId) return { ok: true, wrapIds: [] };
   try {
     await db.concordRumors.bulkPut(allowed.map((o) => toRow(communityId, o)));
     if (plane === "control" && (opts.refounded ?? true)) {
       await noteControlSnapshot(communityId, allowed);
     }
-    return true;
+    return { ok: true, wrapIds: acceptedWrapIds(allowed) };
   } catch (error) {
     console.warn("[concord] plane write failed:", error);
-    return false;
+    return { ok: false, wrapIds: [] };
   }
 }
 
@@ -259,9 +283,9 @@ export async function writeOpened(
  */
 export async function writeChatRumors(
   communityId: string,
-  opened: Array<OpenedEvent & { channel: string }>,
+  opened: Array<OpenedEvent & { channel: string; wrapId?: string }>,
   nowSecs: number = Math.floor(Date.now() / 1000),
-): Promise<boolean> {
+): Promise<WriteResult> {
   // Already-expired rumors are refused at ingest (CORD-08 §3). Storing one only
   // hands the read filter something to hide and the local sweep something to
   // delete — and in the meantime it sits in Dexie as plaintext at rest, which is
@@ -269,15 +293,15 @@ export async function writeChatRumors(
   const allowed = opened.filter(
     (o) => !PLANE_KINDS.has(o.kind) && !isExpired(o.tags, nowSecs),
   );
-  if (allowed.length === 0 || !communityId) return true;
+  if (allowed.length === 0 || !communityId) return { ok: true, wrapIds: [] };
   try {
     await db.concordRumors.bulkPut(
       allowed.map((o) => toRow(communityId, o, o.channel.toLowerCase())),
     );
-    return true;
+    return { ok: true, wrapIds: acceptedWrapIds(allowed) };
   } catch (error) {
     console.warn("[concord] chat write failed:", error);
-    return false;
+    return { ok: false, wrapIds: [] };
   }
 }
 
@@ -473,17 +497,17 @@ let pendingKnownEmpty: boolean | undefined;
 /**
  * Park wraps the client holds no key for.
  *
- * Returns a promise so a test (or a drain that wants ordering) can wait, but the
- * ingest path deliberately does not: parking is a durability backstop, and
- * blocking live delivery on it would trade the thing that matters for the thing
- * that recovers.
+ * Resolves TRUE when the wraps are durably parked. The caller needs that answer:
+ * the wire advances a durable read cursor over the same batch, and a park that
+ * failed silently would leave a wrap neither stored nor parked with the cursor
+ * already past it.
  *
  * The known-empty flag flips SYNCHRONOUSLY, before the write lands — a peek
  * racing this must do the real read rather than trust a probe that began before
  * the row existed.
  */
-export function parkPendingWraps(wraps: NostrEvent[]): Promise<void> {
-  if (wraps.length === 0) return Promise.resolve();
+export function parkPendingWraps(wraps: NostrEvent[]): Promise<boolean> {
+  if (wraps.length === 0) return Promise.resolve(true);
   // Set BEFORE the write resolves: a peek racing this must do the real read
   // rather than trust a probe that started before the row landed.
   pendingKnownEmpty = false;
@@ -499,8 +523,11 @@ export function parkPendingWraps(wraps: NostrEvent[]): Promise<void> {
   }));
   return db.concordPendingWraps
     .bulkPut(rows)
-    .then(() => undefined)
-    .catch(() => undefined);
+    .then(() => true)
+    .catch((error) => {
+      console.warn("[concord] could not park wraps:", error);
+      return false;
+    });
 }
 
 /**

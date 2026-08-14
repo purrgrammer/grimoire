@@ -50,9 +50,11 @@ import { buildWireSpec, type WireSpec } from "@/lib/concord/wire-spec";
 import concordPool from "@/services/concord-relay-pool";
 import {
   _resetPendingWrapsForTests,
+  parkPendingWraps,
   queryChannelRumors,
   queryPlane,
 } from "@/services/concord-rumor-store";
+import { drainParkedWraps } from "@/services/concord-wire-ingest";
 import {
   _configureWireForTests,
   _resetWireCursorsForTests,
@@ -287,6 +289,67 @@ describe("live delivery", () => {
   });
 });
 
+describe("the parked-wrap drain", () => {
+  it("acks ONLY the wraps whose rumors reached the store", async () => {
+    // The loss-proof invariant. A wrap that could not be opened — a key we
+    // still do not hold, a retired epoch's cutoff — must stay parked; acking it
+    // here is the one way a notified message becomes locally destructible.
+    const stranger = channelGroupKey(random32(), random32(), 0n);
+    const at = Math.floor(Date.now() / 1000);
+
+    // One openable control wrap and one we hold no key for, both parked.
+    const mine = controlWrap("drained", at);
+    const seal = finalizeEvent(
+      { kind: KIND_SEAL_PLAINTEXT, content: "{}", tags: [], created_at: at },
+      generateSecretKey(),
+    );
+    const theirs = restamp(wrapSeal(seal, stranger), at, stranger.sk);
+    await parkPendingWraps([mine, theirs]);
+
+    // The spec holds a key for the control address and none for the stranger.
+    await drainParkedWraps(spec([]));
+
+    const left = await db.concordPendingWraps.toArray();
+    expect(left.map((w) => w.id)).toEqual([theirs.id]);
+    expect(await queryPlane(COMMUNITY, "control")).toHaveLength(1);
+  });
+
+  it("leaves a wrap parked when the store refuses it", async () => {
+    // A control wrap carrying a `channel` tag is refused by the plane fence
+    // (CORD-02 §5) — it opens, but nothing is written. Acking on "we hold that
+    // key" rather than on "it is in the store" would drop it here.
+    const at = Math.floor(Date.now() / 1000);
+    const author = generateSecretKey();
+    const rumor = buildRumor({
+      kind: KIND_CONTROL,
+      content: "{}",
+      tags: [
+        ["vsk", VSK_CHANNEL],
+        ["channel", CHANNEL],
+      ],
+      pubkey: getPublicKey(author),
+      createdAtSecs: at,
+      ms: null,
+    });
+    const seal = finalizeEvent(
+      {
+        kind: KIND_SEAL_PLAINTEXT,
+        content: JSON.stringify(rumor),
+        tags: [],
+        created_at: at,
+      },
+      author,
+    );
+    const fenced = restamp(wrapSeal(seal, control), at, control.sk);
+    await parkPendingWraps([fenced]);
+
+    await drainParkedWraps(spec([]));
+
+    expect(await db.concordPendingWraps.count()).toBe(1);
+    expect(await queryPlane(COMMUNITY, "control")).toHaveLength(0);
+  });
+});
+
 // ── The round loop ──────────────────────────────────────────────────────────
 
 describe("the round loop", () => {
@@ -301,6 +364,26 @@ describe("the round loop", () => {
     expect(r.reqCount()).toBeGreaterThanOrEqual(2);
   });
 
+  it("does not let a socket opening kill the round that opened it", async () => {
+    // applesauce connects ON DEMAND, so a relay's `open$` fires moments after
+    // the round that caused it — and again after every reconnect, because the
+    // socket drops 30s past the last unsubscribe. Treating those as
+    // relay-initiated reopens aborts the round each time.
+    //
+    // At the 60s backoff ceiling that becomes absorbing: sleep, socket closes,
+    // next round reconnects, its own open kills it before it hears anything, so
+    // it is never healthy enough to reset the backoff and the relay is
+    // permanently deaf with nothing logged. Only an ESTABLISHED round may be
+    // bumped.
+    _configureWireForTests({ quietMs: 10_000, silentMs: 10_000 });
+    const r = await relay({ kind: "normal" });
+    setWireSpec(spec([r.url]));
+
+    await until("the first REQ", () => r.reqCount() > 0);
+    await tick(600);
+    expect(r.reqCount()).toBe(1);
+  });
+
   it("does not flood a relay that CLOSEs every round", async () => {
     // `resubscribe: true` retries a CLOSED with no delay and no count, which
     // measured >20k REQ/s here once. The backoff is what stands between the
@@ -311,6 +394,25 @@ describe("the round loop", () => {
     await tick(1_500);
     expect(r.reqCount()).toBeGreaterThan(1);
     expect(r.reqCount()).toBeLessThan(40);
+  });
+
+  it("does not flood a gating relay it can never authenticate to", async () => {
+    // No stream keys are registered, so every round is refused forever. This is
+    // the shape that matters: the wire must wait rather than re-REQ at
+    // round-trip speed into someone else's relay. ~17k REQ/s was measured here
+    // once, against a live third party.
+    //
+    // The backoff is turned OFF so this isolates the post-refusal auth wait.
+    // With both in play the backoff alone holds the count down and the test
+    // stops saying anything about the wait — which is how it read at first.
+    _configureWireForTests({ backoffMinMs: 1, backoffMaxMs: 1 });
+    _configureAuthWaitForTests(300);
+    const r = await relay({ kind: "nip42-gated" });
+    setWireSpec(spec([r.url]));
+
+    await tick(1_500);
+    expect(r.reqCount()).toBeGreaterThan(0);
+    expect(r.reqCount()).toBeLessThan(12);
   });
 
   it("heals a refused round once the stream AUTH lands", async () => {
@@ -430,6 +532,29 @@ describe("cursors", () => {
     // The cursor, minus the 60s skew overlap.
     expect(since).toBeGreaterThanOrEqual(at - 61);
     expect(since).toBeLessThanOrEqual(at);
+  });
+
+  it("refuses to be dragged past the local clock", async () => {
+    // One wrap stamped in the future — a skewed clock, or a hostile timestamp —
+    // would otherwise push the DURABLE cursor beyond `now`. Every later REQ
+    // then opens with `since > now` and this relay goes deaf permanently, while
+    // everyone else's correctly-stamped messages simply stop matching.
+    const r = await relay({ kind: "normal" });
+    const rings = busLog();
+    setWireSpec(spec([r.url]));
+    await until("the first REQ", () => r.reqCount() > 0);
+
+    const now = Math.floor(Date.now() / 1000);
+    r.push(controlWrap("from the future", now + 86_400));
+    await until("a control ring", () =>
+      rings.includes(controlScope(COMMUNITY)),
+    );
+
+    const before = r.reqFilters().length;
+    await until("a rotated round", () => r.reqFilters().length > before, 4_000);
+    const filters = r.reqFilters();
+    const since = filters[filters.length - 1].since as number;
+    expect(since).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
   });
 
   it("persists the cursor, so a warm start does not replay the backlog", async () => {

@@ -190,9 +190,16 @@ function runRound(
   filters: Filter[],
   getSpec: () => WireSpec,
   abort: AbortSignal,
+  /** Called the first time this round hears anything (see {@link watchSocketReopens}). */
+  onEstablished?: () => void,
 ): Promise<RoundOutcome> {
   return new Promise<RoundOutcome>((resolve) => {
     const state: RoundOutcome = { sawAnything: false };
+    const establish = () => {
+      if (state.sawAnything) return;
+      state.sawAnything = true;
+      onEstablished?.();
+    };
     let lastMessageAt = Date.now();
     let eosed = false;
     let replay: NostrEvent[] = [];
@@ -242,7 +249,7 @@ function runRound(
       (message: PlaneStreamMessage) => {
         lastMessageAt = Date.now();
         if (message.type === "eose") {
-          state.sawAnything = true;
+          establish();
           void flushReplay();
           eosed = true;
           return;
@@ -252,7 +259,7 @@ function runRound(
           finish();
           return;
         }
-        state.sawAnything = true;
+        establish();
         if (eosed) {
           // Live. Ingest immediately — latency is the point.
           const live = message.event;
@@ -307,8 +314,12 @@ function startRelayLoop(
       const round = new AbortController();
       const onOuter = () => round.abort();
       controller.signal.addEventListener("abort", onOuter);
+      // Only an ESTABLISHED round may be bumped by a socket reopen — see
+      // `watchSocketReopens`. Between rounds the bump only wakes the backoff
+      // sleep, which is always safe.
+      let established = false;
       bumpRound = () => {
-        round.abort();
+        if (established) round.abort();
         wakeSleep?.();
       };
 
@@ -317,6 +328,9 @@ function startRelayLoop(
         filters.map((filter) => ({ ...filter, since })),
         getSpec,
         round.signal,
+        () => {
+          established = true;
+        },
       );
       controller.signal.removeEventListener("abort", onOuter);
       if (controller.signal.aborted) break;
@@ -358,31 +372,33 @@ const reopenWatchers = new Map<string, Subscription>();
 let poolWatch: Subscription | undefined;
 
 /**
- * Re-REQ a relay the instant its socket reopens.
+ * Re-REQ a relay the instant its socket reopens under a LIVE round.
  *
  * A reopen means a fresh NIP-42 challenge and an empty subscription table on the
- * relay's side, so the round that was running is dead whether or not it ever
- * says so. Waiting out the 90s quiet watchdog is the difference between "live"
- * and "eventually".
+ * relay's side, so a round that was running is dead whether or not it ever says
+ * so. Waiting out the 90s quiet watchdog is the difference between "live" and
+ * "eventually".
+ *
+ * The gate is in `bump()`: it only fires once the current round has heard
+ * something. This is not a nicety. applesauce connects ON DEMAND and drops the
+ * socket 30s after the last subscription unsubscribes (`keepAlive`), so most
+ * opens are caused by the wire's own REQ rather than by the relay — and bumping
+ * on those aborts the round that opened the socket. Once the backoff has climbed
+ * to its 60s ceiling, that becomes an absorbing state: sleep 60s, socket closes
+ * at 30s, next round reconnects, its own open kills it before it hears anything,
+ * so the round is never healthy enough to reset the backoff. The relay goes
+ * permanently deaf with nothing logged.
+ *
+ * Armada is not a precedent for the unguarded version: its `onRelayReopened`
+ * comes off a transport that holds the socket independently of the wire, so
+ * there every reopen really is relay-initiated.
  */
 function watchSocketReopens(): void {
   const watch = (relay: Relay) => {
     if (reopenWatchers.has(relay.url)) return;
-    // The FIRST open is the one this wire's own opening REQ caused — a relay
-    // connects on demand, so it always arrives moments after the round starts.
-    // Bumping on it aborts the round that opened the socket and re-REQs into a
-    // backoff, which costs the whole first live window. Only a RE-open means
-    // the relay dropped a subscription table on the floor.
-    let opened = false;
     reopenWatchers.set(
       relay.url,
-      relay.open$.subscribe(() => {
-        if (!opened) {
-          opened = true;
-          return;
-        }
-        loops.get(relay.url)?.bump();
-      }),
+      relay.open$.subscribe(() => loops.get(relay.url)?.bump()),
     );
   };
   for (const relay of concordPool.relays.values()) watch(relay);

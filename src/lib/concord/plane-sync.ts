@@ -692,9 +692,9 @@ async function runControlScope(
 
     let stored = true;
     if (opened.length > 0) {
-      stored = await writeOpened(community.idHex, opened, "control", {
-        refounded,
-      });
+      stored = (
+        await writeOpened(community.idHex, opened, "control", { refounded })
+      ).ok;
       if (stored) fresh.push(...opened);
     }
     // The memo advances only once the rumors are durably stored. It is what

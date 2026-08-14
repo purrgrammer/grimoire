@@ -111,7 +111,13 @@ export async function ingestWireEvents(
     // A wrap for a stream we hold no key for: a rekey not caught up with, a
     // channel granted moments ago, a spec that has not refreshed. Ordinary, and
     // a standing subscription has no later chance to re-fetch it.
-    void parkPendingWraps(toPark);
+    //
+    // AWAITED, and its failure counts. The caller advances a durable cursor on
+    // this batch, so a park that silently failed — quota, a blocked upgrade,
+    // private-mode IndexedDB — would leave the wrap neither stored nor parked
+    // with the cursor already past it. That is the permanent loss the whole
+    // peek/ack split exists to prevent.
+    if (!(await parkPendingWraps(toPark))) result.failed = true;
     for (const event of toPark) scopes.add(parkScope(event.pubkey));
   }
 
@@ -139,14 +145,14 @@ async function ingestChat(
         communityIdHex,
         opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
       );
-      if (!written) {
+      if (!written.ok) {
         result.failed = true;
         continue;
       }
-      // `wrapId` is an envelope fact, present only while the wrap is in hand —
-      // which it is here. A row without one simply never gets acked, and the
-      // age prune is what eventually clears it.
-      for (const ev of opened) if (ev.wrapId) result.stored.add(ev.wrapId);
+      // What the STORE accepted, not what decoded. `writeChatRumors` refuses a
+      // rumor carrying a plane's kind and an already-expired one (CORD-08 §3),
+      // and acking a parked wrap it refused would delete it for good.
+      for (const wrapId of written.wrapIds) result.stored.add(wrapId);
       scopes.add(channelScope(channel.idHex));
     } catch (error) {
       result.failed = true;
@@ -185,12 +191,16 @@ async function ingestControl(
       const opened = await openPlaneWraps(unseen, target.groups);
       let written = true;
       if (opened.length > 0) {
-        written = await writeOpened(idHex, opened, "control", {
+        // Same discipline as chat: `writeOpened` refuses a plane rumor carrying
+        // a channel tag or the wrong seal form (CORD-02 §5), so only what it
+        // ACCEPTED may be acked.
+        const result_ = await writeOpened(idHex, opened, "control", {
           refounded: target.refounded,
         });
+        written = result_.ok;
         if (written) {
-          for (const ev of opened) result.stored.add(ev.wrapId);
-          scopes.add(controlScope(idHex));
+          for (const wrapId of result_.wrapIds) result.stored.add(wrapId);
+          if (result_.wrapIds.length > 0) scopes.add(controlScope(idHex));
         } else {
           result.failed = true;
         }

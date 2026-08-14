@@ -96,7 +96,7 @@ export async function syncChannel(
         community.idHex,
         opened.map((ev) => ({ ...ev, channel: ev.channelIdHex })),
       );
-      if (!stored) return;
+      if (!stored.ok) return;
       fresh.push(...opened);
       opts.onFresh?.(opened);
     }),

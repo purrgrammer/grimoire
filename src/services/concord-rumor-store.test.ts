@@ -63,7 +63,7 @@ beforeEach(async () => {
 
 describe("the plane boundary — writeOpened", () => {
   it("stores a well-formed control edition", async () => {
-    expect(await writeOpened(COMMUNITY, [opened()], "control")).toBe(true);
+    expect((await writeOpened(COMMUNITY, [opened()], "control")).ok).toBe(true);
     expect(await queryPlane(COMMUNITY, "control")).toHaveLength(1);
   });
 
@@ -118,7 +118,7 @@ describe("the plane boundary — writeChatRumors", () => {
       ...opened({ kind: KIND_MESSAGE }),
       channel: "CC".repeat(32),
     };
-    expect(await writeChatRumors(COMMUNITY, [chat])).toBe(true);
+    expect((await writeChatRumors(COMMUNITY, [chat])).ok).toBe(true);
     const rows = await db.concordRumors
       .where("communityId")
       .equals(COMMUNITY)
