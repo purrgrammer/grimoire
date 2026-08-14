@@ -12,7 +12,7 @@
  * instead of silently swallowing a message.
  */
 
-import { BehaviorSubject, Observable } from "rxjs";
+import { Observable, ReplaySubject } from "rxjs";
 import type { AddressPointer, EventPointer } from "nostr-tools/nip19";
 
 import {
@@ -63,8 +63,23 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   readonly protocol = "concord" as const;
   readonly type = "group" as const;
 
-  /** Per-conversation emitters, so a backfill can push into a live timeline. */
-  private timelines = new Map<string, BehaviorSubject<Message[]>>();
+  /**
+   * Per-conversation emitters, so a backfill can push into a live timeline.
+   *
+   * A ReplaySubject(1) rather than a BehaviorSubject seeded with `[]`:
+   * ChatViewer reads an undefined stream as "still loading" and an empty array
+   * as "no messages yet", so seeding it would flash
+   * "No messages yet. Start the conversation!" over a channel that is merely
+   * still being read. Replaying the last value is what makes re-entering a
+   * channel paint instantly.
+   */
+  private timelines = new Map<string, ReplaySubject<Message[]>>();
+
+  /** Conversations whose read+backfill has already been kicked off. */
+  private started = new Set<string>();
+
+  /** Last emitted timeline signature per conversation (see {@link publish}). */
+  private lastEmitted = new Map<string, string>();
 
   /**
    * A Concord channel is never addressed by a typed string.
@@ -128,25 +143,59 @@ export class ConcordAdapter extends ChatProtocolAdapter {
 
     let subject = this.timelines.get(conversation.id);
     if (!subject) {
-      subject = new BehaviorSubject<Message[]>([]);
+      subject = new ReplaySubject<Message[]>(1);
       this.timelines.set(conversation.id, subject);
     }
     const emitter = subject;
+
+    // ONCE per conversation. `loadMessages` is called again whenever the
+    // caller's `conversation` object identity changes, and the emitter is shared
+    // per channel — so without this each call started another read+backfill pair
+    // pushing into the same stream. The visible symptom is a timeline that
+    // flashes: every emission is a fresh array, which re-anchors the virtualizer.
+    if (this.started.has(conversation.id)) return emitter.asObservable();
+    this.started.add(conversation.id);
 
     void (async () => {
       try {
         // Paint from the store first, then backfill and repaint. A user
         // reopening a channel should not stare at an empty pane while a relay
         // round-trips.
-        emitter.next(await this.read(identifier, options));
+        this.publish(
+          conversation.id,
+          emitter,
+          await this.read(identifier, options),
+        );
         await this.backfill(identifier);
-        emitter.next(await this.read(identifier, options));
+        this.publish(
+          conversation.id,
+          emitter,
+          await this.read(identifier, options),
+        );
       } catch (error) {
         console.warn("[concord] could not load the timeline:", error);
       }
     })();
 
     return emitter.asObservable();
+  }
+
+  /**
+   * Emit only when the timeline actually changed.
+   *
+   * A repaint with identical content still hands the virtualizer a fresh array,
+   * which re-anchors the scroll — so a re-read that found nothing new has to be
+   * silent rather than merely harmless.
+   */
+  private publish(
+    conversationId: string,
+    emitter: ReplaySubject<Message[]>,
+    next: Message[],
+  ): void {
+    const signature = next.map((m) => m.id).join(",");
+    if (this.lastEmitted.get(conversationId) === signature) return;
+    this.lastEmitted.set(conversationId, signature);
+    emitter.next(next);
   }
 
   async loadMoreMessages(
@@ -220,12 +269,16 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     super.cleanup(conversationId);
     this.timelines.get(conversationId)?.complete();
     this.timelines.delete(conversationId);
+    this.started.delete(conversationId);
+    this.lastEmitted.delete(conversationId);
   }
 
   cleanupAll(): void {
     super.cleanupAll();
     for (const subject of this.timelines.values()) subject.complete();
     this.timelines.clear();
+    this.started.clear();
+    this.lastEmitted.clear();
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────

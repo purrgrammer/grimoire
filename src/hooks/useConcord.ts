@@ -99,6 +99,14 @@ export function useConcordCommunity(
   const [loaded, setLoaded] = useState<{
     idHex: string;
     nonce: number;
+    /**
+     * Whether the SWEEP has finished, as distinct from having something to
+     * paint. The stored fold paints first and is often empty on a cold visit, so
+     * without this an empty first paint reads as a settled answer and the viewer
+     * states "no channel here is readable" about a community it has not
+     * finished reading.
+     */
+    swept: boolean;
     state?: CommunityState;
     error?: string;
   }>();
@@ -119,17 +127,28 @@ export function useConcordCommunity(
         // runs behind an already-usable sidebar.
         const stored = await readStoredState(community);
         if (!cancelled && stored) {
-          setLoaded({ idHex: community.idHex, nonce, state: stored });
+          setLoaded({
+            idHex: community.idHex,
+            nonce,
+            swept: false,
+            state: stored,
+          });
         }
         const next = await syncCommunityState(community);
         if (!cancelled) {
-          setLoaded({ idHex: community.idHex, nonce, state: next });
+          setLoaded({
+            idHex: community.idHex,
+            nonce,
+            swept: true,
+            state: next,
+          });
         }
       } catch (err) {
         if (!cancelled) {
           setLoaded({
             idHex: community.idHex,
             nonce,
+            swept: true,
             error: err instanceof Error ? err.message : String(err),
           });
         }
@@ -149,8 +168,12 @@ export function useConcordCommunity(
     state: settled ? loaded.state : undefined,
     // A sweep still in flight reads as loading even once the stored fold has
     // painted, so the spinner means "a sweep is running" rather than "we have
-    // nothing at all" — and the sidebar shows channels while it spins.
-    loading: idHex !== undefined && (!settled || loaded.nonce !== nonce),
+    // nothing at all" — and the sidebar shows channels while it spins. An empty
+    // stored fold must NOT read as settled: that is what made a cold visit
+    // claim no channel was readable before it had finished looking.
+    loading:
+      idHex !== undefined &&
+      (!settled || !loaded.swept || loaded.nonce !== nonce),
     error: settled ? loaded.error : undefined,
     refresh,
   };

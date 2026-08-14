@@ -17,6 +17,7 @@
 import { channelsView } from "@/lib/concord/channels";
 import {
   currentControlPlane,
+  heldControlPlanes,
   type ControlPlaneView,
 } from "@/lib/concord/control-address";
 import {
@@ -180,11 +181,17 @@ export async function syncCommunityState(
   }
 
   // Retired epochs' snapshot sets are dead weight once their keys are gone.
+  //
+  // The addresses to KEEP are the ones a fold actually asks about, resolved per
+  // epoch — NOT the `controlPk` field. A LEGACY (pre-split) epoch carries no
+  // `controlPk` at all, because its address is derived rather than handed over
+  // (CORD-02 §2), so reading the field would produce an empty keep-set and this
+  // prune would delete the very snapshot the sweep above just recorded. The
+  // community then never folds again: the gate in `foldStoredControl` blocks on
+  // a set that is wiped as fast as it is written.
   void pruneControlSnapshots(
     community.idHex,
-    community.heldRoots
-      .map((held) => held.controlPk)
-      .filter((pk): pk is string => pk !== undefined),
+    heldControlPlanes(community).map((held) => held.group.pk),
   ).catch(() => undefined);
 
   return { folded, channels: channelsView(community, folded) };

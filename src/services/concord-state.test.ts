@@ -18,7 +18,12 @@ import type { OpenedWireEvent } from "@/lib/concord/stream";
 import type { Community } from "@/lib/concord/types";
 import { editionHash } from "@/lib/concord/version";
 import db from "@/services/db";
-import { writeOpened } from "@/services/concord-rumor-store";
+import {
+  pruneControlSnapshots,
+  readControlSnapshot,
+  writeOpened,
+} from "@/services/concord-rumor-store";
+import { heldControlPlanes } from "@/lib/concord/control-address";
 
 import { _resetConcordStateForTests, foldStoredControl } from "./concord-state";
 
@@ -234,6 +239,50 @@ describe("the carried head floor", () => {
     const after = await foldStoredControl(c1);
     // No floor carried across the epoch, so nothing reports unaccounted-for.
     expect(after!.incomplete).toEqual([]);
+  });
+});
+
+describe("snapshot pruning", () => {
+  it("keeps a LEGACY epoch's DERIVED control address", async () => {
+    // The bug this guards destroyed data, and only on a legacy Refounded
+    // community: `control_pk` is absent there because the address is derived
+    // rather than handed over (CORD-02 §2), so pruning by that field produced an
+    // empty keep-set and deleted the snapshot the sweep had just written. The
+    // community then never folded again — the gate blocked on a set wiped as
+    // fast as it was written, and the channel list stayed empty forever.
+    const c = community({
+      rootEpoch: 2n,
+      heldRoots: [
+        { epoch: 2n, key: root },
+        { epoch: 1n, key: random32() },
+      ],
+    });
+    const current = controlGroupKey(root, cid, 2n).pk;
+    const stale = controlGroupKey(random32(), cid, 9n).pk;
+    for (const controlPk of [current, stale]) {
+      await db.concordSnapshots.put({
+        communityId: c.idHex,
+        controlPk,
+        rumorIds: ["a"],
+        updatedAt: Date.now(),
+      });
+    }
+
+    await pruneControlSnapshots(
+      c.idHex,
+      heldControlPlanes(c).map((held) => held.group.pk),
+    );
+
+    expect(await readControlSnapshot(c.idHex, current)).toBeDefined();
+    expect(await readControlSnapshot(c.idHex, stale)).toBeUndefined();
+
+    // And the shape that caused it: reading `controlPk` off the held roots of a
+    // legacy community yields nothing to keep, so everything goes.
+    expect(
+      c.heldRoots
+        .map((held) => held.controlPk)
+        .filter((pk): pk is string => pk !== undefined),
+    ).toEqual([]);
   });
 });
 

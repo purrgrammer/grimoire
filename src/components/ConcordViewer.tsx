@@ -188,7 +188,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         ) : (
           <Empty>
             {loading
-              ? "Folding the control plane…"
+              ? "Reading the control plane…"
               : "No channel here is readable with the keys you hold."}
           </Empty>
         )}
