@@ -326,6 +326,38 @@ describe("guestbook coalesce (CORD-02 §5)", () => {
     expect(coalesced.has(ghost.pubkey)).toBe(false);
   });
 
+  it("breaks a same-instant tie on the LOWER rumor id, deterministically", async () => {
+    // The cross-client tiebreak: two clients disagreeing here fold different
+    // rosters from identical data. Built by hand rather than sealed, so the two
+    // ids are known and the assertion cannot come out either way by luck.
+    const alice = "aa".repeat(32);
+    const entry = (rumorId: string, state: "join" | "leave"): OpenedEvent => ({
+      rumorId,
+      author: alice,
+      kind: KIND_JOIN_LEAVE,
+      content: state,
+      tags: [],
+      ms: 5000,
+      createdAt: 5,
+    });
+    const low = "0".repeat(64);
+    const high = "f".repeat(64);
+
+    // Same ms, same firsthand-ness — only the id separates them, and the order
+    // they arrive in must not matter.
+    for (const opened of [
+      [entry(high, "join"), entry(low, "leave")],
+      [entry(low, "leave"), entry(high, "join")],
+    ]) {
+      const coalesced = coalesceGuestbook(opened, {
+        nowMs: 10_000,
+        canKick: denyAllKicks,
+      });
+      expect(coalesced.get(alice)?.rumorId).toBe(low);
+      expect(coalesced.get(alice)?.state).toBe("leave");
+    }
+  });
+
   it("a firsthand entry at the same instant beats a snapshot seed", async () => {
     const refounder = signer();
     const alice = signer();
@@ -346,6 +378,33 @@ describe("guestbook coalesce (CORD-02 §5)", () => {
     });
     expect(coalesced.get(alice.pubkey)?.state).toBe("leave");
     expect(coalesced.get(alice.pubkey)?.fromSnapshot).toBe(false);
+
+    // …and the same pair with the ids forced the WRONG way for the id
+    // tiebreak, so this cannot pass by falling through to it.
+    const snapshotEntry: OpenedEvent = {
+      rumorId: "0".repeat(64),
+      author: refounder.pubkey,
+      kind: KIND_SNAPSHOT,
+      content: JSON.stringify([alice.pubkey]),
+      tags: [["snap", "aa".repeat(32), "1", "1"]],
+      ms: 7000,
+      createdAt: 7,
+    };
+    const firsthand: OpenedEvent = {
+      rumorId: "f".repeat(64),
+      author: alice.pubkey,
+      kind: KIND_JOIN_LEAVE,
+      content: "leave",
+      tags: [],
+      ms: 7000,
+      createdAt: 7,
+    };
+    const forced = coalesceGuestbook([snapshotEntry, firsthand], {
+      nowMs: 10_000,
+      canKick: denyAllKicks,
+      snapshotAuthorities: new Set([refounder.pubkey]),
+    });
+    expect(forced.get(alice.pubkey)?.fromSnapshot).toBe(false);
   });
 });
 

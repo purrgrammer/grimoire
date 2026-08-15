@@ -22,7 +22,7 @@ import {
   type CoalescedMember,
 } from "@/lib/concord/guestbook";
 import { sweepGuestbook } from "@/lib/concord/plane-sync";
-import { canActOnMember, Permissions } from "@/lib/concord/roles";
+import { badgeOf, canActOnMember, Permissions } from "@/lib/concord/roles";
 import type { Community } from "@/lib/concord/types";
 import { observedAuthors, queryPlane } from "@/services/concord-rumor-store";
 
@@ -77,6 +77,31 @@ export async function readStoredRoster(
     ),
     coalesced,
   };
+}
+
+/**
+ * The roster as a chat viewer's participant list: the proven owner first, then
+ * every member with their display tier.
+ *
+ * `badgeOf`, NOT an `isAuthorized` permission mask. Permission checks here are
+ * ALL-BITS — `(perms & bits) === bits` — so testing against the management mask
+ * labels a real moderator "member" unless they happen to hold every admin bit
+ * at once. This is the tier armada's own member list shows: MANAGE_ROLES is
+ * "admin", any other management bit is "moderator".
+ */
+export function rosterParticipants(
+  roster: Roster,
+  folded: FoldedControl,
+): Array<{ pubkey: string; role: "admin" | "moderator" | "member" }> {
+  return [
+    { pubkey: folded.ownerHex, role: "admin" as const },
+    ...[...roster.members]
+      .filter((pubkey) => pubkey !== folded.ownerHex)
+      .map((pubkey) => ({
+        pubkey,
+        role: badgeOf(folded.roster, pubkey) ?? ("member" as const),
+      })),
+  ];
 }
 
 /** Sweep the Guestbook, then fold the roster. */

@@ -863,9 +863,20 @@ function advanceGuestbookCursor(scope: string, createdAt: number): void {
 
 /** Test seam: forget every guestbook cursor, in memory and on disk. */
 export async function _resetGuestbookCursorsForTests(): Promise<void> {
+  _forgetGuestbookCursorMemoryForTests();
+  await db.concordKv.where("key").startsWith(GUESTBOOK_CURSOR_PREFIX).delete();
+}
+
+/**
+ * Test seam: forget the in-memory cursor cache but KEEP the rows.
+ *
+ * The only way to exercise the persisted half. A reset that wipes both makes a
+ * "the cursor survives a cold launch" test pass against the surviving `Map`,
+ * with the Dexie round-trip never executed.
+ */
+export function _forgetGuestbookCursorMemoryForTests(): void {
   guestbookCursors.clear();
   guestbookCursorsLoaded = undefined;
-  await db.concordKv.where("key").startsWith(GUESTBOOK_CURSOR_PREFIX).delete();
 }
 
 /**
@@ -942,11 +953,18 @@ async function runGuestbookScope(
   if (page.length === 0) return [];
 
   const opened = await openPlaneWraps(page, groups);
-  if (opened.length === 0) return [];
-
-  const written = await writeOpened(community.idHex, opened, "guestbook", {
-    refounded: community.rootEpoch > 0n,
-  });
+  // A page that decrypted to NOTHING still advances the cursor, as in armada.
+  // The guestbook address is member-derivable, so any member can mint wraps
+  // there that never open; pinning the cursor on them would re-decrypt the same
+  // junk on every sweep, and this path has no seen-memo to stop it. They are
+  // permanently unopenable under keys we already hold, so there is nothing
+  // behind them to come back for.
+  const written =
+    opened.length > 0
+      ? await writeOpened(community.idHex, opened, "guestbook", {
+          refounded: community.rootEpoch > 0n,
+        })
+      : { ok: true, wrapIds: [] };
   // DIVERGENCE from armada, narrowing and deliberate: armada advances this
   // cursor without checking the write. A forward cursor is the one place that
   // cannot be forgiven — a `since` filter will never serve these wraps again,

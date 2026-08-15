@@ -35,13 +35,12 @@ import type { BlobAttachmentMeta } from "./base-adapter";
 import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import type { Channel, Community } from "@/lib/concord/types";
 import { channelScope, onWireScope } from "@/lib/concord/wire-bus";
+import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
 import {
-  canActOnMember,
-  isAuthorized,
-  MANAGEMENT_MASK,
-  Permissions,
-} from "@/lib/concord/roles";
-import { readStoredRoster, syncRoster } from "@/services/concord-members";
+  readStoredRoster,
+  rosterParticipants,
+  syncRoster,
+} from "@/services/concord-members";
 import {
   buildChatSend,
   type BuildChatSendOptions,
@@ -149,22 +148,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     const roster = await readStoredRoster(community, folded);
     void syncRoster(community, folded).catch(() => undefined);
 
-    const participants: Participant[] = [
-      { pubkey: folded.ownerHex, role: "admin" },
-      ...[...roster.members]
-        .filter((pubkey) => pubkey !== folded.ownerHex)
-        .map((pubkey): Participant => ({
-          pubkey,
-          role: isAuthorized(
-            folded.roster,
-            pubkey,
-            folded.ownerHex,
-            MANAGEMENT_MASK,
-          )
-            ? "moderator"
-            : "member",
-        })),
-    ];
+    const participants: Participant[] = rosterParticipants(roster, folded);
 
     return {
       id: conversationIdOf(identifier),

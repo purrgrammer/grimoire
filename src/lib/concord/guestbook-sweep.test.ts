@@ -20,6 +20,7 @@ import { bytesToHex, guestbookGroupKey, random32 } from "./derive";
 import { KIND_JOIN_LEAVE, KIND_SEAL_ENCRYPTED } from "./kinds";
 import {
   _configureAuthWaitForTests,
+  _forgetGuestbookCursorMemoryForTests,
   _resetGuestbookCursorsForTests,
   _resetPlaneSweepForTests,
   guestbookScopeKey,
@@ -132,8 +133,11 @@ describe("sweepGuestbook", () => {
     const c = community([relay.url]);
     await sweepGuestbook(c, { pool });
 
-    // Forget the in-memory half only — the persisted cursor must survive.
-    _resetPlaneSweepForTests();
+    // Forget the in-memory half ONLY — the persisted cursor must survive, so
+    // the second sweep has to go back to Dexie for it. Using the full reset
+    // here would leave the cursor in the surviving Map and the round-trip
+    // would never execute.
+    _forgetGuestbookCursorMemoryForTests();
     await sweepGuestbook(c, { pool });
     expect(relay.reqFilters()[1].since).toBe(NOW - 300);
   });
@@ -198,6 +202,29 @@ describe("sweepGuestbook", () => {
     const since = relay.reqFilters()[1].since;
     expect(since).toBeDefined();
     expect(since!).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
+  it("advances past a page that decrypted to nothing", async () => {
+    // The guestbook address is member-derivable, so any member can mint wraps
+    // there that never open. Pinning the cursor on them would re-decrypt the
+    // same junk on every sweep — this path has no seen-memo — and they are
+    // permanently unopenable under keys we hold, so nothing is left behind.
+    const junk = finalizeEvent(
+      {
+        kind: 1059,
+        content: "not-nip44",
+        tags: [["p", "ff".repeat(32)]],
+        created_at: NOW - 200,
+      },
+      gb.sk,
+    );
+    relay = await startMockRelay({ kind: "paged", events: [junk] });
+    pool = new RelayPool();
+    const c = community([relay.url]);
+
+    expect(await sweepGuestbook(c, { pool })).toHaveLength(0);
+    await sweepGuestbook(c, { pool });
+    expect(relay.reqFilters()[1].since).toBe(NOW - 200);
   });
 
   it("re-asks behind the auth gate after a refused read", async () => {
