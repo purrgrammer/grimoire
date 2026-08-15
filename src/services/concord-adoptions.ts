@@ -142,14 +142,40 @@ export function applyAdoption(
       // keys stay held so the losing fork's messages stay readable.
       const held = bytesToHex(out.root);
       if (held === bytesToHex(key)) continue;
-      const winner = held <= bytesToHex(key) ? out.root : key;
-      const loser = winner === out.root ? key : out.root;
+      const listWins = held <= bytesToHex(key);
+
+      // THE CONTROL PAIR TRAVELS WITH ITS OWN ROOT, and only the winner's is
+      // this epoch's. The pair is minted beside the root it ships with
+      // (CORD-06 §1), so pinning the loser's `control_pk` onto the winning
+      // `HeldRoot` would make this client register and sweep the losing fork's
+      // Control Plane and never the winner's — no roster, no banlist, no
+      // channel updates — and `refounder` is the epoch's snapshot authority, so
+      // real snapshots would be refused too. The list's own entry for this
+      // epoch is therefore KEPT when the list wins, rather than rebuilt from
+      // the adoption's fields.
+      const listHeld = out.heldRoots.find((r) => r.epoch === epoch);
+      const winnerHeld: HeldRoot = listWins
+        ? (listHeld ?? { epoch, key: out.root })
+        : heldOf(epoch, key, adopted);
+      const loserHeld: HeldRoot = listWins
+        ? { epoch, key }
+        : (listHeld ?? { epoch, key: out.root });
+
       out = {
         ...out,
-        root: winner,
+        root: listWins ? out.root : key,
+        ...(listWins
+          ? {}
+          : {
+              controlPk: adopted.controlPk,
+              controlRoot: adopted.controlRoot
+                ? key32(adopted.controlRoot)
+                : undefined,
+              refounder: adopted.refounder,
+            }),
         heldRoots: [
-          { ...heldOf(out, epoch, winner, adopted) },
-          { epoch, key: loser },
+          winnerHeld,
+          loserHeld,
           ...out.heldRoots.filter((r) => r.epoch !== epoch),
         ],
       };
@@ -174,7 +200,7 @@ export function applyAdoption(
       controlRoot: adopted.controlRoot ? key32(adopted.controlRoot) : undefined,
       refounder: adopted.refounder,
       heldRoots: [
-        heldOf(out, epoch, key, adopted),
+        heldOf(epoch, key, adopted),
         ...out.heldRoots.map((r) =>
           r.epoch === priorEpoch && r.retiredAt === undefined
             ? { ...r, retiredAt: adopted.retiredAt }
@@ -229,18 +255,33 @@ export function applyAdoption(
     out = { ...out, privateChannels: channels };
   }
 
+  // ── What can never be "spent" ──
+  //
+  // `spent` means the LIST HAS CAUGHT UP, so the cached copy can go. Two kinds
+  // of record are not caches of anything the list will ever carry, and deleting
+  // them loses the fact outright:
+  //
+  //   - `cuts` are a FLOOR. The cut exists so a stale invite bundle carrying the
+  //     pre-rotation key can never merge the access back; drop it and the next
+  //     list read re-admits the member to a channel they were removed from. It
+  //     stays even when the channel it names is no longer vended — that is
+  //     precisely the state it is describing.
+  //   - `excludedAtEpoch` is the base watcher's only output when a Refounding
+  //     cut us. Nothing else records it, and it computed spent on a row with no
+  //     roots and no channels — so it was written and deleted on alternate
+  //     passes, forever, and could never be read by anything.
+  if (row.cuts.length > 0 || row.excludedAtEpoch !== undefined) spent = false;
+
   return { community: out, spent };
 }
 
 function heldOf(
-  community: Community,
   epoch: bigint,
   key: Uint8Array,
   adopted: ConcordAdoptionRow["roots"][number],
 ): HeldRoot {
   // The rotator is this epoch's snapshot authority (CORD-02 §5), recorded per
   // root so it survives later rotations — `snapshotAuthorities` reads it.
-  void community;
   return {
     epoch,
     key,

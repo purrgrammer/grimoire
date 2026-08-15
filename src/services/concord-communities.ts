@@ -209,25 +209,34 @@ export async function loadStoredCommunities(
 
 /**
  * When this viewer joined a community, in epoch-ms (the list entry's
- * `added_at`), or 0 if unknown.
+ * `added_at`), or UNDEFINED when it cannot be established.
  *
  * The removal decision needs it: a complete rotation carrying no blob for us is
  * an exclusion only if it published AT OR AFTER we joined. One that predates the
  * join is community history a stale invite dropped us onto, and reading it as a
  * removal would eject every fresh joiner seconds after they arrive.
+ *
+ * **NOT ZERO ON FAILURE.** A join time of 0 makes every rotation in history
+ * postdate the join, which turns that guard off entirely — the one guard whose
+ * absence costs a member their channels. A missing row, a non-numeric
+ * `added_at` (the list parser tolerates anything) or a Dexie failure are all
+ * "we do not know", and armada's answer to not knowing is to not act at all
+ * (`if (!entry) return; // the removal decision needs my join time`). So this
+ * returns undefined and the caller declines to run.
  */
 export async function readJoinedAtMs(
   pubkey: string,
   idHex: string,
-): Promise<number> {
+): Promise<number | undefined> {
   try {
     const row = await db.concordCommunities.get([pubkey, idHex]);
-    const addedAt = (row?.entry as CommunityListEntry | undefined)?.added_at;
+    if (!row) return undefined;
+    const addedAt = (row.entry as CommunityListEntry | undefined)?.added_at;
     return typeof addedAt === "number" && Number.isFinite(addedAt)
       ? addedAt
-      : 0;
+      : undefined;
   } catch {
-    return 0;
+    return undefined;
   }
 }
 

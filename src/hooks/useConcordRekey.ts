@@ -20,6 +20,7 @@ import { useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
 
 import type { FoldedControl } from "@/lib/concord/control";
+import { bytesToHex } from "@/lib/concord/derive";
 import type { Community } from "@/lib/concord/types";
 import accountManager from "@/services/accounts";
 import { readJoinedAtMs } from "@/services/concord-communities";
@@ -38,6 +39,16 @@ export function useConcordRekeyWatch(
   const signer = account?.signer;
   const idHex = community?.idHex;
   const rootEpoch = community?.rootEpoch;
+  /**
+   * The channel generations being watched. A CHANNEL adoption does not move
+   * `rootEpoch`, so without this the effect never re-armed after one and kept
+   * re-deriving the same pre-rotation addresses. Armada keys its channel effect
+   * on the same thing, for the same reason.
+   */
+  const watchKey = (community?.privateChannels ?? [])
+    .map((channel) => `${bytesToHex(channel.id)}:${channel.epoch}`)
+    .sort()
+    .join(",");
 
   useEffect(() => {
     if (!community || !folded || !pubkey || !signer) return;
@@ -51,6 +62,16 @@ export function useConcordRekeyWatch(
     const round = async () => {
       try {
         const joinedAtMs = await readJoinedAtMs(pubkey, community.idHex);
+        // WITHOUT A JOIN TIME, DO NOT ACT. The removal decision compares every
+        // rotation's publish time against it, so an unknown join time (a
+        // missing row, a list entry whose `added_at` is not a number, a failed
+        // read) would make every rotation in history postdate the join and turn
+        // that guard off — ejecting a member from channels on rotations that
+        // happened before they existed. Armada declines the same way.
+        if (joinedAtMs === undefined) {
+          if (!cancelled) timer = setTimeout(() => void round(), POLL_MS);
+          return;
+        }
         const result = await watchRekeys(
           community,
           folded,
@@ -58,10 +79,13 @@ export function useConcordRekeyWatch(
           joinedAtMs,
         );
         if (cancelled) return;
-        // An exclusion is recorded but does NOT reload: the membership stays
-        // exactly where it is, marked, and re-reading would only re-render the
-        // same thing. Only new key material changes what can be read.
-        if (result.adopted) onAdopted();
+        // EITHER outcome reloads. An adoption obviously changes what can be
+        // read — but so does a cut, which drops a channel from the sidebar, and
+        // a pass that adopts on one channel while being cut from another
+        // reports both. Not reloading is also what left the watcher re-walking
+        // the same rotation on every poll, because the `Community` it reads
+        // only advances when the list is re-read.
+        if (result.adopted || result.excluded) onAdopted();
       } catch (error) {
         if (!cancelled) console.debug("[concord] rekey watch:", error);
       }
@@ -78,5 +102,5 @@ export function useConcordRekeyWatch(
     // render. An adoption changes `rootEpoch`, which re-arms this naturally and
     // is what walks a client forward across several missed rotations.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idHex, rootEpoch, pubkey, signer, folded, onAdopted]);
+  }, [idHex, rootEpoch, watchKey, pubkey, signer, folded, onAdopted]);
 }

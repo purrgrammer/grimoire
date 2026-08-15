@@ -32,7 +32,11 @@ import { myLocator, ROOT_SCOPE_HEX } from "@/lib/concord/rekey";
 import { Permissions } from "@/lib/concord/roles";
 import { buildRumor, sealRumor, wrapSeal } from "@/lib/concord/stream";
 import type { Community } from "@/lib/concord/types";
-import { readAdoption, applyAdoption } from "@/services/concord-adoptions";
+import {
+  applyAdoption,
+  readAdoption,
+  writeAdoption,
+} from "@/services/concord-adoptions";
 import {
   _resetRekeyCursorsForTests,
   watchBaseRekey,
@@ -498,6 +502,62 @@ describe("watchBaseRekey", () => {
   });
 });
 
+describe("the join-time guard", () => {
+  const nextEpoch = 2n;
+
+  it("does not cut us out on a base rotation from a peer who does not outrank us", async () => {
+    // CORD-06 §Authority on the BASE half: "the Rotator must strictly outrank
+    // every removed target". Every other base test uses the owner, who
+    // outranks everyone, so this is the only one the gate is reachable from.
+    const { fold, vac } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+          vac,
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }))
+        .excluded,
+    ).toBe(false);
+  });
+
+  it("does not cut us from a CHANNEL on a rotation that predates our join", async () => {
+    // A stale public invite lands a joiner on a channel epoch the community has
+    // already rotated past. That rotation is history they were never part of,
+    // and reading it as a removal takes the room away seconds after they arrive.
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, nextEpoch),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: channelKey,
+          blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+          createdAt: NOW - 7200, // before JOINED_MS
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
+        pool,
+      }),
+    ).toEqual({ adopted: false, excluded: false });
+  });
+});
+
 describe("watchChannelRekeys", () => {
   const nextEpoch = 2n;
   const newChannelKey = random32();
@@ -811,6 +871,315 @@ describe("watchChannelRekeys", () => {
         pool,
       }),
     ).toEqual({ adopted: false, excluded: false });
+  });
+});
+
+describe("the CORD-04 §5 citation gate", () => {
+  const nextEpoch = 2n;
+  const newRoot = random32();
+
+  /** A rotation from an authorized non-owner, citing `vac`. */
+  async function rotationCiting(vac: string[]): Promise<MockRelay> {
+    return startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [
+            blobForMe(
+              wrappedPlain(new Uint8Array(32), nextEpoch, newRoot),
+              ROOT_SCOPE_HEX,
+              nextEpoch,
+            ),
+          ],
+          vac,
+        }),
+      ],
+    });
+  }
+
+  it("adopts from an authorized non-owner citing the Grant we folded", async () => {
+    const { fold, vac } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await rotationCiting(vac);
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(true);
+  });
+
+  it("REFUSES the same rotation citing a Grant version we have not read", async () => {
+    // The whole community's keys turn on this: a just-demoted admin's
+    // Refounding must not be honored by a client one sweep behind. Citing v9
+    // when our fold is at v1 means we cannot confirm the authority — fail
+    // closed and let it self-heal when the Grant arrives.
+    const { fold, vac } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await rotationCiting([vac[0], vac[1], "9", vac[3]]);
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(false);
+  });
+
+  it("REFUSES a rotation citing a non-canonical fork of its own Grant", async () => {
+    const { fold, vac } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await rotationCiting([vac[0], vac[1], vac[2], "cd".repeat(32)]);
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(false);
+  });
+
+  it("REFUSES an authorized non-owner rotation with no citation at all", async () => {
+    const { fold } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [
+            blobForMe(
+              wrappedPlain(new Uint8Array(32), nextEpoch, newRoot),
+              ROOT_SCOPE_HEX,
+              nextEpoch,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(false);
+  });
+});
+
+describe("idempotence", () => {
+  const nextEpoch = 2n;
+
+  it("does not re-adopt a channel rotation it has already recorded", async () => {
+    // The loop this closes: the walk reads the `Community` prop, which only
+    // advances when the caller reloads the list — so without a check against
+    // what is STORED, every poll re-adopted the same rotation and appended
+    // another copy of the key it stepped off, forever.
+    const newKey = random32();
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, nextEpoch),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: channelKey,
+          blobs: [
+            blobForMe(
+              wrappedPlain(channelId, nextEpoch, newKey),
+              bytesToHex(channelId),
+              nextEpoch,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+
+    const results = [];
+    for (let i = 0; i < 3; i++) {
+      results.push(
+        await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
+          pool,
+        }),
+      );
+    }
+    expect(results.map((r) => r.adopted)).toEqual([true, false, false]);
+    const row = await readAdoption(me, idHex);
+    expect(row?.channels[0].priors).toHaveLength(1);
+  });
+
+  it("does not duplicate a prior the stored row already carries", async () => {
+    // Reachable whenever the stored row leads the Community: the walk steps off
+    // epoch 1, and the row already lists epoch 1 as a prior. A prior is a KEY,
+    // and every duplicate becomes a stream key the reader derives and
+    // subscribes at.
+    const two = random32();
+    const three = random32();
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, 2n),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: 2n,
+          prevEpoch: 1n,
+          prevKey: channelKey,
+          blobs: [
+            blobForMe(
+              wrappedPlain(channelId, 2n, two),
+              bytesToHex(channelId),
+              2n,
+            ),
+          ],
+        }),
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, 3n),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: 3n,
+          prevEpoch: 2n,
+          prevKey: two,
+          blobs: [
+            blobForMe(
+              wrappedPlain(channelId, 3n, three),
+              bytesToHex(channelId),
+              3n,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+
+    // The row already knows about epoch 2, with epoch 1 retained behind it —
+    // the state a previous poll left before the list caught up.
+    await writeAdoption(me, idHex, {
+      channels: [
+        {
+          idHex: bytesToHex(channelId),
+          epoch: "2",
+          key: bytesToHex(two),
+          priors: [{ epoch: "1", key: bytesToHex(channelKey) }],
+        },
+      ],
+    });
+
+    // The Community is still at epoch 1, so the walk re-steps 1 → 2 → 3.
+    await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
+      pool,
+    });
+    const stored = await readAdoption(me, idHex);
+    const epochs = (stored?.channels[0].priors ?? []).map((p) => p.epoch);
+    expect(epochs).toEqual([...new Set(epochs)]);
+    expect(epochs.sort()).toEqual(["1", "2"]);
+  });
+
+  it("reports an adoption even when another channel was cut in the same pass", async () => {
+    // `adopted && !excluded` hid this, so the caller never reloaded, so the
+    // adoption never reached the `Community` — and the walk repeated forever.
+    const otherId = random32();
+    const otherKey = random32();
+    const newKey = random32();
+    const c = () =>
+      community({
+        privateChannels: [
+          { id: channelId, key: channelKey, epoch: 1n, name: "#a" },
+          { id: otherId, key: otherKey, epoch: 1n, name: "#b" },
+        ],
+      });
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, nextEpoch),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: channelKey,
+          blobs: [
+            blobForMe(
+              wrappedPlain(channelId, nextEpoch, newKey),
+              bytesToHex(channelId),
+              nextEpoch,
+            ),
+          ],
+        }),
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, otherId, nextEpoch),
+          scopeIdHex: bytesToHex(otherId),
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: otherKey,
+          blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+
+    const first = await watchChannelRekeys(c(), folded(), viewer, JOINED_MS, {
+      pool,
+    });
+    expect(first).toEqual({ adopted: true, excluded: true });
+    // And the second pass is quiet, so the caller is asked to reload once.
+    expect(
+      await watchChannelRekeys(c(), folded(), viewer, JOINED_MS, { pool }),
+    ).toEqual({ adopted: false, excluded: false });
+  });
+
+  it("does not re-announce a base adoption it has already recorded", async () => {
+    const newRoot = random32();
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [
+            blobForMe(
+              wrappedPlain(new Uint8Array(32), nextEpoch, newRoot),
+              ROOT_SCOPE_HEX,
+              nextEpoch,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(true);
+    expect(
+      (await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }))
+        .adopted,
+    ).toBe(false);
+  });
+
+  it("does not re-announce a base exclusion it has already recorded", async () => {
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      (await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }))
+        .excluded,
+    ).toBe(true);
+    expect(
+      (await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }))
+        .excluded,
+    ).toBe(false);
   });
 });
 

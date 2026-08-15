@@ -125,6 +125,93 @@ describe("applyAdoption — roots", () => {
     }
   });
 
+  it("keeps the WINNER's control pair through a same-epoch race", () => {
+    // The pair is minted beside the root it ships with (CORD-06 §1), so only
+    // the winner's belongs to this epoch. Pinning the loser's `control_pk` onto
+    // the winning HeldRoot makes the client register and sweep the losing
+    // fork's Control Plane and never the winner's — no roster, no banlist, no
+    // channel updates — and `refounder` is the epoch's snapshot authority, so
+    // real snapshots get refused too.
+    const low = new Uint8Array(32).fill(0x01);
+    const high = new Uint8Array(32).fill(0x02);
+    const listPk = "cc".repeat(32);
+    const adoptedPk = "dd".repeat(32);
+    const listRefounder = "11".repeat(32);
+    const adoptedRefounder = "22".repeat(32);
+
+    // The LIST holds the winner: its pair must survive untouched.
+    const listWins = applyAdoption(
+      community({
+        root: low,
+        controlPk: listPk,
+        refounder: listRefounder,
+        heldRoots: [
+          {
+            epoch: 1n,
+            key: low,
+            controlPk: listPk,
+            refounder: listRefounder,
+          },
+        ],
+      }),
+      row({
+        roots: [
+          {
+            epoch: "1",
+            key: bytesToHex(high),
+            controlPk: adoptedPk,
+            refounder: adoptedRefounder,
+          },
+        ],
+      }),
+    ).community;
+    expect(listWins.controlPk).toBe(listPk);
+    const winner = listWins.heldRoots.find(
+      (r) => bytesToHex(r.key) === bytesToHex(low),
+    );
+    expect(winner?.controlPk).toBe(listPk);
+    expect(winner?.refounder).toBe(listRefounder);
+    // The loser is retained as a readable key and nothing more.
+    const loser = listWins.heldRoots.find(
+      (r) => bytesToHex(r.key) === bytesToHex(high),
+    );
+    expect(loser?.controlPk).toBeUndefined();
+
+    // The ADOPTION holds the winner: now ITS pair leads, top level included.
+    const adoptionWins = applyAdoption(
+      community({
+        root: high,
+        controlPk: listPk,
+        refounder: listRefounder,
+        heldRoots: [
+          {
+            epoch: 1n,
+            key: high,
+            controlPk: listPk,
+            refounder: listRefounder,
+          },
+        ],
+      }),
+      row({
+        roots: [
+          {
+            epoch: "1",
+            key: bytesToHex(low),
+            controlPk: adoptedPk,
+            refounder: adoptedRefounder,
+          },
+        ],
+      }),
+    ).community;
+    expect(adoptionWins.controlPk).toBe(adoptedPk);
+    expect(adoptionWins.refounder).toBe(adoptedRefounder);
+    const won = adoptionWins.heldRoots.find(
+      (r) => bytesToHex(r.key) === bytesToHex(low),
+    );
+    expect(won?.controlPk).toBe(adoptedPk);
+    expect(won?.refounder).toBe(adoptedRefounder);
+  });
+
   it("walks several adopted epochs in order", () => {
     const two = random32();
     const three = random32();
@@ -162,6 +249,28 @@ describe("applyAdoption — roots", () => {
       row({ roots: [{ epoch: "2", key: bytesToHex(random32()) }] }),
     );
     expect(out.controlPk).toBeUndefined();
+  });
+});
+
+describe("applyAdoption — what can never be spent", () => {
+  it("keeps a row that only records a base exclusion", () => {
+    // The base watcher's ONLY output when a Refounding cuts us. Nothing else
+    // records it, so deleting it as spent meant it was written and deleted on
+    // alternate passes forever and could never be read by anything.
+    const { spent } = applyAdoption(community(), row({ excludedAtEpoch: "2" }));
+    expect(spent).toBe(false);
+  });
+
+  it("keeps a cut for a channel the list no longer vends", () => {
+    // A cut is a FLOOR, not a cache: it exists so a stale invite bundle
+    // carrying the pre-rotation key can never merge the access back. The
+    // channel being absent from the list is the state it describes, not a sign
+    // the record is spent.
+    const { spent } = applyAdoption(
+      community({ privateChannels: [] }),
+      row({ cuts: [{ idHex: bytesToHex(channelId), epoch: "2" }] }),
+    );
+    expect(spent).toBe(false);
   });
 });
 

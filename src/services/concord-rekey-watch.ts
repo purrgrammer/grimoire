@@ -217,6 +217,24 @@ async function fetchRounds(
   );
 }
 
+/**
+ * Retained keys, newest first, one entry per epoch.
+ *
+ * A prior is a KEY, not an event: the same epoch appearing twice is a duplicate
+ * however it got there, and duplicates are not harmless — every prior becomes a
+ * stream key the reader derives and subscribes at.
+ */
+function dedupePriors<T extends { epoch: string }>(priors: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const prior of priors) {
+    if (seen.has(prior.epoch)) continue;
+    seen.add(prior.epoch);
+    out.push(prior);
+  }
+  return out;
+}
+
 /** Parse the stored rounds for a set of targets. */
 async function storedRotations(
   communityId: string,
@@ -356,6 +374,15 @@ export async function watchBaseRekey(
 
   if (adopted) {
     const prior = await readAdoption(viewer.pubkey, community.idHex);
+    // ALREADY RECORDED → say nothing changed, the same as the channel walk. The
+    // base half is normally saved by `rootEpoch` moving on the reload, but a
+    // reload that fails (or an adoption the list has already caught up with)
+    // would otherwise have this re-announce an adoption on every poll.
+    const already = prior?.roots.find(
+      (r) =>
+        BigInt(r.epoch) === nextEpoch && r.key === bytesToHex(adopted!.key),
+    );
+    if (already) return { adopted: false, excluded: false };
     const ok = await writeAdoption(viewer.pubkey, community.idHex, {
       roots: [
         ...(prior?.roots ?? []).filter((r) => BigInt(r.epoch) !== nextEpoch),
@@ -378,6 +405,10 @@ export async function watchBaseRekey(
   }
 
   if (sawExcludingRotation) {
+    const prior = await readAdoption(viewer.pubkey, community.idHex);
+    if (prior?.excludedAtEpoch === nextEpoch.toString()) {
+      return { adopted: false, excluded: false }; // already recorded
+    }
     const ok = await writeAdoption(viewer.pubkey, community.idHex, {
       excludedAtEpoch: nextEpoch.toString(),
     });
@@ -466,6 +497,7 @@ export async function watchChannelRekeys(
   const channels = [...(prior?.channels ?? [])];
   const cuts = [...(prior?.cuts ?? [])];
   let changed = false;
+  let adoptedAny = false;
   let excluded = false;
 
   for (const channel of community.privateChannels) {
@@ -597,22 +629,37 @@ export async function watchChannelRekeys(
     // re-admission; below it, the exclusion is the later word.
     if (adopted && (excludedAt === undefined || adopted.epoch > excludedAt)) {
       const at = channels.findIndex((c) => c.idHex === chIdHex);
+      // ALREADY RECORDED → nothing changed. Without this the walk re-adopts the
+      // same rotation on every poll: the `Community` it reads only advances
+      // when the caller reloads the list, so the pre-rotation key keeps coming
+      // back and each pass appends another copy of the key it stepped off.
+      // Armada is protected by a `handled` ref keyed on the epoch the walk lands
+      // on; comparing against what is STORED does the same job and survives a
+      // reload, where a session ref would not.
+      if (
+        at >= 0 &&
+        channels[at].epoch === adopted.epoch.toString() &&
+        channels[at].key === bytesToHex(adopted.key)
+      ) {
+        continue;
+      }
       const entry = {
         idHex: chIdHex,
         epoch: adopted.epoch.toString(),
         key: bytesToHex(adopted.key),
-        priors: [
+        priors: dedupePriors([
           ...steppedOver.map((p) => ({
             epoch: p.epoch.toString(),
             key: bytesToHex(p.key),
             ...(p.retiredAt !== undefined ? { retiredAt: p.retiredAt } : {}),
           })),
           ...(at >= 0 ? (channels[at].priors ?? []) : []),
-        ],
+        ]),
       };
       if (at >= 0) channels[at] = entry;
       else channels.push(entry);
       changed = true;
+      adoptedAny = true;
     } else if (excludedAt !== undefined) {
       // Removed from this channel: it is dropped so it visibly disappears
       // (CORD-06 §2). The cut is RECORDED at the epoch that excluded us, so a
@@ -620,6 +667,7 @@ export async function watchChannelRekeys(
       // access back.
       const at = cuts.findIndex((c) => c.idHex === chIdHex);
       const entry = { idHex: chIdHex, epoch: excludedAt.toString() };
+      if (at >= 0 && cuts[at].epoch === entry.epoch) continue; // already recorded
       if (at >= 0) cuts[at] = entry;
       else cuts.push(entry);
       changed = true;
@@ -632,7 +680,11 @@ export async function watchChannelRekeys(
     channels,
     cuts,
   });
-  return { adopted: ok && !excluded, excluded: ok && excluded };
+  // BOTH facts, independently. One pass can adopt on one channel and be cut
+  // from another, and reporting `adopted: false` there left the caller with no
+  // reason to reload — so the adoption never reached the `Community`, and the
+  // next poll walked the same rotation again, forever.
+  return { adopted: ok && adoptedAny, excluded: ok && excluded };
 }
 
 /**

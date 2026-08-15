@@ -36,6 +36,7 @@ const {
   _resetDecryptMemoForTests,
   clearCommunities,
   loadStoredCommunities,
+  readJoinedAtMs,
   syncCommunities,
 } = await import("./concord-communities");
 const { default: db } = await import("./db");
@@ -92,6 +93,35 @@ beforeEach(async () => {
   await db.concordKv.clear();
   _resetDecryptMemoForTests();
   requestEvents.mockReset();
+});
+
+describe("readJoinedAtMs", () => {
+  it("reads the list entry's added_at", async () => {
+    const alpha = joinMaterial("Alpha");
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(alpha, 4242)], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+    expect(await readJoinedAtMs(pubkey, alpha.community_id)).toBe(4242);
+  });
+
+  it("is UNDEFINED, never 0, when it cannot be established", async () => {
+    // A join time of 0 makes every rotation in history postdate the join, which
+    // turns off the single guard stopping a stale-invite joiner being ejected
+    // from channels. "We do not know" must be distinguishable from "epoch 0",
+    // so the watcher can decline to act at all — the way armada does.
+    const alpha = joinMaterial("Alpha");
+    const broken = entry(alpha);
+    delete (broken as { added_at?: number }).added_at;
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [broken], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+    expect(await readJoinedAtMs(pubkey, alpha.community_id)).toBeUndefined();
+
+    // …and for a community with no row at all.
+    expect(await readJoinedAtMs(pubkey, "ff".repeat(32))).toBeUndefined();
+  });
 });
 
 describe("syncCommunities", () => {
