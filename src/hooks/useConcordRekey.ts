@@ -16,7 +16,7 @@
  * only changes when the list is re-read.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 
 import type { FoldedControl } from "@/lib/concord/control";
@@ -29,11 +29,18 @@ import { watchRekeys } from "@/services/concord-rekey-watch";
 /** How often to re-check, while the community is open. */
 const POLL_MS = 2 * 60_000;
 
+/**
+ * @returns whether this member is STRANDED on a superseded epoch — dropped
+ * there by a stale invite link, with no forward path on the wire.
+ */
 export function useConcordRekeyWatch(
   community: Community | undefined,
   folded: FoldedControl | undefined,
   onAdopted: () => void,
-): void {
+): { stranded: boolean } {
+  // Keyed by subject, like the other Concord hooks: the verdict belongs to the
+  // community it was computed for, and the viewer switches in place.
+  const [strandedAt, setStrandedAt] = useState<string>();
   const account = use$(accountManager.active$);
   const pubkey = account?.pubkey;
   const signer = account?.signer;
@@ -85,6 +92,7 @@ export function useConcordRekeyWatch(
         // reports both. Not reloading is also what left the watcher re-walking
         // the same rotation on every poll, because the `Community` it reads
         // only advances when the list is re-read.
+        if (result.stranded) setStrandedAt(community.idHex);
         if (result.adopted || result.excluded) onAdopted();
       } catch (error) {
         if (!cancelled) console.debug("[concord] rekey watch:", error);
@@ -103,4 +111,6 @@ export function useConcordRekeyWatch(
     // is what walks a client forward across several missed rotations.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idHex, rootEpoch, watchKey, pubkey, signer, folded, onAdopted]);
+
+  return { stranded: strandedAt !== undefined && strandedAt === idHex };
 }

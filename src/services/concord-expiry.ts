@@ -50,7 +50,15 @@ export function _resetExpirySweepForTests(): void {
 export function sweepExpiredRumors(
   opts: { force?: boolean; nowSecs?: number } = {},
 ): Promise<number> {
-  if (inFlight) return inFlight;
+  // A FORCED sweep waits for the one in flight and then runs its own, rather
+  // than silently inheriting a result that was computed before whatever the
+  // caller wants swept existed. An unforced caller joins, which is the point of
+  // the single flight.
+  if (inFlight) {
+    return opts.force
+      ? inFlight.then(() => sweepExpiredRumors(opts))
+      : inFlight;
+  }
   const now = Date.now();
   if (!opts.force && now - lastSweep < SWEEP_INTERVAL_MS) {
     return Promise.resolve(0);

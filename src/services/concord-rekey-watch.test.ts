@@ -285,7 +285,7 @@ describe("watchBaseRekey", () => {
       JOINED_MS,
       { pool },
     );
-    expect(result).toEqual({ adopted: true, excluded: false });
+    expect(result).toEqual({ adopted: true, excluded: false, stranded: false });
 
     // …and the adoption layers onto the community the next read produces.
     const row = await readAdoption(me, idHex);
@@ -450,7 +450,7 @@ describe("watchBaseRekey", () => {
 
     expect(
       await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
   });
 
   it("records an exclusion when a complete rotation carries no blob for us", async () => {
@@ -476,11 +476,11 @@ describe("watchBaseRekey", () => {
       JOINED_MS,
       { pool },
     );
-    expect(result).toEqual({ adopted: false, excluded: true });
+    expect(result).toEqual({ adopted: false, excluded: true, stranded: false });
     expect((await readAdoption(me, idHex))?.excludedAtEpoch).toBe("2");
   });
 
-  it("does NOT read a rotation that PREDATES our join as a removal", async () => {
+  it("reports a rotation that PREDATES our join as a STRAND, not a removal", async () => {
     // A stale public invite drops a joiner ONTO a historical Refounding: it is
     // complete, continuity-valid, and has no blob at their locator. Reading
     // that as a removal ejects every fresh joiner seconds after they arrive.
@@ -500,9 +500,14 @@ describe("watchBaseRekey", () => {
     });
     pool = new RelayPool();
 
+    // Neither an adoption nor an exclusion — and the third answer matters,
+    // because there is no forward path on the wire: the rekey for the epoch we
+    // hold was minted before our pubkey existed, so it can never carry our
+    // blob. Only a refreshed link or a direct invite heals it, and the reader
+    // has to be told that rather than left staring at an unreadable community.
     expect(
       await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: true });
   });
 });
 
@@ -558,7 +563,94 @@ describe("the join-time guard", () => {
       await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
         pool,
       }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
+  });
+});
+
+describe("the strand signal", () => {
+  const nextEpoch = 2n;
+
+  it("does NOT strand on a rotation from someone who does not outrank us", async () => {
+    // Tested on the join time, not on the negation of "could exclude me": a
+    // peer's rotation is not our removal AND not our strand — it is simply not
+    // about us. Negating the conjunction would route every peer-rank rotation
+    // here and tell the user their invite link is stale when it is fine.
+    const { fold, vac } = foldWithGrant(rotator, Permissions.BAN, 1);
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+          vac,
+          // AFTER our join, so it is the exclusion branch that is being
+          // declined, not the strand branch.
+          createdAt: NOW - 60,
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    expect(
+      await watchBaseRekey(community(), fold, viewer, JOINED_MS, { pool }),
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
+  });
+
+  it("does not strand when the rotation carried our blob after all", async () => {
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [
+            blobForMe(
+              wrappedPlain(new Uint8Array(32), nextEpoch, random32()),
+              ROOT_SCOPE_HEX,
+              nextEpoch,
+            ),
+          ],
+          createdAt: NOW - 7200, // predates the join, but addressed to us
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    const out = await watchBaseRekey(community(), folded(), viewer, JOINED_MS, {
+      pool,
+    });
+    expect(out.adopted).toBe(true);
+    expect(out.stranded).toBe(false);
+  });
+});
+
+describe("channel cursor housekeeping", () => {
+  it("drops the cursors of windows it has stopped watching", async () => {
+    // The scope key names the exact (channel, epoch) set, so every adoption
+    // mints a new one and abandons the last. Nothing collected them.
+    relay = await startMockRelay({ kind: "paged", events: [] });
+    pool = new RelayPool();
+
+    await db.concordKv.put({
+      key: `rekey-cursor:chan:${idHex}:stale-window|${relay.url}`,
+      value: 1_700_000_000,
+    });
+    await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
+      pool,
+    });
+    // Give the fire-and-forget prune a turn.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const left = await db.concordKv
+      .where("key")
+      .startsWith(`rekey-cursor:chan:${idHex}:`)
+      .primaryKeys();
+    expect(left.some((k) => String(k).includes("stale-window"))).toBe(false);
   });
 });
 
@@ -874,7 +966,7 @@ describe("watchChannelRekeys", () => {
       await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
         pool,
       }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
   });
 });
 
@@ -1122,11 +1214,11 @@ describe("idempotence", () => {
     const first = await watchChannelRekeys(c(), folded(), viewer, JOINED_MS, {
       pool,
     });
-    expect(first).toEqual({ adopted: true, excluded: true });
+    expect(first).toEqual({ adopted: true, excluded: true, stranded: false });
     // And the second pass is quiet, so the caller is asked to reload once.
     expect(
       await watchChannelRekeys(c(), folded(), viewer, JOINED_MS, { pool }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
   });
 
   it("does not re-announce a base adoption it has already recorded", async () => {
@@ -1220,7 +1312,7 @@ describe("the dissolution guard", () => {
 
     expect(
       await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
     // Not even a request: the grave is checked before any address is derived.
     expect(relay.reqFilters()).toHaveLength(0);
   });
@@ -1252,7 +1344,7 @@ describe("the dissolution guard", () => {
       await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
         pool,
       }),
-    ).toEqual({ adopted: false, excluded: false });
+    ).toEqual({ adopted: false, excluded: false, stranded: false });
     expect(relay.reqFilters()).toHaveLength(0);
   });
 });

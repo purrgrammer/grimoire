@@ -925,56 +925,63 @@ async function runGuestbookScope(
     ...(since ? { since } : {}),
   };
 
-  const ask = () =>
-    planeRequest(relayUrl, filter, {
-      timeout: paging.queryTimeoutMs,
-      pool: opts.pool,
-    });
+  // PAGED, unlike armada, which takes page one and stops.
+  //
+  // A cursorless first sweep is the whole history of the plane, and a burst
+  // larger than one page between sweeps loses its middle — the cursor jumps to
+  // the newest entry it saw and `since` never serves the gap again. Armada
+  // accepts that because §5's observed-authors rule heals it for anyone who
+  // speaks; it does not heal for the silent, who are exactly the members only
+  // the Guestbook knows about. `pageScope` already walks `until` backwards and
+  // stops on a short page, and the `since` floor makes it terminate at the
+  // cursor rather than at the beginning of time — so this is more complete than
+  // armada and never less, which is the only direction a divergence may go.
+  const fresh: OpenedWireEvent[] = [];
+  let newest = 0;
+  let failed = false;
 
-  let read = await ask();
-  // Same two routine races as the control sweep: a refused read whose challenge
-  // has since been answered, and an empty page that raced NIP-42 and reads back
-  // clean. Re-ask once behind the gate rather than record either as an answer.
-  const wanted = new Set(pubkeys);
-  const mine = (events: NostrEvent[]) =>
-    events.filter((e) => e.kind === KIND_WRAP && wanted.has(e.pubkey));
+  const ingest = async (batch: NostrEvent[]) => {
+    for (const wrap of batch) newest = Math.max(newest, wrap.created_at);
+    const opened = await openPlaneWraps(batch, groups);
+    // A page that decrypted to NOTHING still advances the cursor, as in armada.
+    // The guestbook address is member-derivable, so any member can mint wraps
+    // there that never open; pinning the cursor on them would re-decrypt the
+    // same junk on every sweep, and this path has no seen-memo to stop it. They
+    // are permanently unopenable under keys we already hold, so there is
+    // nothing behind them to come back for.
+    if (opened.length === 0) return;
+    const written = await writeOpened(community.idHex, opened, "guestbook", {
+      refounded: community.rootEpoch > 0n,
+    });
+    if (written.ok) fresh.push(...opened);
+    else failed = true;
+  };
+
+  let outcome = await pageScope(relayUrl, filter, ingest, opts.pool);
+  // The same two routine races the control sweep handles, and for the same
+  // reason: on this pool a relay connects on the FIRST REQ, so the opening read
+  // races the NIP-42 challenge. A refusal, or an empty answer while the AUTHs
+  // are known-unacked, is not an exhausted plane.
   if (
-    read.outcome === "refused" ||
-    (read.outcome === "eose" &&
-      mine(read.events).length === 0 &&
-      !streamAuthsSettled(relayUrl, pubkeys))
+    outcome.refused ||
+    (outcome.total === 0 && !streamAuthsSettled(relayUrl, pubkeys))
   ) {
     await whenAuthAnswered(relayUrl, pubkeys);
-    read = await ask();
+    outcome = await pageScope(relayUrl, filter, ingest, opts.pool);
   }
-  if (read.outcome !== "eose") return [];
+  if (!outcome.answered || newest === 0) return fresh;
 
-  const page = mine(read.events);
-  if (page.length === 0) return [];
-
-  const opened = await openPlaneWraps(page, groups);
-  // A page that decrypted to NOTHING still advances the cursor, as in armada.
-  // The guestbook address is member-derivable, so any member can mint wraps
-  // there that never open; pinning the cursor on them would re-decrypt the same
-  // junk on every sweep, and this path has no seen-memo to stop it. They are
-  // permanently unopenable under keys we already hold, so there is nothing
-  // behind them to come back for.
-  const written =
-    opened.length > 0
-      ? await writeOpened(community.idHex, opened, "guestbook", {
-          refounded: community.rootEpoch > 0n,
-        })
-      : { ok: true, wrapIds: [] };
   // DIVERGENCE from armada, narrowing and deliberate: armada advances this
   // cursor without checking the write. A forward cursor is the one place that
   // cannot be forgiven — a `since` filter will never serve these wraps again,
-  // and the seen-memo offers no second chance either, so advancing over a failed
-  // Dexie write loses them for good.
-  if (!written.ok) return [];
+  // and the seen-memo offers no second chance either, so advancing over a
+  // failed Dexie write loses them for good. Same for a TRUNCATED walk: the
+  // plane below where we stopped went unread, and the cursor must not claim it.
+  if (failed || outcome.truncated) return fresh;
 
-  advanceGuestbookCursor(scope, Math.max(...page.map((e) => e.created_at)));
-  if (opened.length > 0) opts.onFresh?.(opened);
-  return opened;
+  advanceGuestbookCursor(scope, newest);
+  if (fresh.length > 0) opts.onFresh?.(fresh);
+  return fresh;
 }
 
 /**

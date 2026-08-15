@@ -143,6 +143,18 @@ describe("sweepExpiredRumors", () => {
     expect(await sweepExpiredRumors({ force: true })).toBe(1);
   });
 
+  it("a FORCED sweep waits for the one in flight rather than inheriting it", async () => {
+    // Inheriting is wrong for a forced caller: the in-flight result was
+    // computed before whatever they want swept existed.
+    await put(KIND_MESSAGE, NOW - 10);
+    const running = sweepExpiredRumors();
+    const late = await put(KIND_MESSAGE, NOW - 5);
+    const forced = sweepExpiredRumors({ force: true });
+    expect(await running).toBe(1);
+    expect(await forced).toBe(1);
+    expect(await db.concordRumors.get(late)).toBeUndefined();
+  });
+
   it("single-flights concurrent sweeps", async () => {
     await put(KIND_MESSAGE, NOW - 10);
     const [a, b] = await Promise.all([

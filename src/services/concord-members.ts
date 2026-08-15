@@ -104,16 +104,25 @@ export function rosterParticipants(
   ];
 }
 
-/** Sweep the Guestbook, then fold the roster. */
+/**
+ * Sweep the Guestbook, then fold the roster — or skip the fold when the sweep
+ * found nothing.
+ *
+ * Folding costs a full scan of the community's messages (the observed half), so
+ * a caller that has already read the stored roster and is only refreshing
+ * behind it should not pay for a second one that can only produce the same
+ * answer. Returns undefined when nothing changed.
+ */
 export async function syncRoster(
   community: Community,
   folded: FoldedControl,
-): Promise<Roster> {
+): Promise<Roster | undefined> {
   // Off-consensus: a failed sweep folds whatever the store already holds rather
   // than failing the read. Nothing in Control or Chat depends on this plane.
-  await sweepGuestbook(community).catch((error: unknown) => {
+  const fresh = await sweepGuestbook(community).catch((error: unknown) => {
     console.debug("[concord] guestbook sweep failed:", error);
     return [];
   });
+  if (fresh.length === 0) return undefined;
   return readStoredRoster(community, folded);
 }

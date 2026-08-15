@@ -89,6 +89,21 @@ export interface RekeyWatchResult {
    * on the list, marked read-only at that epoch.
    */
   excluded: boolean;
+  /**
+   * STRANDED: a complete, continuity-valid rotation that PREDATES our join and
+   * carries no blob for us, advancing past the epoch we hold.
+   *
+   * Neither an adoption nor an exclusion — it is community history we were
+   * never part of, which a stale public invite dropped us onto. The distinction
+   * matters because there is no forward path on the wire: the rekey for the
+   * epoch we hold was minted before our pubkey existed, so it cannot ever carry
+   * our blob. Only a REFRESHED invite link or a Direct Invite heals it, and
+   * both are things someone else has to do.
+   *
+   * Reported so the reader is told their link is out of date, rather than left
+   * staring at a community whose current epoch they silently cannot read.
+   */
+  stranded: boolean;
 }
 
 // ── Cursors ─────────────────────────────────────────────────────────────────
@@ -131,6 +146,29 @@ async function advanceCursor(
     await db.concordKv.put({ key: cursorKey(scope, relayUrl), value: next });
   } catch {
     // Best effort: a lost cursor costs one re-read, never a missed chunk.
+  }
+}
+
+/**
+ * Drop the cursors of every channel-watch scope this community is no longer
+ * watching.
+ *
+ * The channel scope key names the exact (channel, epoch) set being watched, so
+ * every adoption mints a new one and abandons the last — correctly, since the
+ * new window must be re-read from the beginning. Nothing collected the old
+ * rows, so `concordKv` grew one per rotation per relay forever.
+ */
+async function pruneChannelCursors(idHex: string, keep: string): Promise<void> {
+  try {
+    const prefix = `${CURSOR_PREFIX}chan:${idHex}:`;
+    const stale = await db.concordKv
+      .where("key")
+      .startsWith(prefix)
+      .primaryKeys();
+    const doomed = stale.filter((key) => !String(key).startsWith(keep));
+    if (doomed.length > 0) await db.concordKv.bulkDelete(doomed);
+  } catch {
+    // Housekeeping only — a failure costs a few stale rows, never a read.
   }
 }
 
@@ -273,11 +311,11 @@ export async function watchBaseRekey(
   opts: { pool?: RelayPool } = {},
 ): Promise<RekeyWatchResult> {
   const nip44 = viewer.signer.nip44;
-  if (!nip44) return { adopted: false, excluded: false };
+  if (!nip44) return { adopted: false, excluded: false, stranded: false };
   // Death wins every race (CORD-02 §9): a Refounding never crosses the owner's
   // tombstone, so no epoch advance past it is honored.
   if ((await dissolvedAt(community.idHex)) !== undefined) {
-    return { adopted: false, excluded: false };
+    return { adopted: false, excluded: false, stranded: false };
   }
 
   const nextEpoch = community.rootEpoch + 1n;
@@ -311,7 +349,8 @@ export async function watchBaseRekey(
       citationSatisfied(folded, community.id, set.rotator, set.authority) &&
       checkContinuity(set, community.rootEpoch, community.root).ok,
   );
-  if (rotations.length === 0) return { adopted: false, excluded: false };
+  if (rotations.length === 0)
+    return { adopted: false, excluded: false, stranded: false };
 
   let adopted:
     | {
@@ -323,6 +362,9 @@ export async function watchBaseRekey(
       }
     | undefined;
   let sawExcludingRotation = false;
+  // A complete rotation PAST our epoch that predates our join and holds no blob
+  // for us: a stale invite dropped us onto a superseded epoch.
+  let sawStrandingRotation = false;
 
   for (const set of rotations) {
     // A rotation is our removal only if it could have carried our blob AND its
@@ -343,6 +385,17 @@ export async function watchBaseRekey(
     );
     if (!blob) {
       if (couldExcludeMe) sawExcludingRotation = true;
+      // Tested on the JOIN TIME, not on `!couldExcludeMe`: a rotation from
+      // someone who does not outrank us is not our removal AND not our strand
+      // — it is simply not about us, and both flags must stay off. Negating the
+      // conjunction would route every peer-rank rotation here and tell the user
+      // their invite link is stale.
+      else if (
+        !rotationExcludesMe(rotationPublishedAtMs(set), joinedAtMs) &&
+        set.newEpoch > community.rootEpoch
+      ) {
+        sawStrandingRotation = true;
+      }
       continue;
     }
     try {
@@ -382,7 +435,7 @@ export async function watchBaseRekey(
       (r) =>
         BigInt(r.epoch) === nextEpoch && r.key === bytesToHex(adopted!.key),
     );
-    if (already) return { adopted: false, excluded: false };
+    if (already) return { adopted: false, excluded: false, stranded: false };
     const ok = await writeAdoption(viewer.pubkey, community.idHex, {
       roots: [
         ...(prior?.roots ?? []).filter((r) => BigInt(r.epoch) !== nextEpoch),
@@ -401,20 +454,20 @@ export async function watchBaseRekey(
         },
       ],
     });
-    return { adopted: ok, excluded: false };
+    return { adopted: ok, excluded: false, stranded: false };
   }
 
   if (sawExcludingRotation) {
     const prior = await readAdoption(viewer.pubkey, community.idHex);
     if (prior?.excludedAtEpoch === nextEpoch.toString()) {
-      return { adopted: false, excluded: false }; // already recorded
+      return { adopted: false, excluded: false, stranded: false }; // already recorded
     }
     const ok = await writeAdoption(viewer.pubkey, community.idHex, {
       excludedAtEpoch: nextEpoch.toString(),
     });
-    return { adopted: false, excluded: ok };
+    return { adopted: false, excluded: ok, stranded: false };
   }
-  return { adopted: false, excluded: false };
+  return { adopted: false, excluded: false, stranded: sawStrandingRotation };
 }
 
 // ── The channel watch ───────────────────────────────────────────────────────
@@ -442,11 +495,11 @@ export async function watchChannelRekeys(
 ): Promise<RekeyWatchResult> {
   const nip44 = viewer.signer.nip44;
   if (!nip44 || community.privateChannels.length === 0) {
-    return { adopted: false, excluded: false };
+    return { adopted: false, excluded: false, stranded: false };
   }
   // Death wins every race (CORD-02 §9), channel rotations included.
   if ((await dissolvedAt(community.idHex)) !== undefined) {
-    return { adopted: false, excluded: false };
+    return { adopted: false, excluded: false, stranded: false };
   }
 
   const roots =
@@ -471,12 +524,9 @@ export async function watchChannelRekeys(
     .map((ch) => `${bytesToHex(ch.id)}:${ch.epoch + 1n}`)
     .sort()
     .join(",");
-  await fetchRounds(
-    community,
-    `chan:${community.idHex}:${watchKey}`,
-    addresses,
-    opts.pool,
-  );
+  const scope = `chan:${community.idHex}:${watchKey}`;
+  await fetchRounds(community, scope, addresses, opts.pool);
+  void pruneChannelCursors(community.idHex, `${CURSOR_PREFIX}${scope}`);
 
   // Read back the SAME window the request covered. Reading only `held + 1`
   // would make the window a single-poll affair: the wire hands a rotation over
@@ -675,7 +725,7 @@ export async function watchChannelRekeys(
     }
   }
 
-  if (!changed) return { adopted: false, excluded: false };
+  if (!changed) return { adopted: false, excluded: false, stranded: false };
   const ok = await writeAdoption(viewer.pubkey, community.idHex, {
     channels,
     cuts,
@@ -684,7 +734,11 @@ export async function watchChannelRekeys(
   // from another, and reporting `adopted: false` there left the caller with no
   // reason to reload — so the adoption never reached the `Community`, and the
   // next poll walked the same rotation again, forever.
-  return { adopted: ok && adoptedAny, excluded: ok && excluded };
+  return {
+    adopted: ok && adoptedAny,
+    excluded: ok && excluded,
+    stranded: false,
+  };
 }
 
 /**
@@ -710,7 +764,7 @@ export async function watchRekeys(
     opts,
   ).catch((error: unknown) => {
     console.debug("[concord] base rekey watch failed:", error);
-    return { adopted: false, excluded: false };
+    return { adopted: false, excluded: false, stranded: false };
   });
   const channels = await watchChannelRekeys(
     community,
@@ -720,10 +774,11 @@ export async function watchRekeys(
     opts,
   ).catch((error: unknown) => {
     console.debug("[concord] channel rekey watch failed:", error);
-    return { adopted: false, excluded: false };
+    return { adopted: false, excluded: false, stranded: false };
   });
   return {
     adopted: base.adopted || channels.adopted,
     excluded: base.excluded || channels.excluded,
+    stranded: base.stranded,
   };
 }

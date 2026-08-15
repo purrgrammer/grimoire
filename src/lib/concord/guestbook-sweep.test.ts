@@ -20,6 +20,7 @@ import { bytesToHex, guestbookGroupKey, random32 } from "./derive";
 import { KIND_JOIN_LEAVE, KIND_SEAL_ENCRYPTED } from "./kinds";
 import {
   _configureAuthWaitForTests,
+  _configureSweepPagingForTests,
   _forgetGuestbookCursorMemoryForTests,
   _resetGuestbookCursorsForTests,
   _resetPlaneSweepForTests,
@@ -95,6 +96,11 @@ beforeEach(async () => {
   await _resetGuestbookCursorsForTests();
   _resetStreamAuthRegistry();
   _configureAuthWaitForTests(50);
+  _configureSweepPagingForTests({
+    pageLimit: 500,
+    maxEvents: 15_000,
+    wallPage: 10_000,
+  });
 });
 
 afterEach(async () => {
@@ -122,6 +128,44 @@ describe("sweepGuestbook", () => {
     expect(asks).toHaveLength(2);
     expect(asks[0].since).toBeUndefined();
     expect(asks[1].since).toBe(NOW - 300);
+  });
+
+  it("pages PAST the relay's per-filter limit, unlike armada", async () => {
+    // The gap this closes: a cursorless first sweep is the whole history of the
+    // plane, and armada takes page one and stops. The members lost are the
+    // silent ones — the observed-authors rule heals everyone who speaks, and
+    // nobody else.
+    _configureSweepPagingForTests({ pageLimit: 3 });
+    const events = [];
+    for (let i = 0; i < 7; i++)
+      events.push(await joinWrap(NOW - 1000 + i * 10));
+    relay = await startMockRelay({ kind: "paged", events });
+    pool = new RelayPool();
+    const c = community([relay.url]);
+
+    expect(await sweepGuestbook(c, { pool })).toHaveLength(7);
+    expect(await queryPlane(c.idHex, "guestbook")).toHaveLength(7);
+    // More than one request: page one could only have carried three.
+    expect(relay.reqFilters().length).toBeGreaterThan(1);
+  });
+
+  it("does NOT advance the cursor over a walk it truncated itself", async () => {
+    // A truncated walk left the plane below it unread, and a forward cursor
+    // that claimed it would never serve the gap again.
+    _configureSweepPagingForTests({ pageLimit: 3, maxEvents: 3 });
+    const events = [];
+    for (let i = 0; i < 9; i++)
+      events.push(await joinWrap(NOW - 1000 + i * 10));
+    relay = await startMockRelay({ kind: "paged", events });
+    pool = new RelayPool();
+    const c = community([relay.url]);
+
+    await sweepGuestbook(c, { pool });
+    await sweepGuestbook(c, { pool });
+    // Still asking from the beginning: nothing was proved read.
+    expect(relay.reqFilters()[0].since).toBeUndefined();
+    const asks = relay.reqFilters();
+    expect(asks[asks.length - 1].since).toBeUndefined();
   });
 
   it("persists the cursor, so a fresh session does not re-read the plane", async () => {

@@ -70,7 +70,11 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     refreshList();
     refresh();
   }, [refreshList, refresh]);
-  useConcordRekeyWatch(community, state?.folded, handleAdopted);
+  const { stranded } = useConcordRekeyWatch(
+    community,
+    state?.folded,
+    handleAdopted,
+  );
 
   // Terminal, one-way (CORD-02 §9). The write gates read the stored verdict
   // themselves; this is what tells the reader why.
@@ -161,6 +165,14 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         <span className="truncate text-xs font-medium text-muted-foreground">
           {state?.folded.metadata?.name ?? community?.name ?? "Community"}
         </span>
+        {stranded && (
+          <span
+            className="mr-auto ml-2 shrink-0 rounded border border-dotted px-1 text-[10px] text-muted-foreground"
+            title="The invite link you joined with was out of date: this community has rotated its keys past the epoch you hold, and the rotation happened before you joined, so it carries nothing for you. Ask a member for a fresh link or a direct invite."
+          >
+            stale invite
+          </span>
+        )}
         {dissolvedAtMs !== undefined && (
           <span
             className="mr-auto ml-2 shrink-0 rounded border border-dotted px-1 text-[10px] text-muted-foreground"

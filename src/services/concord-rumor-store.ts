@@ -71,6 +71,17 @@ const TAG_CHANNEL = "channel";
  * `ok` is false only when the write itself failed — storage pressure, a blocked
  * upgrade. A refusal is a successful write of nothing.
  */
+/**
+ * What a store write did.
+ *
+ * `ok` means NOTHING WAS LOST — either the rumors are durably stored, or they
+ * were refused as permanently invalid (wrong seal form for the plane, a plane
+ * rumor carrying a `channel` tag, an already-expired chat rumor). Both are
+ * terminal, which is what lets a caller advance a forward cursor over them: a
+ * refused rumor will be refused identically every time it is served, so
+ * re-fetching it forever buys nothing. `ok: false` is the only case where
+ * something that WOULD have been kept was not.
+ */
 export interface WriteResult {
   ok: boolean;
   wrapIds: string[];
