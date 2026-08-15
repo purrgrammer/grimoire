@@ -65,6 +65,7 @@ import { openWrap, type OpenedWireEvent } from "@/lib/concord/stream";
 import { streamAuthsSettled } from "@/lib/concord/stream-auth";
 import type { Community } from "@/lib/concord/types";
 import { readAdoption, writeAdoption } from "@/services/concord-adoptions";
+import { dissolvedAt } from "@/services/concord-dissolution";
 import { queryRekeyRounds, writeOpened } from "@/services/concord-rumor-store";
 import db from "@/services/db";
 import { whenAuthAnswered } from "@/lib/concord/plane-sync";
@@ -255,6 +256,11 @@ export async function watchBaseRekey(
 ): Promise<RekeyWatchResult> {
   const nip44 = viewer.signer.nip44;
   if (!nip44) return { adopted: false, excluded: false };
+  // Death wins every race (CORD-02 §9): a Refounding never crosses the owner's
+  // tombstone, so no epoch advance past it is honored.
+  if ((await dissolvedAt(community.idHex)) !== undefined) {
+    return { adopted: false, excluded: false };
+  }
 
   const nextEpoch = community.rootEpoch + 1n;
   const address = baseRekeyGroupKey(community.root, community.id, nextEpoch);
@@ -405,6 +411,10 @@ export async function watchChannelRekeys(
 ): Promise<RekeyWatchResult> {
   const nip44 = viewer.signer.nip44;
   if (!nip44 || community.privateChannels.length === 0) {
+    return { adopted: false, excluded: false };
+  }
+  // Death wins every race (CORD-02 §9), channel rotations included.
+  if ((await dissolvedAt(community.idHex)) !== undefined) {
     return { adopted: false, excluded: false };
   }
 

@@ -57,6 +57,7 @@ import { emitWireScopes } from "@/lib/concord/wire-bus";
 import { syncChannel } from "@/services/concord-channel-sync";
 import { publishWrap } from "@/services/concord-publish";
 import { loadStoredCommunities } from "@/services/concord-communities";
+import { dissolvedAt } from "@/services/concord-dissolution";
 import {
   queryChannelRumors,
   readChannelRumor,
@@ -478,12 +479,24 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     if (folded.banned.has(account.pubkey)) {
       throw new Error("You have been banned from this community.");
     }
-    // TODO(phase 9): refuse when the community carries a dissolution tombstone.
-    // Death is one-way (CORD-02 §9) and armada gates the publish on it; grimoire
-    // has no dissolved-state read yet, so a dissolved community is currently
-    // writable here and inert everywhere else.
-
     const kind = opts.replyTo ? KIND_COMMENT : (opts.kind ?? KIND_MESSAGE);
+    // A dissolved community honors nothing new (CORD-02 §9: the seal is one-way).
+    //
+    // ONE CARVE-OUT, and it is the spec's: a member's delete of their own past
+    // message is always honored, even post-seal. A self-scrub cannot inject
+    // content, and a departing member deserves to erase themselves.
+    //
+    // Reads the local store only, so it costs no network — and fails OPEN on a
+    // store error, matching armada and Vector: an unreadable cache must not
+    // block a legitimate send.
+    if (kind !== KIND_DELETE) {
+      const dead = await dissolvedAt(community.idHex).catch(() => undefined);
+      if (dead !== undefined) {
+        throw new Error(
+          "This community has been dissolved; it accepts nothing new.",
+        );
+      }
+    }
     // Spend the budget BEFORE anything with a side effect, so a refusal leaves
     // nothing signed, published or stored to unwind.
     if (isRateLimitedKind(kind)) {

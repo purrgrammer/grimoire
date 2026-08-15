@@ -24,6 +24,7 @@ import {
 import { sweepGuestbook } from "@/lib/concord/plane-sync";
 import { badgeOf, canActOnMember, Permissions } from "@/lib/concord/roles";
 import type { Community } from "@/lib/concord/types";
+import { dissolvedAt } from "@/services/concord-dissolution";
 import { observedAuthors, queryPlane } from "@/services/concord-rumor-store";
 
 export interface Roster {
@@ -38,14 +39,20 @@ export async function readStoredRoster(
   community: Community,
   folded: FoldedControl,
 ): Promise<Roster> {
-  const [opened, observed] = await Promise.all([
+  const [opened, observed, dissolvedAtMs] = await Promise.all([
     queryPlane(community.idHex, "guestbook"),
     observedAuthors(community.idHex),
+    dissolvedAt(community.idHex),
   ]);
 
   const coalesced = coalesceGuestbook(opened, {
     nowMs: Date.now(),
-    canKick: (actor, target, citation) =>
+    canKick: (actor, target, citation, atMs) =>
+      // Death wins every race (CORD-02 §9) — but as an ORDERING rule, since the
+      // coalesce replays history: only a kick published AFTER the tombstone is
+      // refused. A blanket refusal would un-kick everyone the community ever
+      // kicked, the moment it died.
+      !(dissolvedAtMs !== undefined && atMs > dissolvedAtMs) &&
       // KICK bit + strict outrank against the folded roster…
       canActOnMember(
         folded.roster,
@@ -57,13 +64,6 @@ export async function readStoredRoster(
       // …and the CORD-04 §5 sync floor, so a kick from an admin whose demotion
       // we have not read yet parks instead of landing.
       citationSatisfied(folded, community.id, actor, citation),
-    // TEMPORARY WIDENING, tied to phase 9. Armada also refuses a kick published
-    // AFTER the dissolution tombstone (CORD-02 §9, death wins every race), as an
-    // ordering rule rather than a blanket one — the coalesce replays history, so
-    // refusing every kick in a dissolved community would un-kick everyone the
-    // moment it died. Grimoire has no dissolved-state read yet, so post-tombstone
-    // kicks are honored here. It widens what we honor, never narrows it, and the
-    // only communities affected are dead ones.
     snapshotAuthorities: snapshotAuthorities(community),
     banned: folded.banned,
   });

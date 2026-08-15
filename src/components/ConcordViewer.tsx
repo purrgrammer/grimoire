@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConcordCommunities, useConcordCommunity } from "@/hooks/useConcord";
 import { useConcordWire } from "@/hooks/useConcordWire";
 import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
+import { useConcordDissolved } from "@/hooks/useConcordDissolved";
 import {
   channelCategory,
   groupChannelsByCategory,
@@ -70,6 +71,10 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     refresh();
   }, [refreshList, refresh]);
   useConcordRekeyWatch(community, state?.folded, handleAdopted);
+
+  // Terminal, one-way (CORD-02 §9). The write gates read the stored verdict
+  // themselves; this is what tells the reader why.
+  const dissolvedAtMs = useConcordDissolved(community);
 
   // The OPEN channel is derived, not stored: falling back to the first one keeps
   // the pane filled the moment the fold lands, with no effect writing state
@@ -156,6 +161,14 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         <span className="truncate text-xs font-medium text-muted-foreground">
           {state?.folded.metadata?.name ?? community?.name ?? "Community"}
         </span>
+        {dissolvedAtMs !== undefined && (
+          <span
+            className="mr-auto ml-2 shrink-0 rounded border border-dotted px-1 text-[10px] text-muted-foreground"
+            title="This community was dissolved by its owner. History stays readable; nothing new is accepted."
+          >
+            dissolved
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon"

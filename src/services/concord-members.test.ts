@@ -38,7 +38,16 @@ import {
   writeOpened,
 } from "@/services/concord-rumor-store";
 import { openWrap } from "@/lib/concord/stream";
+import { _resetDissolutionForTests } from "@/services/concord-dissolution";
 import db from "@/services/db";
+
+/**
+ * Record a dissolution the way a real probe would, without one: the service
+ * reads its verdict straight out of `concordKv`.
+ */
+async function rememberDissolvedForTest(id: string, ms: number): Promise<void> {
+  await db.concordKv.put({ key: `concord-dissolved:${id}`, value: ms });
+}
 
 const root = random32();
 const communityId = random32();
@@ -221,6 +230,41 @@ describe("readStoredRoster", () => {
     expect(roster.members.has(speaker.pk)).toBe(true);
     // …and never from the Guestbook, which has nothing about them.
     expect(roster.coalesced.has(speaker.pk)).toBe(false);
+  });
+});
+
+describe("the dissolution gate on kicks", () => {
+  it("refuses a kick published AFTER the tombstone, and honors one before", async () => {
+    // Death wins every race (CORD-02 §9) — but as an ORDERING rule, because
+    // the coalesce replays history. A blanket refusal would un-kick everyone
+    // the community ever kicked, the moment it died.
+    const target = keyFor();
+    await storeGuestbook(KIND_JOIN_LEAVE, "join", [], target.sk, 1000);
+    const kicker = keyFor();
+    await storeGuestbook(KIND_KICK, "", [["p", target.pk]], kicker.sk, 5000);
+    const asOwner = folded({ ownerHex: kicker.pk });
+
+    // No tombstone: the kick lands.
+    expect(
+      (await readStoredRoster(community(), asOwner)).coalesced.get(target.pk)
+        ?.state,
+    ).toBe("kick");
+
+    // Dissolved BEFORE the kick → the kick is refused.
+    await rememberDissolvedForTest(idHex, 4000);
+    expect(
+      (await readStoredRoster(community(), asOwner)).coalesced.get(target.pk)
+        ?.state,
+    ).toBe("join");
+
+    // Dissolved AFTER it → the kick stands, because it predates the grave.
+    await _resetDissolutionForTests();
+    await rememberDissolvedForTest(idHex, 6000);
+    expect(
+      (await readStoredRoster(community(), asOwner)).coalesced.get(target.pk)
+        ?.state,
+    ).toBe("kick");
+    await _resetDissolutionForTests();
   });
 });
 
