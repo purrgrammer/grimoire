@@ -44,7 +44,13 @@ import type { NostrEvent } from "nostr-tools";
 
 import type { FoldedControl } from "@/lib/concord/control";
 import { isExpired } from "@/lib/concord/disappearing";
-import { PLANE_KINDS, PLANE_RULES, type Plane } from "@/lib/concord/kinds";
+import {
+  KIND_COMMENT,
+  KIND_MESSAGE,
+  PLANE_KINDS,
+  PLANE_RULES,
+  type Plane,
+} from "@/lib/concord/kinds";
 import type { OpenedEvent, OpenedWireEvent } from "@/lib/concord/stream";
 import { resolveMs } from "@/lib/concord/stream";
 import db, { type ConcordRumorRow } from "@/services/db";
@@ -327,6 +333,42 @@ export async function queryPlane(
     .anyOf(kinds.map((kind) => [communityId, kind]))
     .toArray();
   return rows.map(rowToOpened);
+}
+
+/**
+ * Every author this community has been SEEN publishing a message under, mapped
+ * to the newest ms they were seen at.
+ *
+ * The other half of the Complete Memberlist (CORD-02 §5): an author seen
+ * publishing is observably present, whatever the Guestbook does or does not say
+ * — which is what lets grimoire publish no Join at all and still appear on
+ * every member's roster after one message.
+ *
+ * Messages and comments ONLY, matching armada's `MembersView`. Its own comment
+ * says "anyone seen publishing anywhere", but the code it documents reads these
+ * two kinds; a reaction or a delete is a weaker signal and admitting them here
+ * would put a departed member back on the roster for reacting once.
+ */
+export async function observedAuthors(
+  communityId: string,
+): Promise<Map<string, number>> {
+  const seen = new Map<string, number>();
+  if (!communityId) return seen;
+  try {
+    await db.concordRumors
+      .where("[communityId+kind]")
+      .anyOf([
+        [communityId, KIND_MESSAGE],
+        [communityId, KIND_COMMENT],
+      ])
+      .each((row) => {
+        const ms = safeMs(row.created_at, row.tags);
+        if (ms > (seen.get(row.pubkey) ?? 0)) seen.set(row.pubkey, ms);
+      });
+  } catch (error) {
+    console.warn("[concord] observed-author scan failed:", error);
+  }
+  return seen;
 }
 
 /** Chat kinds that occupy a timeline row. */

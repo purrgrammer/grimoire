@@ -34,6 +34,7 @@
 import type { Filter, NostrEvent } from "nostr-tools";
 import type { RelayPool } from "applesauce-relay";
 
+import { guestbookGroups } from "@/lib/concord/guestbook";
 import { KIND_WRAP } from "@/lib/concord/kinds";
 import {
   planeRequest,
@@ -44,7 +45,7 @@ import {
   relayHasChallenged,
   streamAuthsSettled,
 } from "@/lib/concord/stream-auth";
-import type { StreamKeyView } from "@/lib/concord/derive";
+import type { GroupKey, StreamKeyView } from "@/lib/concord/derive";
 import type { Community } from "@/lib/concord/types";
 import {
   readControlSnapshot,
@@ -783,6 +784,200 @@ export async function sweepControl(
   const results = await Promise.all(
     community.relays.map((url) =>
       sweepControlRelay(community, url, group, opts),
+    ),
+  );
+  return mergeOpened(...results);
+}
+
+// ── The Guestbook sweep (FORWARD-cursored) ──────────────────────────────────
+//
+// A different cadence from the control sweep above, and the difference is the
+// point — do not "consistency-fix" them into each other.
+//
+// The Guestbook is append-mostly and unbounded, and it is OFF-CONSENSUS: nothing
+// in Control or Chat depends on it, and §5's observed-authors rule heals a miss
+// by the member's next message. So it rides a PERSISTED forward cursor and never
+// re-reads its own history. The Control Plane cannot: its whole job is to
+// re-see editions BELOW the high-water mark (an unban published while we were
+// offline), which a forward cursor makes permanently invisible.
+//
+// Armada's shape, kept: ONE request per relay per sweep, no pager. A cursorless
+// first sweep therefore reads the newest `pageLimit` entries and no deeper, and
+// a burst larger than a page between sweeps loses its middle. Both are armada's
+// behaviour and both self-heal by observation, which is why the Guestbook is
+// allowed to be the cheap plane.
+
+const GUESTBOOK_CURSOR_PREFIX = "guestbook-cursor:";
+
+/**
+ * The scope key for one community's Guestbook on one relay.
+ *
+ * EPOCH-KEYED, like the control scope but for a sharper reason: a rejoin or a
+ * rekey adoption changes WHAT THE MEMBER CAN READ, so the first sweep at a new
+ * epoch must be a full backfill. A cursor minted under the old read scope would
+ * gate it and the new epoch's history would never be fetched.
+ */
+export const guestbookScopeKey = (community: Community, relayUrl: string) =>
+  `guestbook:${community.idHex}@${community.rootEpoch}|${relayUrl}`;
+
+const guestbookCursors = new Map<string, number>();
+let guestbookCursorsLoaded: Promise<void> | undefined;
+
+function loadGuestbookCursors(): Promise<void> {
+  guestbookCursorsLoaded ??= db.concordKv
+    .where("key")
+    .startsWith(GUESTBOOK_CURSOR_PREFIX)
+    .toArray()
+    .then((rows) => {
+      for (const row of rows) {
+        if (typeof row.value === "number" && Number.isFinite(row.value)) {
+          guestbookCursors.set(
+            row.key.slice(GUESTBOOK_CURSOR_PREFIX.length),
+            row.value,
+          );
+        }
+      }
+    })
+    .catch(() => undefined);
+  return guestbookCursorsLoaded;
+}
+
+/**
+ * Advance a scope's cursor, CLAMPED to the local clock and monotone.
+ *
+ * The clamp is the wire's lesson, and it bites harder here because there is no
+ * completeness backstop behind this plane: one entry stamped in the future — a
+ * skewed clock, or a hostile timestamp any member can mint — would drag the
+ * cursor past `now`, and every later REQ opening with `since > now` goes deaf on
+ * that relay forever, because the cursor is durable.
+ */
+function advanceGuestbookCursor(scope: string, createdAt: number): void {
+  const next = Math.min(createdAt, Math.floor(Date.now() / 1000));
+  const prev = guestbookCursors.get(scope) ?? 0;
+  if (next <= prev) return;
+  guestbookCursors.set(scope, next);
+  void db.concordKv
+    .put({ key: `${GUESTBOOK_CURSOR_PREFIX}${scope}`, value: next })
+    .catch(() => undefined);
+}
+
+/** Test seam: forget every guestbook cursor, in memory and on disk. */
+export async function _resetGuestbookCursorsForTests(): Promise<void> {
+  guestbookCursors.clear();
+  guestbookCursorsLoaded = undefined;
+  await db.concordKv.where("key").startsWith(GUESTBOOK_CURSOR_PREFIX).delete();
+}
+
+/**
+ * Single-flight per scope, like the control sweep: the viewer's open and its
+ * refresh interval routinely overlap, and two in-flight reads of the same scope
+ * would race to advance one cursor.
+ */
+function sweepGuestbookRelay(
+  community: Community,
+  relayUrl: string,
+  groups: GroupKey[],
+  opts: ControlSweepOptions,
+): Promise<OpenedWireEvent[]> {
+  const scope = guestbookScopeKey(community, relayUrl);
+  const existing = inflight.get(scope);
+  if (existing) {
+    return existing.then((fresh) => {
+      if (fresh.length > 0) opts.onFresh?.(fresh);
+      return fresh;
+    });
+  }
+  const run = runGuestbookScope(community, relayUrl, groups, opts);
+  inflight.set(scope, run);
+  void run.finally(() => {
+    if (inflight.get(scope) === run) inflight.delete(scope);
+  });
+  return run;
+}
+
+/** One community's Guestbook on one relay: one REQ, forward of the cursor. */
+async function runGuestbookScope(
+  community: Community,
+  relayUrl: string,
+  groups: GroupKey[],
+  opts: ControlSweepOptions,
+): Promise<OpenedWireEvent[]> {
+  await loadGuestbookCursors();
+  const scope = guestbookScopeKey(community, relayUrl);
+  const pubkeys = groups.map((g) => g.pk);
+  const since = guestbookCursors.get(scope);
+
+  const filter: Filter = {
+    kinds: [KIND_WRAP],
+    authors: pubkeys,
+    limit: paging.pageLimit,
+    ...(since ? { since } : {}),
+  };
+
+  const ask = () =>
+    planeRequest(relayUrl, filter, {
+      timeout: paging.queryTimeoutMs,
+      pool: opts.pool,
+    });
+
+  let read = await ask();
+  // Same two routine races as the control sweep: a refused read whose challenge
+  // has since been answered, and an empty page that raced NIP-42 and reads back
+  // clean. Re-ask once behind the gate rather than record either as an answer.
+  const wanted = new Set(pubkeys);
+  const mine = (events: NostrEvent[]) =>
+    events.filter((e) => e.kind === KIND_WRAP && wanted.has(e.pubkey));
+  if (
+    read.outcome === "refused" ||
+    (read.outcome === "eose" &&
+      mine(read.events).length === 0 &&
+      !streamAuthsSettled(relayUrl, pubkeys))
+  ) {
+    await whenAuthAnswered(relayUrl, pubkeys);
+    read = await ask();
+  }
+  if (read.outcome !== "eose") return [];
+
+  const page = mine(read.events);
+  if (page.length === 0) return [];
+
+  const opened = await openPlaneWraps(page, groups);
+  if (opened.length === 0) return [];
+
+  const written = await writeOpened(community.idHex, opened, "guestbook", {
+    refounded: community.rootEpoch > 0n,
+  });
+  // DIVERGENCE from armada, narrowing and deliberate: armada advances this
+  // cursor without checking the write. A forward cursor is the one place that
+  // cannot be forgiven — a `since` filter will never serve these wraps again,
+  // and the seen-memo offers no second chance either, so advancing over a failed
+  // Dexie write loses them for good.
+  if (!written.ok) return [];
+
+  advanceGuestbookCursor(scope, Math.max(...page.map((e) => e.created_at)));
+  if (opened.length > 0) opts.onFresh?.(opened);
+  return opened;
+}
+
+/**
+ * Sweep one community's Guestbook across every relay it lists; union deduped by
+ * rumor id.
+ *
+ * ALL HELD EPOCHS, unlike the control sweep. The Guestbook is not
+ * compaction-bounded: a Refounding seeds the new epoch's stream with a snapshot
+ * of present members, but the prior epochs' Joins and Kicks remain the only
+ * record for anyone the refounder's snapshot predates — and a snapshot is
+ * honored only from the epoch's own refounder, which we may not have recorded.
+ */
+export async function sweepGuestbook(
+  community: Community,
+  opts: ControlSweepOptions = {},
+): Promise<OpenedWireEvent[]> {
+  const groups = guestbookGroups(community);
+  if (groups.length === 0) return [];
+  const results = await Promise.all(
+    community.relays.map((url) =>
+      sweepGuestbookRelay(community, url, groups, opts).catch(() => []),
     ),
   );
   return mergeOpened(...results);
