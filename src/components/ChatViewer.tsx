@@ -34,6 +34,7 @@ import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
 import type { Message } from "@/types/chat";
+import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction } from "@/types/chat-actions";
 import { parseSlashCommand } from "@/lib/chat/slash-command-parser";
 import {
@@ -264,12 +265,45 @@ type ConversationResult =
  */
 const ComposerReplyPreview = memo(function ComposerReplyPreview({
   replyToId,
+  adapter,
+  conversation,
   onClear,
 }: {
   replyToId: string;
+  adapter: ChatProtocolAdapter;
+  conversation: Conversation;
   onClear: () => void;
 }) {
-  const replyEvent = use$(() => eventStore.event(replyToId), [replyToId]);
+  const fromStore = use$(() => eventStore.event(replyToId), [replyToId]);
+  /**
+   * The adapter's own answer, for protocols whose messages never reach the
+   * shared EventStore — the same two-source resolution `ReplyPreview` already
+   * does for the in-timeline banner.
+   *
+   * Concord is the case, and it is not an edge one: its messages are decrypted
+   * rumors of a private community, deliberately kept out of the store shared
+   * with every other window. Reading only the store meant the composer could
+   * never name what it was replying to and fell back to a raw rumor id — while
+   * the timeline right above it rendered the same parent correctly.
+   */
+  const [fromAdapter, setFromAdapter] = useState<NostrEvent | null>(null);
+  const replyEvent = fromStore ?? fromAdapter ?? undefined;
+
+  useEffect(() => {
+    if (fromStore || fromAdapter) return;
+    let cancelled = false;
+    adapter
+      .loadReplyMessage(conversation, { id: replyToId })
+      .then((event) => {
+        if (!cancelled && event) setFromAdapter(event);
+      })
+      .catch((error: unknown) => {
+        console.warn("[Chat] could not resolve the reply parent:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fromStore, fromAdapter, adapter, conversation, replyToId]);
 
   if (!replyEvent) {
     return (
@@ -1356,6 +1390,8 @@ export function ChatViewer({
           {replyTo && (
             <ComposerReplyPreview
               replyToId={replyTo}
+              adapter={adapter}
+              conversation={conversation}
               onClear={() => setReplyTo(undefined)}
             />
           )}
