@@ -5,7 +5,7 @@
  * not throw here — it renders wrong, or not at all, in Armada.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -23,7 +23,12 @@ import {
   KIND_TIMER_NOTICE,
   KIND_WRAP,
 } from "./kinds";
-import { buildChatSend, buildConcordCommentTags } from "./send";
+import {
+  buildChatSend,
+  buildConcordCommentTags,
+  SIGNER_TIMEOUT_MS,
+  SignerUnresponsiveError,
+} from "./send";
 import { openWrap } from "./stream";
 import type { Channel } from "./types";
 
@@ -281,5 +286,67 @@ describe("buildChatSend", () => {
         signer,
       ),
     ).rejects.toThrow(/65,535/);
+  });
+});
+
+describe("the signer deadline", () => {
+  it("gives up on a signer that never answers, instead of hanging forever", async () => {
+    // The state a dead browser extension is actually in: `signEvent` returns a
+    // promise that never settles, for every kind, with no prompt and no
+    // rejection. Unbounded, that is worse than a slow send — the composer has
+    // already cleared, so the text is gone, and `isSending` never resets, which
+    // makes the viewer swallow every later send in silence.
+    vi.useFakeTimers();
+    try {
+      const dead = { signEvent: () => new Promise<NostrEvent>(() => {}) };
+      const build = buildChatSend(
+        { channel, pubkey: AUTHOR, content: "hello" },
+        dead,
+      );
+      const settled = vi.fn();
+      void build.then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(SIGNER_TIMEOUT_MS - 1_000);
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      await expect(build).rejects.toBeInstanceOf(SignerUnresponsiveError);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets a slow-but-alive signer through", async () => {
+    // A NIP-46 bunker is a remote call and a human may approve it on a phone,
+    // so the deadline has to be generous enough not to punish that.
+    vi.useFakeTimers();
+    try {
+      const slow = {
+        signEvent: (template: EventTemplate): Promise<NostrEvent> =>
+          new Promise((resolve) => {
+            setTimeout(
+              () => void signer.signEvent(template).then(resolve),
+              30_000,
+            );
+          }),
+      };
+      const build = buildChatSend(
+        { channel, pubkey: AUTHOR, content: "hello" },
+        slow,
+      );
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect((await build).rumor.content).toBe("hello");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("passes a genuine signer refusal through unchanged", async () => {
+    const refusing = {
+      signEvent: () => Promise.reject(new Error("user rejected")),
+    };
+    await expect(
+      buildChatSend({ channel, pubkey: AUTHOR, content: "hello" }, refusing),
+    ).rejects.toThrow(/user rejected/);
   });
 });

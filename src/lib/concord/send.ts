@@ -118,11 +118,64 @@ export interface BuiltChatSend {
 }
 
 /**
+ * Reject if the signer has not answered by the deadline.
+ *
+ * The signer's own promise is left running rather than cancelled — there is no
+ * way to withdraw a request already handed to an extension, and a late answer
+ * is harmless because nothing downstream is waiting on it any more.
+ */
+function withSignerDeadline<T>(work: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new SignerUnresponsiveError()),
+      SIGNER_TIMEOUT_MS,
+    );
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
+}
+
+/**
+ * How long to wait for the signer before giving up on a send.
+ *
+ * Generous, because the round trip is legitimately slow: a NIP-46 bunker is a
+ * remote call, and a human may have to approve it on a phone. But BOUNDED,
+ * because a signer that never answers is a real state — a browser extension
+ * that has lost its background worker returns a promise that simply never
+ * settles, for every kind, with no prompt and no rejection.
+ *
+ * Unbounded, that costs more than a slow send: the composer clears
+ * optimistically, so the text is already gone, and `isSending` never resets —
+ * which makes the viewer swallow every later send silently. One dead signer
+ * call bricks the composer for the rest of the session.
+ */
+export const SIGNER_TIMEOUT_MS = 60_000;
+
+/** The signer never answered. Separated so the UI can say what to do about it. */
+export class SignerUnresponsiveError extends Error {
+  constructor() {
+    super(
+      "Your signer did not respond. Check the extension or bunker that holds your key — it may need unlocking or reconnecting.",
+    );
+    this.name = "SignerUnresponsiveError";
+  }
+}
+
+/**
  * Build one chat-plane send: rumor → seal → wrap.
  *
  * Exactly ONE signer round-trip, on the seal — which for a NIP-46 login is a
- * remote call that can take seconds. The wrap is signed locally by the stream
- * key, which the client holds.
+ * remote call that can take seconds, and is bounded by
+ * {@link SIGNER_TIMEOUT_MS}. The wrap is signed locally by the stream key,
+ * which the client holds.
  */
 export async function buildChatSend(
   opts: BuildChatSendOptions,
@@ -162,11 +215,8 @@ export async function buildChatSend(
     pubkey: opts.pubkey,
     ms,
   });
-  const seal = await sealRumor(
-    rumor,
-    KIND_SEAL_ENCRYPTED,
-    channel.current.group,
-    signer,
+  const seal = await withSignerDeadline(
+    sealRumor(rumor, KIND_SEAL_ENCRYPTED, channel.current.group, signer),
   );
   const wrap = wrapSeal(
     seal,

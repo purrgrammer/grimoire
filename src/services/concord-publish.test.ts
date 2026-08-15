@@ -81,6 +81,18 @@ describe("publishWrap", () => {
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
+  it("gives up when EVERY relay stays silent, rather than hanging forever", async () => {
+    // "Sending spins forever" is this: no relay answers at all, so nothing
+    // resolves and nothing rejects. The dead-relay test above is satisfied by
+    // the LIVE relay's ack, so it never exercised the all-silent case.
+    const a = await relay({ kind: "silent" });
+    const b = await relay({ kind: "silent" });
+
+    const started = Date.now();
+    await expect(publishWrap([a.url, b.url], wrap(), 1_500)).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(6_000);
+  }, 20_000);
+
   it("explains an auth refusal in words a sender can act on", async () => {
     const r = await relay({ kind: "auth-required" });
     await expect(publishWrap([r.url], wrap(), 5_000)).rejects.toThrow(

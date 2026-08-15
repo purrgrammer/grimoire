@@ -807,7 +807,12 @@ export function ChatViewer({
     emojiTags?: EmojiTag[],
     blobAttachments?: BlobAttachment[],
   ) => {
-    if (!conversation || !canSign || isSending) return;
+    if (!conversation || !canSign) return;
+    // Already sending: REJECT rather than return. The composer clears
+    // optimistically and only puts the text back when the send rejects, so a
+    // bare return swallows the attempt AND the text — which is what turned one
+    // stuck send into every later one vanishing without a word.
+    if (isSending) throw new Error("Still sending the last message.");
 
     // Check if this is a slash command
     const slashCmd = parseSlashCommand(content);
