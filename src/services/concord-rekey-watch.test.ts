@@ -42,6 +42,7 @@ import {
   watchBaseRekey,
   watchChannelRekeys,
 } from "@/services/concord-rekey-watch";
+import { _resetDissolutionForTests } from "@/services/concord-dissolution";
 import db from "@/services/db";
 import { startMockRelay, type MockRelay } from "@/test/mock-relay";
 
@@ -239,6 +240,9 @@ beforeEach(async () => {
   await db.concordAdoptions.clear();
   await db.concordKv.clear();
   await _resetRekeyCursorsForTests();
+  // The dissolution verdict is a SESSION memo as well as a row — clearing the
+  // table alone leaves a buried community buried for every later test.
+  await _resetDissolutionForTests();
 });
 
 afterEach(async () => {
@@ -1180,6 +1184,76 @@ describe("idempotence", () => {
       (await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }))
         .excluded,
     ).toBe(false);
+  });
+});
+
+describe("the dissolution guard", () => {
+  const nextEpoch = 2n;
+
+  /** Record the community as dissolved the way a real probe would. */
+  const bury = () =>
+    db.concordKv.put({ key: `concord-dissolved:${idHex}`, value: 5_000 });
+
+  it("refuses to advance the ROOT past the owner's tombstone", async () => {
+    // Death wins every race (CORD-02 §9): a Refounding never crosses it.
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: baseRekeyGroupKey(root, communityId, nextEpoch),
+          scopeIdHex: ROOT_SCOPE_HEX,
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: root,
+          blobs: [
+            blobForMe(
+              wrappedPlain(new Uint8Array(32), nextEpoch, random32()),
+              ROOT_SCOPE_HEX,
+              nextEpoch,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    await bury();
+
+    expect(
+      await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool }),
+    ).toEqual({ adopted: false, excluded: false });
+    // Not even a request: the grave is checked before any address is derived.
+    expect(relay.reqFilters()).toHaveLength(0);
+  });
+
+  it("refuses to advance a CHANNEL past it either", async () => {
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await rotationWrap({
+          address: channelRekeyGroupKey(root, channelId, nextEpoch),
+          scopeIdHex: bytesToHex(channelId),
+          newEpoch: nextEpoch,
+          prevEpoch: 1n,
+          prevKey: channelKey,
+          blobs: [
+            blobForMe(
+              wrappedPlain(channelId, nextEpoch, random32()),
+              bytesToHex(channelId),
+              nextEpoch,
+            ),
+          ],
+        }),
+      ],
+    });
+    pool = new RelayPool();
+    await bury();
+
+    expect(
+      await watchChannelRekeys(community(), folded(), viewer, JOINED_MS, {
+        pool,
+      }),
+    ).toEqual({ adopted: false, excluded: false });
+    expect(relay.reqFilters()).toHaveLength(0);
   });
 });
 

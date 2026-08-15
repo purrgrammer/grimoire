@@ -23,7 +23,12 @@ const POLL_MS = 5 * 60_000;
 export function useConcordDissolved(
   community: Community | undefined,
 ): number | undefined {
-  const [dissolvedAtMs, setDissolvedAtMs] = useState<number>();
+  // Keyed BY SUBJECT rather than reset in an effect, like the other Concord
+  // hooks: no write to state during a render pass, and no window where one
+  // community wears another's verdict. The viewer switches communities in
+  // place, so without the key a live community kept the dissolved badge of the
+  // one looked at before it for the rest of the session.
+  const [found, setFound] = useState<{ idHex: string; ms: number }>();
   const idHex = community?.idHex;
 
   useEffect(() => {
@@ -32,16 +37,19 @@ export function useConcordDissolved(
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const round = async () => {
-      const found = await syncDissolved(community).catch(() => undefined);
+      // Hiding is not disappearing (CORD-08 §3): the expired rumors a timeline
+      // already refuses to show are still plaintext in IndexedDB. FIRST, not
+      // after the dissolution check — a dissolved community returns early, and
+      // a dead community whose history nobody will re-open is exactly the case
+      // the purge exists for. Rate-limited and single-flight inside, so riding
+      // this poll costs nothing.
+      void sweepExpiredRumors();
+      const ms = await syncDissolved(community).catch(() => undefined);
       if (cancelled) return;
-      if (found !== undefined) {
-        setDissolvedAtMs(found);
+      if (ms !== undefined) {
+        setFound({ idHex: community.idHex, ms });
         return; // terminal — nothing left to poll for
       }
-      // Hiding is not disappearing (CORD-08 §3): the expired rumors a timeline
-      // already refuses to show are still plaintext in IndexedDB. Rate-limited
-      // and single-flight inside, so riding this poll costs nothing.
-      void sweepExpiredRumors();
       timer = setTimeout(() => void round(), POLL_MS);
     };
     void round();
@@ -54,5 +62,5 @@ export function useConcordDissolved(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idHex]);
 
-  return idHex === community?.idHex ? dissolvedAtMs : undefined;
+  return found && found.idHex === idHex ? found.ms : undefined;
 }

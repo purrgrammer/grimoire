@@ -9,7 +9,15 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { KIND_DELETE, KIND_MESSAGE } from "@/lib/concord/kinds";
+import {
+  KIND_CONTROL,
+  KIND_DELETE,
+  KIND_JOIN_LEAVE,
+  KIND_KICK,
+  KIND_MESSAGE,
+  KIND_REKEY,
+  KIND_SNAPSHOT,
+} from "@/lib/concord/kinds";
 import {
   _resetExpirySweepForTests,
   sweepExpiredRumors,
@@ -85,6 +93,27 @@ describe("sweepExpiredRumors", () => {
     const id = await put(KIND_DELETE, NOW - 10);
     await sweepExpiredRumors();
     expect(await db.concordRumors.get(id)).toBeUndefined();
+  });
+
+  it("NEVER touches a plane rumor, whatever tag it carries", async () => {
+    // CORD-08 is a Chat-plane feature, and deleting a plane rumor is not
+    // recoverable: the Guestbook rides a PERSISTED forward cursor and never
+    // re-fetches behind it. The concrete attack — a member publishes their own
+    // Leave carrying a past `expiration`, this deletes it, the cursor never
+    // serves it again, and the coalesce falls back to their older Join. A
+    // permanent local presence spoof.
+    const leave = await put(KIND_JOIN_LEAVE, NOW - 10);
+    const kick = await put(KIND_KICK, NOW - 10);
+    const snapshot = await put(KIND_SNAPSHOT, NOW - 10);
+    const edition = await put(KIND_CONTROL, NOW - 10);
+    const rekey = await put(KIND_REKEY, NOW - 10);
+    const message = await put(KIND_MESSAGE, NOW - 10);
+
+    expect(await sweepExpiredRumors()).toBe(1);
+    for (const id of [leave, kick, snapshot, edition, rekey]) {
+      expect(await db.concordRumors.get(id)).toBeDefined();
+    }
+    expect(await db.concordRumors.get(message)).toBeUndefined();
   });
 
   it("crosses community boundaries — every tenant's expiry is the same duty", async () => {

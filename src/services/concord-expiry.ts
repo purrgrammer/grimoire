@@ -12,11 +12,19 @@
  * eviction, which grimoire does not have — one Dexie table serves every
  * community, so the sweep is a table scan rather than a store drop.
  *
- * Deletion is by the `expiration` tag alone, so it is protocol-faithful rather
- * than clever: the same predicate the ingest and the display use.
+ * CHAT ROWS ONLY. CORD-08 is a Chat-plane feature: `message_expiration` sets a
+ * timer for messages, and only `writeChatRumors` refuses an expired rumor at
+ * ingest. A plane rumor carrying an `expiration` tag is not a disappearing
+ * message, it is a non-compliant one — and deleting it is not recoverable,
+ * because the Guestbook rides a PERSISTED forward cursor and never re-fetches
+ * behind it. Concretely: a member publishes their own Leave (kind 3306) with a
+ * past `expiration`, this sweep deletes it, the cursor never serves it again,
+ * and the coalesce falls back to their older Join — a permanent local presence
+ * spoof. So the plane kinds are skipped, and their rumors are simply stored.
  */
 
 import { isExpired } from "@/lib/concord/disappearing";
+import { PLANE_KINDS } from "@/lib/concord/kinds";
 import db from "@/services/db";
 
 /** At most one sweep this often — it is a full scan of the rumor table. */
@@ -62,6 +70,7 @@ async function purge(nowSecs: number): Promise<number> {
   let deleted = 0;
   try {
     await db.concordRumors.each((row) => {
+      if (PLANE_KINDS.has(row.kind)) return;
       if (isExpired(row.tags, nowSecs)) doomed.push(row.id);
     });
     for (let i = 0; i < doomed.length; i += BATCH) {
