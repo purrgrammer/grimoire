@@ -31,6 +31,11 @@ import {
 import { registerStreamKeys } from "@/lib/concord/stream-auth";
 import type { Community } from "@/lib/concord/types";
 import { requestEvents } from "@/lib/relay-subscription";
+import {
+  applyAdoption,
+  clearAdoptions,
+  readAdoptions,
+} from "@/services/concord-adoptions";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
 import { startConcordStreamAuth } from "@/services/concord-stream-auth";
@@ -179,16 +184,51 @@ async function replaceVault(
 export async function loadStoredCommunities(
   pubkey: string,
 ): Promise<Community[]> {
-  const rows = await db.concordCommunities
-    .where("pubkey")
-    .equals(pubkey)
-    .toArray();
+  const [rows, adoptions] = await Promise.all([
+    db.concordCommunities.where("pubkey").equals(pubkey).toArray(),
+    readAdoptions(pubkey),
+  ]);
   const out: Community[] = [];
+  const spent: string[] = [];
   for (const row of rows) {
-    const community = rehydrateCommunity(row.entry as CommunityListEntry);
-    if (community) out.push(community);
+    const rehydrated = rehydrateCommunity(row.entry as CommunityListEntry);
+    if (!rehydrated) continue;
+    // Layer on anything this device adopted from a rotation the list has not
+    // caught up with yet. A row the list HAS caught up with is spent — dropped
+    // here rather than left to shadow a newer list forever.
+    const { community, spent: done } = applyAdoption(
+      rehydrated,
+      adoptions.get(rehydrated.idHex),
+    );
+    if (done && adoptions.has(rehydrated.idHex)) spent.push(rehydrated.idHex);
+    out.push(community);
   }
+  for (const idHex of spent) void clearAdoptions(pubkey, idHex);
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * When this viewer joined a community, in epoch-ms (the list entry's
+ * `added_at`), or 0 if unknown.
+ *
+ * The removal decision needs it: a complete rotation carrying no blob for us is
+ * an exclusion only if it published AT OR AFTER we joined. One that predates the
+ * join is community history a stale invite dropped us onto, and reading it as a
+ * removal would eject every fresh joiner seconds after they arrive.
+ */
+export async function readJoinedAtMs(
+  pubkey: string,
+  idHex: string,
+): Promise<number> {
+  try {
+    const row = await db.concordCommunities.get([pubkey, idHex]);
+    const addedAt = (row?.entry as CommunityListEntry | undefined)?.added_at;
+    return typeof addedAt === "number" && Number.isFinite(addedAt)
+      ? addedAt
+      : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -278,6 +318,9 @@ export function registerControlAddresses(communities: Community[]): void {
 export async function clearCommunities(pubkey: string): Promise<void> {
   await db.concordCommunities.where("pubkey").equals(pubkey).delete();
   await db.concordKv.delete(vaultStateKey(pubkey));
+  // Adoptions hold decrypted roots and channel keys of their own — leaving them
+  // behind would keep this account's key material after the vault is gone.
+  await clearAdoptions(pubkey);
   await clearGroupKeyPersistence();
 }
 

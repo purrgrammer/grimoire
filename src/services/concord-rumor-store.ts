@@ -47,6 +47,7 @@ import { isExpired } from "@/lib/concord/disappearing";
 import {
   KIND_COMMENT,
   KIND_MESSAGE,
+  KIND_REKEY,
   PLANE_KINDS,
   PLANE_RULES,
   type Plane,
@@ -333,6 +334,41 @@ export async function queryPlane(
     .anyOf(kinds.map((kind) => [communityId, kind]))
     .toArray();
   return rows.map(rowToOpened);
+}
+
+/**
+ * The stored rekey rounds for specific (scope, new-epoch) targets.
+ *
+ * A rekey address is `f(root, scope, epoch)`, so selecting rounds by address
+ * would mean storing the address. The rumor names the same two things ITSELF,
+ * in the `scope` and `newepoch` tags `parseRekey` already reads and validates,
+ * so this is one indexed read on the kind plus an in-memory tag match.
+ *
+ * Nothing is given up by not selecting on the address: every member derives
+ * rekey addresses from the community root they all hold, so publishing to one
+ * was never restricted either. A round's authority is its CORD-04 §5 citation,
+ * checked against the roster by the caller.
+ */
+export async function queryRekeyRounds(
+  communityId: string,
+  targets: Array<{ scopeIdHex: string; newEpoch: bigint }>,
+): Promise<OpenedEvent[]> {
+  if (!communityId || targets.length === 0) return [];
+  const want = new Set(
+    targets.map((t) => `${t.scopeIdHex.toLowerCase()}:${t.newEpoch}`),
+  );
+  const rows = await db.concordRumors
+    .where("[communityId+kind]")
+    .equals([communityId, KIND_REKEY])
+    .toArray();
+  const out: OpenedEvent[] = [];
+  for (const row of rows) {
+    const scope = row.tags.find((t) => t[0] === "scope")?.[1]?.toLowerCase();
+    const epoch = row.tags.find((t) => t[0] === "newepoch")?.[1];
+    if (!scope || !epoch) continue;
+    if (want.has(`${scope}:${epoch}`)) out.push(rowToOpened(row));
+  }
+  return out;
 }
 
 /**

@@ -74,7 +74,7 @@ function folded(over: Partial<FoldedControl> = {}): FoldedControl {
           name: "Mods",
           position: 1,
           permissions: Permissions.KICK,
-          scope: { kind: "global" },
+          scope: { kind: "server" as const },
           color: 0,
         },
       ],
@@ -144,13 +144,13 @@ describe("readStoredRoster", () => {
             name: "Mods",
             position: 1,
             permissions: Permissions.KICK,
-            scope: { kind: "global" },
+            scope: { kind: "server" as const },
             color: 0,
           },
         ],
         grants: [{ member: rando.pk, roleIds: ["r1"] }],
       },
-    } as Partial<FoldedControl>);
+    });
     const uncited = await readStoredRoster(community(), withRole);
     expect(uncited.coalesced.get(target.pk)?.state).toBe("join");
 
@@ -239,13 +239,13 @@ describe("rosterParticipants", () => {
             name: "Mods",
             position: 1,
             permissions: Permissions.KICK,
-            scope: { kind: "global" },
+            scope: { kind: "server" as const },
             color: 0,
           },
         ],
         grants: [{ member: mod.pk, roleIds: ["r1"] }],
       },
-    } as Partial<FoldedControl>);
+    });
 
     const participants = rosterParticipants(
       await readStoredRoster(community(), fold),

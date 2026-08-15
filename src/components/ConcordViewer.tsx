@@ -8,6 +8,7 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConcordCommunities, useConcordCommunity } from "@/hooks/useConcord";
 import { useConcordWire } from "@/hooks/useConcordWire";
+import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
 import {
   channelCategory,
   groupChannelsByCategory,
@@ -59,6 +60,16 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // channel you are not looking at is exactly the case pull-on-open could not
   // serve. Refcounted, so several Concord windows share one set of sockets.
   useConcordWire(communities);
+
+  // Adopt any CORD-06 rotation addressed to this member. Read-only: grimoire
+  // never rotates and never writes the Community List, so an adoption lands in
+  // Dexie and the list is re-read to pick it up — which is also what hands the
+  // wire the new epoch's addresses and the sidebar its re-keyed channels.
+  const handleAdopted = useCallback(() => {
+    refreshList();
+    refresh();
+  }, [refreshList, refresh]);
+  useConcordRekeyWatch(community, state?.folded, handleAdopted);
 
   // The OPEN channel is derived, not stored: falling back to the first one keeps
   // the pane filled the moment the fold lands, with no effect writing state

@@ -214,6 +214,52 @@ export interface ConcordPendingWrapRow {
   tags: string[][];
 }
 
+/**
+ * Key material this device adopted from a CORD-06 rotation, keyed by account.
+ *
+ * Grimoire never publishes kind 13302, so an adoption cannot go where armada
+ * puts it — into the member's own Community List. It lands here instead, and
+ * the reader layers it over the rehydrated list entry. The list stays the
+ * source of truth; this is a cache allowed to run AHEAD of it, and both
+ * directions heal: if armada is offline when a rotation lands, grimoire adopts
+ * locally; if grimoire is offline, it picks the same key up from the refreshed
+ * list on the next read and drops its own copy as stale.
+ *
+ * Keyed by `[pubkey+idHex]` for the same reason the vault is: these are
+ * decrypted community roots and channel keys, so keying by community alone
+ * would let one account read another's, and account removal would have no
+ * column to wipe by.
+ *
+ * Everything is hex — this row is JSON in IndexedDB, and a `Uint8Array` round
+ * trips through structured clone in ways that differ across browsers.
+ */
+export interface ConcordAdoptionRow {
+  pubkey: string;
+  idHex: string;
+  /** Adopted root epochs, newest first. `retiredAt` belongs to the epoch it retired. */
+  roots: Array<{
+    epoch: string;
+    key: string;
+    controlPk?: string;
+    controlRoot?: string;
+    refounder?: string;
+    /** Epoch-seconds the rotation published — the retired root's read cutoff. */
+    retiredAt?: number;
+  }>;
+  /** Adopted private-channel keys, one entry per channel. */
+  channels: Array<{
+    idHex: string;
+    epoch: string;
+    key: string;
+    priors?: Array<{ epoch: string; key: string; retiredAt?: number }>;
+  }>;
+  /** Channels a rotation cut us out of: the epoch that excluded us. */
+  cuts: Array<{ idHex: string; epoch: string }>;
+  /** The root epoch a rotation excluded us at, if one did. */
+  excludedAtEpoch?: string;
+  updatedAt: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -235,6 +281,7 @@ class GrimoireDb extends Dexie {
   concordSnapshots!: Table<ConcordSnapshotRow>;
   concordKv!: Table<ConcordKvRow>;
   concordPendingWraps!: Table<ConcordPendingWrapRow>;
+  concordAdoptions!: Table<ConcordAdoptionRow>;
 
   constructor(name: string) {
     super(name);
@@ -568,6 +615,33 @@ class GrimoireDb extends Dexie {
       concordSnapshots: "&[communityId+controlPk], communityId",
       concordKv: "&key",
       concordPendingWraps: "&id, pubkey, created_at",
+    });
+
+    // Version 22: Concord rekey adoptions (keys this device took locally)
+    this.version(22).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
+      concordCommunities: "&[pubkey+idHex], pubkey",
+      concordRumors:
+        "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+      concordSnapshots: "&[communityId+controlPk], communityId",
+      concordKv: "&key",
+      concordPendingWraps: "&id, pubkey, created_at",
+      concordAdoptions: "&[pubkey+idHex], pubkey",
     });
   }
 }
