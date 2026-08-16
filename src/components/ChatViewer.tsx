@@ -263,6 +263,17 @@ function getChatIdentifier(conversation: Conversation): string | null {
  */
 const OLDER_PAGE_SIZE = 50;
 
+/**
+ * How long the timeline must stop changing before we jump it to the newest
+ * message.
+ *
+ * The timeline arrives in pieces — the local store first, then each relay's
+ * backfill page — and every piece shifts what "the end" means. Waiting for a
+ * lull is what makes one jump land correctly instead of a dozen chasing a
+ * moving target.
+ */
+const ANCHOR_SETTLE_MS = 400;
+
 type ConversationResult =
   | { status: "loading" }
   | { status: "success"; conversation: Conversation }
@@ -738,11 +749,6 @@ export function ChatViewer({
     };
   }, [adapter, conversation]);
 
-  // Reset initial scroll flag when conversation changes
-  useEffect(() => {
-    isInitialScrollDone.current = false;
-  }, [conversation?.id]);
-
   // Load messages for this conversation (reactive)
   const messages = use$(
     () => (conversation ? adapter.loadMessages(conversation) : undefined),
@@ -830,8 +836,32 @@ export function ChatViewer({
   // Ref to Virtuoso for programmatic scrolling; also wires up Home/End
   const { ref: virtuosoRef, onKeyDown: handleFeedKeyDown } = useFeedHomeEnd();
 
-  // Track if initial scroll has completed (to avoid smooth scroll on first load)
-  const isInitialScrollDone = useRef(false);
+  /**
+   * Open every channel at its NEWEST message.
+   *
+   * NOT via `initialTopMostItemIndex`. That prop asks Virtuoso to scroll so a
+   * given index is TOPMOST, and in this layout it deadlocks: the item list is
+   * left `visibility: hidden` with zero rows mounted and never recovers, so the
+   * channel renders permanently blank while its header and "Load older" still
+   * draw. Short channels can never satisfy it (nothing to scroll), but long
+   * ones hung too, so there is no safe threshold — it simply goes.
+   *
+   * `scrollToIndex` is the same call the End key already uses, and it works.
+   * Debounced until the timeline stops growing, because it arrives in pieces —
+   * the local store, then each relay's backfill page — and anchoring to the end
+   * of the first piece just gets pushed back up by the next one.
+   */
+  const anchoredFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const id = conversation?.id;
+    const count = messagesWithMarkers.length;
+    if (!id || count === 0 || anchoredFor.current === id) return;
+    const timer = setTimeout(() => {
+      anchoredFor.current = id;
+      virtuosoRef.current?.scrollToIndex({ index: count - 1, align: "end" });
+    }, ANCHOR_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [conversation?.id, messagesWithMarkers.length, virtuosoRef]);
 
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
@@ -1253,15 +1283,7 @@ export function ChatViewer({
           <Virtuoso
             ref={virtuosoRef}
             data={messagesWithMarkers}
-            initialTopMostItemIndex={messagesWithMarkers.length - 1}
-            followOutput={() => {
-              // Use instant scroll on initial load to avoid slow scroll animation
-              if (!isInitialScrollDone.current) {
-                isInitialScrollDone.current = true;
-                return "auto"; // Instant scroll (no animation)
-              }
-              return "smooth";
-            }}
+            followOutput="smooth"
             alignToBottom
             components={{
               Header: () => {
