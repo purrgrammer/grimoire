@@ -202,7 +202,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       // from `useConcordUnread`, which re-runs the same summary off Dexie.
       // Both paths share `channelUnreadSummary`, so they can be stale relative
       // to one another but never disagree about what "unread" means.
-      unreadCount: (await this.unread(identifier)).count,
+      unreadCount: (await this.unread(identifier, folded.banned)).count,
     };
   }
 
@@ -600,7 +600,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
    * runs, deliberately, so a snapshot and a live badge can never mean different
    * things. Nobody signed in has nothing unread.
    */
-  private async unread(identifier: ConcordIdentifier): Promise<ChannelUnread> {
+  private async unread(
+    identifier: ConcordIdentifier,
+    /** The fold's banlist, when the caller already holds it. */
+    bannedAuthors?: ReadonlySet<string>,
+  ): Promise<ChannelUnread> {
     const pubkey = accountManager.active$.value?.pubkey;
     if (!pubkey) return { count: 0, latest: 0, mention: false, capped: false };
     const after = await readLastRead(
@@ -613,6 +617,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       nowSecs: Math.floor(Date.now() / 1000),
       maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
       selfPubkey: pubkey,
+      ...(bannedAuthors ? { bannedAuthors } : {}),
     });
   }
 

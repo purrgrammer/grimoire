@@ -76,7 +76,11 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // reader is not looking at — which is the case a per-channel count alone
   // cannot serve.
   const channelIds = useMemo(() => channels.map((ch) => ch.idHex), [channels]);
-  const unread = useConcordUnread(community?.idHex, channelIds);
+  const unread = useConcordUnread(
+    community?.idHex,
+    channelIds,
+    state?.folded.banned,
+  );
   const totals = useConcordUnreadTotals(communities);
 
   // Live delivery for EVERY community in the list, not just the open one: a

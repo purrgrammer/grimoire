@@ -612,6 +612,17 @@ export async function channelUnreadSummary(
     maxFutureSecs: number;
     /** The reader, whose own messages are never unread. */
     selfPubkey?: string;
+    /**
+     * The community's banned authors, when the caller has the fold to hand.
+     *
+     * Their rows still RAISE `latest` — the asymmetry is the point. A banned
+     * author's message is invisible in the timeline, so counting it badges a
+     * channel the reader cannot clear by reading; but not every caller can
+     * supply this set (`markRead` deliberately does not), and a scan without it
+     * would count that row again. Letting it raise the stamp is what heals
+     * both: the stamp passes it, and it never comes back.
+     */
+    bannedAuthors?: ReadonlySet<string>;
     cap?: number;
   },
 ): Promise<ChannelUnread> {
@@ -648,10 +659,14 @@ export async function channelUnreadSummary(
         if (opts.selfPubkey && row.pubkey === opts.selfPubkey) return;
         // Cheap accuracy for a disappearing-message channel: an expired rumor
         // is already invisible in the timeline, and counting it would be a
-        // badge for a message that is not there. Bans and epoch cutoffs cannot
-        // be judged from a row alone — those are what `latest` covers instead.
+        // badge for a message that is not there. An epoch cutoff cannot be
+        // judged from a row alone — that is what `latest` covers instead.
         if (isExpired(row.tags, opts.nowSecs)) return;
         if (row.created_at > latest) latest = row.created_at;
+        // AFTER `latest`, never before: see `bannedAuthors`. The fold hides
+        // these rows, so they must not badge — but they must still be
+        // stampable, or the badge they left behind could never clear.
+        if (opts.bannedAuthors?.has(row.pubkey)) return;
         if (
           !mention &&
           opts.selfPubkey &&

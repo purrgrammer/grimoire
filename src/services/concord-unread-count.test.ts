@@ -207,3 +207,42 @@ describe("channelUnreadSummary", () => {
     expect(out.latest).toBe(NOW - 100);
   });
 });
+
+describe("a banned author's messages", () => {
+  const BANNED = "33".repeat(32);
+
+  const withBan = (after: number) =>
+    channelUnreadSummary(COMMUNITY, CHANNEL, {
+      after,
+      nowSecs: NOW,
+      maxFutureSecs: SKEW,
+      selfPubkey: ME,
+      bannedAuthors: new Set([BANNED]),
+    });
+
+  it("are not counted, because the timeline does not show them", async () => {
+    await seed([{ at: NOW - 300, author: BANNED }, { at: NOW - 200 }]);
+    expect((await withBan(0)).count).toBe(1);
+  });
+
+  it("do not raise the @ flag either, even addressed to the reader", async () => {
+    await seed([{ at: NOW - 300, author: BANNED, tags: [["p", ME]] }]);
+    expect((await withBan(0)).mention).toBe(false);
+  });
+
+  it("still raise `latest`, so the stamp can pass them", async () => {
+    // The asymmetry that keeps the badge clearable: `markRead` scans without a
+    // banlist, so a banned row it could not stamp past would be re-counted by
+    // any caller that also had no banlist — forever.
+    await seed([{ at: NOW - 200 }, { at: NOW - 100, author: BANNED }]);
+    const out = await withBan(0);
+    expect(out.count).toBe(1);
+    expect(out.latest).toBe(NOW - 100);
+  });
+
+  it("count again once the ban is lifted", async () => {
+    await seed([{ at: NOW - 300, author: BANNED }]);
+    expect((await withBan(0)).count).toBe(0);
+    expect((await summary(0)).count).toBe(1);
+  });
+});

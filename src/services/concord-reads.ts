@@ -157,6 +157,8 @@ export async function communityUnread(
   communityId: string,
   channelIdsHex: readonly string[],
   nowSecs: number = Math.floor(Date.now() / 1000),
+  /** The community's banned authors, whose messages the timeline hides. */
+  bannedAuthors?: ReadonlySet<string>,
 ): Promise<CommunityUnread> {
   const total: CommunityUnread = { count: 0, mention: false };
   if (!pubkey || !communityId || channelIdsHex.length === 0) return total;
@@ -168,6 +170,7 @@ export async function communityUnread(
       nowSecs,
       maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
       selfPubkey: pubkey,
+      ...(bannedAuthors ? { bannedAuthors } : {}),
     });
     total.count += summary.count;
     total.mention = total.mention || summary.mention;

@@ -522,10 +522,13 @@ describe("unread state", () => {
     const a = adapter();
     banned.add(BANNED);
     await post([{ at: NOW() - 300 }, { at: NOW() - 100, author: BANNED }]);
-    expect(await countFor(a)).toBe(2);
+    // The snapshot has the fold in hand, so the hidden row does not badge…
+    expect(await countFor(a)).toBe(1);
 
-    // What ChatViewer would hand over: the newest FOLD-VISIBLE message.
+    // …and the stamp still has to cover it, because `markRead` scans WITHOUT a
+    // banlist. What ChatViewer hands over is the newest FOLD-VISIBLE message.
     await a.markRead(conversation, NOW() - 300);
+    expect(await a.getLastRead(conversation)).toBe(NOW() - 100);
     expect(await countFor(a)).toBe(0);
   });
 

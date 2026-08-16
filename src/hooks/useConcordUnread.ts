@@ -33,10 +33,17 @@ import type { CommunityUnread } from "@/services/concord-reads";
 const EMPTY = new Map<string, ChannelUnread>();
 const EMPTY_TOTALS = new Map<string, CommunityUnread>();
 
-/** Per-channel unread for one community, keyed by lowercase channel id. */
+/**
+ * Per-channel unread for one community, keyed by lowercase channel id.
+ *
+ * `banned` comes in from the fold for the same reason the channel list does —
+ * a row alone cannot say whether its author was banned, and a badge for a
+ * message the timeline hides is one the reader cannot clear by reading.
+ */
 export function useConcordUnread(
   communityIdHex: string | undefined,
   channelIdsHex: string[],
+  banned?: ReadonlySet<string>,
 ): Map<string, ChannelUnread> {
   const pubkey = use$(accountManager.active$)?.pubkey;
   // The channel list is a prop rather than something this closure reads,
@@ -45,6 +52,9 @@ export function useConcordUnread(
   // every fold write in the app. This one watches `concordRumors` and
   // `concordReads` and nothing else.
   const key = channelIdsHex.join(",");
+  // The fold hands back a fresh Set every read, so its CONTENT is its identity
+  // — without this the query would never re-run on a new ban.
+  const bannedKey = banned ? [...banned].sort().join(",") : "";
 
   const summaries = useLiveQuery(
     async () => {
@@ -62,14 +72,15 @@ export function useConcordUnread(
             nowSecs,
             maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
             selfPubkey: pubkey,
+            ...(banned ? { bannedAuthors: banned } : {}),
           }),
         );
       }
       return out;
     },
-    // `channelIdsHex` is rebuilt from the fold on every read; the joined key is
-    // its identity.
-    [pubkey, communityIdHex, key],
+    // `channelIdsHex` and `banned` are rebuilt from the fold on every read; the
+    // joined keys are their identity.
+    [pubkey, communityIdHex, key, bannedKey],
   );
 
   return summaries ?? EMPTY;
@@ -87,7 +98,7 @@ export function useConcordUnreadTotals(
   communities: Community[],
 ): Map<string, CommunityUnread> {
   const pubkey = use$(accountManager.active$)?.pubkey;
-  const [channelsOf, setChannelsOf] = useState<Map<string, string[]>>(
+  const [foldsOf, setFoldsOf] = useState<Map<string, FoldOfCommunity>>(
     () => new Map(),
   );
   const communityKey = communities
@@ -97,17 +108,8 @@ export function useConcordUnreadTotals(
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const found = new Map<string, string[]>();
-      for (const community of communities) {
-        const state = await readStoredState(community).catch(() => undefined);
-        if (state) {
-          found.set(
-            community.idHex,
-            state.channels.map((ch) => ch.idHex.toLowerCase()),
-          );
-        }
-      }
-      if (!cancelled) setChannelsOf(found);
+      const found = await foldsOfCommunities(communities);
+      if (!cancelled) setFoldsOf(found);
     })();
     return () => {
       cancelled = true;
@@ -117,24 +119,65 @@ export function useConcordUnreadTotals(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [communityKey]);
 
-  const directoryKey = [...channelsOf.entries()]
-    .map(([id, channels]) => `${id}:${channels.join("+")}`)
-    .join(",");
+  const directoryKey = foldKey(foldsOf);
 
   const totals = useLiveQuery(async () => {
     const out = new Map<string, CommunityUnread>();
     if (!pubkey) return out;
     const nowSecs = Math.floor(Date.now() / 1000);
-    for (const [communityId, channelIds] of channelsOf) {
+    for (const [communityId, fold] of foldsOf) {
       out.set(
         communityId,
-        await communityUnread(pubkey, communityId, channelIds, nowSecs),
+        await communityUnread(
+          pubkey,
+          communityId,
+          fold.channelIds,
+          nowSecs,
+          fold.banned,
+        ),
       );
     }
     return out;
   }, [pubkey, directoryKey]);
 
   return totals ?? EMPTY_TOTALS;
+}
+
+/** What a community's materialized fold tells an unread scan. */
+interface FoldOfCommunity {
+  channelIds: string[];
+  banned: ReadonlySet<string>;
+}
+
+/**
+ * The channels and the banlist of every community whose fold has landed.
+ *
+ * A community with no stored fold is absent rather than empty: its channels
+ * cannot be listed either, so showing no badge for it is the honest answer.
+ */
+async function foldsOfCommunities(
+  communities: Community[],
+): Promise<Map<string, FoldOfCommunity>> {
+  const found = new Map<string, FoldOfCommunity>();
+  for (const community of communities) {
+    const state = await readStoredState(community).catch(() => undefined);
+    if (!state) continue;
+    found.set(community.idHex, {
+      channelIds: state.channels.map((ch) => ch.idHex.toLowerCase()),
+      banned: state.folded.banned,
+    });
+  }
+  return found;
+}
+
+/** Identity of a fold map by CONTENT — every part of it is rebuilt per read. */
+function foldKey(folds: Map<string, FoldOfCommunity>): string {
+  return [...folds.entries()]
+    .map(
+      ([id, fold]) =>
+        `${id}:${fold.channelIds.join("+")}!${[...fold.banned].sort().join("+")}`,
+    )
+    .join(",");
 }
 
 /**
@@ -148,7 +191,7 @@ export function useConcordUnreadTotals(
  */
 export function useConcordUnreadTotal(enabled: boolean): number {
   const pubkey = use$(accountManager.active$)?.pubkey;
-  const [channelsOf, setChannelsOf] = useState<Map<string, string[]>>(
+  const [foldsOf, setFoldsOf] = useState<Map<string, FoldOfCommunity>>(
     () => new Map(),
   );
 
@@ -157,34 +200,30 @@ export function useConcordUnreadTotal(enabled: boolean): number {
     let cancelled = false;
     void (async () => {
       const communities = await loadStoredCommunities(pubkey).catch(() => []);
-      const found = new Map<string, string[]>();
-      for (const community of communities) {
-        const state = await readStoredState(community).catch(() => undefined);
-        if (state) {
-          found.set(
-            community.idHex,
-            state.channels.map((ch) => ch.idHex.toLowerCase()),
-          );
-        }
-      }
-      if (!cancelled) setChannelsOf(found);
+      const found = await foldsOfCommunities(communities);
+      if (!cancelled) setFoldsOf(found);
     })();
     return () => {
       cancelled = true;
     };
   }, [enabled, pubkey]);
 
-  const directoryKey = [...channelsOf.entries()]
-    .map(([id, channels]) => `${id}:${channels.join("+")}`)
-    .join(",");
+  const directoryKey = foldKey(foldsOf);
 
   const total = useLiveQuery(async () => {
     if (!enabled || !pubkey) return 0;
     const nowSecs = Math.floor(Date.now() / 1000);
     let count = 0;
-    for (const [communityId, channelIds] of channelsOf) {
-      count += (await communityUnread(pubkey, communityId, channelIds, nowSecs))
-        .count;
+    for (const [communityId, fold] of foldsOf) {
+      count += (
+        await communityUnread(
+          pubkey,
+          communityId,
+          fold.channelIds,
+          nowSecs,
+          fold.banned,
+        )
+      ).count;
     }
     return count;
   }, [enabled, pubkey, directoryKey]);
