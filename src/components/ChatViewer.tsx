@@ -1190,6 +1190,15 @@ export function ChatViewer({
   );
   const savingDraftFor = useRef<string | undefined>(undefined);
 
+  // What the restore needs to check a stored reply target against, read through
+  // a ref so the restore keys on the draft KEY alone: adding the adapter and the
+  // conversation object to its deps would re-run the whole restore on every
+  // identity change of either.
+  const replyResolve = useRef({ adapter, conversation });
+  useEffect(() => {
+    replyResolve.current = { adapter, conversation };
+  });
+
   const flushDraft = useCallback(() => {
     clearTimeout(draftTimer.current);
     const key = savingDraftFor.current;
@@ -1214,6 +1223,37 @@ export function ChatViewer({
     let cancelled = false;
     savingDraftFor.current = draftKeyFor;
     draftDoc.current = { json: undefined, isEmpty: true };
+
+    /**
+     * A restored reply target the channel can no longer answer for clears itself.
+     *
+     * A draft can outlive its parent by days — deleted, or expired under a
+     * disappearing timer — and the composer would otherwise come back reading
+     * "Replying to 1a2b3c4d…" with every Send refused for a parent that is gone.
+     * The text is kept; only the target goes.
+     *
+     * Cleared only on a definitive "no such message": a thrown lookup is a relay
+     * that could not answer, which is no evidence about the parent at all.
+     */
+    const degradeReply = async (parentId: string) => {
+      const { adapter: replyAdapter, conversation: replyIn } =
+        replyResolve.current;
+      if (!replyIn) return;
+      let parent;
+      try {
+        parent = await replyAdapter.loadReplyMessage(replyIn, { id: parentId });
+      } catch (error) {
+        console.warn("[Chat] could not check the draft's reply parent:", error);
+        return;
+      }
+      if (parent || cancelled) return;
+      // The reader may have picked a different message to reply to while the
+      // lookup was out; theirs wins.
+      if (replyToRef.current !== undefined && replyToRef.current !== parentId)
+        return;
+      setReplyTo(undefined);
+    };
+
     if (draftKeyFor) {
       void (async () => {
         // Cold mount: reading before the cache is warm answers "no draft", and
@@ -1224,6 +1264,7 @@ export function ChatViewer({
         // Reply context belongs to the channel it was started in — carrying it
         // across would address a message in another channel entirely.
         setReplyTo(draft?.replyToId);
+        if (draft?.replyToId) void degradeReply(draft.replyToId);
         if (!draft) return;
         // The composer is mounted a beat after the conversation resolves.
         for (let step = 0; step < 40 && !cancelled; step++) {
