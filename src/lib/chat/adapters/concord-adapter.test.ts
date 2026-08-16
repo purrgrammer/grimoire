@@ -317,6 +317,45 @@ describe("paging backwards", () => {
     await vi.waitFor(() => expect(reopened.last()).toHaveLength(200));
     reopened.stop();
   });
+
+  it("never shrinks a timeline the opener asked to be wider than a page", async () => {
+    // The repaints behind a click read with no options at all, so a window that
+    // ignored the opener's own `limit` would answer the first "load older" with
+    // FEWER messages than were already on screen.
+    await seed(Array.from({ length: 600 }, (_, i) => i + 1));
+    const a = adapter();
+    const seen: Message[][] = [];
+    const sub = a
+      .loadMessages(conversation, { limit: 500 })
+      .subscribe((m) => seen.push(m));
+    await vi.waitFor(() => expect(seen[seen.length - 1]).toHaveLength(500));
+
+    await a.loadMoreMessages(conversation, seen[seen.length - 1][0].timestamp);
+    await vi.waitFor(() => expect(seen[seen.length - 1]).toHaveLength(600));
+    expect(seen.every((t) => t.length >= 500)).toBe(true);
+    sub.unsubscribe();
+  });
+
+  it("does not leave the window widened by a click that failed", async () => {
+    // A failed click paints nothing, so a window left wide is pure cost: every
+    // later doorbell ring re-reads and re-folds a page more than the reader can
+    // see, for the rest of the session.
+    await seed(Array.from({ length: 700 }, (_, i) => i + 1));
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(200));
+
+    synced.mockRejectedValueOnce(new Error("vault is locked"));
+    await expect(
+      a.loadMoreMessages(conversation, feed.last()[0].timestamp),
+    ).rejects.toThrow(/vault/);
+    expect(feed.last()).toHaveLength(200);
+
+    // The retry is the FIRST page, not the second: one click, one page.
+    await a.loadMoreMessages(conversation, feed.last()[0].timestamp);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(400));
+    feed.stop();
+  });
 });
 
 describe("the imeta tag for an attachment", () => {

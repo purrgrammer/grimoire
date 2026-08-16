@@ -485,6 +485,11 @@ export async function queryChannelRumors(
 ): Promise<OpenedEvent[]> {
   const channel = channelIdHex.toLowerCase();
   if (!communityId || !channel) return [];
+  // A page of no rows has no window for a side event to decorate. Without this
+  // the walk below never spends a budget it cannot spend, scans the whole
+  // channel, and — with no oldest row to bound them — hands back every reaction
+  // and delete in it.
+  if (opts.limit <= 0) return [];
   const byNewest = (a: ConcordRumorRow, b: ConcordRumorRow) =>
     b.created_at - a.created_at;
   const rowKinds = new Set(CHAT_ROW_KINDS);

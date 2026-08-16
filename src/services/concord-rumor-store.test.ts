@@ -231,15 +231,28 @@ describe("queryChannelRumors — the paging bound", () => {
     expect(got.every((r) => r.createdAt >= 200)).toBe(true);
   });
 
-  it("admits the same-second siblings of the budget's last row", async () => {
-    // The walk stops one row PAST the page, so a tie at the boundary is seen
-    // rather than cut off mid-second.
+  it("admits a side event tied with the budget's last row, but not a row", async () => {
+    // The walk stops one row PAST the page so a tie at the boundary is SEEN
+    // rather than cut off mid-second — but `limit` is still a hard cap on rows,
+    // so the tied message is dropped by the slice while the reaction it shares
+    // a second with is kept, decorating what remains.
     await chat(KIND_MESSAGE, 100);
     await chat(KIND_MESSAGE, 100);
     await chat(7, 100);
     const got = await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 1 });
     expect(got.filter((r) => r.kind === KIND_MESSAGE)).toHaveLength(1);
     expect(got.filter((r) => r.kind === 7)).toHaveLength(1);
+  });
+
+  it("serves nothing at all for a zero-row page", async () => {
+    // Not a caller today, but the walk can only spend a budget it is given: at
+    // limit 0 it scanned the whole channel and, with no oldest row to bound
+    // them, handed back every side event in it.
+    await chat(KIND_MESSAGE, 100);
+    await chat(7, 200);
+    expect(await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 0 })).toEqual(
+      [],
+    );
   });
 });
 

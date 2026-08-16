@@ -221,6 +221,13 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     if (this.started.has(conversation.id)) return emitter.asObservable();
     this.started.add(conversation.id);
 
+    // Seed the window from what this caller asked for. The repaints that follow
+    // a "load older" click read with no options at all, so a caller asking for
+    // more than {@link PAGE_ROWS} would watch its timeline SHRINK on the first
+    // click. Inside the started-gate, so a repeat call cannot clobber a window
+    // the reader has already paged wider.
+    this.windows.set(conversation.id, options?.limit ?? PAGE_ROWS);
+
     // Live delivery. The wire has already decrypted and stored whatever caused
     // the ring, so the response is a local re-read — no relay in the path, and
     // `publish` stays silent if the timeline did not actually change.
@@ -310,10 +317,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     const identifier = parseConversationId(conversation.id);
     if (!identifier) return [];
     const conversationId = conversationIdOf(identifier);
-    this.windows.set(
-      conversationId,
-      (this.windows.get(conversationId) ?? PAGE_ROWS) + PAGE_ROWS,
-    );
+    // Widen BEFORE the fetch: the repaint each relay's page triggers reads
+    // through this window, and a window grown afterwards would show the reader
+    // nothing until the last relay had answered.
+    const previous = this.windows.get(conversationId) ?? PAGE_ROWS;
+    this.windows.set(conversationId, previous + PAGE_ROWS);
 
     const emitter = this.timelines.get(conversationId);
     const repaint = async (): Promise<Message[]> => {
@@ -324,9 +332,19 @@ export class ConcordAdapter extends ChatProtocolAdapter {
 
     // Backfill the relays BELOW the oldest row we hold — the page the caller
     // wants may only exist on the wire — repainting as each relay lands.
-    await this.backfill(identifier, before, () => {
-      void repaint().catch(() => undefined);
-    });
+    try {
+      await this.backfill(identifier, before, () => {
+        void repaint().catch(() => undefined);
+      });
+    } catch (error) {
+      // A failed click showed the reader nothing, so it must not leave the
+      // window wide: every later doorbell ring would then re-read and re-fold a
+      // page more than the timeline is showing, forever. The realistic thrower
+      // is `resolve()` — a locked vault — which throws before any repaint, so
+      // there is nothing on screen to contradict.
+      this.windows.set(conversationId, previous);
+      throw error;
+    }
     const widened = await repaint();
     return widened.filter((m) => m.timestamp < before);
   }
