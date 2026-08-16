@@ -201,6 +201,28 @@ export abstract class ChatProtocolAdapter {
   deleteMessage?(conversation: Conversation, messageId: string): Promise<void>;
 
   /**
+   * How far into this conversation the viewer has read, in unix SECONDS.
+   *
+   * Optional, and read state is per-PROTOCOL by nature: there is no wire format
+   * for it in any of these NIPs, so an adapter that implements this is saying it
+   * has somewhere local to keep the stamp. 0 means "never read", which is not
+   * the same as "all read" — see the divider, which deliberately shows nothing
+   * for a channel the viewer has never opened.
+   */
+  getLastRead?(conversation: Conversation): Promise<number>;
+
+  /**
+   * Mark this conversation read up to `timestampSecs`.
+   *
+   * The caller passes the newest message it has LOADED. An adapter may stamp
+   * higher: what the viewer can see and what is unread are not the same set
+   * whenever the protocol hides rows (moderation, expiry, key rotation), and a
+   * stamp that cannot reach the hidden rows is a badge no user action clears.
+   * Stamping is expected to be monotonic — never move a conversation backwards.
+   */
+  markRead?(conversation: Conversation, timestampSecs: number): Promise<void>;
+
+  /**
    * Get the capabilities of this protocol
    * Used to determine which UI features to show
    */

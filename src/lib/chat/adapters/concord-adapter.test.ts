@@ -398,3 +398,114 @@ describe("the imeta tag for an attachment", () => {
     expect(tag).toContain("m image/png");
   });
 });
+
+describe("unread state", () => {
+  const THEM = "ff".repeat(32);
+  const BANNED = "ee".repeat(32);
+  const NOW = () => Math.floor(Date.now() / 1000);
+
+  let seq = 0;
+  /** One stored message, from whoever, at whenever. */
+  async function post(
+    createdAt: number,
+    author = THEM,
+    tags: string[][] = [],
+  ): Promise<void> {
+    seq += 1;
+    await writeChatRumors(idHex, [
+      {
+        rumorId: (seq + 0x1000).toString(16).padStart(64, "0"),
+        author,
+        kind: KIND_MESSAGE,
+        content: `m${seq}`,
+        tags,
+        ms: createdAt * 1000,
+        createdAt,
+        channel: channelIdHex,
+      },
+    ]);
+  }
+
+  const countFor = async (a: ReturnType<typeof adapter>) =>
+    (await a.resolveConversation(identifier())).unreadCount;
+
+  const identifier = () =>
+    ({
+      type: "concord",
+      communityId: idHex,
+      channelId: channelIdHex,
+    }) as never;
+
+  beforeEach(async () => {
+    await db.concordReads.clear();
+    seq = 0;
+  });
+
+  it("reports what has arrived since the last visit, and nothing after a mark", async () => {
+    const a = adapter();
+    await post(NOW() - 300);
+    await post(NOW() - 200);
+    expect(await countFor(a)).toBe(2);
+
+    await a.markRead(conversation, NOW() - 200);
+    expect(await countFor(a)).toBe(0);
+    expect(await a.getLastRead(conversation)).toBe(NOW() - 200);
+  });
+
+  it("never counts the reader's own messages", async () => {
+    const a = adapter();
+    await post(NOW() - 300, pubkey);
+    await post(NOW() - 200, pubkey);
+    expect(await countFor(a)).toBe(0);
+  });
+
+  it("clears a badge whose newest rows the timeline never showed", async () => {
+    // The stuck badge. A member is banned after posting; the fold drops their
+    // messages, so the newest row ChatViewer can offer is OLDER than the newest
+    // row in Dexie. Stamping what the reader saw would leave the count lit with
+    // nothing to click.
+    const a = adapter();
+    banned.add(BANNED);
+    await post(NOW() - 300);
+    await post(NOW() - 100, BANNED);
+    expect(await countFor(a)).toBe(2);
+
+    // What ChatViewer would hand over: the newest FOLD-VISIBLE message.
+    await a.markRead(conversation, NOW() - 300);
+    expect(await countFor(a)).toBe(0);
+  });
+
+  it("clears it even when the hidden rows sit above the scan cap", async () => {
+    // The same bug, in the shape that survives an ascending scan: with more
+    // unread than the cap, `latest` must still be the NEWEST counted row.
+    const a = adapter();
+    banned.add(BANNED);
+    const base = NOW() - 5000;
+    for (let i = 0; i < 150; i += 1) await post(base + i);
+    await post(NOW() - 10, BANNED);
+
+    await a.markRead(conversation, base + 149);
+    expect(await countFor(a)).toBe(0);
+  });
+
+  it("is not pinned or blanked by a message dated in the far future", async () => {
+    // `created_at` is whatever its author wrote and ingest has no clock check.
+    const a = adapter();
+    await post(NOW() - 100);
+    await post(NOW() + 7200);
+
+    // The future row is invisible to the count…
+    expect(await countFor(a)).toBe(1);
+    // …and cannot be stamped, so it does not mark the channel read for hours.
+    await a.markRead(conversation, NOW() + 7200);
+    expect(await a.getLastRead(conversation)).toBeLessThanOrEqual(NOW() + 3600);
+  });
+
+  it("stamps nothing for a channel with nothing loaded", async () => {
+    const a = adapter();
+    await post(NOW() - 100);
+    await a.markRead(conversation, 0);
+    expect(await a.getLastRead(conversation)).toBe(0);
+    expect(await countFor(a)).toBe(1);
+  });
+});

@@ -58,12 +58,19 @@ import { syncChannel } from "@/services/concord-channel-sync";
 import { publishWrap } from "@/services/concord-publish";
 import { loadStoredCommunities } from "@/services/concord-communities";
 import { dissolvedAt } from "@/services/concord-dissolution";
+import type { ChannelUnread } from "@/services/concord-rumor-store";
 import {
   channelAuthors,
+  channelUnreadSummary,
   queryChannelRumors,
   readChannelRumor,
   writeChatRumors,
 } from "@/services/concord-rumor-store";
+import {
+  CONCORD_READ_MAX_FUTURE_SECS,
+  markChannelRead,
+  readLastRead,
+} from "@/services/concord-reads";
 import { foldStoredControl } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import type {
@@ -189,7 +196,12 @@ export class ConcordAdapter extends ChatProtocolAdapter {
           .join(" — "),
         encrypted: true,
       },
-      unreadCount: 0,
+      // A SNAPSHOT, taken as the channel opens — `Conversation` is resolved
+      // once and does not re-resolve when a message lands. Live badges come
+      // from `useConcordUnread`, which re-runs the same summary off Dexie.
+      // Both paths share `channelUnreadSummary`, so they can be stale relative
+      // to one another but never disagree about what "unread" means.
+      unreadCount: (await this.unread(identifier)).count,
     };
   }
 
@@ -349,6 +361,75 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     return widened.filter((m) => m.timestamp < before);
   }
 
+  /**
+   * How far into this channel the viewer has read, in seconds. 0 if never.
+   *
+   * Local to this device and this account: nothing about read state goes on the
+   * wire, because no CORD document defines a read marker to put there.
+   */
+  async getLastRead(conversation: Conversation): Promise<number> {
+    const identifier = parseConversationId(conversation.id);
+    const pubkey = accountManager.active$.value?.pubkey;
+    if (!identifier || !pubkey) return 0;
+    return readLastRead(pubkey, identifier.communityId, identifier.channelId);
+  }
+
+  /**
+   * Stamp this channel read — and stamp it high enough to actually clear.
+   *
+   * **The invariant this method exists for: the stamp must be able to cover
+   * everything the count counts.** The caller hands over the newest message the
+   * TIMELINE is showing, but the timeline is the fold's output, and the fold
+   * drops a banned author's messages, rumors past their NIP-40 deadline, and
+   * rows sealed under a retired epoch. Dexie still holds every one of them, so
+   * any of them can be NEWER than the newest thing on screen — and stamping the
+   * newest thing on screen would leave the badge lit with nothing the reader
+   * could ever click to clear it. So the stamp is raised to the summary's
+   * `latest`, which is by construction the newest row the count counted.
+   *
+   * The clamp on the other side is for the same reason in the opposite
+   * direction: `created_at` is whatever the author wrote, and chat ingest has no
+   * clock check, so a year-3000 message must not mark the channel read forever.
+   * Both bounds use the SAME allowance the scan does — clamping one and not the
+   * other re-creates whichever bug was not clamped.
+   *
+   * A message arriving between the summary and the write is marked read. That is
+   * acceptable and matches armada: the channel is open and on screen.
+   */
+  async markRead(
+    conversation: Conversation,
+    timestampSecs: number,
+  ): Promise<void> {
+    const identifier = parseConversationId(conversation.id);
+    const pubkey = accountManager.active$.value?.pubkey;
+    if (!identifier || !pubkey) return;
+    // Nothing loaded is not "everything read": without this, `latest` below
+    // would stamp a channel the reader has not seen a single message of.
+    if (!Number.isFinite(timestampSecs) || timestampSecs <= 0) return;
+
+    const nowSecs = Math.floor(Date.now() / 1000);
+    const requested = Math.min(
+      timestampSecs,
+      nowSecs + CONCORD_READ_MAX_FUTURE_SECS,
+    );
+    const summary = await channelUnreadSummary(
+      identifier.communityId,
+      identifier.channelId,
+      {
+        after: requested,
+        nowSecs,
+        maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
+        selfPubkey: pubkey,
+      },
+    );
+    await markChannelRead(
+      pubkey,
+      identifier.communityId,
+      identifier.channelId,
+      Math.max(requested, summary.latest),
+    );
+  }
+
   getCapabilities(): ChatCapabilities {
     return {
       supportsEncryption: true,
@@ -496,6 +577,29 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────
+
+  /**
+   * What this channel has waiting for the active account.
+   *
+   * Two bounded index reads and no fold — the same summary the sidebar hook
+   * runs, deliberately, so a snapshot and a live badge can never mean different
+   * things. Nobody signed in has nothing unread.
+   */
+  private async unread(identifier: ConcordIdentifier): Promise<ChannelUnread> {
+    const pubkey = accountManager.active$.value?.pubkey;
+    if (!pubkey) return { count: 0, latest: 0, mention: false, capped: false };
+    const after = await readLastRead(
+      pubkey,
+      identifier.communityId,
+      identifier.channelId,
+    );
+    return channelUnreadSummary(identifier.communityId, identifier.channelId, {
+      after,
+      nowSecs: Math.floor(Date.now() / 1000),
+      maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
+      selfPubkey: pubkey,
+    });
+  }
 
   /** The community, the channel view, and the control fold behind them. */
   private async resolve(identifier: ConcordIdentifier): Promise<{
