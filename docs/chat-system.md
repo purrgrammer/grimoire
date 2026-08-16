@@ -98,6 +98,27 @@ Search is Concord's alone because its corpus is the local plaintext rumor store.
 NIP-29 messages live in the EventStore with no local mirror, so there is nothing
 to generalize over yet.
 
+### Jumping to a hit
+
+`ChatViewer`'s `jumpTo={{ messageId, nonce }}` is a REQUEST, and two rules keep
+it one:
+
+- **Wait for the resolved conversation's own messages.** `use$` publishes from
+  an effect, so on the render where `conversation` first exists, `messages` is
+  still `undefined` — and `useJumpToMessage` gives up silently on an empty
+  timeline, because there is no oldest row to page below and nothing was paged
+  to warrant a toast. Starting there spends the request on a look that never
+  happened. This is not a cross-channel concern: the results pane replaces
+  ChatViewer, so every click lands on a cold mount.
+- **The caller forgets the request, not the viewer.** For the same reason —
+  ChatViewer unmounts whenever search is open — consumption tracked only in a
+  ref inside it would let a fresh instance honour a request the reader already
+  saw answered. `onJumpHandled(nonce)` fires when the walk ends, and
+  `ConcordViewer` clears `jumpTo` if the nonce still matches.
+
+`src/hooks/useJumpToMessage.request.test.tsx` drives both against the real
+hooks, because everything wrong here was timing.
+
 ## Moderation rendering (Concord only)
 
 Nothing is ever removed from `concordRumors` — `writeChatRumors` only puts — so
