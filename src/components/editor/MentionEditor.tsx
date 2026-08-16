@@ -49,6 +49,15 @@ export interface MentionEditorProps {
   searchCommands?: (query: string) => Promise<ChatAction[]>;
   onCommandExecute?: (action: ChatAction) => Promise<void>;
   onFilePaste?: (files: File[]) => void;
+  /**
+   * Fired on every edit, with the document as it now stands.
+   *
+   * The JSON travels WITH the notification rather than being fetched later:
+   * the composer unmounts between conversations and a child's cleanup runs
+   * before its parent's, so anything reaching for the editor at save time finds
+   * it already destroyed.
+   */
+  onChange?: (state: { isEmpty: boolean; json: unknown }) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -64,6 +73,10 @@ export interface MentionEditorHandle {
   insertText: (text: string) => void;
   /** Insert a blob attachment with rich preview */
   insertBlob: (blob: BlobAttachment) => void;
+  /** The document as tiptap JSON — mentions, emoji and attachments included. */
+  getJSON: () => unknown;
+  /** Replace the document with a previously saved one. */
+  setJSON: (json: unknown) => void;
 }
 
 export const MentionEditor = forwardRef<
@@ -79,11 +92,17 @@ export const MentionEditor = forwardRef<
       searchCommands,
       onCommandExecute,
       onFilePaste,
+      onChange,
       autoFocus = false,
       className = "",
     },
     ref,
   ) => {
+    // Through a ref, so a changing callback never rebuilds the editor: tiptap's
+    // extension manager is built once at mount and `setOptions` does not
+    // rebuild it.
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
     // Use a ref for onSubmit to avoid stale closures in TipTap keyboard handlers.
     // The Enter key handler reads this ref at invocation time, ensuring it always
     // has the latest callback (including any captured reply context).
@@ -310,6 +329,12 @@ export const MentionEditor = forwardRef<
         },
       },
       autofocus: autoFocus,
+      onUpdate: ({ editor: instance }) => {
+        onChangeRef.current?.({
+          isEmpty: instance.isEmpty,
+          json: instance.getJSON(),
+        });
+      },
     });
 
     useImperativeHandle(
@@ -334,6 +359,11 @@ export const MentionEditor = forwardRef<
         },
         insertText: (text: string) => {
           if (editor) editor.chain().focus().insertContent(text).run();
+        },
+        getJSON: () => editor?.getJSON(),
+        setJSON: (json: unknown) => {
+          if (!editor || json === undefined) return;
+          editor.commands.setContent(json as never);
         },
         insertBlob: (blob: BlobAttachment) => {
           if (editor) {

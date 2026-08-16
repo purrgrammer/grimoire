@@ -41,6 +41,7 @@ import {
 } from "@/services/concord-adoptions";
 import { invalidateChannelDirectory } from "@/services/concord-channel-directory";
 import { resetNotifPrefsMemory } from "@/services/concord-notif-prefs";
+import { resetDraftCache } from "@/services/chat-drafts";
 import { clearReads } from "@/services/concord-reads";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
@@ -395,6 +396,9 @@ export async function clearCommunities(pubkey: string): Promise<void> {
   // bounded, so nothing leaks — but it is the account's traffic, and the memo
   // block is where the account's traces go.
   resetAnnouncedMemory();
+  // Drafts are cached in memory to answer a render synchronously, so the rows
+  // going is not enough — the tab would keep handing them to the next account.
+  resetDraftCache();
   await clearGroupKeyPersistence();
 }
 

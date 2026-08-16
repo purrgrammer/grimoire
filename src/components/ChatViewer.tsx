@@ -99,6 +99,14 @@ import {
   computeFirstItemIndexDelta,
   FIRST_ITEM_INDEX_BASE,
 } from "./chat/prepend-anchor";
+import {
+  clearDraft,
+  draftKey,
+  draftsReady,
+  readDraft,
+  shouldRestoreDraft,
+  writeDraft,
+} from "@/services/chat-drafts";
 import { mentionsPubkey } from "@/lib/concord/mentions";
 import { cn } from "@/lib/utils";
 
@@ -297,6 +305,15 @@ const OLDER_PAGE_SIZE = 50;
  * moving target.
  */
 const ANCHOR_SETTLE_MS = 400;
+
+/**
+ * How long typing must pause before the draft is written to disk.
+ *
+ * Only the WRITE waits — the document is mirrored in memory on every keystroke,
+ * so a channel switch or a closed window saves what was typed a moment ago
+ * rather than what was typed a debounce ago.
+ */
+const DRAFT_SAVE_MS = 750;
 
 type ConversationResult =
   | { status: "loading" }
@@ -1143,6 +1160,92 @@ export function ChatViewer({
     return () => clearTimeout(timer);
   }, [conversation?.id, messagesWithMarkers.length, virtuosoRef]);
 
+  /**
+   * Keep what is half-typed with the channel it was typed in.
+   *
+   * The composer is ONE tiptap instance shared by every conversation, so
+   * without this the text follows the reader into the next channel — where it
+   * is either sent to the wrong people or lost when the window closes.
+   *
+   * The document is mirrored into a ref on every keystroke rather than read out
+   * of the editor at save time. The composer unmounts between conversations and
+   * React runs a child's cleanup before its parent's, so anything reaching for
+   * the editor in the save path would find it already destroyed. Only the
+   * WRITE is debounced; the mirror is always current, which is what makes the
+   * save-on-switch complete.
+   */
+  const draftKeyFor = useMemo(
+    () =>
+      pubkey && conversation
+        ? draftKey(pubkey, protocol, conversation.id)
+        : undefined,
+    [pubkey, protocol, conversation],
+  );
+  const draftDoc = useRef<{ json: unknown; isEmpty: boolean }>({
+    json: undefined,
+    isEmpty: true,
+  });
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const savingDraftFor = useRef<string | undefined>(undefined);
+
+  const flushDraft = useCallback(() => {
+    clearTimeout(draftTimer.current);
+    const key = savingDraftFor.current;
+    if (!key) return;
+    const { json, isEmpty } = draftDoc.current;
+    // An emptied composer DELETES the row rather than storing an empty
+    // document, so a channel with nothing in it has nothing to restore.
+    if (isEmpty || json === undefined) clearDraft(key);
+    else writeDraft(key, json, replyToRef.current);
+  }, []);
+
+  const handleEditorChange = useCallback(
+    (state: { isEmpty: boolean; json: unknown }) => {
+      draftDoc.current = state;
+      clearTimeout(draftTimer.current);
+      draftTimer.current = setTimeout(flushDraft, DRAFT_SAVE_MS);
+    },
+    [flushDraft],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    savingDraftFor.current = draftKeyFor;
+    draftDoc.current = { json: undefined, isEmpty: true };
+    if (draftKeyFor) {
+      void (async () => {
+        // Cold mount: reading before the cache is warm answers "no draft", and
+        // the empty composer would then be saved over the real one.
+        await draftsReady();
+        if (cancelled) return;
+        const draft = readDraft(draftKeyFor);
+        // Reply context belongs to the channel it was started in — carrying it
+        // across would address a message in another channel entirely.
+        setReplyTo(draft?.replyToId);
+        if (!draft) return;
+        // The composer is mounted a beat after the conversation resolves.
+        for (let step = 0; step < 40 && !cancelled; step++) {
+          const editor = editorRef.current;
+          if (editor) {
+            if (shouldRestoreDraft(draft, editor.isEmpty())) {
+              editor.setJSON(draft.content);
+              draftDoc.current = { json: draft.content, isEmpty: false };
+            }
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+      flushDraft();
+      savingDraftFor.current = undefined;
+    };
+  }, [draftKeyFor, flushDraft]);
+
   // State for send in progress (prevents double-sends)
   const [isSending, setIsSending] = useState(false);
 
@@ -1794,6 +1897,7 @@ export function ChatViewer({
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}
+              onChange={handleEditorChange}
               onFilePaste={(files) => {
                 // Open upload dialog with pasted files
                 openUpload(files);

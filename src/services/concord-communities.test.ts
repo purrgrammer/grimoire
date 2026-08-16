@@ -455,6 +455,21 @@ describe("syncCommunities", () => {
     expect(resetNotifPrefsMemory).toHaveBeenCalled();
   });
 
+  it("forgets the drafts it was holding in memory to answer renders", async () => {
+    // The rows go with the wipe above; the cache in front of them answers the
+    // composer synchronously, so leaving it populated hands one account's
+    // half-typed messages to whoever signs in next.
+    const { draftKey, draftsReady, readDraft, writeDraft } =
+      await import("./chat-drafts");
+    const key = draftKey(pubkey, "concord", "cc:dd");
+    await draftsReady();
+    writeDraft(key, { type: "doc" });
+    expect(readDraft(key)).toBeDefined();
+
+    await clearCommunities(pubkey);
+    expect(readDraft(key)).toBeUndefined();
+  });
+
   it("forgets which messages this tab has already announced", async () => {
     // Rumor ids belonging to the account that just left. Bounded and opaque,
     // so nothing leaks — but the memo block is where the account's traces go,
