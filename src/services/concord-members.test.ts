@@ -29,6 +29,7 @@ import { Permissions } from "@/lib/concord/roles";
 import { buildRumor, sealRumor, wrapSeal } from "@/lib/concord/stream";
 import type { Community } from "@/lib/concord/types";
 import {
+  readGuestbookFeed,
   readStoredRoster,
   rosterParticipants,
 } from "@/services/concord-members";
@@ -391,5 +392,76 @@ describe("observedAuthors", () => {
   it("never crosses the community boundary", async () => {
     await write(admin, KIND_MESSAGE, 3000, "06".repeat(32));
     expect((await observedAuthors("ee".repeat(32))).size).toBe(0);
+  });
+});
+
+describe("readGuestbookFeed", () => {
+  it("keeps every entry rather than a final state, newest first", async () => {
+    const member = keyFor();
+    await storeGuestbook(KIND_JOIN_LEAVE, "join", [], member.sk, 1000);
+    await storeGuestbook(KIND_JOIN_LEAVE, "leave", [], member.sk, 2000);
+
+    const feed = await readGuestbookFeed(community(), folded());
+    expect(feed.map((e) => e.kind)).toEqual(["leave", "join"]);
+  });
+
+  it("applies the dissolution ordering rule to a kick", async () => {
+    // Death wins every race, but as an ORDERING rule: a kick published before
+    // the tombstone still happened, and one published after it never did.
+    const early = keyFor();
+    const late = keyFor();
+    const kicker = keyFor();
+    await storeGuestbook(KIND_JOIN_LEAVE, "join", [], early.sk, 500);
+    await storeGuestbook(KIND_KICK, "", [["p", early.pk]], kicker.sk, 1000);
+    await storeGuestbook(KIND_KICK, "", [["p", late.pk]], kicker.sk, 9000);
+    await _resetDissolutionForTests();
+    await rememberDissolvedForTest(idHex, 5000);
+
+    // The owner's kicks need no citation, which is what isolates the ordering.
+    const feed = await readGuestbookFeed(
+      community(),
+      folded({ ownerHex: kicker.pk }),
+    );
+    expect(feed.filter((e) => e.kind === "kick").map((e) => e.pubkey)).toEqual([
+      early.pk,
+    ]);
+    await _resetDissolutionForTests();
+  });
+
+  it("gives a row to a member who is banned NOW", async () => {
+    const gone = keyFor();
+    const feed = await readGuestbookFeed(
+      community(),
+      folded({
+        banned: new Set([gone.pk]),
+        bannedAt: new Map([[gone.pk, 4_000]]),
+      }),
+    );
+    // `bannedAt` is seconds; the feed is milliseconds.
+    expect(feed).toEqual([
+      expect.objectContaining({ kind: "ban", pubkey: gone.pk, ms: 4_000_000 }),
+    ]);
+  });
+
+  it("gives no row to a member who was banned and since unbanned", async () => {
+    // `bannedAt` keeps an entry for every npub a Banlist ever named, so reading
+    // it alone would announce bans that have been lifted.
+    const forgiven = keyFor();
+    const feed = await readGuestbookFeed(
+      community(),
+      folded({ banned: new Set(), bannedAt: new Map([[forgiven.pk, 4_000]]) }),
+    );
+    expect(feed).toEqual([]);
+  });
+
+  it("gives no row to a banned member the fold has no time for", async () => {
+    // Nothing to date the row with, and inventing one would be worse than the
+    // roster already saying they are gone.
+    const gone = keyFor();
+    const feed = await readGuestbookFeed(
+      community(),
+      folded({ banned: new Set([gone.pk]), bannedAt: new Map() }),
+    );
+    expect(feed).toEqual([]);
   });
 });

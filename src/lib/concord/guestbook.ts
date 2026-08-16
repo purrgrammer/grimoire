@@ -222,6 +222,97 @@ export function coalesceGuestbook(
   return byMember;
 }
 
+// ── Feed ─────────────────────────────────────────────────────────────────────
+
+/** One thing that happened to somebody's membership. */
+export interface GuestbookFeedEntry {
+  kind: "join" | "leave" | "kick" | "ban";
+  /** The member it happened to. */
+  pubkey: string;
+  /** Who did it, where the plane names them. Only a kick has one. */
+  actor?: string;
+  /** Millisecond time. For a ban this is APPROXIMATE — see `readGuestbookFeed`. */
+  ms: number;
+  /** The rumor it came from; absent for a ban, which is folded from Control. */
+  rumorId?: string;
+  /** Invite attribution (Joins only): the link creator + label. */
+  invite?: { creator: string; label?: string };
+}
+
+/**
+ * The Guestbook as a FEED: every honored entry, in order, rather than one
+ * final state per npub.
+ *
+ * Same gates as {@link coalesceGuestbook} — future-dated drop, encrypted seal,
+ * banned author drop, `canKick` for a Kick — because a feed row is a claim that
+ * something happened, and an unauthorized kick did not happen. What differs is
+ * only that nothing supersedes anything: a member who joined, left and rejoined
+ * produces three rows, which is the history the coalesce exists to throw away.
+ *
+ * Kind-3312 snapshots contribute NOTHING. A snapshot is a secondhand seed —
+ * `fromSnapshot` exists precisely to say so — and rendering one as "joined"
+ * would date a member's arrival to whenever somebody last compacted the plane.
+ */
+export function guestbookFeed(
+  opened: OpenedEvent[],
+  opts: CoalesceOptions,
+): GuestbookFeedEntry[] {
+  const out: GuestbookFeedEntry[] = [];
+
+  for (const ev of opened) {
+    if (ev.ms > opts.nowMs + GUESTBOOK_MAX_FUTURE_MS) continue;
+    if (ev.sealKind !== undefined && ev.sealKind !== KIND_SEAL_ENCRYPTED)
+      continue;
+    if (opts.banned?.has(ev.author)) continue;
+
+    if (ev.kind === KIND_JOIN_LEAVE) {
+      const verb =
+        ev.content === "join"
+          ? "join"
+          : ev.content === "leave"
+            ? "leave"
+            : undefined;
+      if (!verb) continue;
+      const inviteTag =
+        verb === "join" ? ev.tags.find((t) => t[0] === "invite") : undefined;
+      out.push({
+        kind: verb,
+        pubkey: ev.author,
+        ms: ev.ms,
+        rumorId: ev.rumorId,
+        ...(inviteTag?.[1]
+          ? {
+              invite: {
+                creator: inviteTag[1],
+                ...(inviteTag[2] ? { label: inviteTag[2] } : {}),
+              },
+            }
+          : {}),
+      });
+      continue;
+    }
+
+    if (ev.kind === KIND_KICK) {
+      const target = ev.tags.find((t) => t[0] === "p")?.[1];
+      if (!target) continue;
+      if (!opts.canKick(ev.author, target, citationFromTags(ev.tags), ev.ms))
+        continue;
+      out.push({
+        kind: "kick",
+        pubkey: target,
+        actor: ev.author,
+        ms: ev.ms,
+        rumorId: ev.rumorId,
+      });
+    }
+  }
+
+  // Newest first: this is read as news, not as a ledger.
+  return out.sort(
+    (a, b) => b.ms - a.ms || (a.rumorId ?? "").localeCompare(b.rumorId ?? ""),
+  );
+}
+
 /**
  * The Complete Memberlist: the coalesced Guestbook, merged with OBSERVED
  * authors (an author seen publishing is present, forward of their latest

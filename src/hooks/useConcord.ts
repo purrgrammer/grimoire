@@ -24,6 +24,9 @@ import {
   onWireScope,
 } from "@/lib/concord/wire-bus";
 import type { Community, ImagePointer } from "@/lib/concord/types";
+import type { FoldedControl } from "@/lib/concord/control";
+import type { GuestbookFeedEntry } from "@/lib/concord/guestbook";
+import { readGuestbookFeed } from "@/services/concord-members";
 import { readFoldedControl } from "@/services/concord-rumor-store";
 import accountManager from "@/services/accounts";
 import {
@@ -250,6 +253,65 @@ export function useConcordCommunity(
     refresh,
   };
 }
+
+/**
+ * One community's membership feed — joins, leaves, kicks, and who is banned.
+ *
+ * Read on mount and re-read on the community's CONTROL ring, which is a
+ * deliberate compromise rather than an oversight: the guestbook plane has no
+ * doorbell of its own. The wire bus defines three scopes and a guestbook write
+ * rings none of them, so freshness actually arrives with `syncCommunityState`'s
+ * sweeps — after which `useConcord` emits `controlScope` — and with control
+ * traffic ingested from the wire.
+ *
+ * The stated cost: a kick landing between sweeps, in a community with no
+ * control-plane traffic, stays invisible until the next sweep, the next
+ * control edition, or reopening the panel. That is exactly how fresh the
+ * roster is today.
+ */
+export function useConcordGuestbook(
+  community: Community | undefined,
+  folded: FoldedControl | undefined,
+): { feed: GuestbookFeedEntry[]; loading: boolean } {
+  const [loaded, setLoaded] = useState<{
+    idHex: string;
+    feed: GuestbookFeedEntry[];
+  }>();
+  const idHex = community?.idHex;
+  // The fold is a fresh object per read; the banlist is what this depends on.
+  const bannedKey = folded ? [...folded.banned].sort().join(",") : undefined;
+
+  useEffect(() => {
+    if (!community || !folded) return;
+    let cancelled = false;
+    const read = () => {
+      void readGuestbookFeed(community, folded)
+        .then((feed) => {
+          if (!cancelled) setLoaded({ idHex: community.idHex, feed });
+        })
+        .catch((error: unknown) => {
+          console.warn("[concord] could not read the guestbook:", error);
+        });
+    };
+    read();
+    const off = onWireScope(controlScope(community.idHex), read);
+    return () => {
+      cancelled = true;
+      off();
+    };
+    // Keyed on the id and the banlist, not the objects: both are rebuilt on
+    // every vault and fold read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idHex, bannedKey]);
+
+  const settled = idHex !== undefined && loaded?.idHex === idHex;
+  return {
+    feed: settled ? loaded.feed : EMPTY_FEED,
+    loading: idHex !== undefined && !settled,
+  };
+}
+
+const EMPTY_FEED: GuestbookFeedEntry[] = [];
 
 /**
  * Every community's icon pointer, from the MATERIALIZED fold.

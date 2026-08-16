@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BellOff,
+  BookOpen,
   Hash,
   Loader2,
   Lock,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { ChatViewer } from "./ChatViewer";
+import { ConcordGuestbookPanel } from "./ConcordGuestbookPanel";
 import { ConcordSearchPanel } from "./ConcordSearchPanel";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -28,6 +30,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   useConcordCommunities,
   useConcordCommunity,
+  useConcordGuestbook,
   useConcordIcons,
 } from "@/hooks/useConcord";
 import {
@@ -82,6 +85,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     channelId,
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showGuestbook, setShowGuestbook] = useState(false);
   const [query, setQuery] = useState("");
   /** Search this channel only, or everywhere the member can read. */
   const [searchThisChannel, setSearchThisChannel] = useState(false);
@@ -161,9 +165,15 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   const handleChannelSelect = useCallback(
     (idHex: string) => {
       setSelectedChannel(idHex);
+      setShowGuestbook(false);
       if (isMobile) setSidebarOpen(false);
     },
     [isMobile],
+  );
+
+  const { feed: guestbook, loading: guestbookLoading } = useConcordGuestbook(
+    showGuestbook ? community : undefined,
+    state?.folded,
   );
 
   // Memoized BY VALUE, not rebuilt per render. ChatViewer keys its conversation
@@ -333,17 +343,35 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         onSelect={(idHex) => {
           setSelectedId(idHex);
           setSelectedChannel(undefined);
+          setShowGuestbook(false);
         }}
       >
-        <ChannelList
-          channels={channels}
-          communityId={community?.idHex}
-          selected={openChannel?.idHex}
-          loading={loading}
-          error={error}
-          unread={unread}
-          onSelect={handleChannelSelect}
-        />
+        <>
+          <ChannelList
+            channels={channels}
+            communityId={community?.idHex}
+            selected={showGuestbook ? undefined : openChannel?.idHex}
+            loading={loading}
+            error={error}
+            unread={unread}
+            onSelect={handleChannelSelect}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setShowGuestbook((v) => !v);
+              if (isMobile) setSidebarOpen(false);
+            }}
+            className={cn(
+              "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm text-muted-foreground hover:bg-muted/50",
+              showGuestbook && "bg-muted/70 font-medium text-foreground",
+            )}
+            title="Joins, departures, removals and bans"
+          >
+            <BookOpen className="size-3 flex-shrink-0" />
+            <span className="truncate">guestbook</span>
+          </button>
+        </>
       </CommunityPicker>
     </div>
   );
@@ -381,6 +409,8 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
             query={query.trim()}
             onOpen={handleOpenHit}
           />
+        ) : showGuestbook ? (
+          <ConcordGuestbookPanel feed={guestbook} loading={guestbookLoading} />
         ) : identifier ? (
           <ChatViewer
             protocol="concord"

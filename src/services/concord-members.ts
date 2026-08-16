@@ -18,8 +18,11 @@ import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import {
   coalesceGuestbook,
   completeMemberlist,
+  guestbookFeed,
   snapshotAuthorities,
   type CoalescedMember,
+  type CoalesceOptions,
+  type GuestbookFeedEntry,
 } from "@/lib/concord/guestbook";
 import { sweepGuestbook } from "@/lib/concord/plane-sync";
 import { isEntitled } from "@/lib/concord/channel-access";
@@ -35,18 +38,19 @@ export interface Roster {
   coalesced: Map<string, CoalescedMember>;
 }
 
-/** Fold the roster from what the store already holds. No network. */
-export async function readStoredRoster(
+/**
+ * The gates a Guestbook fold applies, in one place.
+ *
+ * Shared by the roster and the feed deliberately: the feed renders "was kicked
+ * by X" as a fact, so an entry it honours and the roster does not — or the
+ * reverse — would be the same plane described two different ways.
+ */
+function coalesceOptions(
   community: Community,
   folded: FoldedControl,
-): Promise<Roster> {
-  const [opened, observed, dissolvedAtMs] = await Promise.all([
-    queryPlane(community.idHex, "guestbook"),
-    observedAuthors(community.idHex),
-    dissolvedAt(community.idHex),
-  ]);
-
-  const coalesced = coalesceGuestbook(opened, {
+  dissolvedAtMs: number | undefined,
+): CoalesceOptions {
+  return {
     nowMs: Date.now(),
     canKick: (actor, target, citation, atMs) =>
       // Death wins every race (CORD-02 §9) — but as an ORDERING rule, since the
@@ -67,7 +71,24 @@ export async function readStoredRoster(
       citationSatisfied(folded, community.id, actor, citation),
     snapshotAuthorities: snapshotAuthorities(community),
     banned: folded.banned,
-  });
+  };
+}
+
+/** Fold the roster from what the store already holds. No network. */
+export async function readStoredRoster(
+  community: Community,
+  folded: FoldedControl,
+): Promise<Roster> {
+  const [opened, observed, dissolvedAtMs] = await Promise.all([
+    queryPlane(community.idHex, "guestbook"),
+    observedAuthors(community.idHex),
+    dissolvedAt(community.idHex),
+  ]);
+
+  const coalesced = coalesceGuestbook(
+    opened,
+    coalesceOptions(community, folded, dissolvedAtMs),
+  );
 
   return {
     members: completeMemberlist(
@@ -78,6 +99,50 @@ export async function readStoredRoster(
     ),
     coalesced,
   };
+}
+
+/**
+ * The Guestbook as a feed — every membership event, newest first, plus a row
+ * for each currently-banned member.
+ *
+ * Two things are worth stating about the ban rows, because both are visible in
+ * what the UI says:
+ *
+ * They come from `folded.banned` INTERSECTED with `bannedAt`, not from
+ * `bannedAt` alone. `bannedAt` keeps an entry for every npub an authorized
+ * Banlist edition ever named — including members since unbanned — so reading it
+ * alone would announce bans that have been lifted.
+ *
+ * And their time is APPROXIMATE. `bannedAt` records the newest edition naming
+ * the member, not the moment they were banned, so a Banlist edited afterwards
+ * for an unrelated reason moves the timestamp. The UI says "as of" for that
+ * reason. Who did the banning is knowable — the edition has an author — but the
+ * fold discards it, and carrying it would change the persisted fold shape; that
+ * is a separate change.
+ */
+export async function readGuestbookFeed(
+  community: Community,
+  folded: FoldedControl,
+): Promise<GuestbookFeedEntry[]> {
+  const [opened, dissolvedAtMs] = await Promise.all([
+    queryPlane(community.idHex, "guestbook"),
+    dissolvedAt(community.idHex),
+  ]);
+
+  const feed = guestbookFeed(
+    opened,
+    coalesceOptions(community, folded, dissolvedAtMs),
+  );
+
+  const bans: GuestbookFeedEntry[] = [];
+  for (const pubkey of folded.banned) {
+    const at = folded.bannedAt.get(pubkey);
+    if (at === undefined) continue;
+    // `bannedAt` is in SECONDS; every other time on this feed is ms.
+    bans.push({ kind: "ban", pubkey, ms: at * 1000 });
+  }
+  if (bans.length === 0) return feed;
+  return [...feed, ...bans].sort((a, b) => b.ms - a.ms);
 }
 
 /**

@@ -11,6 +11,7 @@ import { bytesToHex, guestbookGroupKey, random32 } from "@/lib/concord/derive";
 import {
   coalesceGuestbook,
   completeMemberlist,
+  guestbookFeed,
   snapshotAuthorities,
 } from "@/lib/concord/guestbook";
 import {
@@ -553,5 +554,114 @@ describe("complete memberlist", () => {
         bannedAt,
       ).has(alice.pubkey),
     ).toBe(true);
+  });
+});
+
+describe("the guestbook as a feed", () => {
+  it("keeps every entry an npub made, in order, rather than one state", async () => {
+    // The coalesce answers "are they in?"; the feed answers "what happened?" —
+    // and a member who joined, left and came back did three things.
+    const alice = signer();
+    const wraps = [
+      await seal(joinRumor(alice.pubkey, 1000), alice),
+      await seal(leaveRumor(alice.pubkey, 2000), alice),
+      await seal(joinRumor(alice.pubkey, 3000), alice),
+    ];
+    const feed = guestbookFeed(open(wraps), {
+      nowMs: 10_000,
+      canKick: denyAllKicks,
+    });
+    expect(feed.map((e) => e.kind)).toEqual(["join", "leave", "join"]);
+    expect(feed.map((e) => e.ms)).toEqual([3000, 2000, 1000]);
+  });
+
+  it("names the moderator on a kick", async () => {
+    const admin = signer();
+    const victim = signer();
+    const feed = guestbookFeed(
+      open([await seal(kickRumor(admin.pubkey, victim.pubkey, 2000), admin)]),
+      { nowMs: 10_000, canKick: allowAllKicks },
+    );
+    expect(feed).toEqual([
+      expect.objectContaining({
+        kind: "kick",
+        pubkey: victim.pubkey,
+        actor: admin.pubkey,
+      }),
+    ]);
+  });
+
+  it("excludes a kick the actor was not authorized to make", async () => {
+    // A feed row is a claim that something happened, and this did not.
+    const nobody = signer();
+    const victim = signer();
+    const feed = guestbookFeed(
+      open([await seal(kickRumor(nobody.pubkey, victim.pubkey, 2000), nobody)]),
+      { nowMs: 10_000, canKick: denyAllKicks },
+    );
+    expect(feed).toEqual([]);
+  });
+
+  it("excludes everything from a banned author, kicks included", async () => {
+    const banned = signer();
+    const victim = signer();
+    const wraps = [
+      await seal(joinRumor(banned.pubkey, 1000), banned),
+      await seal(kickRumor(banned.pubkey, victim.pubkey, 2000), banned),
+    ];
+    const feed = guestbookFeed(open(wraps), {
+      nowMs: 10_000,
+      canKick: allowAllKicks,
+      banned: new Set([banned.pubkey]),
+    });
+    expect(feed).toEqual([]);
+  });
+
+  it("takes no rows from a snapshot", async () => {
+    // A snapshot is a secondhand seed; rendering one as "joined" would date a
+    // member's arrival to whenever somebody last compacted the plane.
+    const refounder = signer();
+    const alice = signer();
+    const wraps = await Promise.all(
+      snapshotRumors(
+        refounder.pubkey,
+        [alice.pubkey],
+        "ab".repeat(32),
+        5000,
+      ).map((r) => seal(r, refounder)),
+    );
+    const feed = guestbookFeed(open(wraps), {
+      nowMs: 10_000,
+      canKick: denyAllKicks,
+      snapshotAuthorities: new Set([refounder.pubkey]),
+    });
+    expect(feed).toEqual([]);
+  });
+
+  it("drops an entry dated far in the future", async () => {
+    const alice = signer();
+    const feed = guestbookFeed(
+      open([await seal(joinRumor(alice.pubkey, 10_000_000), alice)]),
+      { nowMs: 1000, canKick: denyAllKicks },
+    );
+    expect(feed).toEqual([]);
+  });
+
+  it("carries the invite a join was made with", async () => {
+    const alice = signer();
+    const host = signer();
+    const feed = guestbookFeed(
+      open([
+        await seal(
+          joinRumor(alice.pubkey, 1000, {
+            creator: host.pubkey,
+            label: "spring",
+          }),
+          alice,
+        ),
+      ]),
+      { nowMs: 10_000, canKick: denyAllKicks },
+    );
+    expect(feed[0].invite).toEqual({ creator: host.pubkey, label: "spring" });
   });
 });
