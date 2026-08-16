@@ -15,7 +15,7 @@
  * communities — or one community's channels — show under another's.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { use$ } from "applesauce-react/hooks";
 
 import {
@@ -281,13 +281,26 @@ export function useConcordGuestbook(
   // The fold is a fresh object per read; the banlist is what this depends on.
   const bannedKey = folded ? [...folded.banned].sort().join(",") : undefined;
 
+  // What a re-read reads FROM. The effect is deliberately not keyed on the
+  // roster — it changes shape on every fold — but a ring must still be answered
+  // with the roster as it stands, not the one this effect closed over. Who may
+  // remove whom is a roster question, so a kick by a moderator promoted since
+  // the panel opened would otherwise be dropped as unauthorized until something
+  // else re-ran the effect.
+  const latest = useRef({ community, folded });
+  useEffect(() => {
+    latest.current = { community, folded };
+  });
+
   useEffect(() => {
     if (!community || !folded) return;
     let cancelled = false;
     const read = () => {
-      void readGuestbookFeed(community, folded)
+      const { community: now, folded: roster } = latest.current;
+      if (!now || !roster) return;
+      void readGuestbookFeed(now, roster)
         .then((feed) => {
-          if (!cancelled) setLoaded({ idHex: community.idHex, feed });
+          if (!cancelled) setLoaded({ idHex: now.idHex, feed });
         })
         .catch((error: unknown) => {
           console.warn("[concord] could not read the guestbook:", error);
