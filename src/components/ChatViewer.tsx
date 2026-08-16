@@ -569,13 +569,17 @@ const DeliveryStatus = memo(function DeliveryStatus({
   }
 
   // Delivered, and ours: a relay took it. Quiet on purpose — it is the absence
-  // of a warning that carries the meaning.
+  // of a warning that carries the meaning. But quiet is not the same as
+  // self-explanatory: a bare tick next to your own message reads as a read
+  // receipt, which this is emphatically not, so it says what it means on hover.
   if (activePubkey && message.author === activePubkey) {
     return (
-      <Check
-        className="size-3 text-muted-foreground/60"
-        aria-label="Delivered"
-      />
+      <span title="Sent — a relay accepted this message. It does not mean anyone has read it.">
+        <Check
+          className="size-3 text-muted-foreground/60"
+          aria-label="Sent — a relay accepted this message"
+        />
+      </span>
     );
   }
   return null;
@@ -1778,8 +1782,13 @@ export function ChatViewer({
   return (
     <div className="flex h-full flex-col">
       {/* Header with conversation info and controls */}
-      <div className="pl-2 pr-0 border-b w-full py-0.5">
-        <div className="flex items-center justify-between gap-3">
+      {/* `h-8` to sit level with the sidebar's search heading beside it. The
+          old `py-0.5` made the height depend on whichever control inside was
+          tallest, so the two headers lined up only by coincidence — and stopped
+          doing so as soon as the search box was empty and this header, rather
+          than the results heading, was the thing next to it. */}
+      <div className="flex h-8 w-full items-center border-b pl-2 pr-0">
+        <div className="flex w-full items-center justify-between gap-3">
           <div className="flex flex-1 min-w-0 items-center gap-2">
             {headerPrefix}
             <TooltipProvider>

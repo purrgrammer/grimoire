@@ -7,6 +7,7 @@ import {
 import { RelayLink } from "@/components/nostr/RelayLink";
 import { useRelayState } from "@/hooks/useRelayState";
 import { getConnectionIcon, getAuthIcon } from "@/lib/relay-status-utils";
+import { useConcordRelayStatus } from "@/hooks/useConcordRelayStatus";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import type { Conversation } from "@/types/chat";
 
@@ -33,6 +34,16 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
           ? [conversation.metadata.relayUrl]
           : [];
 
+  /**
+   * Concord reads over its OWN pool, so the singleton's relay state describes
+   * a different socket. `useConcordRelayStatus` asks the pool that actually
+   * holds this conversation's connections; every other protocol is on the
+   * singleton and this map stays empty.
+   */
+  const concordStatus = useConcordRelayStatus(
+    conversation.protocol === "concord" ? relays : undefined,
+  );
+
   // Pre-compute normalized URLs and state lookups in a single pass (O(n))
   const relayData = relays.map((url) => {
     let normalizedUrl: string;
@@ -42,11 +53,13 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
       normalizedUrl = url;
     }
     const state = relayStates[normalizedUrl];
+    const owned = concordStatus.get(url);
     return {
       url,
       normalizedUrl,
       state,
-      isConnected: state?.connectionState === "connected",
+      isConnected:
+        owned !== undefined ? owned : state?.connectionState === "connected",
     };
   });
 
@@ -72,8 +85,18 @@ export function RelaysDropdown({ conversation }: RelaysDropdownProps) {
           Relays ({relays.length})
         </div>
         <div className="space-y-1 p-1">
-          {relayData.map(({ url, state }) => {
-            const connIcon = getConnectionIcon(state);
+          {relayData.map(({ url, state, isConnected }) => {
+            // Same substitution as the count: on Concord the singleton's
+            // `state` describes a socket this conversation does not use, so
+            // the row is drawn from the owning pool's answer instead.
+            const connIcon = getConnectionIcon(
+              conversation.protocol === "concord"
+                ? {
+                    ...state,
+                    connectionState: isConnected ? "connected" : "disconnected",
+                  }
+                : state,
+            );
             const authIcon = getAuthIcon(state);
 
             return (

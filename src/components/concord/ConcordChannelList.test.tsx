@@ -125,10 +125,9 @@ describe("ChannelList categories", () => {
 });
 
 describe("ChannelList pins", () => {
-  it("lifts a pinned channel out of its category into the pinned run", () => {
+  it("lifts a pinned channel out of its category to the top", () => {
     concordPrefsManager.togglePin(COMMUNITY, "random".padEnd(64, "0"));
     renderList();
-    expect(screen.getByText("pinned")).toBeTruthy();
     // Once, not twice — a pinned channel leaves the category it came from.
     expect(screen.getAllByText("random")).toHaveLength(1);
     expect(screen.getByText("general")).toBeTruthy();
@@ -144,7 +143,12 @@ describe("ChannelList pins", () => {
     expect(screen.queryByText("general")).toBeNull();
   });
 
-  it("shows no pinned heading while nothing is pinned", () => {
+  it("marks a pinned row without a heading, so pinning cannot change the height", () => {
+    // A heading would add a line the moment anything is pinned, moving every
+    // row under the cursor. The mark rides inside the row instead.
+    renderList();
+    expect(screen.queryByText("pinned")).toBeNull();
+    concordPrefsManager.togglePin(COMMUNITY, "random".padEnd(64, "0"));
     renderList();
     expect(screen.queryByText("pinned")).toBeNull();
   });
@@ -165,7 +169,7 @@ describe("the row's context menu", () => {
   it("pins from the menu, and offers to unpin next time", async () => {
     renderList();
     fireEvent.contextMenu(screen.getByText("stage"));
-    fireEvent.click(await screen.findByText("Pin to the top"));
+    fireEvent.click(await screen.findByText("Pin"));
 
     expect(
       isChannelPinned(
@@ -174,7 +178,6 @@ describe("the row's context menu", () => {
         "stage".padEnd(64, "0"),
       ),
     ).toBe(true);
-    expect(screen.getByText("pinned")).toBeTruthy();
 
     fireEvent.contextMenu(screen.getAllByText("stage")[0]);
     fireEvent.click(await screen.findByText("Unpin"));
@@ -187,10 +190,13 @@ describe("the row's context menu", () => {
     ).toBe(false);
   });
 
-  it("still carries the notification levels it always did", async () => {
+  it("offers Pin and nothing else while notifications are hidden", async () => {
     renderList();
     fireEvent.contextMenu(screen.getByText("lobby"));
-    expect(await screen.findByText("Notify me about lobby")).toBeTruthy();
-    expect(screen.getByText("Mentions only")).toBeTruthy();
+    expect(await screen.findByText("Pin")).toBeTruthy();
+    // The notification levels used to live in this menu. They are hidden with
+    // the rest of that subsystem, so the menu is one verb wide.
+    expect(screen.queryByText("Notify me about lobby")).toBeNull();
+    expect(screen.queryByText("Mentions only")).toBeNull();
   });
 });

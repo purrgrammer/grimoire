@@ -29,8 +29,6 @@ import type { CommunityUnread } from "@/services/concord-reads";
 import { useConcordSearch } from "@/hooks/useConcordSearch";
 import type { ConcordSearchHit } from "@/services/concord-search";
 import { useConcordWire } from "@/hooks/useConcordWire";
-import { useConcordNotifLevel } from "@/hooks/useConcordNotifLevel";
-import { useConcordNotifier } from "@/hooks/useConcordNotifier";
 import {
   registerActiveChannel,
   unregisterActiveChannel,
@@ -131,7 +129,9 @@ export function ConcordViewer({
   // Desktop alerts for what the wire brings in. Mounted here for the same
   // reason the wire is: this is the component whose existence means someone is
   // reading Concord at all.
-  useConcordNotifier();
+  // Notifications are hidden for now — nothing rings, and no menu offers to
+  // tune what does not. One call away from being back.
+  // useConcordNotifier();
 
   // Adopt any CORD-06 rotation addressed to this member. Read-only: grimoire
   // never rotates and never writes the Community List, so an adoption lands in
@@ -544,9 +544,8 @@ function CommunityRow({
   const icon = useConcordImage(community.icon);
   const label = community.name || community.idHex.slice(0, 8);
   const hasUnread = (community.unread?.count ?? 0) > 0;
-  const { level } = useConcordNotifLevel(community.idHex);
   return (
-    <NotifLevelMenu communityId={community.idHex} label={label}>
+    <NotifLevelMenu>
       <button
         type="button"
         onClick={() => onSelect(community.idHex)}
@@ -573,12 +572,7 @@ function CommunityRow({
           </span>
         )}
         <span className="truncate">{label}</span>
-        {community.unread && (
-          <UnreadBadge
-            unread={community.unread}
-            silenced={level === "nothing"}
-          />
-        )}
+        {community.unread && <UnreadBadge unread={community.unread} />}
       </button>
     </NotifLevelMenu>
   );
@@ -610,11 +604,19 @@ function CommunityPicker({
 }) {
   // With one community there is nothing to pick between, so the row would be
   // chrome; the channels stand alone under the header that already names it.
-  if (communities.length <= 1) return <>{children}</>;
+  // One community needs no picker, but it still needs the scroller the picker
+  // would have been — the channel list itself is content-sized.
+  if (communities.length <= 1)
+    return <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>;
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {communities.map((c) => (
-        <div key={c.idHex} className="flex min-h-0 flex-col">
+        // `shrink-0`, NOT `min-h-0`: inside a SCROLLING column, `min-h-0` lets
+        // a row shrink below its own content, so the selected community's
+        // channels spilled out of their box and the next community's row was
+        // painted over the last of them. Rows in a scroller must be sized by
+        // their content and let the scroller do the rest.
+        <div key={c.idHex} className="flex shrink-0 flex-col">
           <CommunityRow
             community={c}
             selected={c.idHex === selected}

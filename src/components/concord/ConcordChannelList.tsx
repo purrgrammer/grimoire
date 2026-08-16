@@ -11,7 +11,6 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import {
-  BellOff,
   ChevronDown,
   ChevronRight,
   Hash,
@@ -25,16 +24,10 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { useConcordNotifLevel } from "@/hooks/useConcordNotifLevel";
 import { useConcordPrefs } from "@/hooks/useConcordPrefs";
 import { useLocale } from "@/hooks/useLocale";
-import type { NotifLevel } from "@/services/concord-notif-prefs";
 import type { ChannelUnread } from "@/services/concord-rumor-store";
 import {
   channelCategory,
@@ -86,91 +79,48 @@ export function UnreadBadge({
 }
 
 /**
- * Right-click a row to say how loudly it may interrupt you.
+ * Right-click a row for what can be done to it. Today that is Pin, and the menu
+ * does not render at all where nothing can.
  *
- * Armada's three levels, with a fourth entry for the cascade itself: a channel
- * set to "Use community default" has no level of its own and follows whatever
- * its community — or Settings — says. The distinction matters, because clearing
- * an override is otherwise impossible once set.
- *
- * The levels are stored on THIS DEVICE and are erased when you sign out.
- * Nothing about them is published: no CORD document defines a mute, and
- * grimoire uploads nothing but the messages you type.
+ * The name is now wider than the thing: notification levels used to live here
+ * and are hidden with the rest of that subsystem. Kept so restoring them is an
+ * addition rather than a re-wiring.
  */
 export function NotifLevelMenu({
-  communityId,
-  channelIdHex,
-  label,
   pinned,
   onTogglePin,
   children,
 }: {
-  communityId: string | undefined;
-  channelIdHex?: string;
-  label: string;
   /** Channel rows only — a container is not something you pin above itself. */
   pinned?: boolean;
   onTogglePin?: () => void;
   children: ReactNode;
 }) {
-  const { override, inherited, set } = useConcordNotifLevel(
-    communityId,
-    channelIdHex,
-  );
-  // `inherited`, never the resolved level: with an override set the resolved
-  // level is the override, so naming it here would promise the state you are
-  // already in and deliver its opposite — a community muted to "nothing" with
-  // this channel raised to "all" would read "Use community default (all
-  // messages)" and silence the channel when clicked.
-  const inheritLabel = channelIdHex
-    ? `Use community default (${LEVEL_LABELS[inherited]})`
-    : `Use app default (${LEVEL_LABELS[inherited]})`;
+  // Notification levels are hidden for now: the whole subsystem is off, so a
+  // menu offering to tune it would promise something nothing acts on. The
+  // hook, the prefs and the notifier all stay wired — restoring this is the
+  // radio group below, not a rebuild.
+  //
+  // What survives is Pin, styled like every other menu in the app:
+  // `size-4 mr-2` on the icon, one verb as the label. "Pin to the top"
+  // described the effect where the other items name the action.
+  if (!onTogglePin) return <>{children}</>;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        {onTogglePin && (
-          <>
-            <ContextMenuItem onSelect={onTogglePin}>
-              {pinned ? (
-                <PinOff className="size-3" />
-              ) : (
-                <Pin className="size-3" />
-              )}
-              {pinned ? "Unpin" : "Pin to the top"}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-          </>
-        )}
-        <ContextMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-          Notify me about {label}
-        </ContextMenuLabel>
-        <ContextMenuSeparator />
-        <ContextMenuRadioGroup
-          value={override ?? "inherit"}
-          onValueChange={(next) =>
-            set(next === "inherit" ? undefined : (next as NotifLevel))
-          }
-        >
-          <ContextMenuRadioItem value="inherit">
-            {inheritLabel}
-          </ContextMenuRadioItem>
-          <ContextMenuRadioItem value="all">All messages</ContextMenuRadioItem>
-          <ContextMenuRadioItem value="mentions">
-            Mentions only
-          </ContextMenuRadioItem>
-          <ContextMenuRadioItem value="nothing">Nothing</ContextMenuRadioItem>
-        </ContextMenuRadioGroup>
+      <ContextMenuContent className="w-40">
+        <ContextMenuItem onSelect={onTogglePin}>
+          {pinned ? (
+            <PinOff className="size-4 mr-2" />
+          ) : (
+            <Pin className="size-4 mr-2" />
+          )}
+          {pinned ? "Unpin" : "Pin"}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
 }
-
-const LEVEL_LABELS: Record<NotifLevel, string> = {
-  all: "all messages",
-  mentions: "mentions only",
-  nothing: "nothing",
-};
 
 /**
  * The channels, in the community's own arrangement, with categories that fold.
@@ -223,31 +173,32 @@ export function ChannelList({
   );
 
   return (
-    <div className="flex-1 overflow-y-auto py-1">
+    // Content-sized on purpose: this list is nested INSIDE the community
+    // picker, and a scroll container inside a scroll container gave the
+    // channels a box that did not grow with them — the next community's row
+    // painted straight over the last channels. The single scroller is the
+    // picker (or, with one community, the wrapper it hands the children to).
+    <div className="py-1">
       {error && <p className="px-2 py-1 text-xs text-destructive">{error}</p>}
       {loading && channels.length === 0 && (
         <p className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" /> loading…
         </p>
       )}
-      {pinned.length > 0 && (
-        <div className="mb-1">
-          <p className="flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <Pin className="size-3 shrink-0" />
-            <span className="truncate">pinned</span>
-          </p>
-          {pinned.map((ch) => (
-            <ChannelRow
-              key={ch.idHex}
-              channel={ch}
-              communityId={communityId}
-              selected={ch.idHex === selected}
-              unread={unread.get(ch.idHex.toLowerCase())}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      )}
+      {/* Pinned channels rise to the top but get NO heading of their own. A
+          heading made the list taller the moment you pinned anything, so the
+          rows under the cursor moved — and it spent a whole line saying what a
+          mark on the row itself says without costing any. */}
+      {pinned.map((ch) => (
+        <ChannelRow
+          key={ch.idHex}
+          channel={ch}
+          communityId={communityId}
+          selected={ch.idHex === selected}
+          unread={unread.get(ch.idHex.toLowerCase())}
+          onSelect={onSelect}
+        />
+      ))}
       {uncategorized.map((ch) => (
         <ChannelRow
           key={ch.idHex}
@@ -312,15 +263,10 @@ function ChannelRow({
 }) {
   const Icon = channel.isPrivate ? Lock : Hash;
   const hasUnread = (unread?.count ?? 0) > 0;
-  const { level } = useConcordNotifLevel(communityId, channel.idHex);
-  const silenced = level === "nothing";
   const { isPinned, togglePin } = useConcordPrefs();
   const pinned = isPinned(communityId ?? "", channel.idHex);
   return (
     <NotifLevelMenu
-      communityId={communityId}
-      channelIdHex={channel.idHex}
-      label={channel.name}
       pinned={pinned}
       onTogglePin={
         communityId ? () => togglePin(communityId, channel.idHex) : undefined
@@ -334,16 +280,17 @@ function ChannelRow({
           "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm hover:bg-muted/50",
           selected && "bg-muted/70 font-medium",
           hasUnread && "font-semibold text-foreground",
-          silenced && "text-muted-foreground",
         )}
       >
-        {silenced ? (
-          <BellOff className="size-3 flex-shrink-0 text-muted-foreground" />
-        ) : (
-          <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
-        )}
+        <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
         <span className="truncate">{channel.name}</span>
-        {unread && <UnreadBadge unread={unread} silenced={silenced} />}
+        {/* `ml-auto` on the pin and nothing else: it rides at the right of the
+            row, inside the row's own line box, so pinning cannot change the
+            row's height — which is the whole reason the heading went. */}
+        {pinned && (
+          <Pin className="ml-auto size-3 shrink-0 text-muted-foreground" />
+        )}
+        {unread && <UnreadBadge unread={unread} />}
       </button>
     </NotifLevelMenu>
   );
