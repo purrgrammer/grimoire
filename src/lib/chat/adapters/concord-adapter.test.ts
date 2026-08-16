@@ -206,3 +206,44 @@ describe("the dissolution gate on sending", () => {
     expect(published).not.toHaveBeenCalled();
   });
 });
+
+describe("the imeta tag for an attachment", () => {
+  const base = {
+    url: "https://blossom.example/abc",
+    sha256: "cc".repeat(32),
+    mimeType: "application/octet-stream",
+    size: 1234,
+  };
+
+  it("publishes the AES-GCM params for an encrypted blob", async () => {
+    // These are the ONLY copy: the blob on the host is ciphertext, and a
+    // message that omits them is permanently unreadable by everyone including
+    // its author.
+    const { imetaTag } = await import("@/lib/chat/adapters/concord-adapter");
+    const tag = imetaTag({
+      ...base,
+      originalMime: "image/png",
+      encryption: {
+        algorithm: "aes-gcm",
+        key: "aa".repeat(32),
+        nonce: "bb".repeat(16),
+        ox: "dd".repeat(32),
+      },
+    });
+    expect(tag[0]).toBe("imeta");
+    expect(tag).toContain(`encryption-algorithm aes-gcm`);
+    expect(tag).toContain(`decryption-key ${"aa".repeat(32)}`);
+    expect(tag).toContain(`decryption-nonce ${"bb".repeat(16)}`);
+    expect(tag).toContain(`ox ${"dd".repeat(32)}`);
+    // The server's `m` describes the CIPHERTEXT; the plaintext's own type is
+    // what tells a reader what it is about to render.
+    expect(tag).toContain("m image/png");
+  });
+
+  it("says nothing about encryption for a plain blob", async () => {
+    const { imetaTag } = await import("@/lib/chat/adapters/concord-adapter");
+    const tag = imetaTag({ ...base, mimeType: "image/png" });
+    expect(tag.some((f) => f.startsWith("decryption-"))).toBe(false);
+    expect(tag).toContain("m image/png");
+  });
+});

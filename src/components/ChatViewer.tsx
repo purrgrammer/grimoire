@@ -32,7 +32,14 @@ import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import { ConcordAdapter } from "@/lib/chat/adapters/concord-adapter";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
-import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
+import type {
+  BlobAttachmentMeta,
+  ChatProtocolAdapter,
+} from "@/lib/chat/adapters/base-adapter";
+import {
+  prepareAttachment,
+  type EncryptedUpload,
+} from "@/lib/concord/attachment-upload";
 import type { Message } from "@/types/chat";
 import type { NostrEvent } from "@/types/nostr";
 import type { ChatAction } from "@/types/chat-actions";
@@ -666,10 +673,42 @@ export function ChatViewer({
   // Ref to MentionEditor for programmatic submission
   const editorRef = useRef<MentionEditorHandle>(null);
 
+  /**
+   * AES-GCM params for attachments uploaded in this session, keyed by URL.
+   *
+   * Concord attachments are encrypted BEFORE upload (CORD-02 §6), so the blob
+   * on the media host is ciphertext and these are the only copy of what opens
+   * it. They ride in the message's `imeta`, which is sealed to the members who
+   * may read the channel.
+   */
+  const attachmentEncryption = useRef<
+    Map<string, Pick<BlobAttachmentMeta, "encryption" | "originalMime">>
+  >(new Map());
+  /** The most recent prepared upload, awaiting the URL it lands on. */
+  const preparedUpload = useRef<EncryptedUpload | undefined>(undefined);
+
   // Blossom upload hook for file attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
     accept: "image/*,video/*,audio/*",
+    // Concord only. Every other protocol here posts to a public channel where
+    // an encrypted blob would just be an unreadable one.
+    ...(protocol === "concord"
+      ? {
+          prepareFile: async (file: File) => {
+            const prepared = await prepareAttachment(file);
+            preparedUpload.current = prepared;
+            return prepared.file;
+          },
+        }
+      : {}),
     onSuccess: (results) => {
+      if (results.length > 0 && preparedUpload.current) {
+        attachmentEncryption.current.set(results[0].blob.url, {
+          encryption: preparedUpload.current.encryption,
+          originalMime: preparedUpload.current.originalMime,
+        });
+        preparedUpload.current = undefined;
+      }
       if (results.length > 0 && editorRef.current) {
         // Insert the first successful upload as a blob attachment with metadata
         const { blob, server } = results[0];
@@ -928,7 +967,14 @@ export function ChatViewer({
       await adapter.sendMessage(conversation, content, {
         replyTo: replyToId,
         emojiTags,
-        blobAttachments,
+        // The AES-GCM params never enter the editor: they are held by URL from
+        // the moment the upload resolves and rejoined here, which is armada's
+        // shape too. Losing them makes the blob permanently unreadable, so they
+        // travel the shortest path that exists.
+        blobAttachments: blobAttachments?.map((blob) => {
+          const enc = attachmentEncryption.current.get(blob.url);
+          return enc ? { ...blob, ...enc } : blob;
+        }),
       });
       // Clear reply context immediately (ref + state) so the next send
       // cannot read a stale value before React re-renders.

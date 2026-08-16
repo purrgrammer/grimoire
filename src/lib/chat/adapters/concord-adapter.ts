@@ -683,11 +683,24 @@ function emojiTag(emoji: EmojiTag): string[] {
 }
 
 /** A NIP-92 `imeta` tag for one attachment, in the shape other clients read. */
-function imetaTag(blob: BlobAttachmentMeta): string[] {
+export function imetaTag(blob: BlobAttachmentMeta): string[] {
   const parts = [`url ${blob.url}`];
-  if (blob.mimeType) parts.push(`m ${blob.mimeType}`);
+  // For an encrypted upload the server's `m`, `x` and `size` all describe the
+  // CIPHERTEXT. `m` is the one that matters to a reader deciding what it is
+  // about to render, so the plaintext's own type wins where we know it.
+  const mime = blob.originalMime ?? blob.mimeType;
+  if (mime) parts.push(`m ${mime}`);
   if (blob.sha256) parts.push(`x ${blob.sha256}`);
   if (blob.size !== undefined) parts.push(`size ${blob.size}`);
+  if (blob.encryption) {
+    // Vector / 0xChat's field names, which is what makes the blob readable by
+    // armada and by them. The key travels with the message because the message
+    // is already sealed to the members who may see it.
+    parts.push(`encryption-algorithm ${blob.encryption.algorithm}`);
+    parts.push(`decryption-key ${blob.encryption.key}`);
+    parts.push(`decryption-nonce ${blob.encryption.nonce}`);
+    parts.push(`ox ${blob.encryption.ox}`);
+  }
   return ["imeta", ...parts];
 }
 

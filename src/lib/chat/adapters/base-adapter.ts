@@ -63,6 +63,25 @@ export interface BlobAttachmentMeta {
   size?: number;
   /** Blossom server URL */
   server?: string;
+  /**
+   * AES-GCM parameters, when the blob at `url` is CIPHERTEXT.
+   *
+   * Concord attachments are encrypted before upload, so the host never holds
+   * the plaintext. These travel in the message's `imeta` and are the only copy
+   * — losing them makes the blob permanently unreadable.
+   */
+  encryption?: {
+    algorithm: "aes-gcm";
+    key: string;
+    nonce: string;
+    /** SHA-256 of the plaintext, so a swapped blob fails closed. */
+    ox: string;
+  };
+  /**
+   * The plaintext's MIME. The server's own `m` describes the ciphertext, which
+   * tells a reader nothing about what it will find inside.
+   */
+  originalMime?: string;
 }
 
 /**

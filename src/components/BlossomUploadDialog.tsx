@@ -56,6 +56,15 @@ interface BlossomUploadDialogProps {
   accept?: string;
   /** Optional initial files to pre-select (e.g., from drag-and-drop) */
   initialFiles?: File[];
+  /**
+   * Transform the chosen file just before it is uploaded.
+   *
+   * The upload path is the only place this can happen: whatever it returns is
+   * what reaches the media host, and the caller keeps whatever it needs to make
+   * sense of it afterwards. Concord uses it to strip metadata and encrypt, so
+   * the host only ever holds ciphertext.
+   */
+  prepareFile?: (file: File) => Promise<File>;
 }
 
 /**
@@ -75,6 +84,7 @@ export function BlossomUploadDialog({
   onError,
   accept = "image/*,video/*,audio/*",
   initialFiles,
+  prepareFile,
 }: BlossomUploadDialogProps) {
   const eventStore = useEventStore();
   const activeAccount = use$(accountManager.active$);
@@ -270,8 +280,11 @@ export function BlossomUploadDialog({
     setUploadErrors([]);
 
     try {
+      const upload = prepareFile
+        ? await prepareFile(selectedFile)
+        : selectedFile;
       const { results, errors } = await uploadBlobToServers(
-        selectedFile,
+        upload,
         Array.from(selectedServers),
       );
 

@@ -11,6 +11,11 @@ export interface UseBlossomUploadOptions {
   onError?: (error: Error) => void;
   /** File types to accept (e.g., "image/*,video/*,audio/*") */
   accept?: string;
+  /**
+   * Transform the file just before upload — see the dialog's own prop. Used to
+   * encrypt Concord attachments so the media host never holds the plaintext.
+   */
+  prepareFile?: (file: File) => Promise<File>;
 }
 
 export interface UseBlossomUploadReturn {
@@ -96,6 +101,7 @@ export function useBlossomUpload(
         onError={handleError}
         accept={options.accept}
         initialFiles={initialFiles}
+        prepareFile={options.prepareFile}
       />
     ),
     [
@@ -104,6 +110,7 @@ export function useBlossomUpload(
       handleCancel,
       handleError,
       options.accept,
+      options.prepareFile,
       initialFiles,
     ],
   );
