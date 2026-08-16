@@ -20,6 +20,11 @@
  * already arrived. The same reason the landing scroll waits for the row to
  * exist in the RENDERED array rather than scrolling to an index computed from
  * the page it just fetched.
+ *
+ * Which is also why every step checks the conversation it started in. Those refs
+ * follow the viewer, so a reader who opens another channel mid-walk would
+ * otherwise have it page the channel they left and then scroll — and flash — a
+ * row in the one they just opened.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -88,7 +93,11 @@ export function nextJumpAction(
  * The message a jump should land on, or undefined if the window cannot answer.
  *
  * For a date that is the first message ON or after it — the top of that day —
- * which is where a reader asking "what happened on the 3rd" wants to start.
+ * which is where a reader asking "what happened on the 3rd" wants to start. A
+ * date NEWER than everything loaded lands on the newest message instead of
+ * nowhere: picking today in a channel that last spoke yesterday is an ordinary
+ * thing to do, and answering it with a Go button that does nothing reads as
+ * broken.
  */
 export function jumpLandingId(
   messages: readonly Message[],
@@ -97,7 +106,8 @@ export function jumpLandingId(
   if (target.kind === "id") {
     return messages.some((m) => m.id === target.id) ? target.id : undefined;
   }
-  return messages.find((m) => m.timestamp >= target.ts)?.id;
+  return (messages.find((m) => m.timestamp >= target.ts) ?? messages.at(-1))
+    ?.id;
 }
 
 const delay = (ms: number) =>
@@ -133,6 +143,7 @@ export function useJumpToMessage({
   // a page arrives as a re-render, which a running async function never sees.
   const messagesRef = useRef(messages);
   const indexRef = useRef(indexOfMessage);
+  const conversationRef = useRef(conversation?.id);
   const running = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -140,14 +151,23 @@ export function useJumpToMessage({
   useEffect(() => {
     messagesRef.current = messages;
     indexRef.current = indexOfMessage;
+    conversationRef.current = conversation?.id;
   });
   useEffect(() => () => clearTimeout(flashTimer.current), []);
 
-  /** Scroll to a row once it exists on screen, and mark where it landed. */
+  /**
+   * Scroll to a row once it exists on screen, and mark where it landed.
+   *
+   * `startedIn` is not ceremony: the refs point at whatever ChatViewer is
+   * rendering NOW, and a reader who changes channel during the wait would
+   * otherwise be scrolled to — and have flashed at them — a row in the channel
+   * they just opened.
+   */
   const land = useCallback(
-    async (messageId: string | undefined) => {
+    async (messageId: string | undefined, startedIn: string) => {
       if (!messageId) return;
       for (let step = 0; step < SETTLE_STEPS; step++) {
+        if (conversationRef.current !== startedIn) return;
         const index = indexRef.current(messageId);
         if (index >= 0) {
           virtuosoRef.current?.scrollToIndex({
@@ -174,16 +194,20 @@ export function useJumpToMessage({
       // One walk at a time. A second click while the first is paging would
       // fight it for the same `before` boundary and double every fetch.
       if (running.current || !conversation) return;
+      // Every await below is a chance for the reader to open another channel,
+      // and this walk belongs to the one it started in.
+      const startedIn = conversation.id;
       running.current = true;
       setIsJumping(true);
       try {
         let pagesUsed = 0;
         let hasMore = canPage;
         for (;;) {
+          if (conversationRef.current !== startedIn) return;
           const loaded = messagesRef.current ?? [];
           const action = nextJumpAction({ pagesUsed, hasMore }, loaded, target);
           if (action === "found") {
-            await land(jumpLandingId(loaded, target));
+            await land(jumpLandingId(loaded, target), startedIn);
             return;
           }
           if (action === "give-up") {
@@ -194,7 +218,7 @@ export function useJumpToMessage({
               toast.info(
                 "Nothing that far back is readable on this device — showing the oldest message there is.",
               );
-              await land(loaded[0]?.id);
+              await land(loaded[0]?.id, startedIn);
             } else if (pagesUsed > 0) {
               toast.info(
                 "That message is beyond the history this device can read.",
@@ -208,18 +232,31 @@ export function useJumpToMessage({
           const page = await adapter.loadMoreMessages(conversation, before);
           pagesUsed += 1;
           if (page.length < pageSize) hasMore = false;
+          // Nothing older exists — no point waiting for a repaint that has
+          // nothing to paint.
+          if (page.length === 0) {
+            hasMore = false;
+            continue;
+          }
 
           // Wait for the widened window to reach the render before looking
           // again — the adapter publishes through its emitter, not through this
           // promise's value.
-          const seen = messagesRef.current;
-          for (
-            let step = 0;
-            step < SETTLE_STEPS && messagesRef.current === seen;
-            step++
-          ) {
-            await delay(SETTLE_STEP_MS);
+          //
+          // The wait is for the OLDEST row to move back, not for the array to
+          // change identity: a message arriving mid-walk re-emits without
+          // widening anything, and a walk that took that for progress would
+          // page against the same boundary again. A window that never widens is
+          // the end of the history, whatever the page size said — which for a
+          // protocol whose page grows rather than slides is the only signal
+          // there is.
+          let widened = false;
+          for (let step = 0; step < SETTLE_STEPS && !widened; step++) {
+            const oldest = messagesRef.current?.[0]?.timestamp;
+            widened = oldest !== undefined && oldest < before;
+            if (!widened) await delay(SETTLE_STEP_MS);
           }
+          if (!widened) hasMore = false;
         }
       } catch (error) {
         console.warn("[Chat] jump failed:", error);
