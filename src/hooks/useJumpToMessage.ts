@@ -106,8 +106,10 @@ export function jumpLandingId(
   if (target.kind === "id") {
     return messages.some((m) => m.id === target.id) ? target.id : undefined;
   }
-  return (messages.find((m) => m.timestamp >= target.ts) ?? messages.at(-1))
-    ?.id;
+  return (
+    messages.find((m) => m.timestamp >= target.ts) ??
+    messages[messages.length - 1]
+  )?.id;
 }
 
 const delay = (ms: number) =>
