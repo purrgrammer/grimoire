@@ -132,7 +132,9 @@ const MINE = "11".repeat(32);
 beforeEach(async () => {
   await db.concordRumors.clear();
   await db.concordKv.clear();
+  await db.concordOutbox.clear();
   published.mockClear();
+  published.mockResolvedValue({ accepted: ["wss://x"], rejected: [] });
   synced.mockClear();
   banned.clear();
   const { _resetDissolutionForTests } =
@@ -166,7 +168,9 @@ async function myMessage(): Promise<string> {
 
 describe("the dissolution gate on sending", () => {
   it("sends normally while the community is alive", async () => {
-    await adapter().sendMessage(conversation, "hello");
+    const a = adapter();
+    await a.sendMessage(conversation, "hello");
+    await a._settleSends();
     expect(published).toHaveBeenCalledTimes(1);
   });
 
@@ -232,16 +236,17 @@ describe("mention p tags on an outgoing message", () => {
   it("names the person the message mentions", async () => {
     // The interop point: this is the tag an armada reader's mention badge and
     // notifier match on. It rides the sealed rumor, so no relay sees it.
-    await adapter().sendMessage(conversation, `hey nostr:${npub} look at this`);
+    const a = adapter();
+    await a.sendMessage(conversation, `hey nostr:${npub} look at this`);
+    await a._settleSends();
     expect(await sentPTags()).toEqual([FRIEND]);
   });
 
   it("does not tag the sender for mentioning themselves", async () => {
     const mine = nip19.npubEncode(pubkey);
-    await adapter().sendMessage(
-      conversation,
-      `nostr:${mine} talking to myself`,
-    );
+    const a = adapter();
+    await a.sendMessage(conversation, `nostr:${mine} talking to myself`);
+    await a._settleSends();
     expect(await sentPTags()).toEqual([]);
   });
 
@@ -261,9 +266,11 @@ describe("mention p tags on an outgoing message", () => {
         channel: channelIdHex,
       },
     ]);
-    await adapter().sendMessage(conversation, `yes nostr:${npub}`, {
+    const a = adapter();
+    await a.sendMessage(conversation, `yes nostr:${npub}`, {
       replyTo: parent,
     });
+    await a._settleSends();
     expect(await sentPTags()).toEqual([FRIEND]);
   });
 });
@@ -575,5 +582,153 @@ describe("unread state", () => {
     await a.markRead(conversation, 0);
     expect(await a.getLastRead(conversation)).toBe(0);
     expect(await countFor(a)).toBe(1);
+  });
+});
+
+describe("delivery state", () => {
+  /** Watch the standing emitter the way ChatViewer does. */
+  function watch(a: ReturnType<typeof adapter>) {
+    const seen: Message[][] = [];
+    const sub = a.loadMessages(conversation).subscribe((m) => seen.push(m));
+    return {
+      last: () => seen[seen.length - 1],
+      count: () => seen.length,
+      stop: () => sub.unsubscribe(),
+    };
+  }
+
+  const settle = () => new Promise((r) => setTimeout(r, 120));
+
+  it("resolves the send and shows the message queued, not lost", async () => {
+    published.mockRejectedValue(new Error("No relay accepted the message."));
+    const a = adapter();
+    const view = watch(a);
+
+    // The point of the whole change: this does NOT throw, so the composer
+    // clears and the text lives in the timeline instead of in a toast.
+    await expect(
+      a.sendMessage(conversation, "into the void"),
+    ).resolves.toBeUndefined();
+    await a._settleSends();
+    await settle();
+
+    const rows = view.last() ?? [];
+    expect(rows.map((m) => m.content)).toContain("into the void");
+    expect(rows.find((m) => m.content === "into the void")?.delivery).toBe(
+      "failed",
+    );
+    // And publish-first holds: nothing a relay refused reached the store.
+    expect(await db.concordRumors.count()).toBe(0);
+    view.stop();
+  });
+
+  it("leaves nothing queued once a relay took it", async () => {
+    const a = adapter();
+    const view = watch(a);
+    await a.sendMessage(conversation, "delivered");
+    await a._settleSends();
+    await settle();
+
+    expect(await db.concordOutbox.count()).toBe(0);
+    expect(await db.concordRumors.count()).toBe(1);
+    expect((view.last() ?? []).every((m) => !m.delivery)).toBe(true);
+    view.stop();
+  });
+
+  it("shows the message once, not twice, while the row is being dropped", async () => {
+    // The echo race: the store row is written and the doorbell rung BEFORE the
+    // outbox row is deleted, so a re-read in that window sees both halves of
+    // the same message.
+    const a = adapter();
+    await a.sendMessage(conversation, "echo");
+    await a._settleSends();
+    const stored = (await db.concordRumors.toArray())[0];
+    // Put the row back exactly as it stood mid-flight.
+    await db.concordOutbox.put({
+      id: "queued",
+      pubkey,
+      communityId: idHex,
+      channel: channelIdHex,
+      kind: KIND_MESSAGE,
+      content: "echo",
+      createdAt: stored.created_at,
+      status: "sending",
+      attempts: 1,
+      lastAttemptRumorId: stored.id,
+    });
+
+    const view = watch(a);
+    await settle();
+    expect(
+      (view.last() ?? []).filter((m) => m.content === "echo"),
+    ).toHaveLength(1);
+    view.stop();
+  });
+
+  it("repaints when a queued message flips from sending to failed", async () => {
+    // The emission is suppressed unless the timeline actually changed, and a
+    // status flip changes no id at all — an id-only signature would swallow
+    // exactly the repaint that tells the reader their message did not go.
+    const a = adapter();
+    const view = watch(a);
+    await db.concordOutbox.put({
+      id: "queued",
+      pubkey,
+      communityId: idHex,
+      channel: channelIdHex,
+      kind: KIND_MESSAGE,
+      content: "pending",
+      createdAt: 100,
+      status: "sending",
+      attempts: 1,
+    });
+    await settle();
+    const before = view.count();
+    expect(view.last()?.find((m) => m.id === "queued")?.delivery).toBe(
+      "sending",
+    );
+
+    await db.concordOutbox.update("queued", { status: "failed" });
+    const { emitWireScopes, channelScope } =
+      await import("@/lib/concord/wire-bus");
+    emitWireScopes([channelScope(channelIdHex)]);
+    await settle();
+
+    expect(view.count()).toBeGreaterThan(before);
+    expect(view.last()?.find((m) => m.id === "queued")?.delivery).toBe(
+      "failed",
+    );
+    view.stop();
+  });
+
+  it("forgets a discarded message and nothing else", async () => {
+    published.mockRejectedValue(new Error("nope"));
+    const a = adapter();
+    await a.sendMessage(conversation, "give up on me");
+    await a._settleSends();
+    const row = (await db.concordOutbox.toArray())[0];
+
+    await a.discardSend(conversation, row.id);
+    expect(await db.concordOutbox.count()).toBe(0);
+  });
+
+  it("keeps a refused reaction throwing, with nothing queued", async () => {
+    // A queued reaction would need a UI of its own and an answer to "react to a
+    // message deleted while you were offline". It stays publish-first.
+    published.mockRejectedValue(new Error("nope"));
+    const id = await myMessage();
+    await expect(
+      adapter().sendReaction(conversation, id, "🔥"),
+    ).rejects.toThrow();
+    expect(await db.concordOutbox.count()).toBe(0);
+  });
+
+  it("keeps a refused self-delete throwing, with nothing queued", async () => {
+    // The context menu says "Message deleted" when this resolves, so resolving
+    // early would say it about a message that is still there.
+    published.mockRejectedValue(new Error("nope"));
+    const id = await myMessage();
+    await expect(adapter().deleteMessage(conversation, id)).rejects.toThrow();
+    expect(await db.concordOutbox.count()).toBe(0);
   });
 });

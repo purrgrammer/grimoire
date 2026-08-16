@@ -201,6 +201,19 @@ export abstract class ChatProtocolAdapter {
   deleteMessage?(conversation: Conversation, messageId: string): Promise<void>;
 
   /**
+   * Try a queued message again, now.
+   *
+   * `messageId` is the id of the row the timeline is showing with a `delivery`
+   * state — which is NOT a message id on any relay, because the message never
+   * reached one. Optional: only adapters advertising `supportsDeliveryStatus`
+   * have anything to retry, and the UI feature-detects.
+   */
+  retrySend?(conversation: Conversation, messageId: string): Promise<void>;
+
+  /** Give up on a queued message and forget it. Same id as `retrySend`. */
+  discardSend?(conversation: Conversation, messageId: string): Promise<void>;
+
+  /**
    * How far into this conversation the viewer has read, in unix SECONDS.
    *
    * Optional, and read state is per-PROTOCOL by nature: there is no wire format

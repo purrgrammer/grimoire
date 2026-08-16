@@ -11,13 +11,29 @@
  * new messages.
  *
  * Sending is PUBLISH-FIRST: build, seal, wrap, publish, and only then write to
- * the store. Armada is optimistic instead — it renders the message before the
- * seal and flips it to a retryable "failed" badge — because a NIP-46 seal is a
- * remote round-trip that can take seconds. Grimoire has no failed-state or retry
- * affordance, and a message sitting in the local store that no relay ever took
- * is a lie the reader cannot see through. So nothing is written until a relay
- * accepted it, and a failure throws with nothing to reconcile. A deliberate
- * divergence, narrowing.
+ * the store. The invariant that buys is that **`concordRumors` never holds a
+ * message no relay accepted** — a row in the store means it was delivered, and
+ * nothing in the timeline's history can be a message that only ever existed
+ * here.
+ *
+ * A message still in flight is not written into the store, then. It lives in
+ * the OUTBOX (`concord-outbox.ts`), a separate table, and is merged into the
+ * emitted timeline carrying a `delivery` state the reader can see and act on.
+ * So `sendMessage` resolves once the message is QUEUED rather than once it is
+ * delivered: the composer clears immediately, a failure shows up as a badge
+ * with Retry and Discard beside it instead of as a toast that took the text
+ * with it, and a send attempted with no connection survives until there is one.
+ * Every pre-queue refusal — signed out, banned, dissolved, rate-limited, an
+ * unresolvable reply parent, a signer that will not answer — still throws, and
+ * that is exactly when putting the text back in the composer is right.
+ *
+ * **Reactions and self-deletes are unchanged**, deliberately: they publish
+ * first and throw on failure, with nothing queued. A queued reaction would need
+ * a UI surface of its own and an answer to "react to a message that was deleted
+ * while you were offline" that no CORD document gives, and a self-delete that
+ * resolved optimistically would let the context menu say "Message deleted"
+ * about a message that is still there. So only messages queue — which is also
+ * what lets the timeline merge treat every outbox row as a message row.
  */
 
 import { Observable, ReplaySubject } from "rxjs";
@@ -61,6 +77,14 @@ import {
 } from "@/services/concord-channel-resolve";
 import { publishWrap } from "@/services/concord-publish";
 import { dissolvedAt } from "@/services/concord-dissolution";
+import {
+  drainOutbox,
+  enqueueOutbox,
+  markOutboxFailed,
+  outboxForChannel,
+  removeOutbox,
+  retryOutbox,
+} from "@/services/concord-outbox";
 import type { ChannelUnread } from "@/services/concord-rumor-store";
 import {
   channelAuthors,
@@ -140,6 +164,20 @@ export class ConcordAdapter extends ChatProtocolAdapter {
    * page was never rendered and the button did nothing at all.
    */
   private windows = new Map<string, number>();
+
+  /**
+   * Background publishes this adapter has started and not yet finished.
+   *
+   * `sendMessage` resolves at enqueue, so its relay work outlives the call. The
+   * set exists so a test can wait for that work rather than racing it — nothing
+   * in the app reads it.
+   */
+  private sending = new Set<Promise<void>>();
+
+  /** Test seam: settle every background publish already started. */
+  async _settleSends(): Promise<void> {
+    await Promise.allSettled([...this.sending]);
+  }
 
   /**
    * A Concord channel is never addressed by a typed string.
@@ -249,7 +287,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     this.doorbells.set(
       conversation.id,
       onWireScope(channelScope(identifier.channelId), () => {
-        void this.read(identifier, options)
+        void this.readMerged(identifier, options)
           .then((next) => this.publish(conversation.id, emitter, next))
           .catch(() => undefined);
       }),
@@ -265,13 +303,13 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         // emitting it puts "No messages yet" over a channel whose history is
         // still on the wire. Staying silent leaves the stream undefined, which
         // is what ChatViewer reads as "still loading".
-        const stored = await this.read(identifier, options);
+        const stored = await this.readMerged(identifier, options);
         if (stored.length > 0) this.publish(conversation.id, emitter, stored);
         // Repaint as each relay lands, not once at the end: the first relay to
         // answer is what the reader is waiting for, and `publish` stays silent
         // when a page added nothing new.
         await this.backfill(identifier, undefined, () => {
-          void this.read(identifier, options).then((next) =>
+          void this.readMerged(identifier, options).then((next) =>
             this.publish(conversation.id, emitter, next),
           );
         });
@@ -280,7 +318,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         this.publish(
           conversation.id,
           emitter,
-          await this.read(identifier, options),
+          await this.readMerged(identifier, options),
         );
       } catch (error) {
         console.warn("[concord] could not load the timeline:", error);
@@ -302,7 +340,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     emitter: ReplaySubject<Message[]>,
     next: Message[],
   ): void {
-    const signature = next.map((m) => m.id).join(",");
+    // The delivery state is part of the signature, not just the id: a queued
+    // message flipping from "sending" to "failed" changes no id at all, and an
+    // id-only signature would suppress the very repaint that shows the reader
+    // their message did not go.
+    const signature = next.map((m) => `${m.id}:${m.delivery ?? ""}`).join(",");
     if (this.lastEmitted.get(conversationId) === signature) return;
     this.lastEmitted.set(conversationId, signature);
     emitter.next(next);
@@ -339,7 +381,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
 
     const emitter = this.timelines.get(conversationId);
     const repaint = async (): Promise<Message[]> => {
-      const next = await this.read(identifier);
+      const next = await this.readMerged(identifier);
       if (emitter) this.publish(conversationId, emitter, next);
       return next;
     };
@@ -360,7 +402,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       throw error;
     }
     const widened = await repaint();
-    return widened.filter((m) => m.timestamp < before);
+    // Queued rows are excluded explicitly, not merely by being newer than the
+    // boundary: this page is counted against the page size to decide whether
+    // any history is left, and a message that has not been SENT yet is no
+    // evidence about what a relay still holds.
+    return widened.filter((m) => !m.delivery && m.timestamp < before);
   }
 
   /**
@@ -446,6 +492,9 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       canCreateConversations: false,
       // Self-delete only — see {@link deleteMessage}.
       supportsDeletion: true,
+      // Messages carry a delivery state and can be retried or discarded; see
+      // the module docstring for why reactions and deletes do not.
+      supportsDeliveryStatus: true,
       requiresRelay: true,
       // The membership is known and closed, so the composer offers it and
       // nothing else. `resolveConversation` has already narrowed it to whoever
@@ -491,11 +540,79 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       ]),
     ];
 
-    await this.send(community, channel, folded, {
+    // Everything that can refuse still throws from here, which is what puts the
+    // typed text back in the composer.
+    const { built, account } = await this.prepareSend(
+      community,
+      channel,
+      folded,
+      {
+        content,
+        ...(replyTo ? { replyTo } : {}),
+        ...(extraTags.length > 0 ? { extraTags } : {}),
+      },
+    );
+
+    // Queued, and that is what this resolves on. Waiting for the relay would
+    // pin the composer for up to the publish timeout and leave no moment at
+    // which a "sending" badge could ever be shown.
+    const row = await enqueueOutbox({
+      pubkey: account.pubkey,
+      communityId: community.idHex,
+      channel: channel.idHex,
+      kind: built.rumor.kind,
       content,
-      ...(replyTo ? { replyTo } : {}),
+      ...(options?.replyTo ? { replyToId: options.replyTo } : {}),
       ...(extraTags.length > 0 ? { extraTags } : {}),
+      createdAt: built.createdAt,
+      lastAttemptRumorId: built.rumor.id,
     });
+    emitWireScopes([channelScope(channel.idHex)]);
+
+    // From here nothing throws to the caller: the message is safe in the
+    // outbox, and rethrowing would restore text the reader can already see
+    // sitting in the timeline with a badge on it.
+    const task = (async () => {
+      try {
+        // The wrap in hand is this attempt's — freshly built, so there is
+        // nothing to rebuild for the FIRST try. Only a later drain rebuilds.
+        await publishWrap(community.relays, built.wrap);
+      } catch (error) {
+        await markOutboxFailed(
+          row.id,
+          error instanceof Error ? error.message : String(error),
+        );
+        emitWireScopes([channelScope(channel.idHex)]);
+        return;
+      }
+      const written = await writeChatRumors(community.idHex, [
+        {
+          rumorId: built.rumor.id,
+          author: account.pubkey,
+          kind: built.rumor.kind,
+          content: built.rumor.content,
+          tags: built.rumor.tags,
+          createdAt: built.createdAt,
+          ms: built.ms,
+          wrapId: built.wrap.id,
+          channel: channel.idHex,
+        },
+      ]);
+      // Dropped whether or not the store took it. A relay HAS the message, so
+      // marking this failed would rebuild and republish it on the next drain —
+      // a visible duplicate that the rumor-id dedupe cannot catch, because the
+      // rumor never reached the store to be found. The wire echo restores the
+      // row instead.
+      await removeOutbox(row.id);
+      if (!written.ok) {
+        console.warn(
+          "[concord] sent, but this device could not save it — it will reappear when it is fetched again",
+        );
+      }
+      emitWireScopes([channelScope(channel.idHex)]);
+    })();
+    this.sending.add(task);
+    void task.finally(() => this.sending.delete(task));
   }
 
   async sendReaction(
@@ -509,15 +626,23 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     const target = await this.findRumor(identifier, messageId);
     if (!target) throw new Error("Can't find the message you're reacting to.");
 
-    await this.send(community, channel, folded, {
-      // A NIP-30 reaction's content is the shortcode; the `emoji` tag carries
-      // the image. A plain unicode reaction is its own content.
-      content: customEmoji ? `:${customEmoji.shortcode}:` : emoji,
-      kind: KIND_REACTION,
-      target: messageId,
-      targetPubkey: target.pubkey,
-      ...(customEmoji ? { extraTags: [emojiTag(customEmoji)] } : {}),
-    });
+    // Publish-first end to end, and it throws on failure — no outbox. See the
+    // module docstring for why a queued reaction is a different feature.
+    const { built, account } = await this.prepareSend(
+      community,
+      channel,
+      folded,
+      {
+        // A NIP-30 reaction's content is the shortcode; the `emoji` tag carries
+        // the image. A plain unicode reaction is its own content.
+        content: customEmoji ? `:${customEmoji.shortcode}:` : emoji,
+        kind: KIND_REACTION,
+        target: messageId,
+        targetPubkey: target.pubkey,
+        ...(customEmoji ? { extraTags: [emojiTag(customEmoji)] } : {}),
+      },
+    );
+    await this.publishAndStore(community, channel, built, account);
   }
 
   /**
@@ -541,12 +666,47 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       throw new Error("You can only delete your own messages here.");
     }
 
-    await this.send(community, channel, folded, {
-      content: "",
-      kind: KIND_DELETE,
-      target: messageId,
-      targetKind: target.kind,
-    });
+    // Publish-first, and it throws: the context menu says "Message deleted" on
+    // resolve, so resolving before a relay took the tombstone would be a lie.
+    const { built, account } = await this.prepareSend(
+      community,
+      channel,
+      folded,
+      {
+        content: "",
+        kind: KIND_DELETE,
+        target: messageId,
+        targetKind: target.kind,
+      },
+    );
+    await this.publishAndStore(community, channel, built, account);
+  }
+
+  /**
+   * Try a queued message again, now.
+   *
+   * A fresh rumor, not the one that failed — see the outbox docstring. The ring
+   * is so the badge flips back to "sending" before the attempt is made rather
+   * than after it finishes.
+   */
+  async retrySend(
+    conversation: Conversation,
+    messageId: string,
+  ): Promise<void> {
+    const identifier = this.identifierOf(conversation);
+    await retryOutbox(messageId);
+    emitWireScopes([channelScope(identifier.channelId)]);
+    await drainOutbox();
+  }
+
+  /** Give up on a queued message. Nothing was ever published, so nothing leaks. */
+  async discardSend(
+    conversation: Conversation,
+    messageId: string,
+  ): Promise<void> {
+    const identifier = this.identifierOf(conversation);
+    await removeOutbox(messageId);
+    emitWireScopes([channelScope(identifier.channelId)]);
   }
 
   /**
@@ -630,18 +790,21 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   }
 
   /**
-   * Build, seal, wrap, publish, store, ring.
+   * Everything that can refuse a send, and the build itself.
    *
-   * The order matters: nothing reaches the store until a relay accepted the
-   * wrap (see the module docstring), and the doorbell rings only after the write
-   * so the re-read finds it.
+   * Split from the publish so a message can be QUEUED between the two while a
+   * reaction or a delete goes straight through. Every failure in here throws,
+   * for both paths, and none of them has a side effect to unwind.
    */
-  private async send(
+  private async prepareSend(
     community: Community,
     channel: Channel,
     folded: FoldedControl,
     opts: Omit<BuildChatSendOptions, "channel" | "pubkey" | "timerSecs">,
-  ): Promise<void> {
+  ): Promise<{
+    built: Awaited<ReturnType<typeof buildChatSend>>;
+    account: { pubkey: string };
+  }> {
     const account = accountManager.active$.value;
     if (!account?.pubkey) throw new Error("Sign in to send a message.");
     if (folded.banned.has(account.pubkey)) {
@@ -684,7 +847,21 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       },
       account.signer,
     );
+    return { built, account: { pubkey: account.pubkey } };
+  }
 
+  /**
+   * Publish, store, ring — the half that talks to relays.
+   *
+   * Nothing reaches the store until a relay accepted the wrap, and the doorbell
+   * rings only after the write so the re-read finds it.
+   */
+  private async publishAndStore(
+    community: Community,
+    channel: Channel,
+    built: Awaited<ReturnType<typeof buildChatSend>>,
+    account: { pubkey: string },
+  ): Promise<void> {
     await publishWrap(community.relays, built.wrap);
 
     // Accepted somewhere. Store it exactly as an ingested wrap would be, so the
@@ -759,6 +936,65 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       until: before,
       ...(onFresh ? { onFresh } : {}),
     });
+  }
+
+  /**
+   * The timeline as the reader should see it: what was delivered, plus what is
+   * still trying to be.
+   *
+   * The queued rows go at the BOTTOM regardless of when they were composed. A
+   * failed send from an hour ago sorted into its own place in the history would
+   * be buried where nobody would ever find it, and the one thing it needs is to
+   * be found.
+   */
+  private async readMerged(
+    identifier: ConcordIdentifier,
+    options?: LoadMessagesOptions,
+  ): Promise<Message[]> {
+    const stored = await this.read(identifier, options);
+    const pubkey = accountManager.active$.value?.pubkey;
+    if (!pubkey) return stored;
+    const queued = await outboxForChannel(
+      identifier.communityId,
+      identifier.channelId,
+      pubkey,
+    );
+    if (queued.length === 0) return stored;
+
+    // The echo race: a send writes its store row, rings the doorbell, and only
+    // then drops its outbox row. A re-read in that window would otherwise show
+    // the same message twice — once delivered and once still sending.
+    const delivered = new Set(stored.map((m) => m.id));
+    const conversationId = conversationIdOf(identifier);
+    const pending = queued
+      .filter(
+        (row) =>
+          !(row.lastAttemptRumorId && delivered.has(row.lastAttemptRumorId)),
+      )
+      .map((row): Message => {
+        const event = toEvent({
+          rumorId: row.id,
+          author: row.pubkey,
+          kind: row.kind,
+          content: row.content,
+          tags: row.extraTags ?? [],
+          createdAt: row.createdAt,
+        }) as NostrEvent;
+        return {
+          id: row.id,
+          conversationId,
+          author: row.pubkey,
+          content: row.content,
+          timestamp: row.createdAt,
+          type: "user" as const,
+          ...(row.replyToId ? { replyTo: { id: row.replyToId } } : {}),
+          metadata: { encrypted: true },
+          protocol: "concord" as const,
+          event,
+          delivery: row.status,
+        };
+      });
+    return pending.length > 0 ? [...stored, ...pending] : stored;
   }
 
   /** Read the store, fold, and map to grimoire's `Message` shape. */

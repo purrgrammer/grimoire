@@ -153,6 +153,15 @@ export interface Message {
   metadata?: MessageMetadata;
   protocol: ChatProtocol;
   event: NostrEvent; // Original Nostr event for verification
+  /**
+   * Where an OUTGOING message has got to, when the protocol tracks that.
+   *
+   * Absent is the normal case and means delivered — a message only carries this
+   * while it is still the sender's problem. `"sending"` is queued and being
+   * attempted, `"failed"` is queued and waiting for a retry the reader can
+   * trigger. A row with this set exists nowhere but the sender's own device.
+   */
+  delivery?: "sending" | "failed";
 }
 
 /**
@@ -357,4 +366,10 @@ export interface ChatCapabilities {
    * the right answer for a public thread.
    */
   mentionSuggestions?: "roster";
+  /**
+   * Outgoing messages carry a `delivery` state, and the adapter offers
+   * `retrySend`/`discardSend` for the ones that are stuck. Absent means a send
+   * either succeeds or throws, with nothing to show afterwards.
+   */
+  supportsDeliveryStatus?: boolean;
 }
