@@ -14,7 +14,9 @@ import type { FoldedControl } from "@/lib/concord/control";
 import type { Community } from "@/lib/concord/types";
 import { controlScope, emitWireScopes } from "@/lib/concord/wire-bus";
 
-const read = vi.hoisted(() => vi.fn(async () => []));
+const read = vi.hoisted(() =>
+  vi.fn(async (_community: unknown, _folded: unknown) => []),
+);
 
 vi.mock("@/services/concord-members", () => ({ readGuestbookFeed: read }));
 
