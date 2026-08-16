@@ -203,6 +203,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   const {
     hits,
     searching,
+    waiting: searchWaiting,
     active: searchActive,
   } = useConcordSearch(community, state?.folded, channels, searchFilters);
 
@@ -434,6 +435,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           <ConcordSearchPanel
             hits={hits}
             searching={searching}
+            waiting={searchWaiting}
             query={query.trim()}
             onOpen={handleOpenHit}
           />

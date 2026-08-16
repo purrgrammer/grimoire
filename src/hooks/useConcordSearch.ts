@@ -36,6 +36,15 @@ export interface ConcordSearchResult {
   hits: ConcordSearchHit[];
   /** A scan is running — distinct from "ran and found nothing". */
   searching: boolean;
+  /**
+   * The scan cannot start yet, because the community has not folded.
+   *
+   * A third state rather than a slower `searching`: nothing is being scanned,
+   * so a spinner captioned "searching…" claims work that is not happening — and
+   * on a community whose control plane never resolves it would claim it
+   * forever.
+   */
+  waiting: boolean;
   /** Whether the filters constitute a search at all. */
   active: boolean;
 }
@@ -82,6 +91,12 @@ export function useConcordSearch(
     };
   }, [active, idHex, scopeKey]);
 
+  // Whether a scan CAN run. In the deps below because the fold arrives after
+  // the first render on a cold community: without it the effect that returned
+  // early would never be re-run, and the pane would wait on a scan nobody had
+  // scheduled.
+  const ready = !!community && !!folded;
+
   useEffect(() => {
     abort.current?.abort();
     if (!active || !community || !folded) return;
@@ -109,7 +124,7 @@ export function useConcordSearch(
     // or per render; `token` is their identity for this purpose, and `ring` is
     // the wire asking for a re-run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, active, ring]);
+  }, [token, active, ring, ready]);
 
   // Whether a scan is running is DERIVED, not stored: it is exactly "this run
   // has not answered yet". A `searching` flag set from the effect would say the
@@ -123,10 +138,12 @@ export function useConcordSearch(
   // is what stops a busy community from blanking the pane to "searching…" every
   // time anyone speaks.
   const forThisQuery = state?.token === token;
+  const waiting = active && !ready;
 
   return {
     hits: active && forThisQuery ? state.hits : NO_HITS,
-    searching: active && !answered,
+    searching: active && !waiting && !answered,
+    waiting,
     active,
   };
 }

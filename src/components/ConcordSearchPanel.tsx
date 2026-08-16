@@ -46,11 +46,14 @@ function hitEvent(hit: ConcordSearchHit): NostrEvent {
 export function ConcordSearchPanel({
   hits,
   searching,
+  waiting,
   query,
   onOpen,
 }: {
   hits: ConcordSearchHit[];
   searching: boolean;
+  /** The community has not folded yet, so no scan has started. */
+  waiting: boolean;
   query: string;
   /** Open the channel a hit is in and try to land on the message. */
   onOpen: (hit: ConcordSearchHit) => void;
@@ -66,7 +69,12 @@ export function ConcordSearchPanel({
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
         <Search className="size-3 shrink-0" />
-        {searching ? (
+        {waiting ? (
+          <span className="flex items-center gap-1">
+            <Loader2 className="size-3 animate-spin" /> waiting for this
+            community to open…
+          </span>
+        ) : searching ? (
           <span className="flex items-center gap-1">
             <Loader2 className="size-3 animate-spin" /> searching…
           </span>
@@ -79,7 +87,7 @@ export function ConcordSearchPanel({
         )}
       </div>
 
-      {!searching && hits.length === 0 ? (
+      {!searching && !waiting && hits.length === 0 ? (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
           <p className="max-w-sm">
             Nothing here matches “{query}”. Only messages this device has

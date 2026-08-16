@@ -168,6 +168,30 @@ describe("useConcordSearch", () => {
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
   });
 
+  it("says it is waiting, not searching, before the community has folded", async () => {
+    // Typing into the box on a cold start schedules no scan at all. Calling
+    // that "searching…" claims work nobody is doing, and a community whose
+    // control plane never resolves would claim it forever.
+    const c = community();
+    const { result, rerender } = renderHook(
+      ({ f }: { f: FoldedControl | undefined }) =>
+        useConcordSearch(c, f, channels, {
+          query: "otter",
+          channelIds: [],
+        }),
+      { initialProps: { f: undefined as FoldedControl | undefined } },
+    );
+    expect(result.current.waiting).toBe(true);
+    expect(result.current.searching).toBe(false);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(scan).not.toHaveBeenCalled();
+
+    rerender({ f: folded() });
+    expect(result.current.waiting).toBe(false);
+    expect(result.current.searching).toBe(true);
+    await waitFor(() => expect(result.current.hits).toHaveLength(1));
+  });
+
   it("keeps the results on screen while a ring is being re-scanned", async () => {
     // A ring does not make the hits wrong the way a changed query does — it
     // only makes them possibly short by one message. Blanking the pane on every
