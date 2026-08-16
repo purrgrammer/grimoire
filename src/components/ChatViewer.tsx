@@ -253,6 +253,14 @@ function getChatIdentifier(conversation: Conversation): string | null {
     return `${cleanRelay}'${groupId}`;
   }
 
+  if (conversation.protocol === "concord") {
+    // The raw channel id. Unlike every other protocol here this is NOT
+    // something you can type back into the command — a Concord channel lives
+    // at a derived pubkey and has no public address — but it is what names the
+    // channel in the store, in a filter and in a bug report.
+    return conversation.metadata?.channelId ?? null;
+  }
+
   if (conversation.protocol === "nip-53") {
     const activityAddress = conversation.metadata?.activityAddress;
     if (!activityAddress) return null;

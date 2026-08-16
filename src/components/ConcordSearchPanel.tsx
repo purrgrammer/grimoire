@@ -49,6 +49,9 @@ export function ConcordSearchPanel({
   waiting,
   query,
   onOpen,
+  thisChannelOnly,
+  scopeChannelName,
+  onToggleScope,
 }: {
   hits: ConcordSearchHit[];
   searching: boolean;
@@ -57,6 +60,11 @@ export function ConcordSearchPanel({
   query: string;
   /** Open the channel a hit is in and try to land on the message. */
   onOpen: (hit: ConcordSearchHit) => void;
+  /** Scope lives here rather than under the box: it describes the RESULTS. */
+  thisChannelOnly: boolean;
+  /** Absent when no channel is open, which is when scope cannot be narrowed. */
+  scopeChannelName?: string;
+  onToggleScope?: () => void;
 }) {
   const { locale } = useLocale();
   const count = new Intl.NumberFormat(locale).format(hits.length);
@@ -67,7 +75,11 @@ export function ConcordSearchPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
+      {/* `h-8` matches the sidebar's search heading exactly. The two sit on the
+          same line across the split, so a couple of pixels apart reads as a
+          mistake — and padding alone could not hold them level once this side
+          gained a button and the other did not. */}
+      <div className="flex h-8 items-center gap-2 border-b px-3 text-xs text-muted-foreground">
         <Search className="size-3 shrink-0" />
         {waiting ? (
           <span className="flex items-center gap-1">
@@ -79,11 +91,21 @@ export function ConcordSearchPanel({
             <Loader2 className="size-3 animate-spin" /> searching…
           </span>
         ) : (
-          <span>
+          <span className="truncate">
             {hits.length === 1 ? "1 result" : `${count} results`}
             {hits.length >= SEARCH_RESULT_LIMIT && " (the newest)"} for “{query}
             ”
           </span>
+        )}
+        {onToggleScope && scopeChannelName && (
+          <button
+            type="button"
+            onClick={onToggleScope}
+            className="ml-auto shrink-0 cursor-crosshair rounded border border-dotted px-1.5 py-0.5 text-[10px] hover:bg-muted/50 hover:text-foreground"
+            title="Switch between searching this channel and every channel you can read"
+          >
+            {thisChannelOnly ? `#${scopeChannelName}` : "everywhere"}
+          </button>
         )}
       </div>
 

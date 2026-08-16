@@ -236,6 +236,20 @@ export class ConcordAdapter extends ChatProtocolAdapter {
           .filter(Boolean)
           .join(" — "),
         encrypted: true,
+        // The community's relay set, so the chat header can show where this
+        // channel is actually being read from — the same affordance NIP-29
+        // gets from its single relay. The FOLD is the authority (CORD-02 §6);
+        // `community.relays` is the join-time preview and only stands in until
+        // a metadata edition has been read.
+        relays:
+          folded.metadata?.relays && folded.metadata.relays.length > 0
+            ? folded.metadata.relays
+            : community.relays,
+        // Not a typeable address — a channel lives at a derived pubkey and has
+        // no `relay'id` form to paste back — but the id is what identifies a
+        // channel in the store, in a filter and in a bug report, so it is worth
+        // being able to copy.
+        channelId: channel.idHex,
       },
       // A SNAPSHOT, taken as the channel opens — `Conversation` is resolved
       // once and does not re-resolve when a message lands. Live badges come

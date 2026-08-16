@@ -88,6 +88,11 @@ export interface ConversationMetadata {
   encrypted?: boolean;
   giftWrapped?: boolean;
 
+  // Concord: the channel's own id. Not an address — a channel lives at a
+  // derived pubkey and cannot be typed back in — but it identifies the channel
+  // everywhere else, so it is offered for copying.
+  channelId?: string;
+
   // NIP-10 thread
   rootEventId?: string; // Thread root event ID
   providedEventId?: string; // Original event from nevent (may be reply)

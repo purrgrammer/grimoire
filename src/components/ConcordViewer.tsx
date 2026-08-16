@@ -346,7 +346,7 @@ export function ConcordViewer({
       {/* The heading IS the search box. The community name was redundant with
           the row that names it in the picker below and with the window title,
           and search is the thing worth reaching for at the top of a sidebar. */}
-      <div className="flex items-center gap-1 border-b px-2 py-1">
+      <div className="flex h-8 items-center gap-1 border-b px-2">
         <div className="flex min-w-0 flex-1 items-center gap-1 rounded border px-1.5 py-0.5">
           <Search className="size-3 shrink-0 text-muted-foreground" />
           <input
@@ -389,20 +389,9 @@ export function ConcordViewer({
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />
         </Button>
       </div>
-      <div className="border-b px-2 py-1 empty:hidden">
-        {searchActive && openChannel && (
-          <button
-            type="button"
-            onClick={() => setSearchThisChannel((v) => !v)}
-            className="mt-1 w-full cursor-crosshair truncate text-left text-[10px] text-muted-foreground hover:text-foreground"
-            title="Switch between searching this channel and the whole community"
-          >
-            {searchThisChannel
-              ? `searching #${openChannel.name} · search everywhere`
-              : "searching every channel · search this one"}
-          </button>
-        )}
-      </div>
+      {/* The scope control moved to the results heading — it describes what
+          was searched, so it belongs beside the count, not under the box where
+          it pushed the channel list down on every keystroke. */}
       <CommunityPicker
         communities={communities.map((c) => ({
           idHex: c.idHex,
@@ -495,6 +484,13 @@ export function ConcordViewer({
               waiting={searchWaiting}
               query={query.trim()}
               onOpen={handleOpenHit}
+              thisChannelOnly={searchThisChannel}
+              {...(openChannel
+                ? {
+                    scopeChannelName: openChannel.name,
+                    onToggleScope: () => setSearchThisChannel((v) => !v),
+                  }
+                : {})}
             />
           ) : showGuestbook ? (
             <ConcordGuestbookPanel
