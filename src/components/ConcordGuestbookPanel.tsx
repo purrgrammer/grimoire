@@ -13,6 +13,7 @@
 
 import { Ban, LogIn, LogOut, UserMinus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Virtuoso } from "react-virtuoso";
 
 import Timestamp from "@/components/Timestamp";
 import { UserName } from "@/components/nostr/UserName";
@@ -50,48 +51,58 @@ export function ConcordGuestbookPanel({
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto py-1">
-          {feed.map((entry) => {
-            const Icon = ICONS[entry.kind];
-            return (
-              <div
-                key={`${entry.kind}:${entry.rumorId ?? entry.pubkey}`}
-                className="flex items-center gap-1.5 px-3 py-0.5 text-xs text-muted-foreground"
-              >
-                <Icon className="size-3 shrink-0" />
-                <UserName pubkey={entry.pubkey} className="text-xs" />
-                {entry.kind === "join" && <span>joined</span>}
-                {entry.kind === "leave" && <span>left</span>}
-                {entry.kind === "kick" && (
-                  <>
-                    <span>was removed by</span>
-                    {entry.actor ? (
-                      <UserName pubkey={entry.actor} className="text-xs" />
-                    ) : (
-                      <span>a moderator</span>
-                    )}
-                  </>
-                )}
-                {entry.kind === "ban" && (
-                  // "as of", not "at": the fold records the newest Banlist
-                  // edition naming this member, which is not necessarily the
-                  // edition that banned them.
-                  <span
-                    title={`The Banlist naming them was last edited ${formatTimestamp(
-                      Math.floor(entry.ms / 1000),
-                      "long",
-                      locale,
-                    )}; the ban itself may be older.`}
-                  >
-                    is banned, as of
+        // Virtualized, because this feed has no cap: `readGuestbookFeed`
+        // returns every honoured entry the plane carries plus a row per
+        // currently-banned member, and a community with real churn has more of
+        // those than a browser should lay out at once. Top-anchored, with no
+        // `initialTopMostItemIndex` — the deadlock that bit the chat list is a
+        // property of anchoring to the END, and nothing here anchors at all.
+        <div className="flex-1 overflow-hidden py-1">
+          <Virtuoso
+            style={{ height: "100%" }}
+            data={feed}
+            computeItemKey={(_, entry) =>
+              `${entry.kind}:${entry.rumorId ?? entry.pubkey}`
+            }
+            itemContent={(_, entry) => {
+              const Icon = ICONS[entry.kind];
+              return (
+                <div className="flex items-center gap-1.5 px-3 py-0.5 text-xs text-muted-foreground">
+                  <Icon className="size-3 shrink-0" />
+                  <UserName pubkey={entry.pubkey} className="text-xs" />
+                  {entry.kind === "join" && <span>joined</span>}
+                  {entry.kind === "leave" && <span>left</span>}
+                  {entry.kind === "kick" && (
+                    <>
+                      <span>was removed by</span>
+                      {entry.actor ? (
+                        <UserName pubkey={entry.actor} className="text-xs" />
+                      ) : (
+                        <span>a moderator</span>
+                      )}
+                    </>
+                  )}
+                  {entry.kind === "ban" && (
+                    // "as of", not "at": the fold records the newest Banlist
+                    // edition naming this member, which is not necessarily the
+                    // edition that banned them.
+                    <span
+                      title={`The Banlist naming them was last edited ${formatTimestamp(
+                        Math.floor(entry.ms / 1000),
+                        "long",
+                        locale,
+                      )}; the ban itself may be older.`}
+                    >
+                      is banned, as of
+                    </span>
+                  )}
+                  <span className="ml-auto shrink-0">
+                    <Timestamp timestamp={Math.floor(entry.ms / 1000)} />
                   </span>
-                )}
-                <span className="ml-auto shrink-0">
-                  <Timestamp timestamp={Math.floor(entry.ms / 1000)} />
-                </span>
-              </div>
-            );
-          })}
+                </div>
+              );
+            }}
+          />
         </div>
       )}
     </div>
