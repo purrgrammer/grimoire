@@ -189,16 +189,6 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   const communityIdHex = community?.idHex;
   const openChannelIdHex = openChannel?.idHex;
 
-  // Say which channel is on screen, so the notifier does not alert about the
-  // messages the reader is watching arrive. Refcounted in the registry, because
-  // a second Concord window showing the same channel must not be un-silenced by
-  // the first one closing.
-  useEffect(() => {
-    if (!openChannelIdHex) return;
-    registerActiveChannel(openChannelIdHex);
-    return () => unregisterActiveChannel(openChannelIdHex);
-  }, [openChannelIdHex]);
-
   // Search is Concord's alone for now: its corpus is the local plaintext rumor
   // store, and NIP-29 has no equivalent — its messages live in the EventStore
   // and are never mirrored to disk. Nothing here is generalized on spec.
@@ -215,6 +205,23 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     searching,
     active: searchActive,
   } = useConcordSearch(community, state?.folded, channels, searchFilters);
+
+  // Say which channel is ON SCREEN, so the notifier does not alert about the
+  // messages the reader is watching arrive. Refcounted in the registry, because
+  // a second Concord window showing the same channel must not be un-silenced by
+  // the first one closing.
+  //
+  // "Selected" is not "on screen": the search results and the guestbook take
+  // the whole pane, and a channel registered from behind one of them silences
+  // alerts and badges for messages nobody can see. Both panes therefore hand
+  // the channel back for as long as they are up.
+  const channelOnScreen =
+    searchActive || showGuestbook ? undefined : openChannelIdHex;
+  useEffect(() => {
+    if (!channelOnScreen) return;
+    registerActiveChannel(channelOnScreen);
+    return () => unregisterActiveChannel(channelOnScreen);
+  }, [channelOnScreen]);
 
   const handleOpenHit = useCallback(
     (hit: ConcordSearchHit) => {
