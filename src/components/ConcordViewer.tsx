@@ -1,10 +1,26 @@
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
-import { Hash, Loader2, Lock, PanelLeft, RefreshCw } from "lucide-react";
+import {
+  BellOff,
+  Hash,
+  Loader2,
+  Lock,
+  PanelLeft,
+  RefreshCw,
+} from "lucide-react";
 
 import { ChatViewer } from "./ChatViewer";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
@@ -18,6 +34,8 @@ import {
 } from "@/hooks/useConcordUnread";
 import type { CommunityUnread } from "@/services/concord-reads";
 import { useConcordWire } from "@/hooks/useConcordWire";
+import { useConcordNotifLevel } from "@/hooks/useConcordNotifLevel";
+import type { NotifLevel } from "@/services/concord-notif-prefs";
 import { useLocale } from "@/hooks/useLocale";
 import type { ChannelUnread } from "@/services/concord-rumor-store";
 import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
@@ -224,6 +242,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
       >
         <ChannelList
           channels={channels}
+          communityId={community?.idHex}
           selected={openChannel?.idHex}
           loading={loading}
           error={error}
@@ -292,11 +311,17 @@ function Empty({ children }: { children: React.ReactNode }) {
  * `font-semibold` marks an unread row rather than `font-medium`, which the
  * SELECTED row already uses — otherwise the row you are reading and the row you
  * have not read look identical.
+ *
+ * A silenced scope still shows its count — the messages are there and the
+ * reader asked for quiet, not for blindness — but drops the `@`: an accent that
+ * says "come and look" is the one thing `nothing` was set to stop.
  */
 function UnreadBadge({
   unread,
+  silenced,
 }: {
   unread: { count: number; mention: boolean; capped?: boolean };
+  silenced?: boolean;
 }) {
   const { locale } = useLocale();
   if (unread.count <= 0) return null;
@@ -305,7 +330,7 @@ function UnreadBadge({
     : new Intl.NumberFormat(locale).format(unread.count);
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1">
-      {unread.mention && (
+      {unread.mention && !silenced && (
         <span
           aria-label="You were mentioned"
           title="You were mentioned"
@@ -320,6 +345,70 @@ function UnreadBadge({
     </span>
   );
 }
+
+/**
+ * Right-click a row to say how loudly it may interrupt you.
+ *
+ * Armada's three levels, with a fourth entry for the cascade itself: a channel
+ * set to "Use community default" has no level of its own and follows whatever
+ * its community — or Settings — says. The distinction matters, because clearing
+ * an override is otherwise impossible once set.
+ *
+ * The levels are stored on THIS DEVICE and are erased when you sign out.
+ * Nothing about them is published: no CORD document defines a mute, and
+ * grimoire uploads nothing but the messages you type.
+ */
+function NotifLevelMenu({
+  communityId,
+  channelIdHex,
+  label,
+  children,
+}: {
+  communityId: string | undefined;
+  channelIdHex?: string;
+  label: string;
+  children: ReactNode;
+}) {
+  const { level, override, set } = useConcordNotifLevel(
+    communityId,
+    channelIdHex,
+  );
+  const inheritLabel = channelIdHex
+    ? `Use community default (${LEVEL_LABELS[level]})`
+    : `Use app default (${LEVEL_LABELS[level]})`;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuLabel className="truncate text-xs font-normal text-muted-foreground">
+          Notify me about {label}
+        </ContextMenuLabel>
+        <ContextMenuSeparator />
+        <ContextMenuRadioGroup
+          value={override ?? "inherit"}
+          onValueChange={(next) =>
+            set(next === "inherit" ? undefined : (next as NotifLevel))
+          }
+        >
+          <ContextMenuRadioItem value="inherit">
+            {inheritLabel}
+          </ContextMenuRadioItem>
+          <ContextMenuRadioItem value="all">All messages</ContextMenuRadioItem>
+          <ContextMenuRadioItem value="mentions">
+            Mentions only
+          </ContextMenuRadioItem>
+          <ContextMenuRadioItem value="nothing">Nothing</ContextMenuRadioItem>
+        </ContextMenuRadioGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+const LEVEL_LABELS: Record<NotifLevel, string> = {
+  all: "all messages",
+  mentions: "mentions only",
+  nothing: "nothing",
+};
 
 /** One community's row: its icon (encrypted, CORD-02 §6) and its name. */
 function CommunityRow({
@@ -339,35 +428,43 @@ function CommunityRow({
   const icon = useConcordImage(community.icon);
   const label = community.name || community.idHex.slice(0, 8);
   const hasUnread = (community.unread?.count ?? 0) > 0;
+  const { level } = useConcordNotifLevel(community.idHex);
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(community.idHex)}
-      className={cn(
-        "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-1 text-left text-sm hover:bg-muted/50",
-        selected && "bg-muted/70 font-medium",
-        hasUnread && "font-semibold text-foreground",
-      )}
-    >
-      {icon ? (
-        <img
-          src={icon}
-          alt=""
-          className="size-4 shrink-0 rounded-sm object-cover"
-        />
-      ) : (
-        // A placeholder of the SAME size, so a community whose icon is absent,
-        // unfetchable or failed verification does not shift its neighbours.
-        <span
-          aria-hidden
-          className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-dotted text-[8px] text-muted-foreground"
-        >
-          {label.slice(0, 1).toUpperCase()}
-        </span>
-      )}
-      <span className="truncate">{label}</span>
-      {community.unread && <UnreadBadge unread={community.unread} />}
-    </button>
+    <NotifLevelMenu communityId={community.idHex} label={label}>
+      <button
+        type="button"
+        onClick={() => onSelect(community.idHex)}
+        className={cn(
+          "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-1 text-left text-sm hover:bg-muted/50",
+          selected && "bg-muted/70 font-medium",
+          hasUnread && "font-semibold text-foreground",
+        )}
+      >
+        {icon ? (
+          <img
+            src={icon}
+            alt=""
+            className="size-4 shrink-0 rounded-sm object-cover"
+          />
+        ) : (
+          // A placeholder of the SAME size, so a community whose icon is absent,
+          // unfetchable or failed verification does not shift its neighbours.
+          <span
+            aria-hidden
+            className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-dotted text-[8px] text-muted-foreground"
+          >
+            {label.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="truncate">{label}</span>
+        {community.unread && (
+          <UnreadBadge
+            unread={community.unread}
+            silenced={level === "nothing"}
+          />
+        )}
+      </button>
+    </NotifLevelMenu>
   );
 }
 
@@ -416,6 +513,7 @@ function CommunityPicker({
 
 function ChannelList({
   channels,
+  communityId,
   selected,
   loading,
   error,
@@ -423,6 +521,7 @@ function ChannelList({
   onSelect,
 }: {
   channels: Channel[];
+  communityId: string | undefined;
   selected: string | undefined;
   loading: boolean;
   error: string | undefined;
@@ -453,6 +552,7 @@ function ChannelList({
         <ChannelRow
           key={ch.idHex}
           channel={ch}
+          communityId={communityId}
           selected={ch.idHex === selected}
           unread={unread.get(ch.idHex.toLowerCase())}
           onSelect={onSelect}
@@ -467,6 +567,7 @@ function ChannelList({
             <ChannelRow
               key={ch.idHex}
               channel={ch}
+              communityId={communityId}
               selected={ch.idHex === selected}
               unread={unread.get(ch.idHex.toLowerCase())}
               onSelect={onSelect}
@@ -480,31 +581,46 @@ function ChannelList({
 
 function ChannelRow({
   channel,
+  communityId,
   selected,
   unread,
   onSelect,
 }: {
   channel: Channel;
+  communityId: string | undefined;
   selected: boolean;
   unread: ChannelUnread | undefined;
   onSelect: (idHex: string) => void;
 }) {
   const Icon = channel.isPrivate ? Lock : Hash;
   const hasUnread = (unread?.count ?? 0) > 0;
+  const { level } = useConcordNotifLevel(communityId, channel.idHex);
+  const silenced = level === "nothing";
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(channel.idHex)}
-      title={channel.idHex}
-      className={cn(
-        "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm hover:bg-muted/50",
-        selected && "bg-muted/70 font-medium",
-        hasUnread && "font-semibold text-foreground",
-      )}
+    <NotifLevelMenu
+      communityId={communityId}
+      channelIdHex={channel.idHex}
+      label={channel.name}
     >
-      <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
-      <span className="truncate">{channel.name}</span>
-      {unread && <UnreadBadge unread={unread} />}
-    </button>
+      <button
+        type="button"
+        onClick={() => onSelect(channel.idHex)}
+        title={channel.idHex}
+        className={cn(
+          "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm hover:bg-muted/50",
+          selected && "bg-muted/70 font-medium",
+          hasUnread && "font-semibold text-foreground",
+          silenced && "text-muted-foreground",
+        )}
+      >
+        {silenced ? (
+          <BellOff className="size-3 flex-shrink-0 text-muted-foreground" />
+        ) : (
+          <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
+        )}
+        <span className="truncate">{channel.name}</span>
+        {unread && <UnreadBadge unread={unread} silenced={silenced} />}
+      </button>
+    </NotifLevelMenu>
   );
 }

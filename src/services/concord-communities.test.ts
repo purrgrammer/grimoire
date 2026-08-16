@@ -32,11 +32,13 @@ vi.mock("@/services/relay-selection", () => ({
 }));
 vi.mock("@/services/event-store", () => ({ default: {} }));
 
-/** The one thing the logout wipe does to this module that Dexie cannot show. */
+/** The things the logout wipe does in MEMORY, which Dexie cannot show. */
 const invalidateChannelDirectory = vi.hoisted(() => vi.fn());
 vi.mock("@/services/concord-channel-directory", () => ({
   invalidateChannelDirectory,
 }));
+const resetNotifPrefsMemory = vi.hoisted(() => vi.fn());
+vi.mock("@/services/concord-notif-prefs", () => ({ resetNotifPrefsMemory }));
 
 const {
   _resetDecryptMemoForTests,
@@ -389,6 +391,14 @@ describe("syncCommunities", () => {
     invalidateChannelDirectory.mockClear();
     await clearCommunities(pubkey);
     expect(invalidateChannelDirectory).toHaveBeenCalled();
+  });
+
+  it("forgets the notification levels the emptied kv table held", async () => {
+    // The rows go with `db.concordKv.clear()` above; the memo in front of them
+    // has to go too, or this tab keeps muting channels for the next account.
+    resetNotifPrefsMemory.mockClear();
+    await clearCommunities(pubkey);
+    expect(resetNotifPrefsMemory).toHaveBeenCalled();
   });
 
   it("drops a stored row whose owner commitment no longer verifies", async () => {

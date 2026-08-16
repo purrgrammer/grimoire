@@ -9,8 +9,9 @@ import {
 import { Switch } from "./ui/switch";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/themes";
-import { Palette, FileEdit, Radio } from "lucide-react";
+import { Palette, FileEdit, Radio, Bell } from "lucide-react";
 import { RelayListsSettings } from "./settings/RelayListsSettings";
+import { NotificationSettingsSection } from "./settings/NotificationSettings";
 
 export function SettingsViewer() {
   const { settings, updateSetting } = useSettings();
@@ -28,6 +29,10 @@ export function SettingsViewer() {
             <TabsTrigger value="post" className="gap-2">
               <FileEdit className="h-4 w-4" />
               Post
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Notifications
             </TabsTrigger>
             <TabsTrigger value="relays" className="gap-2">
               <Radio className="h-4 w-4" />
@@ -146,6 +151,10 @@ export function SettingsViewer() {
                 />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="notifications" className="m-0 p-6 space-y-6">
+            <NotificationSettingsSection />
           </TabsContent>
 
           <TabsContent value="relays" className="m-0 p-6 space-y-6">

@@ -27,12 +27,28 @@ export interface AppearanceSettings {
 }
 
 /**
+ * Desktop notification settings.
+ *
+ * Opt-in, and `enabled` is INTENT rather than permission: the browser owns
+ * whether notifications may be shown, this owns whether Grimoire would like to.
+ * Both must say yes. `defaultLevel` is the bottom of the Concord cascade — what
+ * a channel nobody has set a level on is worth (`concord-notif-prefs.ts`).
+ */
+export interface NotificationSettings {
+  /** Whether Grimoire should raise desktop notifications at all */
+  enabled: boolean;
+  /** Fallback per-channel level: every message, only mentions, or none */
+  defaultLevel: "all" | "mentions" | "nothing";
+}
+
+/**
  * Complete application settings structure
  */
 export interface AppSettings {
   __version: 1;
   post: PostSettings;
   appearance: AppearanceSettings;
+  notifications: NotificationSettings;
 }
 
 // ============================================================================
@@ -48,10 +64,22 @@ const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   loadMedia: true,
 };
 
+/**
+ * Off, and mentions-only when switched on.
+ *
+ * An explorer that started firing OS notifications the moment you opened a
+ * community would be a misread of what it is for.
+ */
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  enabled: false,
+  defaultLevel: "mentions",
+};
+
 export const DEFAULT_SETTINGS: AppSettings = {
   __version: 1,
   post: DEFAULT_POST_SETTINGS,
   appearance: DEFAULT_APPEARANCE_SETTINGS,
+  notifications: DEFAULT_NOTIFICATION_SETTINGS,
 };
 
 // ============================================================================
@@ -80,6 +108,12 @@ function validateSettings(settings: unknown): AppSettings {
     appearance: {
       ...DEFAULT_APPEARANCE_SETTINGS,
       ...((s.appearance as object) || {}),
+    },
+    // Merged onto the defaults like the sections above it, which is what lets a
+    // settings blob stored before notifications existed load unchanged.
+    notifications: {
+      ...DEFAULT_NOTIFICATION_SETTINGS,
+      ...((s.notifications as object) || {}),
     },
   };
 }

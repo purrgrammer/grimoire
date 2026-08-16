@@ -39,6 +39,7 @@ import {
   readAdoptions,
 } from "@/services/concord-adoptions";
 import { invalidateChannelDirectory } from "@/services/concord-channel-directory";
+import { resetNotifPrefsMemory } from "@/services/concord-notif-prefs";
 import { clearReads } from "@/services/concord-reads";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
@@ -377,6 +378,10 @@ export async function clearCommunities(pubkey: string): Promise<void> {
   // The channel directory holds decrypted community and channel NAMES, which
   // would otherwise outlive the fold they were read from.
   invalidateChannelDirectory();
+  // Notification levels live in `concordKv`, which the wipe above emptied — so
+  // the memo in front of it has to go too, or the tab keeps answering with
+  // levels that no longer exist and hands them to whoever signs in next.
+  resetNotifPrefsMemory();
   await clearGroupKeyPersistence();
 }
 
