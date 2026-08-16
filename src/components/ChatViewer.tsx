@@ -839,17 +839,22 @@ export function ChatViewer({
   /**
    * Open every channel at its NEWEST message.
    *
-   * NOT via `initialTopMostItemIndex`. That prop asks Virtuoso to scroll so a
-   * given index is TOPMOST, and in this layout it deadlocks: the item list is
-   * left `visibility: hidden` with zero rows mounted and never recovers, so the
-   * channel renders permanently blank while its header and "Load older" still
-   * draw. Short channels can never satisfy it (nothing to scroll), but long
-   * ones hung too, so there is no safe threshold — it simply goes.
+   * The SECOND of two anchors, and they cover different opens.
    *
-   * `scrollToIndex` is the same call the End key already uses, and it works.
-   * Debounced until the timeline stops growing, because it arrives in pieces —
-   * the local store, then each relay's backfill page — and anchoring to the end
-   * of the first piece just gets pushed back up by the next one.
+   * `initialTopMostItemIndex={{ index: "LAST", align: "end" }}` on the list is
+   * the first. It is read once at mount, so it lands whenever the history is
+   * already in the store — which is every open after the first. Note the
+   * `align`: passing a bare NUMBER instead asks Virtuoso to put that index at
+   * the TOP, which this layout cannot satisfy, and it answers by leaving the
+   * item list `visibility: hidden` with zero rows mounted and never recovering.
+   * That is the blank channel. `align: "end"` asks for the same row at the
+   * bottom, which is reachable. Never reintroduce the numeric form.
+   *
+   * This effect is the second, for the FIRST open, where the timeline arrives
+   * after mount: the local store first, then each relay's backfill page, each
+   * one prepending history that walks the view back up. Debounced until that
+   * stops, because anchoring to the end of one piece only gets pushed up by the
+   * next. `scrollToIndex` is the same call the End key uses.
    */
   const anchoredFor = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -1283,6 +1288,7 @@ export function ChatViewer({
           <Virtuoso
             ref={virtuosoRef}
             data={messagesWithMarkers}
+            initialTopMostItemIndex={{ index: "LAST", align: "end" }}
             followOutput="smooth"
             alignToBottom
             components={{
