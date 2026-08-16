@@ -381,10 +381,20 @@ describe("paging backwards", () => {
     const sub = a
       .loadMessages(conversation, { limit: 500 })
       .subscribe((m) => seen.push(m));
-    await vi.waitFor(() => expect(seen[seen.length - 1]).toHaveLength(500));
+    // The deepest seed in this file — 600 rows read and folded twice. The
+    // default one-second wait loses to it whenever the whole suite is running,
+    // and the failure reads as `seen` being empty rather than as a timeout.
+    const settle = { timeout: 15_000 };
+    await vi.waitFor(
+      () => expect(seen[seen.length - 1]).toHaveLength(500),
+      settle,
+    );
 
     await a.loadMoreMessages(conversation, seen[seen.length - 1][0].timestamp);
-    await vi.waitFor(() => expect(seen[seen.length - 1]).toHaveLength(600));
+    await vi.waitFor(
+      () => expect(seen[seen.length - 1]).toHaveLength(600),
+      settle,
+    );
     expect(seen.every((t) => t.length >= 500)).toBe(true);
     sub.unsubscribe();
   });
