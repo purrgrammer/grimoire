@@ -92,6 +92,8 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import { mentionsPubkey } from "@/lib/concord/mentions";
+import { cn } from "@/lib/utils";
 
 interface ChatViewerProps {
   protocol: ChatProtocol;
@@ -454,6 +456,14 @@ const MessageItem = memo(function MessageItem({
     [conversation],
   );
 
+  // Whether this message names the reader. Protocol-generic: NIP-29's factory
+  // emits the same `p` tag Concord now sends.
+  const mentionsMe =
+    !!activePubkey &&
+    message.author !== activePubkey &&
+    !!message.event &&
+    mentionsPubkey(message.event.tags, activePubkey);
+
   // Determine if the reply target is a chat message (not a reaction, repost, etc.)
   // Extract event ID from reply pointer
   const replyEventId =
@@ -577,7 +587,18 @@ const MessageItem = memo(function MessageItem({
 
   // Regular user messages - wrap in context menu if event exists
   const messageContent = (
-    <div className="group flex items-start hover:bg-muted/50 px-3">
+    <div
+      className={cn(
+        "group flex items-start hover:bg-muted/50 px-3",
+        // A message that names you, marked the way the composer's own accent
+        // marks you elsewhere. `mentionsPubkey` is the single predicate the
+        // unread badge and the "New" divider also answer with, so a highlighted
+        // row and a badged channel can never disagree — including the rule it
+        // carries: a threaded reply to you p-tags you, so it counts as naming
+        // you even with no @ in the body.
+        mentionsMe && "border-l-2 border-highlight bg-highlight/10",
+      )}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <UserName pubkey={message.author} className="font-semibold text-sm" />
