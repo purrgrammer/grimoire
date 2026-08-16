@@ -270,6 +270,13 @@ export function reconstructCommand(window: WindowInstance): string {
         return "chat";
       }
 
+      // The community only. A channel has no user-typeable address — there is
+      // no vault-side channel index to resolve a name against — so the channel
+      // rides in the window's props and never in the command. Round-trips
+      // exactly: `parseConcordCommand` takes the same id hex back.
+      case "concord":
+        return props.communityId ? `concord ${props.communityId}` : "concord";
+
       default:
         return appId; // Fallback to just the command name
     }
