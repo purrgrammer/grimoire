@@ -405,25 +405,26 @@ describe("unread state", () => {
   const NOW = () => Math.floor(Date.now() / 1000);
 
   let seq = 0;
-  /** One stored message, from whoever, at whenever. */
+  /** Stored messages, from whoever, at whenever — one write per call. */
   async function post(
-    createdAt: number,
-    author = THEM,
-    tags: string[][] = [],
+    rows: Array<{ at: number; author?: string; tags?: string[][] }>,
   ): Promise<void> {
-    seq += 1;
-    await writeChatRumors(idHex, [
-      {
-        rumorId: (seq + 0x1000).toString(16).padStart(64, "0"),
-        author,
-        kind: KIND_MESSAGE,
-        content: `m${seq}`,
-        tags,
-        ms: createdAt * 1000,
-        createdAt,
-        channel: channelIdHex,
-      },
-    ]);
+    await writeChatRumors(
+      idHex,
+      rows.map((row) => {
+        seq += 1;
+        return {
+          rumorId: (seq + 0x1000).toString(16).padStart(64, "0"),
+          author: row.author ?? THEM,
+          kind: KIND_MESSAGE,
+          content: `m${seq}`,
+          tags: row.tags ?? [],
+          ms: row.at * 1000,
+          createdAt: row.at,
+          channel: channelIdHex,
+        };
+      }),
+    );
   }
 
   const countFor = async (a: ReturnType<typeof adapter>) =>
@@ -443,8 +444,7 @@ describe("unread state", () => {
 
   it("reports what has arrived since the last visit, and nothing after a mark", async () => {
     const a = adapter();
-    await post(NOW() - 300);
-    await post(NOW() - 200);
+    await post([{ at: NOW() - 300 }, { at: NOW() - 200 }]);
     expect(await countFor(a)).toBe(2);
 
     await a.markRead(conversation, NOW() - 200);
@@ -454,8 +454,10 @@ describe("unread state", () => {
 
   it("never counts the reader's own messages", async () => {
     const a = adapter();
-    await post(NOW() - 300, pubkey);
-    await post(NOW() - 200, pubkey);
+    await post([
+      { at: NOW() - 300, author: pubkey },
+      { at: NOW() - 200, author: pubkey },
+    ]);
     expect(await countFor(a)).toBe(0);
   });
 
@@ -466,8 +468,7 @@ describe("unread state", () => {
     // nothing to click.
     const a = adapter();
     banned.add(BANNED);
-    await post(NOW() - 300);
-    await post(NOW() - 100, BANNED);
+    await post([{ at: NOW() - 300 }, { at: NOW() - 100, author: BANNED }]);
     expect(await countFor(a)).toBe(2);
 
     // What ChatViewer would hand over: the newest FOLD-VISIBLE message.
@@ -481,8 +482,10 @@ describe("unread state", () => {
     const a = adapter();
     banned.add(BANNED);
     const base = NOW() - 5000;
-    for (let i = 0; i < 150; i += 1) await post(base + i);
-    await post(NOW() - 10, BANNED);
+    await post([
+      ...Array.from({ length: 150 }, (_, i) => ({ at: base + i })),
+      { at: NOW() - 10, author: BANNED },
+    ]);
 
     await a.markRead(conversation, base + 149);
     expect(await countFor(a)).toBe(0);
@@ -491,8 +494,7 @@ describe("unread state", () => {
   it("is not pinned or blanked by a message dated in the far future", async () => {
     // `created_at` is whatever its author wrote and ingest has no clock check.
     const a = adapter();
-    await post(NOW() - 100);
-    await post(NOW() + 7200);
+    await post([{ at: NOW() - 100 }, { at: NOW() + 7200 }]);
 
     // The future row is invisible to the count…
     expect(await countFor(a)).toBe(1);
@@ -503,7 +505,7 @@ describe("unread state", () => {
 
   it("stamps nothing for a channel with nothing loaded", async () => {
     const a = adapter();
-    await post(NOW() - 100);
+    await post([{ at: NOW() - 100 }]);
     await a.markRead(conversation, 0);
     expect(await a.getLastRead(conversation)).toBe(0);
     expect(await countFor(a)).toBe(1);

@@ -30,6 +30,41 @@ chat wss://nos.lol'welcome
 Groups live on a single relay that enforces membership and moderation.
 Messages are kind 9, metadata kind 39000, admins kind 39001, members kind 39002.
 
+## Read state (optional adapter surface)
+
+Two optional methods on `ChatProtocolAdapter`, implemented only by Concord:
+
+- `getLastRead(conversation): Promise<number>` — unix seconds, 0 for never read
+- `markRead(conversation, timestampSecs): Promise<void>` — monotonic
+
+`useReadMarker` (`src/hooks/useReadMarker.ts`) drives both and returns the id of
+the message the "New" divider belongs above. Three rules matter to anyone
+implementing this for another protocol:
+
+1. **Read before write.** Opening a conversation is what moves the stamp, so the
+   pre-visit value is captured first and the divider is measured against that
+   frozen number for the whole visit. Reversing the order silently deletes the
+   divider.
+2. **The stamp must be able to cover everything the count counts.** If the
+   protocol hides rows the store still holds — moderation, expiry, key rotation —
+   then the newest message the viewer can show is older than the newest unread
+   row, and stamping what the viewer showed leaves a badge nothing can clear.
+   Concord resolves this in `markRead`: it stamps
+   `max(clamped newest loaded, summary.latest)`, where `latest` is by
+   construction the newest row the count counted
+   (`channelUnreadSummary`, `src/services/concord-rumor-store.ts`).
+3. **Bound both sides by the same clock allowance.** Message timestamps are
+   author-chosen. Concord's scan and stamp both stop at
+   `now + CONCORD_READ_MAX_FUTURE_SECS`; clamping one and not the other either
+   pins the badge forever or marks the conversation read for years.
+
+A conversation with `lastRead === 0` gets badges but no divider — flagging the
+whole history of a channel someone just joined is noise.
+
+Concord's stamps live in the `concordReads` Dexie table, keyed
+`[pubkey+communityId+channelId]`, and are wiped on logout. Nothing about read
+state is ever published: no CORD document defines a read marker.
+
 ## Adding a protocol
 
 1. Extend `ChatProtocolAdapter` in `src/lib/chat/adapters/`

@@ -579,7 +579,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "concord [community]",
     description:
-      "Browse your Concord communities — end-to-end encrypted community channels (CORD-01…08). Opens the community list with channels, members and history; pass a community to jump straight to one. Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. There is no shareable public address to type, because a community id is a hex commitment and its channels live at derived pubkeys — so the optional argument matches against your OWN decrypted list, by name or id prefix.",
+      "Browse your Concord communities — end-to-end encrypted community channels (CORD-01…08). Opens the community list with channels, members and history; pass a community to jump straight to one. Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. There is no shareable public address to type, because a community id is a hex commitment and its channels live at derived pubkeys — so the optional argument matches against your OWN decrypted list, by name or id prefix. Unread badges, the NEW divider and the tile count are LOCAL: read positions are stored per account on this device, never published (no CORD document defines a read marker), and they are erased when you sign out. They accrue only while a Concord window is open, since that is what holds the subscriptions.",
     options: [
       {
         flag: "[community]",
