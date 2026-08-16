@@ -8,6 +8,7 @@ import {
   NotifLevelMenu,
   UnreadBadge,
 } from "./concord/ConcordChannelList";
+import { NoCommunitiesEmpty, StrandedBanner } from "./concord/ArmadaHandoff";
 import { ConcordGuestbookPanel } from "./ConcordGuestbookPanel";
 import { ConcordSearchPanel } from "./ConcordSearchPanel";
 import { Button } from "@/components/ui/button";
@@ -317,12 +318,7 @@ export function ConcordViewer({
   }
 
   if (communities.length === 0) {
-    return (
-      <Empty>
-        No Concord communities found. Join one in Armada — it publishes the
-        encrypted membership list this reads.
-      </Empty>
-    );
+    return <NoCommunitiesEmpty onRefresh={refreshList} />;
   }
 
   const sidebar = (
@@ -461,32 +457,40 @@ export function ConcordViewer({
       ) : (
         <div className="w-64 flex-shrink-0 border-r">{sidebar}</div>
       )}
-      <div className="min-w-0 flex-1">
-        {searchActive ? (
-          <ConcordSearchPanel
-            hits={hits}
-            searching={searching}
-            waiting={searchWaiting}
-            query={query.trim()}
-            onOpen={handleOpenHit}
-          />
-        ) : showGuestbook ? (
-          <ConcordGuestbookPanel feed={guestbook} loading={guestbookLoading} />
-        ) : identifier ? (
-          <ChatViewer
-            protocol="concord"
-            identifier={identifier as ProtocolIdentifier}
-            headerPrefix={headerPrefix}
-            onJumpHandled={handleJumpHandled}
-            {...(jumpTo ? { jumpTo } : {})}
-          />
-        ) : (
-          <Empty>
-            {loading
-              ? "Loading channels…"
-              : "No channels here can be opened with the keys you hold."}
-          </Empty>
-        )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Above the pane, not instead of it: a stranded member can still read
+            everything written before the rotation. */}
+        {stranded && <StrandedBanner />}
+        <div className="min-h-0 flex-1">
+          {searchActive ? (
+            <ConcordSearchPanel
+              hits={hits}
+              searching={searching}
+              waiting={searchWaiting}
+              query={query.trim()}
+              onOpen={handleOpenHit}
+            />
+          ) : showGuestbook ? (
+            <ConcordGuestbookPanel
+              feed={guestbook}
+              loading={guestbookLoading}
+            />
+          ) : identifier ? (
+            <ChatViewer
+              protocol="concord"
+              identifier={identifier as ProtocolIdentifier}
+              headerPrefix={headerPrefix}
+              onJumpHandled={handleJumpHandled}
+              {...(jumpTo ? { jumpTo } : {})}
+            />
+          ) : (
+            <Empty>
+              {loading
+                ? "Loading channels…"
+                : "No channels here can be opened with the keys you hold."}
+            </Empty>
+          )}
+        </div>
       </div>
     </div>
   );
