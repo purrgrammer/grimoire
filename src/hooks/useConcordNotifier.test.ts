@@ -214,6 +214,28 @@ describe("useConcordNotifier", () => {
     now.mockRestore();
   });
 
+  it("starts a fresh floor when the same account signs back in", async () => {
+    // Logout erases the rumors, the read stamps AND the ring that remembers
+    // what was announced. Signing back in re-ingests that history with its
+    // original timestamps, so a floor left at the first session's start would
+    // announce the whole day again to the person who just signed in.
+    const t0 = 1_700_000_000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(t0 * 1000);
+    const { rerender } = renderHook(() => useConcordNotifier());
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(channelRumorsSince).toHaveBeenCalledTimes(1));
+
+    active$.next(undefined);
+    rerender();
+    now.mockReturnValue((t0 + 1000) * 1000);
+    active$.next({ pubkey: ME });
+    rerender();
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(channelRumorsSince).toHaveBeenCalledTimes(2));
+    expect(channelRumorsSince.mock.calls[1]?.[2]?.after).toBe(t0 + 1000);
+    now.mockRestore();
+  });
+
   it("opens the community and channel it came from when clicked", async () => {
     renderHook(() => useConcordNotifier());
     emitWireScopes([`c2:${CHANNEL}`]);

@@ -86,7 +86,14 @@ export function useConcordNotifier(): void {
 
   useEffect(() => {
     const pubkey = selfPubkey;
-    if (!pubkey) return;
+    if (!pubkey) {
+      // Signing out ends the session, so signing back in starts another — even
+      // as the same account. Logout erases the rumors, the read stamps and the
+      // dedupe ring; without this the re-ingest that follows would be measured
+      // against a floor from before all three and announced all over again.
+      floorFor.current = undefined;
+      return;
+    }
     if (floorFor.current !== pubkey) {
       floorFor.current = pubkey;
       sessionFloor.current = Math.floor(Date.now() / 1000);
