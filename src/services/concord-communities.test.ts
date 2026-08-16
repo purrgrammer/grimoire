@@ -32,6 +32,12 @@ vi.mock("@/services/relay-selection", () => ({
 }));
 vi.mock("@/services/event-store", () => ({ default: {} }));
 
+/** The one thing the logout wipe does to this module that Dexie cannot show. */
+const invalidateChannelDirectory = vi.hoisted(() => vi.fn());
+vi.mock("@/services/concord-channel-directory", () => ({
+  invalidateChannelDirectory,
+}));
+
 const {
   _resetDecryptMemoForTests,
   clearCommunities,
@@ -374,6 +380,15 @@ describe("syncCommunities", () => {
     expect(await db.concordRumors.count()).toBe(0);
     expect(await db.concordKv.count()).toBe(0);
     expect(await db.concordReads.count()).toBe(0);
+  });
+
+  it("forgets the in-memory channel directory, names and all", async () => {
+    // It holds decrypted community and channel names, so it must not outlive
+    // the fold it read them from — a memo left populated is the running tab's
+    // copy of what was just erased from disk.
+    invalidateChannelDirectory.mockClear();
+    await clearCommunities(pubkey);
+    expect(invalidateChannelDirectory).toHaveBeenCalled();
   });
 
   it("drops a stored row whose owner commitment no longer verifies", async () => {

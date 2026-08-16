@@ -38,6 +38,7 @@ import {
   clearAdoptions,
   readAdoptions,
 } from "@/services/concord-adoptions";
+import { invalidateChannelDirectory } from "@/services/concord-channel-directory";
 import { clearReads } from "@/services/concord-reads";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
@@ -373,6 +374,9 @@ export async function clearCommunities(pubkey: string): Promise<void> {
   resetPlaneSweepMemory();
   resetDissolutionMemory();
   clearDecryptMemo();
+  // The channel directory holds decrypted community and channel NAMES, which
+  // would otherwise outlive the fold they were read from.
+  invalidateChannelDirectory();
   await clearGroupKeyPersistence();
 }
 
