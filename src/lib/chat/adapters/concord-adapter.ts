@@ -345,7 +345,16 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     // message flipping from "sending" to "failed" changes no id at all, and an
     // id-only signature would suppress the very repaint that shows the reader
     // their message did not go.
-    const signature = next.map((m) => `${m.id}:${m.delivery ?? ""}`).join(",");
+    //
+    // So is the tombstone flag, for the same reason and a worse consequence: a
+    // moderator's delete turns a message into a removal row at the SAME id and
+    // the same timestamp, so an id-and-delivery signature is unchanged and the
+    // reader keeps seeing the content that was just taken down.
+    const signature = next
+      .map(
+        (m) => `${m.id}:${m.delivery ?? ""}:${m.metadata?.deleted ? "x" : ""}`,
+      )
+      .join(",");
     if (this.lastEmitted.get(conversationId) === signature) return;
     this.lastEmitted.set(conversationId, signature);
     emitter.next(next);
@@ -1059,7 +1068,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     });
 
     const conversationId = conversationIdOf(identifier);
-    return timeline.messages.map((ev) => {
+    const messages = timeline.messages.map((ev): Message => {
       const parent = parentPointerOf(ev);
       return {
         id: ev.rumorId,
@@ -1080,6 +1089,36 @@ export class ConcordAdapter extends ChatProtocolAdapter {
         event: toEvent(ev) as NostrEvent,
       };
     });
+
+    // Moderator removals, as rows saying only that a message was here and who
+    // took it down. Self-deletes are not in `removed` and never become a row.
+    //
+    // The event handed over is SCRUBBED — no content, no tags — while the id
+    // stays the real rumor id, so React keys and dedupe still work and the
+    // withheld text reaches no renderer. The id then no longer hashes its
+    // content, which for Concord costs nothing that was not already given up:
+    // `toEvent` has always emitted an empty `sig` because a rumor has none and
+    // nothing re-verifies. The row carries no raw-event affordance, so the
+    // scrubbed event is never surfaced — but a future generic "view raw event"
+    // over `Message.event` would have to special-case a deleted row.
+    const tombstones = timeline.removed.map(({ target, deleter }): Message => ({
+      id: target.rumorId,
+      conversationId,
+      author: target.author,
+      content: "",
+      timestamp: target.createdAt,
+      // "user", not "system", deliberately: `groupSystemMessages` collapses
+      // only system rows, and a tombstone that could be grouped away would
+      // take a jump target with it.
+      type: "user" as const,
+      metadata: { encrypted: true, deleted: true, deletedBy: deleter },
+      protocol: "concord" as const,
+      event: toEvent({ ...target, content: "", tags: [] }) as NostrEvent,
+    }));
+    if (tombstones.length === 0) return messages;
+    return [...messages, ...tombstones].sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
   }
 }
 

@@ -14,6 +14,7 @@ import { nip19 } from "nostr-tools";
 import { bytesToHex, channelGroupKey, random32 } from "@/lib/concord/derive";
 import type { FoldedControl } from "@/lib/concord/control";
 import { KIND_MESSAGE } from "@/lib/concord/kinds";
+import { channelScope, emitWireScopes } from "@/lib/concord/wire-bus";
 import type { Channel, Community } from "@/lib/concord/types";
 import type { Conversation, Message } from "@/types/chat";
 
@@ -730,5 +731,122 @@ describe("delivery state", () => {
     const id = await myMessage();
     await expect(adapter().deleteMessage(conversation, id)).rejects.toThrow();
     expect(await db.concordOutbox.count()).toBe(0);
+  });
+});
+
+describe("a message a moderator took down", () => {
+  const OWNER = "aa".repeat(32);
+  const FRIEND = "ab".repeat(32);
+  const VICTIM = "cd".repeat(64).slice(0, 64);
+
+  /** Their message, and optionally a kind-5 naming it. */
+  async function seed(deleter?: string): Promise<string> {
+    await writeChatRumors(idHex, [
+      {
+        rumorId: VICTIM,
+        author: FRIEND,
+        kind: KIND_MESSAGE,
+        content: "the words that were removed",
+        tags: [],
+        ms: 1000,
+        createdAt: 1,
+        channel: channelIdHex,
+      },
+      ...(deleter
+        ? [
+            {
+              rumorId: "ef".repeat(32),
+              author: deleter,
+              kind: 5,
+              content: "",
+              tags: [["e", VICTIM]],
+              ms: 2000,
+              createdAt: 2,
+              channel: channelIdHex,
+            },
+          ]
+        : []),
+    ]);
+    return VICTIM;
+  }
+
+  /** Watch the standing emitter the way ChatViewer does. */
+  function watch(a: ReturnType<typeof adapter>) {
+    const seen: Message[][] = [];
+    const sub = a.loadMessages(conversation).subscribe((m) => seen.push(m));
+    return {
+      seen,
+      last: () => seen[seen.length - 1],
+      stop: () => sub.unsubscribe(),
+    };
+  }
+
+  it("renders a tombstone naming the moderator, with the words gone", async () => {
+    // The owner outranks everyone by the community_id itself, so their delete
+    // needs no citation — this is the authorized case.
+    await seed(OWNER);
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(1));
+
+    const [row] = feed.last();
+    expect(row.id).toBe(VICTIM);
+    expect(row.author).toBe(FRIEND);
+    expect(row.metadata?.deleted).toBe(true);
+    expect(row.metadata?.deletedBy).toBe(OWNER);
+    expect(row.content).toBe("");
+    expect(row.event.content).toBe("");
+    expect(row.event.tags).toEqual([]);
+    // Nowhere in the emission — not in content, not in a tag, not in the event.
+    expect(JSON.stringify(feed.last())).not.toContain("the words that were");
+    feed.stop();
+  });
+
+  it("leaves a self-deleted message as a silent gap", async () => {
+    await seed(FRIEND);
+    const a = adapter();
+    const feed = watch(a);
+    // Nothing to wait FOR, so wait for the read to have happened at all: the
+    // backfill's final publish emits the empty timeline.
+    await vi.waitFor(() => expect(feed.last()).toEqual([]));
+    feed.stop();
+  });
+
+  it("replaces the message live when the delete lands mid-session", async () => {
+    // The repaint the dedupe signature nearly suppressed: the tombstone carries
+    // the same id, the same timestamp and no delivery state, so an id-only
+    // signature leaves the removed words on screen until something else moves.
+    await seed();
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(1));
+    expect(feed.last()[0].metadata?.deleted).toBeUndefined();
+
+    await writeChatRumors(idHex, [
+      {
+        rumorId: "ef".repeat(32),
+        author: OWNER,
+        kind: 5,
+        content: "",
+        tags: [["e", VICTIM]],
+        ms: 2000,
+        createdAt: 2,
+        channel: channelIdHex,
+      },
+    ]);
+    emitWireScopes([channelScope(channelIdHex)]);
+
+    await vi.waitFor(() => expect(feed.last()[0].metadata?.deleted).toBe(true));
+    feed.stop();
+  });
+
+  it("ignores a delete from someone with no authority over it", async () => {
+    await seed("dd".repeat(32));
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(1));
+    expect(feed.last()[0].metadata?.deleted).toBeUndefined();
+    expect(feed.last()[0].content).toBe("the words that were removed");
+    feed.stop();
   });
 });

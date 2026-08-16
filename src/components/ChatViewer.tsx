@@ -597,6 +597,36 @@ const MessageItem = memo(function MessageItem({
     (CHAT_KINDS as readonly number[]).includes(replyEvent.kind) ||
     (conversation.protocol === "nip-10" && replyEvent.kind === 1);
 
+  // A message a moderator took down. Early, and BEFORE the context-menu wrap
+  // below: every entry in that menu names an event, and this row's event is a
+  // scrubbed stand-in whose content was deliberately withheld.
+  //
+  // Only a third party's removal ever reaches here. A message its own author
+  // deleted leaves no row at all, which is the point — a tombstone would
+  // announce exactly the erasure they performed.
+  if (message.metadata?.deleted) {
+    return (
+      <div className="flex items-center px-3 py-1">
+        <span className="text-xs italic text-muted-foreground">
+          Message from{" "}
+          <UserName pubkey={message.author} className="text-xs not-italic" />{" "}
+          {message.metadata.deletedBy ? (
+            <>
+              removed by{" "}
+              <UserName
+                pubkey={message.metadata.deletedBy}
+                className="text-xs not-italic"
+              />
+            </>
+          ) : (
+            "removed"
+          )}{" "}
+          · <Timestamp timestamp={message.timestamp} />
+        </span>
+      </div>
+    );
+  }
+
   // System messages (join/leave) have special styling
   if (message.type === "system") {
     return (

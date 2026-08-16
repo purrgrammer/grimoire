@@ -125,6 +125,15 @@ export interface MessageMetadata {
   reactions?: NostrEvent[];
   zaps?: NostrEvent[];
   deleted?: boolean;
+  /**
+   * Who removed it, when the removal was an act of MODERATION.
+   *
+   * Set only where a protocol can prove a third party took the message down.
+   * An author deleting their own message leaves this absent — and generally
+   * leaves no row at all — because naming the erasure is the opposite of
+   * honouring it.
+   */
+  deletedBy?: string;
   hidden?: boolean; // NIP-28 channel hide
   // Zap-specific metadata (for type: "zap" messages)
   zapAmount?: number; // Amount in sats
