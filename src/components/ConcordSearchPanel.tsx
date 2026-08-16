@@ -13,6 +13,7 @@
  * cannot always deliver.
  */
 
+import { useMemo } from "react";
 import { Hash, Loader2, Lock, Search } from "lucide-react";
 
 import { RichText } from "@/components/nostr/RichText";
@@ -56,6 +57,10 @@ export function ConcordSearchPanel({
 }) {
   const { locale } = useLocale();
   const count = new Intl.NumberFormat(locale).format(hits.length);
+  // Built once per result set rather than per render: `RichText` re-parses
+  // whenever it is handed a new event object, and a scan re-runs on every
+  // message that lands in a channel being searched.
+  const events = useMemo(() => hits.map(hitEvent), [hits]);
 
   return (
     <div className="flex h-full flex-col">
@@ -83,7 +88,7 @@ export function ConcordSearchPanel({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {hits.map((hit) => {
+          {hits.map((hit, i) => {
             const Icon = hit.channelPrivate ? Lock : Hash;
             return (
               // A div, not a button: `RichText` renders links and mentions,
@@ -116,7 +121,7 @@ export function ConcordSearchPanel({
                   </span>
                 </span>
                 <RichText
-                  event={hitEvent(hit)}
+                  event={events[i]}
                   className="w-full break-words text-sm leading-tight"
                   options={{ showMedia: false, showEventEmbeds: false }}
                 />

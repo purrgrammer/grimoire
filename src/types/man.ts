@@ -592,7 +592,6 @@ export const manPages: Record<string, ManPageEntry> = {
       "concord Bitcoin Builders                  Open by name",
       "concord bitcoin                           Open by name prefix",
       "concord 3fa2c1                            Open by community_id prefix",
-      "                                          Search and the guestbook live in the sidebar",
     ],
     seeAlso: ["chat", "profile"],
     appId: "concord",
