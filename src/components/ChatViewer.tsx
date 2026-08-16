@@ -92,6 +92,10 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
+import {
+  computeFirstItemIndexDelta,
+  FIRST_ITEM_INDEX_BASE,
+} from "./chat/prepend-anchor";
 import { mentionsPubkey } from "@/lib/concord/mentions";
 import { cn } from "@/lib/utils";
 
@@ -944,6 +948,45 @@ export function ChatViewer({
     dividerMessageId,
   ]);
 
+  /**
+   * The offset that keeps a row's Virtuoso identity stable as history is paged
+   * in above it — see `prepend-anchor.ts` for why lengths cannot be used.
+   *
+   * Adjusted DURING RENDER rather than from an effect, which is React's own
+   * shape for state derived from changing inputs: an effect would paint the new
+   * page at the old offset first, and that one frame is the scroll jump this
+   * exists to prevent. The comparison is on array IDENTITY, so a re-render that
+   * changed nothing costs one reference check.
+   */
+  const [anchor, setAnchor] = useState<{
+    items: typeof messagesWithMarkers;
+    conversationId: string | undefined;
+    firstItemIndex: number;
+  }>({
+    items: messagesWithMarkers,
+    conversationId: conversation?.id,
+    firstItemIndex: FIRST_ITEM_INDEX_BASE,
+  });
+  if (
+    anchor.items !== messagesWithMarkers ||
+    anchor.conversationId !== conversation?.id
+  ) {
+    // A conversation switch is a different timeline, not a prepend. ChatViewer
+    // does NOT remount between conversations — only the Virtuoso does, through
+    // the empty-timeline gate below — so this state would otherwise carry one
+    // channel's offset into the next.
+    const delta =
+      anchor.conversationId === conversation?.id
+        ? computeFirstItemIndexDelta(anchor.items, messagesWithMarkers)
+        : null;
+    setAnchor({
+      items: messagesWithMarkers,
+      conversationId: conversation?.id,
+      firstItemIndex:
+        delta === null ? FIRST_ITEM_INDEX_BASE : anchor.firstItemIndex - delta,
+    });
+  }
+
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
   const replyToRef = useRef<string | undefined>(undefined);
@@ -1426,6 +1469,7 @@ export function ChatViewer({
           <Virtuoso
             ref={virtuosoRef}
             data={messagesWithMarkers}
+            firstItemIndex={anchor.firstItemIndex}
             initialTopMostItemIndex={{ index: "LAST", align: "end" }}
             followOutput="smooth"
             alignToBottom
