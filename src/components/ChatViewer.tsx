@@ -13,6 +13,7 @@ import {
   CopyCheck,
   FileText,
   MessageSquare,
+  Check,
 } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
@@ -439,6 +440,91 @@ const GroupedSystemMessageItem = memo(function GroupedSystemMessageItem({
 });
 
 /**
+ * Where an outgoing message has got to.
+ *
+ * Only ever rendered for the sender's own messages, and only by protocols that
+ * track delivery at all — everywhere else this is nothing, which is why the
+ * check on a delivered message is gated on the capability rather than on the
+ * author alone. Retry and Discard are feature-detected on the adapter, so a
+ * protocol that grows a delivery state without them shows a badge and no
+ * buttons rather than two that throw.
+ */
+const DeliveryStatus = memo(function DeliveryStatus({
+  message,
+  adapter,
+  conversation,
+  activePubkey,
+}: {
+  message: Message;
+  adapter: ChatProtocolAdapter;
+  conversation: Conversation;
+  activePubkey?: string;
+}) {
+  const tracked = adapter.getCapabilities().supportsDeliveryStatus;
+  if (!tracked) return null;
+
+  if (message.delivery === "sending") {
+    return (
+      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Sending
+      </span>
+    );
+  }
+
+  if (message.delivery === "failed") {
+    const act = async (
+      run: ((c: Conversation, id: string) => Promise<void>) | undefined,
+      what: string,
+    ) => {
+      if (!run) return;
+      try {
+        await run.call(adapter, conversation, message.id);
+      } catch (error) {
+        console.error(`[Chat] could not ${what} the message:`, error);
+        toast.error(
+          error instanceof Error ? error.message : `Could not ${what} it.`,
+        );
+      }
+    };
+    return (
+      <span className="flex items-center gap-1.5 text-[10px] text-destructive">
+        <AlertTriangle className="size-3" />
+        Not sent
+        {adapter.retrySend && (
+          <button
+            className="underline hover:no-underline"
+            onClick={() => void act(adapter.retrySend, "resend")}
+          >
+            Retry
+          </button>
+        )}
+        {adapter.discardSend && (
+          <button
+            className="underline hover:no-underline"
+            onClick={() => void act(adapter.discardSend, "discard")}
+          >
+            Discard
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  // Delivered, and ours: a relay took it. Quiet on purpose — it is the absence
+  // of a warning that carries the meaning.
+  if (activePubkey && message.author === activePubkey) {
+    return (
+      <Check
+        className="size-3 text-muted-foreground/60"
+        aria-label="Delivered"
+      />
+    );
+  }
+  return null;
+});
+
+/**
  * MessageItem - Memoized message component for performance
  */
 const MessageItem = memo(function MessageItem({
@@ -630,7 +716,15 @@ const MessageItem = memo(function MessageItem({
             conversation={conversation}
             reactions={message.metadata?.reactions}
           />
-          {canReply && onReply && !isRootMessage && (
+          <DeliveryStatus
+            message={message}
+            adapter={adapter}
+            conversation={conversation}
+            activePubkey={activePubkey}
+          />
+          {/* Nothing to reply to yet: a queued message exists on no relay, so
+              a reply could not name it. */}
+          {canReply && onReply && !isRootMessage && !message.delivery && (
             <button
               onClick={() => onReply(message.id)}
               className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground ml-auto"
@@ -662,8 +756,9 @@ const MessageItem = memo(function MessageItem({
     </div>
   );
 
-  // Wrap in context menu if event exists
-  if (message.event) {
+  // Wrap in context menu if event exists — but never for a message that is
+  // still queued: every action in that menu names an event id no relay holds.
+  if (message.event && !message.delivery) {
     return (
       <ChatMessageContextMenu
         event={message.event}
