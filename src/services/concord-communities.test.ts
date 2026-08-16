@@ -39,6 +39,7 @@ const {
   readJoinedAtMs,
   syncCommunities,
 } = await import("./concord-communities");
+const { markChannelRead } = await import("./concord-reads");
 const { default: db } = await import("./db");
 
 const sk = generateSecretKey();
@@ -364,11 +365,15 @@ describe("syncCommunities", () => {
       channel: "dd".repeat(32),
     } as never);
     await db.concordKv.put({ key: "wire-cursor:whatever", value: 1 });
+    // Read state names the channels this person was reading and when they last
+    // looked — the same class of thing, and account-scoped, so it goes too.
+    await markChannelRead(pubkey, "cc".repeat(32), "dd".repeat(32), 1_700_000);
 
     await clearCommunities(pubkey);
 
     expect(await db.concordRumors.count()).toBe(0);
     expect(await db.concordKv.count()).toBe(0);
+    expect(await db.concordReads.count()).toBe(0);
   });
 
   it("drops a stored row whose owner commitment no longer verifies", async () => {

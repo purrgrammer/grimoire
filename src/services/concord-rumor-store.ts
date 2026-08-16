@@ -54,8 +54,10 @@ import {
   KIND_REKEY,
   PLANE_KINDS,
   PLANE_RULES,
+  TIMELINE_KINDS,
   type Plane,
 } from "@/lib/concord/kinds";
+import { mentionsPubkey } from "@/lib/concord/mentions";
 import type { OpenedEvent, OpenedWireEvent } from "@/lib/concord/stream";
 import { resolveMs } from "@/lib/concord/stream";
 import db, { type ConcordRumorRow } from "@/services/db";
@@ -551,6 +553,123 @@ export async function queryChannelRumors(
   }
 
   return [...timeline, ...side].map(rowToOpened);
+}
+
+/** How many unread rows one summary will walk before answering "and more". */
+export const UNREAD_CAP = 100;
+
+/** What one channel has waiting for a reader who last read at `after`. */
+export interface ChannelUnread {
+  /** Qualifying rows in `(after, nowSecs + skew]`, capped at {@link UNREAD_CAP}. */
+  count: number;
+  /** The newest `created_at` among exactly the rows counted. 0 when none. */
+  latest: number;
+  /** Whether any counted row addresses the reader. */
+  mention: boolean;
+  /** Whether the walk stopped at the cap, i.e. `count` is a floor. */
+  capped: boolean;
+}
+
+/**
+ * What is unread in one channel — the badge, and the stamp that can clear it.
+ *
+ * A RAW index scan, deliberately not a fold: folding is the expensive half and
+ * a count does not need a delete tally or a reaction map. The cost of that is
+ * the reason `latest` exists, and it is the whole subtlety of this function.
+ *
+ * **The stamp must be able to cover everything the count counts.** The fold
+ * drops rows this scan cannot cheaply see: a banned author's messages, rumors
+ * past their NIP-40 deadline that the sweep has not reached, rows sealed under
+ * a retired epoch. Nothing purges those from Dexie, so they can be the NEWEST
+ * rows in a channel — and a reader who stamps the newest message the TIMELINE
+ * showed them stamps below those rows and can never clear the badge by any
+ * action. So this returns `latest`: the newest `created_at` among exactly the
+ * rows it counted, whatever the fold would have done with them. The adapter's
+ * `markRead` stamps `max(clamped newest loaded, latest)`, and the badge always
+ * clears.
+ *
+ * That is why the cursor walks DESCENDING. Ascending, a capped scan would
+ * report the newest of the OLDEST hundred rows as `latest`, the stamp could
+ * never reach past the cap, and the stuck badge would come back for exactly the
+ * >100-unread case. Descending, `latest` is the first qualifying row seen.
+ *
+ * The upper bound is `nowSecs + skew`, not infinity: rumor `created_at` is
+ * attacker-chosen and ingest has no clock check, so a year-3000 message would
+ * otherwise pin the badge forever. Bounded here and at the stamp with the SAME
+ * number — see `CONCORD_READ_MAX_FUTURE_SECS`.
+ *
+ * The lower bound is EXCLUSIVE: a message dated exactly `after` is the one the
+ * reader last read.
+ */
+export async function channelUnreadSummary(
+  communityId: string,
+  channelIdHex: string,
+  opts: {
+    /** The reader's last-read stamp, in seconds. 0 means "never read". */
+    after: number;
+    nowSecs: number;
+    /** Skew allowance; rows dated past `nowSecs + this` are invisible. */
+    maxFutureSecs: number;
+    /** The reader, whose own messages are never unread. */
+    selfPubkey?: string;
+    cap?: number;
+  },
+): Promise<ChannelUnread> {
+  const empty: ChannelUnread = {
+    count: 0,
+    latest: 0,
+    mention: false,
+    capped: false,
+  };
+  const channel = channelIdHex.toLowerCase();
+  if (!communityId || !channel) return empty;
+  const cap = opts.cap ?? UNREAD_CAP;
+  const upper = opts.nowSecs + opts.maxFutureSecs;
+  const after = Math.max(0, opts.after);
+  if (upper <= after) return empty;
+
+  let count = 0;
+  let latest = 0;
+  let mention = false;
+  let capped = false;
+  try {
+    await db.concordRumors
+      .where("[communityId+channel+created_at]")
+      .between(
+        [communityId, channel, after],
+        [communityId, channel, upper],
+        false,
+        true,
+      )
+      .reverse()
+      .until(() => capped, false)
+      .each((row) => {
+        if (!TIMELINE_KINDS.has(row.kind)) return;
+        if (opts.selfPubkey && row.pubkey === opts.selfPubkey) return;
+        // Cheap accuracy for a disappearing-message channel: an expired rumor
+        // is already invisible in the timeline, and counting it would be a
+        // badge for a message that is not there. Bans and epoch cutoffs cannot
+        // be judged from a row alone — those are what `latest` covers instead.
+        if (isExpired(row.tags, opts.nowSecs)) return;
+        if (row.created_at > latest) latest = row.created_at;
+        if (
+          !mention &&
+          opts.selfPubkey &&
+          mentionsPubkey(row.tags, opts.selfPubkey)
+        ) {
+          mention = true;
+        }
+        count += 1;
+        if (count >= cap) capped = true;
+      });
+  } catch (error) {
+    console.warn("[concord] unread scan failed:", error);
+    return empty;
+  }
+  // `capped` says the count is a floor and — stated plainly because it surprises
+  // — that the mention flag only saw the newest `cap` rows: a mention buried
+  // under a hundred newer messages shows a count with no @.
+  return { count, latest, mention, capped };
 }
 
 /**

@@ -38,6 +38,7 @@ import {
   clearAdoptions,
   readAdoptions,
 } from "@/services/concord-adoptions";
+import { clearReads } from "@/services/concord-reads";
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
 import { startConcordStreamAuth } from "@/services/concord-stream-auth";
@@ -353,6 +354,10 @@ export async function clearCommunities(pubkey: string): Promise<void> {
     db.concordSnapshots.clear(),
     db.concordPendingWraps.clear(),
     db.concordKv.clear(),
+    // Read state is account-scoped, so unlike the rest of these it can be
+    // deleted for the account that left and nobody else. It says which channels
+    // this person was reading and when they last looked.
+    clearReads(pubkey),
   ]);
   const failed = wipes.filter((r) => r.status === "rejected");
   if (failed.length > 0) {

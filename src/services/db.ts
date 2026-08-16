@@ -260,6 +260,31 @@ export interface ConcordAdoptionRow {
   updatedAt: number;
 }
 
+/**
+ * How far into a Concord channel the reading account has caught up.
+ *
+ * Keyed by `[pubkey+communityId+channelId]` rather than by channel alone: read
+ * state is a fact about a READER, so keying it by channel would show one
+ * account another's badges the moment a second account signs in. The standalone
+ * `pubkey` index is what lets the logout wipe delete this account's rows and
+ * only this account's — unlike the rumor store beside it, which is keyed by
+ * community and can only be cleared whole.
+ *
+ * Both ids are LOWERCASE HEX (the rumor store lowercases channel ids at write,
+ * so a mixed-case key here would never match a scan). `lastRead` is unix
+ * SECONDS, because it is compared against rumor `created_at`; `updatedAt` is
+ * milliseconds and is bookkeeping only.
+ */
+export interface ConcordReadRow {
+  pubkey: string;
+  communityId: string;
+  channelId: string;
+  /** Unix SECONDS. Everything at or below this is read. */
+  lastRead: number;
+  /** Milliseconds. Bookkeeping; nothing reads it. */
+  updatedAt: number;
+}
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -282,6 +307,7 @@ class GrimoireDb extends Dexie {
   concordKv!: Table<ConcordKvRow>;
   concordPendingWraps!: Table<ConcordPendingWrapRow>;
   concordAdoptions!: Table<ConcordAdoptionRow>;
+  concordReads!: Table<ConcordReadRow>;
 
   constructor(name: string) {
     super(name);
@@ -642,6 +668,38 @@ class GrimoireDb extends Dexie {
       concordKv: "&key",
       concordPendingWraps: "&id, pubkey, created_at",
       concordAdoptions: "&[pubkey+idHex], pubkey",
+    });
+
+    // Version 23: Concord read state (per-account, per-channel last-read stamp)
+    this.version(23).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
+      concordCommunities: "&[pubkey+idHex], pubkey",
+      concordRumors:
+        "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+      concordSnapshots: "&[communityId+controlPk], communityId",
+      concordKv: "&key",
+      concordPendingWraps: "&id, pubkey, created_at",
+      concordAdoptions: "&[pubkey+idHex], pubkey",
+      // `pubkey` on its own is what the logout wipe deletes by; the compound
+      // `[pubkey+communityId]` answers "every last-read in this community" —
+      // the sidebar's whole query — in one index range.
+      concordReads:
+        "&[pubkey+communityId+channelId], pubkey, [pubkey+communityId]",
     });
   }
 }

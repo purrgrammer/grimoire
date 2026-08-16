@@ -70,6 +70,26 @@ export const KIND_CALENDAR_RSVP = 31925;
 /** WebXDC peer signal. */
 export const KIND_WEBXDC = 3310;
 
+/**
+ * The rumor kinds that occupy a TIMELINE ROW.
+ *
+ * `foldTimeline` is the source of truth (`chat.ts`, the branch that fills
+ * `timeline.messages`) and this set must stay equal to it: anything counted as
+ * unread that the fold does not render is a badge no reader can clear, and
+ * anything rendered but not counted is a channel that lights up with no badge.
+ *
+ * Side events (votes, RSVPs, reactions, deletes, edits) decorate a row rather
+ * than being one. Timer notices (1740) are rendered separately from the message
+ * pool by the fold and are deliberately out.
+ */
+export const TIMELINE_KINDS: ReadonlySet<number> = new Set([
+  KIND_MESSAGE,
+  KIND_COMMENT,
+  KIND_POLL,
+  KIND_CALENDAR_DATE,
+  KIND_CALENDAR_TIME,
+]);
+
 /** Typing indicator — ephemeral rumor (rides a 21059 wrap). */
 export const KIND_TYPING = 23311;
 /** Voice presence (CORD-07 §4) — ephemeral rumor. Grimoire does not do calls. */
