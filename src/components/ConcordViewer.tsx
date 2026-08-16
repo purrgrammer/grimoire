@@ -1,30 +1,17 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  BellOff,
-  BookOpen,
-  Hash,
-  Loader2,
-  Lock,
-  PanelLeft,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { BookOpen, Loader2, PanelLeft, RefreshCw, Search } from "lucide-react";
 
 import { ChatViewer } from "./ChatViewer";
+import {
+  ChannelList,
+  NotifLevelMenu,
+  UnreadBadge,
+} from "./concord/ConcordChannelList";
 import { ConcordGuestbookPanel } from "./ConcordGuestbookPanel";
 import { ConcordSearchPanel } from "./ConcordSearchPanel";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuLabel,
-  ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
@@ -47,22 +34,14 @@ import {
   registerActiveChannel,
   unregisterActiveChannel,
 } from "@/lib/concord/notify";
-import type { NotifLevel } from "@/services/concord-notif-prefs";
-import { useLocale } from "@/hooks/useLocale";
-import type { ChannelUnread } from "@/services/concord-rumor-store";
 import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
 import { useConcordDissolved } from "@/hooks/useConcordDissolved";
 import { useConcordImage } from "@/hooks/useConcordImage";
 import type { ImagePointer } from "@/lib/concord/types";
-import {
-  channelCategory,
-  groupChannelsByCategory,
-  resolveOpenChannel,
-} from "@/lib/concord/channels";
+import { resolveOpenChannel } from "@/lib/concord/channels";
 import { buildConcordWindowUpdate } from "@/lib/concord/window-props";
 import { useConcordPrefs } from "@/hooks/useConcordPrefs";
 import { useGrimoire } from "@/core/state";
-import type { Channel } from "@/lib/concord/types";
 import { cn } from "@/lib/utils";
 import type { ConcordIdentifier, ProtocolIdentifier } from "@/types/chat";
 
@@ -521,116 +500,6 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * The waiting-messages badge: a count, or an `@` when one of them names you.
- *
- * `font-semibold` marks an unread row rather than `font-medium`, which the
- * SELECTED row already uses — otherwise the row you are reading and the row you
- * have not read look identical.
- *
- * A silenced scope still shows its count — the messages are there and the
- * reader asked for quiet, not for blindness — but drops the `@`: an accent that
- * says "come and look" is the one thing `nothing` was set to stop.
- */
-function UnreadBadge({
-  unread,
-  silenced,
-}: {
-  unread: { count: number; mention: boolean; capped?: boolean };
-  silenced?: boolean;
-}) {
-  const { locale } = useLocale();
-  if (unread.count <= 0) return null;
-  const label = unread.capped
-    ? `${new Intl.NumberFormat(locale).format(unread.count)}+`
-    : new Intl.NumberFormat(locale).format(unread.count);
-  return (
-    <span className="ml-auto flex shrink-0 items-center gap-1">
-      {unread.mention && !silenced && (
-        <span
-          aria-label="You were mentioned"
-          title="You were mentioned"
-          className="flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground"
-        >
-          @
-        </span>
-      )}
-      <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">
-        {label}
-      </span>
-    </span>
-  );
-}
-
-/**
- * Right-click a row to say how loudly it may interrupt you.
- *
- * Armada's three levels, with a fourth entry for the cascade itself: a channel
- * set to "Use community default" has no level of its own and follows whatever
- * its community — or Settings — says. The distinction matters, because clearing
- * an override is otherwise impossible once set.
- *
- * The levels are stored on THIS DEVICE and are erased when you sign out.
- * Nothing about them is published: no CORD document defines a mute, and
- * grimoire uploads nothing but the messages you type.
- */
-function NotifLevelMenu({
-  communityId,
-  channelIdHex,
-  label,
-  children,
-}: {
-  communityId: string | undefined;
-  channelIdHex?: string;
-  label: string;
-  children: ReactNode;
-}) {
-  const { override, inherited, set } = useConcordNotifLevel(
-    communityId,
-    channelIdHex,
-  );
-  // `inherited`, never the resolved level: with an override set the resolved
-  // level is the override, so naming it here would promise the state you are
-  // already in and deliver its opposite — a community muted to "nothing" with
-  // this channel raised to "all" would read "Use community default (all
-  // messages)" and silence the channel when clicked.
-  const inheritLabel = channelIdHex
-    ? `Use community default (${LEVEL_LABELS[inherited]})`
-    : `Use app default (${LEVEL_LABELS[inherited]})`;
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        <ContextMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-          Notify me about {label}
-        </ContextMenuLabel>
-        <ContextMenuSeparator />
-        <ContextMenuRadioGroup
-          value={override ?? "inherit"}
-          onValueChange={(next) =>
-            set(next === "inherit" ? undefined : (next as NotifLevel))
-          }
-        >
-          <ContextMenuRadioItem value="inherit">
-            {inheritLabel}
-          </ContextMenuRadioItem>
-          <ContextMenuRadioItem value="all">All messages</ContextMenuRadioItem>
-          <ContextMenuRadioItem value="mentions">
-            Mentions only
-          </ContextMenuRadioItem>
-          <ContextMenuRadioItem value="nothing">Nothing</ContextMenuRadioItem>
-        </ContextMenuRadioGroup>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
-
-const LEVEL_LABELS: Record<NotifLevel, string> = {
-  all: "all messages",
-  mentions: "mentions only",
-  nothing: "nothing",
-};
-
 /** One community's row: its icon (encrypted, CORD-02 §6) and its name. */
 function CommunityRow({
   community,
@@ -729,119 +598,5 @@ function CommunityPicker({
         </div>
       ))}
     </div>
-  );
-}
-
-function ChannelList({
-  channels,
-  communityId,
-  selected,
-  loading,
-  error,
-  unread,
-  onSelect,
-}: {
-  channels: Channel[];
-  communityId: string | undefined;
-  selected: string | undefined;
-  loading: boolean;
-  error: string | undefined;
-  unread: Map<string, ChannelUnread>;
-  onSelect: (idHex: string) => void;
-}) {
-  // `channelsView` already returns display order, so the grouping reads the
-  // categories straight off it — the arrangement is one act, not two.
-  const { uncategorized, categories } = useMemo(
-    () =>
-      groupChannelsByCategory(channels, (ch) =>
-        ch.category !== undefined
-          ? ch.category
-          : channelCategory({ name: ch.name, private: ch.isPrivate }),
-      ),
-    [channels],
-  );
-
-  return (
-    <div className="flex-1 overflow-y-auto py-1">
-      {error && <p className="px-2 py-1 text-xs text-destructive">{error}</p>}
-      {loading && channels.length === 0 && (
-        <p className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" /> loading…
-        </p>
-      )}
-      {uncategorized.map((ch) => (
-        <ChannelRow
-          key={ch.idHex}
-          channel={ch}
-          communityId={communityId}
-          selected={ch.idHex === selected}
-          unread={unread.get(ch.idHex.toLowerCase())}
-          onSelect={onSelect}
-        />
-      ))}
-      {categories.map((group) => (
-        <div key={group.key} className="mt-1">
-          <p className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {group.name}
-          </p>
-          {group.channels.map((ch) => (
-            <ChannelRow
-              key={ch.idHex}
-              channel={ch}
-              communityId={communityId}
-              selected={ch.idHex === selected}
-              unread={unread.get(ch.idHex.toLowerCase())}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ChannelRow({
-  channel,
-  communityId,
-  selected,
-  unread,
-  onSelect,
-}: {
-  channel: Channel;
-  communityId: string | undefined;
-  selected: boolean;
-  unread: ChannelUnread | undefined;
-  onSelect: (idHex: string) => void;
-}) {
-  const Icon = channel.isPrivate ? Lock : Hash;
-  const hasUnread = (unread?.count ?? 0) > 0;
-  const { level } = useConcordNotifLevel(communityId, channel.idHex);
-  const silenced = level === "nothing";
-  return (
-    <NotifLevelMenu
-      communityId={communityId}
-      channelIdHex={channel.idHex}
-      label={channel.name}
-    >
-      <button
-        type="button"
-        onClick={() => onSelect(channel.idHex)}
-        title={channel.idHex}
-        className={cn(
-          "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm hover:bg-muted/50",
-          selected && "bg-muted/70 font-medium",
-          hasUnread && "font-semibold text-foreground",
-          silenced && "text-muted-foreground",
-        )}
-      >
-        {silenced ? (
-          <BellOff className="size-3 flex-shrink-0 text-muted-foreground" />
-        ) : (
-          <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
-        )}
-        <span className="truncate">{channel.name}</span>
-        {unread && <UnreadBadge unread={unread} silenced={silenced} />}
-      </button>
-    </NotifLevelMenu>
   );
 }
