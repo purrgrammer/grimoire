@@ -446,6 +446,10 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       // Self-delete only — see {@link deleteMessage}.
       supportsDeletion: true,
       requiresRelay: true,
+      // The membership is known and closed, so the composer offers it and
+      // nothing else. `resolveConversation` has already narrowed it to whoever
+      // can actually open a private channel.
+      mentionSuggestions: "roster",
     };
   }
 

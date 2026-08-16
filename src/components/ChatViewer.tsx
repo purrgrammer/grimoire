@@ -68,6 +68,8 @@ import {
   type BlobAttachment,
 } from "./editor/MentionEditor";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
+import profileSearch from "@/services/profile-search";
+import { makeRosterProfileSearch } from "@/lib/chat/roster-search";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
 import { useFeedHomeEnd } from "@/hooks/useFeedHomeEnd";
@@ -775,6 +777,29 @@ export function ChatViewer({
     () => (conversation ? getConversationRelays(conversation) : []),
     [conversation],
   );
+
+  /**
+   * Where `@` looks: the room's roster when the protocol has one, else the
+   * global profile index.
+   *
+   * **This is read ONCE, when the editor is created.** `MentionEditor` builds
+   * its suggestion plugin from `searchProfiles` at mount and tiptap's
+   * `setOptions` never rebuilds the extension manager, so handing a MOUNTED
+   * editor a different function is a silent no-op. It works here only because
+   * ChatViewer unmounts the composer between conversations — `conversation` is
+   * null while the next one resolves, and the composer is behind that gate. If
+   * anyone later keeps the previous conversation on screen while re-resolving,
+   * or makes this identity change mid-mount, the composer will quietly keep
+   * autocompleting against the previous channel's roster.
+   */
+  const searchMentions = useMemo(() => {
+    if (!conversation) return searchProfiles;
+    if (adapter.getCapabilities().mentionSuggestions !== "roster")
+      return searchProfiles;
+    return makeRosterProfileSearch(conversation.participants, (pk) =>
+      profileSearch.getByPubkey(pk),
+    );
+  }, [adapter, conversation, searchProfiles]);
 
   // Slash command search for action autocomplete
   // Context-aware: only shows relevant actions based on membership status
@@ -1568,7 +1593,7 @@ export function ChatViewer({
             <MentionEditor
               ref={editorRef}
               placeholder="Type a message..."
-              searchProfiles={searchProfiles}
+              searchProfiles={searchMentions}
               searchEmojis={searchEmojis}
               searchCommands={searchCommands}
               onCommandExecute={handleCommandExecute}

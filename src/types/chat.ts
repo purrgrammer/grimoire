@@ -347,4 +347,14 @@ export interface ChatCapabilities {
   supportsGroupManagement: boolean;
   canCreateConversations: boolean;
   requiresRelay: boolean;
+  /**
+   * Where the composer's @-autocomplete should look.
+   *
+   * `"roster"` means this protocol knows exactly who is in the room and the
+   * suggestions must come from there — a closed community, where the global
+   * profile index offers strangers who will never read the message and omits
+   * members who have no cached profile. Absent means the global index, which is
+   * the right answer for a public thread.
+   */
+  mentionSuggestions?: "roster";
 }
