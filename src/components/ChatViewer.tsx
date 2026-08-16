@@ -701,12 +701,24 @@ export function ChatViewer({
           },
         }
       : {}),
+    onCancel: () => {
+      // A prepared-but-unuploaded file must not outlive its dialog, or the next
+      // upload could be tagged with the previous file's key.
+      preparedUpload.current = undefined;
+    },
+    onError: () => {
+      preparedUpload.current = undefined;
+    },
     onSuccess: (results) => {
       if (results.length > 0 && preparedUpload.current) {
-        attachmentEncryption.current.set(results[0].blob.url, {
-          encryption: preparedUpload.current.encryption,
-          originalMime: preparedUpload.current.originalMime,
-        });
+        // Every result is the SAME blob mirrored to several servers, so one
+        // record per URL keeps a later mirror URL readable too.
+        for (const { blob } of results) {
+          attachmentEncryption.current.set(blob.url, {
+            encryption: preparedUpload.current.encryption,
+            originalMime: preparedUpload.current.originalMime,
+          });
+        }
         preparedUpload.current = undefined;
       }
       if (results.length > 0 && editorRef.current) {
@@ -973,6 +985,17 @@ export function ChatViewer({
         // travel the shortest path that exists.
         blobAttachments: blobAttachments?.map((blob) => {
           const enc = attachmentEncryption.current.get(blob.url);
+          // REFUSE rather than post an unopenable attachment. In Concord the
+          // blob is ciphertext and this map holds the only copy of what opens
+          // it, so an attachment we cannot pair with its params would be
+          // published as a URL that renders as a broken image for everyone,
+          // forever, with nothing to recover from. Every other protocol posts
+          // plaintext blobs and is unaffected.
+          if (!enc && protocol === "concord") {
+            throw new Error(
+              "Lost the decryption key for that attachment — attach it again.",
+            );
+          }
           return enc ? { ...blob, ...enc } : blob;
         }),
       });

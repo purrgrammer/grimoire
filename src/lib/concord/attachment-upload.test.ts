@@ -17,8 +17,10 @@ import {
   encryptFileForUpload,
   encryptFileWithParams,
 } from "@/lib/concord/attachment-upload";
+import { imetaTag } from "@/lib/chat/adapters/concord-adapter";
 import { bytesToHex } from "@/lib/concord/derive";
 import { fetchEncryptedBlob } from "@/lib/concord/image";
+import { encryptedPointerOf, parseImetaTag } from "@/lib/imeta";
 
 const PNG = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6, 7, 8,
@@ -116,5 +118,31 @@ describe("an encrypted attachment", () => {
     );
     expect(poster.encryption.key).toBe(main.encryption.key);
     expect(poster.encryption.nonce).toBe(main.encryption.nonce);
+  });
+});
+
+describe("the published imeta tag", () => {
+  it("carries everything the reader needs to open the blob", async () => {
+    // The crypto round-trip above proves the BYTES survive. This proves the
+    // TAG does — which is the half that actually ships, and where a renamed or
+    // dropped field makes a perfectly good blob permanently unreadable.
+    const url = "https://blossom.example/abc";
+    const out = await encryptFileForUpload(
+      new File([PNG], "x.png", { type: "image/png" }),
+    );
+    const tag = imetaTag({
+      url,
+      sha256: "cc".repeat(32),
+      mimeType: "application/octet-stream",
+      encryption: out.encryption,
+      originalMime: out.originalMime,
+    });
+
+    const pointer = encryptedPointerOf(parseImetaTag(tag) ?? undefined);
+    expect(pointer).toBeDefined();
+
+    serve(new Uint8Array(await out.file.arrayBuffer()));
+    const read = await fetchEncryptedBlob(pointer!);
+    expect(bytesToHex(read.bytes)).toBe(bytesToHex(PNG));
   });
 });
