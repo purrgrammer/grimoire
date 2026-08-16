@@ -383,6 +383,36 @@ export async function queryRekeyRounds(
 }
 
 /**
+ * The authors seen publishing in ONE channel.
+ *
+ * For a private channel this is proof of key possession, which role
+ * entitlement is not: entitlement records who the key was delivered to, while
+ * publishing here means the sender could actually seal under it. A member whose
+ * grant predates the fold this client holds, or who was let in by a route the
+ * roster does not describe, is visible only this way.
+ */
+export async function channelAuthors(
+  communityId: string,
+  channelIdHex: string,
+): Promise<Set<string>> {
+  const seen = new Set<string>();
+  if (!communityId || !channelIdHex) return seen;
+  try {
+    await db.concordRumors
+      .where("[communityId+channel]")
+      .equals([communityId, channelIdHex.toLowerCase()])
+      .each((row) => {
+        if (row.kind === KIND_MESSAGE || row.kind === KIND_COMMENT) {
+          seen.add(row.pubkey);
+        }
+      });
+  } catch (error) {
+    console.warn("[concord] channel-author scan failed:", error);
+  }
+  return seen;
+}
+
+/**
  * Every author this community has been SEEN publishing a message under, mapped
  * to the newest ms they were seen at.
  *

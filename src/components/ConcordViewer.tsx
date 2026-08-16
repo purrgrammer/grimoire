@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { Hash, Loader2, Lock, PanelLeft, RefreshCw } from "lucide-react";
 
@@ -6,10 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useConcordCommunities, useConcordCommunity } from "@/hooks/useConcord";
+import {
+  useConcordCommunities,
+  useConcordCommunity,
+  useConcordIcons,
+} from "@/hooks/useConcord";
 import { useConcordWire } from "@/hooks/useConcordWire";
 import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
 import { useConcordDissolved } from "@/hooks/useConcordDissolved";
+import { useConcordImage } from "@/hooks/useConcordImage";
+import type { ImagePointer } from "@/lib/concord/types";
 import {
   channelCategory,
   groupChannelsByCategory,
@@ -35,6 +42,7 @@ interface ConcordViewerProps {
 export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   const isMobile = useIsMobile();
   const { communities, status, refresh: refreshList } = useConcordCommunities();
+  const icons = useConcordIcons(communities);
   const [selectedId, setSelectedId] = useState<string | undefined>(communityId);
   const [selectedChannel, setSelectedChannel] = useState<string | undefined>(
     channelId,
@@ -150,17 +158,6 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      <CommunityPicker
-        communities={communities.map((c) => ({
-          idHex: c.idHex,
-          name: c.name,
-        }))}
-        selected={community?.idHex}
-        onSelect={(idHex) => {
-          setSelectedId(idHex);
-          setSelectedChannel(undefined);
-        }}
-      />
       <div className="flex items-center justify-between border-b px-2 py-1">
         <span className="truncate text-xs font-medium text-muted-foreground">
           {state?.folded.metadata?.name ?? community?.name ?? "Community"}
@@ -194,13 +191,26 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />
         </Button>
       </div>
-      <ChannelList
-        channels={channels}
-        selected={openChannel?.idHex}
-        loading={loading}
-        error={error}
-        onSelect={handleChannelSelect}
-      />
+      <CommunityPicker
+        communities={communities.map((c) => ({
+          idHex: c.idHex,
+          name: c.name,
+          ...(icons.get(c.idHex) ? { icon: icons.get(c.idHex) } : {}),
+        }))}
+        selected={community?.idHex}
+        onSelect={(idHex) => {
+          setSelectedId(idHex);
+          setSelectedChannel(undefined);
+        }}
+      >
+        <ChannelList
+          channels={channels}
+          selected={openChannel?.idHex}
+          loading={loading}
+          error={error}
+          onSelect={handleChannelSelect}
+        />
+      </CommunityPicker>
     </div>
   );
 
@@ -256,30 +266,81 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** One community's row: its icon (encrypted, CORD-02 §6) and its name. */
+function CommunityRow({
+  community,
+  selected,
+  onSelect,
+}: {
+  community: { idHex: string; name: string; icon?: ImagePointer };
+  selected: boolean;
+  onSelect: (idHex: string) => void;
+}) {
+  const icon = useConcordImage(community.icon);
+  const label = community.name || community.idHex.slice(0, 8);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(community.idHex)}
+      className={cn(
+        "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-1 text-left text-sm hover:bg-muted/50",
+        selected && "bg-muted/70 font-medium",
+      )}
+    >
+      {icon ? (
+        <img
+          src={icon}
+          alt=""
+          className="size-4 shrink-0 rounded-sm object-cover"
+        />
+      ) : (
+        // A placeholder of the SAME size, so a community whose icon is absent,
+        // unfetchable or failed verification does not shift its neighbours.
+        <span
+          aria-hidden
+          className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-dotted text-[8px] text-muted-foreground"
+        >
+          {label.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * The community list, with the selected community's channels nested directly
+ * beneath its own row.
+ *
+ * Rendering the channels in a separate block below the whole list left nothing
+ * saying which community they belonged to — the reader had to remember what
+ * they had clicked. Nesting states it.
+ */
 function CommunityPicker({
   communities,
   selected,
   onSelect,
+  children,
 }: {
-  communities: Array<{ idHex: string; name: string }>;
+  communities: Array<{ idHex: string; name: string; icon?: ImagePointer }>;
   selected: string | undefined;
   onSelect: (idHex: string) => void;
+  children: ReactNode;
 }) {
-  if (communities.length <= 1) return null;
+  // With one community there is nothing to pick between, so the row would be
+  // chrome; the channels stand alone under the header that already names it.
+  if (communities.length <= 1) return <>{children}</>;
   return (
-    <div className="border-b">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {communities.map((c) => (
-        <button
-          key={c.idHex}
-          type="button"
-          onClick={() => onSelect(c.idHex)}
-          className={cn(
-            "block w-full cursor-crosshair truncate px-2 py-1 text-left text-sm hover:bg-muted/50",
-            c.idHex === selected && "bg-muted/70 font-medium",
-          )}
-        >
-          {c.name || c.idHex.slice(0, 8)}
-        </button>
+        <div key={c.idHex} className="flex min-h-0 flex-col">
+          <CommunityRow
+            community={c}
+            selected={c.idHex === selected}
+            onSelect={onSelect}
+          />
+          {c.idHex === selected && <div className="pl-2">{children}</div>}
+        </div>
       ))}
     </div>
   );

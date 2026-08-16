@@ -7,6 +7,8 @@ import {
 import { MediaDialog } from "../MediaDialog";
 import { MediaEmbed } from "../MediaEmbed";
 import { CompactMediaRenderer } from "../CompactMediaRenderer";
+import { useDecryptedMedia } from "@/hooks/useDecryptedMedia";
+import type { ImetaEntry } from "@/lib/imeta";
 import { useRichTextOptions, useRichTextEvent } from "../RichText";
 import { findImetaForUrl } from "@/lib/imeta";
 import { useSettings } from "@/hooks/useSettings";
@@ -23,6 +25,100 @@ interface GalleryNodeProps {
   node: {
     links?: string[];
   };
+}
+
+/**
+ * One gallery item.
+ *
+ * Its own component so the decryption hook can run per item — an encrypted
+ * attachment's URL serves ciphertext, and a plain function inside `Gallery`
+ * cannot call a hook.
+ */
+function GalleryMedia({
+  url,
+  imeta,
+  showMedia,
+  showImages,
+  showVideos,
+  showAudio,
+  loadMedia,
+  onAudioClick,
+}: {
+  url: string;
+  imeta: ImetaEntry | undefined;
+  showMedia: boolean;
+  showImages: boolean;
+  showVideos: boolean;
+  showAudio: boolean;
+  loadMedia: boolean;
+  onAudioClick: () => void;
+}) {
+  const media = useDecryptedMedia(url, imeta);
+
+  // Never fall back to the ciphertext URL — rendering whatever the host served
+  // is what the plaintext hash exists to prevent.
+  if (media.failed) {
+    return (
+      <span className="block text-xs text-muted-foreground">
+        Could not decrypt this attachment.
+      </span>
+    );
+  }
+  const src = media.url;
+
+  if (isImageURL(url)) {
+    if (showMedia && showImages) {
+      if (!src) return <MediaPlaceholder type="image" />;
+      if (!loadMedia) {
+        return (
+          <CompactMediaRenderer
+            url={url}
+            src={src}
+            type="image"
+            imeta={imeta}
+          />
+        );
+      }
+      return <MediaEmbed url={src} type="image" preset="grid" enableZoom />;
+    }
+    return <MediaPlaceholder type="image" />;
+  }
+  if (isVideoURL(url)) {
+    if (showMedia && showVideos) {
+      if (!src) return <MediaPlaceholder type="video" />;
+      if (!loadMedia) {
+        return (
+          <CompactMediaRenderer
+            url={url}
+            src={src}
+            type="video"
+            imeta={imeta}
+          />
+        );
+      }
+      return <MediaEmbed url={src} type="video" preset="grid" />;
+    }
+    return <MediaPlaceholder type="video" />;
+  }
+  if (isAudioURL(url)) {
+    if (showMedia && showAudio) {
+      if (!src) return <MediaPlaceholder type="audio" />;
+      if (!loadMedia) {
+        return (
+          <CompactMediaRenderer
+            url={url}
+            src={src}
+            type="audio"
+            imeta={imeta}
+          />
+        );
+      }
+      return <MediaEmbed url={src} type="audio" onAudioClick={onAudioClick} />;
+    }
+    return <MediaPlaceholder type="audio" />;
+  }
+  // Non-media URLs shouldn't appear in galleries, but handle gracefully
+  return null;
 }
 
 export function Gallery({ node }: GalleryNodeProps) {
@@ -42,49 +138,18 @@ export function Gallery({ node }: GalleryNodeProps) {
     setDialogOpen(true);
   };
 
-  const renderLink = (url: string, index: number) => {
-    // Check if media should be shown
-    const shouldShowMedia = options.showMedia;
-
-    // Look up imeta for this URL if event is available
-    const imeta = event ? findImetaForUrl(event, url) : undefined;
-
-    if (isImageURL(url)) {
-      if (shouldShowMedia && options.showImages) {
-        if (!loadMedia) {
-          return <CompactMediaRenderer url={url} type="image" imeta={imeta} />;
-        }
-        return <MediaEmbed url={url} type="image" preset="grid" enableZoom />;
-      }
-      return <MediaPlaceholder type="image" />;
-    }
-    if (isVideoURL(url)) {
-      if (shouldShowMedia && options.showVideos) {
-        if (!loadMedia) {
-          return <CompactMediaRenderer url={url} type="video" imeta={imeta} />;
-        }
-        return <MediaEmbed url={url} type="video" preset="grid" />;
-      }
-      return <MediaPlaceholder type="video" />;
-    }
-    if (isAudioURL(url)) {
-      if (shouldShowMedia && options.showAudio) {
-        if (!loadMedia) {
-          return <CompactMediaRenderer url={url} type="audio" imeta={imeta} />;
-        }
-        return (
-          <MediaEmbed
-            url={url}
-            type="audio"
-            onAudioClick={() => handleAudioClick(index)}
-          />
-        );
-      }
-      return <MediaPlaceholder type="audio" />;
-    }
-    // Non-media URLs shouldn't appear in galleries, but handle gracefully
-    return null;
-  };
+  const renderLink = (url: string, index: number) => (
+    <GalleryMedia
+      url={url}
+      imeta={event ? findImetaForUrl(event, url) : undefined}
+      showMedia={options.showMedia}
+      showImages={options.showImages}
+      showVideos={options.showVideos}
+      showAudio={options.showAudio}
+      loadMedia={loadMedia}
+      onAudioClick={() => handleAudioClick(index)}
+    />
+  );
 
   // Separate media types for layout
   const imageLinks = links.filter((url) => isImageURL(url));

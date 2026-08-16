@@ -255,6 +255,14 @@ function getChatIdentifier(conversation: Conversation): string | null {
 /**
  * Conversation resolution result - either success with conversation or error
  */
+/**
+ * The page an older-messages fetch asks for, and the depth below which there is
+ * nothing older to ask for. One constant, because the two have to agree: using
+ * a different number in each is how a "load older" button ends up permanently
+ * offered on a channel that has already given up everything it has.
+ */
+const OLDER_PAGE_SIZE = 50;
+
 type ConversationResult =
   | { status: "loading" }
   | { status: "success"; conversation: Conversation }
@@ -981,8 +989,8 @@ export function ChatViewer({
         oldestMessage.timestamp,
       );
 
-      // If we got fewer messages than expected, there might be no more
-      if (olderMessages.length < 50) {
+      // A short page is the end of the history: nothing deeper to ask for.
+      if (olderMessages.length < OLDER_PAGE_SIZE) {
         setHasMore(false);
       }
     } catch (error) {
@@ -1271,9 +1279,17 @@ export function ChatViewer({
                   );
                 }
 
-                // "Load older" for protocols that support it
+                // "Load older" for protocols that support it.
+                //
+                // Hidden until the timeline is at least a full page deep. A
+                // channel holding fewer messages than one page has nothing
+                // older by construction, so offering to fetch it is an empty
+                // promise the reader can only discover by clicking — and on a
+                // quiet channel that button was the ONLY thing in the pane.
                 if (
                   hasMore &&
+                  messages !== undefined &&
+                  messages.length >= OLDER_PAGE_SIZE &&
                   conversationResult.status === "success" &&
                   protocol !== "nip-10" &&
                   protocol !== "nip-22"

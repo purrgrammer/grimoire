@@ -23,7 +23,8 @@ import {
   emitWireScopes,
   onWireScope,
 } from "@/lib/concord/wire-bus";
-import type { Community } from "@/lib/concord/types";
+import type { Community, ImagePointer } from "@/lib/concord/types";
+import { readFoldedControl } from "@/services/concord-rumor-store";
 import accountManager from "@/services/accounts";
 import {
   syncCommunities,
@@ -248,4 +249,50 @@ export function useConcordCommunity(
     error: settled ? loaded.error : undefined,
     refresh,
   };
+}
+
+/**
+ * Every community's icon pointer, from the MATERIALIZED fold.
+ *
+ * The picker lists communities the client is not currently reading, and their
+ * icons live in the Control Plane metadata — so a hook that only had the open
+ * community's fold could decorate exactly one row. `readFoldedControl` is the
+ * fold already written to Dexie, so this costs one indexed read per community
+ * and no network at all.
+ *
+ * The Community List cannot supply this: its join material carries membership
+ * and keys, never the icon (CORD-02 §8).
+ */
+export function useConcordIcons(
+  communities: Community[],
+): Map<string, ImagePointer> {
+  const [icons, setIcons] = useState<Map<string, ImagePointer>>(new Map());
+  // Keyed on the (id, epoch) pairs: a Refounding re-anchors the fold, and a
+  // metadata edition that changes the icon lands under the same key, which the
+  // control doorbell already re-reads.
+  const key = communities.map((c) => `${c.idHex}@${c.rootEpoch}`).join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const found = new Map<string, ImagePointer>();
+      for (const community of communities) {
+        const folded = await readFoldedControl(
+          community.idHex,
+          community.rootEpoch,
+        ).catch(() => undefined);
+        const icon = folded?.metadata?.icon;
+        if (icon) found.set(community.idHex, icon);
+      }
+      if (!cancelled) setIcons(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `communities` is a fresh array on every vault read; the key is its
+    // identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return icons;
 }

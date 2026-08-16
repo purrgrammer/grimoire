@@ -22,6 +22,7 @@ import {
   type CoalescedMember,
 } from "@/lib/concord/guestbook";
 import { sweepGuestbook } from "@/lib/concord/plane-sync";
+import { isEntitled } from "@/lib/concord/channel-access";
 import { badgeOf, canActOnMember, Permissions } from "@/lib/concord/roles";
 import type { Community } from "@/lib/concord/types";
 import { dissolvedAt } from "@/services/concord-dissolution";
@@ -92,10 +93,40 @@ export async function readStoredRoster(
 export function rosterParticipants(
   roster: Roster,
   folded: FoldedControl,
+  /**
+   * The channel being viewed. For a PRIVATE channel the list is narrowed to
+   * whoever holds its key, because the community roster is the wrong answer
+   * there: a private channel's audience is the granted role-holders (CORD-03),
+   * and showing every member implies an audience the room does not have.
+   *
+   * Entitlement is who the key was DELIVERED to, not who can read — key
+   * possession is the only real enforcement (CORD-04 §1), and a member whose
+   * role was revoked keeps reading until the rekey lands. So this is the
+   * community's intent, which is what a member list should show.
+   */
+  channel?: {
+    idHex: string;
+    isPrivate: boolean;
+    authors?: ReadonlySet<string>;
+  },
 ): Array<{ pubkey: string; role: "admin" | "moderator" | "member" }> {
+  const visible =
+    channel?.isPrivate === true
+      ? [...roster.members].filter(
+          (pubkey) =>
+            isEntitled(folded.roster, folded.ownerHex, pubkey, channel.idHex) ||
+            // …OR observably holding the key. Entitlement is who the key was
+            // DELIVERED to, which a lagging or partial fold can understate — a
+            // member whose grant this client has not read yet, or who was let
+            // in by a route the roster does not describe, would otherwise
+            // vanish from a room they are demonstrably in. Publishing under the
+            // channel key is proof; the roster is only intent.
+            channel.authors?.has(pubkey) === true,
+        )
+      : [...roster.members];
   return [
     { pubkey: folded.ownerHex, role: "admin" as const },
-    ...[...roster.members]
+    ...visible
       .filter((pubkey) => pubkey !== folded.ownerHex)
       .map((pubkey) => ({
         pubkey,

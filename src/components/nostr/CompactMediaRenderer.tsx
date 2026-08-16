@@ -111,7 +111,12 @@ function MediaIcon({ type }: { type: "image" | "video" | "audio" }) {
   }
 }
 
-export function CompactMediaRenderer({ url, type, imeta }: MediaRendererProps) {
+export function CompactMediaRenderer({
+  url,
+  src,
+  type,
+  imeta,
+}: MediaRendererProps) {
   const addWindow = useAddWindow();
   const [expanded, setExpanded] = useState(false);
 
@@ -149,7 +154,7 @@ export function CompactMediaRenderer({ url, type, imeta }: MediaRendererProps) {
     return (
       <span className="block max-w-sm my-1">
         <MediaEmbed
-          url={url}
+          url={src ?? url}
           type={type}
           alt={imeta?.alt}
           preset="inline"

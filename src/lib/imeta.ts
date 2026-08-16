@@ -7,6 +7,17 @@ import type { NostrEvent } from "@/types/nostr";
 export interface ImetaEntry {
   url: string;
   m?: string; // MIME type
+  /**
+   * Encrypted-attachment fields (Concord chat, CORD-02 §6's scheme applied to
+   * an `imeta`). When present the URL serves CIPHERTEXT, and putting it in an
+   * `<img src>` renders a broken image — the blob has to be fetched, AES-GCM
+   * decrypted under the key and nonce, and verified against `ox`, which is the
+   * SHA-256 of the PLAINTEXT (`x` is the ciphertext's).
+   */
+  "encryption-algorithm"?: string;
+  "decryption-key"?: string;
+  "decryption-nonce"?: string;
+  ox?: string; // SHA-256 of the plaintext
   blurhash?: string;
   dim?: string; // dimensions (e.g., "1920x1080")
   alt?: string; // alt text
@@ -52,6 +63,25 @@ export function parseImetaTag(tag: string[]): ImetaEntry | null {
   if (!entry.url) return null;
 
   return entry as ImetaEntry;
+}
+
+/**
+ * The encrypted-blob pointer an imeta carries, or undefined.
+ *
+ * `ox` is required, not optional: it is the plaintext hash, and without it
+ * there is nothing to verify the decrypted bytes against — which is the whole
+ * defence against an untrusted media host serving different bytes. A pointer
+ * that cannot be checked is treated as no pointer at all.
+ */
+export function encryptedPointerOf(
+  entry: ImetaEntry | undefined,
+): { url: string; key: string; nonce: string; hash: string } | undefined {
+  if (!entry) return undefined;
+  const key = entry["decryption-key"];
+  const nonce = entry["decryption-nonce"];
+  const hash = entry.ox;
+  if (!key || !nonce || !hash) return undefined;
+  return { url: entry.url, key, nonce, hash };
 }
 
 /**

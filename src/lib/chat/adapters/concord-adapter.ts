@@ -59,6 +59,7 @@ import { publishWrap } from "@/services/concord-publish";
 import { loadStoredCommunities } from "@/services/concord-communities";
 import { dissolvedAt } from "@/services/concord-dissolution";
 import {
+  channelAuthors,
   queryChannelRumors,
   readChannelRumor,
   writeChatRumors,
@@ -149,7 +150,14 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     const roster = await readStoredRoster(community, folded);
     void syncRoster(community, folded).catch(() => undefined);
 
-    const participants: Participant[] = rosterParticipants(roster, folded);
+    const participants: Participant[] = rosterParticipants(roster, folded, {
+      idHex: channel.idHex,
+      isPrivate: channel.isPrivate,
+      // Only a private channel narrows, so only it pays for this read.
+      ...(channel.isPrivate
+        ? { authors: await channelAuthors(community.idHex, channel.idHex) }
+        : {}),
+    });
 
     return {
       id: conversationIdOf(identifier),

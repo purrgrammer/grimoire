@@ -579,16 +579,16 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "concord [community]",
     description:
-      "Open a Concord community — end-to-end encrypted community channels (CORD-01…08). Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. A community has no shareable public address to type, because its id is a hex commitment and its channels live at derived pubkeys, so the argument matches against your OWN decrypted community list by name or id prefix. With no argument it opens the first community you hold.",
+      "Browse your Concord communities — end-to-end encrypted community channels (CORD-01…08). Opens the community list with channels, members and history; pass a community to jump straight to one. Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. There is no shareable public address to type, because a community id is a hex commitment and its channels live at derived pubkeys — so the optional argument matches against your OWN decrypted list, by name or id prefix.",
     options: [
       {
         flag: "[community]",
         description:
-          "Community name (case-insensitive, prefix-matched) or a community_id prefix. Omit to open the first one.",
+          "Optional. Community name (case-insensitive, prefix-matched) or a community_id prefix. Omit to browse them all.",
       },
     ],
     examples: [
-      "concord                                   Open your first Concord community",
+      "concord                                   Browse your Concord communities",
       "concord Bitcoin Builders                  Open by name",
       "concord bitcoin                           Open by name prefix",
       "concord 3fa2c1                            Open by community_id prefix",

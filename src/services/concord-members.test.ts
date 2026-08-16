@@ -302,6 +302,48 @@ describe("rosterParticipants", () => {
     expect(participants[0]).toEqual({ pubkey: owner, role: "admin" });
   });
 
+  it("narrows a PRIVATE channel to whoever holds its key", async () => {
+    // A private channel's audience is its granted role-holders (CORD-03), so
+    // listing every member implies an audience the room does not have.
+    const insider = keyFor();
+    const outsider = keyFor();
+    await storeGuestbook(KIND_JOIN_LEAVE, "join", [], insider.sk, 1000);
+    await storeGuestbook(KIND_JOIN_LEAVE, "join", [], outsider.sk, 1000);
+    const channelIdHex = "77".repeat(32);
+    const fold = folded({
+      roster: {
+        roles: [
+          {
+            roleId: "testers",
+            name: "Testers",
+            position: 1,
+            permissions: Permissions.KICK,
+            scope: { kind: "channel" as const, channelId: channelIdHex },
+            color: 0,
+          },
+        ],
+        grants: [{ member: insider.pk, roleIds: ["testers"] }],
+      },
+    });
+    const roster = await readStoredRoster(community(), fold);
+
+    const priv = rosterParticipants(roster, fold, {
+      idHex: channelIdHex,
+      isPrivate: true,
+    }).map((p) => p.pubkey);
+    expect(priv).toContain(insider.pk);
+    expect(priv).not.toContain(outsider.pk);
+    // The owner is always entitled — position 0, supreme.
+    expect(priv).toContain(owner);
+
+    // …and a PUBLIC channel is the whole community again.
+    const pub = rosterParticipants(roster, fold, {
+      idHex: channelIdHex,
+      isPrivate: false,
+    }).map((p) => p.pubkey);
+    expect(pub).toContain(outsider.pk);
+  });
+
   it("labels a roleless member a member, and never repeats the owner", async () => {
     const plain = keyFor();
     await storeGuestbook(KIND_JOIN_LEAVE, "join", [], plain.sk, 1000);

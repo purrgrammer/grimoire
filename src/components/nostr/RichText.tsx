@@ -20,7 +20,15 @@ import type { ImetaEntry } from "@/lib/imeta";
  * Props for custom media renderers
  */
 export interface MediaRendererProps {
+  /** The attachment's own URL — its identity, for labels and the Blossom link. */
   url: string;
+  /**
+   * What to actually render, when it differs. An encrypted attachment's `url`
+   * serves CIPHERTEXT, so the caller resolves a decrypted object URL and passes
+   * it here — while `url` stays the real one, so a chip still shows a filename
+   * and still links to the blob rather than to a `blob:` handle.
+   */
+  src?: string;
   type: "image" | "video" | "audio";
   /** Image/video metadata from imeta tags (NIP-92) if available */
   imeta?: ImetaEntry;
