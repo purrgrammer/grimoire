@@ -383,7 +383,7 @@ describe("syncCommunities", () => {
 
     expect(await db.concordRumors.count()).toBe(0);
     expect(await db.concordKv.count()).toBe(0);
-    expect(await db.concordReads.count()).toBe(0);
+    expect(await db.chatReads.count()).toBe(0);
   });
 
   it("takes what was never sent as well as what was read", async () => {

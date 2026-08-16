@@ -108,7 +108,7 @@ const summary = (after: number) =>
 
 beforeEach(async () => {
   await db.concordRumors.clear();
-  await db.concordReads.clear();
+  await db.chatReads.clear();
 });
 
 describe("a message arriving on the wire", () => {

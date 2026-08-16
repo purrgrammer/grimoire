@@ -50,7 +50,7 @@ export function useConcordUnread(
   // deliberately: resolving it goes through `readStoredState`, which touches
   // `concordKv` — and a liveQuery that touched `concordKv` would re-run on
   // every fold write in the app. This one watches `concordRumors` and
-  // `concordReads` and nothing else.
+  // `chatReads` and nothing else.
   const key = channelIdsHex.join(",");
   // The fold hands back a fresh Set every read, so its CONTENT is its identity
   // — without this the query would never re-run on a new ban.

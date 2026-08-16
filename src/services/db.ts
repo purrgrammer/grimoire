@@ -4,6 +4,7 @@ import { RelayInformation } from "../types/nip11";
 import { normalizeRelayURL } from "../lib/relay-url";
 import type { EmojiTag } from "../lib/emoji-helpers";
 import type { NostrEvent } from "@/types/nostr";
+import type { ChatProtocol } from "@/types/chat";
 import type {
   SpellEvent,
   SpellbookContent,
@@ -261,23 +262,38 @@ export interface ConcordAdoptionRow {
 }
 
 /**
- * How far into a Concord channel the reading account has caught up.
+ * How far into one chat channel the reading account has caught up.
  *
- * Keyed by `[pubkey+communityId+channelId]` rather than by channel alone: read
- * state is a fact about a READER, so keying it by channel would show one
- * account another's badges the moment a second account signs in. The standalone
- * `pubkey` index is what lets the logout wipe delete this account's rows and
- * only this account's — unlike the rumor store beside it, which is keyed by
- * community and can only be cleared whole.
+ * Keyed by `[pubkey+protocol+containerId+channelId]` rather than by channel
+ * alone, and every segment is load-bearing:
  *
- * Both ids are LOWERCASE HEX (the rumor store lowercases channel ids at write,
- * so a mixed-case key here would never match a scan). `lastRead` is unix
- * SECONDS, because it is compared against rumor `created_at`; `updatedAt` is
- * milliseconds and is bookkeeping only.
+ * - `pubkey` because read state is a fact about a READER — keying it by channel
+ *   would show one account another's badges the moment a second signs in. The
+ *   standalone index on it is what lets the logout wipe delete this account's
+ *   rows and only this account's, unlike the rumor store beside it.
+ * - `protocol` because a channel id is only unique WITHIN a protocol. This is
+ *   the cursor every chat protocol will share: the shape is generic even while
+ *   the only writer is Concord, and adding the discriminator later would mean
+ *   re-keying a populated table, which Dexie cannot do in place.
+ * - `containerId` because a channel id alone is never an identity. A NIP-29
+ *   group is `(relay, id)` — the same id forked onto another relay is a
+ *   different room under different governance — so the container is part of the
+ *   key by rule, not by convenience.
+ *
+ * `containerId` is the Concord community idHex today; for NIP-29 it would be
+ * the relay URL. Ids are stored LOWERCASE (the rumor store lowercases channel
+ * ids at write, so a mixed-case key here would never match a scan) — a relay
+ * URL survives that unharmed, since scheme and host are case-insensitive.
+ *
+ * `lastRead` is unix SECONDS, because it is compared against message
+ * `created_at`; `updatedAt` is milliseconds and is bookkeeping only.
  */
-export interface ConcordReadRow {
+export interface ChatReadRow {
   pubkey: string;
-  communityId: string;
+  /** {@link ChatProtocol}. `"concord"` for every row written so far. */
+  protocol: ChatProtocol;
+  /** Concord: community idHex. NIP-29 (later): relay URL. Lowercase. */
+  containerId: string;
   channelId: string;
   /** Unix SECONDS. Everything at or below this is read. */
   lastRead: number;
@@ -350,7 +366,8 @@ export interface ChatDraftRow {
 /** A failure nothing will retry on its own — only the reader's own Retry. */
 export const OUTBOX_NEVER = Number.MAX_SAFE_INTEGER;
 
-class GrimoireDb extends Dexie {
+/** Exported for the migration tests, which open a throwaway database name. */
+export class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
   nips!: Table<Nip>;
@@ -372,7 +389,7 @@ class GrimoireDb extends Dexie {
   concordKv!: Table<ConcordKvRow>;
   concordPendingWraps!: Table<ConcordPendingWrapRow>;
   concordAdoptions!: Table<ConcordAdoptionRow>;
-  concordReads!: Table<ConcordReadRow>;
+  chatReads!: Table<ChatReadRow>;
   concordOutbox!: Table<ConcordOutboxRow>;
   chatDrafts!: Table<ChatDraftRow>;
 
@@ -803,6 +820,78 @@ class GrimoireDb extends Dexie {
       // logout deletes by primary-key prefix instead — see `clearCommunities`.
       chatDrafts: "&key, updatedAt",
     });
+
+    // Version 25: the read cursor becomes protocol-qualified — `concordReads`
+    // gives way to `chatReads`, keyed by protocol as well as reader, container
+    // and channel.
+    //
+    // A NEW TABLE rather than a re-key, because Dexie refuses to change a
+    // primary key in place ("Not yet support for changing primary key"). The
+    // upgrade copies every existing row forward under protocol `"concord"`
+    // instead of dropping the store: these stamps are days old but a lost one
+    // relights a channel the reader has already read, which is the one way this
+    // table can lie. Reading `concordReads` here is safe even though the same
+    // version deletes it — Dexie runs the content upgrade before
+    // `deleteRemovedTables`, and keeps the dropped table on the upgrade
+    // transaction's schema for exactly this.
+    this.version(25)
+      .stores({
+        profiles: "&pubkey",
+        nip05: "&nip05",
+        nips: "&id",
+        relayInfo: "&url",
+        relayAuthPreferences: "&url",
+        relayLists: "&pubkey, updatedAt",
+        relayLiveness: "&url",
+        blossomServers: "&pubkey, updatedAt",
+        spells: "&id, alias, createdAt, isPublished, deletedAt",
+        spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+        lnurlCache: "&address, fetchedAt",
+        grimoireZaps:
+          "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+        nsiteMetadata: "&hash",
+        userEmojiLists: "&pubkey",
+        emojiSets: "&address",
+        concordCommunities: "&[pubkey+idHex], pubkey",
+        concordRumors:
+          "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+        concordSnapshots: "&[communityId+controlPk], communityId",
+        concordKv: "&key",
+        concordPendingWraps: "&id, pubkey, created_at",
+        concordAdoptions: "&[pubkey+idHex], pubkey",
+        concordOutbox: "&id, pubkey, [communityId+channel], nextAttemptAt",
+        chatDrafts: "&key, updatedAt",
+        // Superseded by `chatReads`. `null` is what removes a table; a later
+        // version must simply not mention it, since restating the name would
+        // recreate it empty.
+        concordReads: null,
+        // `pubkey` on its own is still the logout wipe's column;
+        // `[pubkey+protocol+containerId]` answers "every last-read in this
+        // container" — the sidebar's whole query — in one index range.
+        chatReads:
+          "&[pubkey+protocol+containerId+channelId], pubkey, [pubkey+protocol+containerId]",
+      })
+      .upgrade(async (tx) => {
+        const old = await tx
+          .table<{
+            pubkey: string;
+            communityId: string;
+            channelId: string;
+            lastRead: number;
+            updatedAt: number;
+          }>("concordReads")
+          .toArray();
+        for (const row of old) {
+          await tx.table<ChatReadRow>("chatReads").put({
+            pubkey: row.pubkey,
+            protocol: "concord",
+            containerId: row.communityId,
+            channelId: row.channelId,
+            lastRead: row.lastRead,
+            updatedAt: row.updatedAt,
+          });
+        }
+      });
   }
 }
 

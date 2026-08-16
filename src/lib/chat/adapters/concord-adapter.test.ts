@@ -508,7 +508,7 @@ describe("unread state", () => {
     }) as never;
 
   beforeEach(async () => {
-    await db.concordReads.clear();
+    await db.chatReads.clear();
     seq = 0;
   });
 

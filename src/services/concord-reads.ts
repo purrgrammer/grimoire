@@ -12,6 +12,12 @@
  * IndexedDB both see each other's marks (and each other's ingested rumors)
  * through `useLiveQuery`.
  *
+ * The rows live in `chatReads`, which is PROTOCOL-QUALIFIED and shared: a
+ * NIP-29 (relay, group) cursor is the same row shape as a Concord (community,
+ * channel) one, and the discriminator went in while the table was days old
+ * rather than after it had history to migrate. This module writes only Concord
+ * rows — see {@link PROTOCOL}.
+ *
  * This module stays PURE about the stamp: it stores what it is given, only ever
  * forwards, and knows nothing about clock skew or about the rows a fold hides.
  * That composition belongs to the Concord adapter's `markRead`, which is the
@@ -20,7 +26,8 @@
  */
 
 import { channelUnreadSummary } from "@/services/concord-rumor-store";
-import db, { type ConcordReadRow } from "@/services/db";
+import db, { type ChatReadRow } from "@/services/db";
+import type { ChatProtocol } from "@/types/chat";
 
 /**
  * How far ahead of the local clock a rumor may be dated and still count.
@@ -39,12 +46,25 @@ import db, { type ConcordReadRow } from "@/services/db";
  */
 export const CONCORD_READ_MAX_FUTURE_SECS = 3600;
 
+/**
+ * Which protocol's cursors this module writes.
+ *
+ * `chatReads` is protocol-qualified and shared by design — a NIP-29 (relay,
+ * group) pair occupies the same row shape a Concord (community, channel) pair
+ * does. Only the KEY is generic so far: the counting below scans
+ * `concordRumors` through the fold pipeline, which is Concord's alone, so the
+ * functions here stay Concord-facing and stamp this constant. A second protocol
+ * arrives by parameterising these signatures, not by re-keying the table.
+ */
+const PROTOCOL: ChatProtocol = "concord";
+
 const key = (
   pubkey: string,
   communityId: string,
   channelId: string,
-): [string, string, string] => [
+): [string, ChatProtocol, string, string] => [
   pubkey,
+  PROTOCOL,
   communityId.toLowerCase(),
   channelId.toLowerCase(),
 ];
@@ -67,7 +87,7 @@ export async function readLastRead(
 ): Promise<number> {
   if (!pubkey || !communityId || !channelId) return 0;
   try {
-    const row = await db.concordReads.get(key(pubkey, communityId, channelId));
+    const row = await db.chatReads.get(key(pubkey, communityId, channelId));
     return row?.lastRead ?? 0;
   } catch (error) {
     console.warn("[concord] could not read the last-read stamp:", error);
@@ -88,9 +108,9 @@ export async function readCommunityLastReads(
   const out = new Map<string, number>();
   if (!pubkey || !communityId) return out;
   try {
-    const rows = await db.concordReads
-      .where("[pubkey+communityId]")
-      .equals([pubkey, communityId.toLowerCase()])
+    const rows = await db.chatReads
+      .where("[pubkey+protocol+containerId]")
+      .equals([pubkey, PROTOCOL, communityId.toLowerCase()])
       .toArray();
     for (const row of rows) out.set(row.channelId, row.lastRead);
   } catch (error) {
@@ -120,17 +140,18 @@ export async function markChannelRead(
   if (!Number.isFinite(timestampSecs) || timestampSecs <= 0) return;
   const id = key(pubkey, communityId, channelId);
   try {
-    await db.transaction("rw", db.concordReads, async () => {
-      const existing = await db.concordReads.get(id);
+    await db.transaction("rw", db.chatReads, async () => {
+      const existing = await db.chatReads.get(id);
       if (existing && existing.lastRead >= timestampSecs) return;
-      const row: ConcordReadRow = {
+      const row: ChatReadRow = {
         pubkey: id[0],
-        communityId: id[1],
-        channelId: id[2],
+        protocol: id[1],
+        containerId: id[2],
+        channelId: id[3],
         lastRead: timestampSecs,
         updatedAt: Date.now(),
       };
-      await db.concordReads.put(row);
+      await db.chatReads.put(row);
     });
   } catch (error) {
     console.warn("[concord] could not stamp the channel as read:", error);
@@ -150,7 +171,7 @@ export interface CommunityUnread {
  * a constraint from the hooks above it: resolving a community's channels goes
  * through the materialized fold in `concordKv`, and a Dexie live query that
  * touched `concordKv` would re-run on every fold write in the app. Here the
- * only tables touched are `concordReads` and `concordRumors`.
+ * only tables touched are `chatReads` and `concordRumors`.
  */
 export async function communityUnread(
   pubkey: string,
@@ -179,13 +200,22 @@ export async function communityUnread(
 }
 
 /**
- * Drop every stamp belonging to one account.
+ * Drop every stamp belonging to one account, in every protocol.
  *
  * The logout wipe's door. Unlike the rumor store beside it this table IS
  * account-scoped — the standalone `pubkey` index exists for exactly this — so a
  * logout takes only the account that left.
+ *
+ * Deliberately NOT protocol-scoped, even though the table now is. Concord's
+ * rows have to go regardless: they index plaintext history that the same wipe
+ * deletes, and a stamp says which channels this person was reading and when
+ * they last looked. Leaving other protocols' rows behind would buy nothing —
+ * they belong to the same account, which is the thing leaving the device — and
+ * would cost the invariant that one call empties the reader's cursors. A cursor
+ * is the cheapest row in the schema to lose: worst case a channel relights as
+ * unread. So the wipe stays keyed on the reader alone.
  */
 export async function clearReads(pubkey: string): Promise<void> {
   if (!pubkey) return;
-  await db.concordReads.where("pubkey").equals(pubkey).delete();
+  await db.chatReads.where("pubkey").equals(pubkey).delete();
 }

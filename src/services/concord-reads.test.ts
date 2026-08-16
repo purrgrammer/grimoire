@@ -26,7 +26,7 @@ const CHANNEL = "bb".repeat(32);
 const OTHER_CHANNEL = "cc".repeat(32);
 
 beforeEach(async () => {
-  await db.concordReads.clear();
+  await db.chatReads.clear();
   await db.concordRumors.clear();
 });
 
@@ -55,9 +55,9 @@ describe("markChannelRead", () => {
     expect(await readLastRead(ME, COMMUNITY, CHANNEL)).toBe(900);
     // …and does not create a row where there was none.
     await markChannelRead(ME, COMMUNITY, OTHER_CHANNEL, 0);
-    expect(await db.concordReads.get([ME, COMMUNITY, OTHER_CHANNEL])).toBe(
-      undefined,
-    );
+    expect(
+      await db.chatReads.get([ME, "concord", COMMUNITY, OTHER_CHANNEL]),
+    ).toBe(undefined);
   });
 
   it("keeps two accounts' stamps for the same channel apart", async () => {
@@ -70,7 +70,7 @@ describe("markChannelRead", () => {
   it("lowercases both ids, so a mixed-case caller hits the same row", async () => {
     await markChannelRead(ME, COMMUNITY.toUpperCase(), CHANNEL, 700);
     expect(await readLastRead(ME, COMMUNITY, CHANNEL.toUpperCase())).toBe(700);
-    expect(await db.concordReads.count()).toBe(1);
+    expect(await db.chatReads.count()).toBe(1);
   });
 });
 
@@ -92,6 +92,27 @@ describe("readCommunityLastReads", () => {
     expect(map.get(OTHER_CHANNEL)).toBe(800);
     expect(map.size).toBe(2);
   });
+
+  it("ignores another protocol's cursor for the same ids", async () => {
+    await markChannelRead(ME, COMMUNITY, CHANNEL, 500);
+    // The row a NIP-29 writer would put down. Same reader, same id strings,
+    // different protocol — the discriminator is the only thing keeping the two
+    // apart, and a range read that dropped it would report this one as
+    // Concord's.
+    await db.chatReads.put({
+      pubkey: ME,
+      protocol: "nip-29",
+      containerId: COMMUNITY,
+      channelId: OTHER_CHANNEL,
+      lastRead: 4242,
+      updatedAt: Date.now(),
+    });
+
+    const map = await readCommunityLastReads(ME, COMMUNITY);
+    expect(map.get(CHANNEL)).toBe(500);
+    expect(map.size).toBe(1);
+    expect(await readLastRead(ME, COMMUNITY, OTHER_CHANNEL)).toBe(0);
+  });
 });
 
 describe("clearReads", () => {
@@ -101,6 +122,20 @@ describe("clearReads", () => {
     await clearReads(ME);
     expect(await readLastRead(ME, COMMUNITY, CHANNEL)).toBe(0);
     expect(await readLastRead(THEM, COMMUNITY, CHANNEL)).toBe(500);
+  });
+
+  it("takes that account's cursors in every protocol, not just Concord", async () => {
+    await markChannelRead(ME, COMMUNITY, CHANNEL, 500);
+    await db.chatReads.put({
+      pubkey: ME,
+      protocol: "nip-29",
+      containerId: "wss://groups.example/",
+      channelId: "general",
+      lastRead: 900,
+      updatedAt: Date.now(),
+    });
+    await clearReads(ME);
+    expect(await db.chatReads.where("pubkey").equals(ME).count()).toBe(0);
   });
 });
 
