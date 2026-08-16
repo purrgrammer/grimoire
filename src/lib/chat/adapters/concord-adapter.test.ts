@@ -260,6 +260,15 @@ describe("paging backwards", () => {
     expect(page).toHaveLength(50);
     expect(page.every((m) => m.timestamp < 51)).toBe(true);
     await vi.waitFor(() => expect(feed.last()).toHaveLength(250));
+    // The page the caller wants may only exist on the wire, so the click has to
+    // reach for it BELOW the oldest row on screen and repaint as it lands. What
+    // that fetch actually returns is covered against a real relay in
+    // `concord-adapter-backfill.test.ts`; this is the contract, not the effect.
+    expect(synced).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ until: 51, onFresh: expect.any(Function) }),
+    );
     feed.stop();
   });
 
