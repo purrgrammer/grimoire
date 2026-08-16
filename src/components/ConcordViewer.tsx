@@ -166,6 +166,12 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     (idHex: string) => {
       setSelectedChannel(idHex);
       setShowGuestbook(false);
+      // Abandon any pending jump. It is only ever pending because the channel
+      // it named would not resolve, and picking a channel by hand says the
+      // reader has moved on — without this, the next channel that DOES resolve
+      // inherits the jump and walks its history looking for a message that was
+      // never in it.
+      setJumpTo(undefined);
       if (isMobile) setSidebarOpen(false);
     },
     [isMobile],
@@ -344,6 +350,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           setSelectedId(idHex);
           setSelectedChannel(undefined);
           setShowGuestbook(false);
+          setJumpTo(undefined);
         }}
       >
         <>
