@@ -124,6 +124,17 @@ interface ChatViewerProps {
    * at all, and a lingering id would re-fire on every channel change.
    */
   jumpTo?: { messageId: string; nonce: number };
+  /**
+   * Called once a `jumpTo` request has been walked to its end — landed, given
+   * up, or refused.
+   *
+   * The consumption has to live with the CALLER, not in a ref here: the pane
+   * that raises a jump is the pane that replaces this one, so ChatViewer
+   * unmounts between the click and the next time the reader comes back. A
+   * request remembered only in a ref would be honoured again by the fresh
+   * instance, and the timeline would jump at someone who asked for nothing.
+   */
+  onJumpHandled?: (nonce: number) => void;
 }
 
 /**
@@ -860,6 +871,7 @@ export function ChatViewer({
   customTitle,
   headerPrefix,
   jumpTo,
+  onJumpHandled,
 }: ChatViewerProps) {
   const addWindow = useAddWindow();
 
@@ -1515,22 +1527,42 @@ export function ChatViewer({
   // A jump asked for from OUTSIDE — a search result the reader clicked, which
   // may well be in a channel that was not open a moment ago.
   //
-  // Carried as a nonce rather than a bare id, and consumed by one: a bare id
-  // could not ask for the same message twice, and would re-fire every time the
-  // conversation changed. The consume happens only once `jump` has actually
-  // run, because `jump` silently returns while the conversation is still
-  // resolving — and the new channel's conversation always is, right after a
-  // result click.
+  // Carried as a nonce rather than a bare id: a bare id could not ask for the
+  // same message twice, and would re-fire every time the conversation changed.
+  //
+  // The wait is the whole of this. A resolved conversation is NOT enough to
+  // start walking — `use$` publishes its value from an effect, so on the render
+  // where `conversation` first exists, `messages` has not been subscribed yet
+  // and is still `undefined`. Firing there hands the walk an empty timeline,
+  // which it can only give up on (there is no oldest row to page below), and it
+  // gives up SILENTLY because nothing was paged. The nonce would be spent on a
+  // jump that never looked at anything, which is a search result that never
+  // lands — the same for a hit in the channel already open, because the results
+  // pane replaces this component and every click arrives at a cold mount.
+  //
+  // So: wait for the resolved conversation's own first timeline. The messages
+  // cannot belong to a previous channel, because `conversation` passes through
+  // `null` between identifiers and takes the message stream to `undefined` with
+  // it — the same null gap the composer's roster relies on above. An empty
+  // timeline is not waited out forever, it is simply never the case for a
+  // channel a hit was just found in; a jump left pending by one is dropped by
+  // the next channel the reader picks.
+  //
+  // The freshness check is not ceremony either: that same lag means the render
+  // right after the caller switches channel still holds the PREVIOUS channel's
+  // conversation. Jumping on that would walk ten pages of the channel the
+  // reader just left and tell them the message is unreachable.
   //
   // The row it lands on survives `groupSystemMessages` by construction: only
   // `type: "system"` rows are collapsed, and both chat messages and Concord's
   // tombstones are `type: "user"`. Any future grouping must keep that true, or
   // this jump starts silently no-opping.
-  // The freshness check is not ceremony either: `use$` clears its value in an
-  // effect, so the render right after the caller switches channel still holds
-  // the PREVIOUS channel's conversation. Jumping on that would walk ten pages
-  // of the channel the reader just left, tell them the message is unreachable,
-  // and consume the nonce — so the jump they actually asked for never happens.
+  //
+  // The ref still earns its place next to `onJumpHandled`: the effect now
+  // re-runs on every emission, and the ref is what stops a second walk starting
+  // while the first is still paging. The callback is the other half — it is
+  // what makes the request stop existing, so a later mount does not honour it
+  // again.
   const jumpedNonce = useRef<number | undefined>(undefined);
   const resolvedFor =
     conversationResult?.status === "success"
@@ -1538,10 +1570,20 @@ export function ChatViewer({
       : undefined;
   useEffect(() => {
     if (!jumpTo || !conversation || resolvedFor !== identifier) return;
+    if (!messages || messages.length === 0) return;
     if (jumpedNonce.current === jumpTo.nonce) return;
     jumpedNonce.current = jumpTo.nonce;
-    void jump({ kind: "id", id: jumpTo.messageId });
-  }, [jumpTo, conversation, resolvedFor, identifier, jump]);
+    const { nonce, messageId } = jumpTo;
+    void jump({ kind: "id", id: messageId }).then(() => onJumpHandled?.(nonce));
+  }, [
+    jumpTo,
+    conversation,
+    resolvedFor,
+    identifier,
+    messages,
+    jump,
+    onJumpHandled,
+  ]);
 
   // Handle loading older messages
   const handleLoadOlder = useCallback(async () => {

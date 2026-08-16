@@ -228,6 +228,20 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     [isMobile],
   );
 
+  /**
+   * Forget a jump once the timeline has answered it.
+   *
+   * The request has to be dropped from HERE rather than remembered inside
+   * ChatViewer, because opening search unmounts ChatViewer: a request it only
+   * remembered in a ref would be honoured a second time by the fresh instance,
+   * and the reader who typed a new query and pressed Escape would be scrolled
+   * away from where they were. Guarded by the nonce so a jump that was already
+   * superseded by a newer click cannot clear the newer one.
+   */
+  const handleJumpHandled = useCallback((nonce: number) => {
+    setJumpTo((prev) => (prev?.nonce === nonce ? undefined : prev));
+  }, []);
+
   const identifier: ConcordIdentifier | undefined = useMemo(
     () =>
       communityIdHex && openChannelIdHex
@@ -423,6 +437,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
             protocol="concord"
             identifier={identifier as ProtocolIdentifier}
             headerPrefix={headerPrefix}
+            onJumpHandled={handleJumpHandled}
             {...(jumpTo ? { jumpTo } : {})}
           />
         ) : (
