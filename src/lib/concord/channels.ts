@@ -134,6 +134,27 @@ export function groupChannelsByCategory<T extends { name: string }>(
 }
 
 /**
+ * Which channel a sidebar should have open: the explicit pick, else the one this
+ * device was last left on, else the first the member can read.
+ *
+ * Fully derived, so nothing writes state during a render pass and the pane fills
+ * the moment the fold lands. Only an explicit pick is ever REMEMBERED — a
+ * fallback resolution that persisted itself would record the first channel of a
+ * community whose fold had not arrived yet as the one the reader chose.
+ */
+export function resolveOpenChannel<T extends { idHex: string }>(
+  channels: readonly T[],
+  explicitIdHex: string | undefined,
+  rememberedIdHex?: string,
+): T | undefined {
+  const at = (wanted: string | undefined): T | undefined =>
+    wanted
+      ? channels.find((ch) => ch.idHex.toLowerCase() === wanted.toLowerCase())
+      : undefined;
+  return at(explicitIdHex) ?? at(rememberedIdHex) ?? channels[0];
+}
+
+/**
  * Assemble the channels the member can actually read, from the Control fold plus
  * the keys they hold:
  *

@@ -4,6 +4,7 @@ import {
   findLowestAvailableWorkspaceNumber,
   addWindow,
   reorderWorkspaces,
+  updateWindow,
 } from "./logic";
 import type { GrimoireState, LayoutConfig } from "@/types/app";
 
@@ -679,5 +680,69 @@ describe("reorderWorkspaces", () => {
 
     expect(result.workspaces["w2"].number).toBe(1);
     expect(result.workspaces["w1"].number).toBe(2);
+  });
+});
+
+describe("updateWindow", () => {
+  const stateWith = (windows: GrimoireState["windows"]): GrimoireState => ({
+    __version: 8,
+    windows,
+    activeWorkspaceId: "ws",
+    layoutConfig: {
+      insertionMode: "smart",
+      splitPercentage: 50,
+      insertionPosition: "second",
+    },
+    workspaces: {
+      ws: {
+        id: "ws",
+        number: 1,
+        windowIds: Object.keys(windows),
+        layout: null,
+      },
+    },
+  });
+
+  const window = (id: string, props: Record<string, unknown>) => ({
+    id,
+    appId: "concord" as const,
+    props,
+  });
+
+  it("REPLACES props wholesale rather than merging them", () => {
+    // The contract every caller has to compensate for: an update that names
+    // `props` without spreading the old ones drops whatever it did not mention.
+    // `buildConcordWindowUpdate` exists because of this line.
+    const state = stateWith({
+      a: window("a", { communityId: "aa", channelId: "bb", view: "compact" }),
+    });
+
+    const result = updateWindow(state, "a", { props: { communityId: "cc" } });
+
+    expect(result.windows["a"].props).toEqual({ communityId: "cc" });
+  });
+
+  it("keeps the fields the update did not name", () => {
+    const state = stateWith({ a: window("a", { communityId: "aa" }) });
+    const result = updateWindow(state, "a", { commandString: "concord aa" });
+    expect(result.windows["a"].props).toEqual({ communityId: "aa" });
+    expect(result.windows["a"].appId).toBe("concord");
+  });
+
+  it("leaves every other window alone", () => {
+    const state = stateWith({
+      a: window("a", { communityId: "aa" }),
+      b: window("b", { communityId: "bb" }),
+    });
+
+    const result = updateWindow(state, "a", { props: { communityId: "cc" } });
+
+    expect(result.windows["b"]).toBe(state.windows["b"]);
+    expect(result.workspaces).toBe(state.workspaces);
+  });
+
+  it("is a no-op for a window that is not there", () => {
+    const state = stateWith({ a: window("a", { communityId: "aa" }) });
+    expect(updateWindow(state, "gone", { props: {} })).toBe(state);
   });
 });

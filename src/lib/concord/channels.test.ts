@@ -13,6 +13,7 @@ import {
   channelsView,
   compareChannelOrder,
   groupChannelsByCategory,
+  resolveOpenChannel,
 } from "./channels";
 import type { FoldedChannel, FoldedControl } from "./control";
 import { emptyRoles } from "./roles";
@@ -274,5 +275,32 @@ describe("channelsView", () => {
 
   it("renders nothing when there is no fold and no held key", () => {
     expect(channelsView(community(), undefined)).toEqual([]);
+  });
+});
+
+describe("resolveOpenChannel", () => {
+  const chans = [{ idHex: "aa" }, { idHex: "bb" }, { idHex: "cc" }];
+
+  it("prefers what the reader just clicked", () => {
+    expect(resolveOpenChannel(chans, "cc", "bb")?.idHex).toBe("cc");
+  });
+
+  it("falls back to what this device was last left on", () => {
+    expect(resolveOpenChannel(chans, undefined, "bb")?.idHex).toBe("bb");
+  });
+
+  it("falls back to the first readable channel when neither resolves", () => {
+    // A remembered channel can name one that was deleted, or one whose key the
+    // member no longer holds — the sidebar must still fill.
+    expect(resolveOpenChannel(chans, "zz", "yy")?.idHex).toBe("aa");
+    expect(resolveOpenChannel(chans, undefined, undefined)?.idHex).toBe("aa");
+  });
+
+  it("matches regardless of how the id was cased on the way in", () => {
+    expect(resolveOpenChannel(chans, "CC")?.idHex).toBe("cc");
+  });
+
+  it("has nothing to open before the fold lands", () => {
+    expect(resolveOpenChannel([], "aa", "bb")).toBeUndefined();
   });
 });

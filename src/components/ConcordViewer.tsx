@@ -57,7 +57,11 @@ import type { ImagePointer } from "@/lib/concord/types";
 import {
   channelCategory,
   groupChannelsByCategory,
+  resolveOpenChannel,
 } from "@/lib/concord/channels";
+import { buildConcordWindowUpdate } from "@/lib/concord/window-props";
+import { useConcordPrefs } from "@/hooks/useConcordPrefs";
+import { useGrimoire } from "@/core/state";
 import type { Channel } from "@/lib/concord/types";
 import { cn } from "@/lib/utils";
 import type { ConcordIdentifier, ProtocolIdentifier } from "@/types/chat";
@@ -67,6 +71,8 @@ interface ConcordViewerProps {
   communityId?: string;
   /** Channel to open on mount, if the caller already knows one. */
   channelId?: string;
+  /** The window these props belong to, when there is one to write back to. */
+  windowId?: string;
 }
 
 /**
@@ -76,8 +82,14 @@ interface ConcordViewerProps {
  * and rotated in Armada. What this renders is the member's own view of it — the
  * channels their keys can actually open, in the community's own arrangement.
  */
-export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
+export function ConcordViewer({
+  communityId,
+  channelId,
+  windowId,
+}: ConcordViewerProps) {
   const isMobile = useIsMobile();
+  const { state: grimoire, updateWindow } = useGrimoire();
+  const { lastChannel, setLastChannel } = useConcordPrefs();
   const { communities, status, refresh: refreshList } = useConcordCommunities();
   const icons = useConcordIcons(communities);
   const [selectedId, setSelectedId] = useState<string | undefined>(communityId);
@@ -113,6 +125,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
       communities[0]
     );
   }, [communities, selectedId]);
+  const communityIdHex = community?.idHex;
 
   const { state, loading, error, refresh } = useConcordCommunity(community);
   const channels = useMemo(() => state?.channels ?? [], [state]);
@@ -156,15 +169,42 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // themselves; this is what tells the reader why.
   const dissolvedAtMs = useConcordDissolved(community);
 
-  // The OPEN channel is derived, not stored: falling back to the first one keeps
-  // the pane filled the moment the fold lands, with no effect writing state
-  // during a render pass. An explicit pick wins whenever it still resolves.
-  const openChannel =
-    channels.find((ch) => ch.idHex === selectedChannel) ?? channels[0];
+  // The OPEN channel is derived, not stored: falling back keeps the pane filled
+  // the moment the fold lands, with no effect writing state during a render
+  // pass. An explicit pick wins whenever it still resolves; failing that, the
+  // channel this device was last left on in this community.
+  const openChannel = resolveOpenChannel(
+    channels,
+    selectedChannel,
+    communityIdHex ? lastChannel(communityIdHex) : undefined,
+  );
+
+  /**
+   * Record a deliberate move: on this device, and in this window's own props.
+   *
+   * Only ever called from a click. A fallback resolution must not write here —
+   * it would record the first channel of a community whose fold had not landed
+   * yet as the one the reader chose.
+   */
+  const rememberNavigation = useCallback(
+    (idHex: string | undefined, channelIdHex?: string) => {
+      if (!idHex) return;
+      if (channelIdHex) setLastChannel(idHex, channelIdHex);
+      if (!windowId) return;
+      const existing = grimoire.windows[windowId]?.props;
+      if (!existing) return;
+      updateWindow(
+        windowId,
+        buildConcordWindowUpdate(existing, idHex, channelIdHex),
+      );
+    },
+    [grimoire.windows, setLastChannel, updateWindow, windowId],
+  );
 
   const handleChannelSelect = useCallback(
     (idHex: string) => {
       setSelectedChannel(idHex);
+      rememberNavigation(communityIdHex, idHex);
       setShowGuestbook(false);
       // Abandon any pending jump. It is only ever pending because the channel
       // it named would not resolve, and picking a channel by hand says the
@@ -174,7 +214,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
       setJumpTo(undefined);
       if (isMobile) setSidebarOpen(false);
     },
-    [isMobile],
+    [isMobile, communityIdHex, rememberNavigation],
   );
 
   const { feed: guestbook, loading: guestbookLoading } = useConcordGuestbook(
@@ -186,7 +226,6 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // resolution on this object, so a fresh one every render made it re-resolve
   // and blank the timeline — the flicker on first load, where the community
   // paints twice (stored fold, then swept).
-  const communityIdHex = community?.idHex;
   const openChannelIdHex = openChannel?.idHex;
 
   // Search is Concord's alone for now: its corpus is the local plaintext rumor
@@ -235,10 +274,14 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
       setQuery("");
       setShowGuestbook(false);
       setSelectedChannel(hit.channelIdHex);
+      // A result is a deliberate pick of the channel it was found in, so it is
+      // remembered exactly like a click on the row would be. Leaving it out
+      // would have a search land somewhere the next reload does not.
+      rememberNavigation(communityIdHex, hit.channelIdHex);
       setJumpTo({ messageId: hit.message.rumorId, nonce: Date.now() });
       if (isMobile) setSidebarOpen(false);
     },
-    [isMobile],
+    [isMobile, communityIdHex, rememberNavigation],
   );
 
   /**
@@ -375,7 +418,11 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         selected={community?.idHex}
         onSelect={(idHex) => {
           setSelectedId(idHex);
-          setSelectedChannel(undefined);
+          // Come back to where you left this community, not to its first
+          // channel. Undefined is fine — the derived fallback covers it.
+          const remembered = lastChannel(idHex);
+          setSelectedChannel(remembered);
+          rememberNavigation(idHex, remembered);
           setShowGuestbook(false);
           setJumpTo(undefined);
         }}
