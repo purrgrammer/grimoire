@@ -93,6 +93,7 @@ vi.mock("@/services/concord-channel-resolve", () => ({
 
 const { drainOutbox, dueOutbox, enqueueOutbox, outboxForChannel, retryOutbox } =
   await import("./concord-outbox");
+const { ConcordAdapter } = await import("@/lib/chat/adapters/concord-adapter");
 const { writeChatRumors } = await import("@/services/concord-rumor-store");
 const { default: db, OUTBOX_NEVER } = await import("@/services/db");
 
@@ -273,5 +274,45 @@ describe("reading the outbox", () => {
 
     const rows = await outboxForChannel(idHex, channelIdHex, pubkey);
     expect(rows.map((r) => r.content)).toEqual(["first", "second"]);
+  });
+});
+
+describe("a drain that fires while the adapter's own attempt is still open", () => {
+  const conversation = {
+    id: `${idHex}:${channelIdHex}`,
+    type: "group",
+    protocol: "concord",
+    title: "general",
+    participants: [],
+    unreadCount: 0,
+  } as unknown as import("@/types/chat").Conversation;
+
+  it("does not send the same message twice", async () => {
+    // The window is real: the adapter publishes the first attempt in the
+    // background for up to the publish timeout, and a drain fires whenever a
+    // relay round comes back or another row is retried. The queued row is due,
+    // and the dedupe pre-check cannot help — the wrap has not been accepted
+    // yet — so an unclaimed row is rebuilt under a NEW rumor id and published
+    // a second time. Both copies land, and nothing afterwards can tell they
+    // were one message.
+    let accept: (() => void) | undefined;
+    published.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          accept = () => resolve({ accepted: ["wss://x"], rejected: [] });
+        }),
+    );
+
+    const adapter = new ConcordAdapter();
+    await adapter.sendMessage(conversation, "exactly once");
+    expect(published).toHaveBeenCalledTimes(1);
+
+    await drainOutbox(NOW);
+    expect(published).toHaveBeenCalledTimes(1);
+
+    accept?.();
+    await adapter._settleSends();
+    expect(await db.concordRumors.count()).toBe(1);
+    expect(await db.concordOutbox.count()).toBe(0);
   });
 });

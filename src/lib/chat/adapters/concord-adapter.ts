@@ -80,6 +80,7 @@ import { dissolvedAt } from "@/services/concord-dissolution";
 import {
   drainOutbox,
   enqueueOutbox,
+  holdOutboxRow,
   markOutboxFailed,
   outboxForChannel,
   removeOutbox,
@@ -569,6 +570,11 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     });
     emitWireScopes([channelScope(channel.idHex)]);
 
+    // Claimed for the whole background attempt: a drain firing while this
+    // publish is still open would otherwise rebuild the row under a fresh rumor
+    // id and send the same message twice.
+    const release = holdOutboxRow(row.id);
+
     // From here nothing throws to the caller: the message is safe in the
     // outbox, and rethrowing would restore text the reader can already see
     // sitting in the timeline with a badge on it.
@@ -612,7 +618,10 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       emitWireScopes([channelScope(channel.idHex)]);
     })();
     this.sending.add(task);
-    void task.finally(() => this.sending.delete(task));
+    void task.finally(() => {
+      release();
+      this.sending.delete(task);
+    });
   }
 
   async sendReaction(

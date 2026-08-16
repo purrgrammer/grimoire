@@ -186,6 +186,21 @@ const inFlight = new Set<string>();
 let draining = false;
 
 /**
+ * Claim a row for an attempt happening OUTSIDE the drain, and release it after.
+ *
+ * The adapter publishes the first attempt itself, in the background, for up to
+ * the publish timeout. Without this claim a drain fired in that window — a
+ * relay round re-establishing, or a Retry on some other row — would find the
+ * queued row due, miss the dedupe pre-check because the wrap has not been
+ * accepted yet, rebuild it under a NEW rumor id and publish a second copy. Both
+ * would be accepted, and nothing afterwards could tell they were one message.
+ */
+export function holdOutboxRow(id: string): () => void {
+  inFlight.add(id);
+  return () => inFlight.delete(id);
+}
+
+/**
  * Try every due row once, oldest first.
  *
  * Sequential rather than parallel: each attempt spends the community's send
