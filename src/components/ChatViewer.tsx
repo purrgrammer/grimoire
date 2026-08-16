@@ -74,6 +74,7 @@ import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
 import { useFeedHomeEnd } from "@/hooks/useFeedHomeEnd";
 import { useReadMarker } from "@/hooks/useReadMarker";
+import { useJumpToMessage } from "@/hooks/useJumpToMessage";
 import { useAccount } from "@/hooks/useAccount";
 import { useLocale } from "@/hooks/useLocale";
 import { Label } from "./ui/label";
@@ -443,6 +444,7 @@ const MessageItem = memo(function MessageItem({
   onScrollToMessage,
   isRootMessage,
   activePubkey,
+  isFlashing,
 }: {
   message: Message;
   adapter: ChatProtocolAdapter;
@@ -453,6 +455,8 @@ const MessageItem = memo(function MessageItem({
   isRootMessage?: boolean;
   /** The viewer, so the menu can offer a self-delete on their own messages. */
   activePubkey?: string;
+  /** Briefly marked, because a jump just landed here. */
+  isFlashing?: boolean;
 }) {
   // Get relays for this conversation (memoized to prevent unnecessary re-subscriptions)
   const relays = useMemo(
@@ -601,6 +605,9 @@ const MessageItem = memo(function MessageItem({
         // carries: a threaded reply to you p-tags you, so it counts as naming
         // you even with no @ in the body.
         mentionsMe && "border-l-2 border-highlight bg-highlight/10",
+        // Where a jump landed. Fades on its own, so the reader's eye finds the
+        // row without the timeline keeping a selection it never asked for.
+        isFlashing && "bg-primary/15 transition-colors duration-500",
       )}
     >
       <div className="flex-1 min-w-0">
@@ -1167,27 +1174,40 @@ export function ChatViewer({
     });
   }, []);
 
-  // Handle scroll to message (when clicking on reply preview)
-  // Must search in messagesWithMarkers since that's what Virtuoso renders
-  const handleScrollToMessage = useCallback(
-    (messageId: string) => {
-      if (!messagesWithMarkers) return;
-      // Find index in the rendered array (which includes day markers and grouped messages)
-      const index = messagesWithMarkers.findIndex(
+  // Where a message sits in the RENDERED array, which is not the message array:
+  // day markers, the unread divider and grouped system rows all take a slot.
+  const indexOfMessage = useCallback(
+    (messageId: string) =>
+      messagesWithMarkers.findIndex(
         (item) =>
           (item.type === "message" && item.data.id === messageId) ||
           (item.type === "grouped-system" &&
             item.data.messageIds.includes(messageId)),
-      );
-      if (index !== -1 && virtuosoRef.current) {
-        virtuosoRef.current.scrollToIndex({
-          index,
-          align: "center",
-          behavior: "smooth",
-        });
-      }
+      ),
+    [messagesWithMarkers],
+  );
+
+  // Jumping to a message, paging backwards for it when it is older than what is
+  // loaded. Only for protocols whose `loadMoreMessages` repaints the timeline —
+  // a NIP-10 thread or a NIP-22 comment set is already whole, so there is
+  // nothing to page and a miss stays as quiet as it has always been.
+  const canPage = protocol !== "nip-10" && protocol !== "nip-22";
+  const { jump, flashId } = useJumpToMessage({
+    adapter,
+    conversation,
+    messages,
+    canPage,
+    virtuosoRef,
+    indexOfMessage,
+    pageSize: OLDER_PAGE_SIZE,
+  });
+
+  // Handle scroll to message (when clicking on reply preview)
+  const handleScrollToMessage = useCallback(
+    (messageId: string) => {
+      void jump({ kind: "id", id: messageId });
     },
-    [messagesWithMarkers, virtuosoRef],
+    [jump],
   );
 
   // Handle loading older messages
@@ -1605,6 +1625,7 @@ export function ChatViewer({
                   onScrollToMessage={handleScrollToMessage}
                   isRootMessage={isRootMessage}
                   activePubkey={pubkey}
+                  isFlashing={flashId === item.data.id}
                 />
               );
             }}
