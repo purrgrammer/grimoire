@@ -379,6 +379,8 @@ export const MentionEditor = forwardRef<
                     mimeType: blob.mimeType,
                     size: blob.size,
                     server: blob.server,
+                    previewUrl: blob.previewUrl ?? null,
+                    encrypted: blob.encrypted ?? null,
                   },
                 },
                 { type: "text", text: " " },

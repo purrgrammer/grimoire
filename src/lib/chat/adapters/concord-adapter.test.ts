@@ -405,7 +405,10 @@ describe("paging backwards", () => {
     );
     expect(seen.every((t) => t.length >= 500)).toBe(true);
     sub.unsubscribe();
-  });
+    // The generous `settle` above raised the wrong dial: `vi.waitFor` can wait
+    // 15s, but the TEST still ended at vitest's 5s default, which is what
+    // actually fired under full-suite load. This is the binding one.
+  }, 30_000);
 
   it("does not leave the window widened by a click that failed", async () => {
     // A failed click paints nothing, so a window left wide is pure cost: every

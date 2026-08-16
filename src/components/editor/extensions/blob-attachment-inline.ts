@@ -21,6 +21,9 @@ export const BlobAttachmentInlineNode = Node.create({
       mimeType: { default: null },
       size: { default: null },
       server: { default: null },
+      // Composer-only, never serialized into a message: see BlobAttachment.
+      previewUrl: { default: null },
+      encrypted: { default: null },
     };
   },
 

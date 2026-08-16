@@ -13,13 +13,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
 const addWindow = vi.hoisted(() => vi.fn());
+const updateWindow = vi.hoisted(() => vi.fn());
+/** Mutable so a test can place a window before rendering the hook. */
+const windows = vi.hoisted(
+  () => ({}) as Record<string, { appId: string; props?: unknown }>,
+);
 const resolveChannel = vi.hoisted(() => vi.fn());
 const invalidateChannelDirectory = vi.hoisted(() => vi.fn());
 const resolveLevel = vi.hoisted(() => vi.fn());
 const readLastRead = vi.hoisted(() => vi.fn(async () => 0));
 const channelRumorsSince = vi.hoisted(() => vi.fn());
 
-vi.mock("@/core/state", () => ({ useAddWindow: () => addWindow }));
+vi.mock("@/core/state", () => ({
+  useAddWindow: () => addWindow,
+  // The notifier reads the window map to steer a Concord window that is
+  // already open instead of stacking another. No windows here, so every ring
+  // in these tests takes the `addWindow` fallback the assertions expect.
+  useGrimoire: () => ({ state: { windows }, updateWindow }),
+}));
 vi.mock("@/services/concord-channel-directory", () => ({
   resolveChannel,
   invalidateChannelDirectory,
@@ -97,6 +108,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   raised.length = 0;
+  for (const key of Object.keys(windows)) delete windows[key];
   vi.clearAllMocks();
   _resetWireBusForTests();
   _resetNotifyForTests();
@@ -246,5 +258,45 @@ describe("useConcordNotifier", () => {
       channelId: CHANNEL,
     });
     expect(raised[0]?.closed).toBe(true);
+  });
+
+  it("steers a Concord window already open on that community", async () => {
+    // Three notifications for one channel used to leave three windows behind.
+    windows.w1 = {
+      appId: "concord",
+      props: { communityId: COMMUNITY, channelId: "old" },
+    };
+    renderHook(() => useConcordNotifier());
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(raised).toHaveLength(1));
+    raised[0]?.onclick?.();
+
+    expect(addWindow).not.toHaveBeenCalled();
+    expect(updateWindow).toHaveBeenCalledTimes(1);
+    const [id, update] = updateWindow.mock.calls[0] ?? [];
+    expect(id).toBe("w1");
+    expect(update.props).toMatchObject({
+      communityId: COMMUNITY,
+      channelId: CHANNEL,
+    });
+  });
+
+  it("opens a window when none is on that community", async () => {
+    // A different community — note COMMUNITY is "aa".repeat(32), so "a" x 64
+    // would be the SAME id and this test would silently assert the opposite.
+    windows.other = {
+      appId: "concord",
+      props: { communityId: "cc".repeat(32) },
+    };
+    renderHook(() => useConcordNotifier());
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(raised).toHaveLength(1));
+    raised[0]?.onclick?.();
+
+    expect(updateWindow).not.toHaveBeenCalled();
+    expect(addWindow).toHaveBeenCalledWith("concord", {
+      communityId: COMMUNITY,
+      channelId: CHANNEL,
+    });
   });
 });

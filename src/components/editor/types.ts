@@ -26,6 +26,16 @@ export interface BlobAttachment {
   size?: number;
   /** Blossom server URL */
   server?: string;
+  /**
+   * A local `blob:` URL for the ORIGINAL bytes, for the composer preview only.
+   *
+   * An encrypted attachment's `url` serves ciphertext, so pointing an `<img>`
+   * at it draws a broken image. The sender still has the plaintext in hand at
+   * upload time; this carries it to the badge and is never published.
+   */
+  previewUrl?: string;
+  /** Ciphertext on the server — the badge must not fetch `url` to draw it. */
+  encrypted?: boolean;
 }
 
 /**

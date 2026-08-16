@@ -24,7 +24,8 @@ import {
   type NotifyCandidate,
 } from "@/lib/concord/notify";
 import { onWireScopes } from "@/lib/concord/wire-bus";
-import { useAddWindow } from "@/core/state";
+import { useAddWindow, useGrimoire } from "@/core/state";
+import { buildConcordWindowUpdate } from "@/lib/concord/window-props";
 import {
   invalidateChannelDirectory,
   resolveChannel,
@@ -73,7 +74,21 @@ function displayNameFor(pubkey: string): string {
  */
 export function useConcordNotifier(): void {
   const addWindow = useAddWindow();
+  const { state: grimoire, updateWindow } = useGrimoire();
   const selfPubkey = use$(accountManager.active$)?.pubkey;
+  /**
+   * The live window map, behind a ref.
+   *
+   * A click has to know which Concord windows are open, but the ring
+   * subscription must NOT re-register when they change — it is keyed on the
+   * account alone precisely so a mute edit or a layout change cannot drop a
+   * ring in the gap. So the effect reads this at click time instead of taking
+   * `grimoire.windows` as a dependency.
+   */
+  const navigate = useRef({ windows: grimoire.windows, updateWindow });
+  useEffect(() => {
+    navigate.current = { windows: grimoire.windows, updateWindow };
+  }, [grimoire.windows, updateWindow]);
   // Everything ingested before this instant is history, however it arrives.
   // Without it, the first sync after a week away fires a week of alerts. Read
   // in the effect rather than in the initializer: a clock read during render is
@@ -159,17 +174,42 @@ export function useConcordNotifier(): void {
         try {
           const notification = new Notification(title, {
             body,
-            icon: "/favicon.png",
+            // `/favicon.png` does not exist in `public/` — the notification
+            // simply rendered without an icon. This one does.
+            icon: "/favicon-192x192.png",
             // Tagged by channel, so a burst collapses into one entry rather
             // than stacking twenty.
             tag: channelIdHex,
           });
           notification.onclick = () => {
             window.focus();
-            addWindow("concord", {
-              communityId: entry.communityId,
-              channelId: channelIdHex,
-            });
+            // Steer a Concord window that is already open on this community
+            // rather than stacking a new one: three notifications for the same
+            // channel used to leave three identical windows behind. Adding one
+            // is the fallback, for when none is open.
+            const { windows, updateWindow: update } = navigate.current;
+            const existing = Object.entries(windows).find(
+              ([, w]) =>
+                w.appId === "concord" &&
+                (w.props as { communityId?: string } | undefined)
+                  ?.communityId === entry.communityId,
+            );
+            if (existing) {
+              const [id, w] = existing;
+              update(
+                id,
+                buildConcordWindowUpdate(
+                  w.props as Record<string, unknown> | undefined,
+                  entry.communityId,
+                  channelIdHex,
+                ),
+              );
+            } else {
+              addWindow("concord", {
+                communityId: entry.communityId,
+                channelId: channelIdHex,
+              });
+            }
             notification.close();
           };
         } catch {

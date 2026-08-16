@@ -2,10 +2,13 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 /**
- * File paste handler extension to intercept file pastes and trigger upload
+ * File paste and DROP handler: intercept files arriving at the composer and
+ * hand them to the upload flow.
  *
- * Handles clipboard paste events with files (e.g., pasting images from clipboard)
- * and triggers a callback to open the upload dialog.
+ * Paste and drop are the same gesture as far as this is concerned — a file the
+ * reader wants attached — so they share one callback and one filter. Drop
+ * needed saying out loud because the browser's default is to NAVIGATE to the
+ * dropped file, which throws away whatever was being written.
  */
 export const FilePasteHandler = Extension.create<{
   onFilePaste?: (files: File[]) => void;
@@ -21,11 +24,29 @@ export const FilePasteHandler = Extension.create<{
   addProseMirrorPlugins() {
     const onFilePaste = this.options.onFilePaste;
 
+    /** Images, video and audio only — the kinds the timeline can render back. */
+    const attachable = (list: FileList | undefined | null): File[] =>
+      Array.from(list ?? []).filter((file) =>
+        file.type.match(/^(image|video|audio)\//),
+      );
+
     return [
       new Plugin({
         key: new PluginKey("filePasteHandler"),
 
         props: {
+          handleDrop: (_view, event) => {
+            if (!onFilePaste) return false;
+            const files = attachable(
+              (event as DragEvent).dataTransfer?.files ?? null,
+            );
+            if (files.length === 0) return false;
+            onFilePaste(files);
+            // Without this the browser leaves the app and opens the file.
+            event.preventDefault();
+            return true;
+          },
+
           handlePaste: (_view, event) => {
             // Handle paste events with files (e.g., pasting images from clipboard)
             const files = event.clipboardData?.files;

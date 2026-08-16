@@ -15,6 +15,7 @@ import {
   Bug,
   Wifi,
   MessageSquare,
+  MessagesSquare,
   Hash,
   Zap,
   type LucideIcon,
@@ -80,6 +81,10 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   chat: {
     icon: MessageSquare,
     description: "Join and participate in NIP-29 relay-based group chats",
+  },
+  concord: {
+    icon: MessagesSquare,
+    description: "Browse your end-to-end encrypted Concord communities",
   },
   zap: {
     icon: Zap,

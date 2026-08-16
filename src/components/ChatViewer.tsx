@@ -906,6 +906,18 @@ export function ChatViewer({
   >(new Map());
   /** The most recent prepared upload, awaiting the URL it lands on. */
   const preparedUpload = useRef<EncryptedUpload | undefined>(undefined);
+  /**
+   * A `blob:` URL for the plaintext of that upload, for the composer badge.
+   *
+   * The uploaded URL serves ciphertext, so the badge cannot draw it. Held only
+   * until the badge is inserted, and revoked whenever it is replaced or
+   * abandoned — an object URL pins its bytes in memory until it is.
+   */
+  const preparedPreview = useRef<string | undefined>(undefined);
+  const dropPreview = useCallback(() => {
+    if (preparedPreview.current) URL.revokeObjectURL(preparedPreview.current);
+    preparedPreview.current = undefined;
+  }, []);
 
   // Blossom upload hook for file attachments
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
@@ -917,6 +929,12 @@ export function ChatViewer({
           prepareFile: async (file: File) => {
             const prepared = await prepareAttachment(file);
             preparedUpload.current = prepared;
+            dropPreview();
+            // Only images are ever drawn in the badge; minting a URL for a
+            // video would pin its bytes for nothing.
+            if (file.type.startsWith("image/")) {
+              preparedPreview.current = URL.createObjectURL(file);
+            }
             return prepared.file;
           },
         }
@@ -925,11 +943,17 @@ export function ChatViewer({
       // A prepared-but-unuploaded file must not outlive its dialog, or the next
       // upload could be tagged with the previous file's key.
       preparedUpload.current = undefined;
+      dropPreview();
     },
     onError: () => {
       preparedUpload.current = undefined;
+      dropPreview();
     },
     onSuccess: (results) => {
+      // Captured before the ref is cleared below: the badge needs to know the
+      // server holds ciphertext, and `insertBlob` runs after that clear.
+      const wasEncrypted = preparedUpload.current !== undefined;
+      const preview = preparedPreview.current;
       if (results.length > 0 && preparedUpload.current) {
         // Every result is the SAME blob mirrored to several servers, so one
         // record per URL keeps a later mirror URL readable too.
@@ -950,7 +974,11 @@ export function ChatViewer({
           mimeType: blob.type,
           size: blob.size,
           server,
+          ...(preview ? { previewUrl: preview } : {}),
+          ...(wasEncrypted ? { encrypted: true } : {}),
         });
+        // Ownership passes to the badge; revoking here would blank it.
+        preparedPreview.current = undefined;
         editorRef.current.focus();
       }
     },
