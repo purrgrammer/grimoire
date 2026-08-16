@@ -1,0 +1,130 @@
+/**
+ * Search results, in the pane the timeline would otherwise be in.
+ *
+ * Results REPLACE the channel rather than sitting beside it — armada's model,
+ * and the one that fits a scan spanning every channel: a result list narrower
+ * than the conversation it came from would have nowhere to say which channel
+ * each hit belongs to.
+ *
+ * A row is a real answer on its own. Author, channel, time and the matching
+ * text are all here, so a click that cannot reach the message — a hit deeper
+ * than the jump's page budget — still leaves the reader with what they came
+ * for. Which is why the panel says so rather than promising navigation it
+ * cannot always deliver.
+ */
+
+import { Hash, Loader2, Lock, Search } from "lucide-react";
+
+import { RichText } from "@/components/nostr/RichText";
+import Timestamp from "@/components/Timestamp";
+import { UserName } from "@/components/nostr/UserName";
+import { SEARCH_RESULT_LIMIT } from "@/lib/concord/search";
+import { useLocale } from "@/hooks/useLocale";
+import type { ConcordSearchHit } from "@/services/concord-search";
+import type { NostrEvent } from "@/types/nostr";
+
+/**
+ * The hit as grimoire's renderers expect an event.
+ *
+ * `sig` is empty because a rumor has none — authorship was proved by the seal
+ * at ingest, and nothing here re-verifies. The same compromise the timeline
+ * already makes for every Concord row.
+ */
+function hitEvent(hit: ConcordSearchHit): NostrEvent {
+  return {
+    id: hit.message.rumorId,
+    pubkey: hit.message.author,
+    kind: hit.message.kind,
+    content: hit.message.content,
+    tags: hit.message.tags,
+    created_at: hit.message.createdAt,
+    sig: "",
+  } as NostrEvent;
+}
+
+export function ConcordSearchPanel({
+  hits,
+  searching,
+  query,
+  onOpen,
+}: {
+  hits: ConcordSearchHit[];
+  searching: boolean;
+  query: string;
+  /** Open the channel a hit is in and try to land on the message. */
+  onOpen: (hit: ConcordSearchHit) => void;
+}) {
+  const { locale } = useLocale();
+  const count = new Intl.NumberFormat(locale).format(hits.length);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
+        <Search className="size-3 shrink-0" />
+        {searching ? (
+          <span className="flex items-center gap-1">
+            <Loader2 className="size-3 animate-spin" /> searching…
+          </span>
+        ) : (
+          <span>
+            {hits.length === 1 ? "1 result" : `${count} results`}
+            {hits.length >= SEARCH_RESULT_LIMIT && " (the newest)"} for “{query}
+            ”
+          </span>
+        )}
+      </div>
+
+      {!searching && hits.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
+          <p className="max-w-sm">
+            Nothing here matches “{query}”. Only messages this device has
+            already decrypted can be searched — no relay can read them.
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {hits.map((hit) => {
+            const Icon = hit.channelPrivate ? Lock : Hash;
+            return (
+              // A div, not a button: `RichText` renders links and mentions,
+              // and an anchor inside a button is invalid markup that browsers
+              // resolve by swallowing one of the two clicks.
+              <div
+                key={hit.message.rumorId}
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpen(hit)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpen(hit);
+                  }
+                }}
+                className="flex w-full cursor-crosshair flex-col items-start gap-0.5 border-b px-3 py-1.5 text-left hover:bg-muted/50"
+              >
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon className="size-3 shrink-0" />
+                  <span className="truncate">{hit.channelName}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <UserName
+                    pubkey={hit.message.author}
+                    className="text-sm font-semibold"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    <Timestamp timestamp={hit.message.createdAt} />
+                  </span>
+                </span>
+                <RichText
+                  event={hitEvent(hit)}
+                  className="w-full break-words text-sm leading-tight"
+                  options={{ showMedia: false, showEventEmbeds: false }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

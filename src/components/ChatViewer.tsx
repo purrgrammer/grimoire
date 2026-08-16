@@ -116,6 +116,14 @@ interface ChatViewerProps {
   customTitle?: string;
   /** Optional content to render before the title (e.g., sidebar toggle on mobile) */
   headerPrefix?: React.ReactNode;
+  /**
+   * Land on a message the caller already knows about — a search hit, typically.
+   *
+   * The `nonce` is what makes it a request rather than a value: without one,
+   * clicking the same result twice would be indistinguishable from not clicking
+   * at all, and a lingering id would re-fire on every channel change.
+   */
+  jumpTo?: { messageId: string; nonce: number };
 }
 
 /**
@@ -838,6 +846,7 @@ export function ChatViewer({
   identifier,
   customTitle,
   headerPrefix,
+  jumpTo,
 }: ChatViewerProps) {
   const addWindow = useAddWindow();
 
@@ -1488,6 +1497,28 @@ export function ChatViewer({
     },
     [jump],
   );
+
+  // A jump asked for from OUTSIDE — a search result the reader clicked, which
+  // may well be in a channel that was not open a moment ago.
+  //
+  // Carried as a nonce rather than a bare id, and consumed by one: a bare id
+  // could not ask for the same message twice, and would re-fire every time the
+  // conversation changed. The consume happens only once `jump` has actually
+  // run, because `jump` silently returns while the conversation is still
+  // resolving — and the new channel's conversation always is, right after a
+  // result click.
+  //
+  // The row it lands on survives `groupSystemMessages` by construction: only
+  // `type: "system"` rows are collapsed, and both chat messages and Concord's
+  // tombstones are `type: "user"`. Any future grouping must keep that true, or
+  // this jump starts silently no-opping.
+  const jumpedNonce = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!jumpTo || !conversation) return;
+    if (jumpedNonce.current === jumpTo.nonce) return;
+    jumpedNonce.current = jumpTo.nonce;
+    void jump({ kind: "id", id: jumpTo.messageId });
+  }, [jumpTo, conversation, jump]);
 
   // Handle loading older messages
   const handleLoadOlder = useCallback(async () => {

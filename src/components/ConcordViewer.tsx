@@ -7,9 +7,11 @@ import {
   Lock,
   PanelLeft,
   RefreshCw,
+  Search,
 } from "lucide-react";
 
 import { ChatViewer } from "./ChatViewer";
+import { ConcordSearchPanel } from "./ConcordSearchPanel";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -33,6 +35,8 @@ import {
   useConcordUnreadTotals,
 } from "@/hooks/useConcordUnread";
 import type { CommunityUnread } from "@/services/concord-reads";
+import { useConcordSearch } from "@/hooks/useConcordSearch";
+import type { ConcordSearchHit } from "@/services/concord-search";
 import { useConcordWire } from "@/hooks/useConcordWire";
 import { useConcordNotifLevel } from "@/hooks/useConcordNotifLevel";
 import { useConcordNotifier } from "@/hooks/useConcordNotifier";
@@ -78,6 +82,20 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     channelId,
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  /** Search this channel only, or everywhere the member can read. */
+  const [searchThisChannel, setSearchThisChannel] = useState(false);
+  /**
+   * A jump the reader asked for by clicking a result.
+   *
+   * A nonce rides along because the request has to survive being made twice:
+   * clicking the same hit again, after wandering off, must jump again — and a
+   * bare id could not tell the second click from the first.
+   */
+  const [jumpTo, setJumpTo] = useState<{
+    messageId: string;
+    nonce: number;
+  }>();
 
   // Resolve the community by full id or by prefix — a user typing `concord
   // 3fa2` should land somewhere rather than nowhere.
@@ -165,6 +183,35 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
     return () => unregisterActiveChannel(openChannelIdHex);
   }, [openChannelIdHex]);
 
+  // Search is Concord's alone for now: its corpus is the local plaintext rumor
+  // store, and NIP-29 has no equivalent — its messages live in the EventStore
+  // and are never mirrored to disk. Nothing here is generalized on spec.
+  const searchFilters = useMemo(
+    () => ({
+      query,
+      channelIds:
+        searchThisChannel && openChannelIdHex ? [openChannelIdHex] : [],
+    }),
+    [query, searchThisChannel, openChannelIdHex],
+  );
+  const {
+    hits,
+    searching,
+    active: searchActive,
+  } = useConcordSearch(community, state?.folded, channels, searchFilters);
+
+  const handleOpenHit = useCallback(
+    (hit: ConcordSearchHit) => {
+      // Leave search on the way in: the results pane is what the channel would
+      // otherwise be, so a jump into a channel has nowhere to land until it does.
+      setQuery("");
+      setSelectedChannel(hit.channelIdHex);
+      setJumpTo({ messageId: hit.message.rumorId, nonce: Date.now() });
+      if (isMobile) setSidebarOpen(false);
+    },
+    [isMobile],
+  );
+
   const identifier: ConcordIdentifier | undefined = useMemo(
     () =>
       communityIdHex && openChannelIdHex
@@ -248,6 +295,33 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />
         </Button>
       </div>
+      <div className="border-b px-2 py-1">
+        <div className="flex items-center gap-1 rounded border px-1.5 py-0.5">
+          <Search className="size-3 shrink-0 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setQuery("");
+            }}
+            placeholder="Search messages"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+        {searchActive && openChannel && (
+          <button
+            type="button"
+            onClick={() => setSearchThisChannel((v) => !v)}
+            className="mt-1 w-full cursor-crosshair truncate text-left text-[10px] text-muted-foreground hover:text-foreground"
+            title="Switch between searching this channel and the whole community"
+          >
+            {searchThisChannel
+              ? `searching #${openChannel.name} · search everywhere`
+              : "searching every channel · search this one"}
+          </button>
+        )}
+      </div>
       <CommunityPicker
         communities={communities.map((c) => ({
           idHex: c.idHex,
@@ -300,11 +374,19 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
         <div className="w-64 flex-shrink-0 border-r">{sidebar}</div>
       )}
       <div className="min-w-0 flex-1">
-        {identifier ? (
+        {searchActive ? (
+          <ConcordSearchPanel
+            hits={hits}
+            searching={searching}
+            query={query.trim()}
+            onOpen={handleOpenHit}
+          />
+        ) : identifier ? (
           <ChatViewer
             protocol="concord"
             identifier={identifier as ProtocolIdentifier}
             headerPrefix={headerPrefix}
+            {...(jumpTo ? { jumpTo } : {})}
           />
         ) : (
           <Empty>

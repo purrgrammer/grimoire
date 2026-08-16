@@ -1,0 +1,126 @@
+/**
+ * Running a Concord search from a component.
+ *
+ * Three things this owns and the service deliberately does not: the pause
+ * before a scan starts, cancelling the scan a new keystroke supersedes, and
+ * re-running when a message lands in a channel the results are drawn from.
+ *
+ * The debounce is an inline effect + `setTimeout`. There is no `useDebounce` in
+ * this repo and no react-query, so armada's hook cannot be lifted; the timer is
+ * the whole of it. Each run holds an `AbortController` the next run aborts,
+ * which is what the service checks between channels — a fast typist leaves at
+ * most one scan alive.
+ *
+ * Live results: the adapter's own doorbell scope (`c2:<channelIdHex>`) rings
+ * once a channel's rumors are durably stored, so listening to the in-scope
+ * channels' scopes means a message arriving while results are open shows up in
+ * them. A ring is a re-read of the store, never a fetch.
+ */
+
+import { useEffect, useRef, useState } from "react";
+
+import {
+  SEARCH_DEBOUNCE_MS,
+  searchIsActive,
+  type ConcordSearchFilters,
+} from "@/lib/concord/search";
+import type { Channel, Community } from "@/lib/concord/types";
+import type { FoldedControl } from "@/lib/concord/control";
+import { channelScope, onWireScope } from "@/lib/concord/wire-bus";
+import {
+  searchConcordMessages,
+  type ConcordSearchHit,
+} from "@/services/concord-search";
+
+export interface ConcordSearchResult {
+  hits: ConcordSearchHit[];
+  /** A scan is running — distinct from "ran and found nothing". */
+  searching: boolean;
+  /** Whether the filters constitute a search at all. */
+  active: boolean;
+}
+
+const NO_HITS: ConcordSearchHit[] = [];
+
+export function useConcordSearch(
+  community: Community | undefined,
+  folded: FoldedControl | undefined,
+  channels: readonly Channel[],
+  filters: ConcordSearchFilters,
+): ConcordSearchResult {
+  const [state, setState] = useState<{
+    /** Which run these hits belong to — a stale run's answer is discarded. */
+    token: string;
+    /** The ring this answer counted; a later ring supersedes it. */
+    ring: number;
+    hits: ConcordSearchHit[];
+  }>();
+  const abort = useRef<AbortController>(undefined);
+
+  const active = searchIsActive(filters);
+  const idHex = community?.idHex;
+  // The fold and the channel list are rebuilt on every read, so their identity
+  // is their content — the same reason `useConcordUnread` keys on joined ids.
+  const scopeKey = filters.channelIds.length
+    ? filters.channelIds.join(",")
+    : channels.map((ch) => ch.idHex).join(",");
+  const token = `${idHex ?? ""}|${filters.query.trim().toLowerCase()}|${scopeKey}`;
+
+  // A ring on any in-scope channel re-runs the scan. A nonce rather than a
+  // direct call: the run belongs to the effect below, which already knows how
+  // to abort the one it replaces.
+  const [ring, setRing] = useState(0);
+  useEffect(() => {
+    if (!active || !idHex) return;
+    const ids = scopeKey ? scopeKey.split(",").filter(Boolean) : [];
+    if (ids.length === 0) return;
+    const offs = ids.map((id) =>
+      onWireScope(channelScope(id), () => setRing((n) => n + 1)),
+    );
+    return () => {
+      for (const off of offs) off();
+    };
+  }, [active, idHex, scopeKey]);
+
+  useEffect(() => {
+    abort.current?.abort();
+    if (!active || !community || !folded) return;
+    const controller = new AbortController();
+    abort.current = controller;
+    const timer = setTimeout(() => {
+      void searchConcordMessages(community, folded, channels, filters, {
+        signal: controller.signal,
+      })
+        .then((hits) => {
+          if (controller.signal.aborted) return;
+          setState({ token, ring, hits });
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          console.warn("[concord] search failed:", error);
+          setState({ token, ring, hits: [] });
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // `community`, `folded`, `channels` and `filters` are all rebuilt per read
+    // or per render; `token` is their identity for this purpose, and `ring` is
+    // the wire asking for a re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, active, ring]);
+
+  // Whether a scan is running is DERIVED, not stored: it is exactly "this run
+  // has not answered yet". A `searching` flag set from the effect would say the
+  // same thing one render later, and cost a cascading render to say it.
+  const answered = state?.token === token && state.ring === ring;
+
+  return {
+    // Answers from a superseded run are not shown at all: a query the reader
+    // has already changed is worse than an empty pane, because it looks right.
+    hits: active && answered ? state.hits : NO_HITS,
+    searching: active && !answered,
+    active,
+  };
+}
