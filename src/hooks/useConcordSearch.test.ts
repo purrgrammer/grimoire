@@ -168,6 +168,26 @@ describe("useConcordSearch", () => {
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
   });
 
+  it("keeps the results on screen while a ring is being re-scanned", async () => {
+    // A ring does not make the hits wrong the way a changed query does — it
+    // only makes them possibly short by one message. Blanking the pane on every
+    // message that lands in a busy community would make the list unreadable.
+    const c = community();
+    const { result } = renderHook(() =>
+      useConcordSearch(c, folded(), channels, {
+        query: "otter",
+        channelIds: [],
+      }),
+    );
+    await waitFor(() => expect(result.current.hits).toHaveLength(1));
+
+    emitWireScopes([channelScope(CHANNEL)]);
+    await waitFor(() => expect(result.current.searching).toBe(true));
+    expect(result.current.hits).toHaveLength(1);
+    await waitFor(() => expect(result.current.searching).toBe(false));
+    expect(result.current.hits).toHaveLength(1);
+  });
+
   it("ignores a ring from a channel outside the search scope", async () => {
     const c = community();
     const { result } = renderHook(() =>

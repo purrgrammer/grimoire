@@ -115,11 +115,17 @@ export function useConcordSearch(
   // has not answered yet". A `searching` flag set from the effect would say the
   // same thing one render later, and cost a cascading render to say it.
   const answered = state?.token === token && state.ring === ring;
+  // Superseding a QUERY and superseding a RING are not the same event, and the
+  // difference is what the reader sees. A changed query makes the hits on
+  // screen wrong — they answer a question nobody asked. A ring makes them
+  // merely INCOMPLETE: one more message may have landed in a channel already
+  // being searched. So a ring keeps the list up while the re-scan runs, which
+  // is what stops a busy community from blanking the pane to "searching…" every
+  // time anyone speaks.
+  const forThisQuery = state?.token === token;
 
   return {
-    // Answers from a superseded run are not shown at all: a query the reader
-    // has already changed is worse than an empty pane, because it looks right.
-    hits: active && answered ? state.hits : NO_HITS,
+    hits: active && forThisQuery ? state.hits : NO_HITS,
     searching: active && !answered,
     active,
   };
