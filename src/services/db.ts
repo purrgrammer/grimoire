@@ -285,6 +285,71 @@ export interface ConcordReadRow {
   updatedAt: number;
 }
 
+/**
+ * A message this account has asked to send and no relay has taken yet.
+ *
+ * The INTENT, never a sealed wrap. A wrap is sealed under the channel's current
+ * epoch and its rumor id commits to the timestamp and NIP-40 deadline stamped
+ * when it was built, so one that waited out a CORD-06 rotation is undecodable
+ * to the members it was for, and one that waited out its disappearing timer is
+ * refused by `writeChatRumors` on arrival. Every attempt therefore rebuilds
+ * from these fields and produces a NEW rumor id — which is why `id` is a uuid
+ * and not a rumor id, and why `lastAttemptRumorId` is tracked separately.
+ *
+ * Kinds 9 and 1111 only. A reaction or a self-delete keeps the strict
+ * publish-first contract and throws on failure, so nothing else can appear
+ * here — which is what lets the timeline merge treat every row as a message.
+ *
+ * Plaintext at rest, like the rumor store beside it: logout wipes it.
+ */
+export interface ConcordOutboxRow {
+  /** uuid. NOT a rumor id — a rebuild changes that. */
+  id: string;
+  /** The sending account, for scoping and for the logout wipe. */
+  pubkey: string;
+  communityId: string;
+  /** Channel idHex, lowercase. */
+  channel: string;
+  /** KIND_MESSAGE (9) or KIND_COMMENT (1111). */
+  kind: number;
+  content: string;
+  /** Parent RUMOR id, re-resolved at every attempt rather than preserved. */
+  replyToId?: string;
+  /** Emoji and imeta tags, as the send path built them. */
+  extraTags?: string[][];
+  /** Enqueue time in SECONDS — what the reader sees while it is pending. */
+  createdAt: number;
+  status: "sending" | "failed";
+  attempts: number;
+  /** Seconds. A refusal's backoff, or {@link OUTBOX_NEVER} for a dead row. */
+  nextAttemptAt?: number;
+  lastError?: string;
+  /** The rumor id of the most recent build — the at-least-once dedupe key. */
+  lastAttemptRumorId?: string;
+}
+
+/**
+ * A half-typed message, kept so switching channels does not eat it.
+ *
+ * `key` is `${accountPubkey}:${protocol}:${conversationId}`. The account comes
+ * FIRST and is not optional: grimoire is multi-account, and a key without it
+ * would show one account the draft another was writing. It is also what the
+ * logout wipe deletes by, since this table has no other column for it.
+ *
+ * `content` is tiptap's JSON document, stored whole rather than as text so the
+ * mentions, emoji and attachments in it survive the round trip.
+ */
+export interface ChatDraftRow {
+  key: string;
+  content: unknown;
+  replyToId?: string;
+  /** Milliseconds. */
+  updatedAt: number;
+}
+
+/** A failure nothing will retry on its own — only the reader's own Retry. */
+export const OUTBOX_NEVER = Number.MAX_SAFE_INTEGER;
+
 class GrimoireDb extends Dexie {
   profiles!: Table<Profile>;
   nip05!: Table<Nip05>;
@@ -308,6 +373,8 @@ class GrimoireDb extends Dexie {
   concordPendingWraps!: Table<ConcordPendingWrapRow>;
   concordAdoptions!: Table<ConcordAdoptionRow>;
   concordReads!: Table<ConcordReadRow>;
+  concordOutbox!: Table<ConcordOutboxRow>;
+  chatDrafts!: Table<ChatDraftRow>;
 
   constructor(name: string) {
     super(name);
@@ -700,6 +767,41 @@ class GrimoireDb extends Dexie {
       // the sidebar's whole query — in one index range.
       concordReads:
         "&[pubkey+communityId+channelId], pubkey, [pubkey+communityId]",
+    });
+
+    // Version 24: the message outbox, and per-channel composer drafts
+    this.version(24).stores({
+      profiles: "&pubkey",
+      nip05: "&nip05",
+      nips: "&id",
+      relayInfo: "&url",
+      relayAuthPreferences: "&url",
+      relayLists: "&pubkey, updatedAt",
+      relayLiveness: "&url",
+      blossomServers: "&pubkey, updatedAt",
+      spells: "&id, alias, createdAt, isPublished, deletedAt",
+      spellbooks: "&id, slug, title, createdAt, isPublished, deletedAt",
+      lnurlCache: "&address, fetchedAt",
+      grimoireZaps:
+        "&eventId, senderPubkey, timestamp, [senderPubkey+timestamp]",
+      nsiteMetadata: "&hash",
+      userEmojiLists: "&pubkey",
+      emojiSets: "&address",
+      concordCommunities: "&[pubkey+idHex], pubkey",
+      concordRumors:
+        "&id, communityId, [communityId+kind], [communityId+channel], [communityId+channel+created_at]",
+      concordSnapshots: "&[communityId+controlPk], communityId",
+      concordKv: "&key",
+      concordPendingWraps: "&id, pubkey, created_at",
+      concordAdoptions: "&[pubkey+idHex], pubkey",
+      concordReads:
+        "&[pubkey+communityId+channelId], pubkey, [pubkey+communityId]",
+      // `pubkey` is the logout wipe's column; `[communityId+channel]` is what
+      // the timeline merge asks ("what is still in flight in this channel").
+      concordOutbox: "&id, pubkey, [communityId+channel], nextAttemptAt",
+      // No `pubkey` column: the account is the first segment of the key, so a
+      // logout deletes by primary-key prefix instead — see `clearCommunities`.
+      chatDrafts: "&key, updatedAt",
     });
   }
 }

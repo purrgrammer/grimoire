@@ -45,8 +45,10 @@ import {
   controlScope,
   onWireScopes,
   parkScope,
+  wireUpScope,
 } from "@/lib/concord/wire-bus";
 import { buildWireSpec, type WireSpec } from "@/lib/concord/wire-spec";
+import { normalizeRelayURL } from "@/lib/relay-url";
 import concordPool from "@/services/concord-relay-pool";
 import {
   _resetPendingWrapsForTests,
@@ -247,6 +249,20 @@ describe("live delivery", () => {
     );
     expect(rings).toContain(controlScope(COMMUNITY));
     expect(await queryPlane(COMMUNITY, "control")).toHaveLength(1);
+  });
+
+  it("rings a relay's revival, which is what lets a queued send go", async () => {
+    // Not `navigator.onLine`: a wrap is published over `relay.multiplex()`, and
+    // on a gating relay only the round holding this socket has settled the
+    // stream AUTH that makes the wrap acceptable. So the outbox waits for THIS
+    // — a round that is answering — and nothing weaker.
+    const r = await relay({ kind: "normal" });
+    const rings = busLog();
+    setWireSpec(spec([r.url]));
+
+    await until("a wire-up ring", () =>
+      rings.includes(wireUpScope(normalizeRelayURL(r.url))),
+    );
   });
 
   it("stores a chat message pushed after eose, and rings its channel", async () => {

@@ -386,6 +386,58 @@ describe("syncCommunities", () => {
     expect(await db.concordReads.count()).toBe(0);
   });
 
+  it("takes what was never sent as well as what was read", async () => {
+    // A queued send and a half-typed draft are prose this account WROTE and no
+    // relay has even seen. Both are account-scoped, so both go — and only this
+    // account's: signing out must not wipe another account's composer.
+    const other = getPublicKey(generateSecretKey());
+    await db.concordOutbox.bulkPut([
+      {
+        id: "mine",
+        pubkey,
+        communityId: "cc".repeat(32),
+        channel: "dd".repeat(32),
+        kind: 9,
+        content: "never sent",
+        createdAt: 1,
+        status: "failed",
+        attempts: 1,
+      },
+      {
+        id: "theirs",
+        pubkey: other,
+        communityId: "cc".repeat(32),
+        channel: "dd".repeat(32),
+        kind: 9,
+        content: "someone else's",
+        createdAt: 1,
+        status: "failed",
+        attempts: 1,
+      },
+    ]);
+    await db.chatDrafts.bulkPut([
+      {
+        key: `${pubkey}:concord:cc:dd`,
+        content: { half: "typed" },
+        updatedAt: 1,
+      },
+      {
+        key: `${other}:concord:cc:dd`,
+        content: { half: "typed" },
+        updatedAt: 1,
+      },
+    ]);
+
+    await clearCommunities(pubkey);
+
+    expect((await db.concordOutbox.toArray()).map((r) => r.id)).toEqual([
+      "theirs",
+    ]);
+    expect((await db.chatDrafts.toArray()).map((r) => r.key)).toEqual([
+      `${other}:concord:cc:dd`,
+    ]);
+  });
+
   it("forgets the in-memory channel directory, names and all", async () => {
     // It holds decrypted community and channel names, so it must not outlive
     // the fold it read them from — a memo left populated is the running tab's

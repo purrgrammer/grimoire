@@ -22,6 +22,7 @@ import {
   type PlaneStreamMessage,
 } from "@/lib/concord/plane-request";
 import { whenAuthAnswered } from "@/lib/concord/plane-sync";
+import { emitWireScopes, wireUpScope } from "@/lib/concord/wire-bus";
 import { streamPubkeysForRelay } from "@/lib/concord/stream-auth";
 import {
   subSignature,
@@ -330,6 +331,10 @@ function startRelayLoop(
         round.signal,
         () => {
           established = true;
+          // This relay is answering, which is the only moment a queued send can
+          // count on the socket its publish path needs. Coalesced by the bus,
+          // so a spec change that restarts every round rings once.
+          emitWireScopes([wireUpScope(relay)]);
         },
       );
       controller.signal.removeEventListener("abort", onOuter);
@@ -468,6 +473,11 @@ export function setWireSpec(spec: WireSpec): void {
   // A changed spec means a changed held-key set, which is exactly when a parked
   // wrap becomes readable.
   void drainParkedWraps(spec).catch(() => undefined);
+
+  // And ring for every relay we are now holding a round on, so a queued send
+  // gets its chance without waiting for a round to be re-established. A loop
+  // that was left running never fires `onEstablished` again.
+  emitWireScopes([...loops.keys()].map(wireUpScope));
 
   const authors = spec.subs.reduce(
     (n, sub) =>

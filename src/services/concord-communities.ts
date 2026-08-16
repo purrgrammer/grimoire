@@ -361,6 +361,14 @@ export async function clearCommunities(pubkey: string): Promise<void> {
     // deleted for the account that left and nobody else. It says which channels
     // this person was reading and when they last looked.
     clearReads(pubkey),
+    // Queued sends and half-typed drafts are the most plainly personal rows
+    // here: prose this account WROTE, that no relay has even seen. Both are
+    // account-scoped — the outbox by column, the drafts by key prefix, since
+    // the account is the first segment of a draft's key. Written out here
+    // rather than called through their own services, which would import this
+    // module back and close a cycle around the community loader.
+    db.concordOutbox.where("pubkey").equals(pubkey).delete(),
+    db.chatDrafts.where("key").startsWith(`${pubkey}:`).delete(),
   ]);
   const failed = wipes.filter((r) => r.status === "rejected");
   if (failed.length > 0) {

@@ -28,6 +28,7 @@ import { buildWireSpec, type WireInputs } from "@/lib/concord/wire-spec";
 import { registerStreamKeys } from "@/lib/concord/stream-auth";
 import { readStoredState } from "@/services/concord-state";
 import { setWireSpec, stopWire } from "@/services/concord-wire";
+import { startOutboxDrain, stopOutboxDrain } from "@/services/concord-outbox";
 
 let mounted = 0;
 
@@ -110,10 +111,16 @@ export function useConcordWire(communities: Community[]): void {
   // diff would never get to do its job because `loops` was already cleared.
   useEffect(() => {
     mounted += 1;
+    // Queued sends go out over the wire's own sockets, so the queue listens for
+    // exactly as long as the wire holds them. Idempotent, like the wire itself.
+    startOutboxDrain();
     return () => {
       mounted -= 1;
       // The last Concord window closing is the only reason to drop the sockets.
-      if (mounted === 0) stopWire();
+      if (mounted === 0) {
+        stopWire();
+        stopOutboxDrain();
+      }
     };
   }, []);
 

@@ -29,7 +29,6 @@ import {
   type ReactionEntry,
 } from "@/lib/concord/chat";
 import { filterEpochCutoff } from "@/lib/concord/chat";
-import { channelsView } from "@/lib/concord/channels";
 import { KIND_COMMENT } from "@/lib/concord/kinds";
 import type { BlobAttachmentMeta } from "./base-adapter";
 import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
@@ -56,8 +55,11 @@ import { messageExpirationOf } from "@/lib/concord/disappearing";
 import { extractMentionTags } from "@/lib/concord/mentions";
 import { emitWireScopes } from "@/lib/concord/wire-bus";
 import { syncChannel } from "@/services/concord-channel-sync";
+import {
+  resolveChannel,
+  type ResolvedChannel,
+} from "@/services/concord-channel-resolve";
 import { publishWrap } from "@/services/concord-publish";
-import { loadStoredCommunities } from "@/services/concord-communities";
 import { dissolvedAt } from "@/services/concord-dissolution";
 import type { ChannelUnread } from "@/services/concord-rumor-store";
 import {
@@ -72,7 +74,6 @@ import {
   markChannelRead,
   readLastRead,
 } from "@/services/concord-reads";
-import { foldStoredControl } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import type {
   ChatCapabilities,
@@ -622,40 +623,10 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   }
 
   /** The community, the channel view, and the control fold behind them. */
-  private async resolve(identifier: ConcordIdentifier): Promise<{
-    community: Community;
-    channel: Channel;
-    folded: FoldedControl;
-  }> {
-    const pubkey = accountManager.active$.value?.pubkey;
-    if (!pubkey) throw new Error("No active account");
-
-    const communities = await loadStoredCommunities(pubkey);
-    const community = communities.find(
-      (c) => c.idHex === identifier.communityId,
-    );
-    if (!community) {
-      throw new Error("That community is not in your Community List");
-    }
-    const folded = await foldStoredControl(community);
-    if (!folded) {
-      // A Refounded community whose compaction snapshot has not been recorded
-      // yet. Folding by old-root contiguity would anchor on a superseded
-      // fragment, so there is nothing safe to resolve against.
-      throw new Error(
-        "Still catching up with this community — try again in a moment.",
-      );
-    }
-    const channel = channelsView(community, folded).find(
-      (ch) => ch.idHex === identifier.channelId,
-    );
-    if (!channel) {
-      // Either the channel was deleted, or it is private and this member holds
-      // no key for it. Both read the same from here, and both mean the same
-      // thing to the reader: there is nothing to show.
-      throw new Error("That channel is not readable with the keys you hold");
-    }
-    return { community, channel, folded };
+  private resolve(identifier: ConcordIdentifier): Promise<ResolvedChannel> {
+    // Shared with the outbox drain, which resolves the same channel from a wire
+    // doorbell where no adapter exists — see `concord-channel-resolve.ts`.
+    return resolveChannel(identifier.communityId, identifier.channelId);
   }
 
   /**

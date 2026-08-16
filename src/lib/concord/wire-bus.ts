@@ -31,6 +31,21 @@ export const controlScope = (communityIdHex: string): WireScope =>
 /** A wrap for this stream address was parked, unopened. */
 export const parkScope = (streamPk: string): WireScope => `c2park:${streamPk}`;
 
+/**
+ * A relay's round is live again — anything held back for want of a socket can
+ * go now.
+ *
+ * The signal exists because sending bypasses applesauce's connection handling
+ * (`concord-publish.ts`): a wrap goes out over `relay.multiplex()`, and on a
+ * gating relay only the wire's own standing REQ has settled the stream AUTH
+ * that makes it acceptable. So "the network is back" is not the condition to
+ * drain a queue on — "this relay's round is answering" is.
+ */
+export const wireUpScope = (relayUrl: string): WireScope => `c2up:${relayUrl}`;
+
+/** The prefix a listener filters on to hear every relay's revival. */
+export const WIRE_UP_PREFIX = "c2up:";
+
 type WireListener = (scopes: ReadonlySet<WireScope>) => void;
 
 /** Coalescing window for scope flushes (ms). Armada's value. */
