@@ -390,13 +390,18 @@ function NotifLevelMenu({
   label: string;
   children: ReactNode;
 }) {
-  const { level, override, set } = useConcordNotifLevel(
+  const { override, inherited, set } = useConcordNotifLevel(
     communityId,
     channelIdHex,
   );
+  // `inherited`, never the resolved level: with an override set the resolved
+  // level is the override, so naming it here would promise the state you are
+  // already in and deliver its opposite — a community muted to "nothing" with
+  // this channel raised to "all" would read "Use community default (all
+  // messages)" and silence the channel when clicked.
   const inheritLabel = channelIdHex
-    ? `Use community default (${LEVEL_LABELS[level]})`
-    : `Use app default (${LEVEL_LABELS[level]})`;
+    ? `Use community default (${LEVEL_LABELS[inherited]})`
+    : `Use app default (${LEVEL_LABELS[inherited]})`;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>

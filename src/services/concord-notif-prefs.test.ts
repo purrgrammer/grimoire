@@ -11,6 +11,7 @@ import {
   channelLevelKey,
   communityLevelKey,
   ensureNotifPrefsLoaded,
+  inheritedLevelSync,
   levelAdmits,
   resetNotifPrefsMemory,
   resolveLevel,
@@ -69,6 +70,41 @@ describe("the cascade", () => {
   it("is case-insensitive about ids, like every other Concord key", async () => {
     await setChannelLevel(ALPHA.toUpperCase(), GENERAL.toUpperCase(), "all");
     expect(await resolveLevel(ALPHA, GENERAL)).toBe("all");
+  });
+});
+
+describe("what clearing an override would leave", () => {
+  it("is the community's level for a channel, not the channel's own", async () => {
+    // The menu entry that clears the override names this. Naming the RESOLVED
+    // level instead would read "Use community default (all messages)" here and
+    // silence the channel on click.
+    await setCommunityLevel(ALPHA, "nothing");
+    await setChannelLevel(ALPHA, GENERAL, "all");
+    await ensureNotifPrefsLoaded();
+    expect(resolveLevelSync(ALPHA, GENERAL)).toBe("all");
+    expect(inheritedLevelSync(ALPHA, GENERAL)).toBe("nothing");
+  });
+
+  it("holds the other way round too — a muted channel under a loud community", async () => {
+    await setCommunityLevel(ALPHA, "all");
+    await setChannelLevel(ALPHA, GENERAL, "nothing");
+    await ensureNotifPrefsLoaded();
+    expect(inheritedLevelSync(ALPHA, GENERAL)).toBe("all");
+  });
+
+  it("is the app default for a community, whatever the community is set to", async () => {
+    await setCommunityLevel(ALPHA, "nothing");
+    await ensureNotifPrefsLoaded();
+    expect(inheritedLevelSync(ALPHA)).toBe("mentions");
+    settingsManager.updateSetting("notifications", "defaultLevel", "all");
+    expect(inheritedLevelSync(ALPHA)).toBe("all");
+  });
+
+  it("agrees with the resolved level when nothing is overridden", async () => {
+    await ensureNotifPrefsLoaded();
+    expect(inheritedLevelSync(ALPHA, GENERAL)).toBe(
+      resolveLevelSync(ALPHA, GENERAL),
+    );
   });
 });
 

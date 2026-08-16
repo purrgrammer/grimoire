@@ -16,6 +16,7 @@ import {
   communityLevelOverride,
   defaultLevel,
   ensureNotifPrefsLoaded,
+  inheritedLevelSync,
   onNotifPrefsChange,
   resolveLevelSync,
   setChannelLevel,
@@ -29,6 +30,11 @@ export interface ConcordNotifLevel {
   level: NotifLevel;
   /** What is set AT this scope, or undefined when it inherits. */
   override: NotifLevel | undefined;
+  /**
+   * What clearing the override would leave — NOT the same as {@link level}
+   * while one is set, which is the whole reason this is separate.
+   */
+  inherited: NotifLevel;
   /** Set this scope's level, or clear it back to inherited with `undefined`. */
   set: (level: NotifLevel | undefined) => void;
 }
@@ -71,12 +77,23 @@ export function useConcordNotifLevel(
     [communityId, channelIdHex],
   );
 
-  if (!communityId) return { level: "mentions", override: undefined, set };
+  if (!communityId)
+    return {
+      level: defaultLevel(),
+      override: undefined,
+      inherited: defaultLevel(),
+      set,
+    };
   const override = channelIdHex
     ? channelLevelOverride(communityId, channelIdHex)
     : communityLevelOverride(communityId);
   const level = channelIdHex
     ? resolveLevelSync(communityId, channelIdHex)
     : (override ?? defaultLevel());
-  return { level, override, set };
+  return {
+    level,
+    override,
+    inherited: inheritedLevelSync(communityId, channelIdHex),
+    set,
+  };
 }

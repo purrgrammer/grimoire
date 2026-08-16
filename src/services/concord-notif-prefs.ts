@@ -119,6 +119,24 @@ export function resolveLevelSync(
   );
 }
 
+/**
+ * What a scope would fall back to if its OWN level were cleared.
+ *
+ * The cascade with this rung removed, which is what the "Use community
+ * default (…)" entry has to name: while an override is set, the resolved level
+ * IS the override, so labelling that entry with it promises the level the click
+ * would leave — the one control whose whole job is not losing a mention.
+ *
+ * Omit the channel for a community's own fallback: the app default.
+ */
+export function inheritedLevelSync(
+  communityId: string,
+  channelIdHex?: string,
+): NotifLevel {
+  if (!channelIdHex) return defaultLevel();
+  return communityLevelOverride(communityId) ?? defaultLevel();
+}
+
 /** {@link resolveLevelSync}, having waited for the store. */
 export async function resolveLevel(
   communityId: string,
