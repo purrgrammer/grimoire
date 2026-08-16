@@ -31,6 +31,7 @@ import { CHAT_KINDS } from "@/types/chat";
 import { Nip10Adapter } from "@/lib/chat/adapters/nip-10-adapter";
 import { Nip22Adapter } from "@/lib/chat/adapters/nip-22-adapter";
 import { ConcordAdapter } from "@/lib/chat/adapters/concord-adapter";
+import { CONCORD_URL } from "@/constants/concord-links";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
 import { Nip53Adapter } from "@/lib/chat/adapters/nip-53-adapter";
 import type {
@@ -1621,6 +1622,11 @@ export function ChatViewer({
       addWindow("nip", { number: 29 });
     } else if (conversation?.protocol === "nip-53") {
       addWindow("nip", { number: 53 });
+    } else if (conversation?.protocol === "concord") {
+      // Concord is not a NIP, so there is no `nip` window to open — the badge
+      // goes to the spec itself. Without this branch the button rendered
+      // hover styles and a pointer cursor and did nothing at all.
+      window.open(CONCORD_URL, "_blank", "noopener,noreferrer");
     }
   }, [conversation?.protocol, addWindow]);
 

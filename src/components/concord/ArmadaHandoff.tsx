@@ -11,16 +11,9 @@ import { RefreshCw, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "@/components/ExternalLink";
+import { ARMADA_URL } from "@/constants/concord-links";
 
-/**
- * The hosted Armada client.
- *
- * NEW PRECEDENT: grimoire's first hardcoded external product URL in `src`. The
- * no-hardcoded-relays law does not cover it — this is an app, not a relay — but
- * it is an endpoint grimoire does not control, so it stays one exported
- * constant and every mention goes through it.
- */
-export const ARMADA_URL = "https://armada.buzz";
+export { ARMADA_URL };
 
 /**
  * There is no community list to read, because nothing has published one yet.

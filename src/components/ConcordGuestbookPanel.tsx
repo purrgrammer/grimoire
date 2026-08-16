@@ -83,9 +83,11 @@ export function ConcordGuestbookPanel({
                     </>
                   )}
                   {entry.kind === "ban" && (
-                    // "as of", not "at": the fold records the newest Banlist
-                    // edition naming this member, which is not necessarily the
-                    // edition that banned them.
+                    // The row says only "is banned" — the timestamp sits in its
+                    // own right-aligned column, so any "as of" here reads as a
+                    // sentence cut off. The caveat that the fold records the
+                    // newest Banlist edition, not necessarily the one that
+                    // banned them, lives in the tooltip where it fits.
                     <span
                       title={`The Banlist naming them was last edited ${formatTimestamp(
                         Math.floor(entry.ms / 1000),
@@ -93,7 +95,7 @@ export function ConcordGuestbookPanel({
                         locale,
                       )}; the ban itself may be older.`}
                     >
-                      is banned, as of
+                      is banned
                     </span>
                   )}
                   <span className="ml-auto shrink-0">
