@@ -7,6 +7,7 @@ import {
   CHAT_PREFS_STORAGE_KEY,
   concordPrefsManager,
   isCategoryCollapsed,
+  isChannelPinned,
   resetConcordPrefs,
 } from "@/services/concord-prefs";
 import type { Channel } from "@/lib/concord/types";
@@ -120,5 +121,76 @@ describe("ChannelList categories", () => {
     renderList({ selected: "random".padEnd(64, "0") });
     expect(screen.getByText("random")).toBeTruthy();
     expect(screen.queryByText("general")).toBeNull();
+  });
+});
+
+describe("ChannelList pins", () => {
+  it("lifts a pinned channel out of its category into the pinned run", () => {
+    concordPrefsManager.togglePin(COMMUNITY, "random".padEnd(64, "0"));
+    renderList();
+    expect(screen.getByText("pinned")).toBeTruthy();
+    // Once, not twice — a pinned channel leaves the category it came from.
+    expect(screen.getAllByText("random")).toHaveLength(1);
+    expect(screen.getByText("general")).toBeTruthy();
+  });
+
+  it("keeps a pinned channel visible even when its category is folded", () => {
+    // The point of a pin: always where the reader can see it. A pin that could
+    // be folded away would be two arrangements arguing.
+    concordPrefsManager.togglePin(COMMUNITY, "random".padEnd(64, "0"));
+    concordPrefsManager.toggleCategoryCollapsed(COMMUNITY, "text");
+    renderList();
+    expect(screen.getByText("random")).toBeTruthy();
+    expect(screen.queryByText("general")).toBeNull();
+  });
+
+  it("shows no pinned heading while nothing is pinned", () => {
+    renderList();
+    expect(screen.queryByText("pinned")).toBeNull();
+  });
+
+  it("stores a pin under a protocol-qualified community and channel key", () => {
+    concordPrefsManager.togglePin(COMMUNITY, "stage".padEnd(64, "0"));
+    expect(concordPrefsManager.value.pinnedChannels).toEqual([
+      `concord|${COMMUNITY}|${"stage".padEnd(64, "0")}`,
+    ]);
+  });
+});
+
+describe("the row's context menu", () => {
+  // Radix menus need pointer APIs jsdom is short on; these pass because the
+  // menu is opened by a contextmenu event rather than a pointer gesture. If a
+  // Radix upgrade ever breaks that, unit-invoke the handlers instead of
+  // deleting the coverage.
+  it("pins from the menu, and offers to unpin next time", async () => {
+    renderList();
+    fireEvent.contextMenu(screen.getByText("stage"));
+    fireEvent.click(await screen.findByText("Pin to the top"));
+
+    expect(
+      isChannelPinned(
+        concordPrefsManager.value,
+        COMMUNITY,
+        "stage".padEnd(64, "0"),
+      ),
+    ).toBe(true);
+    expect(screen.getByText("pinned")).toBeTruthy();
+
+    fireEvent.contextMenu(screen.getAllByText("stage")[0]);
+    fireEvent.click(await screen.findByText("Unpin"));
+    expect(
+      isChannelPinned(
+        concordPrefsManager.value,
+        COMMUNITY,
+        "stage".padEnd(64, "0"),
+      ),
+    ).toBe(false);
+  });
+
+  it("still carries the notification levels it always did", async () => {
+    renderList();
+    fireEvent.contextMenu(screen.getByText("lobby"));
+    expect(await screen.findByText("Notify me about lobby")).toBeTruthy();
+    expect(screen.getByText("Mentions only")).toBeTruthy();
   });
 });

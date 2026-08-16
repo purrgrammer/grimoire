@@ -13,6 +13,7 @@ import {
   channelsView,
   compareChannelOrder,
   groupChannelsByCategory,
+  partitionPinned,
   resolveOpenChannel,
 } from "./channels";
 import type { FoldedChannel, FoldedControl } from "./control";
@@ -302,5 +303,35 @@ describe("resolveOpenChannel", () => {
 
   it("has nothing to open before the fold lands", () => {
     expect(resolveOpenChannel([], "aa", "bb")).toBeUndefined();
+  });
+});
+
+describe("partitionPinned", () => {
+  const chans = [
+    { idHex: "aa", name: "alpha" },
+    { idHex: "bb", name: "beta" },
+    { idHex: "cc", name: "gamma" },
+  ];
+
+  it("keeps display order inside both runs", () => {
+    const { pinned, rest } = partitionPinned(chans, (ch) =>
+      ["cc", "aa"].includes(ch.idHex),
+    );
+    // Pinning does not reorder: the community's own arrangement still decides
+    // which pinned channel comes first.
+    expect(pinned.map((c) => c.idHex)).toEqual(["aa", "cc"]);
+    expect(rest.map((c) => c.idHex)).toEqual(["bb"]);
+  });
+
+  it("is the identity when nothing is pinned", () => {
+    const { pinned, rest } = partitionPinned(chans, () => false);
+    expect(pinned).toEqual([]);
+    expect(rest).toEqual(chans);
+  });
+
+  it("leaves nothing behind when everything is pinned", () => {
+    const { pinned, rest } = partitionPinned(chans, () => true);
+    expect(pinned).toEqual(chans);
+    expect(rest).toEqual([]);
   });
 });

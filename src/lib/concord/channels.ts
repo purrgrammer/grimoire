@@ -134,6 +134,28 @@ export function groupChannelsByCategory<T extends { name: string }>(
 }
 
 /**
+ * Split the pinned channels off the front, both runs keeping display order.
+ *
+ * A pinned channel leaves its category, which means it escapes a folded one —
+ * intended: pinning says "always where I can see it", and a pin that could be
+ * folded away would be two arrangements arguing.
+ *
+ * Grimoire-original. Armada pins messages and direct messages, never channels,
+ * so nothing here claims cross-client parity — a pin is invisible to armada and
+ * armada's arrangement is unaffected by one.
+ */
+export function partitionPinned<T>(
+  channels: readonly T[],
+  isPinned: (channel: T) => boolean,
+): { pinned: T[]; rest: T[] } {
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const channel of channels)
+    (isPinned(channel) ? pinned : rest).push(channel);
+  return { pinned, rest };
+}
+
+/**
  * Which channel a sidebar should have open: the explicit pick, else the one this
  * device was last left on, else the first the member can read.
  *

@@ -17,11 +17,14 @@ import {
   Hash,
   Loader2,
   Lock,
+  Pin,
+  PinOff,
 } from "lucide-react";
 
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuItem,
   ContextMenuLabel,
   ContextMenuRadioGroup,
   ContextMenuRadioItem,
@@ -36,6 +39,7 @@ import type { ChannelUnread } from "@/services/concord-rumor-store";
 import {
   channelCategory,
   groupChannelsByCategory,
+  partitionPinned,
 } from "@/lib/concord/channels";
 import type { Channel } from "@/lib/concord/types";
 import { cn } from "@/lib/utils";
@@ -97,11 +101,16 @@ export function NotifLevelMenu({
   communityId,
   channelIdHex,
   label,
+  pinned,
+  onTogglePin,
   children,
 }: {
   communityId: string | undefined;
   channelIdHex?: string;
   label: string;
+  /** Channel rows only — a container is not something you pin above itself. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
   children: ReactNode;
 }) {
   const { override, inherited, set } = useConcordNotifLevel(
@@ -120,6 +129,19 @@ export function NotifLevelMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
+        {onTogglePin && (
+          <>
+            <ContextMenuItem onSelect={onTogglePin}>
+              {pinned ? (
+                <PinOff className="size-3" />
+              ) : (
+                <Pin className="size-3" />
+              )}
+              {pinned ? "Unpin" : "Pin to the top"}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuLabel className="truncate text-xs font-normal text-muted-foreground">
           Notify me about {label}
         </ContextMenuLabel>
@@ -180,17 +202,24 @@ export function ChannelList({
   unread: Map<string, ChannelUnread>;
   onSelect: (idHex: string) => void;
 }) {
-  const { isCollapsed, toggleCollapsed } = useConcordPrefs();
+  const { isCollapsed, toggleCollapsed, isPinned } = useConcordPrefs();
+  // Pins come off the front first, so a pinned channel is never also drawn
+  // inside its category — and never disappears when that category is folded.
+  const { pinned, rest } = useMemo(
+    () =>
+      partitionPinned(channels, (ch) => isPinned(communityId ?? "", ch.idHex)),
+    [channels, communityId, isPinned],
+  );
   // `channelsView` already returns display order, so the grouping reads the
   // categories straight off it — the arrangement is one act, not two.
   const { uncategorized, categories } = useMemo(
     () =>
-      groupChannelsByCategory(channels, (ch) =>
+      groupChannelsByCategory(rest, (ch) =>
         ch.category !== undefined
           ? ch.category
           : channelCategory({ name: ch.name, private: ch.isPrivate }),
       ),
-    [channels],
+    [rest],
   );
 
   return (
@@ -200,6 +229,24 @@ export function ChannelList({
         <p className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" /> loading…
         </p>
+      )}
+      {pinned.length > 0 && (
+        <div className="mb-1">
+          <p className="flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Pin className="size-3 shrink-0" />
+            <span className="truncate">pinned</span>
+          </p>
+          {pinned.map((ch) => (
+            <ChannelRow
+              key={ch.idHex}
+              channel={ch}
+              communityId={communityId}
+              selected={ch.idHex === selected}
+              unread={unread.get(ch.idHex.toLowerCase())}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
       )}
       {uncategorized.map((ch) => (
         <ChannelRow
@@ -267,11 +314,17 @@ function ChannelRow({
   const hasUnread = (unread?.count ?? 0) > 0;
   const { level } = useConcordNotifLevel(communityId, channel.idHex);
   const silenced = level === "nothing";
+  const { isPinned, togglePin } = useConcordPrefs();
+  const pinned = isPinned(communityId ?? "", channel.idHex);
   return (
     <NotifLevelMenu
       communityId={communityId}
       channelIdHex={channel.idHex}
       label={channel.name}
+      pinned={pinned}
+      onTogglePin={
+        communityId ? () => togglePin(communityId, channel.idHex) : undefined
+      }
     >
       <button
         type="button"
