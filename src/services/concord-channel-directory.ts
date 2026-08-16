@@ -17,6 +17,12 @@
  * is pulled to a channel to find nothing there.
  */
 
+// A cycle: `concord-communities` imports `invalidateChannelDirectory` back out
+// of this file for its logout wipe. Safe because both sides of it are hoisted
+// `export function` declarations and neither is called while a module is still
+// evaluating — but a `const` arrow or a call at module scope on either side
+// would make one of them `undefined` at init, which in this repo has shipped
+// green before. Keep both ends functions, and keep both ends lazy.
 import { loadStoredCommunities } from "@/services/concord-communities";
 import { readStoredState } from "@/services/concord-state";
 
