@@ -126,6 +126,23 @@ export function shouldNotify(
   return true;
 }
 
+/**
+ * Forget what this tab has already announced. The logout door.
+ *
+ * The ring holds rumor ids belonging to the account that just left, and every
+ * other Concord memo is emptied there — `clearCommunities` in
+ * `src/services/concord-communities.ts` is where this is called from.
+ *
+ * The ACTIVE-CHANNEL registry deliberately stays. It mirrors which windows are
+ * mounted right now, not who is signed in: clearing it would tell the next ring
+ * that nobody is looking at the channel that is still on screen, which is the
+ * one case this file exists to suppress. Those entries leave when their windows
+ * unmount, which is the only thing that knows.
+ */
+export function resetAnnouncedMemory(): void {
+  notified.clear();
+}
+
 /** Test seam: forget which channels are open and what has been announced. */
 export function _resetNotifyForTests(): void {
   active.clear();

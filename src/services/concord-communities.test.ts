@@ -39,6 +39,8 @@ vi.mock("@/services/concord-channel-directory", () => ({
 }));
 const resetNotifPrefsMemory = vi.hoisted(() => vi.fn());
 vi.mock("@/services/concord-notif-prefs", () => ({ resetNotifPrefsMemory }));
+const resetAnnouncedMemory = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/concord/notify", () => ({ resetAnnouncedMemory }));
 
 const {
   _resetDecryptMemoForTests,
@@ -399,6 +401,15 @@ describe("syncCommunities", () => {
     resetNotifPrefsMemory.mockClear();
     await clearCommunities(pubkey);
     expect(resetNotifPrefsMemory).toHaveBeenCalled();
+  });
+
+  it("forgets which messages this tab has already announced", async () => {
+    // Rumor ids belonging to the account that just left. Bounded and opaque,
+    // so nothing leaks — but the memo block is where the account's traces go,
+    // and a memo nobody reset is the one that gets missed next time.
+    resetAnnouncedMemory.mockClear();
+    await clearCommunities(pubkey);
+    expect(resetAnnouncedMemory).toHaveBeenCalled();
   });
 
   it("drops a stored row whose owner commitment no longer verifies", async () => {

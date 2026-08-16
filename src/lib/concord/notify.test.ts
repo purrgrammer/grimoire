@@ -13,6 +13,7 @@ import {
   _resetNotifyForTests,
   isChannelActive,
   registerActiveChannel,
+  resetAnnouncedMemory,
   shouldNotify,
   unregisterActiveChannel,
   type NotifyCandidate,
@@ -157,6 +158,24 @@ describe("the active-channel registry", () => {
 
   it("matches ids case-insensitively", () => {
     registerActiveChannel(CHANNEL.toUpperCase());
+    expect(isChannelActive(CHANNEL)).toBe(true);
+  });
+});
+
+describe("the logout door", () => {
+  it("forgets what it announced, so the next account can be told", () => {
+    const message = candidate({ rumorId: "shared" });
+    expect(shouldNotify(message, context())).toBe(true);
+    resetAnnouncedMemory();
+    expect(shouldNotify(message, context())).toBe(true);
+  });
+
+  it("leaves the open windows registered", () => {
+    // The registry says which channels are ON SCREEN, not who is signed in.
+    // Clearing it here would tell the next ring nobody is looking at the
+    // channel still in front of the reader — the one case this file suppresses.
+    registerActiveChannel(CHANNEL);
+    resetAnnouncedMemory();
     expect(isChannelActive(CHANNEL)).toBe(true);
   });
 });

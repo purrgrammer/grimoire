@@ -25,6 +25,7 @@ import {
 } from "@/lib/concord/community-list";
 import { heldControlPlanes } from "@/lib/concord/control-address";
 import { clearGroupKeyMemo } from "@/lib/concord/derive";
+import { resetAnnouncedMemory } from "@/lib/concord/notify";
 import { resetPlaneSweepMemory } from "@/lib/concord/plane-sync";
 import {
   clearGroupKeyPersistence,
@@ -382,6 +383,10 @@ export async function clearCommunities(pubkey: string): Promise<void> {
   // the memo in front of it has to go too, or the tab keeps answering with
   // levels that no longer exist and hands them to whoever signs in next.
   resetNotifPrefsMemory();
+  // The ids of every message this tab has already announced. Opaque and
+  // bounded, so nothing leaks — but it is the account's traffic, and the memo
+  // block is where the account's traces go.
+  resetAnnouncedMemory();
   await clearGroupKeyPersistence();
 }
 
