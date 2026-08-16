@@ -341,6 +341,36 @@ describe("syncCommunities", () => {
     ).toBeUndefined();
   });
 
+  it("takes the decrypted messages, not just the keys", async () => {
+    // The comment on the rumor store said "Wiped on logout" for the whole port
+    // and nothing did it: `clearCommunityRumors` had no caller outside its own
+    // test. Clearing the keys alone protects nothing — these rows are ALREADY
+    // plaintext, so nothing has to be decrypted a second time to read them.
+    requestEvents.mockResolvedValue([
+      listEvent({ entries: [entry(joinMaterial("Alpha"))], tombstones: [] }),
+    ]);
+    await syncCommunities(pubkey, signer);
+
+    await db.concordRumors.put({
+      id: "aa".repeat(32),
+      communityId: "cc".repeat(32),
+      kind: 9,
+      pubkey,
+      created_at: 1,
+      ms: 1000,
+      content: "the plaintext of a private message",
+      tags: [],
+      sig: "",
+      channel: "dd".repeat(32),
+    } as never);
+    await db.concordKv.put({ key: "wire-cursor:whatever", value: 1 });
+
+    await clearCommunities(pubkey);
+
+    expect(await db.concordRumors.count()).toBe(0);
+    expect(await db.concordKv.count()).toBe(0);
+  });
+
   it("drops a stored row whose owner commitment no longer verifies", async () => {
     const jm = joinMaterial("Alpha");
     requestEvents.mockResolvedValue([

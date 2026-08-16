@@ -68,15 +68,17 @@ async function remember(idHex: string, ms: number): Promise<void> {
 
 /** Test seam: forget every dissolution verdict, session and persisted. */
 export async function _resetDissolutionForTests(): Promise<void> {
-  _resetDissolutionMemoForTests();
+  resetDissolutionMemory();
   await db.concordKv.where("key").startsWith(KEY_PREFIX).delete();
 }
 
 /**
- * Test seam: forget the session memo but KEEP the row — the only way to
- * exercise the persisted half, which is what has to survive a relaunch.
+ * Forget the session memo of which communities are dissolved.
+ *
+ * Called on logout; also the test seam for exercising the PERSISTED half,
+ * since it deliberately keeps the rows.
  */
-export function _resetDissolutionMemoForTests(): void {
+export function resetDissolutionMemory(): void {
   memo.clear();
 }
 

@@ -24,6 +24,8 @@ import {
   type CommunityListEntry,
 } from "@/lib/concord/community-list";
 import { heldControlPlanes } from "@/lib/concord/control-address";
+import { clearGroupKeyMemo } from "@/lib/concord/derive";
+import { resetPlaneSweepMemory } from "@/lib/concord/plane-sync";
 import {
   clearGroupKeyPersistence,
   initGroupKeyPersistence,
@@ -39,6 +41,7 @@ import {
 import db, { type ConcordCommunityRow } from "@/services/db";
 import eventStore from "@/services/event-store";
 import { startConcordStreamAuth } from "@/services/concord-stream-auth";
+import { resetDissolutionMemory } from "@/services/concord-dissolution";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import type { NostrEvent } from "@/types/nostr";
 
@@ -315,25 +318,70 @@ export function registerControlAddresses(communities: Community[]): void {
 }
 
 /**
- * Wipe one account's Concord state: the mirrored memberships, the floor that
- * tracks them, and the shared derivation cache.
+ * Wipe one account's Concord state on logout: the mirrored memberships, the
+ * decrypted message bodies, and every derivation cache and cursor.
  *
- * The rows hold decrypted `community_root`s and private-channel keys and the
- * memo holds the stream secrets derived from them, so removing an account has
- * to take both. The memo is global rather than per-account — a derivation is
- * pure, so the only cost of clearing another account's entries with it is
- * re-deriving them.
+ * **The keys are not the sensitive half.** The vault rows hold decrypted
+ * `community_root`s and channel keys, so they obviously go — but
+ * `concordRumors` holds the PLAINTEXT of every message ever read: who wrote it,
+ * when, and what it said. Clearing the keys and leaving those behind protects
+ * nothing, because nothing has to be decrypted a second time. Someone logging
+ * out to take a community off a machine means the conversations too.
+ *
+ * The rumor store, snapshots and `concordKv` are all keyed by COMMUNITY, not by
+ * account, so there is no account-scoped delete to issue against them. This
+ * wipes them whole. That is correct while grimoire is single-account, and it is
+ * the reason a second account would need those tables scoped BEFORE it shipped
+ * — otherwise one logout takes the other account's history with it.
  */
 export async function clearCommunities(pubkey: string): Promise<void> {
-  await db.concordCommunities.where("pubkey").equals(pubkey).delete();
-  await db.concordKv.delete(vaultStateKey(pubkey));
-  // Adoptions hold decrypted roots and channel keys of their own — leaving them
-  // behind would keep this account's key material after the vault is gone.
-  await clearAdoptions(pubkey);
+  // allSettled, NOT all, and NOT sequential awaits: a rejection anywhere in a
+  // `Promise.all` — or a throw from an earlier `await` — abandons every wipe
+  // after it, which on a wipe is precisely backwards. One table erroring would
+  // silently leave the rest full. Every table gets its attempt, and whatever
+  // failed is reported rather than swallowed.
+  const wipes = await Promise.allSettled([
+    db.concordCommunities.where("pubkey").equals(pubkey).delete(),
+    // Adoptions hold decrypted roots and channel keys of their own — leaving
+    // them behind would keep this account's key material after the vault is
+    // gone.
+    clearAdoptions(pubkey),
+    // Decrypted rumors, control snapshots, parked wraps, and every cursor,
+    // fold, seen-memo and dissolution verdict in `concordKv`. All
+    // Concord-owned; no other subsystem stores anything in these.
+    db.concordRumors.clear(),
+    db.concordSnapshots.clear(),
+    db.concordPendingWraps.clear(),
+    db.concordKv.clear(),
+  ]);
+  const failed = wipes.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.warn(
+      "[concord] some tables survived the logout wipe:",
+      failed.map((r) => r.reason),
+    );
+  }
+  // In-memory, and outliving the tables otherwise: the derivation memo holds
+  // stream secrets, and the sweep memos hold wrap ids from the account that
+  // just left.
+  clearGroupKeyMemo();
+  resetPlaneSweepMemory();
+  resetDissolutionMemory();
+  clearDecryptMemo();
   await clearGroupKeyPersistence();
 }
 
-/** Test seam: forget which list events have already been decrypted. */
-export function _resetDecryptMemoForTests(): void {
+/**
+ * Forget which list events have already been decrypted.
+ *
+ * The memo caches decrypted Community Lists by event id, so it holds the
+ * account's memberships in memory after their rows are gone.
+ */
+export function clearDecryptMemo(): void {
   decryptMemo.clear();
+}
+
+/** Test seam: {@link clearDecryptMemo}. */
+export function _resetDecryptMemoForTests(): void {
+  clearDecryptMemo();
 }

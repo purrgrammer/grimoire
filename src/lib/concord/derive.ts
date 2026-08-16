@@ -333,10 +333,21 @@ export function onGroupKeyMemoDirty(listener: () => void): void {
   memoDirtyListener = listener;
 }
 
-/** Test seam: forget every cached and hydrated derivation. */
-export function _resetGroupKeyMemoForTests(): void {
+/**
+ * Drop every cached and hydrated derivation.
+ *
+ * Called on logout: the memo holds STREAM SECRETS derived from the vault's
+ * roots, so clearing the vault without it leaves the derived key material live
+ * in memory. Re-deriving is pure, so the only cost is the work itself.
+ */
+export function clearGroupKeyMemo(): void {
   groupKeyMemo.clear();
   hydratedEntries.clear();
+}
+
+/** Test seam: as {@link clearGroupKeyMemo}, plus the persist-layer listener. */
+export function _resetGroupKeyMemoForTests(): void {
+  clearGroupKeyMemo();
   memoDirtyListener = undefined;
 }
 

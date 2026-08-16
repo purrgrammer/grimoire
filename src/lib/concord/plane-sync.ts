@@ -327,8 +327,13 @@ export async function unseenPlaneWraps(
   return wraps.filter((w) => !seenWraps.has(w.id) && !junkWraps.has(w.id));
 }
 
-/** Test seam: forget every verdict and memo, session and persisted. */
-export function _resetPlaneSweepForTests(): void {
+/**
+ * Drop the sweep's in-memory verdicts and wrap memos.
+ *
+ * Called on logout. These hold wrap ids and per-scope read state belonging to
+ * the account that just left; the persisted copies go with `concordKv`.
+ */
+export function resetPlaneSweepMemory(): void {
   seenWraps.clear();
   junkWraps.clear();
   scopeTruncated.clear();
@@ -341,6 +346,11 @@ export function _resetPlaneSweepForTests(): void {
     persistTimer = undefined;
   }
   memoLoaded = Promise.resolve();
+}
+
+/** Test seam: as {@link resetPlaneSweepMemory}, plus the persisted memos. */
+export function _resetPlaneSweepForTests(): void {
+  resetPlaneSweepMemory();
   void db.concordKv.delete(SEEN_WRAPS_KEY);
   void db.concordKv.delete(JUNK_WRAPS_KEY);
 }

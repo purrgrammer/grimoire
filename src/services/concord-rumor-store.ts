@@ -37,7 +37,10 @@
  * rumor its author signed, which is what the rumor id commits to.
  *
  * Trust note: this persists DECRYPTED plane data at rest, the same device-trust
- * level as the membership vault beside it. Wiped on logout.
+ * level as the membership vault beside it — message bodies, authors and times,
+ * readable with no key. `clearCommunities` wipes it on logout; that claim sat
+ * here untrue for the whole port, so if this table gains a sibling, wipe it
+ * there too.
  */
 
 import type { NostrEvent } from "nostr-tools";
@@ -596,7 +599,14 @@ export async function writeFoldedControl(
   }
 }
 
-/** Wipe one community's stored rumors and snapshots. */
+/**
+ * Wipe ONE community's stored rumors and snapshots.
+ *
+ * Not the logout path — that is `clearCommunities`, which takes every table
+ * whole. This is the per-community door, for leaving a single community while
+ * staying signed in. It has no caller yet; grimoire never leaves a community,
+ * because joining and leaving belong to Armada.
+ */
 export async function clearCommunityRumors(communityId: string): Promise<void> {
   await db.concordRumors.where("communityId").equals(communityId).delete();
   await db.concordSnapshots.where("communityId").equals(communityId).delete();

@@ -21,7 +21,7 @@ import { buildRumor, sealRumor, wrapSeal } from "@/lib/concord/stream";
 import type { Community } from "@/lib/concord/types";
 import {
   _resetDissolutionForTests,
-  _resetDissolutionMemoForTests,
+  resetDissolutionMemory,
   dissolvedAt,
   syncDissolved,
 } from "@/services/concord-dissolution";
@@ -115,7 +115,7 @@ describe("syncDissolved", () => {
 
     // A fresh launch: the memo is gone but the Dexie row is not. Wiping both
     // would make this pass against the surviving Map.
-    _resetDissolutionMemoForTests();
+    resetDissolutionMemory();
     expect(await dissolvedAt(idHex)).toBe(7_000);
   });
 
