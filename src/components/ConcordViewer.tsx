@@ -226,9 +226,14 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
 
   const handleOpenHit = useCallback(
     (hit: ConcordSearchHit) => {
-      // Leave search on the way in: the results pane is what the channel would
-      // otherwise be, so a jump into a channel has nowhere to land until it does.
+      // Leave BOTH panes on the way in: the results and the guestbook each take
+      // the space the channel would occupy, so a jump has nowhere to land until
+      // the timeline is the thing on screen. Searching from the guestbook is an
+      // ordinary way to arrive here, and leaving that flag set put the reader
+      // back in the guestbook with a jump pending against a viewer that never
+      // mounted.
       setQuery("");
+      setShowGuestbook(false);
       setSelectedChannel(hit.channelIdHex);
       setJumpTo({ messageId: hit.message.rumorId, nonce: Date.now() });
       if (isMobile) setSidebarOpen(false);

@@ -178,10 +178,15 @@ function ChatViewerLike({
 interface Api {
   search: () => void;
   closeSearch: () => void;
+  openGuestbook: () => void;
   openHit: (channelId: string, messageId: string) => void;
 }
 
-/** ConcordViewer's half: results REPLACE the viewer, and clear it on the way back. */
+/**
+ * ConcordViewer's half: the results AND the guestbook each replace the viewer,
+ * and opening a hit has to leave both — the guestbook is an ordinary place to
+ * start a search from.
+ */
 function ConcordViewerLike({
   adapter,
   scrollToIndex,
@@ -194,6 +199,7 @@ function ConcordViewerLike({
 }) {
   const [channelId, setChannelId] = useState("chan-a");
   const [searching, setSearching] = useState(false);
+  const [guestbook, setGuestbook] = useState(false);
   const [jumpTo, setJumpTo] = useState<{ messageId: string; nonce: number }>();
 
   const identifier = useMemo<Identifier>(
@@ -203,20 +209,23 @@ function ConcordViewerLike({
 
   const search = useCallback(() => setSearching(true), []);
   const closeSearch = useCallback(() => setSearching(false), []);
+  const openGuestbook = useCallback(() => setGuestbook(true), []);
   const openHit = useCallback((channel: string, messageId: string) => {
     setSearching(false);
+    setGuestbook(false);
     setChannelId(channel);
     setJumpTo({ messageId, nonce: Math.random() });
   }, []);
   useEffect(() => {
-    onReady({ search, closeSearch, openHit });
-  }, [onReady, search, closeSearch, openHit]);
+    onReady({ search, closeSearch, openGuestbook, openHit });
+  }, [onReady, search, closeSearch, openGuestbook, openHit]);
 
   const onJumpHandled = useCallback((nonce: number) => {
     setJumpTo((prev) => (prev?.nonce === nonce ? undefined : prev));
   }, []);
 
   if (searching) return <div data-testid="results" />;
+  if (guestbook) return <div data-testid="guestbook" />;
   return (
     <ChatViewerLike
       adapter={adapter}
@@ -234,6 +243,7 @@ async function mount() {
   let api: Api = {
     search: () => {},
     closeSearch: () => {},
+    openGuestbook: () => {},
     openHit: () => {},
   };
   render(
@@ -274,6 +284,20 @@ describe("a jump requested while the viewer is being remounted", () => {
     await waitFor(() =>
       expect(scrollToIndex).toHaveBeenCalledWith(
         expect.objectContaining({ index: 1 }),
+      ),
+    );
+  });
+
+  it("lands on a hit searched for from the guestbook", async () => {
+    const { api, scrollToIndex } = await mount();
+
+    act(() => api.openGuestbook());
+    act(() => api.search());
+    act(() => api.openHit("chan-b", "b1"));
+
+    await waitFor(() =>
+      expect(scrollToIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ index: 0 }),
       ),
     );
   });

@@ -121,8 +121,8 @@ export function useConcordSearch(
       controller.abort();
     };
     // `community`, `folded`, `channels` and `filters` are all rebuilt per read
-    // or per render; `token` is their identity for this purpose, and `ring` is
-    // the wire asking for a re-run.
+    // or per render; `token` is their identity for this purpose, `ring` is the
+    // wire asking for a re-run, and `ready` is the fold turning up at all.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, active, ring, ready]);
 
