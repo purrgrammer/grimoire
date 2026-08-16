@@ -54,6 +54,7 @@ import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
+import { JumpToDate } from "./chat/JumpToDate";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
@@ -109,9 +110,14 @@ interface ChatViewerProps {
 }
 
 /**
- * Helper: Format timestamp as a readable day marker
+ * Format a timestamp as a readable day marker, in the reader's calendar.
+ *
+ * The locale is a PARAMETER rather than a `useLocale()` call, because this runs
+ * inside the memo that builds the rendered array and a hook cannot. The caller
+ * passes what `useLocale` gave it, which is what keeps this off the browser
+ * default that CLAUDE.md's locale rule exists to stop.
  */
-function formatDayMarker(timestamp: number): string {
+function formatDayMarker(timestamp: number, locale: string): string {
   const date = new Date(timestamp * 1000);
   const today = new Date();
   const yesterday = new Date(today);
@@ -139,8 +145,8 @@ function formatDayMarker(timestamp: number): string {
   } else if (dateOnly.getTime() === yesterdayOnly.getTime()) {
     return "Yesterday";
   } else {
-    // Format as "Jan 15" (short month, no year, respects locale)
-    return date.toLocaleDateString(undefined, {
+    // "Jan 15" — short month, no year, in the reader's locale.
+    return date.toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
     });
@@ -696,6 +702,9 @@ export function ChatViewer({
   // Get active account with signing capability
   const { pubkey, canSign, signer } = useAccount();
 
+  // Day markers are dates, so they answer to the reader's calendar.
+  const { locale } = useLocale();
+
   // Profile search for mentions
   const { searchProfiles } = useProfileSearch();
 
@@ -916,7 +925,7 @@ export function ChatViewer({
         // First message (or first comment after NIP-22 root)
         items.push({
           type: "day-marker",
-          data: formatDayMarker(timestamp),
+          data: formatDayMarker(timestamp, locale),
           timestamp,
         });
       } else {
@@ -927,7 +936,7 @@ export function ChatViewer({
         if (isDifferentDay(prevTimestamp, timestamp)) {
           items.push({
             type: "day-marker",
-            data: formatDayMarker(timestamp),
+            data: formatDayMarker(timestamp, locale),
             timestamp,
           });
         }
@@ -953,6 +962,7 @@ export function ChatViewer({
     protocol,
     conversation?.metadata?.commentRootEventId,
     dividerMessageId,
+    locale,
   ]);
 
   /**
@@ -1192,7 +1202,7 @@ export function ChatViewer({
   // a NIP-10 thread or a NIP-22 comment set is already whole, so there is
   // nothing to page and a miss stays as quiet as it has always been.
   const canPage = protocol !== "nip-10" && protocol !== "nip-22";
-  const { jump, flashId } = useJumpToMessage({
+  const { jump, flashId, isJumping } = useJumpToMessage({
     adapter,
     conversation,
     messages,
@@ -1471,6 +1481,12 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
+            {canPage && (
+              <JumpToDate
+                busy={isJumping}
+                onPick={(ts) => void jump({ kind: "date", ts })}
+              />
+            )}
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
             <button
