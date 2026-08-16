@@ -71,6 +71,7 @@ import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useCopy } from "@/hooks/useCopy";
 import { useFeedHomeEnd } from "@/hooks/useFeedHomeEnd";
+import { useReadMarker } from "@/hooks/useReadMarker";
 import { useAccount } from "@/hooks/useAccount";
 import { useLocale } from "@/hooks/useLocale";
 import { Label } from "./ui/label";
@@ -806,6 +807,16 @@ export function ChatViewer({
     [adapter, conversation],
   );
 
+  // Where the "New messages" line goes, and — once the pre-visit stamp has been
+  // captured — moving that stamp forward as the reader sits here. Inert for any
+  // protocol whose adapter keeps no read state.
+  const dividerMessageId = useReadMarker(
+    adapter,
+    conversation ?? undefined,
+    messages,
+    pubkey,
+  );
+
   // Process messages to include day markers and group system messages
   const messagesWithMarkers = useMemo(() => {
     if (!messages || messages.length === 0) return [];
@@ -829,6 +840,7 @@ export function ChatViewer({
       | { type: "message"; data: Message }
       | { type: "grouped-system"; data: GroupedSystemMessage }
       | { type: "day-marker"; data: string; timestamp: number }
+      | { type: "unread-divider" }
     > = [];
 
     groupedMessages.forEach((item, index) => {
@@ -868,12 +880,23 @@ export function ChatViewer({
       if (isGroupedSystemMessage(item)) {
         items.push({ type: "grouped-system", data: item });
       } else {
+        // The "New messages" line sits directly ABOVE the first unread message,
+        // and below its day marker: the reader is looking for where they left
+        // off, not for a second date heading.
+        if (dividerMessageId && item.id === dividerMessageId) {
+          items.push({ type: "unread-divider" });
+        }
         items.push({ type: "message", data: item });
       }
     });
 
     return items;
-  }, [messages, protocol, conversation?.metadata?.commentRootEventId]);
+  }, [
+    messages,
+    protocol,
+    conversation?.metadata?.commentRootEventId,
+    dividerMessageId,
+  ]);
 
   // Track reply context (which message is being replied to)
   const [replyTo, setReplyTo] = useState<string | undefined>();
@@ -1426,6 +1449,20 @@ export function ChatViewer({
                     <Label className="text-[10px] text-muted-foreground">
                       {item.data}
                     </Label>
+                  </div>
+                );
+              }
+
+              if (item.type === "unread-divider") {
+                return (
+                  <div
+                    className="flex items-center gap-2 px-3 py-1"
+                    key="unread-divider"
+                  >
+                    <div className="h-px flex-1 bg-destructive/60" />
+                    <span className="rounded-sm bg-destructive/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                      New
+                    </span>
                   </div>
                 );
               }
