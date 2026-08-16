@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BellOff,
   Hash,
@@ -35,6 +35,11 @@ import {
 import type { CommunityUnread } from "@/services/concord-reads";
 import { useConcordWire } from "@/hooks/useConcordWire";
 import { useConcordNotifLevel } from "@/hooks/useConcordNotifLevel";
+import { useConcordNotifier } from "@/hooks/useConcordNotifier";
+import {
+  registerActiveChannel,
+  unregisterActiveChannel,
+} from "@/lib/concord/notify";
 import type { NotifLevel } from "@/services/concord-notif-prefs";
 import { useLocale } from "@/hooks/useLocale";
 import type { ChannelUnread } from "@/services/concord-rumor-store";
@@ -106,6 +111,11 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // serve. Refcounted, so several Concord windows share one set of sockets.
   useConcordWire(communities);
 
+  // Desktop alerts for what the wire brings in. Mounted here for the same
+  // reason the wire is: this is the component whose existence means someone is
+  // reading Concord at all.
+  useConcordNotifier();
+
   // Adopt any CORD-06 rotation addressed to this member. Read-only: grimoire
   // never rotates and never writes the Community List, so an adoption lands in
   // Dexie and the list is re-read to pick it up — which is also what hands the
@@ -144,6 +154,17 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
   // paints twice (stored fold, then swept).
   const communityIdHex = community?.idHex;
   const openChannelIdHex = openChannel?.idHex;
+
+  // Say which channel is on screen, so the notifier does not alert about the
+  // messages the reader is watching arrive. Refcounted in the registry, because
+  // a second Concord window showing the same channel must not be un-silenced by
+  // the first one closing.
+  useEffect(() => {
+    if (!openChannelIdHex) return;
+    registerActiveChannel(openChannelIdHex);
+    return () => unregisterActiveChannel(openChannelIdHex);
+  }, [openChannelIdHex]);
+
   const identifier: ConcordIdentifier | undefined = useMemo(
     () =>
       communityIdHex && openChannelIdHex

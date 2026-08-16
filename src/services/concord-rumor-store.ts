@@ -687,6 +687,73 @@ export async function channelUnreadSummary(
   return { count, latest, mention, capped };
 }
 
+/** How many fresh rows one notifier pass will look at. */
+export const NOTIFY_SCAN_CAP = 20;
+
+/**
+ * The fresh rows of one channel — what a notifier has to READ, not count.
+ *
+ * The same index range and the same bounds as {@link channelUnreadSummary},
+ * with one deliberate difference: a banned author's rows are dropped outright
+ * rather than allowed to raise a stamp. The summary's asymmetry exists so a
+ * badge can always be cleared; nothing here writes a stamp, and an alert
+ * pulling someone to a channel to find a message the timeline hides is the
+ * worst version of this feature.
+ *
+ * Newest first and capped low. A catch-up replay after a laptop wakes can write
+ * hundreds of rows in one flush, and the answer to that is a handful of
+ * notifications collapsed by tag — not a scan of the backlog.
+ */
+export async function channelRumorsSince(
+  communityId: string,
+  channelIdHex: string,
+  opts: {
+    /** Exclusive lower bound in seconds — a row dated exactly this is old. */
+    after: number;
+    nowSecs: number;
+    /** Skew allowance; rows dated past `nowSecs + this` are invisible. */
+    maxFutureSecs: number;
+    /** The reader, whose own messages never notify. */
+    selfPubkey?: string;
+    /** The community's banned authors, whose rows the timeline hides. */
+    bannedAuthors?: ReadonlySet<string>;
+    cap?: number;
+  },
+): Promise<ConcordRumorRow[]> {
+  const channel = channelIdHex.toLowerCase();
+  if (!communityId || !channel) return [];
+  const cap = opts.cap ?? NOTIFY_SCAN_CAP;
+  const upper = opts.nowSecs + opts.maxFutureSecs;
+  const after = Math.max(0, opts.after);
+  if (upper <= after || cap <= 0) return [];
+
+  const found: ConcordRumorRow[] = [];
+  try {
+    await db.concordRumors
+      .where("[communityId+channel+created_at]")
+      .between(
+        [communityId, channel, after],
+        [communityId, channel, upper],
+        false,
+        true,
+      )
+      .reverse()
+      .until(() => found.length >= cap, false)
+      .each((row) => {
+        if (found.length >= cap) return;
+        if (!TIMELINE_KINDS.has(row.kind)) return;
+        if (opts.selfPubkey && row.pubkey === opts.selfPubkey) return;
+        if (isExpired(row.tags, opts.nowSecs)) return;
+        if (opts.bannedAuthors?.has(row.pubkey)) return;
+        found.push(row);
+      });
+  } catch (error) {
+    console.warn("[concord] could not read fresh rows:", error);
+    return [];
+  }
+  return found;
+}
+
 /**
  * One stored rumor by id, scoped to the channel it must belong to.
  *
