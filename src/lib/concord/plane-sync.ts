@@ -380,7 +380,7 @@ export async function openPlaneWraps(
 
 // ── The pager ────────────────────────────────────────────────────────────────
 
-interface SweepOutcome {
+export interface SweepOutcome {
   total: number;
   truncated: boolean;
   /** Whether the relay answered at all (as opposed to refusing or dying). */
@@ -437,8 +437,13 @@ export function _configureAuthWaitForTests(ms: number): void {
  *
  * `truncated` means ONE thing: WE stopped — on the event budget, or over a
  * second wider than a single ask can drain. Never an inference about the relay.
+ *
+ * Page fullness is judged against the CALLER'S `filter.limit`, not the module
+ * knob. A caller asking for a smaller page than `paging.pageLimit` would
+ * otherwise have every full page read as short, so the walk would stop after
+ * page one — paging-shaped code that does not page.
  */
-async function pageScope(
+export async function pageScope(
   relayUrl: string,
   filter: Filter,
   onPage: (page: NostrEvent[]) => Promise<void>,
@@ -449,6 +454,7 @@ async function pageScope(
   // the plane and (b) be memoed as processed — which permanently stops that
   // wrap from ever being decrypted, by this pager or anything else sharing the
   // memo. The `created_at` bound is enforced for the same reason.
+  const pageLimit = filter.limit ?? paging.pageLimit;
   const wanted = new Set(filter.authors ?? []);
   const mine = (events: NostrEvent[], until: number) =>
     events.filter(
@@ -482,7 +488,7 @@ async function pageScope(
   // purpose: the overlap steps over a same-second boundary instead of skipping
   // it, and the id dedupe makes it free.
   let cursor = Math.min(...firstPage.map((e) => e.created_at));
-  let full = firstPage.length >= paging.pageLimit;
+  let full = firstPage.length >= pageLimit;
   /** We stepped over part of a second we could not page through. */
   let walled = false;
 
@@ -516,7 +522,7 @@ async function pageScope(
       };
     }
     const page = mine(next.events, cursor);
-    full = page.length >= paging.pageLimit;
+    full = page.length >= pageLimit;
     const fresh = page.filter((e) => !seen.has(e.id));
     if (fresh.length > 0) {
       for (const e of fresh) seen.add(e.id);
@@ -558,7 +564,7 @@ async function pageScope(
       // Either way the cursor steps below the second: a repeat of the widest
       // ask we can make cannot return more than it just did.
       const emptied =
-        drained.length > paging.pageLimit && drained.length < paging.wallPage;
+        drained.length > pageLimit && drained.length < paging.wallPage;
       if (!emptied) {
         console.warn(
           `[concord] ${relayUrl}: cannot prove second ${cursor} was read whole (${drained.length} served)`,

@@ -38,6 +38,7 @@ import {
   writeAdoption,
 } from "@/services/concord-adoptions";
 import {
+  _configureRekeyPagingForTests,
   _resetRekeyCursorsForTests,
   watchBaseRekey,
   watchChannelRekeys,
@@ -246,6 +247,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  _configureRekeyPagingForTests(200);
   pool?.close();
   pool = undefined;
   await relay?.close();
@@ -1374,6 +1376,79 @@ describe("the rekey cursor", () => {
     const asks = relay.reqFilters();
     expect(asks[0].since).toBeUndefined();
     expect(asks[1].since).toBe(created);
+  });
+
+  it("pages past the relay's per-filter limit before advancing", async () => {
+    // A rotation deeper than one page: without the walk, the cursor would jump
+    // to the newest chunk and the ones below it would never be asked for again.
+    const nextEpoch = 2n;
+    const address = baseRekeyGroupKey(root, communityId, nextEpoch);
+    const chunk = (n: number, createdAt: number) =>
+      rotationWrap({
+        address,
+        scopeIdHex: ROOT_SCOPE_HEX,
+        newEpoch: nextEpoch,
+        prevEpoch: 1n,
+        prevKey: root,
+        blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+        chunk: [n, 3],
+        createdAt,
+      });
+    relay = await startMockRelay({
+      kind: "paged",
+      events: [
+        await chunk(1, NOW - 300),
+        await chunk(2, NOW - 200),
+        await chunk(3, NOW - 100),
+      ],
+    });
+    pool = new RelayPool();
+    _configureRekeyPagingForTests(2);
+
+    await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool });
+
+    // All three chunks landed, not just the newest page…
+    const stored = await db.concordRumors
+      .where("communityId")
+      .equals(idHex)
+      .toArray();
+    expect(stored.filter((r) => r.kind === KIND_REKEY)).toHaveLength(3);
+    // …and only then did the cursor move to the newest of them.
+    await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool });
+    const asks = relay.reqFilters();
+    expect(asks[asks.length - 1].since).toBe(NOW - 100);
+  });
+
+  it("stays put when the walk is truncated", async () => {
+    // A relay capping its pages BELOW what we asked for cannot prove it served
+    // a whole second, so the pager stops and says so. Advancing over that would
+    // bury the chunks it never handed us.
+    const nextEpoch = 2n;
+    const address = baseRekeyGroupKey(root, communityId, nextEpoch);
+    const at = NOW - 100;
+    const chunk = (n: number) =>
+      rotationWrap({
+        address,
+        scopeIdHex: ROOT_SCOPE_HEX,
+        newEpoch: nextEpoch,
+        prevEpoch: 1n,
+        prevKey: root,
+        blobs: [{ locator: "ff".repeat(32), wrapped: "x" }],
+        chunk: [n, 3],
+        createdAt: at,
+      });
+    relay = await startMockRelay({
+      kind: "paged",
+      pageLimit: 2,
+      events: [await chunk(1), await chunk(2), await chunk(3)],
+    });
+    pool = new RelayPool();
+    _configureRekeyPagingForTests(2);
+
+    await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool });
+    await watchBaseRekey(community(), folded(), viewer, JOINED_MS, { pool });
+    const asks = relay.reqFilters();
+    expect(asks[asks.length - 1].since).toBeUndefined();
   });
 
   it("stays put when the store refuses the write", async () => {

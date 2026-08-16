@@ -38,7 +38,6 @@ import {
 import type { FoldedControl } from "@/lib/concord/control";
 import { citationSatisfied } from "@/lib/concord/control";
 import { KIND_WRAP } from "@/lib/concord/kinds";
-import { planeRequest } from "@/lib/concord/plane-request";
 import {
   base64ToBytes,
   CHANNEL_REKEY_LOOKAHEAD,
@@ -68,11 +67,15 @@ import { readAdoption, writeAdoption } from "@/services/concord-adoptions";
 import { dissolvedAt } from "@/services/concord-dissolution";
 import { queryRekeyRounds, writeOpened } from "@/services/concord-rumor-store";
 import db from "@/services/db";
-import { whenAuthAnswered } from "@/lib/concord/plane-sync";
+import { pageScope, whenAuthAnswered } from "@/lib/concord/plane-sync";
 
 /** Per-request page size. Rotations are rare and small. */
-const PAGE_LIMIT = 200;
-const REQUEST_TIMEOUT_MS = 15_000;
+let pageLimit = 200;
+
+/** Test seam: shrink the page so the pager is exercisable with a few chunks. */
+export function _configureRekeyPagingForTests(limit: number): void {
+  pageLimit = limit;
+}
 const CURSOR_PREFIX = "rekey-cursor:";
 
 /** What a signer must offer to open a blob — one ECDH, bunker-friendly. */
@@ -183,11 +186,18 @@ export async function _resetRekeyCursorsForTests(): Promise<void> {
  * Fetch one rotation address set across every relay, decrypt what opens, and
  * store it.
  *
- * The cursor advances only once the rumors are DURABLY STORED. Armada advances
- * it and fire-and-forgets the write; here that is the one thing that cannot be
- * forgiven, because it is exactly the never-adopts failure the per-relay cursor
- * exists to prevent — a chunk dropped behind an advanced `since` is never
- * served again, and its rotation stays incomplete for good.
+ * The cursor advances only once the rumors are DURABLY STORED, and only if the
+ * walk was not truncated. Armada advances it and fire-and-forgets the write;
+ * here that is the one thing that cannot be forgiven, because it is exactly the
+ * never-adopts failure the per-relay cursor exists to prevent — a chunk dropped
+ * behind an advanced `since` is never served again, and its rotation stays
+ * incomplete for good.
+ *
+ * PAGED, unlike armada. A single ask reads the newest page and no deeper, so a
+ * rotation with more chunks than a page would advance the cursor over chunks it
+ * never fetched — the same permanent loss, arrived at from the other side. One
+ * epoch's rekey address carries one rotation, so the depth is unreachable in
+ * practice; it is paged anyway because the failure would be silent.
  */
 async function fetchRounds(
   community: Community,
@@ -204,53 +214,57 @@ async function fetchRounds(
       const filter: Filter = {
         kinds: [KIND_WRAP],
         authors,
-        limit: PAGE_LIMIT,
+        limit: pageLimit,
         ...(since ? { since } : {}),
       };
-      const ask = () =>
-        planeRequest(url, filter, { timeout: REQUEST_TIMEOUT_MS, pool });
+      /** Newest wrap stored across every page, and whether all of them stored. */
+      let newest = 0;
+      let stored = true;
+      let served = 0;
 
-      let read = await ask();
-      const mine = (events: NostrEvent[]) =>
-        events.filter((e) => e.kind === KIND_WRAP && addresses.has(e.pubkey));
+      const onPage = async (page: NostrEvent[]) => {
+        served += page.length;
+        const opened: OpenedWireEvent[] = [];
+        for (const wrap of page) {
+          const address = addresses.get(wrap.pubkey);
+          if (!address) continue;
+          try {
+            opened.push(openWrap(wrap, address));
+          } catch {
+            // not this address / malformed
+          }
+        }
+        if (opened.length > 0) {
+          const written = await writeOpened(community.idHex, opened, "rekey", {
+            refounded: community.rootEpoch > 0n,
+          });
+          if (!written.ok) stored = false;
+        }
+        newest = Math.max(newest, ...page.map((e) => e.created_at));
+      };
+
+      const walk = () => pageScope(url, filter, onPage, pool);
+
+      let out = await walk();
       // The same two routine races the plane sweeps handle: a refused read
-      // whose challenge has since been answered, and an empty page that raced
+      // whose challenge has since been answered, and an empty walk that raced
       // NIP-42 and reads back clean.
       if (
-        read.outcome === "refused" ||
-        (read.outcome === "eose" &&
-          mine(read.events).length === 0 &&
-          !streamAuthsSettled(url, authors))
+        out.refused ||
+        (out.answered && served === 0 && !streamAuthsSettled(url, authors))
       ) {
         await whenAuthAnswered(url, authors);
-        read = await ask();
+        // The retry re-walks from the top. Re-storing what the first attempt
+        // already stored is free — the rumor store is keyed by rumor id.
+        stored = true;
+        out = await walk();
       }
-      if (read.outcome !== "eose") return;
-
-      const page = mine(read.events);
-      if (page.length === 0) return;
-
-      const opened: OpenedWireEvent[] = [];
-      for (const wrap of page) {
-        const address = addresses.get(wrap.pubkey);
-        if (!address) continue;
-        try {
-          opened.push(openWrap(wrap, address));
-        } catch {
-          // not this address / malformed
-        }
-      }
-      if (opened.length > 0) {
-        const written = await writeOpened(community.idHex, opened, "rekey", {
-          refounded: community.rootEpoch > 0n,
-        });
-        if (!written.ok) return; // cursor stays put — see the docstring
-      }
-      await advanceCursor(
-        scope,
-        url,
-        Math.max(...page.map((e) => e.created_at)),
-      );
+      if (!out.answered || served === 0) return;
+      // Cursor stays put on either failure — see the docstring. A truncated
+      // walk left rotation chunks below the newest page unread, and a `since`
+      // past them would never ask for them again.
+      if (!stored || out.truncated) return;
+      await advanceCursor(scope, url, newest);
     }),
   );
 }
