@@ -325,7 +325,20 @@ const DRAFT_SAVE_MS = 750;
 
 type ConversationResult =
   | { status: "loading" }
-  | { status: "success"; conversation: Conversation }
+  | {
+      status: "success";
+      conversation: Conversation;
+      /**
+       * The identifier this conversation was resolved FROM.
+       *
+       * Carried because the resolved value lags the prop by a render: `use$`
+       * clears itself in an effect, so the first render after the caller points
+       * this viewer at another channel still hands back the previous channel's
+       * conversation. Anything that must not act on the wrong channel compares
+       * this against the current `identifier` first.
+       */
+      identifier: ProtocolIdentifier;
+    }
   | { status: "error"; error: string };
 
 /**
@@ -944,6 +957,7 @@ export function ChatViewer({
         map((conv): ConversationResult => ({
           status: "success",
           conversation: conv,
+          identifier,
         })),
         catchError((err) => {
           console.error("[Chat] Failed to resolve conversation:", err);
@@ -1512,13 +1526,22 @@ export function ChatViewer({
   // `type: "system"` rows are collapsed, and both chat messages and Concord's
   // tombstones are `type: "user"`. Any future grouping must keep that true, or
   // this jump starts silently no-opping.
+  // The freshness check is not ceremony either: `use$` clears its value in an
+  // effect, so the render right after the caller switches channel still holds
+  // the PREVIOUS channel's conversation. Jumping on that would walk ten pages
+  // of the channel the reader just left, tell them the message is unreachable,
+  // and consume the nonce — so the jump they actually asked for never happens.
   const jumpedNonce = useRef<number | undefined>(undefined);
+  const resolvedFor =
+    conversationResult?.status === "success"
+      ? conversationResult.identifier
+      : undefined;
   useEffect(() => {
-    if (!jumpTo || !conversation) return;
+    if (!jumpTo || !conversation || resolvedFor !== identifier) return;
     if (jumpedNonce.current === jumpTo.nonce) return;
     jumpedNonce.current = jumpTo.nonce;
     void jump({ kind: "id", id: jumpTo.messageId });
-  }, [jumpTo, conversation, jump]);
+  }, [jumpTo, conversation, resolvedFor, identifier, jump]);
 
   // Handle loading older messages
   const handleLoadOlder = useCallback(async () => {
