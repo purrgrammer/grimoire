@@ -40,6 +40,7 @@ import { Observable, ReplaySubject } from "rxjs";
 import type { AddressPointer, EventPointer } from "nostr-tools/nip19";
 
 import {
+  chatModerationOf,
   foldTimeline,
   type OpenedChat,
   type ReactionEntry,
@@ -47,10 +48,9 @@ import {
 import { filterEpochCutoff } from "@/lib/concord/chat";
 import { KIND_COMMENT } from "@/lib/concord/kinds";
 import type { BlobAttachmentMeta } from "./base-adapter";
-import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
+import type { FoldedControl } from "@/lib/concord/control";
 import type { Channel, Community } from "@/lib/concord/types";
 import { channelScope, onWireScope } from "@/lib/concord/wire-bus";
-import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
 import {
   readStoredRoster,
   rosterParticipants,
@@ -1046,26 +1046,13 @@ export class ConcordAdapter extends ChatProtocolAdapter {
       epoch: channel.current.epoch,
     }));
 
-    const timeline = foldTimeline(filterEpochCutoff(opened, channel), {
-      banned: folded.banned,
-      canDelete: (deleter, author, action) =>
-        deleter !== author &&
-        canActOnMember(
-          folded.roster,
-          deleter,
-          folded.ownerHex,
-          author,
-          Permissions.MANAGE_MESSAGES,
-        ) &&
-        citationSatisfied(folded, community.id, deleter, action?.citation),
-      canSetTimer: (author) =>
-        isAuthorized(
-          folded.roster,
-          author,
-          folded.ownerHex,
-          Permissions.MANAGE_METADATA,
-        ),
-    });
+    // The SAME wiring local search folds with — see `chatModerationOf`. A
+    // search result the timeline would refuse to render is the one failure
+    // search cannot have.
+    const timeline = foldTimeline(
+      filterEpochCutoff(opened, channel),
+      chatModerationOf(folded, community.id),
+    );
 
     const conversationId = conversationIdOf(identifier);
     const messages = timeline.messages.map((ev): Message => {

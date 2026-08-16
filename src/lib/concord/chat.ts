@@ -21,7 +21,9 @@ import {
   citationFromTags,
   type AuthorityCitation,
 } from "@/lib/concord/edition";
+import { citationSatisfied, type FoldedControl } from "@/lib/concord/control";
 import { isExpired, timerNoticeSeconds } from "@/lib/concord/disappearing";
+import { canActOnMember, isAuthorized, Permissions } from "@/lib/concord/roles";
 import {
   KIND_CALENDAR_DATE,
   KIND_CALENDAR_TIME,
@@ -239,6 +241,44 @@ export interface ChatModeration {
    * like an authority claim, or anyone could spell the tag.
    */
   canSetTimer?: (author: string) => boolean;
+}
+
+/**
+ * The moderation wiring a fold of one community's chat needs.
+ *
+ * Extracted so the two readers of a channel's history — the timeline and the
+ * local search — cannot wire it differently. A search result the timeline
+ * would refuse to render is the whole failure mode search has to avoid, and it
+ * would arrive as a slightly different `canDelete` rather than as anything a
+ * reviewer would spot.
+ */
+export function chatModerationOf(
+  folded: Pick<
+    FoldedControl,
+    "banned" | "roster" | "ownerHex" | "heads" | "bannedAt" | "incomplete"
+  >,
+  communityId: Uint8Array,
+): ChatModeration {
+  return {
+    banned: folded.banned,
+    canDelete: (deleter, author, action) =>
+      deleter !== author &&
+      canActOnMember(
+        folded.roster,
+        deleter,
+        folded.ownerHex,
+        author,
+        Permissions.MANAGE_MESSAGES,
+      ) &&
+      citationSatisfied(folded, communityId, deleter, action?.citation),
+    canSetTimer: (author) =>
+      isAuthorized(
+        folded.roster,
+        author,
+        folded.ownerHex,
+        Permissions.MANAGE_METADATA,
+      ),
+  };
 }
 
 /** A tallied reaction: reactors (pubkey → rumorId) plus any custom-emoji URL. */
