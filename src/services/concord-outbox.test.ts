@@ -97,7 +97,13 @@ const { ConcordAdapter } = await import("@/lib/chat/adapters/concord-adapter");
 const { writeChatRumors } = await import("@/services/concord-rumor-store");
 const { default: db, OUTBOX_NEVER } = await import("@/services/db");
 
+const { channelScope, onWireScopes } = await import("@/lib/concord/wire-bus");
+const { SEND_BURST } = await import("@/lib/concord/send-rate-limit");
+
 const NOW = 1_800_000_000;
+
+/** Long enough for the bus's coalescing window to flush. */
+const FLUSH_WAIT_MS = 80;
 
 /** One queued message, as `sendMessage` would leave it behind. */
 async function queue(over: Partial<Parameters<typeof enqueueOutbox>[0]> = {}) {
@@ -235,6 +241,41 @@ describe("draining the outbox", () => {
     ).toBeGreaterThan(NOW);
     // Untouched: never attempted, so never marked.
     expect((await db.concordOutbox.get(second.id))?.status).toBe("sending");
+  });
+
+  it("does not spend the send budget on a row that is already dead", async () => {
+    // Five gone-parent replies exhaust the burst if they pay on their way out,
+    // and the sixth — a live message — is then refused and stops the pass. A
+    // failing row must not be able to rate-limit a good one.
+    for (let i = 0; i < SEND_BURST; i++) {
+      await queue({ replyToId: "cd".repeat(32), createdAt: NOW - 10 + i });
+    }
+    await queue({ content: "still sendable", createdAt: NOW });
+
+    await drainOutbox(NOW);
+    expect(published).toHaveBeenCalledTimes(1);
+    expect((await db.concordRumors.toArray())[0]?.content).toBe(
+      "still sendable",
+    );
+  });
+
+  it("rings the channel when a row dies, so the badge does not stay 'Sending'", async () => {
+    // The row is on screen as pending. Nothing re-reads the outbox until the
+    // doorbell rings, so without this the reader watches a message that has
+    // already failed keep claiming to be on its way.
+    banned.add(pubkey);
+    // The bus coalesces globally, so let any earlier test's ring flush before
+    // listening — otherwise it arrives here and the assertion passes for free.
+    await new Promise((resolve) => setTimeout(resolve, FLUSH_WAIT_MS));
+    const heard: string[] = [];
+    const off = onWireScopes((scopes) => heard.push(...scopes));
+
+    await queue();
+    await drainOutbox(NOW);
+    await new Promise((resolve) => setTimeout(resolve, FLUSH_WAIT_MS));
+    off();
+
+    expect(heard).toContain(channelScope(channelIdHex));
   });
 
   it("leaves a backed-off row alone until its time comes", async () => {

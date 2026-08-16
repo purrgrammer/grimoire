@@ -255,12 +255,18 @@ async function attemptRow(
     }
   }
 
+  // Every failure below rings the channel: the row is on screen as "Sending",
+  // and a badge that only corrects itself when some unrelated message happens
+  // to arrive is a message the reader believes is still going out.
+  const ring = () => emitWireScopes([channelScope(row.channel)]);
+
   let resolved;
   try {
     resolved = await resolveChannel(row.communityId, row.channel);
   } catch (error) {
     // A locked vault or a fold still catching up — try again later.
     await markOutboxFailed(row.id, reason(error), undefined, nowSecs);
+    ring();
     return "next";
   }
   const { community, channel, folded } = resolved;
@@ -271,6 +277,7 @@ async function attemptRow(
       "You have been banned from this community.",
       OUTBOX_NEVER,
     );
+    ring();
     return "next";
   }
   // CORD-02 §9: the seal is one-way, and a queued message is new content.
@@ -281,21 +288,13 @@ async function attemptRow(
       "This community has been dissolved; it accepts nothing new.",
       OUTBOX_NEVER,
     );
+    ring();
     return "next";
   }
 
-  // A drained message is a fresh post, so it spends fresh budget — matching
-  // armada's retry-as-a-new-send. Spent BEFORE anything is signed.
-  const waitMs = consumeSend(community.idHex);
-  if (waitMs > 0) {
-    await markOutboxFailed(
-      row.id,
-      "Sending too fast — waiting before trying again.",
-      nowSecs + Math.ceil(waitMs / 1000),
-    );
-    return "stop";
-  }
-
+  // Resolved BEFORE the rate limit is spent: a row that is about to fail for
+  // good would otherwise burn the community's send budget on its way out, and
+  // stop the pass — leaving a live message behind a dead one.
   let replyTo: ReplyParent | undefined;
   if (row.replyToId) {
     const parent = await readChannelRumor(
@@ -309,6 +308,7 @@ async function attemptRow(
         "The message this was replying to is gone.",
         OUTBOX_NEVER,
       );
+      ring();
       return "next";
     }
     replyTo = {
@@ -317,6 +317,19 @@ async function attemptRow(
       pubkey: parent.author,
       tags: parent.tags,
     };
+  }
+
+  // A drained message is a fresh post, so it spends fresh budget — matching
+  // armada's retry-as-a-new-send. Spent BEFORE anything is signed.
+  const waitMs = consumeSend(community.idHex);
+  if (waitMs > 0) {
+    await markOutboxFailed(
+      row.id,
+      "Sending too fast — waiting before trying again.",
+      nowSecs + Math.ceil(waitMs / 1000),
+    );
+    ring();
+    return "stop";
   }
 
   let built;
@@ -336,7 +349,7 @@ async function attemptRow(
     );
   } catch (error) {
     await markOutboxFailed(row.id, reason(error), undefined, nowSecs);
-    emitWireScopes([channelScope(row.channel)]);
+    ring();
     return "next";
   }
 
@@ -349,7 +362,7 @@ async function attemptRow(
     await publishWrap(community.relays, built.wrap);
   } catch (error) {
     await markOutboxFailed(row.id, reason(error), undefined, nowSecs);
-    emitWireScopes([channelScope(row.channel)]);
+    ring();
     return "next";
   }
 
@@ -375,7 +388,7 @@ async function attemptRow(
       "[concord] sent, but this device could not save it — it will reappear when it is fetched again",
     );
   }
-  emitWireScopes([channelScope(row.channel)]);
+  ring();
   return "next";
 }
 
