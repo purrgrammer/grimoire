@@ -12,7 +12,14 @@ import {
   useConcordCommunity,
   useConcordIcons,
 } from "@/hooks/useConcord";
+import {
+  useConcordUnread,
+  useConcordUnreadTotals,
+  type CommunityUnread,
+} from "@/hooks/useConcordUnread";
 import { useConcordWire } from "@/hooks/useConcordWire";
+import { useLocale } from "@/hooks/useLocale";
+import type { ChannelUnread } from "@/services/concord-rumor-store";
 import { useConcordRekeyWatch } from "@/hooks/useConcordRekey";
 import { useConcordDissolved } from "@/hooks/useConcordDissolved";
 import { useConcordImage } from "@/hooks/useConcordImage";
@@ -64,6 +71,13 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
 
   const { state, loading, error, refresh } = useConcordCommunity(community);
   const channels = useMemo(() => state?.channels ?? [], [state]);
+
+  // Badges for the open community's channels, and for the rows of the ones the
+  // reader is not looking at — which is the case a per-channel count alone
+  // cannot serve.
+  const channelIds = useMemo(() => channels.map((ch) => ch.idHex), [channels]);
+  const unread = useConcordUnread(community?.idHex, channelIds);
+  const totals = useConcordUnreadTotals(communities);
 
   // Live delivery for EVERY community in the list, not just the open one: a
   // channel you are not looking at is exactly the case pull-on-open could not
@@ -196,6 +210,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           idHex: c.idHex,
           name: c.name,
           ...(icons.get(c.idHex) ? { icon: icons.get(c.idHex) } : {}),
+          ...(totals.get(c.idHex) ? { unread: totals.get(c.idHex) } : {}),
         }))}
         selected={community?.idHex}
         onSelect={(idHex) => {
@@ -208,6 +223,7 @@ export function ConcordViewer({ communityId, channelId }: ConcordViewerProps) {
           selected={openChannel?.idHex}
           loading={loading}
           error={error}
+          unread={unread}
           onSelect={handleChannelSelect}
         />
       </CommunityPicker>
@@ -266,18 +282,59 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The waiting-messages badge: a count, or an `@` when one of them names you.
+ *
+ * `font-semibold` marks an unread row rather than `font-medium`, which the
+ * SELECTED row already uses — otherwise the row you are reading and the row you
+ * have not read look identical.
+ */
+function UnreadBadge({
+  unread,
+}: {
+  unread: { count: number; mention: boolean; capped?: boolean };
+}) {
+  const { locale } = useLocale();
+  if (unread.count <= 0) return null;
+  const label = unread.capped
+    ? `${new Intl.NumberFormat(locale).format(unread.count)}+`
+    : new Intl.NumberFormat(locale).format(unread.count);
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1">
+      {unread.mention && (
+        <span
+          aria-label="You were mentioned"
+          title="You were mentioned"
+          className="flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground"
+        >
+          @
+        </span>
+      )}
+      <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">
+        {label}
+      </span>
+    </span>
+  );
+}
+
 /** One community's row: its icon (encrypted, CORD-02 §6) and its name. */
 function CommunityRow({
   community,
   selected,
   onSelect,
 }: {
-  community: { idHex: string; name: string; icon?: ImagePointer };
+  community: {
+    idHex: string;
+    name: string;
+    icon?: ImagePointer;
+    unread?: CommunityUnread;
+  };
   selected: boolean;
   onSelect: (idHex: string) => void;
 }) {
   const icon = useConcordImage(community.icon);
   const label = community.name || community.idHex.slice(0, 8);
+  const hasUnread = (community.unread?.count ?? 0) > 0;
   return (
     <button
       type="button"
@@ -285,6 +342,7 @@ function CommunityRow({
       className={cn(
         "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-1 text-left text-sm hover:bg-muted/50",
         selected && "bg-muted/70 font-medium",
+        hasUnread && "font-semibold text-foreground",
       )}
     >
       {icon ? (
@@ -304,6 +362,7 @@ function CommunityRow({
         </span>
       )}
       <span className="truncate">{label}</span>
+      {community.unread && <UnreadBadge unread={community.unread} />}
     </button>
   );
 }
@@ -322,7 +381,12 @@ function CommunityPicker({
   onSelect,
   children,
 }: {
-  communities: Array<{ idHex: string; name: string; icon?: ImagePointer }>;
+  communities: Array<{
+    idHex: string;
+    name: string;
+    icon?: ImagePointer;
+    unread?: CommunityUnread;
+  }>;
   selected: string | undefined;
   onSelect: (idHex: string) => void;
   children: ReactNode;
@@ -351,12 +415,14 @@ function ChannelList({
   selected,
   loading,
   error,
+  unread,
   onSelect,
 }: {
   channels: Channel[];
   selected: string | undefined;
   loading: boolean;
   error: string | undefined;
+  unread: Map<string, ChannelUnread>;
   onSelect: (idHex: string) => void;
 }) {
   // `channelsView` already returns display order, so the grouping reads the
@@ -384,6 +450,7 @@ function ChannelList({
           key={ch.idHex}
           channel={ch}
           selected={ch.idHex === selected}
+          unread={unread.get(ch.idHex.toLowerCase())}
           onSelect={onSelect}
         />
       ))}
@@ -397,6 +464,7 @@ function ChannelList({
               key={ch.idHex}
               channel={ch}
               selected={ch.idHex === selected}
+              unread={unread.get(ch.idHex.toLowerCase())}
               onSelect={onSelect}
             />
           ))}
@@ -409,13 +477,16 @@ function ChannelList({
 function ChannelRow({
   channel,
   selected,
+  unread,
   onSelect,
 }: {
   channel: Channel;
   selected: boolean;
+  unread: ChannelUnread | undefined;
   onSelect: (idHex: string) => void;
 }) {
   const Icon = channel.isPrivate ? Lock : Hash;
+  const hasUnread = (unread?.count ?? 0) > 0;
   return (
     <button
       type="button"
@@ -424,10 +495,12 @@ function ChannelRow({
       className={cn(
         "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm hover:bg-muted/50",
         selected && "bg-muted/70 font-medium",
+        hasUnread && "font-semibold text-foreground",
       )}
     >
       <Icon className="size-3 flex-shrink-0 text-muted-foreground" />
       <span className="truncate">{channel.name}</span>
+      {unread && <UnreadBadge unread={unread} />}
     </button>
   );
 }
