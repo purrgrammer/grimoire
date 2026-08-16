@@ -10,6 +10,7 @@ import { Emoji } from "./RichText/Emoji";
 import { Gallery } from "./RichText/Gallery";
 import { Nip } from "./RichText/Nip";
 import { Relay } from "./RichText/Relay";
+import { bareNostrMentions } from "@/lib/bare-mention-transformer";
 import { nipReferences } from "@/lib/nip-transformer";
 import { relayReferences } from "@/lib/relay-transformer";
 import type { NostrEvent } from "@/types/nostr";
@@ -52,6 +53,9 @@ const GrimoireContentSymbol = Symbol.for("grimoire-content");
 // Default transformers including our custom NIP and relay transformers
 export const defaultTransformers = [
   ...textNoteTransformers,
+  // AFTER the built-ins, never before: it resolves ids with no whitespace
+  // around them, and running it first would find them inside URLs too.
+  bareNostrMentions,
   nipReferences,
   relayReferences,
 ];
