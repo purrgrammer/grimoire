@@ -13,6 +13,7 @@ import {
   ensureNotifPrefsLoaded,
   inheritedLevelSync,
   levelAdmits,
+  onNotifPrefsChange,
   resetNotifPrefsMemory,
   resolveLevel,
   resolveLevelSync,
@@ -146,6 +147,16 @@ describe("persistence", () => {
     ]);
     expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
+  });
+
+  it("repaints the open menus when the account leaves", () => {
+    // Logout runs with the sidebar mounted. Without the ring, every context
+    // menu keeps its pre-logout checkmark until something else re-renders.
+    const repaint = vi.fn();
+    const unsubscribe = onNotifPrefsChange(repaint);
+    resetNotifPrefsMemory();
+    expect(repaint).toHaveBeenCalled();
+    unsubscribe();
   });
 
   it("forgets everything in memory when the account leaves", async () => {

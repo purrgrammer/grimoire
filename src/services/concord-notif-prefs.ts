@@ -146,6 +146,17 @@ export async function resolveLevel(
   return resolveLevelSync(communityId, channelIdHex);
 }
 
+/** Tell every mounted menu the memo moved under it. */
+function ring(): void {
+  for (const listener of listeners) {
+    try {
+      listener();
+    } catch {
+      // One stale subscriber must not stop the others from repainting.
+    }
+  }
+}
+
 async function writeLevel(
   key: string,
   level: NotifLevel | undefined,
@@ -155,13 +166,7 @@ async function writeLevel(
   // click. The row is the durable copy, not the authority for this session.
   if (level === undefined) memo.delete(key);
   else memo.set(key, level);
-  for (const listener of listeners) {
-    try {
-      listener();
-    } catch {
-      // One stale subscriber must not stop the others from repainting.
-    }
-  }
+  ring();
   try {
     if (level === undefined) await db.concordKv.delete(key);
     else await db.concordKv.put({ key, value: level });
@@ -214,11 +219,16 @@ export function levelAdmits(level: NotifLevel, mention: boolean): boolean {
  * The logout door. The rows themselves go with `db.concordKv.clear()`, so
  * without this the running tab would keep answering from a memo whose backing
  * table is empty — and the levels would reappear for whoever signs in next.
+ *
+ * Rings the listeners like a write does: logout happens with the sidebar still
+ * mounted, and a menu that is not told keeps painting the checkmark of a level
+ * that no longer exists until something unrelated re-renders it.
  */
 export function resetNotifPrefsMemory(): void {
   memo.clear();
   loaded = false;
   loading = undefined;
+  ring();
 }
 
 /** Test seam: forget the levels in memory AND the rows behind them. */
