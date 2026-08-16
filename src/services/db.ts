@@ -317,6 +317,14 @@ export interface ChatReadRow {
  * here — which is what lets the timeline merge treat every row as a message.
  *
  * Plaintext at rest, like the rumor store beside it: logout wipes it.
+ *
+ * NOT protocol-qualified, unlike `chatReads` and the chat drafts, and that is a
+ * decision rather than an oversight. Everything the drain does is Concord's:
+ * it reseals the intent under the channel's CURRENT epoch key, re-resolves the
+ * parent rumor id, and hands the result to the plane. A NIP-29 send is a signed
+ * public event with none of that around it, so it would need its own queue and
+ * its own retry rules, not a row here under a different discriminator. The
+ * shared shapes are the ones a second protocol could actually occupy.
  */
 export interface ConcordOutboxRow {
   /** uuid. NOT a rumor id — a rebuild changes that. */

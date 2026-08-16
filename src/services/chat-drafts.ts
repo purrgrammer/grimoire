@@ -24,7 +24,23 @@
 
 import db, { type ChatDraftRow } from "@/services/db";
 
-/** `${account}:${protocol}:${conversation}` — account first, deliberately. */
+/**
+ * `${account}:${protocol}:${conversation}` — account first, deliberately.
+ *
+ * Already protocol-qualified, and the template the rest of the chat keys were
+ * brought up to: a conversation id is only unique within a protocol, and this
+ * table is the one place two protocols already write side by side.
+ *
+ * Two things a reader should know before touching the shape. The key is built
+ * here and taken apart NOWHERE — `clearCommunities` matches the account prefix
+ * and nothing else parses it — which is what makes the separator survivable at
+ * all, since a NIP-29 conversation id is `nip-29:${relayUrl}'${groupId}` and a
+ * relay URL is full of colons and slashes. That same id already carries its
+ * protocol, so a NIP-29 draft key spells `…:nip-29:nip-29:wss://…` — redundant,
+ * harmless while nothing splits the key, and left alone here: changing it would
+ * orphan the drafts already stored under it for no behaviour the reader can
+ * see.
+ */
 export function draftKey(
   accountPubkey: string,
   protocol: string,
