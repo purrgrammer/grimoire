@@ -61,9 +61,17 @@ implementing this for another protocol:
 A conversation with `lastRead === 0` gets badges but no divider — flagging the
 whole history of a channel someone just joined is noise.
 
-Concord's stamps live in the `concordReads` Dexie table, keyed
-`[pubkey+communityId+channelId]`, and are wiped on logout. Nothing about read
-state is ever published: no CORD document defines a read marker.
+Stamps live in the `chatReads` Dexie table, keyed
+`[pubkey+protocol+containerId+channelId]`, and are wiped on logout for every
+protocol the account holds. The table is shared by design — a NIP-29
+`(relay, group)` pair is the same row shape as a Concord `(community, channel)`
+one — but only Concord writes it today, because the COUNTING behind the badge
+scans `concordRumors` through the fold pipeline. Nothing about read state is
+ever published: no CORD document defines a read marker.
+
+Notification levels are keyed the same way:
+`chatnotif:<protocol>|<container>[|<channel>]` in `concordKv`, which a Concord
+logout empties whole.
 
 ## Adding a protocol
 
