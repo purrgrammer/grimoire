@@ -56,7 +56,6 @@ import { RichText } from "./nostr/RichText";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
-import { JumpToDate } from "./chat/JumpToDate";
 import { RelaysDropdown } from "./chat/RelaysDropdown";
 import { MessageReactions } from "./chat/MessageReactions";
 import { StatusBadge } from "./live/StatusBadge";
@@ -1507,7 +1506,9 @@ export function ChatViewer({
   // a NIP-10 thread or a NIP-22 comment set is already whole, so there is
   // nothing to page and a miss stays as quiet as it has always been.
   const canPage = protocol !== "nip-10" && protocol !== "nip-22";
-  const { jump, flashId, isJumping } = useJumpToMessage({
+  // `isJumping` is unused while the date entry point is hidden from the header;
+  // the jump itself still runs for search hits and reply previews.
+  const { jump, flashId } = useJumpToMessage({
     adapter,
     conversation,
     messages,
@@ -1852,12 +1853,10 @@ export function ChatViewer({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-1">
-            {canPage && (
-              <JumpToDate
-                busy={isJumping}
-                onPick={(ts) => void jump({ kind: "date", ts })}
-              />
-            )}
+            {/* Jump-to-date is hidden from the header: it earned a permanent
+                slot next to members and relays without being reached for at
+                that rate. `jump({kind:"date"})` and the whole paging walk stay,
+                so a date entry point costs one element wherever it belongs. */}
             <MembersDropdown participants={derivedParticipants} />
             <RelaysDropdown conversation={conversation} />
             <button

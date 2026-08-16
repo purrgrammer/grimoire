@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Loader2, PanelLeft, RefreshCw, Search } from "lucide-react";
+import { Loader2, PanelLeft, RefreshCw, Search } from "lucide-react";
 
 import { ChatViewer } from "./ChatViewer";
 import {
@@ -77,6 +77,8 @@ export function ConcordViewer({
     channelId,
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  /** Desktop only: the channel column is collapsible, the sheet is not. */
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [showGuestbook, setShowGuestbook] = useState(false);
   const [query, setQuery] = useState("");
   /** Search this channel only, or everywhere the member can read. */
@@ -149,15 +151,33 @@ export function ConcordViewer({
   // themselves; this is what tells the reader why.
   const dissolvedAtMs = useConcordDissolved(community);
 
+  /**
+   * The remembered channel, captured when the community changes — NEVER read
+   * live.
+   *
+   * `lastChannel` is a device-wide preference every open window shares, so
+   * reading it reactively made one window follow another: open a second window,
+   * click a channel in it, and the first window — still on its fallback because
+   * nobody had clicked in it yet — jumped to the same channel. Armada hit this
+   * and kept the same state per-device for the same reason, and grimoire
+   * reproduced it between two windows of one app.
+   *
+   * Freezing it per community keeps the fallback doing its job (fill the pane on
+   * open) without letting a sibling window steer this one.
+   */
+  const remembered = useMemo(
+    () => (communityIdHex ? lastChannel(communityIdHex) : undefined),
+    // `lastChannel` is deliberately absent: a later write by another window
+    // must not re-run this. `communityIdHex` is the only identity that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [communityIdHex],
+  );
+
   // The OPEN channel is derived, not stored: falling back keeps the pane filled
   // the moment the fold lands, with no effect writing state during a render
   // pass. An explicit pick wins whenever it still resolves; failing that, the
   // channel this device was last left on in this community.
-  const openChannel = resolveOpenChannel(
-    channels,
-    selectedChannel,
-    communityIdHex ? lastChannel(communityIdHex) : undefined,
-  );
+  const openChannel = resolveOpenChannel(channels, selectedChannel, remembered);
 
   /**
    * Record a deliberate move: on this device, and in this window's own props.
@@ -323,10 +343,23 @@ export function ConcordViewer({
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-2 py-1">
-        <span className="truncate text-xs font-medium text-muted-foreground">
-          {state?.folded.metadata?.name ?? community?.name ?? "Community"}
-        </span>
+      {/* The heading IS the search box. The community name was redundant with
+          the row that names it in the picker below and with the window title,
+          and search is the thing worth reaching for at the top of a sidebar. */}
+      <div className="flex items-center gap-1 border-b px-2 py-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1 rounded border px-1.5 py-0.5">
+          <Search className="size-3 shrink-0 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setQuery("");
+            }}
+            placeholder="Search messages"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+        </div>
         {stranded && (
           <span
             className="mr-auto ml-2 shrink-0 rounded border border-dotted px-1 text-[10px] text-muted-foreground"
@@ -356,20 +389,7 @@ export function ConcordViewer({
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />
         </Button>
       </div>
-      <div className="border-b px-2 py-1">
-        <div className="flex items-center gap-1 rounded border px-1.5 py-0.5">
-          <Search className="size-3 shrink-0 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setQuery("");
-            }}
-            placeholder="Search messages"
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+      <div className="border-b px-2 py-1 empty:hidden">
         {searchActive && openChannel && (
           <button
             type="button"
@@ -412,42 +432,46 @@ export function ConcordViewer({
             unread={unread}
             onSelect={handleChannelSelect}
           />
-          <button
-            type="button"
-            onClick={() => {
-              setShowGuestbook((v) => !v);
-              if (isMobile) setSidebarOpen(false);
-            }}
-            className={cn(
-              "flex w-full cursor-crosshair items-center gap-1.5 px-2 py-0.5 text-left text-sm text-muted-foreground hover:bg-muted/50",
-              showGuestbook && "bg-muted/70 font-medium text-foreground",
-            )}
-            title="Joins, departures, removals and bans"
-          >
-            <BookOpen className="size-3 flex-shrink-0" />
-            <span className="truncate">guestbook</span>
-          </button>
+          {/* The guestbook entry is hidden for now: it sat between the channels
+              and nothing else, reading as a channel that is not one. The panel
+              and its state stay wired, so restoring the entry is one element. */}
         </>
       </CommunityPicker>
     </div>
   );
 
-  const headerPrefix = isMobile ? (
+  // One control, two meanings: on mobile it opens the sheet, on desktop it
+  // collapses and restores the column. Desktop kept the channels pinned open
+  // with no way to reclaim the width, which a narrow tile cannot afford.
+  const headerPrefix = (
     <Button
       variant="ghost"
       size="icon"
       className="size-7"
-      onClick={() => setSidebarOpen(true)}
+      title={
+        isMobile
+          ? "Show channels"
+          : desktopSidebarOpen
+            ? "Hide channels"
+            : "Show channels"
+      }
+      onClick={() =>
+        isMobile ? setSidebarOpen(true) : setDesktopSidebarOpen((v) => !v)
+      }
     >
       <PanelLeft className="size-4" />
+      <span className="sr-only">Toggle channels</span>
     </Button>
-  ) : undefined;
+  );
 
   return (
     <div className="flex h-full">
       {isMobile ? (
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-72 p-0">
+          {/* `pt-10` clears the sheet's own close button, which otherwise sits
+              on top of the search box in the sidebar heading. Same reason
+              GroupListViewer pads its sheet. */}
+          <SheetContent side="left" className="w-72 p-0 pt-10">
             <VisuallyHidden.Root>
               <SheetTitle>Channels</SheetTitle>
             </VisuallyHidden.Root>
@@ -455,7 +479,9 @@ export function ConcordViewer({
           </SheetContent>
         </Sheet>
       ) : (
-        <div className="w-64 flex-shrink-0 border-r">{sidebar}</div>
+        desktopSidebarOpen && (
+          <div className="w-64 flex-shrink-0 border-r">{sidebar}</div>
+        )
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Above the pane, not instead of it: a stranded member can still read
