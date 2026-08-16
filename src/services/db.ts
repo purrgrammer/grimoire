@@ -892,6 +892,39 @@ export class GrimoireDb extends Dexie {
           });
         }
       });
+
+    // Version 26: notification levels become protocol-qualified too.
+    //
+    // No schema change — the levels are rows in the flat `concordKv` table, so
+    // this rewrites their KEYS: `c2notif:<community>[::<channel>]` becomes
+    // `chatnotif:<protocol>|<container>[|<channel>]`. See the separator note in
+    // `concord-notif-prefs.ts`: `::` stops working the moment a container is a
+    // relay URL, since an IPv6 literal contains one.
+    //
+    // Carried rather than dropped even though a logout forgets these anyway: a
+    // level is the one preference in Concord whose loss is audible, because a
+    // channel deliberately silenced starts ringing again. The old shape is
+    // spelled out here rather than imported — `concord-notif-prefs` imports
+    // this module, and a migration is frozen history in any case.
+    this.version(26)
+      .stores({ concordKv: "&key" })
+      .upgrade(async (tx) => {
+        const kv = tx.table<{ key: string; value: unknown }>("concordKv");
+        const legacy = await kv.where("key").startsWith("c2notif:").toArray();
+        for (const row of legacy) {
+          const rest = row.key.slice("c2notif:".length);
+          // The community segment is 64 hex characters, so the first `::` is
+          // unambiguously the channel separator.
+          const cut = rest.indexOf("::");
+          const container = cut === -1 ? rest : rest.slice(0, cut);
+          const channel = cut === -1 ? "" : rest.slice(cut + 2);
+          const key = channel
+            ? `chatnotif:concord|${container}|${channel}`
+            : `chatnotif:concord|${container}`;
+          await kv.put({ key, value: row.value });
+          await kv.delete(row.key);
+        }
+      });
   }
 }
 

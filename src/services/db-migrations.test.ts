@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Dexie } from "dexie";
 
 import { GrimoireDb } from "./db";
+import { channelLevelKey, containerLevelKey } from "./concord-notif-prefs";
 
 const ME = "11".repeat(32);
 const COMMUNITY = "aa".repeat(32);
@@ -54,6 +55,10 @@ async function seedV24(name: string): Promise<void> {
     lastRead: 1_700_000_000,
     updatedAt: 1_700_000_000_000,
   });
+  await old.table("concordKv").bulkPut([
+    { key: `c2notif:${COMMUNITY}`, value: "mentions" },
+    { key: `c2notif:${COMMUNITY}::${CHANNEL}`, value: "nothing" },
+  ]);
   old.close();
 }
 
@@ -79,7 +84,7 @@ describe("version 25: the read cursor becomes protocol-qualified", () => {
     }
   });
 
-  it("leaves the superseded table behind", async () => {
+  it("drops the superseded table once its rows are copied", async () => {
     const name = scratchName();
     await seedV24(name);
 
@@ -92,7 +97,7 @@ describe("version 25: the read cursor becomes protocol-qualified", () => {
     }
   });
 
-  it("opens a database that never held the old table", async () => {
+  it("opens a database that never held the old tables", async () => {
     const name = scratchName();
     const db = new GrimoireDb(name);
     await db.open();
@@ -106,6 +111,33 @@ describe("version 25: the read cursor becomes protocol-qualified", () => {
         updatedAt: 8,
       });
       expect(await db.chatReads.count()).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("version 26: notification levels become protocol-qualified", () => {
+  it("rewrites both rungs of the cascade and leaves no old key behind", async () => {
+    const name = scratchName();
+    await seedV24(name);
+
+    const db = new GrimoireDb(name);
+    await db.open();
+    try {
+      expect(
+        await db.concordKv.get(containerLevelKey("concord", COMMUNITY)),
+      ).toEqual({
+        key: containerLevelKey("concord", COMMUNITY),
+        value: "mentions",
+      });
+      expect(
+        (await db.concordKv.get(channelLevelKey("concord", COMMUNITY, CHANNEL)))
+          ?.value,
+      ).toBe("nothing");
+      expect(
+        await db.concordKv.where("key").startsWith("c2notif:").count(),
+      ).toBe(0);
     } finally {
       db.close();
     }

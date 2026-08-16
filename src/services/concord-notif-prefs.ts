@@ -14,7 +14,15 @@
  * clears that table whole, which means signing out forgets every level you set.
  * Both are deliberate: a mute is a preference about this screen, not a claim
  * about an identity, and a wipe that left it behind would leak which channels
- * someone cared enough about to silence.
+ * someone cared enough about to silence. That behaviour is unchanged by the
+ * keys becoming protocol-qualified: the family still sits in a table a Concord
+ * logout empties whole, so a protocol that wants its levels to outlive one will
+ * need a table of its own, not a different key.
+ *
+ * **The keys carry the protocol** ({@link containerLevelKey}) even though
+ * Concord is the only writer, because the cascade's two rungs are a container
+ * and a channel — the same two rungs a NIP-29 relay and group would need — and
+ * a container id only means anything alongside the protocol that issued it.
  *
  * Reads are SYNCHRONOUS against a memo, because the callers are a context menu
  * painting a checkmark and a notifier deciding inside a bus flush. {@link
@@ -25,22 +33,47 @@
 
 import { settingsManager } from "@/services/settings";
 import db from "@/services/db";
+import type { ChatProtocol } from "@/types/chat";
 
 /** All, only when named, or never. Absent at a scope means "inherit". */
 export type NotifLevel = "all" | "mentions" | "nothing";
 
-const KEY_PREFIX = "c2notif:";
+const KEY_PREFIX = "chatnotif:";
 
-/** The kv key for one channel's explicit level. */
+/**
+ * The field separator inside a level key.
+ *
+ * `|` rather than the `::` this family shipped with, because the container
+ * segment is only a bare hex id while Concord is the only protocol. A NIP-29
+ * container is a relay URL, and `wss://[::1]/` puts `::` inside the segment —
+ * which would make `container::channel` ambiguous with a container that merely
+ * contains a colon pair. `|` cannot appear unescaped in a URL and cannot appear
+ * in hex, so it stays a separator whatever occupies the fields.
+ */
+const SEP = "|";
+
+/** Which protocol the functions below write levels for. */
+const PROTOCOL: ChatProtocol = "concord";
+
+/**
+ * The kv key for a whole container's explicit level.
+ *
+ * PROTOCOL-QUALIFIED, because a container id is only unique within a protocol:
+ * a Concord community id is a global commitment, a NIP-29 relay URL is not, and
+ * nothing but this segment would keep the two families apart in one flat table.
+ */
+export const containerLevelKey = (
+  protocol: ChatProtocol,
+  containerId: string,
+): string => `${KEY_PREFIX}${protocol}${SEP}${containerId.toLowerCase()}`;
+
+/** The kv key for one channel's explicit level, inside its container. */
 export const channelLevelKey = (
-  communityId: string,
+  protocol: ChatProtocol,
+  containerId: string,
   channelIdHex: string,
 ): string =>
-  `${KEY_PREFIX}${communityId.toLowerCase()}::${channelIdHex.toLowerCase()}`;
-
-/** The kv key for a whole community's explicit level. */
-export const communityLevelKey = (communityId: string): string =>
-  `${KEY_PREFIX}${communityId.toLowerCase()}`;
+  `${containerLevelKey(protocol, containerId)}${SEP}${channelIdHex.toLowerCase()}`;
 
 /** Every explicit level this device holds, by kv key. Sync answers come here. */
 const memo = new Map<string, NotifLevel>();
@@ -86,14 +119,14 @@ export function channelLevelOverride(
   communityId: string,
   channelIdHex: string,
 ): NotifLevel | undefined {
-  return memo.get(channelLevelKey(communityId, channelIdHex));
+  return memo.get(channelLevelKey(PROTOCOL, communityId, channelIdHex));
 }
 
 /** The level explicitly set on this community, or undefined — it inherits. */
 export function communityLevelOverride(
   communityId: string,
 ): NotifLevel | undefined {
-  return memo.get(communityLevelKey(communityId));
+  return memo.get(containerLevelKey(PROTOCOL, communityId));
 }
 
 /** The app-wide fallback: what a channel nobody has touched is worth. */
@@ -181,7 +214,10 @@ export function setChannelLevel(
   channelIdHex: string,
   level: NotifLevel | undefined,
 ): Promise<void> {
-  return writeLevel(channelLevelKey(communityId, channelIdHex), level);
+  return writeLevel(
+    channelLevelKey(PROTOCOL, communityId, channelIdHex),
+    level,
+  );
 }
 
 /** Set — or clear — the level every channel of one community inherits. */
@@ -189,7 +225,7 @@ export function setCommunityLevel(
   communityId: string,
   level: NotifLevel | undefined,
 ): Promise<void> {
-  return writeLevel(communityLevelKey(communityId), level);
+  return writeLevel(containerLevelKey(PROTOCOL, communityId), level);
 }
 
 /** Repaint on a level change, from anywhere in the app. Returns unsubscribe. */

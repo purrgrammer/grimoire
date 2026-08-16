@@ -352,8 +352,13 @@ export async function clearCommunities(pubkey: string): Promise<void> {
     // gone.
     clearAdoptions(pubkey),
     // Decrypted rumors, control snapshots, parked wraps, and every cursor,
-    // fold, seen-memo and dissolution verdict in `concordKv`. All
-    // Concord-owned; no other subsystem stores anything in these.
+    // fold, seen-memo, dissolution verdict and notification level in
+    // `concordKv`. The table is emptied WHOLE and is treated as Concord-owned,
+    // which the notification levels now qualify rather than contradict: their
+    // keys carry a protocol so a NIP-29 container cannot collide with a
+    // community, but the rows still live here and a Concord logout still takes
+    // them. A family that must outlive one needs its own table, not a
+    // different key.
     db.concordRumors.clear(),
     db.concordSnapshots.clear(),
     db.concordPendingWraps.clear(),

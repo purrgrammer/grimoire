@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _resetNotifPrefsForTests,
   channelLevelKey,
-  communityLevelKey,
+  containerLevelKey,
   ensureNotifPrefsLoaded,
   inheritedLevelSync,
   levelAdmits,
@@ -121,16 +121,33 @@ describe("persistence", () => {
   it("clears the row rather than storing an 'inherit' value", async () => {
     await setChannelLevel(ALPHA, GENERAL, "all");
     expect(
-      await db.concordKv.get(channelLevelKey(ALPHA, GENERAL)),
+      await db.concordKv.get(channelLevelKey("concord", ALPHA, GENERAL)),
     ).toBeTruthy();
     await setChannelLevel(ALPHA, GENERAL, undefined);
     expect(
-      await db.concordKv.get(channelLevelKey(ALPHA, GENERAL)),
+      await db.concordKv.get(channelLevelKey("concord", ALPHA, GENERAL)),
     ).toBeUndefined();
   });
 
+  it("keys a level by protocol, so another protocol's cannot claim it", async () => {
+    await setCommunityLevel(ALPHA, "nothing");
+    // The row a NIP-29 writer would leave for a container whose id happens to
+    // spell the same string. Without the protocol segment the two families
+    // share a key and the loudest write wins.
+    await db.concordKv.put({
+      key: containerLevelKey("nip-29", ALPHA),
+      value: "all",
+    });
+    resetNotifPrefsMemory();
+    await ensureNotifPrefsLoaded();
+    expect(resolveLevelSync(ALPHA, GENERAL)).toBe("nothing");
+  });
+
   it("ignores a row whose value is not a level", async () => {
-    await db.concordKv.put({ key: communityLevelKey(ALPHA), value: "loud" });
+    await db.concordKv.put({
+      key: containerLevelKey("concord", ALPHA),
+      value: "loud",
+    });
     resetNotifPrefsMemory();
     await ensureNotifPrefsLoaded();
     expect(resolveLevelSync(ALPHA, GENERAL)).toBe("mentions");
