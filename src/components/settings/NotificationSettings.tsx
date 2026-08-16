@@ -21,6 +21,7 @@ import {
 } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { useSettings } from "@/hooks/useSettings";
+import { requestNotificationPermission } from "@/lib/notification-permission";
 import type { NotifLevel } from "@/services/concord-notif-prefs";
 
 type Permission = NotificationPermission | "unsupported";
@@ -52,7 +53,7 @@ export function NotificationSettingsSection() {
       // inside the gesture that produced it, so an effect or a later retry
       // would be refused without ever showing a prompt.
       if (checked && typeof Notification !== "undefined") {
-        void Notification.requestPermission()
+        void requestNotificationPermission()
           .then(setPermission)
           .catch(() => setPermission(currentPermission()));
       }
