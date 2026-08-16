@@ -73,6 +73,57 @@ Notification levels are keyed the same way:
 `chatnotif:<protocol>|<container>[|<channel>]` in `concordKv`, which a Concord
 logout empties whole.
 
+## Local search (Concord only)
+
+`searchConcordMessages` (`src/services/concord-search.ts`) does **not** query
+rows. It runs each in-scope channel through the same pipeline the timeline reads
+with — `queryChannelRumors` → stamp the channel's `current.epoch` →
+`filterEpochCutoff` → `foldTimeline(…, chatModerationOf(folded, community.id))`
+— and matches a case-insensitive substring over the FOLDED messages.
+
+That is the invariant: **a hit is a strict subset of what the channel would
+render.** Banned authors, expired rumors, retired-epoch rows and deleted
+messages are absent by construction rather than by a second set of rules, and an
+edited message matches its edited text because the fold applied the edit first.
+`chatModerationOf` (`src/lib/concord/chat.ts`) exists so the timeline and the
+search cannot wire moderation differently.
+
+`SEARCH_SCAN_LIMIT` bounds the store read as well as the fold: since the paging
+fix, `queryChannelRumors` walks the `[communityId+channel+created_at]` index
+backwards and stops once the limit's worth of row-kind rows is collected, and
+search passes no `until`, so the side-event top-up query never runs. A match
+older than a channel's newest 5000 rows is invisible.
+
+Search is Concord's alone because its corpus is the local plaintext rumor store.
+NIP-29 messages live in the EventStore with no local mirror, so there is nothing
+to generalize over yet.
+
+## Moderation rendering (Concord only)
+
+Nothing is ever removed from `concordRumors` — `writeChatRumors` only puts — so
+a kind-5 and its target both persist and `foldTimeline` re-applies the removal
+on every read. (Armada physically deletes; CORD authorizes a moderator delete
+without mandating removal, so the two clients differ and both are honest.)
+
+`FoldedTimeline.removed` carries the moderator removals only. The adapter maps
+each to a `Message` with `metadata.deleted` and `metadata.deletedBy`, and
+ChatViewer renders it as a muted row naming author and remover. Three details
+are load-bearing:
+
+- **Self-deletes leave nothing.** They are not in `removed`; a tombstone would
+  advertise the erasure the spec's carve-out protects.
+- **The `event` is scrubbed** — empty content, empty tags — while `id` stays the
+  real rumor id for keying and dedupe. `Message.event` is documented as "the
+  original event for verification", a contract Concord already voids (`sig` is
+  empty; rumors have none and nothing re-verifies). The row exposes no
+  raw-event affordance, but a future generic "view raw event" over
+  `Message.event` must special-case a deleted row.
+- **Tombstones are `type: "user"`, not `"system"`.** `groupSystemMessages`
+  collapses only system rows, and a collapsed tombstone would take a jump target
+  with it. The adapter's emitter dedupe signature also counts
+  `metadata.deleted`, because a delete landing mid-session changes no id, no
+  timestamp and no delivery state.
+
 ## Adding a protocol
 
 1. Extend `ChatProtocolAdapter` in `src/lib/chat/adapters/`
