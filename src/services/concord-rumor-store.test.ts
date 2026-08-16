@@ -21,6 +21,7 @@ import {
   clearCommunityRumors,
   noteControlSnapshot,
   pruneControlSnapshots,
+  queryChannelRumors,
   queryPlane,
   readControlSnapshot,
   writeChatRumors,
@@ -160,6 +161,85 @@ describe("the plane boundary — writeChatRumors", () => {
     };
     await writeChatRumors(COMMUNITY, [forged]);
     expect(await queryPlane(COMMUNITY, "control")).toEqual([]);
+  });
+});
+
+describe("queryChannelRumors — the paging bound", () => {
+  const CHANNEL = "cc".repeat(32);
+
+  /** One stored chat rumor at a given second. */
+  async function chat(
+    kind: number,
+    createdAt: number,
+    channel = CHANNEL,
+  ): Promise<string> {
+    const row: OpenedEvent & { channel: string } = {
+      ...opened({ kind, createdAt, ms: createdAt * 1000 }),
+      channel,
+    };
+    await writeChatRumors(COMMUNITY, [row]);
+    return row.rumorId;
+  }
+
+  it("keeps a delete that is NEWER than the page it deletes into", async () => {
+    // The whole point: a kind-5 arrives after the message it removes, so
+    // bounding side events by `until` hides the tombstone behind the very page
+    // that reveals its target — and deleted messages come back to life when
+    // you scroll into history.
+    const message = await chat(KIND_MESSAGE, 100);
+    const del = await chat(5, 200);
+    const ids = (
+      await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 50, until: 150 })
+    ).map((r) => r.rumorId);
+    expect(ids).toContain(message);
+    expect(ids).toContain(del);
+  });
+
+  it("still drops a side event older than the window it would decorate", async () => {
+    await chat(7, 10);
+    const message = await chat(KIND_MESSAGE, 100);
+    const ids = (
+      await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 1 })
+    ).map((r) => r.rumorId);
+    expect(ids).toEqual([message]);
+  });
+
+  it("includes a row sitting exactly ON the bound", async () => {
+    const message = await chat(KIND_MESSAGE, 150);
+    const ids = (
+      await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 50, until: 150 })
+    ).map((r) => r.rumorId);
+    expect(ids).toContain(message);
+  });
+
+  it("spends the page budget on ROWS ONLY, so a reaction flood cannot shrink it", async () => {
+    for (let i = 0; i < 10; i++) await chat(KIND_MESSAGE, 100 + i);
+    for (let i = 0; i < 100; i++) await chat(7, 100 + i);
+    const got = await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 5 });
+    expect(got.filter((r) => r.kind === KIND_MESSAGE)).toHaveLength(5);
+  });
+
+  it("pages the newest rows first and never crosses into another channel", async () => {
+    const OTHER_CHANNEL = "dd".repeat(32);
+    await chat(KIND_MESSAGE, 500, OTHER_CHANNEL);
+    const newest = await chat(KIND_MESSAGE, 300);
+    await chat(KIND_MESSAGE, 200);
+    await chat(KIND_MESSAGE, 100);
+    const got = await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 2 });
+    expect(got).toHaveLength(2);
+    expect(got[0].rumorId).toBe(newest);
+    expect(got.every((r) => r.createdAt >= 200)).toBe(true);
+  });
+
+  it("admits the same-second siblings of the budget's last row", async () => {
+    // The walk stops one row PAST the page, so a tie at the boundary is seen
+    // rather than cut off mid-second.
+    await chat(KIND_MESSAGE, 100);
+    await chat(KIND_MESSAGE, 100);
+    await chat(7, 100);
+    const got = await queryChannelRumors(COMMUNITY, CHANNEL, { limit: 1 });
+    expect(got.filter((r) => r.kind === KIND_MESSAGE)).toHaveLength(1);
+    expect(got.filter((r) => r.kind === 7)).toHaveLength(1);
   });
 });
 

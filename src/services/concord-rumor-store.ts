@@ -43,6 +43,7 @@
  * there too.
  */
 
+import { Dexie } from "dexie";
 import type { NostrEvent } from "nostr-tools";
 
 import type { FoldedControl } from "@/lib/concord/control";
@@ -462,6 +463,20 @@ const CHAT_SIDE_KINDS = [7, 5, 3302];
  * `limit` budgets the ROWS, and the side events (reactions, deletes, edits) are
  * fetched separately and unbudgeted against it — otherwise a reaction flood on
  * one message displaces the rows it decorates, and the channel reads empty.
+ *
+ * `until` bounds the ROWS ONLY, and inclusively. A side event is almost always
+ * NEWER than what it decorates — a delete arrives after the message it removes,
+ * a reaction after the message it answers — so applying the paging bound to
+ * them too hides a kind-5 behind the very page that reveals its target: page
+ * backwards into history and deleted messages come back to life. The bound that
+ * does apply to side events is the window's OLDEST row, below which their
+ * targets are not on screen to decorate.
+ *
+ * The walk is index-backed (`[communityId+channel+created_at]`, descending) so
+ * a live re-read costs the page rather than the channel. The index cannot
+ * express the row/side split, so the walk keeps going until `limit` ROW-kind
+ * rows are collected: side kinds ride along without spending the budget, which
+ * is what stops a reaction flood from silently shrinking the page.
  */
 export async function queryChannelRumors(
   communityId: string,
@@ -469,32 +484,66 @@ export async function queryChannelRumors(
   opts: { limit: number; until?: number } = { limit: 200 },
 ): Promise<OpenedEvent[]> {
   const channel = channelIdHex.toLowerCase();
-  const inRange = (row: ConcordRumorRow) =>
-    opts.until === undefined || row.created_at <= opts.until;
-
-  const all = await db.concordRumors
-    .where("[communityId+channel]")
-    .equals([communityId, channel])
-    .toArray();
-
-  const rows = all.filter(inRange);
+  if (!communityId || !channel) return [];
   const byNewest = (a: ConcordRumorRow, b: ConcordRumorRow) =>
     b.created_at - a.created_at;
   const rowKinds = new Set(CHAT_ROW_KINDS);
   const sideKinds = new Set(CHAT_SIDE_KINDS);
+  const upper = opts.until ?? Dexie.maxKey;
 
-  const timeline = rows
+  // Walk back from the bound until the page's rows are collected, then one row
+  // further: stopping at the first row strictly older than the budget's last
+  // row is what admits its same-second siblings before quitting.
+  const collected: ConcordRumorRow[] = [];
+  let rows = 0;
+  let budgetSpentAt: number | undefined;
+  await db.concordRumors
+    .where("[communityId+channel+created_at]")
+    .between(
+      [communityId, channel, Dexie.minKey],
+      [communityId, channel, upper],
+      true,
+      true,
+    )
+    .reverse()
+    .until(
+      (row) => budgetSpentAt !== undefined && row.created_at < budgetSpentAt,
+      false,
+    )
+    .each((row) => {
+      collected.push(row);
+      if (!rowKinds.has(row.kind)) return;
+      rows += 1;
+      if (rows === opts.limit) budgetSpentAt = row.created_at;
+    });
+
+  const timeline = collected
     .filter((r) => rowKinds.has(r.kind))
     .sort(byNewest)
     .slice(0, opts.limit);
   const oldest =
     timeline.length > 0 ? timeline[timeline.length - 1].created_at : undefined;
-  // Side events only for the window the rows cover, so an old reaction cannot
-  // resurrect a message that fell outside it.
-  const side = rows.filter(
+  const side = collected.filter(
     (r) =>
       sideKinds.has(r.kind) && (oldest === undefined || r.created_at >= oldest),
   );
+
+  // The half the paging bound must not hide: side events ABOVE `until`. Every
+  // one of them is newer than the window's oldest row by construction, so the
+  // walk's lower bound needs no restating here.
+  if (opts.until !== undefined) {
+    const above = await db.concordRumors
+      .where("[communityId+channel+created_at]")
+      .between(
+        [communityId, channel, opts.until],
+        [communityId, channel, Dexie.maxKey],
+        false,
+        true,
+      )
+      .filter((r) => sideKinds.has(r.kind))
+      .toArray();
+    side.push(...above);
+  }
 
   return [...timeline, ...side].map(rowToOpened);
 }
