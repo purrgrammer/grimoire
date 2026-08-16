@@ -41,6 +41,7 @@ import {
 } from "@/services/concord-adoptions";
 import { invalidateChannelDirectory } from "@/services/concord-channel-directory";
 import { resetNotifPrefsMemory } from "@/services/concord-notif-prefs";
+import { resetConcordPrefs } from "@/services/concord-prefs";
 import { resetDraftCache } from "@/services/chat-drafts";
 import { clearReads } from "@/services/concord-reads";
 import db, { type ConcordCommunityRow } from "@/services/db";
@@ -397,6 +398,11 @@ export async function clearCommunities(pubkey: string): Promise<void> {
   // the memo in front of it has to go too, or the tab keeps answering with
   // levels that no longer exist and hands them to whoever signs in next.
   resetNotifPrefsMemory();
+  // Pins, folded categories and the channel each community was left on. These
+  // live in localStorage rather than `concordKv`, so the table wipe above does
+  // not reach them — and they must go for the same reason the levels do: they
+  // name the communities and channels this account cared enough to arrange.
+  resetConcordPrefs();
   // The ids of every message this tab has already announced. Opaque and
   // bounded, so nothing leaks — but it is the account's traffic, and the memo
   // block is where the account's traces go.

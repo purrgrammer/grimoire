@@ -470,6 +470,25 @@ describe("syncCommunities", () => {
     expect(readDraft(key)).toBeUndefined();
   });
 
+  it("forgets how this device had the sidebar arranged", async () => {
+    // Pins, folded categories and the channel each community was left on live
+    // in localStorage rather than `concordKv`, so the table wipe cannot reach
+    // them — and they name the communities and channels this account cared
+    // enough about to arrange, which is the same disclosure the levels go for.
+    const { CHAT_PREFS_STORAGE_KEY, concordPrefsManager, loadPrefs } =
+      await import("./concord-prefs");
+    concordPrefsManager.togglePin("cc".repeat(32), "dd".repeat(32));
+    concordPrefsManager.setLastChannel("cc".repeat(32), "dd".repeat(32));
+    expect(localStorage.getItem(CHAT_PREFS_STORAGE_KEY)).not.toBeNull();
+
+    await clearCommunities(pubkey);
+
+    expect(localStorage.getItem(CHAT_PREFS_STORAGE_KEY)).toBeNull();
+    // And the tab it was still painting from, not only the stored copy.
+    expect(concordPrefsManager.value.pinnedChannels).toEqual([]);
+    expect(loadPrefs().lastChannelByContainer).toEqual({});
+  });
+
   it("forgets which messages this tab has already announced", async () => {
     // Rumor ids belonging to the account that just left. Bounded and opaque,
     // so nothing leaks — but the memo block is where the account's traces go,
