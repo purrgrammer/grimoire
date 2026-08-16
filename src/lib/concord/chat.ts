@@ -247,6 +247,16 @@ export interface ReactionEntry {
   url?: string;
 }
 
+/** A message a MODERATOR removed, kept so the reader can be told it existed. */
+export interface RemovedMessage {
+  /** The message that was removed — its author, id and time, not its content. */
+  target: OpenedChat;
+  /** The moderator whose authorized kind-5 removed it. */
+  deleter: string;
+  /** Millisecond time of the removed message (not of the delete). */
+  ms: number;
+}
+
 export interface FoldedTimeline {
   /** Surviving messages, sorted by `ms` ascending. */
   messages: OpenedChat[];
@@ -258,6 +268,18 @@ export interface FoldedTimeline {
    * centered notice rows.
    */
   timerNotices: OpenedChat[];
+  /**
+   * Moderator removals, sorted by target `ms` ascending — the facts a tombstone
+   * row is drawn from.
+   *
+   * A SELF-delete is never in here, deliberately. A member scrubbing their own
+   * past message is the one erasure CORD-02 §9 protects even after a community
+   * is dissolved, and a row saying "something was here" would advertise exactly
+   * what they removed. Their message stays a silent gap; only a removal someone
+   * ELSE performed is announced, because that is an act of moderation the
+   * community's members are entitled to see happened.
+   */
+  removed: RemovedMessage[];
 }
 
 /**
@@ -288,12 +310,18 @@ export function markReactionDeleted(rumorId: string): void {
  * authors and expired rumors, apply edits (author-only, latest by `ms`), and
  * tally reactions per target.
  *
- * Deletes are DELETES, not hides — a kind-5 physically removes its target from
- * the store — so a set read back from the store never contains a deleted
- * message. The delete pass here covers only IN-BATCH deletes, where an
- * optimistic or just-arrived kind-5 folds alongside its target before the
- * store's removal has committed, and it applies the same authorization so the
- * two paths agree.
+ * Deletes are applied HERE and nowhere else. Nothing ever removes a row from
+ * the store — `writeChatRumors` only puts — so the kind-5 and the message it
+ * names both stay on disk and this pass re-applies the removal on every read.
+ * That is deliberate rather than incidental: a tombstone row needs both events
+ * to still exist, and a physical delete would leave the reader with an
+ * unexplained gap and no way to say who made it. (Armada does delete the row;
+ * CORD.md §405 authorizes a moderator's delete without mandating removal, so the
+ * two clients differ here and both are honest.)
+ *
+ * The removal is not silent for a moderator's delete: `removed` carries the
+ * target and the deleter so the reader is told a message was taken down. A
+ * self-delete leaves nothing behind — see {@link FoldedTimeline.removed}.
  */
 export function foldTimeline(
   opened: OpenedChat[],
@@ -415,17 +443,30 @@ export function foldTimeline(
     }
   }
 
-  // In-batch deletes: self-delete, or an authorized moderator delete.
+  // Deletes: a self-delete, or an authorized moderator delete.
+  const removed: RemovedMessage[] = [];
   for (const [id, msg] of byId) {
     const deleters = deletes.get(id);
     if (!deleters) continue;
-    const deleted =
-      deleters.has(msg.author) ||
-      (moderation !== undefined &&
-        [...deleters].some(([d, act]) =>
-          moderation.canDelete(d, msg.author, act),
-        ));
-    if (deleted) byId.delete(id);
+    // Self FIRST, and the order is the rule: a message its own author deleted
+    // leaves no trace even when a moderator deleted it too. Recording the
+    // moderator there would announce an erasure the author performed themselves.
+    if (deleters.has(msg.author)) {
+      byId.delete(id);
+      continue;
+    }
+    if (moderation === undefined) continue;
+    // The EARLIEST authorized delete is the one credited, so two moderators
+    // acting on the same message name the one who actually took it down rather
+    // than whichever the Map happened to iterate first.
+    let actor: { deleter: string; ms: number } | undefined;
+    for (const [deleter, act] of deleters) {
+      if (!moderation.canDelete(deleter, msg.author, act)) continue;
+      if (!actor || act.ms < actor.ms) actor = { deleter, ms: act.ms };
+    }
+    if (!actor) continue;
+    byId.delete(id);
+    removed.push({ target: msg, deleter: actor.deleter, ms: msg.ms });
   }
 
   // In-batch reaction deletes: a kind-5 targeting a reaction rumor removes that
@@ -444,5 +485,6 @@ export function foldTimeline(
     messages: [...byId.values()].sort((a, b) => a.ms - b.ms),
     reactions,
     timerNotices: timerNotices.sort((a, b) => a.ms - b.ms),
+    removed: removed.sort((a, b) => a.ms - b.ms),
   };
 }
