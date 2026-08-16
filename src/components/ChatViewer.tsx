@@ -99,6 +99,7 @@ import {
   computeFirstItemIndexDelta,
   FIRST_ITEM_INDEX_BASE,
 } from "./chat/prepend-anchor";
+import { REVIVE_AFTER_MS, shouldRevive } from "./chat/list-revival";
 import {
   clearDraft,
   draftKey,
@@ -1253,6 +1254,41 @@ export function ChatViewer({
    * stops, because anchoring to the end of one piece only gets pushed up by the
    * next. `scrollToIndex` is the same call the End key uses.
    */
+  /**
+   * Revive a timeline that mounted before its container existed — see
+   * `list-revival.ts` for what react-virtuoso does in that case and why nothing
+   * recovers on its own.
+   *
+   * `itemsRendered` is the signal: it fires with the rows the list actually put
+   * in the DOM, so zero of them while `messagesWithMarkers` is non-empty is the
+   * blank pane exactly. The check is deferred, because zero is also what a
+   * healthy list reports for one frame between mounting and measuring.
+   */
+  const [listKey, setListKey] = useState(0);
+  const renderedCount = useRef(0);
+  const revivals = useRef(0);
+  const revivingFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const id = conversation?.id;
+    if (revivingFor.current !== id) {
+      revivingFor.current = id;
+      revivals.current = 0;
+      // A new conversation has rendered nothing yet. Without this the count
+      // left behind by the LAST channel — a healthy 13 — answers for the new
+      // one, and a channel that mounts stuck is never seen to be stuck. That
+      // is the common way into a blank pane: clicking between channels.
+      renderedCount.current = 0;
+    }
+    const count = messagesWithMarkers.length;
+    if (count === 0) return;
+    const timer = setTimeout(() => {
+      if (!shouldRevive(renderedCount.current, count, revivals.current)) return;
+      revivals.current += 1;
+      setListKey((k) => k + 1);
+    }, REVIVE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [conversation?.id, messagesWithMarkers.length, listKey]);
+
   const anchoredFor = useRef<string | undefined>(undefined);
   useEffect(() => {
     const id = conversation?.id;
@@ -1918,8 +1954,15 @@ export function ChatViewer({
       <div className="flex-1 overflow-hidden" onKeyDown={handleFeedKeyDown}>
         {messagesWithMarkers && messagesWithMarkers.length > 0 ? (
           <Virtuoso
+            // A remount is the revival: it re-runs `initialTopMostItemIndex`
+            // against a container that is laid out by now. Nothing is lost —
+            // this only bumps while the list is rendering nothing.
+            key={listKey}
             ref={virtuosoRef}
             data={messagesWithMarkers}
+            itemsRendered={(items) => {
+              renderedCount.current = items.length;
+            }}
             firstItemIndex={anchor.firstItemIndex}
             initialTopMostItemIndex={{ index: "LAST", align: "end" }}
             followOutput="smooth"
