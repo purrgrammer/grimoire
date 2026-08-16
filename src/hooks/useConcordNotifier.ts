@@ -17,7 +17,7 @@
 import { useEffect, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 
-import { mentionsPubkey } from "@/lib/concord/mentions";
+import { mentionsPubkey } from "@/lib/chat/mentions";
 import {
   notificationBody,
   shouldNotify,

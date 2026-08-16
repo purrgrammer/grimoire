@@ -107,7 +107,7 @@ import {
   shouldRestoreDraft,
   writeDraft,
 } from "@/services/chat-drafts";
-import { mentionsPubkey } from "@/lib/concord/mentions";
+import { mentionsPubkey } from "@/lib/chat/mentions";
 import { cn } from "@/lib/utils";
 
 interface ChatViewerProps {

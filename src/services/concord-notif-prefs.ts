@@ -239,7 +239,7 @@ export function onNotifPrefsChange(listener: () => void): () => void {
 /**
  * Whether a resolved level lets this message through.
  *
- * `mention` here is what `mentionsPubkey` (`src/lib/concord/mentions.ts`)
+ * `mention` here is what `mentionsPubkey` (`src/lib/chat/mentions.ts`)
  * answers, which includes a threaded reply to you — a reply is addressed to you
  * whether or not it spells your name. Armada draws the same line.
  */

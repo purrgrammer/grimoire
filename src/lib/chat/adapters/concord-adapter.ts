@@ -68,7 +68,7 @@ import {
 } from "@/lib/concord/send-rate-limit";
 import { KIND_DELETE, KIND_MESSAGE, KIND_REACTION } from "@/lib/concord/kinds";
 import { messageExpirationOf } from "@/lib/concord/disappearing";
-import { extractMentionTags } from "@/lib/concord/mentions";
+import { extractMentionTags } from "@/lib/chat/mentions";
 import { emitWireScopes } from "@/lib/concord/wire-bus";
 import { syncChannel } from "@/services/concord-channel-sync";
 import {

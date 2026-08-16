@@ -57,7 +57,7 @@ import {
   TIMELINE_KINDS,
   type Plane,
 } from "@/lib/concord/kinds";
-import { mentionsPubkey } from "@/lib/concord/mentions";
+import { mentionsPubkey } from "@/lib/chat/mentions";
 import type { OpenedEvent, OpenedWireEvent } from "@/lib/concord/stream";
 import { resolveMs } from "@/lib/concord/stream";
 import db, { type ConcordRumorRow } from "@/services/db";
