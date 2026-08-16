@@ -18,7 +18,11 @@ import { useEffect, useRef } from "react";
 import { use$ } from "applesauce-react/hooks";
 
 import { mentionsPubkey } from "@/lib/concord/mentions";
-import { shouldNotify, type NotifyCandidate } from "@/lib/concord/notify";
+import {
+  notificationBody,
+  shouldNotify,
+  type NotifyCandidate,
+} from "@/lib/concord/notify";
 import { onWireScopes } from "@/lib/concord/wire-bus";
 import { useAddWindow } from "@/core/state";
 import {
@@ -144,7 +148,7 @@ export function useConcordNotifier(): void {
         const title = candidate.isMention
           ? `${name} mentioned you in #${entry.channelName}`
           : `${name} in #${entry.channelName}`;
-        const body = row.content.slice(0, BODY_CHARS);
+        const body = notificationBody(row.content, BODY_CHARS);
         try {
           const notification = new Notification(title, {
             body,

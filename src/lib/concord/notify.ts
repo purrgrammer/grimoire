@@ -127,6 +127,35 @@ export function shouldNotify(
 }
 
 /**
+ * A message as an OS notification can show it: plain text, one line.
+ *
+ * The timeline runs content through `RichText`, which turns a `nostr:` URI into
+ * a name and a `:shortcode:` into an image. A notification has neither, so
+ * without this a mention reads as sixty characters of bech32 and the message
+ * itself never fits. Placeholders rather than names: resolving a pubkey is
+ * asynchronous and this has to answer while the alert is being built.
+ *
+ * The shortcode pattern is deliberately anchored to word edges — `10:30:45` is
+ * not two emoji — and the trim is last, so what is cut is the reader's prose
+ * rather than a URI that was about to disappear anyway.
+ */
+export function notificationBody(content: string, limit: number): string {
+  const text = content
+    .replace(
+      /\bnostr:(?:npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]+/gi,
+      "@someone",
+    )
+    .replace(
+      /\bnostr:(?:note|nevent|naddr)1[023456789acdefghjklmnpqrstuvwxyz]+/gi,
+      "[note]",
+    )
+    .replace(/(^|\s):([a-z0-9_+-]{2,30}):(?=$|[\s.,!?])/gi, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
+
+/**
  * Forget what this tab has already announced. The logout door.
  *
  * The ring holds rumor ids belonging to the account that just left, and every

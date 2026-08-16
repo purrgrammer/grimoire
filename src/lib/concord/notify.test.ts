@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   _resetNotifyForTests,
   isChannelActive,
+  notificationBody,
   registerActiveChannel,
   resetAnnouncedMemory,
   shouldNotify,
@@ -177,5 +178,46 @@ describe("the logout door", () => {
     registerActiveChannel(CHANNEL);
     resetAnnouncedMemory();
     expect(isChannelActive(CHANNEL)).toBe(true);
+  });
+});
+
+describe("notificationBody", () => {
+  const npub =
+    "nostr:npub1qqqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qarc0sjvzsu6";
+
+  it("names a mention as a person rather than sixty characters of bech32", () => {
+    expect(notificationBody(`hey ${npub} look`, 140)).toBe("hey @someone look");
+  });
+
+  it("stands a quoted note in for its pointer", () => {
+    expect(notificationBody("see nostr:note1qqqsyqcyq5rq wow", 140)).toBe(
+      "see [note] wow",
+    );
+  });
+
+  it("shows a custom emoji's name instead of its colons", () => {
+    expect(notificationBody("ship it :rocket:", 140)).toBe("ship it rocket");
+  });
+
+  it("leaves a clock time alone — 10:30:45 is not two emoji", () => {
+    expect(notificationBody("standup at 10:30:45 sharp", 140)).toBe(
+      "standup at 10:30:45 sharp",
+    );
+  });
+
+  it("flattens the newlines an OS would swallow anyway", () => {
+    expect(notificationBody("one\n\n  two   three", 140)).toBe("one two three");
+  });
+
+  it("trims after substituting, so prose is what gets cut", () => {
+    // Trimming first would spend the whole budget on a URI that was about to
+    // become eight characters.
+    const body = notificationBody(`${npub} and then some more words`, 20);
+    expect(body.startsWith("@someone and then")).toBe(true);
+    expect(body.endsWith("…")).toBe(true);
+  });
+
+  it("adds no ellipsis to a message that fits", () => {
+    expect(notificationBody("short", 140)).toBe("short");
   });
 });
