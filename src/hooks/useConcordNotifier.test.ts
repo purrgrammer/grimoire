@@ -11,7 +11,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { BehaviorSubject } from "rxjs";
 
 const addWindow = vi.hoisted(() => vi.fn());
 const resolveChannel = vi.hoisted(() => vi.fn());
