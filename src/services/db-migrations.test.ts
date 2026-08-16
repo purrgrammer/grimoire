@@ -117,6 +117,36 @@ describe("version 25: the read cursor becomes protocol-qualified", () => {
   });
 });
 
+describe("the ladder replays from every version that ever shipped", () => {
+  // The v25 upgrade READS `concordReads` — a table the same version deletes,
+  // and one that databases older than v23 never had at all. On those, Dexie
+  // creates it while walking the intervening versions and the upgrader then
+  // reads it empty. If that ever stopped working the upgrader would throw
+  // inside `open()`, which is not a lost row but a database that will not open
+  // — so the oldest ladders are walked here rather than assumed.
+  for (const version of [5, 20, 22, 23]) {
+    it(`opens a v${version} database without losing what was in it`, async () => {
+      const name = scratchName();
+      const old = new Dexie(name);
+      old.version(version).stores({ profiles: "&pubkey", concordKv: "&key" });
+      await old.open();
+      await old.table("profiles").put({ pubkey: ME });
+      old.close();
+
+      const db = new GrimoireDb(name);
+      await db.open();
+      try {
+        const tables = db.tables.map((t) => t.name);
+        expect(tables).toContain("chatReads");
+        expect(tables).not.toContain("concordReads");
+        expect(await db.profiles.count()).toBe(1);
+      } finally {
+        db.close();
+      }
+    });
+  }
+});
+
 describe("version 26: notification levels become protocol-qualified", () => {
   it("rewrites both rungs of the cascade and leaves no old key behind", async () => {
     const name = scratchName();
