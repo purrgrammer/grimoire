@@ -120,6 +120,19 @@ export class ConcordAdapter extends ChatProtocolAdapter {
   private doorbells = new Map<string, () => void>();
 
   /**
+   * How many rows the reader has asked this conversation to show, per paging.
+   *
+   * It lives on the adapter rather than in a `read()` argument because the two
+   * reads that repaint the timeline cannot carry it: the doorbell closure is
+   * pinned to the `options` its `loadMessages` call was made with (ChatViewer
+   * passes none), and the backfill's `onFresh` re-read is pinned the same way.
+   * Without this, every "load older" click fetched history into the store and
+   * then immediately re-read the newest {@link PAGE_ROWS} rows over it, so the
+   * page was never rendered and the button did nothing at all.
+   */
+  private windows = new Map<string, number>();
+
+  /**
    * A Concord channel is never addressed by a typed string.
    *
    * Both ids are raw hex and both are meaningless without held key material, so
@@ -274,16 +287,48 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     emitter.next(next);
   }
 
+  /**
+   * Page backwards: widen what the timeline shows, and fill it in.
+   *
+   * The caller's `before` is the oldest row it currently renders. Widening the
+   * window is what actually makes the page appear — the returned array is not a
+   * render path (ChatViewer counts it and throws it away), so a `loadMoreMessages`
+   * that only fetched left the reader looking at the same messages.
+   *
+   * The page returned for that count is STRICTLY older than `before`. The store's
+   * bound is inclusive, so `<=` would hand back the boundary row the caller
+   * already has and make "is this the end of the history" off by one. The cost of
+   * strict is that same-second siblings of the oldest rendered row do not count —
+   * they still RENDER, because the emitter publishes the whole widened window;
+   * only the count is short, and only 50+ messages sharing one second could end
+   * paging a click early.
+   */
   async loadMoreMessages(
     conversation: Conversation,
     before: number,
   ): Promise<Message[]> {
     const identifier = parseConversationId(conversation.id);
     if (!identifier) return [];
-    // Backfill the relays BELOW the oldest row we hold, then re-read the store:
-    // the page the caller wants may only exist on the wire.
-    await this.backfill(identifier, before);
-    return this.read(identifier, { before });
+    const conversationId = conversationIdOf(identifier);
+    this.windows.set(
+      conversationId,
+      (this.windows.get(conversationId) ?? PAGE_ROWS) + PAGE_ROWS,
+    );
+
+    const emitter = this.timelines.get(conversationId);
+    const repaint = async (): Promise<Message[]> => {
+      const next = await this.read(identifier);
+      if (emitter) this.publish(conversationId, emitter, next);
+      return next;
+    };
+
+    // Backfill the relays BELOW the oldest row we hold — the page the caller
+    // wants may only exist on the wire — repainting as each relay lands.
+    await this.backfill(identifier, before, () => {
+      void repaint().catch(() => undefined);
+    });
+    const widened = await repaint();
+    return widened.filter((m) => m.timestamp < before);
   }
 
   getCapabilities(): ChatCapabilities {
@@ -416,6 +461,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     this.timelines.delete(conversationId);
     this.started.delete(conversationId);
     this.lastEmitted.delete(conversationId);
+    this.windows.delete(conversationId);
     this.doorbells.get(conversationId)?.();
     this.doorbells.delete(conversationId);
   }
@@ -427,6 +473,7 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     this.timelines.clear();
     this.started.clear();
     this.lastEmitted.clear();
+    this.windows.clear();
     this.doorbells.clear();
   }
 
@@ -607,11 +654,17 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     options?: LoadMessagesOptions,
   ): Promise<Message[]> {
     const { community, channel, folded } = await this.resolve(identifier);
+    // Whatever the caller asked for, never less than the reader has paged into
+    // view — see {@link windows} for why the callers cannot say so themselves.
+    const limit = Math.max(
+      options?.limit ?? PAGE_ROWS,
+      this.windows.get(conversationIdOf(identifier)) ?? 0,
+    );
     const rows = await queryChannelRumors(
       identifier.communityId,
       identifier.channelId,
       {
-        limit: options?.limit ?? PAGE_ROWS,
+        limit,
         ...(options?.before !== undefined ? { until: options.before } : {}),
       },
     );

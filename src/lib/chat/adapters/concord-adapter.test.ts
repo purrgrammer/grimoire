@@ -14,7 +14,7 @@ import { bytesToHex, channelGroupKey, random32 } from "@/lib/concord/derive";
 import type { FoldedControl } from "@/lib/concord/control";
 import { KIND_MESSAGE } from "@/lib/concord/kinds";
 import type { Channel, Community } from "@/lib/concord/types";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, Message } from "@/types/chat";
 
 const communityId = random32();
 const idHex = bytesToHex(communityId);
@@ -33,7 +33,14 @@ const published = vi.hoisted(() =>
 );
 const banned = vi.hoisted(() => new Set<string>());
 
+const synced = vi.hoisted(() =>
+  vi.fn(async (_c: unknown, _ch: unknown, opts?: { onFresh?: () => void }) => {
+    opts?.onFresh?.();
+  }),
+);
+
 vi.mock("@/services/concord-publish", () => ({ publishWrap: published }));
+vi.mock("@/services/concord-channel-sync", () => ({ syncChannel: synced }));
 vi.mock("@/services/accounts", () => ({
   default: {
     active$: {
@@ -125,6 +132,7 @@ beforeEach(async () => {
   await db.concordRumors.clear();
   await db.concordKv.clear();
   published.mockClear();
+  synced.mockClear();
   banned.clear();
   const { _resetDissolutionForTests } =
     await import("@/services/concord-dissolution");
@@ -204,6 +212,101 @@ describe("the dissolution gate on sending", () => {
       /banned/i,
     );
     expect(published).not.toHaveBeenCalled();
+  });
+});
+
+describe("paging backwards", () => {
+  /** One stored message per given second, authored by someone else. */
+  async function seed(seconds: number[]): Promise<void> {
+    await writeChatRumors(
+      idHex,
+      seconds.map((createdAt, i) => ({
+        rumorId: (i + 1).toString(16).padStart(64, "0"),
+        author: "ff".repeat(32),
+        kind: KIND_MESSAGE,
+        content: `m${i}`,
+        tags: [],
+        ms: createdAt * 1000,
+        createdAt,
+        channel: channelIdHex,
+      })),
+    );
+  }
+
+  /** Watch the standing emitter the way ChatViewer does. */
+  function watch(a: ReturnType<typeof adapter>) {
+    const seen: Message[][] = [];
+    const sub = a.loadMessages(conversation).subscribe((m) => seen.push(m));
+    return {
+      seen,
+      last: () => seen[seen.length - 1],
+      stop: () => sub.unsubscribe(),
+    };
+  }
+
+  it("widens the rendered window instead of re-reading the newest page", async () => {
+    // The defect this covers: the store gained the history and the reader never
+    // saw it, because every repaint re-read the newest 200 rows over the top.
+    const seconds = Array.from({ length: 250 }, (_, i) => i + 1);
+    await seed(seconds);
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(200));
+
+    const page = await a.loadMoreMessages(
+      conversation,
+      feed.last()[0].timestamp,
+    );
+    expect(page).toHaveLength(50);
+    expect(page.every((m) => m.timestamp < 51)).toBe(true);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(250));
+    feed.stop();
+  });
+
+  it("reports the end of the history once nothing older is left", async () => {
+    // ChatViewer reads a short page as "stop offering the button", so the
+    // second click has to come back short rather than repeat the first page.
+    await seed(Array.from({ length: 250 }, (_, i) => i + 1));
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(200));
+
+    await a.loadMoreMessages(conversation, feed.last()[0].timestamp);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(250));
+    const second = await a.loadMoreMessages(
+      conversation,
+      feed.last()[0].timestamp,
+    );
+    expect(second).toEqual([]);
+    feed.stop();
+  });
+
+  it("counts the page strictly older than the boundary, and renders the ties anyway", async () => {
+    // Inclusive here would hand back the row the caller already has and make
+    // "is this the end" off by one. The same-second sibling it costs us is
+    // absent from the COUNT only — the emitter still paints it.
+    await seed([10, 10, 20]);
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(3));
+
+    expect(await a.loadMoreMessages(conversation, 10)).toEqual([]);
+    expect(feed.last().filter((m) => m.timestamp === 10)).toHaveLength(2);
+    feed.stop();
+  });
+
+  it("forgets the widened window when the conversation is torn down", async () => {
+    await seed(Array.from({ length: 250 }, (_, i) => i + 1));
+    const a = adapter();
+    const feed = watch(a);
+    await vi.waitFor(() => expect(feed.last()).toHaveLength(200));
+    await a.loadMoreMessages(conversation, feed.last()[0].timestamp);
+    feed.stop();
+    a.cleanup(conversation.id);
+
+    const reopened = watch(a);
+    await vi.waitFor(() => expect(reopened.last()).toHaveLength(200));
+    reopened.stop();
   });
 });
 
