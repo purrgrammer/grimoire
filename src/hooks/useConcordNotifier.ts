@@ -75,12 +75,18 @@ export function useConcordNotifier(): void {
   // in the effect rather than in the initializer: a clock read during render is
   // not a pure one, and the first ring cannot precede the subscription anyway.
   const sessionFloor = useRef(0);
+  // Which account that floor belongs to. Signing into a second account in a
+  // live tab starts a new session: keeping the first one's floor would scan —
+  // and could announce — everything ingested since the tab was opened.
+  const floorFor = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const pubkey = selfPubkey;
     if (!pubkey) return;
-    if (sessionFloor.current === 0)
+    if (floorFor.current !== pubkey) {
+      floorFor.current = pubkey;
       sessionFloor.current = Math.floor(Date.now() / 1000);
+    }
     let live = true;
 
     const announce = async (channelIdHex: string): Promise<void> => {

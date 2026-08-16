@@ -46,12 +46,20 @@ vi.mock("@/services/profile-search", () => ({
 
 const ME = "11".repeat(32);
 const THEM = "22".repeat(32);
+const OTHER_ACCOUNT = "33".repeat(32);
 const COMMUNITY = "aa".repeat(32);
 const CHANNEL = "bb".repeat(32);
 
-vi.mock("@/services/accounts", () => ({
-  default: { active$: new BehaviorSubject({ pubkey: ME }) },
-}));
+// Hoisted so a test can sign a different account in mid-tab, which is the only
+// way to see that the session floor belongs to the account and not the mount.
+const active$ = await vi.hoisted(async () => {
+  const rxjs = await import("rxjs");
+  return new rxjs.BehaviorSubject<{ pubkey: string } | undefined>({
+    pubkey: "11".repeat(32),
+  });
+});
+
+vi.mock("@/services/accounts", () => ({ default: { active$ } }));
 
 const { useConcordNotifier } = await import("./useConcordNotifier");
 const { emitWireScopes, _resetWireBusForTests } =
@@ -113,6 +121,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   settingsManager.reset();
   _resetWireBusForTests();
+  active$.next({ pubkey: ME });
 });
 
 describe("useConcordNotifier", () => {
@@ -184,6 +193,26 @@ describe("useConcordNotifier", () => {
       expect(invalidateChannelDirectory).toHaveBeenCalledTimes(1),
     );
     expect(channelRumorsSince).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh session floor when a second account signs in", async () => {
+    // Otherwise the floor still marks when the FIRST account's session began,
+    // and every ring re-scans — and can announce — an hour of the previous
+    // reader's traffic to whoever just signed in.
+    const t0 = 1_700_000_000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(t0 * 1000);
+    const { rerender } = renderHook(() => useConcordNotifier());
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(channelRumorsSince).toHaveBeenCalledTimes(1));
+    expect(channelRumorsSince.mock.calls[0]?.[2]?.after).toBe(t0);
+
+    now.mockReturnValue((t0 + 1000) * 1000);
+    active$.next({ pubkey: OTHER_ACCOUNT });
+    rerender();
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(channelRumorsSince).toHaveBeenCalledTimes(2));
+    expect(channelRumorsSince.mock.calls[1]?.[2]?.after).toBe(t0 + 1000);
+    now.mockRestore();
   });
 
   it("opens the community and channel it came from when clicked", async () => {
