@@ -8,12 +8,15 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { KIND_MESSAGE } from "@/lib/concord/kinds";
 import {
   clearReads,
+  communityUnread,
   markChannelRead,
   readCommunityLastReads,
   readLastRead,
 } from "./concord-reads";
+import { writeChatRumors } from "./concord-rumor-store";
 import db from "./db";
 
 const ME = "11".repeat(32);
@@ -24,6 +27,7 @@ const OTHER_CHANNEL = "cc".repeat(32);
 
 beforeEach(async () => {
   await db.concordReads.clear();
+  await db.concordRumors.clear();
 });
 
 describe("markChannelRead", () => {
@@ -97,5 +101,83 @@ describe("clearReads", () => {
     await clearReads(ME);
     expect(await readLastRead(ME, COMMUNITY, CHANNEL)).toBe(0);
     expect(await readLastRead(THEM, COMMUNITY, CHANNEL)).toBe(500);
+  });
+});
+
+describe("communityUnread", () => {
+  const NOW = 1_800_000_000;
+  let seq = 0;
+
+  async function post(
+    communityId: string,
+    channelId: string,
+    at: number,
+    tags: string[][] = [],
+  ): Promise<void> {
+    seq += 1;
+    await writeChatRumors(
+      communityId,
+      [
+        {
+          rumorId: (seq + 0x2000).toString(16).padStart(64, "0"),
+          author: THEM,
+          kind: KIND_MESSAGE,
+          content: "hi",
+          tags,
+          createdAt: at,
+          ms: at * 1000,
+          channel: channelId,
+        },
+      ],
+      0,
+    );
+  }
+
+  it("adds up the channels it was given, and stops at the ones it was not", async () => {
+    await post(COMMUNITY, CHANNEL, NOW - 300);
+    await post(COMMUNITY, CHANNEL, NOW - 200);
+    await post(COMMUNITY, OTHER_CHANNEL, NOW - 100);
+
+    expect(
+      await communityUnread(ME, COMMUNITY, [CHANNEL, OTHER_CHANNEL], NOW),
+    ).toEqual({ count: 3, mention: false });
+    expect(await communityUnread(ME, COMMUNITY, [CHANNEL], NOW)).toEqual({
+      count: 2,
+      mention: false,
+    });
+  });
+
+  it("honours each channel's own stamp", async () => {
+    await post(COMMUNITY, CHANNEL, NOW - 300);
+    await post(COMMUNITY, OTHER_CHANNEL, NOW - 100);
+    await markChannelRead(ME, COMMUNITY, CHANNEL, NOW - 300);
+
+    expect(
+      await communityUnread(ME, COMMUNITY, [CHANNEL, OTHER_CHANNEL], NOW),
+    ).toEqual({ count: 1, mention: false });
+  });
+
+  it("raises the mention flag from any one of its channels", async () => {
+    await post(COMMUNITY, CHANNEL, NOW - 300);
+    await post(COMMUNITY, OTHER_CHANNEL, NOW - 100, [["p", ME]]);
+    const total = await communityUnread(
+      ME,
+      COMMUNITY,
+      [CHANNEL, OTHER_CHANNEL],
+      NOW,
+    );
+    expect(total.mention).toBe(true);
+  });
+
+  it("keeps two communities' totals apart", async () => {
+    const other = "dd".repeat(32);
+    await post(COMMUNITY, CHANNEL, NOW - 300);
+    await post(other, CHANNEL, NOW - 200);
+    await post(other, CHANNEL, NOW - 100);
+
+    expect((await communityUnread(ME, COMMUNITY, [CHANNEL], NOW)).count).toBe(
+      1,
+    );
+    expect((await communityUnread(ME, other, [CHANNEL], NOW)).count).toBe(2);
   });
 });

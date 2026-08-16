@@ -25,6 +25,8 @@ import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getSemanticAuthor } from "@/lib/semantic-author";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
+import { useConcordUnreadTotal } from "@/hooks/useConcordUnread";
+import { loadStoredCommunities } from "@/services/concord-communities";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
 import { useState, useEffect } from "react";
 
@@ -32,6 +34,8 @@ export interface WindowTitleData {
   title: string | ReactElement;
   icon?: LucideIcon;
   tooltip?: string;
+  /** Unread count for the tile's toolbar. Absent or 0 renders nothing. */
+  badge?: number;
 }
 
 /**
@@ -781,6 +785,32 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       });
   }, [appId, props]);
 
+  // Concord windows carry an unread count on the tile, and name their community
+  // in the title. The badge totals EVERY community, not just this window's, so
+  // it shows even for a bare `concord` window — whose props are both optional
+  // (WindowRenderer), which is also why the title falls back to plain
+  // "Concord": with no communityId there is nothing to name at title time.
+  const isConcord = appId === "concord";
+  const concordBadge = useConcordUnreadTotal(isConcord);
+  const concordCommunityId = isConcord ? props.communityId : undefined;
+  const [concordTitle, setConcordTitle] = useState<string>();
+  useEffect(() => {
+    if (!concordCommunityId || !accountPubkey) return;
+    let cancelled = false;
+    void loadStoredCommunities(accountPubkey)
+      .then((communities) => {
+        const wanted = String(concordCommunityId).toLowerCase();
+        const hit =
+          communities.find((c) => c.idHex === wanted) ??
+          communities.find((c) => c.idHex.startsWith(wanted));
+        if (!cancelled && hit?.name) setConcordTitle(`Concord — ${hit.name}`);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [concordCommunityId, accountPubkey]);
+
   // Generate final title data with icon and tooltip
   return useMemo(() => {
     let title: ReactElement | string;
@@ -790,12 +820,14 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     // Generate raw command for tooltip
     const rawCommand = generateRawCommand(appId, props);
 
+    const badge = concordBadge > 0 ? { badge: concordBadge } : {};
+
     // Priority 0: Custom title always wins (user override via --title flag)
     if (customTitle) {
       title = customTitle;
       icon = getCommandIcon(appId);
       tooltip = rawCommand;
-      return { title, icon, tooltip };
+      return { title, icon, tooltip, ...badge };
     }
 
     // Priority order for title selection (dynamic titles based on data)
@@ -866,13 +898,19 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       title = chatTitle;
       icon = getCommandIcon("chat");
       tooltip = rawCommand;
+    } else if (appId === "concord") {
+      title = concordTitle ?? staticTitle ?? "Concord";
+      icon = getCommandIcon("concord");
+      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       tooltip = rawCommand;
     }
 
-    return { title, icon, tooltip };
+    return { title, icon, tooltip, ...badge };
   }, [
+    concordBadge,
+    concordTitle,
     appId,
     props,
     event,

@@ -19,6 +19,7 @@
  * on {@link CONCORD_READ_MAX_FUTURE_SECS}.
  */
 
+import { channelUnreadSummary } from "@/services/concord-rumor-store";
 import db, { type ConcordReadRow } from "@/services/db";
 
 /**
@@ -134,6 +135,44 @@ export async function markChannelRead(
   } catch (error) {
     console.warn("[concord] could not stamp the channel as read:", error);
   }
+}
+
+/** One community's channels, added up. */
+export interface CommunityUnread {
+  count: number;
+  mention: boolean;
+}
+
+/**
+ * What one community has waiting, across the channels it was handed.
+ *
+ * The channel list is an ARGUMENT rather than something this reads, and that is
+ * a constraint from the hooks above it: resolving a community's channels goes
+ * through the materialized fold in `concordKv`, and a Dexie live query that
+ * touched `concordKv` would re-run on every fold write in the app. Here the
+ * only tables touched are `concordReads` and `concordRumors`.
+ */
+export async function communityUnread(
+  pubkey: string,
+  communityId: string,
+  channelIdsHex: readonly string[],
+  nowSecs: number = Math.floor(Date.now() / 1000),
+): Promise<CommunityUnread> {
+  const total: CommunityUnread = { count: 0, mention: false };
+  if (!pubkey || !communityId || channelIdsHex.length === 0) return total;
+  const stamps = await readCommunityLastReads(pubkey, communityId);
+  for (const channelId of channelIdsHex) {
+    const id = channelId.toLowerCase();
+    const summary = await channelUnreadSummary(communityId, id, {
+      after: stamps.get(id) ?? 0,
+      nowSecs,
+      maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
+      selfPubkey: pubkey,
+    });
+    total.count += summary.count;
+    total.mention = total.mention || summary.mention;
+  }
+  return total;
 }
 
 /**

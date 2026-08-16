@@ -15,8 +15,8 @@ import {
 import {
   useConcordUnread,
   useConcordUnreadTotals,
-  type CommunityUnread,
 } from "@/hooks/useConcordUnread";
+import type { CommunityUnread } from "@/services/concord-reads";
 import { useConcordWire } from "@/hooks/useConcordWire";
 import { useLocale } from "@/hooks/useLocale";
 import type { ChannelUnread } from "@/services/concord-rumor-store";

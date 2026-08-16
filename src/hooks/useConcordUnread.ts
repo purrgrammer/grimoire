@@ -17,21 +17,18 @@ import { use$ } from "applesauce-react/hooks";
 
 import {
   CONCORD_READ_MAX_FUTURE_SECS,
+  communityUnread,
   readCommunityLastReads,
 } from "@/services/concord-reads";
 import {
   channelUnreadSummary,
   type ChannelUnread,
 } from "@/services/concord-rumor-store";
+import { loadStoredCommunities } from "@/services/concord-communities";
 import { readStoredState } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import type { Community } from "@/lib/concord/types";
-
-/** What a community row shows: its channels' unread, added up. */
-export interface CommunityUnread {
-  count: number;
-  mention: boolean;
-}
+import type { CommunityUnread } from "@/services/concord-reads";
 
 const EMPTY = new Map<string, ChannelUnread>();
 const EMPTY_TOTALS = new Map<string, CommunityUnread>();
@@ -129,23 +126,68 @@ export function useConcordUnreadTotals(
     if (!pubkey) return out;
     const nowSecs = Math.floor(Date.now() / 1000);
     for (const [communityId, channelIds] of channelsOf) {
-      const stamps = await readCommunityLastReads(pubkey, communityId);
-      let count = 0;
-      let mention = false;
-      for (const channelId of channelIds) {
-        const summary = await channelUnreadSummary(communityId, channelId, {
-          after: stamps.get(channelId) ?? 0,
-          nowSecs,
-          maxFutureSecs: CONCORD_READ_MAX_FUTURE_SECS,
-          selfPubkey: pubkey,
-        });
-        count += summary.count;
-        mention = mention || summary.mention;
-      }
-      out.set(communityId, { count, mention });
+      out.set(
+        communityId,
+        await communityUnread(pubkey, communityId, channelIds, nowSecs),
+      );
     }
     return out;
   }, [pubkey, directoryKey]);
 
   return totals ?? EMPTY_TOTALS;
+}
+
+/**
+ * Everything waiting, across every community this account has stored.
+ *
+ * What a window tile can show: the reader is not looking at the sidebar, so a
+ * per-channel number is no use — one number saying "there is something" is.
+ * `enabled` is a gate rather than a caller-side `if`, because this runs from
+ * the window-title hook, which every open window mounts: without it, ten
+ * windows would each re-read the vault to decorate one Concord tile.
+ */
+export function useConcordUnreadTotal(enabled: boolean): number {
+  const pubkey = use$(accountManager.active$)?.pubkey;
+  const [channelsOf, setChannelsOf] = useState<Map<string, string[]>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    if (!enabled || !pubkey) return;
+    let cancelled = false;
+    void (async () => {
+      const communities = await loadStoredCommunities(pubkey).catch(() => []);
+      const found = new Map<string, string[]>();
+      for (const community of communities) {
+        const state = await readStoredState(community).catch(() => undefined);
+        if (state) {
+          found.set(
+            community.idHex,
+            state.channels.map((ch) => ch.idHex.toLowerCase()),
+          );
+        }
+      }
+      if (!cancelled) setChannelsOf(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, pubkey]);
+
+  const directoryKey = [...channelsOf.entries()]
+    .map(([id, channels]) => `${id}:${channels.join("+")}`)
+    .join(",");
+
+  const total = useLiveQuery(async () => {
+    if (!enabled || !pubkey) return 0;
+    const nowSecs = Math.floor(Date.now() / 1000);
+    let count = 0;
+    for (const [communityId, channelIds] of channelsOf) {
+      count += (await communityUnread(pubkey, communityId, channelIds, nowSecs))
+        .count;
+    }
+    return count;
+  }, [enabled, pubkey, directoryKey]);
+
+  return total ?? 0;
 }

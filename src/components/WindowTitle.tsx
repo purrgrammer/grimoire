@@ -20,7 +20,7 @@ export function WindowTile({
   onClose,
   onEditCommand,
 }: WindowTileProps) {
-  const { title, icon, tooltip } = useDynamicWindowTitle(window);
+  const { title, icon, tooltip, badge } = useDynamicWindowTitle(window);
   const Icon = icon;
 
   // Convert title to string for MosaicWindow (which only accepts strings)
@@ -43,6 +43,14 @@ export function WindowTile({
           <span className="truncate" title={tooltip}>
             {title}
           </span>
+          {badge !== undefined && badge > 0 && (
+            <span
+              title={`${badge} unread`}
+              className="flex-shrink-0 rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground"
+            >
+              {badge}
+            </span>
+          )}
         </div>
         <WindowToolbar
           window={window}
