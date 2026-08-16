@@ -53,6 +53,7 @@ import {
 } from "@/lib/concord/send-rate-limit";
 import { KIND_DELETE, KIND_MESSAGE, KIND_REACTION } from "@/lib/concord/kinds";
 import { messageExpirationOf } from "@/lib/concord/disappearing";
+import { extractMentionTags } from "@/lib/concord/mentions";
 import { emitWireScopes } from "@/lib/concord/wire-bus";
 import { syncChannel } from "@/services/concord-channel-sync";
 import { publishWrap } from "@/services/concord-publish";
@@ -473,6 +474,16 @@ export class ConcordAdapter extends ChatProtocolAdapter {
     const extraTags: string[][] = [
       ...(options?.emojiTags?.map(emojiTag) ?? []),
       ...(options?.blobAttachments?.map(imetaTag) ?? []),
+      // NIP-27 mentions, recovered from the rendered content. Sealed in the
+      // rumor like every other tag here, so it reaches the channel's members
+      // and no relay. The sender is excluded (you cannot mention yourself into
+      // a notification) and so is a reply's parent, whom the NIP-22 tags above
+      // already name.
+      ...extractMentionTags(content, [
+        // Empty when no account is active, which `send` refuses a line later.
+        accountManager.active$.value?.pubkey ?? "",
+        ...(replyTo ? [replyTo.pubkey] : []),
+      ]),
     ];
 
     await this.send(community, channel, folded, {

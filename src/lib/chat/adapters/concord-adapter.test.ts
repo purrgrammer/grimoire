@@ -9,6 +9,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
+import { nip19 } from "nostr-tools";
 
 import { bytesToHex, channelGroupKey, random32 } from "@/lib/concord/derive";
 import type { FoldedControl } from "@/lib/concord/control";
@@ -212,6 +213,58 @@ describe("the dissolution gate on sending", () => {
       /banned/i,
     );
     expect(published).not.toHaveBeenCalled();
+  });
+});
+
+describe("mention p tags on an outgoing message", () => {
+  const FRIEND = "ab".repeat(32);
+  const npub = nip19.npubEncode(FRIEND);
+
+  /** Every `p` tag on the rumor the send stored. */
+  async function sentPTags(): Promise<string[]> {
+    const rows = await db.concordRumors.toArray();
+    const sent = rows.find((r) => r.pubkey === pubkey);
+    return (sent?.tags ?? [])
+      .filter((t) => t[0] === "p")
+      .map((t) => t[1] ?? "");
+  }
+
+  it("names the person the message mentions", async () => {
+    // The interop point: this is the tag an armada reader's mention badge and
+    // notifier match on. It rides the sealed rumor, so no relay sees it.
+    await adapter().sendMessage(conversation, `hey nostr:${npub} look at this`);
+    expect(await sentPTags()).toEqual([FRIEND]);
+  });
+
+  it("does not tag the sender for mentioning themselves", async () => {
+    const mine = nip19.npubEncode(pubkey);
+    await adapter().sendMessage(
+      conversation,
+      `nostr:${mine} talking to myself`,
+    );
+    expect(await sentPTags()).toEqual([]);
+  });
+
+  it("tags a replied-to author once, even when the reply also @-mentions them", async () => {
+    // `buildConcordCommentTags` already p-tags the parent, so an unexcluded
+    // extraction would double it — one tag, one person.
+    const parent = "cd".repeat(32);
+    await writeChatRumors(idHex, [
+      {
+        rumorId: parent,
+        author: FRIEND,
+        kind: KIND_MESSAGE,
+        content: "theirs",
+        tags: [],
+        ms: 1000,
+        createdAt: 1,
+        channel: channelIdHex,
+      },
+    ]);
+    await adapter().sendMessage(conversation, `yes nostr:${npub}`, {
+      replyTo: parent,
+    });
+    expect(await sentPTags()).toEqual([FRIEND]);
   });
 });
 
