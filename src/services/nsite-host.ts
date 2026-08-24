@@ -38,7 +38,14 @@ import {
   getNsiteIdentifier,
 } from "@/lib/nip5a-helpers";
 
-/** Where a running nsite lives, and the scope the worker claims. */
+/**
+ * Where a running nsite's files live.
+ *
+ * Not the worker's scope: the worker is grimoire's own `sw.js` at `/`, because
+ * a site asks for `/assets/index-abc.js` from the origin root and a narrower
+ * scope never sees that request. `sw.js` re-roots such a request under the
+ * prefix of whichever site's document asked for it.
+ */
 export const NSITE_SCOPE = "/_nsite/";
 
 /** The Cache Storage bucket the worker reads. Never grimoire's own caches. */

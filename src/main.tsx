@@ -62,10 +62,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     if (registrations.length === 0) return;
 
-    // The nsite worker is exempt. It is scoped to `/_nsite/`, so it cannot see
-    // Vite's module URLs — the hazard this teardown exists for — and tearing it
-    // down would leave a running nsite's requests falling through to a 404.
-    const stale = registrations.filter((r) => !r.scope.endsWith("/_nsite/"));
+    // A dev-mode worker is exempt. `?mode=dev` disables every caching path in
+    // `sw.js`, so it cannot cache Vite's module URLs — the hazard this teardown
+    // exists for — and it is the only thing serving a running nsite's files.
+    const stale = registrations.filter(
+      (r) =>
+        !(r.active ?? r.waiting ?? r.installing)?.scriptURL.includes(
+          "mode=dev",
+        ),
+    );
     if (stale.length === 0) return;
 
     const wasControlled = Boolean(navigator.serviceWorker.controller);

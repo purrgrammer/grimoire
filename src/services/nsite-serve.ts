@@ -76,30 +76,49 @@ function activated(registration: ServiceWorkerRegistration): Promise<void> {
 let registration: Promise<ServiceWorkerRegistration | null> | null = null;
 
 /**
- * Register the nsite worker, once.
+ * Make sure a worker that can serve nsites is running.
  *
- * Registered in development as well as production — see the scope argument in
- * `nsite-host.ts`. `main.tsx` tears down leftover workers in dev, so it skips
- * this one by scope; if that ever stops matching, an nsite simply 404s rather
- * than serving anything unverified.
+ * It is grimoire's own `sw.js`, at scope `/`, because a registration is keyed
+ * by scope: a second script at `/` would replace the first, and anything
+ * narrower cannot see `/assets/…` — the root-absolute paths real sites are
+ * built with. See the header of `public/sw.js`.
+ *
+ * In production that worker is already registered by `main.tsx` and this finds
+ * it. In development `main.tsx` deliberately does not register it, so this does
+ * — with `?mode=dev`, which turns off every caching path in the script. The
+ * hazard that rule exists for is caching Vite's hashed module URLs; in dev mode
+ * the worker caches nothing and answers only for nsite frames.
  */
 export function ensureNsiteWorker(): Promise<ServiceWorkerRegistration | null> {
   registration ??= (async () => {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const existing =
-        await navigator.serviceWorker.getRegistration(NSITE_SCOPE);
-      if (existing?.active && existing.scope.endsWith(NSITE_SCOPE)) {
-        return existing;
+      const script = import.meta.env.DEV ? "/sw.js?mode=dev" : "/sw.js";
+
+      /*
+       * Adopt what is registered ONLY if it is the script we would register.
+       *
+       * Checking merely that something holds `/` is not enough, and cost a real
+       * regression: a stale registration from an older build was adopted in
+       * development, and being a non-dev worker it precached and cached exactly
+       * the Vite URLs this whole arrangement exists to leave alone. A worker at
+       * `/` that is not ours is replaced, which is what registering does.
+       */
+      const existing = await navigator.serviceWorker.getRegistration("/");
+      const running = existing?.active ?? existing?.waiting;
+      if (
+        running &&
+        new URL(running.scriptURL).search ===
+          new URL(script, location.origin).search
+      ) {
+        return existing!;
       }
-      const registered = await navigator.serviceWorker.register(
-        "/nsite-sw.js",
-        { scope: NSITE_SCOPE },
-      );
+
+      const registered = await navigator.serviceWorker.register(script, {
+        scope: "/",
+      });
       // A registration that is installing cannot answer a fetch yet, and the
-      // frame is about to make one. NOT `navigator.serviceWorker.ready`: that
-      // waits for a worker controlling THIS page, and one scoped to `/_nsite/`
-      // never will — awaiting it hangs forever, which it did.
+      // frame is about to make one.
       await activated(registered);
       return registered;
     } catch {
