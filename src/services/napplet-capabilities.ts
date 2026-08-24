@@ -83,6 +83,13 @@ export function isHostCapability(capability: string): boolean {
   return HOST_CAPABILITIES.has(capability);
 }
 
+/**
+ * Every NAP domain this host knows how to map. Exported so a caller can ask
+ * about the whole surface — the consent tests check that no two capabilities a
+ * user can be asked about describe themselves the same way.
+ */
+export const NAP_DOMAINS: readonly string[] = Object.keys(DOMAIN_CAPABILITIES);
+
 /** Capabilities implied by a set of declared domains, deduped and ordered. */
 export function capabilitiesForDomains(domains: readonly string[]): string[] {
   const out = new Set<string>();

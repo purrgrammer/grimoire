@@ -17,6 +17,8 @@
  * session unless the answer is remembered.
  */
 
+import { toast } from "sonner";
+
 import {
   getNappletBridge,
   onNappletAclCheck,
@@ -64,9 +66,9 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "theme:read": "follow your colour theme",
   "config:read": "read your locale settings",
   "relay:read": "read events from your relays",
-  "relay:write": "publish events signed as you",
+  "relay:write": "publish events signed as you, to relays it names",
   "outbox:read": "read events from the right relays for each author",
-  "outbox:write": "publish events signed as you",
+  "outbox:write": "publish events signed as you, to your own relays",
   "keys:forward": "send keystrokes to grimoire",
   "keys:bind": "register keyboard shortcuts",
   "media:control": "control media playback",
@@ -162,6 +164,84 @@ interface Buffered {
 
 const buffered = new Map<string, Buffered>();
 
+/**
+ * Triples with a question on screen right now.
+ *
+ * `settled` marks a triple the moment it is buffered, so it cannot tell an
+ * answered question from an open one — and a refusal reported while its own
+ * dialog is still up would claim the user had already said no.
+ */
+const asking = new Set<string>();
+
+/**
+ * Tell the user a refusal just happened, and offer to take it back.
+ *
+ * Every path above that stops without asking used to `return` in silence, and
+ * from inside the napplet that is indistinguishable from a broken button: the
+ * click does nothing, no dialog appears, and the only trace is a console line.
+ * A napplet whose publish is refused looks dead rather than refused.
+ *
+ * Rate-limited per triple rather than shown once per denial, because a napplet
+ * that retries on a timer would otherwise paper the screen. The refusal itself
+ * is unchanged — this only makes it visible.
+ */
+const REFUSAL_TOAST_INTERVAL_MS = 20_000;
+const lastReported = new Map<string, number>();
+
+function reportRefusal(
+  event: AclCheckEvent,
+  key: string,
+  remembered: boolean,
+): void {
+  // Its own dialog is still on screen; the answer is being given right now.
+  if (asking.has(key)) return;
+
+  const now = Date.now();
+  const previous = lastReported.get(key);
+  if (previous !== undefined && now - previous < REFUSAL_TOAST_INTERVAL_MS) {
+    return;
+  }
+  lastReported.set(key, now);
+
+  const { dTag, hash } = {
+    dTag: event.identity.dTag,
+    hash: event.identity.hash,
+  };
+  const name = identityTitle(dTag, hash);
+
+  toast.error(`${name} was refused: ${describeCapability(event.capability)}`, {
+    description: remembered
+      ? "You answered no for this version. It will keep being refused until you change that."
+      : "You answered no earlier in this session. Reloading grimoire asks again.",
+    action: {
+      label: "Allow",
+      onClick: () => {
+        if (remembered) forgetNappletDecision(dTag, hash, event.capability);
+        settled.delete(key);
+        lastReported.delete(key);
+        // The ACL state in the live runtime still holds the refusal, so the
+        // frame has to re-run before the napplet can get a different answer.
+        for (const [id, identity] of identities) {
+          if (identity.dTag === dTag && identity.aggregateHash === hash) {
+            reloadListeners.forEach((listener) => listener(id));
+            break;
+          }
+        }
+      },
+    },
+  });
+}
+
+/** The napplet's own name when a live window has one, else its d-tag. */
+function identityTitle(dTag: string, aggregateHash: string): string {
+  for (const identity of identities.values()) {
+    if (identity.dTag === dTag && identity.aggregateHash === aggregateHash) {
+      return identity.title;
+    }
+  }
+  return dTag;
+}
+
 function handleDenial(event: AclCheckEvent): void {
   if (event.decision !== "deny") return;
 
@@ -170,12 +250,16 @@ function handleDenial(event: AclCheckEvent): void {
     hash: event.identity.hash,
   };
   const key = triple(event);
-  if (settled.has(key)) return;
+  if (settled.has(key)) {
+    reportRefusal(event, key, false);
+    return;
+  }
 
   // A remembered deny means never ask again for this exact version.
   const remembered = getNappletDecision(dTag, hash, event.capability);
   if (remembered && !remembered.allowed) {
     settled.add(key);
+    reportRefusal(event, key, true);
     return;
   }
 
@@ -199,6 +283,7 @@ function handleDenial(event: AclCheckEvent): void {
   // never answered — dismissing by closing the window used to mean grimoire
   // never asked about that capability again for the rest of the session.
   settled.add(key);
+  asking.add(key);
 
   const groupKey = `${dTag}:${hash}`;
   const existing = buffered.get(groupKey);
@@ -246,6 +331,10 @@ async function askForUndeclared(
     });
     emitLaunch();
   });
+
+  for (const capability of capabilities) {
+    asking.delete(`${dTag}:${aggregateHash}:${capability}`);
+  }
 
   if (allowed === null) {
     // Dismissed or the window went away: the question stands, so let it be asked
