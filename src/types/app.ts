@@ -32,7 +32,8 @@ export type AppId =
   | "ai"
   | "win"
   | "app"
-  | "apps";
+  | "apps"
+  | "nsite";
 
 export interface WindowInstance {
   id: string;

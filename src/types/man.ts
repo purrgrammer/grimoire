@@ -690,12 +690,12 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "app [--debug] <identifier|archetype> [target]",
     description:
-      "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in a sandboxed iframe that can reach nothing except what you grant it — your keys are never exposed, and every capability its manifest asks for is listed before it runs. An archetype names a role rather than an app: it resolves to the napplet you made the default for that role, or to grimoire's own viewer when no installed napplet handles it.",
+      "Run a NIP-5D napplet or a NIP-5A nsite: content-addressed, sandboxed code published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in a sandboxed iframe that can reach nothing except what you grant it — your keys are never exposed, and every capability its manifest asks for is listed before it runs. An archetype names a role rather than an app: it resolves to the napplet you made the default for that role, or to grimoire's own viewer when no installed napplet handles it.",
     options: [
       {
         flag: "<identifier>",
         description:
-          "naddr, nevent, note, hex event id, or kind:pubkey:d-tag pointing at a napplet manifest (kind 5129, 15129, or 35129)",
+          "naddr, nevent, note, hex event id, or kind:pubkey:d-tag pointing at a napplet manifest (5129, 15129, 35129) or an nsite manifest (5128, 15128, 35128)",
       },
       {
         flag: "--debug",
@@ -717,6 +717,7 @@ export const manPages: Record<string, ManPageEntry> = {
       "app naddr1...                                     Run a named napplet",
       "app 35129:3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d:calculator   Run by address pointer",
       "app nevent1...                                    Run a specific manifest event",
+      "app naddr1...                                     Run an nsite, verified and served locally",
       "app --debug naddr1...                             Run it with the host<->napplet traffic drawer",
       "app profile                                       Open the profile role — your default napplet, or grimoire's viewer",
       "app relay wss://relay.damus.io                    Open a relay through the relay role",

@@ -41,6 +41,7 @@ import {
   getNappletRequires,
 } from "@/lib/nip5d-helpers";
 import type { NostrEvent } from "@/types/nostr";
+import { isNsiteKind } from "@/services/nsite-library";
 import { NappletDecisions } from "@/components/NappletDecisions";
 import {
   getNappletDecisions,
@@ -430,7 +431,14 @@ export function NappletsViewer() {
         "id" in pointer
           ? `app ${nip19.neventEncode(pointer)}`
           : `app ${nip19.naddrEncode(pointer)}`;
-      addWindow("app", { pointer }, command, undefined);
+      // Same command either way; the kind decides which window runs it, as it
+      // does when the command is typed.
+      addWindow(
+        isNsiteKind(candidate.kind) ? "nsite" : "app",
+        { pointer },
+        command,
+        undefined,
+      );
     },
     [addWindow],
   );

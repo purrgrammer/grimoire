@@ -67,4 +67,19 @@ export {
 
 export type { NappletArtifactCache } from "@kehto/nip/5d";
 
+export { verifyManifestSignature, verifyBlobHash } from "@kehto/nip/5d";
+
+/*
+ * NIP-5A. An nsite manifest carries the same `path`/`x`/`server` tags a napplet
+ * manifest does — a napplet IS an nsite with capability tags — so running one
+ * reuses the same verification, and only the serving differs.
+ */
+export {
+  verifyAggregate,
+  pathEntriesFromTags,
+  aggregateTagValue,
+} from "@kehto/nip/5a";
+
+export type { PathEntry } from "@kehto/nip/5a";
+
 export type { Theme as NapTheme } from "@napplet/nap/theme/types";

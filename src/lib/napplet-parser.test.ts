@@ -70,14 +70,43 @@ describe("parseAppCommand", () => {
     },
   );
 
-  it("rejects an naddr for a non-napplet kind", async () => {
+  it.each([5128, 15128, 35128])(
+    "routes an nsite manifest (kind %i) to the nsite window",
+    async (kind) => {
+      const naddr = nip19.naddrEncode({
+        kind,
+        pubkey: PUBKEY,
+        identifier: "site",
+      });
+      const parsed = (await parseAppCommand([naddr])) as Record<
+        string,
+        unknown
+      >;
+      // Same command, different machinery: an nsite is served from an origin,
+      // a napplet is a srcdoc frame.
+      expect(parsed["$appId"]).toBe("nsite");
+    },
+  );
+
+  it("leaves a napplet manifest on the napplet window", async () => {
     const naddr = nip19.naddrEncode({
-      kind: 35128,
+      kind: 35129,
+      pubkey: PUBKEY,
+      identifier: "calculator",
+    });
+    const parsed = (await parseAppCommand([naddr])) as Record<string, unknown>;
+    expect(parsed["$appId"]).toBeUndefined();
+  });
+
+  // 35128 used to belong here; it is an nsite now, and `app` runs those too.
+  it("rejects an naddr for a kind that is neither napplet nor nsite", async () => {
+    const naddr = nip19.naddrEncode({
+      kind: 30023,
       pubkey: PUBKEY,
       identifier: "blog",
     });
     await expect(parseAppCommand([naddr])).rejects.toThrow(
-      /not a napplet manifest/i,
+      /not a runnable manifest/i,
     );
   });
 
@@ -92,9 +121,9 @@ describe("parseAppCommand", () => {
     });
   });
 
-  it("rejects kind:pubkey:dtag for a non-napplet kind", async () => {
+  it("rejects kind:pubkey:dtag for a kind nothing can run", async () => {
     await expect(parseAppCommand([`1:${PUBKEY}:x`])).rejects.toThrow(
-      /not a napplet manifest/i,
+      /not a runnable manifest/i,
     );
   });
 

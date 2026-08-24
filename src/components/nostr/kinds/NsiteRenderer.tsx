@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Globe, FileText, HardDrive, ExternalLink } from "lucide-react";
+import { Globe, FileText, HardDrive, ExternalLink, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useRunNapplet } from "@/hooks/useRunNapplet";
+import type { NostrEvent } from "@/types/nostr";
 import {
   getNsitePaths,
   getNsiteServers,
@@ -26,16 +29,34 @@ function NsiteIcon({
   const [failed, setFailed] = useState(false);
 
   if (!faviconUrl || failed) {
-    return <Globe className={`${className} text-muted-foreground`} />;
+    return <Globe className={`${className} shrink-0 text-muted-foreground`} />;
   }
 
   return (
     <img
       src={faviconUrl}
       alt=""
-      className={`${className} object-contain`}
+      className={`${className} shrink-0 object-contain`}
       onError={() => setFailed(true)}
     />
+  );
+}
+
+function RunButton({ event }: { event: NostrEvent }) {
+  const run = useRunNapplet(event);
+
+  return (
+    <Button
+      size="sm"
+      className="h-7 shrink-0"
+      onClick={(e) => {
+        e.stopPropagation();
+        run();
+      }}
+    >
+      <Play className="size-3.5 shrink-0" />
+      Run
+    </Button>
   );
 }
 
@@ -59,10 +80,10 @@ function NsiteRendererInner({
       <div className="flex flex-col gap-2">
         <ClickableEventTitle
           event={event}
-          className="flex items-center gap-1.5 text-sm font-medium"
+          className="flex min-w-0 items-center gap-1.5 text-sm font-medium"
         >
           <NsiteIcon faviconUrl={faviconUrl} className="size-4" />
-          <span>{displayTitle}</span>
+          <span className="truncate">{displayTitle}</span>
           {variant && (
             <span className="text-xs text-muted-foreground font-normal">
               ({variant})
@@ -70,18 +91,18 @@ function NsiteRendererInner({
           )}
         </ClickableEventTitle>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {paths.length > 0 && (
-            <div className="flex items-center gap-1">
-              <FileText className="size-3.5" />
+            <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+              <FileText className="size-3.5 shrink-0" />
               <span>
                 {paths.length} file{paths.length !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {servers.length > 0 && (
-            <div className="flex items-center gap-1">
-              <HardDrive className="size-3.5" />
+            <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+              <HardDrive className="size-3.5 shrink-0" />
               <span>
                 {servers.length} server{servers.length !== 1 ? "s" : ""}
               </span>
@@ -91,12 +112,15 @@ function NsiteRendererInner({
             href={gatewayUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 hover:text-foreground"
+            className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap hover:text-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="size-3.5 shrink-0" />
             <span>Visit</span>
           </a>
+          {/* Verified here, against the manifest, rather than trusted from a
+              gateway — so it is the primary action and `Visit` is the escape. */}
+          <RunButton event={event} />
         </div>
       </div>
     </BaseEventContainer>

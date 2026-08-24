@@ -74,6 +74,9 @@ const AiViewer = lazy(() => import("./AiViewer"));
 const NappletViewer = lazy(() =>
   import("./NappletViewer").then((m) => ({ default: m.NappletViewer })),
 );
+const NsiteViewer = lazy(() =>
+  import("./NsiteViewer").then((m) => ({ default: m.NsiteViewer })),
+);
 const NappletsViewer = lazy(() =>
   import("./NappletsViewer").then((m) => ({ default: m.NappletsViewer })),
 );
@@ -190,6 +193,10 @@ function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
       return <NipRenderer nipId={window.props.number} />;
     case "apps":
       return <NappletsViewer />;
+    case "nsite":
+      return (
+        <NsiteViewer pointer={window.props.pointer} windowId={window.id} />
+      );
     case "app":
       return (
         <NappletViewer

@@ -33,7 +33,7 @@ describe("assertManifestEvent", () => {
   it("rejects a non-manifest kind", () => {
     expect(() =>
       assertManifestEvent(manifest({ kind: 1 }), { id: ID }),
-    ).toThrow(/not a napplet manifest/i);
+    ).toThrow(/not a napplet or nsite manifest/i);
   });
 
   describe("event pointers", () => {

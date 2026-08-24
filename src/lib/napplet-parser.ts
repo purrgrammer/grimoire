@@ -1,5 +1,7 @@
 import type { Filter } from "nostr-tools";
 import type { NostrEvent } from "@/types/nostr";
+import { NSITE_KINDS, isNsiteManifestKind } from "./nsite-kinds";
+import { APP_ID_OVERRIDE } from "./command-parser";
 
 /**
  * NIP-5D manifest kinds: snapshot, root, named.
@@ -83,16 +85,33 @@ export async function parseAppCommand(
     return resolveArchetypeCommand(token, args.slice(1));
   }
 
-  if (
-    isAddressPointer(pointer) &&
-    !(NAPPLET_KINDS as readonly number[]).includes(pointer.kind)
-  ) {
+  // `app` runs both: a napplet is an nsite with capability tags, and to a
+  // reader they are the same verb. Which viewer opens is decided by the kind,
+  // at the window layer — an event pointer's kind is unknowable until the event
+  // is fetched, so that check cannot happen here either way.
+  const RUNNABLE = [...NAPPLET_KINDS, ...NSITE_KINDS] as readonly number[];
+  if (isAddressPointer(pointer) && !RUNNABLE.includes(pointer.kind)) {
     throw new Error(
-      `Not a napplet manifest: expected kind ${NAPPLET_KINDS.join(", ")}, got ${pointer.kind}`,
+      `Not a runnable manifest: expected kind ${RUNNABLE.join(", ")}, got ${pointer.kind}`,
     );
   }
 
-  return debug ? { pointer, debug } : { pointer };
+  /*
+   * An nsite runs in a different window to a napplet — same verb, different
+   * machinery — so the kind picks the viewer here, where it is known. An event
+   * pointer only carries a kind when the `nevent` author included one; without
+   * it this stays `app`, and the manifest check at fetch time is what catches a
+   * mismatch rather than a silently wrong viewer.
+   */
+  const kind = isAddressPointer(pointer)
+    ? pointer.kind
+    : (pointer as { kind?: number }).kind;
+  const props: Record<string, unknown> =
+    typeof kind === "number" && isNsiteManifestKind(kind)
+      ? { pointer, [APP_ID_OVERRIDE]: "nsite" }
+      : { pointer };
+
+  return debug ? { ...props, debug } : props;
 }
 
 /**
@@ -191,10 +210,14 @@ export function assertManifestEvent(
   event: NostrEvent,
   pointer: EventPointer | AddressPointer,
 ): NostrEvent {
-  if (!(NAPPLET_KINDS as readonly number[]).includes(event.kind)) {
+  // Both, because `app` runs both — and this check is the substitution
+  // defence, so widening it must not mean skipping it: everything below still
+  // asserts the event the relay returned is the one the pointer named.
+  const runnable = [...NAPPLET_KINDS, ...NSITE_KINDS] as readonly number[];
+  if (!runnable.includes(event.kind)) {
     throw new NappletLookupError(
       "wrong-kind",
-      `Kind ${event.kind} is not a napplet manifest.`,
+      `Kind ${event.kind} is not a napplet or nsite manifest.`,
     );
   }
 

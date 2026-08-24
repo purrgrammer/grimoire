@@ -62,8 +62,14 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     if (registrations.length === 0) return;
 
+    // The nsite worker is exempt. It is scoped to `/_nsite/`, so it cannot see
+    // Vite's module URLs — the hazard this teardown exists for — and tearing it
+    // down would leave a running nsite's requests falling through to a 404.
+    const stale = registrations.filter((r) => !r.scope.endsWith("/_nsite/"));
+    if (stale.length === 0) return;
+
     const wasControlled = Boolean(navigator.serviceWorker.controller);
-    await Promise.all(registrations.map((r) => r.unregister()));
+    await Promise.all(stale.map((r) => r.unregister()));
 
     if ("caches" in window) {
       const names = await caches.keys();
