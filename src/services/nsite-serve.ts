@@ -1,30 +1,28 @@
 /**
- * Putting a verified nsite where the worker can serve it.
+ * Handing a verified nsite to its own origin.
  *
- * Nothing is injected into the bytes. An nsite is served from grimoire's own
- * origin, so a NIP-07 extension reaches it exactly as it reaches any other
- * page, and shimming `window.nostr` ourselves would either lose that race or
- * shadow the signer the user actually chose. The consequence is the honest
- * one: with no extension installed, an nsite has no signer — the same as
- * visiting it at a gateway.
+ * A site does not run on grimoire's origin. It runs on one of its own —
+ * `<aggregate>.localhost:<port>` in development, a wildcard subdomain in
+ * production — and that is a security boundary, not a tidiness preference. On
+ * grimoire's origin an iframe with `allow-same-origin` can read `localStorage`,
+ * which holds `accountManager.toJSON()` and therefore a secret key for an nsec
+ * login; it can read the Dexie database; and it can register a service worker
+ * over grimoire's own. Verification does not help there, because it proves an
+ * author signed the code, not that the author is honest.
  *
- * The worker (`public/nsite-sw.js`) is deliberately dumb: it answers from a
- * cache and never verifies anything. That is only safe because everything
- * written here has already been through `resolveNsiteFromEvent` — the author's
- * signature over the tag list, and every file hashed against the entry that
- * list names. **Never write to this cache from anywhere else.**
+ * A separate origin makes all of that unreachable by construction, and it comes
+ * with a bonus: the site is genuinely at `/`, so its router works, its absolute
+ * asset paths resolve, and none of the re-rooting this used to need exists.
  *
- * The site is served under `/_nsite/<aggregateHash>/`, so the URL *is* the
- * content address: two sites cannot collide, a changed site is a different
- * prefix, and a stale cache entry can never be served for a different version.
+ * The handshake, since a cross-origin child cannot be scripted:
+ *
+ *   1. the frame loads `_nsite-boot.html` — the one file grimoire serves there
+ *   2. it registers the worker for that origin and posts `ready`
+ *   3. this sends the verified files, transferring the buffers
+ *   4. it caches them and replaces itself with `/`
  */
 
-import {
-  NSITE_CACHE_NAME,
-  NSITE_SCOPE,
-  indexPathOf,
-  type ResolvedNsite,
-} from "./nsite-host";
+import { indexPathOf, type ResolvedNsite } from "./nsite-host";
 
 /** Guessed from the path, because a manifest declares no content types. */
 const MIME: Record<string, string> = {
@@ -57,144 +55,129 @@ function contentTypeFor(path: string): string {
   return MIME[ext] ?? "application/octet-stream";
 }
 
-/** Resolve once this registration has a worker that can answer a fetch. */
-function activated(registration: ServiceWorkerRegistration): Promise<void> {
-  const worker =
-    registration.active ?? registration.waiting ?? registration.installing;
-  if (!worker || worker.state === "activated") return Promise.resolve();
-  return new Promise((resolve) => {
-    const onChange = () => {
-      if (worker.state === "activated" || worker.state === "redundant") {
-        worker.removeEventListener("statechange", onChange);
-        resolve();
-      }
-    };
-    worker.addEventListener("statechange", onChange);
-  });
-}
-
-let registration: Promise<ServiceWorkerRegistration | null> | null = null;
+/**
+ * Where a production build serves nsites from.
+ *
+ * Deliberately a different registrable domain rather than a subdomain of
+ * grimoire's own: subdomains share cookies and can be reached by a `document
+ * .domain` relaxation, and an isolation boundary that a site can talk its way
+ * across is not one. Unset means nsites do not run — a missing origin must fail
+ * closed, never quietly fall back to grimoire's.
+ */
+const PRODUCTION_ORIGIN = import.meta.env.VITE_NSITE_ORIGIN as
+  string | undefined;
 
 /**
- * Make sure a worker that can serve nsites is running.
+ * The aggregate hash as a hostname label.
  *
- * It is grimoire's own `sw.js`, at scope `/`, because a registration is keyed
- * by scope: a second script at `/` would replace the first, and anything
- * narrower cannot see `/assets/…` — the root-absolute paths real sites are
- * built with. See the header of `public/sw.js`.
- *
- * In production that worker is already registered by `main.tsx` and this finds
- * it. In development `main.tsx` deliberately does not register it, so this does
- * — with `?mode=dev`, which turns off every caching path in the script. The
- * hazard that rule exists for is caching Vite's hashed module URLs; in dev mode
- * the worker caches nothing and answers only for nsite frames.
+ * A DNS label may be 63 characters and a hex hash is 64, which the browser
+ * rejects outright — `DNS_PROBE_FINISHED_NXDOMAIN`, before anything of ours
+ * runs. Base36 of the same 256 bits is 50, so the whole content address still
+ * fits and no two sites can share a label.
  */
-export function ensureNsiteWorker(): Promise<ServiceWorkerRegistration | null> {
-  registration ??= (async () => {
-    if (!("serviceWorker" in navigator)) return null;
-    try {
-      const script = import.meta.env.DEV ? "/sw.js?mode=dev" : "/sw.js";
-
-      /*
-       * Adopt what is registered ONLY if it is the script we would register.
-       *
-       * Checking merely that something holds `/` is not enough, and cost a real
-       * regression: a stale registration from an older build was adopted in
-       * development, and being a non-dev worker it precached and cached exactly
-       * the Vite URLs this whole arrangement exists to leave alone. A worker at
-       * `/` that is not ours is replaced, which is what registering does.
-       */
-      const existing = await navigator.serviceWorker.getRegistration("/");
-      const running = existing?.active ?? existing?.waiting;
-      if (
-        running &&
-        new URL(running.scriptURL).search ===
-          new URL(script, location.origin).search
-      ) {
-        return existing!;
-      }
-
-      const registered = await navigator.serviceWorker.register(script, {
-        scope: "/",
-      });
-      // A registration that is installing cannot answer a fetch yet, and the
-      // frame is about to make one.
-      await activated(registered);
-      return registered;
-    } catch {
-      return null;
-    }
-  })();
-  return registration;
+export function nsiteLabel(aggregateHash: string): string {
+  return BigInt(`0x${aggregateHash}`).toString(36);
 }
 
 /**
- * Where a resolved site's frame points.
+ * The origin one site gets to itself.
  *
- * The root path, not `/_nsite/<hash>/`. A site's own router reads
- * `location.pathname` and renders its 404 for anything it does not recognise,
- * which a content-address prefix never is — Armada and ditto both did exactly
- * that. So the pathname it sees is `/`, and the query tells `sw.js` which site
- * this frame is, once, before it pins the answer to the frame's client id.
- *
- * The files stay cached under `/_nsite/<hash>/`, which is still where the
- * worker reads them from and still what makes the URL a content address.
+ * `*.localhost` needs no DNS and no certificate — Chrome and Firefox resolve
+ * every label to loopback, and each is a distinct origin and a secure context,
+ * which is what service workers require. Vite serves it because the port is
+ * what it listens on; `server.allowedHosts` in `vite.config.ts` is what lets
+ * the host header through.
  */
-export function nsiteUrl(aggregateHash: string): string {
-  return `/?nsite=${aggregateHash}`;
+export function nsiteOrigin(aggregateHash: string): string | null {
+  const label = nsiteLabel(aggregateHash);
+  if (import.meta.env.DEV) {
+    return `${location.protocol}//${label}.localhost:${location.port}`;
+  }
+  if (!PRODUCTION_ORIGIN) return null;
+  const { protocol, host } = new URL(PRODUCTION_ORIGIN);
+  return `${protocol}//${label}.${host}`;
+}
+
+/** The boot document's URL on a site's own origin. */
+export function nsiteBootUrl(aggregateHash: string): string | null {
+  const origin = nsiteOrigin(aggregateHash);
+  return origin ? `${origin}/_nsite-boot.html` : null;
+}
+
+interface WireFile {
+  bytes: ArrayBuffer;
+  type: string;
 }
 
 /**
- * Write a verified site into the worker's cache and return its entry URL.
+ * Hand a verified site to its own origin, and resolve once it has taken it.
  *
- * Idempotent by content address: re-serving the same site overwrites identical
- * bytes at identical URLs, so a second run is a no-op rather than a duplicate.
+ * The frame is the caller's — this only talks to it. Buffers are transferred
+ * rather than copied, so a 500-file site does not exist twice in memory, which
+ * also means `resolved.files` must not be read again afterwards.
  */
-export async function serveNsite(resolved: ResolvedNsite): Promise<string> {
-  await ensureNsiteWorker();
-
-  const cache = await caches.open(NSITE_CACHE_NAME);
-  const base = `${NSITE_SCOPE}${resolved.aggregateHash}`;
-  const index = indexPathOf(resolved.files);
-
-  for (const [path, bytes] of resolved.files) {
-    const normalised = path.startsWith("/") ? path : `/${path}`;
-    // A fresh copy: a Uint8Array view over a pooled buffer would hand the
-    // cache more bytes than the file.
-    const body: BodyInit = bytes.slice() as Uint8Array<ArrayBuffer>;
-
-    await cache.put(
-      `${base}${normalised}`,
-      new Response(body, {
-        headers: {
-          "content-type": contentTypeFor(path),
-          // The URL is a content address, so this can never go stale.
-          "cache-control": "public, max-age=31536000, immutable",
-        },
-      }),
+export function serveNsiteToFrame(
+  frame: HTMLIFrameElement,
+  resolved: ResolvedNsite,
+): Promise<void> {
+  const origin = nsiteOrigin(resolved.aggregateHash);
+  if (!origin) {
+    return Promise.reject(
+      new Error(
+        "No origin is configured to run nsites on, so this one was not run.",
+      ),
     );
   }
 
-  // Served at a stable name whatever the manifest called its entry document.
-  if (index !== "/index.html") {
-    const entry = await cache.match(`${base}${index}`);
-    if (entry) await cache.put(`${base}/index.html`, entry.clone());
+  const index = indexPathOf(resolved.files);
+  const files: Record<string, WireFile> = {};
+  const transfer: ArrayBuffer[] = [];
+
+  for (const [path, bytes] of resolved.files) {
+    const normalised = path.startsWith("/") ? path : `/${path}`;
+    // A fresh copy: a view over a pooled buffer would hand the other origin
+    // more bytes than the file, and a transferred view must own its buffer.
+    const copy = bytes.slice().buffer as ArrayBuffer;
+    files[normalised] = { bytes: copy, type: contentTypeFor(path) };
+    transfer.push(copy);
   }
 
-  return nsiteUrl(resolved.aggregateHash);
-}
+  // Served at a stable name whatever the manifest called its entry document.
+  if (index !== "/index.html" && files[index]) {
+    files["/index.html"] = files[index];
+  }
 
-/** Drop one site's files. The cache is content-addressed, so this is exact. */
-export async function forgetServedNsite(aggregateHash: string): Promise<void> {
-  const cache = await caches.open(NSITE_CACHE_NAME);
-  const keys = await cache.keys();
-  await Promise.all(
-    keys
-      .filter((request) =>
-        new URL(request.url).pathname.startsWith(
-          `${NSITE_SCOPE}${aggregateHash}/`,
-        ),
-      )
-      .map((request) => cache.delete(request)),
-  );
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("The nsite origin never answered."));
+    }, 30_000);
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== origin) return;
+      if (event.source !== frame.contentWindow) return;
+
+      if (event.data?.nsite === "ready") {
+        frame.contentWindow?.postMessage(
+          { nsite: "files", files },
+          origin,
+          transfer,
+        );
+        cleanup();
+        resolve();
+        return;
+      }
+      if (event.data?.nsite === "error") {
+        cleanup();
+        reject(new Error(String(event.data.message)));
+      }
+    };
+
+    function cleanup() {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+    }
+
+    window.addEventListener("message", onMessage);
+  });
 }

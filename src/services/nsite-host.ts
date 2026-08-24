@@ -1,24 +1,16 @@
 /**
- * NIP-5A nsites, verified and served from a worker-backed origin.
+ * NIP-5A nsites: the verification half.
  *
  * An nsite manifest carries the same `path`/`x`/`server` tags a napplet
  * manifest does — a napplet is an nsite with capability tags on top — so the
- * verification is the same walk: check the signature, fetch every blob from
- * Blossom, re-hash each one, then check the aggregate over the whole set.
+ * check is the same walk: the author's signature over the tag list, then every
+ * blob fetched from Blossom and hashed against the entry that list names.
  *
- * What differs is the serving, and it is the whole difference. A napplet is one
- * `index.html` handed to a `srcdoc` frame, which is why it needs no origin. An
- * nsite is a *site*: it asks for `/_next/static/…` at runtime, calls `fetch()`
- * against its own root, and builds URLs its HTML never names. Rewriting the
- * markup cannot reach any of that, so the files go into a cache the service
- * worker in `public/nsite-sw.js` answers from, and the frame is pointed at a
- * real same-origin URL under `/_nsite/<aggregate>/`.
- *
- * That scope is also the safety argument for registering a worker in dev at
- * all. `main.tsx` refuses to register grimoire's own worker outside production
- * because it would cache Vite's hashed module URLs and break dynamic imports;
- * a worker whose scope is `/_nsite/` cannot see those URLs, so the hazard the
- * rule exists for does not apply to it.
+ * What differs is where it runs, and that is `nsite-serve.ts`. A napplet is one
+ * `index.html` in a `srcdoc` frame and needs no origin. An nsite is a *site*: it
+ * asks for `/assets/…` at runtime, calls `fetch()` against its own root, and
+ * builds URLs its HTML never names — so it gets an origin of its own, which is
+ * also what keeps it away from grimoire's storage and keys.
  */
 
 import {
@@ -37,19 +29,6 @@ import {
   getNsiteAggregateHash,
   getNsiteIdentifier,
 } from "@/lib/nip5a-helpers";
-
-/**
- * Where a running nsite's files live.
- *
- * Not the worker's scope: the worker is grimoire's own `sw.js` at `/`, because
- * a site asks for `/assets/index-abc.js` from the origin root and a narrower
- * scope never sees that request. `sw.js` re-roots such a request under the
- * prefix of whichever site's document asked for it.
- */
-export const NSITE_SCOPE = "/_nsite/";
-
-/** The Cache Storage bucket the worker reads. Never grimoire's own caches. */
-export const NSITE_CACHE_NAME = "nsite-artifacts";
 
 /**
  * Verified blobs, keyed by their own hash.

@@ -25,6 +25,16 @@ export default defineConfig({
     hmr: {
       overlay: true,
     },
+    /*
+     * Every nsite runs on `<aggregate>.localhost`, its own origin, so that it
+     * cannot reach grimoire's localStorage, database or service worker. No DNS
+     * or certificate is needed — browsers resolve every `.localhost` label to
+     * loopback and treat it as a secure context — but Vite rejects host headers
+     * it was not told about, as protection against DNS rebinding. Loopback
+     * names cannot be rebound to somewhere else, so allowing them costs nothing
+     * that protection was defending.
+     */
+    allowedHosts: [".localhost"],
   },
   build: {
     rollupOptions: {

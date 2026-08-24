@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Loading nsite…</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0b0f;
+        color: #6b7280;
+        font:
+          12px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="status">Preparing…</p>
+    <script>
+      /*
+       * The bridgehead on an nsite's own origin.
+       *
+       * A service worker can only be registered by a page already on the origin
+       * it will serve, and grimoire cannot script this document once it is
+       * cross-origin — which is the whole point of putting the site here. So
+       * this page is the one thing grimoire serves on that origin: it registers
+       * the worker, receives the already-verified files over `postMessage`, and
+       * gets out of the way.
+       *
+       * It verifies nothing, deliberately. Verification happened in grimoire,
+       * against a signed manifest, before a single byte was sent here; doing it
+       * again in a document the site will shortly replace would prove nothing
+       * about what is in the cache.
+       */
+      const status = document.getElementById("status");
+      const say = (text) => (status.textContent = text);
+
+      // Only the opener may talk to this page. A site loaded here later cannot
+      // reach it — by then this document is gone — but an unchecked listener is
+      // an invitation regardless.
+      const PARENT = window.parent;
+
+      if (PARENT === window) {
+        say("This page is only useful inside grimoire.");
+      } else {
+        boot();
+      }
+
+      async function boot() {
+        try {
+          say("Starting the worker…");
+          const registration = await navigator.serviceWorker.register(
+            "/nsite-sw.js",
+            { scope: "/" },
+          );
+          await activated(registration);
+
+          say("Waiting for files…");
+          const files = await receive();
+
+          say("Storing…");
+          const cache = await caches.open("nsite-files");
+          for (const [path, { bytes, type }] of Object.entries(files)) {
+            await cache.put(
+              path,
+              new Response(bytes, {
+                headers: {
+                  "content-type": type,
+                  // The origin is a content address, so this cannot go stale.
+                  "cache-control": "public, max-age=31536000, immutable",
+                },
+              }),
+            );
+          }
+
+          // Activated is not the same as controlling. Navigating before this
+          // client is controlled means the request goes to the network, which
+          // on this origin answers with grimoire's own index.html — grimoire
+          // then boots where the site should be, which is exactly what it did.
+          say("Handing over…");
+          await controlling();
+
+          // Replace, not push: the site should not have this page in its
+          // history, and a back button that lands here would be a dead end.
+          location.replace("/");
+        } catch (error) {
+          say(`Could not start this nsite: ${error && error.message}`);
+          PARENT.postMessage({ nsite: "error", message: String(error) }, "*");
+        }
+      }
+
+      function controlling() {
+        if (navigator.serviceWorker.controller) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error("the worker never took control")),
+            10000,
+          );
+          navigator.serviceWorker.addEventListener(
+            "controllerchange",
+            () => {
+              clearTimeout(timer);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      }
+
+      function activated(registration) {
+        const worker =
+          registration.active ||
+          registration.waiting ||
+          registration.installing;
+        if (!worker || worker.state === "activated") return Promise.resolve();
+        return new Promise((resolve) => {
+          worker.addEventListener("statechange", function onChange() {
+            if (worker.state === "activated" || worker.state === "redundant") {
+              worker.removeEventListener("statechange", onChange);
+              resolve();
+            }
+          });
+        });
+      }
+
+      function receive() {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error("grimoire never sent the files")),
+            30000,
+          );
+          addEventListener("message", function onMessage(event) {
+            if (event.source !== PARENT) return;
+            if (!event.data || event.data.nsite !== "files") return;
+            clearTimeout(timer);
+            removeEventListener("message", onMessage);
+            resolve(event.data.files);
+          });
+          // Repeated, because "the parent is listening by now" is a claim
+          // about ordering across two documents and this costs nothing.
+          const announce = () => PARENT.postMessage({ nsite: "ready" }, "*");
+          announce();
+          const retry = setInterval(announce, 250);
+          setTimeout(() => clearInterval(retry), 5000);
+        });
+      }
+    </script>
+  </body>
+</html>
