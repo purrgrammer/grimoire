@@ -5,6 +5,7 @@ import {
   describeCapability,
   allowNappletCapability,
   requestLaunchConsent,
+  subscribeNappletLaunch,
 } from "./napplet-consent";
 import { rememberNappletDecision, getNappletDecision } from "./napplet-acl";
 import {
@@ -139,6 +140,35 @@ describe("requestLaunchConsent", () => {
     expect(settledFirst, "a dialog should be pending, not resolved").toBe(
       false,
     );
+  });
+
+  it("acknowledges a notice-only dialog even when it is dismissed", async () => {
+    rememberNappletDecision({
+      dTag: D,
+      aggregateHash: H,
+      capability: "relay:read",
+      allowed: true,
+    });
+
+    // Nothing undecided, so the dialog exists only to show the notice.
+    const pending = requestLaunchConsent({
+      ...base,
+      unenforceable: ["link"],
+    });
+    let pendingRequest: { resolve: (a: string[] | null) => void } | undefined;
+    const stop = subscribeNappletLaunch((requests) => {
+      pendingRequest = requests.at(-1);
+    });
+    pendingRequest?.resolve(null); // dismissed, not run
+    stop();
+    await pending;
+
+    // Seeing it is what counts: the next launch must not raise it again.
+    const second = await requestLaunchConsent({
+      ...base,
+      unenforceable: ["link"],
+    });
+    expect(second).toEqual({ granted: ["relay:read"], cancelled: false });
   });
 
   it("resolves without a dialog when nothing is undecided and nothing to explain", async () => {

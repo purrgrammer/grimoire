@@ -559,13 +559,20 @@ export function requestLaunchConsent(input: {
       resolve: (allowed) => {
         launchRequests.delete(key);
         emitLaunch();
+        /*
+         * Seeing it is what counts, not agreeing to it — there was nothing
+         * here to agree to. Acknowledging only on Run meant a notice-only
+         * dialog that the reader closed came back on every launch forever,
+         * which is the nag this was meant to end. When something WAS undecided
+         * the dialog was a real question, so a dismissal leaves it unanswered
+         * and the notice unacknowledged along with it.
+         */
+        if (explain && (undecided.length === 0 || allowed !== null)) {
+          acknowledgeUnenforceable(input.dTag, input.aggregateHash);
+        }
         if (allowed === null) {
           resolveLaunch({ granted: [], cancelled: true });
           return;
-        }
-        // Only once it was actually run: a cancelled dialog explained nothing.
-        if (explain) {
-          acknowledgeUnenforceable(input.dTag, input.aggregateHash);
         }
         // Everything shown is answered, so nothing re-prompts later.
         for (const capability of undecided) {
