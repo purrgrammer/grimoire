@@ -22,6 +22,7 @@ import {
   Hash,
   Zap,
   Boxes,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,6 +83,12 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   apps: {
     icon: Boxes,
     description: "Find and launch napplets",
+  },
+  // Not a command — an appId. `app` opens either, and the window's icon should
+  // say which one it got.
+  nsite: {
+    icon: Globe,
+    description: "A NIP-5A nsite, verified and served locally",
   },
   profile: {
     icon: User,
