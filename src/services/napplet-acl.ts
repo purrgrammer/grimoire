@@ -38,6 +38,9 @@ const DECISIONS_STORAGE_KEY = "napplet:decisions";
 
 const FIREWALL_STORAGE_KEY = "napplet:firewall";
 
+/** Versions whose unenforceable-domain notice the user has already seen. */
+const ACKNOWLEDGED_STORAGE_KEY = "napplet:acknowledged";
+
 /** An empty restrictive state — what Kehto's store is always reset to. */
 const EMPTY_RESTRICTIVE = JSON.stringify({
   defaultPolicy: "restrictive",
@@ -59,6 +62,48 @@ export function decisionKey(
   capability: string,
 ): string {
   return `${dTag}:${aggregateHash}:${capability}`;
+}
+
+/**
+ * Whether this version's unenforceable domains have already been explained.
+ *
+ * `link`, `common` and `lists` carry no capability, so there is nothing to
+ * grant or withhold and nothing to remember as a decision — which meant the
+ * launch dialog had no reason to stop appearing, and reappeared on every
+ * single run to say the same sentence. It is a notice, not a question, so it
+ * is acknowledged once per version instead.
+ */
+export function hasAcknowledgedUnenforceable(
+  dTag: string,
+  aggregateHash: string,
+): boolean {
+  try {
+    const raw = localStorage.getItem(ACKNOWLEDGED_STORAGE_KEY);
+    if (!raw) return false;
+    const seen = JSON.parse(raw) as string[];
+    return Array.isArray(seen) && seen.includes(`${dTag}:${aggregateHash}`);
+  } catch {
+    return false;
+  }
+}
+
+export function acknowledgeUnenforceable(
+  dTag: string,
+  aggregateHash: string,
+): void {
+  try {
+    const raw = localStorage.getItem(ACKNOWLEDGED_STORAGE_KEY);
+    const seen = raw ? (JSON.parse(raw) as string[]) : [];
+    const key = `${dTag}:${aggregateHash}`;
+    if (Array.isArray(seen) && !seen.includes(key)) {
+      localStorage.setItem(
+        ACKNOWLEDGED_STORAGE_KEY,
+        JSON.stringify([...seen, key]),
+      );
+    }
+  } catch {
+    // Failing to remember only costs the notice being shown again.
+  }
 }
 
 function readDecisions(): DecisionMap {

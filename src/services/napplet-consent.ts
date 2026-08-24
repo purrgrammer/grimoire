@@ -30,6 +30,8 @@ import {
   takeCurrentWriter,
 } from "./napplet-attribution";
 import {
+  hasAcknowledgedUnenforceable,
+  acknowledgeUnenforceable,
   rememberNappletDecision,
   getNappletDecision,
   getNappletDecisions,
@@ -528,7 +530,18 @@ export function requestLaunchConsent(input: {
     else undecided.push(capability);
   }
 
-  if (undecided.length === 0 && input.unenforceable.length === 0) {
+  /*
+   * The unenforceable list is a notice, not a question — `link` and friends
+   * carry no capability, so there is nothing to answer and nothing that would
+   * ever be recorded as answered. Gating the dialog on it therefore re-asked
+   * on every single launch, forever. Shown once per version, then it only
+   * rides along on a dialog that some real decision already raised.
+   */
+  const explain =
+    input.unenforceable.length > 0 &&
+    !hasAcknowledgedUnenforceable(input.dTag, input.aggregateHash);
+
+  if (undecided.length === 0 && !explain) {
     return Promise.resolve({ granted: remembered, cancelled: false });
   }
 
@@ -541,7 +554,7 @@ export function requestLaunchConsent(input: {
       title: input.title,
       pubkey: input.pubkey,
       capabilities: undecided,
-      unenforceable: input.unenforceable,
+      unenforceable: explain ? input.unenforceable : [],
       undeclared: false,
       resolve: (allowed) => {
         launchRequests.delete(key);
@@ -549,6 +562,10 @@ export function requestLaunchConsent(input: {
         if (allowed === null) {
           resolveLaunch({ granted: [], cancelled: true });
           return;
+        }
+        // Only once it was actually run: a cancelled dialog explained nothing.
+        if (explain) {
+          acknowledgeUnenforceable(input.dTag, input.aggregateHash);
         }
         // Everything shown is answered, so nothing re-prompts later.
         for (const capability of undecided) {

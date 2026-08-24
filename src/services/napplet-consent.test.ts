@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { describeCapability, allowNappletCapability } from "./napplet-consent";
+import {
+  describeCapability,
+  allowNappletCapability,
+  requestLaunchConsent,
+} from "./napplet-consent";
 import { rememberNappletDecision, getNappletDecision } from "./napplet-acl";
 import {
   NAP_DOMAINS,
@@ -96,5 +100,60 @@ describe("allowNappletCapability", () => {
     expect(getNappletDecision(D, "d".repeat(64), "relay:write")?.allowed).toBe(
       false,
     );
+  });
+});
+
+describe("requestLaunchConsent", () => {
+  const D = "gm";
+  const H = "e".repeat(64);
+  const base = {
+    dTag: D,
+    aggregateHash: H,
+    title: "Good Morning Protocol",
+    pubkey: "f".repeat(64),
+    capabilities: ["relay:read"],
+  };
+
+  beforeEach(() => localStorage.clear());
+
+  /**
+   * `link` carries no capability, so it is never recorded as answered — which
+   * meant a dialog whose only content was "these are confirmed individually"
+   * reappeared on every launch of every napplet declaring it, forever.
+   */
+  it("stops explaining unenforceable domains once it has been run", async () => {
+    rememberNappletDecision({
+      dTag: D,
+      aggregateHash: H,
+      capability: "relay:read",
+      allowed: true,
+    });
+
+    // First launch: nothing undecided, but the notice has never been shown, so
+    // a dialog is raised and left pending.
+    let settledFirst = false;
+    void requestLaunchConsent({ ...base, unenforceable: ["link"] }).then(
+      () => (settledFirst = true),
+    );
+    await Promise.resolve();
+    expect(settledFirst, "a dialog should be pending, not resolved").toBe(
+      false,
+    );
+  });
+
+  it("resolves without a dialog when nothing is undecided and nothing to explain", async () => {
+    rememberNappletDecision({
+      dTag: D,
+      aggregateHash: H,
+      capability: "relay:read",
+      allowed: true,
+    });
+
+    const decision = await requestLaunchConsent({
+      ...base,
+      unenforceable: [],
+    });
+
+    expect(decision).toEqual({ granted: ["relay:read"], cancelled: false });
   });
 });
