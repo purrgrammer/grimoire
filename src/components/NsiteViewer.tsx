@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ExternalLink, Globe, RotateCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  Copy,
+  CopyCheck,
+  ExternalLink,
+  RotateCw,
+} from "lucide-react";
 
 import { fetchManifestEvent } from "@/services/napplet-host";
 import {
@@ -8,7 +14,6 @@ import {
   type ResolvedNsite,
 } from "@/services/nsite-host";
 import { serveNsite } from "@/services/nsite-serve";
-import { attachNsiteBridge } from "@/services/nsite-bridge";
 import { recordNsiteRun } from "@/services/nsite-library";
 import { getNsiteGatewayUrl } from "@/lib/nip5a-helpers";
 import { useCopy } from "@/hooks/useCopy";
@@ -67,14 +72,7 @@ function NsiteFrame({
   const [resolved, setResolved] = useState<ResolvedNsite | null>(null);
   const [src, setSrc] = useState<string | null>(null);
 
-  const frameRef = useRef<HTMLIFrameElement>(null);
   const { copied, copy } = useCopy();
-
-  // Answers `window.nostr` for this frame only, matched by contentWindow.
-  useEffect(
-    () => attachNsiteBridge(() => frameRef.current?.contentWindow ?? null),
-    [],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -119,55 +117,71 @@ function NsiteFrame({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b px-2 text-xs text-muted-foreground">
-        <Globe className="size-3 shrink-0" />
-        <span className="truncate">
-          {resolved?.title || resolved?.identifier || "nsite"}
-        </span>
+      {/* Controls only. The author and the site's name live in the window
+          title, where every other app puts them — same as a napplet. */}
+      <header className="flex items-center justify-end gap-3 border-b border-border px-4 py-2 font-mono text-xs">
+        {resolved && resolved.missing.length > 0 && (
+          // A site can be worth running with a dead asset in it, but not
+          // silently: the pane would just be missing a picture with no reason
+          // given anywhere.
+          <span
+            className="mr-auto shrink-0 text-[10px] text-warning"
+            title={`No server had: ${resolved.missing.slice(0, 12).join(", ")}${resolved.missing.length > 12 ? "…" : ""}`}
+          >
+            {resolved.missing.length} missing
+          </span>
+        )}
+        {resolved && resolved.aggregate !== "verified" && (
+          // Said plainly rather than hidden: the signature and every file hash
+          // checked out, and only the publisher's own `x` did not.
+          <span
+            className={`shrink-0 text-[10px] text-warning ${resolved.missing.length > 0 ? "" : "mr-auto"}`}
+            title={
+              resolved.aggregate === "absent"
+                ? "This manifest declares no NIP-5A aggregate. Its signature and every file hash were still checked."
+                : "This manifest's NIP-5A aggregate disagrees with the paths it lists — usually a publisher bug. Its signature and every file hash were still checked."
+            }
+          >
+            {resolved.aggregate === "absent"
+              ? "no aggregate"
+              : "aggregate differs"}
+          </span>
+        )}
         {resolved && (
           <>
-            {resolved.aggregate !== "verified" && (
-              // Said plainly rather than hidden: the signature and every file
-              // hash checked out, and only the publisher's own `x` did not.
-              <span
-                className="shrink-0 text-warning"
-                title={
-                  resolved.aggregate === "absent"
-                    ? "This manifest declares no NIP-5A aggregate. Its signature and every file hash were still checked."
-                    : "This manifest's NIP-5A aggregate disagrees with the paths it lists — usually a publisher bug. Its signature and every file hash were still checked."
-                }
-              >
-                {resolved.aggregate === "absent"
-                  ? "no aggregate"
-                  : "aggregate differs"}
-              </span>
-            )}
             <button
-              className="ml-auto shrink-0 font-mono text-[11px] hover:text-foreground"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
               title="Copy the computed content address"
+              aria-label="Copy the computed content address"
               onClick={() => copy(resolved.aggregateHash)}
             >
-              {copied ? "copied" : `${resolved.aggregateHash.slice(0, 8)}…`}
+              {copied ? (
+                <CopyCheck className="size-3" />
+              ) : (
+                <Copy className="size-3" />
+              )}
             </button>
             <a
               href={getNsiteGatewayUrl(resolved.manifestEvent)}
               target="_blank"
               rel="noopener noreferrer"
-              className="shrink-0 hover:text-foreground"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
               title="Open at the public gateway instead"
+              aria-label="Open at the public gateway instead"
             >
               <ExternalLink className="size-3" />
             </a>
           </>
         )}
         <button
-          className={`shrink-0 hover:text-foreground ${resolved ? "" : "ml-auto"}`}
+          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
           title="Re-fetch and verify"
+          aria-label="Re-fetch and verify"
           onClick={onReload}
         >
           <RotateCw className="size-3" />
         </button>
-      </div>
+      </header>
 
       {stage === "error" ? (
         <div className="p-4">
@@ -191,7 +205,6 @@ function NsiteFrame({
          * serves it.
          */
         <iframe
-          ref={frameRef}
           src={src}
           title={resolved?.title || "nsite"}
           className="h-full w-full flex-1 border-0 bg-white"

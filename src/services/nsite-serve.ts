@@ -1,6 +1,12 @@
 /**
- * Putting a verified nsite where the worker can serve it, and giving it a
- * `window.nostr`.
+ * Putting a verified nsite where the worker can serve it.
+ *
+ * Nothing is injected into the bytes. An nsite is served from grimoire's own
+ * origin, so a NIP-07 extension reaches it exactly as it reaches any other
+ * page, and shimming `window.nostr` ourselves would either lose that race or
+ * shadow the signer the user actually chose. The consequence is the honest
+ * one: with no extension installed, an nsite has no signer — the same as
+ * visiting it at a gateway.
  *
  * The worker (`public/nsite-sw.js`) is deliberately dumb: it answers from a
  * cache and never verifies anything. That is only safe because everything
@@ -103,63 +109,6 @@ export function ensureNsiteWorker(): Promise<ServiceWorkerRegistration | null> {
   return registration;
 }
 
-/**
- * The NIP-07 bridge, injected into the served entry document.
- *
- * An nsite gets `window.nostr` where a napplet gets the Kehto bridge: it is an
- * ordinary web page that happens to be verified, and NIP-07 is the interface an
- * ordinary web page already knows how to use. Every call is a `postMessage` the
- * host answers — the frame never sees a key, and `getPublicKey` is as much as
- * it can learn without the user approving a signature.
- *
- * Injected at cache-write time rather than by the worker, so the worker stays a
- * cache lookup and this stays testable as a string.
- */
-export function nostrBridgeScript(): string {
-  return `<script>(() => {
-  const pending = new Map();
-  let seq = 0;
-  addEventListener("message", (e) => {
-    const d = e.data;
-    if (!d || d.__nsite !== "reply") return;
-    const entry = pending.get(d.id);
-    if (!entry) return;
-    pending.delete(d.id);
-    d.error ? entry.reject(new Error(d.error)) : entry.resolve(d.result);
-  });
-  const call = (method, params) => new Promise((resolve, reject) => {
-    const id = ++seq;
-    pending.set(id, { resolve, reject });
-    parent.postMessage({ __nsite: "call", id, method, params }, "*");
-  });
-  window.nostr = {
-    getPublicKey: () => call("getPublicKey"),
-    signEvent: (event) => call("signEvent", { event }),
-    getRelays: () => call("getRelays"),
-    nip04: {
-      encrypt: (pubkey, plaintext) => call("nip04.encrypt", { pubkey, plaintext }),
-      decrypt: (pubkey, ciphertext) => call("nip04.decrypt", { pubkey, ciphertext }),
-    },
-    nip44: {
-      encrypt: (pubkey, plaintext) => call("nip44.encrypt", { pubkey, plaintext }),
-      decrypt: (pubkey, ciphertext) => call("nip44.decrypt", { pubkey, ciphertext }),
-    },
-  };
-})();</script>`;
-}
-
-/** Put the bridge before anything the page ships, so it exists on first script. */
-function injectBridge(html: string): string {
-  const script = nostrBridgeScript();
-  const head = html.match(/<head[^>]*>/i);
-  if (head) {
-    const at = html.indexOf(head[0]) + head[0].length;
-    return html.slice(0, at) + script + html.slice(at);
-  }
-  // No <head>: a bare fragment still parses, and the bridge must come first.
-  return script + html;
-}
-
 /** Where a resolved site's entry document is served from. */
 export function nsiteUrl(aggregateHash: string): string {
   return `${NSITE_SCOPE}${aggregateHash}/index.html`;
@@ -180,13 +129,9 @@ export async function serveNsite(resolved: ResolvedNsite): Promise<string> {
 
   for (const [path, bytes] of resolved.files) {
     const normalised = path.startsWith("/") ? path : `/${path}`;
-    const isIndex = path === index;
-
-    const body: BodyInit = isIndex
-      ? injectBridge(new TextDecoder().decode(bytes))
-      : // A fresh copy: a Uint8Array view over a pooled buffer would hand the
-        // cache more bytes than the file.
-        (bytes.slice() as Uint8Array<ArrayBuffer>);
+    // A fresh copy: a Uint8Array view over a pooled buffer would hand the
+    // cache more bytes than the file.
+    const body: BodyInit = bytes.slice() as Uint8Array<ArrayBuffer>;
 
     await cache.put(
       `${base}${normalised}`,

@@ -44,6 +44,25 @@ export const NSITE_SCOPE = "/_nsite/";
 /** The Cache Storage bucket the worker reads. Never grimoire's own caches. */
 export const NSITE_CACHE_NAME = "nsite-artifacts";
 
+/**
+ * Verified blobs, keyed by their own hash.
+ *
+ * A content address cannot go stale, so a hit is always valid — and re-running
+ * a site is otherwise a full re-download of every file, which for a 500-file
+ * site is a long wait for bytes already on disk. Bytes from here are hashed
+ * again on the way out: cheap, and the cache is not a trust boundary.
+ */
+const BLOB_CACHE_NAME = "nsite-blobs";
+
+let blobCache: Promise<Cache | null> | null = null;
+
+function getBlobCache(): Promise<Cache | null> {
+  // Cache Storage is unavailable in some contexts; an absent cache only costs
+  // a re-fetch, so never fail a load over it.
+  blobCache ??= caches.open(BLOB_CACHE_NAME).catch(() => null);
+  return blobCache;
+}
+
 export class NsiteResolutionError extends Error {
   constructor(
     readonly code:
@@ -60,6 +79,8 @@ export class NsiteResolutionError extends Error {
 }
 
 export interface ResolvedNsite {
+  /** Paths whose blob no server would serve. Absent from `files`. */
+  missing: readonly string[];
   /** The computed content address. Also the URL segment it is served under. */
   aggregateHash: string;
   /**
@@ -79,6 +100,43 @@ export interface ResolvedNsite {
 
 /** The path a site's entry point lives at, in the order worth trying. */
 const INDEX_PATHS = ["/index.html", "/index.htm", "index.html"];
+
+/**
+ * One verified blob: from the cache if it is there, otherwise from a server.
+ *
+ * Hashed on the way out either way — `fetchBlob` already checks what a server
+ * returns, and the cache is not a trust boundary.
+ */
+async function fetchVerified(
+  entry: { path: string; sha256: string },
+  servers: readonly string[],
+  tried: Set<string>,
+): Promise<Uint8Array> {
+  const cache = await getBlobCache();
+  const cacheKey = `/_nsite-blob/${entry.sha256}`;
+
+  const hit = await cache?.match(cacheKey);
+  if (hit) {
+    const cached = new Uint8Array(await hit.arrayBuffer());
+    if (verifyBlobHash(cached, entry.sha256)) return cached;
+  }
+
+  for (const server of servers) tried.add(server);
+  const bytes = await fetchBlob(servers, entry.sha256, async (url) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`blob ${url}: ${res.status}`);
+    return new Uint8Array(await res.arrayBuffer());
+  });
+  if (!verifyBlobHash(bytes, entry.sha256)) {
+    throw new Error(`${entry.path} did not hash to what the manifest declared`);
+  }
+
+  await cache?.put(
+    cacheKey,
+    new Response(bytes.slice() as Uint8Array<ArrayBuffer>),
+  );
+  return bytes;
+}
 
 /**
  * Verify an nsite manifest into its file set.
@@ -122,38 +180,42 @@ export async function resolveNsiteFromEvent(
       "The manifest lists no files.",
     );
   }
+
   const servers = getNsiteServers(event);
   const files = new Map<string, Uint8Array>();
+  const missing: string[] = [];
   const tried = new Set<string>();
   let done = 0;
 
-  for (const entry of entries) {
-    let bytes: Uint8Array;
-    try {
-      for (const server of servers) tried.add(server);
-      // `fetchBlob` re-hashes whatever a server returns, so a lying server is
-      // a miss rather than a compromise; this checks again anyway, because the
-      // cost is nothing and the file is about to be served from our origin.
-      bytes = await fetchBlob(servers, entry.sha256, async (url) => {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error(`blob ${url}: ${res.status}`);
-        return new Uint8Array(await res.arrayBuffer());
-      });
-    } catch (error) {
-      throw new NsiteResolutionError(
-        "blob-unavailable",
-        `No server returned ${entry.path}. Tried ${[...tried].join(", ") || "nothing"}. (${String(error)})`,
-      );
+  /*
+   * One unavailable blob must not cost the whole site.
+   *
+   * A 225-file site with a dead 404.html is still a working site, and failing
+   * it outright — which this used to do — meant a single unreachable asset on
+   * one Blossom server made the whole thing unrunnable. Missing paths are
+   * recorded and simply absent from the cache, so the worker 404s them exactly
+   * as a static host would. The index is the one file that is not optional,
+   * and that is checked below.
+   *
+   * Bounded concurrency rather than one at a time: sequential was minutes for
+   * a few hundred files, and unbounded opens a few hundred sockets at once.
+   */
+  const CONCURRENCY = 8;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < entries.length) {
+      const entry = entries[cursor++];
+      try {
+        files.set(entry.path, await fetchVerified(entry, servers, tried));
+      } catch {
+        missing.push(entry.path);
+      }
+      onProgress?.({ done: ++done, total: entries.length });
     }
-    if (!verifyBlobHash(bytes, entry.sha256)) {
-      throw new NsiteResolutionError(
-        "bad-blob-hash",
-        `${entry.path} did not hash to what the manifest declared.`,
-      );
-    }
-    files.set(entry.path, bytes);
-    onProgress?.({ done: ++done, total: entries.length });
-  }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, entries.length) }, worker),
+  );
 
   if (!INDEX_PATHS.some((path) => files.has(path))) {
     throw new NsiteResolutionError(
@@ -166,6 +228,7 @@ export async function resolveNsiteFromEvent(
   const aggregateHash = computeAggregateHash(entries);
 
   return {
+    missing,
     aggregateHash,
     aggregate: !declared
       ? "absent"

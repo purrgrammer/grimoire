@@ -184,6 +184,7 @@ function generateRawCommand(appId: string, props: any): string {
       }
       return "open";
 
+    case "nsite":
     case "app":
       if (props.pointer) {
         try {
@@ -430,7 +431,8 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   // no d tag, so a `#d: [""]` filter can never match.
   const nappletPointer: EventPointer | AddressPointer | undefined =
     useMemo(() => {
-      if (appId !== "app" || !props.pointer) return undefined;
+      if ((appId !== "app" && appId !== "nsite") || !props.pointer)
+        return undefined;
       const p = props.pointer as EventPointer | AddressPointer;
       if ("id" in p || p.identifier) return p;
       const { identifier: _drop, ...rest } = p;
@@ -441,12 +443,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   // third-party code, and who signed it is the first thing worth knowing about
   // it. Same treatment other kinds get in their titles.
   const nappletTitle = useMemo(() => {
-    if (appId !== "app") return null;
-    if (!nappletManifest) return "Napplet";
+    if (appId !== "app" && appId !== "nsite") return null;
+    const fallback = appId === "nsite" ? "Nsite" : "Napplet";
+    if (!nappletManifest) return fallback;
     const name =
       getTagValues(nappletManifest, "title")[0] ||
       getTagValues(nappletManifest, "d")[0] ||
-      "Napplet";
+      fallback;
     return (
       <div className="flex items-center gap-1">
         <UserName pubkey={nappletManifest.pubkey} className="text-inherit" />
@@ -966,9 +969,9 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
         icon = getCommandIcon("open");
       }
       tooltip = rawCommand;
-    } else if (nappletTitle && appId === "app") {
+    } else if (nappletTitle && (appId === "app" || appId === "nsite")) {
       title = nappletTitle;
-      icon = getCommandIcon("app");
+      icon = getCommandIcon(appId === "nsite" ? "nsite" : "app");
       tooltip = rawCommand;
     } else if (kindTitle && appId === "kind") {
       title = kindTitle;
