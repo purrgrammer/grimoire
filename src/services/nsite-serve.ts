@@ -128,9 +128,20 @@ export function ensureNsiteWorker(): Promise<ServiceWorkerRegistration | null> {
   return registration;
 }
 
-/** Where a resolved site's entry document is served from. */
+/**
+ * Where a resolved site's frame points.
+ *
+ * The root path, not `/_nsite/<hash>/`. A site's own router reads
+ * `location.pathname` and renders its 404 for anything it does not recognise,
+ * which a content-address prefix never is — Armada and ditto both did exactly
+ * that. So the pathname it sees is `/`, and the query tells `sw.js` which site
+ * this frame is, once, before it pins the answer to the frame's client id.
+ *
+ * The files stay cached under `/_nsite/<hash>/`, which is still where the
+ * worker reads them from and still what makes the URL a content address.
+ */
 export function nsiteUrl(aggregateHash: string): string {
-  return `${NSITE_SCOPE}${aggregateHash}/index.html`;
+  return `/?nsite=${aggregateHash}`;
 }
 
 /**
