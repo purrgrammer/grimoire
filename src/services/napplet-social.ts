@@ -155,15 +155,53 @@ export function createNappletListsService() {
 }
 
 /**
+ * Which built-in opens a `nostr:` URI, and the identifier to give it.
+ *
+ * Pure and exported so the scheme rules are testable without a runtime: the
+ * interesting cases are the ones that must stay refused.
+ */
+export function resolveNostrLink(
+  url: string,
+): { archetype: "profile" | "event"; entity: string } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "nostr:") return null;
+  // `nostr:nevent1…` puts the entity in pathname; `nostr://nevent1…` puts it
+  // in host. Napplets write both.
+  const entity = (parsed.pathname || parsed.host).replace(/^\/+/, "");
+  // A person and a thing are different built-ins, and each refuses the other's
+  // identifiers when the target came from a napplet.
+  if (/^(npub|nprofile)1/.test(entity)) return { archetype: "profile", entity };
+  if (/^(note|nevent|naddr)1/.test(entity))
+    return { archetype: "event", entity };
+  return null;
+}
+
+/**
  * NAP-LINK. Navigation the napplet controls, with no capability behind it.
  *
- * Restricted to https so `javascript:`, `file:`, `data:` and custom app schemes
- * cannot be reached, and confirmed each time so a napplet cannot silently
- * redirect the user.
+ * Two schemes, and they are not the same kind of navigation.
+ *
+ * `https:` leaves grimoire, so it opens a browser tab and is confirmed each
+ * time. Everything else external stays refused — `javascript:`, `file:`,
+ * `data:` and custom app schemes are how a link becomes an exploit.
+ *
+ * `nostr:` does NOT leave grimoire. A napplet asking to open a note, a profile
+ * or a relay is naming something this app already renders, so it opens a window
+ * here rather than handing the user to a web gateway. Refusing it — which is
+ * what an https-only allowlist did — makes every "open this note" button in
+ * every napplet dead, and dead in the worst way: `createLinkService` answers
+ * `denied` with no prompt, no toast and no console line, so the button simply
+ * does nothing. It goes through the ordinary `open` command, so the identifier
+ * is validated by the same parser the user's own typing hits.
  */
 export function createNappletLinkService() {
   return createLinkService({
-    allowedProtocols: ["https:"],
+    allowedProtocols: ["https:", "nostr:"],
     open: async (context) => {
       const url = String((context as { url?: unknown }).url ?? "");
       let parsed: URL;
@@ -172,6 +210,34 @@ export function createNappletLinkService() {
       } catch {
         return { status: "denied" };
       }
+
+      if (parsed.protocol === "nostr:") {
+        const target = resolveNostrLink(url);
+        if (!target) return { status: "denied" };
+        const { archetype, entity } = target;
+        const allowed = await requestSigningConsent({
+          summary: "open this in a new window",
+          detail: `nostr:${entity}`,
+        });
+        if (!allowed) return { status: "denied" };
+        const { buildBuiltinWindow, openBuiltinWindow } =
+          await import("./napplet-builtins");
+        try {
+          openBuiltinWindow(
+            await buildBuiltinWindow(
+              archetype,
+              "open",
+              undefined,
+              entity,
+              true,
+            ),
+          );
+        } catch {
+          return { status: "denied" };
+        }
+        return { status: "opened" };
+      }
+
       if (parsed.protocol !== "https:") return { status: "denied" };
 
       const allowed = await requestSigningConsent({
