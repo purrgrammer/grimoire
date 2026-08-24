@@ -174,6 +174,47 @@ const buffered = new Map<string, Buffered>();
 const asking = new Set<string>();
 
 /**
+ * Re-run every live window showing this napplet version.
+ *
+ * The runtime's ACL state is seeded when the frame is built, so a decision
+ * changed afterwards does not reach a napplet already running. Nothing here
+ * changes what was decided — it only makes the frame ask again with the new
+ * answer in place.
+ */
+function reloadNappletWindows(dTag: string, aggregateHash: string): void {
+  for (const [id, identity] of identities) {
+    if (identity.dTag === dTag && identity.aggregateHash === aggregateHash) {
+      reloadListeners.forEach((listener) => listener(id));
+    }
+  }
+}
+
+/**
+ * Turn a refusal into a grant, and make it take effect.
+ *
+ * `requestLaunchConsent` treats a remembered deny as final — it skips the
+ * capability rather than re-asking, which is right for a napplet that should
+ * stop nagging and wrong as the ONLY behaviour, because it left a user who
+ * changed their mind with no way through. Refusing `inc` on a napplet that
+ * declared it, for instance, kills its buttons for good: the launch dialog
+ * never mentions the capability again, so the refusal cannot be revisited from
+ * the flow that caused it.
+ *
+ * This is that way through. It is deliberately explicit — a button the user
+ * presses on a named capability — rather than anything automatic.
+ */
+export function allowNappletCapability(
+  dTag: string,
+  aggregateHash: string,
+  capability: string,
+): void {
+  rememberNappletDecision({ dTag, aggregateHash, capability, allowed: true });
+  settled.delete(`${dTag}:${aggregateHash}:${capability}`);
+  lastReported.delete(`${dTag}:${aggregateHash}:${capability}`);
+  reloadNappletWindows(dTag, aggregateHash);
+}
+
+/**
  * Tell the user a refusal just happened, and offer to take it back.
  *
  * Every path above that stops without asking used to `return` in silence, and
@@ -215,19 +256,7 @@ function reportRefusal(
       : "You answered no earlier in this session. Reloading grimoire asks again.",
     action: {
       label: "Allow",
-      onClick: () => {
-        if (remembered) forgetNappletDecision(dTag, hash, event.capability);
-        settled.delete(key);
-        lastReported.delete(key);
-        // The ACL state in the live runtime still holds the refusal, so the
-        // frame has to re-run before the napplet can get a different answer.
-        for (const [id, identity] of identities) {
-          if (identity.dTag === dTag && identity.aggregateHash === hash) {
-            reloadListeners.forEach((listener) => listener(id));
-            break;
-          }
-        }
-      },
+      onClick: () => allowNappletCapability(dTag, hash, event.capability),
     },
   });
 }

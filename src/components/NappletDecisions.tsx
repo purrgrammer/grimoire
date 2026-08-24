@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import type { NappletDecision } from "@/services/napplet-acl";
 import {
   describeCapability,
+  allowNappletCapability,
   revokeNappletCapability,
   revokeAllNappletCapabilities,
 } from "@/services/napplet-consent";
@@ -58,6 +59,28 @@ export function NappletDecisions({
             {describeCapability(decision.capability)}
           </span>
           <Label>{decision.allowed ? "allowed" : "denied"}</Label>
+          {!decision.allowed && (
+            // A refusal is otherwise a dead end: the launch dialog treats a
+            // remembered deny as final and never mentions the capability
+            // again, so the flow that caused the "no" cannot undo it. This is
+            // the way back — and it re-runs the napplet, because the runtime
+            // was seeded with the refusal when its frame was built.
+            <button
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              title="Allow this, and re-run the napplet"
+              aria-label={`Allow ${decision.capability}`}
+              onClick={() => {
+                allowNappletCapability(
+                  decision.dTag,
+                  decision.aggregateHash,
+                  decision.capability,
+                );
+                onChanged();
+              }}
+            >
+              <ShieldCheck className="size-3" />
+            </button>
+          )}
           <button
             className="text-muted-foreground transition-colors hover:text-destructive"
             title="Forget this answer"

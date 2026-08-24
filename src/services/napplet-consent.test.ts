@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { describeCapability } from "./napplet-consent";
+import { describeCapability, allowNappletCapability } from "./napplet-consent";
+import { rememberNappletDecision, getNappletDecision } from "./napplet-acl";
 import {
   NAP_DOMAINS,
   REMOTE_MEDIA_CAPABILITY,
@@ -45,5 +47,54 @@ describe("describeCapability", () => {
         ).not.toBe(`use ${capability}`);
       }
     }
+  });
+});
+
+describe("allowNappletCapability", () => {
+  const D = "dsui-gm-proto";
+  const H = "c".repeat(64);
+
+  beforeEach(() => localStorage.clear());
+
+  /**
+   * `requestLaunchConsent` treats a remembered deny as final and never offers
+   * the capability again, so a napplet whose declared domain was refused —
+   * `inc` on a napplet whose buttons emit through it — stays broken with no
+   * route back through the flow that broke it. This is that route.
+   */
+  it("turns a remembered refusal into a grant", () => {
+    rememberNappletDecision({
+      dTag: D,
+      aggregateHash: H,
+      capability: "relay:write",
+      allowed: false,
+    });
+    expect(getNappletDecision(D, H, "relay:write")?.allowed).toBe(false);
+
+    allowNappletCapability(D, H, "relay:write");
+
+    expect(getNappletDecision(D, H, "relay:write")?.allowed).toBe(true);
+  });
+
+  it("leaves other capabilities and other versions alone", () => {
+    for (const [hash, capability] of [
+      [H, "relay:write"],
+      [H, "relay:read"],
+      ["d".repeat(64), "relay:write"],
+    ] as const) {
+      rememberNappletDecision({
+        dTag: D,
+        aggregateHash: hash,
+        capability,
+        allowed: false,
+      });
+    }
+
+    allowNappletCapability(D, H, "relay:write");
+
+    expect(getNappletDecision(D, H, "relay:read")?.allowed).toBe(false);
+    expect(getNappletDecision(D, "d".repeat(64), "relay:write")?.allowed).toBe(
+      false,
+    );
   });
 });
