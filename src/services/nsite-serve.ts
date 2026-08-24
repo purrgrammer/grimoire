@@ -4,9 +4,9 @@
  *
  * The worker (`public/nsite-sw.js`) is deliberately dumb: it answers from a
  * cache and never verifies anything. That is only safe because everything
- * written here has already been through `resolveNsiteFromEvent` — signature,
- * per-file hash, and the NIP-5A aggregate over the whole set. **Never write to
- * this cache from anywhere else.**
+ * written here has already been through `resolveNsiteFromEvent` — the author's
+ * signature over the tag list, and every file hashed against the entry that
+ * list names. **Never write to this cache from anywhere else.**
  *
  * The site is served under `/_nsite/<aggregateHash>/`, so the URL *is* the
  * content address: two sites cannot collide, a changed site is a different
@@ -51,6 +51,22 @@ function contentTypeFor(path: string): string {
   return MIME[ext] ?? "application/octet-stream";
 }
 
+/** Resolve once this registration has a worker that can answer a fetch. */
+function activated(registration: ServiceWorkerRegistration): Promise<void> {
+  const worker =
+    registration.active ?? registration.waiting ?? registration.installing;
+  if (!worker || worker.state === "activated") return Promise.resolve();
+  return new Promise((resolve) => {
+    const onChange = () => {
+      if (worker.state === "activated" || worker.state === "redundant") {
+        worker.removeEventListener("statechange", onChange);
+        resolve();
+      }
+    };
+    worker.addEventListener("statechange", onChange);
+  });
+}
+
 let registration: Promise<ServiceWorkerRegistration | null> | null = null;
 
 /**
@@ -75,8 +91,10 @@ export function ensureNsiteWorker(): Promise<ServiceWorkerRegistration | null> {
         { scope: NSITE_SCOPE },
       );
       // A registration that is installing cannot answer a fetch yet, and the
-      // frame is about to make one.
-      if (!registered.active) await navigator.serviceWorker.ready;
+      // frame is about to make one. NOT `navigator.serviceWorker.ready`: that
+      // waits for a worker controlling THIS page, and one scoped to `/_nsite/`
+      // never will — awaiting it hangs forever, which it did.
+      await activated(registered);
       return registered;
     } catch {
       return null;

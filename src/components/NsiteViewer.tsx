@@ -126,9 +126,25 @@ function NsiteFrame({
         </span>
         {resolved && (
           <>
+            {resolved.aggregate !== "verified" && (
+              // Said plainly rather than hidden: the signature and every file
+              // hash checked out, and only the publisher's own `x` did not.
+              <span
+                className="shrink-0 text-warning"
+                title={
+                  resolved.aggregate === "absent"
+                    ? "This manifest declares no NIP-5A aggregate. Its signature and every file hash were still checked."
+                    : "This manifest's NIP-5A aggregate disagrees with the paths it lists — usually a publisher bug. Its signature and every file hash were still checked."
+                }
+              >
+                {resolved.aggregate === "absent"
+                  ? "no aggregate"
+                  : "aggregate differs"}
+              </span>
+            )}
             <button
               className="ml-auto shrink-0 font-mono text-[11px] hover:text-foreground"
-              title="Copy the verified content address"
+              title="Copy the computed content address"
               onClick={() => copy(resolved.aggregateHash)}
             >
               {copied ? "copied" : `${resolved.aggregateHash.slice(0, 8)}…`}

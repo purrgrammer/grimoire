@@ -27,6 +27,7 @@ import {
   verifyBlobHash,
   verifyAggregate,
   pathEntriesFromTags,
+  computeAggregateHash,
 } from "./kehto";
 import type { NostrEvent } from "@/types/nostr";
 import {
@@ -59,8 +60,15 @@ export class NsiteResolutionError extends Error {
 }
 
 export interface ResolvedNsite {
-  /** The verified content address. Also the URL segment it is served under. */
+  /** The computed content address. Also the URL segment it is served under. */
   aggregateHash: string;
+  /**
+   * What the manifest's own `x` tag says, and whether it agrees.
+   *
+   * `absent` and `mismatch` are both common in the wild and neither weakens
+   * what was actually checked — see the note on `resolveNsiteFromEvent`.
+   */
+  aggregate: "verified" | "absent" | "mismatch";
   identifier: string;
   title?: string;
   description?: string;
@@ -75,10 +83,27 @@ const INDEX_PATHS = ["/index.html", "/index.htm", "index.html"];
 /**
  * Verify an nsite manifest into its file set.
  *
- * Nothing is trusted until the aggregate matches: a blob server can return any
- * bytes it likes, and the per-file hash only proves the file is the one the
- * manifest named — the aggregate is what proves the manifest names the set the
- * author signed.
+ * Two checks are load-bearing and both are hard failures:
+ *
+ *  - the **signature**, which is what makes the tag list the author's. Every
+ *    `path`/`x`/`server` tag is inside the signed event, so a relay cannot add,
+ *    drop or alter one.
+ *  - the **per-file hash**, which is what makes each blob the one that list
+ *    named. A Blossom server can return any bytes it likes; these are checked
+ *    against a hash the author signed, so it cannot substitute content.
+ *
+ * The NIP-5A **aggregate is not a third gate**, and treating it as one was
+ * wrong. It exists to catch a truncated path list — but the signature already
+ * covers the whole tag list, so against a hostile relay it adds nothing the
+ * signature has not already settled. What it really catches is a publisher
+ * computing it differently, which is exactly what is out there: of four
+ * manifests sampled live, two carried no `x` at all and two carried one that
+ * disagreed with `computeAggregateHash`. Refusing those would refuse every
+ * nsite that exists; claiming they verified would be a lie. So it is checked,
+ * reported on the window, and never the reason a site will not run.
+ *
+ * The content address is always *computed*, never the declared `x`. A URL is
+ * built from it, and a value a publisher got wrong must not become a path.
  */
 export async function resolveNsiteFromEvent(
   event: NostrEvent,
@@ -90,14 +115,13 @@ export async function resolveNsiteFromEvent(
       "The manifest's signature does not match its author.",
     );
   }
-  if (!verifyAggregate(event.tags)) {
+  const entries = pathEntriesFromTags(event.tags);
+  if (entries.length === 0) {
     throw new NsiteResolutionError(
-      "bad-aggregate",
-      "The manifest's `x` aggregate does not cover the paths it lists.",
+      "missing-index",
+      "The manifest lists no files.",
     );
   }
-
-  const entries = pathEntriesFromTags(event.tags);
   const servers = getNsiteServers(event);
   const files = new Map<string, Uint8Array>();
   const tried = new Set<string>();
@@ -138,18 +162,16 @@ export async function resolveNsiteFromEvent(
     );
   }
 
-  const aggregateHash = getNsiteAggregateHash(event);
-  if (!aggregateHash) {
-    // `verifyAggregate` passed, so this cannot happen — but the type says it
-    // can, and a content address invented here would be a lie.
-    throw new NsiteResolutionError(
-      "bad-aggregate",
-      "The manifest carries no `x` aggregate tag.",
-    );
-  }
+  const declared = getNsiteAggregateHash(event);
+  const aggregateHash = computeAggregateHash(entries);
 
   return {
     aggregateHash,
+    aggregate: !declared
+      ? "absent"
+      : verifyAggregate(event.tags)
+        ? "verified"
+        : "mismatch",
     identifier: getNsiteIdentifier(event) ?? "",
     title: getNsiteTitle(event),
     description: getNsiteDescription(event),

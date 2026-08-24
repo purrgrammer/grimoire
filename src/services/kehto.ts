@@ -78,6 +78,7 @@ export {
   verifyAggregate,
   pathEntriesFromTags,
   aggregateTagValue,
+  computeAggregateHash,
 } from "@kehto/nip/5a";
 
 export type { PathEntry } from "@kehto/nip/5a";
