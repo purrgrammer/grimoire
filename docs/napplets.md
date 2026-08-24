@@ -15,8 +15,13 @@ all pre-1.0, against a draft NIP. That fact shapes most of the decisions below.
 | `15129` | Root Napplet Manifest       |
 | `35129` | Named Napplet (addressable) |
 
-Three commands: **`app <identifier\|archetype> [target]`** runs one, **`apps`**
-is the launcher, **`permissions`** is where grants are reviewed and revoked.
+Two commands: **`app [--debug] <identifier\|archetype> [target]`** runs one and
+**`apps`** is the launcher, which is also where remembered grants are reviewed
+and revoked — a running napplet's own chrome has the same list behind its
+shield, and both render `NappletDecisions` so they cannot drift.
+
+`--debug` opens the host↔napplet traffic drawer. It is for the person *writing*
+a napplet, so it is off unless asked for.
 
 ## Where it lives
 
@@ -29,6 +34,7 @@ is the launcher, **`permissions`** is where grants are reviewed and revoked.
 | The srcdoc CSP | `src/lib/napplet-csp.ts` |
 | Manifest `requires` → ACL capabilities | `src/services/napplet-capabilities.ts` |
 | ACL policy and remembered decisions | `src/services/napplet-acl.ts` |
+| The remembered-decision list, shared by both surfaces | `src/components/NappletDecisions.tsx` |
 | Per-use consent prompts | `src/services/napplet-consent.ts` |
 | Per-origin network grants (NAP-RESOURCE) | `src/services/napplet-origins.ts`, `napplet-devices.ts` |
 | Archetype dispatch (NAP-INTENT) | `src/services/napplet-intent.ts`, `napplet-intent-defaults.ts` |
@@ -37,7 +43,7 @@ is the launcher, **`permissions`** is where grants are reviewed and revoked.
 | Opening the target and waiting for it | `src/services/napplet-targets.ts`, `napplet-readiness.ts` |
 | Which napplet is asking the signer to sign | `src/services/napplet-attribution.ts` |
 | The napplets a user has run | `src/services/napplet-library.ts` |
-| Host↔napplet traffic log | `src/services/napplet-messages.ts` |
+| Host↔napplet traffic log (`app --debug`) | `src/services/napplet-messages.ts` |
 
 `kehto.ts` is a re-export module — no logic, no state, nothing importing back
 into `src/services/` — and `no-restricted-imports` in `eslint.config.js` blocks

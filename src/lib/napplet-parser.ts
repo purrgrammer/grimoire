@@ -25,6 +25,8 @@ import {
 
 export interface ParsedAppCommand {
   pointer: EventPointer | AddressPointer;
+  /** `--debug`: show the host↔napplet traffic drawer in this window. */
+  debug?: boolean;
 }
 
 /**
@@ -59,6 +61,13 @@ function isAddressPointer(
 export async function parseAppCommand(
   args: string[],
 ): Promise<ParsedAppCommand | Record<string, unknown>> {
+  // Pulled out before anything else looks at the arguments: the traffic drawer
+  // is a debugging tool for napplet authors, and every parser downstream —
+  // `open`'s pointer forms, the archetype slug and its target — would otherwise
+  // have to know a flag that means nothing to it.
+  const debug = args.includes("--debug");
+  args = args.filter((arg) => arg !== "--debug");
+
   let pointer: EventPointer | AddressPointer;
   try {
     pointer = parseOpenCommand(args).pointer;
@@ -69,7 +78,8 @@ export async function parseAppCommand(
       await import("@/services/napplet-archetype");
     if (!looksLikeArchetype(token)) throw error;
     // May resolve to a built-in, which comes back with an appId override
-    // rather than a pointer.
+    // rather than a pointer. A built-in is not a napplet and has no traffic to
+    // show, so `--debug` is dropped rather than passed on.
     return resolveArchetypeCommand(token, args.slice(1));
   }
 
@@ -82,7 +92,7 @@ export async function parseAppCommand(
     );
   }
 
-  return { pointer };
+  return debug ? { pointer, debug } : { pointer };
 }
 
 /**

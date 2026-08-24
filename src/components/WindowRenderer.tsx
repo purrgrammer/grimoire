@@ -77,11 +77,6 @@ const NappletViewer = lazy(() =>
 const NappletsViewer = lazy(() =>
   import("./NappletsViewer").then((m) => ({ default: m.NappletsViewer })),
 );
-const NappletPermissionsViewer = lazy(() =>
-  import("./NappletPermissionsViewer").then((m) => ({
-    default: m.NappletPermissionsViewer,
-  })),
-);
 
 // Loading fallback component
 function ViewerLoading() {
@@ -195,11 +190,13 @@ function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
       return <NipRenderer nipId={window.props.number} />;
     case "apps":
       return <NappletsViewer />;
-    case "permissions":
-      return <NappletPermissionsViewer />;
     case "app":
       return (
-        <NappletViewer pointer={window.props.pointer} windowId={window.id} />
+        <NappletViewer
+          pointer={window.props.pointer}
+          windowId={window.id}
+          debug={window.props.debug}
+        />
       );
     case "kind":
       return <KindRenderer kind={parseInt(window.props.number)} />;

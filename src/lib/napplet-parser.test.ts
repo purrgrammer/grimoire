@@ -26,6 +26,33 @@ describe("parseAppCommand", () => {
     await expect(parseAppCommand([])).rejects.toThrow();
   });
 
+  it("is absent unless --debug is passed", async () => {
+    const naddr = nip19.naddrEncode({
+      kind: 35129,
+      pubkey: PUBKEY,
+      identifier: "calculator",
+    });
+    expect(await parseAppCommand([naddr])).not.toHaveProperty("debug");
+  });
+
+  it.each([
+    ["before the identifier", (n: string) => ["--debug", n]],
+    ["after it", (n: string) => [n, "--debug"]],
+  ])("takes --debug %s", async (_label, argv) => {
+    const naddr = nip19.naddrEncode({
+      kind: 35129,
+      pubkey: PUBKEY,
+      identifier: "calculator",
+    });
+    const parsed = (await parseAppCommand(argv(naddr))) as {
+      pointer: AddressPointer;
+      debug?: boolean;
+    };
+    expect(parsed.debug).toBe(true);
+    // The flag must not have been mistaken for the identifier it sat beside.
+    expect(parsed.pointer.identifier).toBe("calculator");
+  });
+
   it.each([5129, 15129, 35129])(
     "accepts an naddr for kind %i",
     async (kind) => {

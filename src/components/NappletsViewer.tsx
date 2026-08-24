@@ -41,6 +41,12 @@ import {
   getNappletRequires,
 } from "@/lib/nip5d-helpers";
 import type { NostrEvent } from "@/types/nostr";
+import { NappletDecisions } from "@/components/NappletDecisions";
+import {
+  getNappletDecisions,
+  subscribeNappletDecisions,
+  type NappletDecision,
+} from "@/services/napplet-acl";
 
 interface Candidate {
   coordinate: string;
@@ -93,11 +99,19 @@ function NappletRow({
   onRun,
   onPin,
   onForget,
+  decisions,
+  onDecisionsChanged,
 }: {
   candidate: Candidate;
   onRun: () => void;
   onPin?: () => void;
   onForget?: () => void;
+  /**
+   * What the user has permanently answered this napplet, already filtered to
+   * it. Absent for a row the user has never run, which can have no answers.
+   */
+  decisions?: NappletDecision[];
+  onDecisionsChanged?: () => void;
 }) {
   return (
     <div className="group flex items-start gap-3 rounded border border-border/40 p-3 hover:bg-muted/30">
@@ -124,6 +138,19 @@ function NappletRow({
             {candidate.requires.map((nap) => (
               <Label key={nap}>{nap}</Label>
             ))}
+          </div>
+        )}
+        {decisions && decisions.length > 0 && (
+          <div className="space-y-1 pt-1">
+            <NappletDecisions
+              decisions={decisions}
+              emptyText=""
+              onChanged={onDecisionsChanged ?? (() => {})}
+            />
+            <p className="text-[11px] text-muted-foreground/70">
+              Answers apply to one exact version. An update re-asks, and a
+              running napplet only loses a permission on its next run.
+            </p>
           </div>
         )}
       </div>
@@ -262,6 +289,35 @@ export function NappletsViewer() {
 
   const [roles, setRoles] = useState<ArchetypeRole[]>([]);
   const [discoveryFailed, setDiscoveryFailed] = useState(false);
+
+  /*
+   * Remembered permissions, live. This is the only place a napplet the user is
+   * NOT running can be reviewed or revoked, so it has to reflect an answer
+   * given anywhere — a running napplet's own popover, another tab — without a
+   * reopen. A synchronous localStorage read, so it is initial state rather
+   * than an effect that cascades a render on mount.
+   */
+  const [decisions, setDecisions] =
+    useState<NappletDecision[]>(getNappletDecisions);
+  const refreshDecisions = useCallback(
+    () => setDecisions(getNappletDecisions()),
+    [],
+  );
+  useEffect(
+    () => subscribeNappletDecisions(refreshDecisions),
+    [refreshDecisions],
+  );
+
+  /* Grouped by d-tag, which is what a launcher row knows about itself. */
+  const decisionsByDTag = useMemo(() => {
+    const byDTag = new Map<string, NappletDecision[]>();
+    for (const decision of decisions) {
+      const list = byDTag.get(decision.dTag);
+      if (list) list.push(decision);
+      else byDTag.set(decision.dTag, [decision]);
+    }
+    return byDTag;
+  }, [decisions]);
 
   const refreshInstalled = useCallback(
     () =>
@@ -425,6 +481,8 @@ export function NappletsViewer() {
               <NappletRow
                 key={candidate.coordinate}
                 candidate={candidate}
+                decisions={decisionsByDTag.get(candidate.identifier)}
+                onDecisionsChanged={refreshDecisions}
                 onRun={() => run(candidate)}
                 onPin={async () => {
                   await setNappletPinned(

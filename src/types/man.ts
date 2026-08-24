@@ -668,21 +668,6 @@ export const manPages: Record<string, ManPageEntry> = {
     category: "Nostr",
     argParser: async (args: string[]) => parseConcordCommand(args),
   },
-  permissions: {
-    name: "permissions",
-    section: "1",
-    synopsis: "permissions",
-    description:
-      "Review and revoke what napplets are allowed to do. Answers are remembered per napplet version, so an update re-asks; revoking applies to the live napplet at once, and it is re-run so it can notice.",
-    options: [],
-    examples: [
-      "permissions                                       Review napplet permissions",
-    ],
-    seeAlso: ["apps", "app"],
-    appId: "permissions",
-    category: "Nostr",
-    defaultProps: {},
-  },
   // Plural of `app`, the way `nips` is of `nip`: one runs a napplet, the other
   // lists them.
   apps: {
@@ -695,7 +680,7 @@ export const manPages: Record<string, ManPageEntry> = {
     examples: [
       "apps                                              Open the launcher",
     ],
-    seeAlso: ["app", "permissions", "nip"],
+    seeAlso: ["app", "nip"],
     appId: "apps",
     category: "Nostr",
     defaultProps: {},
@@ -703,7 +688,7 @@ export const manPages: Record<string, ManPageEntry> = {
   app: {
     name: "app",
     section: "1",
-    synopsis: "app <identifier|archetype> [target]",
+    synopsis: "app [--debug] <identifier|archetype> [target]",
     description:
       "Run a NIP-5D napplet: a content-addressed, sandboxed mini-application published to Nostr. Grimoire verifies the manifest signature, fetches every file from Blossom, checks each file hash and the NIP-5A aggregate, then renders the app in a sandboxed iframe that can reach nothing except what you grant it — your keys are never exposed, and every capability its manifest asks for is listed before it runs. An archetype names a role rather than an app: it resolves to the napplet you made the default for that role, or to grimoire's own viewer when no installed napplet handles it.",
     options: [
@@ -711,6 +696,11 @@ export const manPages: Record<string, ManPageEntry> = {
         flag: "<identifier>",
         description:
           "naddr, nevent, note, hex event id, or kind:pubkey:d-tag pointing at a napplet manifest (kind 5129, 15129, or 35129)",
+      },
+      {
+        flag: "--debug",
+        description:
+          "show the traffic drawer: every message between grimoire and the napplet, for debugging one you are writing. Ignored when the archetype resolves to a built-in, which is not a napplet and has no traffic.",
       },
       {
         flag: "<archetype>",
@@ -727,10 +717,11 @@ export const manPages: Record<string, ManPageEntry> = {
       "app naddr1...                                     Run a named napplet",
       "app 35129:3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d:calculator   Run by address pointer",
       "app nevent1...                                    Run a specific manifest event",
+      "app --debug naddr1...                             Run it with the host<->napplet traffic drawer",
       "app profile                                       Open the profile role — your default napplet, or grimoire's viewer",
       "app relay wss://relay.damus.io                    Open a relay through the relay role",
     ],
-    seeAlso: ["apps", "permissions", "open", "blossom", "nip"],
+    seeAlso: ["apps", "open", "blossom", "nip"],
     appId: "app",
     category: "Nostr",
     argParser: (args: string[]) => parseAppCommand(args),

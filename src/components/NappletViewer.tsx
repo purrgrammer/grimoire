@@ -75,6 +75,13 @@ export interface NappletViewerProps {
    */
   pointer: EventPointer | AddressPointer;
   windowId: string;
+  /**
+   * `app --debug`. The host↔napplet traffic drawer is for the person writing
+   * the napplet, not the person running one, so it is off unless asked for —
+   * its own tap costs nothing, but a control nobody understands in the chrome
+   * of every napplet window is not free.
+   */
+  debug?: boolean;
 }
 
 type Stage = "fetching-manifest" | "resolving" | "ready" | "error";
@@ -160,7 +167,11 @@ function buildNappletDocument(
  * reset back to "fetching-manifest" is a fresh mount rather than a setState in
  * an effect body.
  */
-export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
+export function NappletViewer({
+  pointer,
+  windowId,
+  debug,
+}: NappletViewerProps) {
   const [reloadNonce, setReloadNonce] = useState(0);
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
   const key = useMemo(() => pointerKey(pointer), [pointer]);
@@ -184,6 +195,7 @@ export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
       key={`${key}:${reloadNonce}`}
       pointer={pointer}
       windowId={windowId}
+      debug={debug}
       onReload={reload}
       showMessages={showMessages}
       onToggleMessages={() => setShowMessages((open) => !open)}
@@ -194,6 +206,7 @@ export function NappletViewer({ pointer, windowId }: NappletViewerProps) {
 function NappletFrame({
   pointer,
   windowId,
+  debug,
   onReload,
   showMessages,
   onToggleMessages,
@@ -464,17 +477,19 @@ function NappletFrame({
             onChanged={onReload}
           />
         )}
-        <button
-          className={`flex items-center gap-1 transition-colors hover:text-foreground ${
-            showMessages ? "text-foreground" : "text-muted-foreground"
-          }`}
-          onClick={onToggleMessages}
-          title="Show messages between grimoire and this napplet"
-          aria-label="Show messages between grimoire and this napplet"
-          aria-pressed={showMessages}
-        >
-          <Terminal className="size-3" />
-        </button>
+        {debug && (
+          <button
+            className={`flex items-center gap-1 transition-colors hover:text-foreground ${
+              showMessages ? "text-foreground" : "text-muted-foreground"
+            }`}
+            onClick={onToggleMessages}
+            title="Show messages between grimoire and this napplet"
+            aria-label="Show messages between grimoire and this napplet"
+            aria-pressed={showMessages}
+          >
+            <Terminal className="size-3" />
+          </button>
+        )}
         {resolved && (
           <button
             onClick={() => copy(resolved.identity.aggregateHash)}
@@ -527,7 +542,7 @@ function NappletFrame({
         className={stage === "ready" ? "relative flex-1" : "hidden"}
       />
 
-      {showMessages && (
+      {debug && showMessages && (
         <NappletMessageDrawer windowId={windowId} onClose={onToggleMessages} />
       )}
     </div>
