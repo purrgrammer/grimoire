@@ -1,4 +1,4 @@
-import { getOrComputeCachedValue } from "applesauce-core/helpers";
+import { getOrComputeCachedValue, getTagValue } from "applesauce-core/helpers";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import type { Emoji } from "applesauce-common/helpers/emoji";
 import type { NostrEvent } from "@/types/nostr";
@@ -102,6 +102,20 @@ export function emojiShortcodesToPlainText(
       segment.type === "text" ? segment.value : segment.shortcode,
     )
     .join("");
+}
+
+/**
+ * Human name of a NIP-30 emoji set (kind 30030). Prefers the `title` tag, then
+ * the `name` tag some clients publish, and only falls back to the `d`
+ * identifier — which is an address component, not a display name.
+ */
+export function getEmojiSetName(event: NostrEvent): string {
+  return (
+    getTagValue(event, "title") ||
+    getTagValue(event, "name") ||
+    getTagValue(event, "d") ||
+    "unnamed"
+  );
 }
 
 /**

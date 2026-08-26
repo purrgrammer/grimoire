@@ -1,5 +1,5 @@
 import { getTagValue } from "applesauce-core/helpers";
-import { getEmojiTags } from "@/lib/emoji-helpers";
+import { getEmojiSetName, getEmojiTags } from "@/lib/emoji-helpers";
 import { CustomEmoji } from "@/components/nostr/CustomEmoji";
 import { NostrEvent } from "@/types/nostr";
 
@@ -8,13 +8,21 @@ import { NostrEvent } from "@/types/nostr";
  * Shows the full emoji set in a grid
  */
 export function EmojiSetDetailRenderer({ event }: { event: NostrEvent }) {
-  const identifier = getTagValue(event, "d") || "unnamed";
+  const name = getEmojiSetName(event);
+  const identifier = getTagValue(event, "d");
   const emojis = getEmojiTags(event);
 
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
-      <h1 className="text-2xl font-bold">{identifier}</h1>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold">{name}</h1>
+        {identifier && identifier !== name && (
+          <span className="text-xs font-mono text-muted-foreground">
+            {identifier}
+          </span>
+        )}
+      </div>
 
       {/* Empty state */}
       {emojis.length === 0 ? (

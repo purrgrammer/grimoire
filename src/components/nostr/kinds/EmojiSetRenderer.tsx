@@ -1,5 +1,4 @@
-import { getTagValue } from "applesauce-core/helpers";
-import { getEmojiTags } from "@/lib/emoji-helpers";
+import { getEmojiSetName, getEmojiTags } from "@/lib/emoji-helpers";
 import { CustomEmoji } from "@/components/nostr/CustomEmoji";
 import {
   BaseEventProps,
@@ -12,7 +11,7 @@ import {
  * Shows a preview of the emoji set with a few emojis
  */
 export function EmojiSetRenderer({ event }: BaseEventProps) {
-  const identifier = getTagValue(event, "d") || "unnamed";
+  const name = getEmojiSetName(event);
   const emojis = getEmojiTags(event);
 
   // Show first 8 emojis in feed view
@@ -26,7 +25,7 @@ export function EmojiSetRenderer({ event }: BaseEventProps) {
           event={event}
           className="text-sm font-medium text-foreground"
         >
-          {identifier}
+          {name}
         </ClickableEventTitle>
 
         {emojis.length === 0 ? (
