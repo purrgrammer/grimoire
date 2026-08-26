@@ -6,23 +6,13 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import {
-  AlertCircle,
-  Copy,
-  CopyCheck,
-  Loader2,
-  RotateCw,
-  ShieldAlert,
-  Terminal,
-} from "lucide-react";
+import { AlertCircle, Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { NappletPermissions } from "@/components/NappletPermissions";
 import { NappletMessageDrawer } from "@/components/NappletMessageDrawer";
 import { useTheme } from "@/lib/themes";
-import { useCopy } from "@/hooks/useCopy";
 import { getMissingRequiredNaps } from "@/lib/napplet-parser";
 import type { AddressPointer, EventPointer } from "@/lib/open-parser";
 import type { NostrEvent } from "@/types/nostr";
@@ -196,8 +186,10 @@ export function NappletViewer({
   // Deliberately above the remount key: a reload is the most useful moment to be
   // watching the wire, so the drawer has to survive one. Keeping it open across
   // the reload is also what lets it record the `shell.ready` handshake, which
-  // happens before a drawer opened afterwards could have started.
-  const [showMessages, setShowMessages] = useState(false);
+  // happens before a drawer opened afterwards could have started. With no
+  // chrome left to toggle it from, `--debug` opens it and its own close button
+  // is the way out.
+  const [showMessages, setShowMessages] = useState(Boolean(debug));
 
   // Granting a capability only takes effect on a fresh run — the ACL is
   // consulted synchronously and the napplet has already been refused once.
@@ -241,7 +233,6 @@ function NappletFrame({
     total: number;
   } | null>(null);
   const { theme } = useTheme();
-  const { copied, copy } = useCopy();
 
   // Grants are listed in the permissions popover; a refusal is worth surfacing
   // without one, because it is why the napplet is misbehaving.
@@ -473,68 +464,6 @@ function NappletFrame({
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Controls only. The author and the napplet's name live in the window
-          title, where every other app puts them — repeating them here was the
-          crowding. What stays is what has nowhere else to go. */}
-      <header className="flex items-center justify-end gap-3 border-b border-border px-4 py-2 font-mono text-xs">
-        {refused.length > 0 && (
-          <span
-            className="mr-auto shrink-0 text-[10px] text-warning"
-            title={`Refused: ${refused.join(", ")}`}
-          >
-            {refused.length} refused
-          </span>
-        )}
-        {resolved && (
-          <NappletPermissions
-            dTag={resolved.identity.dTag}
-            aggregateHash={resolved.identity.aggregateHash}
-            // Forgetting a grant only takes effect on a fresh run — the
-            // runtime's live ACL state still holds it.
-            onChanged={onReload}
-          />
-        )}
-        {debug && (
-          <button
-            className={`flex items-center gap-1 transition-colors hover:text-foreground ${
-              showMessages ? "text-foreground" : "text-muted-foreground"
-            }`}
-            onClick={onToggleMessages}
-            title="Show messages between grimoire and this napplet"
-            aria-label="Show messages between grimoire and this napplet"
-            aria-pressed={showMessages}
-          >
-            <Terminal className="size-3" />
-          </button>
-        )}
-        {resolved && (
-          <button
-            onClick={() => copy(resolved.identity.aggregateHash)}
-            className="flex items-center gap-1 truncate text-muted-foreground transition-colors hover:text-foreground"
-            title={`Verified content address ${resolved.identity.aggregateHash}`}
-            aria-label="Copy the verified content address"
-          >
-            {copied ? (
-              <CopyCheck className="size-3 flex-shrink-0" />
-            ) : (
-              <Copy className="size-3 flex-shrink-0" />
-            )}
-            <code className="truncate">
-              {resolved.identity.aggregateHash.slice(0, 12)}…
-              {resolved.identity.aggregateHash.slice(-6)}
-            </code>
-          </button>
-        )}
-        <button
-          className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-          onClick={onReload}
-          title="Re-resolve and verify"
-          aria-label="Re-resolve and verify"
-        >
-          <RotateCw className="size-3" />
-        </button>
-      </header>
-
       {stage !== "ready" && (
         <div className="flex flex-1 items-center justify-center p-6">
           {stage === "error" && error ? (
@@ -554,8 +483,19 @@ function NappletFrame({
         </div>
       )}
 
+      {/* No chrome, like an nsite: the author and the name are in the window
+          title, and permissions are listed per app in `apps`. What had nowhere
+          else to go rides on the frame's own tooltip. */}
       <div
         ref={containerRef}
+        title={[
+          resolved
+            ? `Verified content address ${resolved.identity.aggregateHash}`
+            : "",
+          refused.length ? `Refused: ${refused.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join(" — ")}
         className={stage === "ready" ? "relative flex-1" : "hidden"}
       />
 
