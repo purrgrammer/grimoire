@@ -101,11 +101,28 @@ const INTEGRITY_CODES = new Set([
   "pointer-mismatch",
 ]);
 
+/**
+ * Say whose problem a manifest error is.
+ *
+ * `invalid-manifest` reads like the reader did something wrong, and it is
+ * always the publisher: a tag in the signed event does not match what NIP-5D
+ * says it must be. Grimoire cannot be lenient about it either — the offending
+ * tag is *inside the signature*, so dropping or repairing it would invalidate
+ * the very thing that makes the napplet trustworthy. Naming the author is the
+ * whole of what this side can usefully do.
+ */
+function explainManifest(message: string): string {
+  return `${message}. This is a fault in the manifest the author published, not in the copy you fetched — it cannot be worked around here, because the tag is covered by the signature.`;
+}
+
 function toNappletError(error: unknown): NappletError {
   if (error instanceof NappletResolutionError) {
     return {
       code: error.code,
-      message: error.message,
+      message:
+        error.code === "invalid-manifest"
+          ? explainManifest(error.message)
+          : error.message,
       integrity: INTEGRITY_CODES.has(error.code),
     };
   }

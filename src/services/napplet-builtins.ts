@@ -165,7 +165,9 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
   },
   note: {
     archetype: "note",
-    title: "Note (built-in)",
+    // The archetype is `note`; the built-in that fills it is `open`. Naming a
+    // "Note" built-in invented a command that does not exist.
+    title: "Open (built-in)",
     actions: ["open"],
     keys: ["id", "note", "nevent", "event", "naddr", "address"],
     usage: "app note <note|nevent>",
@@ -175,7 +177,7 @@ const BUILTIN_TABLE: Record<BuiltinArchetypeSlug, BuiltinArchetype> = {
   },
   event: {
     archetype: "event",
-    title: "Event (built-in)",
+    title: "Open (built-in)",
     actions: ["open"],
     keys: ["id", "nevent", "note", "event", "naddr", "address"],
     usage: "app event <nevent|naddr>",

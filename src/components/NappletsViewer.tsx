@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Boxes, Pin, Play, Search, Shapes, Trash2, Users } from "lucide-react";
+import {
+  Boxes,
+  Loader2,
+  Pin,
+  Play,
+  Search,
+  Shapes,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
@@ -115,34 +133,41 @@ function NappletRow({
   onDecisionsChanged?: () => void;
 }) {
   return (
-    <div className="group flex items-start gap-3 rounded border border-border/40 p-3 hover:bg-muted/30">
-      <Boxes className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">
-            {candidate.title}
-          </span>
-          {candidate.pinned && (
-            <Pin className="size-3 shrink-0 text-muted-foreground" />
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          <UserName pubkey={candidate.pubkey} />
+    /* A Card, like a spell and a spellbook — three windows listing things the
+       reader owns, in one shape. */
+    <Card className="flex flex-col transition-colors hover:border-border">
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-start gap-2">
+          <Boxes className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <span className="truncate">{candidate.title}</span>
+              {candidate.pinned && (
+                <Pin className="size-3 shrink-0 text-muted-foreground" />
+              )}
+            </CardTitle>
+            <CardDescription className="mt-0.5 text-xs">
+              <UserName pubkey={candidate.pubkey} />
+            </CardDescription>
+          </div>
         </div>
         {candidate.description && (
-          <p className="line-clamp-2 text-xs text-muted-foreground">
+          <CardDescription className="mt-2 line-clamp-2 text-sm">
             {candidate.description}
-          </p>
+          </CardDescription>
         )}
+      </CardHeader>
+
+      <CardContent className="flex-1 p-4 pt-0">
         {candidate.requires.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1">
             {candidate.requires.map((nap) => (
               <Label key={nap}>{nap}</Label>
             ))}
           </div>
         )}
         {decisions && decisions.length > 0 && (
-          <div className="space-y-1 pt-1">
+          <div className="mt-2 space-y-1">
             <NappletDecisions
               decisions={decisions}
               emptyText=""
@@ -154,32 +179,39 @@ function NappletRow({
             </p>
           </div>
         )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {onPin && (
-          <button
-            className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-            title={candidate.pinned ? "Unpin" : "Pin"}
-            onClick={onPin}
-          >
-            <Pin className="size-3.5" />
-          </button>
-        )}
-        {onForget && (
-          <button
-            className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-            title="Remove from your napplets"
-            onClick={onForget}
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        )}
-        <Button size="sm" className="h-7" onClick={onRun}>
-          <Play className="size-3.5" />
+      </CardContent>
+
+      <CardFooter className="flex-wrap justify-between gap-2 p-4 pt-0">
+        <div className="flex items-center gap-1">
+          {onPin && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-muted-foreground"
+              title={candidate.pinned ? "Unpin" : "Pin"}
+              onClick={onPin}
+            >
+              <Pin className="size-3.5" />
+            </Button>
+          )}
+          {onForget && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-muted-foreground hover:text-destructive"
+              title="Remove from your apps"
+              onClick={onForget}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+        <Button size="sm" className="h-8" onClick={onRun}>
+          <Play className="size-3.5 mr-1" />
           Run
         </Button>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -464,56 +496,79 @@ export function NappletsViewer() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search napplets"
-          className="h-7 border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
-        />
+      {/* Header, laid out the way `spells` and `spellbooks` lay theirs out:
+          icon, title, a count, then the search on its own row. Three windows
+          that list things the reader owns should not each invent a shape. */}
+      <div className="flex-shrink-0 border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Boxes className="size-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Apps</h2>
+          <Badge variant="secondary" className="ml-2">
+            {mine.length + theirs.length}
+          </Badge>
+          {discovered === null && (authors?.length ?? 0) > 0 && (
+            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          )}
+        </div>
+
+        <div className="relative mt-3">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search apps..."
+            className="pl-9"
+          />
+        </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      {/* A container query, not a viewport one. These windows are tiled: a
+          pane can be 300px wide on a large display, and `md:` would call that a
+          desktop and lay three columns into it — which is exactly what it did,
+          truncating every title to "KoboldA…". */}
+      <div className="@container flex-1 space-y-6 overflow-y-auto p-4">
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold text-muted-foreground">
+          <h3 className="text-sm font-semibold text-muted-foreground">
             Yours ({mine.length})
-          </h2>
+          </h3>
           {mine.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               Napplets you run show up here. Try one from below, or{" "}
               <code className="font-mono">app &lt;naddr&gt;</code>.
             </p>
           ) : (
-            mine.map((candidate) => (
-              <NappletRow
-                key={candidate.coordinate}
-                candidate={candidate}
-                decisions={decisionsByDTag.get(candidate.identifier)}
-                onDecisionsChanged={refreshDecisions}
-                onRun={() => run(candidate)}
-                onPin={async () => {
-                  await setNappletPinned(
-                    candidate.coordinate,
-                    !candidate.pinned,
-                  );
-                  await refreshInstalled();
-                }}
-                onForget={async () => {
-                  await forgetNapplet(candidate.coordinate);
-                  await refreshInstalled();
-                }}
-              />
-            ))
+            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
+              {mine.map((candidate) => (
+                <NappletRow
+                  key={candidate.coordinate}
+                  candidate={candidate}
+                  decisions={decisionsByDTag.get(candidate.identifier)}
+                  onDecisionsChanged={refreshDecisions}
+                  onRun={() => run(candidate)}
+                  onPin={async () => {
+                    await setNappletPinned(
+                      candidate.coordinate,
+                      !candidate.pinned,
+                    );
+                    await refreshInstalled();
+                  }}
+                  onForget={async () => {
+                    await forgetNapplet(candidate.coordinate);
+                    await refreshInstalled();
+                  }}
+                />
+              ))}
+            </div>
           )}
         </section>
 
         {roles.length > 0 && (
           <section className="space-y-2">
-            <h2 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Shapes className="size-3.5" />
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+              <Shapes className="size-4" />
               Roles ({roles.length})
-            </h2>
+            </h3>
             {roles.map((role) => (
               <RoleRow
                 key={role.archetype}
@@ -549,8 +604,8 @@ export function NappletsViewer() {
         )}
 
         <section className="space-y-2">
-          <h2 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Users className="size-3.5" />
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <Users className="size-4" />
             From your contacts ({theirs.length})
             {discovered === null && (authors?.length ?? 0) > 0 && (
               <span className="font-normal">· searching…</span>
@@ -560,19 +615,21 @@ export function NappletsViewer() {
                 · relays did not answer
               </span>
             )}
-          </h2>
+          </h3>
           {!account?.pubkey ? (
             <p className="text-xs text-muted-foreground">
               Sign in to see what the people you follow publish.
             </p>
           ) : (
-            theirs.map((candidate) => (
-              <NappletRow
-                key={candidate.coordinate}
-                candidate={candidate}
-                onRun={() => run(candidate)}
-              />
-            ))
+            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
+              {theirs.map((candidate) => (
+                <NappletRow
+                  key={candidate.coordinate}
+                  candidate={candidate}
+                  onRun={() => run(candidate)}
+                />
+              ))}
+            </div>
           )}
         </section>
       </div>
