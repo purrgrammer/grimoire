@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Globe, FileText, HardDrive, ExternalLink, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useRunNapplet } from "@/hooks/useRunNapplet";
-import type { NostrEvent } from "@/types/nostr";
+import { Globe, FileText, HardDrive, ExternalLink } from "lucide-react";
+// Commented out with `RunButton` below, and to be restored with it:
+// import { Play } from "lucide-react";
+// import { Button } from "@/components/ui/button";
+// import { useRunNapplet } from "@/hooks/useRunNapplet";
+// import type { NostrEvent } from "@/types/nostr";
 import {
   getNsitePaths,
   getNsiteServers,
@@ -42,23 +44,39 @@ function NsiteIcon({
   );
 }
 
-function RunButton({ event }: { event: NostrEvent }) {
-  const run = useRunNapplet(event);
-
-  return (
-    <Button
-      size="sm"
-      className="h-7 shrink-0"
-      onClick={(e) => {
-        e.stopPropagation();
-        run();
-      }}
-    >
-      <Play className="size-3.5 shrink-0" />
-      Run
-    </Button>
-  );
-}
+/*
+ * Running an nsite locally is parked, not abandoned — see the tracking issue.
+ *
+ * Everything behind this works and is verified in development: the manifest is
+ * checked, every file is hashed, and the site runs on an origin of its own so
+ * it cannot reach grimoire's storage or keys. What is missing is production.
+ * `VITE_NSITE_ORIGIN` is unset and the code fails closed, so shipping this
+ * button today would offer an action that cannot work outside a dev server.
+ *
+ * `Visit` stays. It hands the reader to a gateway, which is a different trust
+ * story and an honest one — it just is not this one.
+ *
+ * To bring it back: uncomment the button below, and the `Play`, `Button` and
+ * `useRunNapplet` imports with it. `app <naddr>` still runs an nsite, so
+ * nothing under it goes stale in the meantime.
+ */
+// function RunButton({ event }: { event: NostrEvent }) {
+//   const run = useRunNapplet(event);
+//
+//   return (
+//     <Button
+//       size="sm"
+//       className="h-7 shrink-0"
+//       onClick={(e) => {
+//         e.stopPropagation();
+//         run();
+//       }}
+//     >
+//       <Play className="size-3.5 shrink-0" />
+//       Run
+//     </Button>
+//   );
+// }
 
 /**
  * Shared nsite feed renderer
@@ -119,8 +137,9 @@ function NsiteRendererInner({
             <span>Visit</span>
           </a>
           {/* Verified here, against the manifest, rather than trusted from a
-              gateway — so it is the primary action and `Visit` is the escape. */}
-          <RunButton event={event} />
+              gateway — so it is the primary action and `Visit` is the escape.
+              Parked until there is an origin to run it on in production. */}
+          {/* <RunButton event={event} /> */}
         </div>
       </div>
     </BaseEventContainer>
