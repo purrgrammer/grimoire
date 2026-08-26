@@ -179,3 +179,79 @@ describe("payload targets from a napplet", () => {
     ).resolves.toMatchObject({ commandString: `relay ${url}` });
   });
 });
+
+/**
+ * The shape every `napplet:<archetype>/open` convention actually sends. Read
+ * off GM Protocol's bundle, which is where this was found: it nests the thing
+ * to open under `target`, and gave up silently when nothing came back.
+ */
+describe("a convention payload, which nests its target", () => {
+  it("opens an event with only an id", async () => {
+    const window = await buildBuiltinWindow("note", "open", {
+      target: { type: "event", id: EVENT_ID },
+      behavior: { focus: true },
+      source: { napplet: "good-morning" },
+    });
+    const nevent = nip19.neventEncode({ id: EVENT_ID });
+    expect(window.commandString).toBe(`open ${nevent}`);
+  });
+
+  it("keeps the kind and the author, which is what makes dispatch work", () => {
+    return buildBuiltinWindow("event", "open", {
+      target: { type: "event", id: EVENT_ID, kind: 1, pubkey: PUBKEY },
+    }).then((window) => {
+      const pointer = window.commandString.slice("open ".length);
+      const decoded = nip19.decode(pointer);
+      expect(decoded.type).toBe("nevent");
+      expect(decoded.data).toMatchObject({
+        id: EVENT_ID,
+        kind: 1,
+        author: PUBKEY,
+      });
+    });
+  });
+
+  it("opens an addressable event", async () => {
+    const window = await buildBuiltinWindow("note", "open", {
+      target: {
+        type: "address",
+        kind: 30023,
+        pubkey: PUBKEY,
+        identifier: "a-post",
+      },
+    });
+    const naddr = nip19.naddrEncode({
+      kind: 30023,
+      pubkey: PUBKEY,
+      identifier: "a-post",
+    });
+    expect(window.commandString).toBe(`open ${naddr}`);
+  });
+
+  it("drops the relay hints a napplet supplies", async () => {
+    const window = await buildBuiltinWindow("note", "open", {
+      target: { type: "event", id: EVENT_ID, kind: 1 },
+      relays: ["wss://attacker.example/"],
+    });
+    const decoded = nip19.decode(window.commandString.slice("open ".length));
+    expect(decoded.type).toBe("nevent");
+    expect((decoded.data as { relays?: string[] }).relays ?? []).toEqual([]);
+  });
+
+  it("still reads the flat keys, and prefers them", async () => {
+    const nevent = nip19.neventEncode({ id: EVENT_ID, kind: 1 });
+    const window = await buildBuiltinWindow("note", "open", {
+      nevent,
+      target: { type: "event", id: PUBKEY },
+    });
+    expect(window.commandString).toBe(`open ${nevent}`);
+  });
+
+  it("asks for a target when the nested one is not usable", async () => {
+    await expect(
+      buildBuiltinWindow("note", "open", {
+        target: { type: "event", id: "not-an-id" },
+      }),
+    ).rejects.toThrow(/needs something to open/);
+  });
+});

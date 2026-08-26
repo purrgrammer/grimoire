@@ -22,6 +22,7 @@
  */
 
 import { getDefaultStore } from "jotai";
+import { nip19 } from "nostr-tools";
 
 import { grimoireStateAtom } from "@/core/state";
 import * as Logic from "@/core/logic";
@@ -145,6 +146,63 @@ function pick(payload: unknown, keys: readonly string[]): string | undefined {
 }
 
 /**
+ * The identifier a `napplet:<archetype>/open` payload points at.
+ *
+ * The conventions nest it: `{ target: { type: "event", id, kind?, pubkey? } }`
+ * or `{ target: { type: "address", kind, pubkey, identifier } }`, with the flat
+ * keys above being the older, looser form. Reading only the top level meant a
+ * napplet following the convention — GM Protocol does — arrived with nothing to
+ * open, and `build()` returned null before the user was ever asked. That threw
+ * inside the caller's `intent.invoke`, which is a promise a napplet typically
+ * catches, so the whole thing looked like nothing happened.
+ *
+ * Rebuilt from the components rather than read from the payload's own `nip19`
+ * string, so the pointer carries `kind` and `author` as this repo requires and
+ * nothing else. `relays` is dropped on purpose: it is a napplet-chosen host list
+ * grimoire would then connect to, which is the concern `acceptsFromNapplet`
+ * already names. A napplet can still hand over a hint-laden `nevent` through the
+ * flat keys — this declines to add a second way, it does not close that.
+ */
+function targetIdentifier(
+  payload: unknown,
+  keys: readonly string[],
+): string | undefined {
+  const flat = pick(payload, keys);
+  if (flat) return flat;
+
+  if (!payload || typeof payload !== "object") return undefined;
+  const target = (payload as { target?: unknown }).target;
+  if (!target || typeof target !== "object") return undefined;
+  const t = target as Record<string, unknown>;
+
+  const isHex = (value: unknown): value is string =>
+    typeof value === "string" && /^[0-9a-f]{64}$/i.test(value);
+
+  if (t.type === "event" && isHex(t.id)) {
+    return nip19.neventEncode({
+      id: t.id,
+      ...(typeof t.kind === "number" ? { kind: t.kind } : {}),
+      ...(isHex(t.pubkey) ? { author: t.pubkey } : {}),
+    });
+  }
+
+  if (
+    t.type === "address" &&
+    typeof t.kind === "number" &&
+    isHex(t.pubkey) &&
+    typeof t.identifier === "string"
+  ) {
+    return nip19.naddrEncode({
+      kind: t.kind,
+      pubkey: t.pubkey,
+      identifier: t.identifier,
+    });
+  }
+
+  return undefined;
+}
+
+/**
  * Every built-in role, keyed so the compiler enforces coverage.
  *
  * Only archetypes with a real built-in behind them belong in the union. Listing
@@ -245,7 +303,7 @@ export async function buildBuiltinWindow(
     throw new Error(`the built-in "${archetype}" handler cannot "${action}"`);
   }
 
-  const target = pick(payload, builtin.keys) ?? positional?.trim();
+  const target = targetIdentifier(payload, builtin.keys) ?? positional?.trim();
   if (fromNapplet && target && !builtin.acceptsFromNapplet(target)) {
     throw new Error(
       `a napplet may not point the built-in "${archetype}" handler at "${target}"`,
