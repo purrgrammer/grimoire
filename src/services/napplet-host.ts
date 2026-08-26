@@ -231,16 +231,20 @@ function buildAdapter(): ShellAdapter {
   // Without a service the runtime answers notify.send with a fabricated id and
   // notify.permission.request with granted: true — it lies that delivery
   // succeeded. A real toast is the minimum bar for advertising the domain.
+  //
+  // `@kehto/services` 0.20 replaced `onSend`/`defaultGrant` with `present` and
+  // `requestPermission`, and now fails closed when a backend is missing rather
+  // than fabricating success — which is the same position this comment was
+  // arguing for, so the shape changed and the intent did not.
   const notifyService = createNotifyService({
-    defaultGrant: true,
-    onSend: (windowId, payload) => {
+    present: ({ windowId, message }) => {
       const source = getNappletWindowTitle(windowId) ?? "A napplet";
-      const note = payload as { title?: string; body?: string };
-      toast(`${source}${note.title ? `: ${note.title}` : ""}`, {
-        description: note.body,
+      toast(`${source}${message.title ? `: ${message.title}` : ""}`, {
+        description: message.body,
         duration: 6000,
       });
     },
+    requestPermission: () => true,
   });
 
   // NAP-OUTBOX: relay-list-aware routing. Publishing goes through the same
