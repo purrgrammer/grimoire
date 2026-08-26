@@ -529,13 +529,17 @@ describe("unread state", () => {
   });
 
   it("reports what has arrived since the last visit, and nothing after a mark", async () => {
+    // Read once. `NOW()` is the wall clock, so calling it again for the
+    // assertion made this fail whenever a second ticked between the write and
+    // the check — a one-in-however-many flake that says nothing about the code.
+    const now = NOW();
     const a = adapter();
-    await post([{ at: NOW() - 300 }, { at: NOW() - 200 }]);
+    await post([{ at: now - 300 }, { at: now - 200 }]);
     expect(await countFor(a)).toBe(2);
 
-    await a.markRead(conversation, NOW() - 200);
+    await a.markRead(conversation, now - 200);
     expect(await countFor(a)).toBe(0);
-    expect(await a.getLastRead(conversation)).toBe(NOW() - 200);
+    expect(await a.getLastRead(conversation)).toBe(now - 200);
   });
 
   it("never counts the reader's own messages", async () => {
@@ -552,16 +556,19 @@ describe("unread state", () => {
     // messages, so the newest row ChatViewer can offer is OLDER than the newest
     // row in Dexie. Stamping what the reader saw would leave the count lit with
     // nothing to click.
+    // One wall-clock read, so a second ticking mid-test cannot move the
+    // timestamps the assertions below compare exactly.
+    const now = NOW();
     const a = adapter();
     banned.add(BANNED);
-    await post([{ at: NOW() - 300 }, { at: NOW() - 100, author: BANNED }]);
+    await post([{ at: now - 300 }, { at: now - 100, author: BANNED }]);
     // The snapshot has the fold in hand, so the hidden row does not badge…
     expect(await countFor(a)).toBe(1);
 
     // …and the stamp still has to cover it, because `markRead` scans WITHOUT a
     // banlist. What ChatViewer hands over is the newest FOLD-VISIBLE message.
-    await a.markRead(conversation, NOW() - 300);
-    expect(await a.getLastRead(conversation)).toBe(NOW() - 100);
+    await a.markRead(conversation, now - 300);
+    expect(await a.getLastRead(conversation)).toBe(now - 100);
     expect(await countFor(a)).toBe(0);
   });
 
