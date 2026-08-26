@@ -77,7 +77,26 @@ export const REMOTE_MEDIA_CAPABILITY = "media:remote";
  * capability-shaped hole in someone's audit at worst. They live only in our own
  * decision store.
  */
-const HOST_CAPABILITIES = new Set<string>([REMOTE_MEDIA_CAPABILITY]);
+/**
+ * Permission to open grimoire's own windows through NAP-INTENT.
+ *
+ * When nothing installed handles an archetype, grimoire does — and Kehto
+ * auto-selects a sole candidate with no chooser, so without a decision a napplet
+ * holding `intent` could open host windows unprompted. Like `media:remote` this
+ * is enforced here rather than by the ACL: no envelope names it, because the
+ * napplet is not the one being granted anything — grimoire is being asked to act
+ * on its behalf.
+ *
+ * One capability for all four built-in roles. What a payload may point at is
+ * already narrowed by `acceptsFromNapplet`, so per-archetype grants would buy
+ * four dialogs and no safety.
+ */
+export const BUILTIN_OPEN_CAPABILITY = "builtin:open";
+
+const HOST_CAPABILITIES = new Set<string>([
+  REMOTE_MEDIA_CAPABILITY,
+  BUILTIN_OPEN_CAPABILITY,
+]);
 
 export function isHostCapability(capability: string): boolean {
   return HOST_CAPABILITIES.has(capability);

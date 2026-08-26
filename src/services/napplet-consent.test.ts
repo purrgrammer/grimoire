@@ -11,6 +11,8 @@ import { rememberNappletDecision, getNappletDecision } from "./napplet-acl";
 import {
   NAP_DOMAINS,
   REMOTE_MEDIA_CAPABILITY,
+  BUILTIN_OPEN_CAPABILITY,
+  isHostCapability,
   capabilitiesForDomains,
 } from "./napplet-capabilities";
 
@@ -30,6 +32,7 @@ describe("describeCapability", () => {
     const capabilities = [
       ...capabilitiesForDomains(NAP_DOMAINS),
       REMOTE_MEDIA_CAPABILITY,
+      BUILTIN_OPEN_CAPABILITY,
     ];
     const seen = new Map<string, string>();
     for (const capability of capabilities) {
@@ -41,6 +44,21 @@ describe("describeCapability", () => {
       ).toBeUndefined();
       seen.set(description, capability);
     }
+  });
+
+  /**
+   * Grimoire enforces this one itself — no envelope names it — so it must stay
+   * out of Kehto's ACL, and it still has to read as a sentence in the list
+   * where it is revoked.
+   */
+  it("describes the built-in open grant, and keeps it host-side", () => {
+    expect(isHostCapability(BUILTIN_OPEN_CAPABILITY)).toBe(true);
+    expect(describeCapability(BUILTIN_OPEN_CAPABILITY)).toBe(
+      "open notes, profiles and relays in grimoire",
+    );
+    expect(capabilitiesForDomains(NAP_DOMAINS)).not.toContain(
+      BUILTIN_OPEN_CAPABILITY,
+    );
   });
 
   it("describes every capability a domain can require", () => {

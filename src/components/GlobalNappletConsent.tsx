@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { PenLine } from "lucide-react";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import { UserName } from "./nostr/UserName";
 import {
   subscribeNappletSigning,
@@ -42,6 +43,9 @@ function SigningToast({
   request: NappletSigningRequest;
   onAnswer: (allowed: boolean) => void;
 }) {
+  const [remember, setRemember] = useState(false);
+  const rememberId = useId();
+
   return (
     <div className="min-w-[350px] max-w-[500px] overflow-hidden border border-l-4 border-border border-l-warning bg-background p-4 shadow-lg">
       <div className="flex items-start gap-3">
@@ -63,13 +67,32 @@ function SigningToast({
               {request.detail}
             </p>
           </div>
-          {/* No "remember" here on purpose: a standing grant is what
-              relay:write already is. This is the extra confirmation for
-              operations that overwrite or destroy existing data. */}
+          {/* A signing request never offers this: the standing grant for that
+              is `relay:write` itself, and a signature is the one thing worth
+              seeing every time. An action can offer it, and only ever for the
+              allow — a remembered refusal is a silent throw the napplet
+              swallows, which is indistinguishable from the feature being
+              broken. */}
+          {request.remember && (
+            <label
+              htmlFor={rememberId}
+              className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground"
+            >
+              <Checkbox
+                id={rememberId}
+                checked={remember}
+                onCheckedChange={(value) => setRemember(value === true)}
+              />
+              {request.remember.label}
+            </label>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={() => onAnswer(true)}
+              onClick={() => {
+                if (remember) request.remember?.onAllow();
+                onAnswer(true);
+              }}
               className="h-8 flex-1 bg-green-500 text-white hover:bg-green-600"
             >
               {request.kind === "sign" ? "Sign" : "Allow"}

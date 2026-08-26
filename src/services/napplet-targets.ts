@@ -34,7 +34,10 @@ import { nip19 } from "nostr-tools";
 import { grimoireStateAtom } from "@/core/state";
 import * as Logic from "@/core/logic";
 import { getNappletBridge, originRegistry } from "./napplet-host";
-import { getDeclaredDomains } from "./napplet-capabilities";
+import {
+  getDeclaredDomains,
+  BUILTIN_OPEN_CAPABILITY,
+} from "./napplet-capabilities";
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
 import { intentTopic, waitForNappletReady } from "./napplet-readiness";
 import {
@@ -43,6 +46,7 @@ import {
   parseBuiltinHandlerDTag,
 } from "./napplet-builtins";
 import { requestActionConsent } from "./napplet-consent";
+import { getNappletDecision, rememberNappletDecision } from "./napplet-acl";
 
 /**
  * How long to wait for a target to become able to receive.
@@ -118,6 +122,28 @@ function readinessFailure(dTag: string, windowId: string): string {
 }
 
 /**
+ * The verified identity behind a dTag, when there is exactly one answer.
+ *
+ * A decision is remembered per *version*, so a dTag alone cannot key one. With
+ * no live session, or with two running different aggregates, there is no "the"
+ * version and the answer is asked fresh rather than guessed at.
+ */
+function identityForDTag(
+  dTag: string,
+): { dTag: string; aggregateHash: string } | undefined {
+  const bridge = getNappletBridge();
+  const hashes = new Set<string>();
+  for (const entry of bridge.runtime.sessionRegistry.getAllEntries()) {
+    if (entry.dTag !== dTag) continue;
+    const frame = originRegistry.getIframeWindow(entry.windowId);
+    const identity = frame ? originRegistry.getIdentity(frame) : undefined;
+    if (identity) hashes.add(identity.aggregateHash);
+  }
+  const [only] = [...hashes];
+  return hashes.size === 1 ? { dTag, aggregateHash: only } : undefined;
+}
+
+/**
  * Hand an intent to grimoire's own built-in, with the user's say-so.
  *
  * Kehto auto-selects a sole candidate with no chooser, and on a fresh install
@@ -125,11 +151,19 @@ function readinessFailure(dTag: string, windowId: string): string {
  * here, a napplet holding `intent` could open host windows — and reach the
  * network through the requests they make — with no user interaction at all.
  * `fromNapplet` additionally narrows what the payload may name.
+ *
+ * The say-so can be durable. Answering "don't ask again" records
+ * `builtin:open` against that exact version, where it joins the napplet's other
+ * permissions in `apps` and is revoked the same way. Only an allow is ever
+ * remembered: a stored refusal would make every later click throw silently, and
+ * the napplet swallows that — which reads as the feature being broken, not as a
+ * decision the user made.
  */
 async function openBuiltinForNapplet(
   archetype: string,
   action: string,
   payload: unknown,
+  sender: string,
 ): Promise<string> {
   const window = await buildBuiltinWindow(
     archetype,
@@ -139,11 +173,35 @@ async function openBuiltinForNapplet(
     true,
   );
 
-  const allowed = await requestActionConsent({
-    summary: `open ${archetype} in grimoire`,
-    detail: `Runs \`${window.commandString}\`. No napplet you have run handles "${archetype}", so grimoire would.`,
-  });
-  if (!allowed) throw new Error("refused");
+  const identity = identityForDTag(sender);
+  const remembered = identity
+    ? getNappletDecision(
+        identity.dTag,
+        identity.aggregateHash,
+        BUILTIN_OPEN_CAPABILITY,
+      )
+    : undefined;
+
+  if (remembered?.allowed !== true) {
+    const allowed = await requestActionConsent({
+      summary: `open ${archetype} in grimoire`,
+      detail: `Runs \`${window.commandString}\`. No napplet you have run handles "${archetype}", so grimoire would.`,
+      ...(identity
+        ? {
+            remember: {
+              label: "Don't ask again for this napplet",
+              onAllow: () =>
+                rememberNappletDecision({
+                  ...identity,
+                  capability: BUILTIN_OPEN_CAPABILITY,
+                  allowed: true,
+                }),
+            },
+          }
+        : {}),
+    });
+    if (!allowed) throw new Error("refused");
+  }
 
   return openBuiltinWindow(window);
 }
@@ -152,12 +210,14 @@ export function createNappletTargetController() {
   return {
     async dispatch(params: {
       readonly handler: string;
+      /** The calling napplet's dTag. Kehto puts it on every dispatch. */
+      readonly sender: string;
       readonly archetype: string;
       readonly action: string;
       readonly payload?: unknown;
       readonly behavior?: Readonly<{ newWindow?: boolean; reuse?: boolean }>;
     }): Promise<{ windowId: string }> {
-      const { handler, archetype, action, payload, behavior } = params;
+      const { handler, sender, archetype, action, payload, behavior } = params;
 
       // Grimoire itself resolved as the handler: confirm, then open the native
       // window. No readiness dance — there is no frame to wait for — but this
@@ -166,7 +226,12 @@ export function createNappletTargetController() {
       const builtin = parseBuiltinHandlerDTag(handler);
       if (builtin) {
         return {
-          windowId: await openBuiltinForNapplet(builtin, action, payload),
+          windowId: await openBuiltinForNapplet(
+            builtin,
+            action,
+            payload,
+            sender,
+          ),
         };
       }
 

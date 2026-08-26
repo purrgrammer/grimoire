@@ -41,6 +41,7 @@ import {
 import {
   isHostCapability,
   REMOTE_MEDIA_CAPABILITY,
+  BUILTIN_OPEN_CAPABILITY,
 } from "./napplet-capabilities";
 
 /** A per-operation confirmation, resolved by the user answering the prompt. */
@@ -57,6 +58,14 @@ export interface NappletSigningRequest {
   /** Best-effort attribution — see `noteRelayWriteAllowed`. */
   title?: string;
   pubkey?: string;
+  /**
+   * Offer "don't ask again", and what answering that way means.
+   *
+   * Only ever remembers an allow. A remembered refusal would turn every later
+   * click into a silent throw the napplet catches — which is the failure this
+   * consent layer keeps producing, and the one thing the user cannot debug.
+   */
+  remember?: { label: string; onAllow: () => void };
   resolve: (allowed: boolean) => void;
 }
 
@@ -84,6 +93,7 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   "dm:write": "send private messages as you",
   "cvm:call": "call external tool servers over Nostr",
   [REMOTE_MEDIA_CAPABILITY]: "load images, video and fonts from any website",
+  [BUILTIN_OPEN_CAPABILITY]: "open notes, profiles and relays in grimoire",
 };
 
 export function describeCapability(capability: string): string {
@@ -678,6 +688,7 @@ export function requestSigningConsent(input: {
 export function requestActionConsent(input: {
   summary: string;
   detail: string;
+  remember?: { label: string; onAllow: () => void };
 }): Promise<boolean> {
   return requestConfirmation({ ...input, kind: "action" });
 }
@@ -686,6 +697,7 @@ function requestConfirmation(input: {
   kind: "sign" | "action";
   summary: string;
   detail: string;
+  remember?: { label: string; onAllow: () => void };
 }): Promise<boolean> {
   // Only a signature has a synchronous ACL check in front of it; an `action`
   // confirmation is requested by host code that already knows its own context.
@@ -698,6 +710,7 @@ function requestConfirmation(input: {
       kind: input.kind,
       summary: input.summary,
       detail: input.detail,
+      ...(input.remember ? { remember: input.remember } : {}),
       title: attribution?.title,
       pubkey: attribution?.pubkey,
       resolve: (allowed) => {
