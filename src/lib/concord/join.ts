@@ -79,7 +79,7 @@ export function entryFromBundle(
 ): CommunityListEntry {
   const jm = joinMaterialFromBundle(bundle);
   return {
-    community_id: jm.community_id,
+    community_id: bundle.community_id,
     seed: jm,
     current: jm,
     added_at: addedAtMs,

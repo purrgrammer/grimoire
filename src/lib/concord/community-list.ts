@@ -46,7 +46,14 @@ import {
  * so history spanning a Refounding stays readable without a rekey-chain walk.
  */
 export interface JoinMaterial {
-  community_id: string;
+  /**
+   * Optional, because it is redundant: §8 keys the entry by its own
+   * `community_id`, and a writer may derive the snapshot's from it rather than
+   * repeating it. One does — a fragment in the wild carries neither this nor a
+   * `seed` — so a reader that requires it drops every membership in that
+   * document. {@link rehydrateCommunity} falls back to the entry's.
+   */
+  community_id?: string;
   owner: string;
   owner_salt: string;
   community_root: string;
@@ -94,8 +101,12 @@ export interface JoinMaterial {
 
 export interface CommunityListEntry {
   community_id: string;
-  /** Earliest epoch held — the full-history backfill anchor. */
-  seed: JoinMaterial;
+  /**
+   * Earliest epoch held — the full-history backfill anchor. Optional: a writer
+   * in the wild omits it, and an entry with only a `current` is still a
+   * membership (backfill then walks from that epoch instead).
+   */
+  seed?: JoinMaterial;
   /** Freshest snapshot — replaced on every Refounding or rename. */
   current: JoinMaterial;
   /** ms; tiebreaks against a tombstone. */
@@ -670,10 +681,16 @@ export function rehydrateCommunity(
 ): Community | undefined {
   const jm = entry.current;
   try {
-    if (!verifyCommunityId(jm.community_id, jm.owner, jm.owner_salt)) {
+    // Inside a snapshot the id is REDUNDANT — §8 keys the entry by it — and a
+    // writer that derives it from the entry rather than repeating it is
+    // producing a document this client must still read. Taking the entry's own
+    // id costs nothing: the commitment below still binds it to (owner, salt),
+    // so a corrupt entry fails closed exactly as before.
+    const communityId = jm.community_id ?? entry.community_id;
+    if (!verifyCommunityId(communityId, jm.owner, jm.owner_salt)) {
       return undefined;
     }
-    const id = hex32(jm.community_id);
+    const id = hex32(communityId);
     const root = hex32(jm.community_root);
     const rootEpoch = BigInt(jm.root_epoch);
 
@@ -770,7 +787,7 @@ export function rehydrateCommunity(
 
     return {
       id,
-      idHex: jm.community_id.toLowerCase(),
+      idHex: communityId.toLowerCase(),
       owner: jm.owner.toLowerCase(),
       ownerSalt: hex32(jm.owner_salt),
       root,

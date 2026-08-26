@@ -23,7 +23,9 @@ import {
 } from "./community-list";
 
 /** Join material whose id genuinely commits to its owner (CORD-02 §1). */
-function makeJoinMaterial(overrides: Partial<JoinMaterial> = {}): JoinMaterial {
+function makeJoinMaterial(
+  overrides: Partial<JoinMaterial> = {},
+): JoinMaterial & { community_id: string } {
   const owner = bytesToHex(random32());
   const salt = random32();
   return {
@@ -40,7 +42,7 @@ function makeJoinMaterial(overrides: Partial<JoinMaterial> = {}): JoinMaterial {
 }
 
 function entryOf(
-  jm: JoinMaterial,
+  jm: JoinMaterial & { community_id: string },
   over: Partial<CommunityListEntry> = {},
 ): CommunityListEntry {
   return {
@@ -178,6 +180,31 @@ describe("rehydrateCommunity", () => {
     expect(community.rootEpoch).toBe(3n);
     expect(community.heldRoots.map((r) => Number(r.epoch))).toEqual([3, 1]);
     expect(community.privateChannels).toHaveLength(1);
+  });
+
+  it("takes the entry's id when the snapshot omits it", () => {
+    // The shape a kind-33302 fragment in the wild actually holds: the id lives
+    // on the entry alone, and there is no `seed` at all. Requiring it inside
+    // `current` drops every membership in such a document.
+    const jm = makeJoinMaterial();
+    const { community_id, ...currentWithoutId } = jm;
+    const community = rehydrateCommunity({
+      community_id,
+      current: currentWithoutId,
+      added_at: 1000,
+    })!;
+    expect(community.idHex).toBe(community_id);
+  });
+
+  it("still fails closed when neither the entry nor the snapshot names it", () => {
+    const jm = makeJoinMaterial();
+    const { community_id: _id, ...currentWithoutId } = jm;
+    expect(
+      rehydrateCommunity({
+        current: currentWithoutId,
+        added_at: 1000,
+      } as unknown as CommunityListEntry),
+    ).toBeUndefined();
   });
 
   it("fails closed on a corrupted owner", () => {
@@ -401,7 +428,7 @@ describe("mergeCommunityLists", () => {
     ]);
     expect(merged.entries).toHaveLength(1);
     expect(merged.entries[0].current.root_epoch).toBe(4);
-    expect(merged.entries[0].seed.root_epoch).toBe(1);
+    expect(merged.entries[0].seed?.root_epoch).toBe(1);
     expect(merged.entries[0].added_at).toBe(2000);
   });
 
@@ -499,10 +526,26 @@ describe("mergeCommunityLists and shapes it does not know", () => {
 
 describe("mergeCommunityLists and key material", () => {
   const withChannels = (
-    jm: JoinMaterial,
+    jm: JoinMaterial & { community_id: string },
     channels: JoinMaterial["channels"],
     epoch = 0,
   ) => entryOf({ ...jm, root_epoch: epoch, channels });
+
+  it("keeps a seed the other generation carries when a fragment has none", () => {
+    // A fragment written without `seed` must not delete the one the retired
+    // single-event List still holds: it anchors the earliest epoch this member
+    // ever held, which is what a full backfill walks from.
+    const jm = makeJoinMaterial();
+    const { community_id, ...currentWithoutId } = jm;
+    const merged = mergeCommunityLists([
+      {
+        entries: [{ community_id, current: currentWithoutId, added_at: 1000 }],
+        tombstones: [],
+      },
+      { entries: [entryOf(jm)], tombstones: [] },
+    ]);
+    expect(merged.entries[0].seed).toEqual(jm);
+  });
 
   it("unions private channel keys instead of picking one snapshot", () => {
     // A re-invite granting [A, C] must never delete the B this member already

@@ -65,7 +65,7 @@ const signer = {
   },
 };
 
-function joinMaterial(name: string): JoinMaterial {
+function joinMaterial(name: string): JoinMaterial & { community_id: string } {
   const owner = bytesToHex(random32());
   const salt = random32();
   return {
@@ -80,7 +80,10 @@ function joinMaterial(name: string): JoinMaterial {
   };
 }
 
-function entry(jm: JoinMaterial, addedAt = 1000): CommunityListEntry {
+function entry(
+  jm: JoinMaterial & { community_id: string },
+  addedAt = 1000,
+): CommunityListEntry {
   return {
     community_id: jm.community_id,
     seed: jm,
