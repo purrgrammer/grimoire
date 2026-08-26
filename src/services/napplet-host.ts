@@ -97,7 +97,7 @@ import { getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
 import { AGGREGATOR_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
-import { selectRelaysForFilter } from "./relay-selection";
+import { selectRelaysForFilter, fetchRelayList } from "./relay-selection";
 import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import {
@@ -258,12 +258,45 @@ function buildAdapter(): ShellAdapter {
         // never emits one, so forwarding it alone leaves every publish hanging
         // until the router's timeout — "outbox.publish timed out".
         subscribe: (filters, relayUrls, callback) => {
+          /*
+           * A silent relay must not hold the whole query.
+           *
+           * The router fans out one subscription per relay and waits for every
+           * one to say EOSE before it answers. A relay that returns
+           * `auth-required` without sending an AUTH frame sends nothing at all
+           * — no EVENT, no EOSE, no CLOSED — so one of them takes the entire
+           * budget down with it: measured, six of seven relays EOSE'd inside
+           * 300ms and the seventh never did, and every `outbox.query` failed
+           * with "timed out" while holding six relays' worth of events.
+           *
+           * So a relay that has not finished by the deadline is treated as
+           * finished. The events it already sent are kept; what it might still
+           * have sent is lost, which is the correct trade against answering
+           * nothing. Well under the router's own 15s budget, so the router
+           * completes rather than expiring.
+           */
+          const EOSE_DEADLINE_MS = 6_000;
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            callback("EOSE");
+          };
+          const timer = setTimeout(finish, EOSE_DEADLINE_MS);
+
           const sub = streamWithEose(
             relayUrls,
             filters as Parameters<typeof streamWithEose>[1],
-            { onEose: () => callback("EOSE") },
+            { onEose: finish },
           ).subscribe((event) => callback(event));
-          return { unsubscribe: () => sub.unsubscribe() };
+
+          return {
+            unsubscribe: () => {
+              clearTimeout(timer);
+              sub.unsubscribe();
+            },
+          };
         },
         publish: async (event, relayUrls) => {
           const responses = await pool.publish(relayUrls, event);
@@ -290,11 +323,27 @@ function buildAdapter(): ShellAdapter {
       loadRelayLists: async (pubkeys) => {
         const entries = await Promise.all(
           pubkeys.map(async (pubkey) => {
-            const [write, read] = await Promise.all([
-              relayListCache.getOutboxRelays(pubkey),
-              relayListCache.getInboxRelays(pubkey),
-            ]);
-            return [pubkey, { read: read ?? [], write: write ?? [] }] as const;
+            const read = async () =>
+              [
+                await relayListCache.getOutboxRelays(pubkey),
+                await relayListCache.getInboxRelays(pubkey),
+              ] as const;
+
+            let [write, inbox] = await read();
+            if (write === null && inbox === null) {
+              /*
+               * Cache-only, like `blossomServerCache.getServers` was. A pubkey
+               * the reader has never looked at therefore routed to nothing and
+               * the router fell back to the aggregators for everyone —
+               * "outbox.query timed out" on a napplet whose whole job is
+               * reading one person's events. Fetching on a miss is what makes
+               * this the outbox model rather than a fixed relay list.
+               */
+              await fetchRelayList(pubkey, 5_000);
+              [write, inbox] = await read();
+            }
+
+            return [pubkey, { read: inbox ?? [], write: write ?? [] }] as const;
           }),
         );
         return new Map(entries);

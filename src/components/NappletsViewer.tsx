@@ -5,14 +5,10 @@ import {
   Pin,
   Play,
   Search,
-  Shapes,
   Trash2,
   TriangleAlert,
-  Users,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { nip19 } from "nostr-tools";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +23,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
-import { cn } from "@/lib/utils";
 import { useAddWindow } from "@/core/state";
 import { useAccount } from "@/hooks/useAccount";
 import {
@@ -37,20 +32,6 @@ import {
   pointerFromCoordinate,
   type InstalledNapplet,
 } from "@/services/napplet-library";
-import {
-  listArchetypeRoles,
-  type ArchetypeCandidate,
-  type ArchetypeRole,
-} from "@/services/napplet-archetype";
-import {
-  setDefaultHandler,
-  clearDefaultHandler,
-} from "@/services/napplet-intent-defaults";
-import {
-  openBuiltinArchetype,
-  builtinNeedsTarget,
-  builtinUsage,
-} from "@/services/napplet-builtins";
 import { requestEvent, requestEvents } from "@/lib/relay-subscription";
 import { selectRelaysForFilter } from "@/services/relay-selection";
 import defaultEventStore from "@/services/event-store";
@@ -219,141 +200,6 @@ function NappletRow({
 }
 
 /**
- * One archetype and the napplets competing for it.
- *
- * The point of showing this is that `app <archetype>` refuses to guess: with two
- * handlers and no default the command errors, and the only place the user can
- * settle it is here. So the row states what the command would do, not just what
- * is installed.
- *
- * A row in a shared panel rather than a card of its own: a role is a setting,
- * not a launchable thing, and the grid above already means "click to run".
- */
-function RoleRow({
-  role,
-  onRun,
-  onChoose,
-}: {
-  role: ArchetypeRole;
-  onRun: (candidate: ArchetypeCandidate) => void;
-  onChoose: (dTag: string | null) => void;
-}) {
-  const contested = role.candidates.length > 1;
-  // `app note` alone cannot open anything — say what it wants instead of
-  // offering a button that only ever produces an error.
-  const usage =
-    role.resolved?.kind === "builtin" && builtinNeedsTarget(role.archetype)
-      ? builtinUsage(role.archetype)
-      : undefined;
-
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
-      <Shapes className="mt-1 size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 space-y-1.5">
-        {/* Wraps rather than truncates: at a narrow pane the archetype is the
-            information, and the resolved title is what may be cut. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-            app {role.archetype}
-          </code>
-          {usage ? (
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              → {role.resolved?.title} ·{" "}
-              <code className="font-mono">{usage}</code>
-            </span>
-          ) : role.resolved ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="truncate">→ {role.resolved.title}</span>
-              {role.defaultDTag && <Label>default</Label>}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-xs text-warning">
-              <TriangleAlert className="size-3 shrink-0" />
-              {role.candidates.filter((c) => c.kind === "napplet").length}{" "}
-              napplets · pick one
-            </span>
-          )}
-        </div>
-        {contested && (
-          <div className="flex flex-wrap items-center gap-1">
-            {role.candidates.map((candidate) => {
-              const isDefault = role.defaultDTag === candidate.dTag;
-              return (
-                <button
-                  key={candidate.dTag}
-                  type="button"
-                  className={cn(
-                    "rounded-md border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    isDefault
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
-                  )}
-                  title={
-                    isDefault
-                      ? "Clear this default"
-                      : `Make "${candidate.title}" the default`
-                  }
-                  onClick={() => onChoose(isDefault ? null : candidate.dTag)}
-                >
-                  {candidate.kind === "builtin" ? "grimoire" : candidate.dTag}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      {role.resolved && !usage && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => onRun(role.resolved!)}
-        >
-          <Play className="size-3.5" />
-          Run
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function SectionHeading({
-  icon: Icon,
-  title,
-  count,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  count: number;
-  /** Status that belongs next to the count — "searching…", a warning. */
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Icon className="size-3.5 text-muted-foreground" />
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      <span className="text-xs tabular-nums text-muted-foreground/60">
-        {count}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-/** A section with nothing in it still needs to say why. */
-function EmptyPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border/60 px-4 py-6 text-center text-xs text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-/**
  * Find and launch napplets.
  *
  * Two sources: what the user has already run — recorded only after
@@ -368,8 +214,8 @@ export function NappletsViewer() {
   // state synchronously on mount, which cascades a render for nothing.
   const [discovered, setDiscovered] = useState<Candidate[] | null>(null);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "yours" | "contacts">("all");
 
-  const [roles, setRoles] = useState<ArchetypeRole[]>([]);
   const [discoveryFailed, setDiscoveryFailed] = useState(false);
 
   /*
@@ -402,13 +248,7 @@ export function NappletsViewer() {
   }, [decisions]);
 
   const refreshInstalled = useCallback(
-    () =>
-      Promise.all([
-        listNapplets().then((rows) => setInstalled(rows.map(fromInstalled))),
-        // Roles are derived from the same rows, so they can never be staler
-        // than the list they describe.
-        listArchetypeRoles().then(setRoles),
-      ]).then(() => undefined),
+    () => listNapplets().then((rows) => setInstalled(rows.map(fromInstalled))),
     [],
   );
 
@@ -416,9 +256,6 @@ export function NappletsViewer() {
     let cancelled = false;
     listNapplets().then((rows) => {
       if (!cancelled) setInstalled(rows.map(fromInstalled));
-    });
-    listArchetypeRoles().then((next) => {
-      if (!cancelled) setRoles(next);
     });
     return () => {
       cancelled = true;
@@ -543,197 +380,124 @@ export function NappletsViewer() {
     return (discovered ?? []).filter((c) => match(c) && !own.has(c.coordinate));
   }, [discovered, installed, match]);
 
-  /* Four different facts read as one empty list otherwise: still searching, a
-     relay that never answered, a search that filtered everything out, and an
-     account that follows nobody. */
-  const contactsEmpty =
-    discovered === null || discoveryFailed ? null : query.trim() ? (
-      <>
-        Nothing your contacts publish matches{" "}
-        <span className="font-mono text-foreground">{query.trim()}</span>.
-      </>
-    ) : (authors?.length ?? 0) === 0 ? (
-      "You do not follow anyone yet, so there is nothing to discover."
-    ) : (
-      "None of the people you follow have published a napplet."
-    );
+  /* Yours first: something the reader has already run is more likely to be
+     what they came back for than something a contact published. */
+  const all = useMemo(() => [...mine, ...theirs], [mine, theirs]);
+
+  /* One flat list with filters, the way `spells` does it, rather than stacked
+     sections. Where an app came from is a property of the app, not a place it
+     lives, and two grids of the same card made it look like two kinds. */
+  const shown =
+    filter === "yours" ? mine : filter === "contacts" ? theirs : all;
+  const searching = discovered === null && (authors?.length ?? 0) > 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header, laid out the way `spells` and `spellbooks` lay theirs out:
-          icon, title, a count, then the search on its own row. Three windows
-          that list things the reader owns should not each invent a shape. */}
       <div className="flex-shrink-0 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Boxes className="size-5 text-muted-foreground" />
           <h2 className="text-lg font-semibold">Apps</h2>
           <Badge variant="secondary" className="ml-2">
-            {mine.length + theirs.length}
+            {shown.length}/{all.length}
           </Badge>
-          {discovered === null && (authors?.length ?? 0) > 0 && (
+          {searching && (
             <Loader2 className="size-3 animate-spin text-muted-foreground" />
           )}
         </div>
 
-        <div className="relative mt-3">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search apps..."
-            className="pl-9"
-          />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="relative min-w-40 flex-1">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search apps..."
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex gap-1">
+            {(["all", "yours", "contacts"] as const).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={filter === value ? "default" : "outline"}
+                onClick={() => setFilter(value)}
+              >
+                {value === "all"
+                  ? "All"
+                  : value === "yours"
+                    ? "Yours"
+                    : "Contacts"}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* A container query, not a viewport one. These windows are tiled: a
-          pane can be 300px wide on a large display, and `md:` would call that a
-          desktop and lay three columns into it — which is exactly what it did,
-          truncating every title to "KoboldA…". */}
-      <div className="@container flex-1 space-y-8 overflow-y-auto p-4">
-        <section className="space-y-3">
-          <SectionHeading icon={Boxes} title="Yours" count={mine.length} />
-          {mine.length === 0 ? (
-            <EmptyPanel>
-              {installed.length > 0 && query.trim() ? (
-                <>
-                  No app you have run matches{" "}
-                  <span className="font-mono text-foreground">
-                    {query.trim()}
-                  </span>
-                  .
-                </>
-              ) : (
-                <>
-                  Napplets you run show up here. Try one from below, or{" "}
-                  <code className="font-mono">app &lt;naddr&gt;</code>.
-                </>
-              )}
-            </EmptyPanel>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
-              {mine.map((candidate) => (
-                <NappletRow
-                  key={candidate.coordinate}
-                  candidate={candidate}
-                  decisions={decisionsByDTag.get(candidate.identifier)}
-                  onDecisionsChanged={refreshDecisions}
-                  onRun={() => run(candidate)}
-                  onPin={async () => {
-                    await setNappletPinned(
-                      candidate.coordinate,
-                      !candidate.pinned,
-                    );
-                    await refreshInstalled();
-                  }}
-                  onForget={async () => {
-                    await forgetNapplet(candidate.coordinate);
-                    await refreshInstalled();
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+      {discoveryFailed && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning">
+          <TriangleAlert className="size-3.5 shrink-0" />
+          The relays did not answer, so this list may be incomplete.
+        </div>
+      )}
 
-        {roles.length > 0 && (
-          <section className="space-y-3">
-            <div className="space-y-1">
-              <SectionHeading
-                icon={Shapes}
-                title="Roles"
-                count={roles.length}
-              />
-              <p className="text-xs text-muted-foreground/70">
-                Which app answers{" "}
-                <code className="font-mono">app &lt;role&gt;</code>. With more
-                than one candidate the command refuses to guess, so pick the
-                default here.
+      {/* A container query, not a viewport one. These windows are tiled: a pane
+          can be 300px wide on a large display, and `md:` would call that a
+          desktop and lay three columns into it. */}
+      <div className="@container flex-1 overflow-y-auto p-4">
+        {shown.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            <div className="max-w-md text-center">
+              <Boxes className="mx-auto mb-3 size-12 opacity-50" />
+              <h3 className="mb-2 text-lg font-semibold">No apps found</h3>
+              <p className="mb-4 text-sm">
+                {query
+                  ? "Try a different search query"
+                  : filter === "contacts"
+                    ? "Nobody you follow has published one yet"
+                    : "Apps you run show up here"}
+              </p>
+              <p className="text-xs">
+                Run one with{" "}
+                <code className="font-mono">app &lt;naddr&gt;</code>, or from a
+                manifest in any feed
               </p>
             </div>
-            <Card className="divide-y divide-border/60 overflow-hidden">
-              {roles.map((role) => (
-                <RoleRow
-                  key={role.archetype}
-                  role={role}
-                  onRun={(candidate) => {
-                    // The command string records the role, not the resolved
-                    // napplet: re-running it later should honour whatever the
-                    // default is then. The props still pin this exact napplet, so
-                    // a restored window is not silently a different one.
-                    if (candidate.kind === "napplet") {
-                      addWindow(
-                        "app",
-                        { pointer: candidate.pointer },
-                        `app ${role.archetype}`,
-                        undefined,
-                      );
-                      return;
-                    }
-                    openBuiltinArchetype(role.archetype, "open").catch(
-                      (error) =>
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : String(error),
-                        ),
-                    );
-                  }}
-                  onChoose={async (dTag) => {
-                    if (dTag) setDefaultHandler(role.archetype, dTag);
-                    else clearDefaultHandler(role.archetype);
-                    await refreshInstalled();
-                  }}
-                />
-              ))}
-            </Card>
-          </section>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
+            {shown.map((candidate) => (
+              <NappletRow
+                key={candidate.coordinate}
+                candidate={candidate}
+                decisions={decisionsByDTag.get(candidate.identifier)}
+                onDecisionsChanged={refreshDecisions}
+                onRun={() => run(candidate)}
+                onPin={
+                  candidate.lastRunAt === undefined
+                    ? undefined
+                    : async () => {
+                        await setNappletPinned(
+                          candidate.coordinate,
+                          !candidate.pinned,
+                        );
+                        await refreshInstalled();
+                      }
+                }
+                onForget={
+                  candidate.lastRunAt === undefined
+                    ? undefined
+                    : async () => {
+                        await forgetNapplet(candidate.coordinate);
+                        await refreshInstalled();
+                      }
+                }
+              />
+            ))}
+          </div>
         )}
-
-        <section className="space-y-3">
-          <SectionHeading
-            icon={Users}
-            title="From your contacts"
-            count={theirs.length}
-          >
-            {discovered === null && (authors?.length ?? 0) > 0 && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Loader2 className="size-3 animate-spin" />
-                searching…
-              </span>
-            )}
-          </SectionHeading>
-
-          {/* A partial answer is worth saying out loud: the list below is not
-              "what your contacts publish", it is what one relay admitted to. */}
-          {discoveryFailed && (
-            <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-              <TriangleAlert className="size-3.5 shrink-0" />
-              <span>
-                The relays did not answer — this list may be incomplete.
-              </span>
-            </div>
-          )}
-
-          {!account?.pubkey ? (
-            <EmptyPanel>
-              Sign in to see what the people you follow publish.
-            </EmptyPanel>
-          ) : theirs.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
-              {theirs.map((candidate) => (
-                <NappletRow
-                  key={candidate.coordinate}
-                  candidate={candidate}
-                  onRun={() => run(candidate)}
-                />
-              ))}
-            </div>
-          ) : contactsEmpty ? (
-            <EmptyPanel>{contactsEmpty}</EmptyPanel>
-          ) : null}
-        </section>
       </div>
     </div>
   );

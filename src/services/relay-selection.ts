@@ -42,7 +42,7 @@ import type {
  * @param timeoutMs - Timeout in milliseconds
  * @returns Promise that resolves when fetch completes or times out
  */
-async function fetchRelayList(
+export async function fetchRelayList(
   pubkey: string,
   timeoutMs: number,
 ): Promise<void> {
