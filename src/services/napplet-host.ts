@@ -92,6 +92,7 @@ import { skip } from "rxjs/operators";
 import type { Subscription } from "rxjs";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
+import { fetchUserServers } from "./blossom";
 import { getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
 import { AGGREGATOR_RELAYS } from "./loaders";
@@ -777,8 +778,22 @@ export async function resolveNappletFromEvent(
   event: NostrEvent,
   onProgress?: (progress: NappletResolveProgress) => void,
 ): Promise<ResolvedNappletView> {
+  /*
+   * The author's own Blossom servers, fetched when they are not already known.
+   *
+   * `getServers` is cache-only — memory, then Dexie, then null — so a napplet
+   * whose author you have never looked at fell back to nothing, and the only
+   * server tried was whatever the manifest happened to name. Gigi's
+   * `profile-check` names one, `cdn.satellite.earth`, which no longer serves
+   * the blob; the two servers in their published kind 10063 were never asked.
+   *
+   * A manifest naming one server is normal — it records where the publisher
+   * put the files, not everywhere they exist — so the author's list is the
+   * fallback that makes a single dead host survivable.
+   */
   const authorServers =
-    (await blossomServerCache.getServers(event.pubkey)) ?? [];
+    (await blossomServerCache.getServers(event.pubkey)) ??
+    (await fetchUserServers(event.pubkey).catch(() => []));
 
   // Remember what was actually tried, so an unavailable blob can say where we
   // looked instead of just that we failed.
