@@ -7,18 +7,21 @@
  * keys; the Guestbook Join second and best-effort, because it is off-consensus
  * and nothing depends on it.
  *
- * Which generation of the List gets written is decided by what the member
- * already has, never by which one the spec prefers: a member whose other
- * clients read the retired single-event List must not have their join land
- * somewhere those clients never look. A member with no List at all gets the
- * retired kind for exactly the same reason — it is what the ecosystem reads
- * today. When the writers migrate, this follows them without a decision here.
+ * Which generations get written is decided by what the member already has,
+ * never by which one the spec prefers: a member whose other clients read the
+ * retired single-event List must not have their join land somewhere those
+ * clients never look. Holding both generations, they get both — see
+ * `planWrites`, where the asymmetry between them lives. A member with no List
+ * at all gets the retired kind, which is what the ecosystem reads today.
  */
 
 import { hex32 } from "@/lib/concord/derive";
 import { guestbookGroupKey } from "@/lib/concord/derive";
 import { mergeCommunityLists } from "@/lib/concord/community-list";
-import type { CommunityList } from "@/lib/concord/community-list";
+import type {
+  CommunityList,
+  CommunityListEntry,
+} from "@/lib/concord/community-list";
 import { inviteExpired, type InviteBundle } from "@/lib/concord/invite";
 import {
   entryFromBundle,
@@ -53,8 +56,8 @@ export interface JoinSigner extends StreamSigner {
 
 export interface JoinOutcome {
   communityId: string;
-  /** Which generation of the List the membership was written into. */
-  listKind: number;
+  /** Which generations of the List the membership was written into. */
+  listKinds: number[];
   /** The Guestbook is off-consensus: a failure here costs visibility only. */
   guestbook: "published" | "failed";
   guestbookError?: string;
@@ -65,6 +68,180 @@ export class JoinError extends Error {
     super(message);
     this.name = "JoinError";
   }
+}
+
+/** One slot as {@link readListSlotsForWrite} hands it over. */
+type WriteSlot = Awaited<
+  ReturnType<typeof readListSlotsForWrite>
+>["slots"][number];
+
+/** A List event this join will publish, already merged and addressed. */
+interface ListWrite {
+  kind: number;
+  d: string;
+  list: CommunityList;
+  /** The copy being replaced, whose `created_at` the write must outrank. */
+  replaces?: WriteSlot;
+}
+
+/**
+ * Which documents this join rewrites, and what each of them says afterwards.
+ *
+ * A member can hold BOTH generations at once — armada writes the retired
+ * single-event List, other clients write §8 fragments — and a join that lands
+ * in only one of them is invisible in whatever reads the other. Every reader
+ * unions across generations, so writing to both is not duplication with a cost:
+ * it is how the two documents stop drifting apart.
+ *
+ * The two are not filled the same way, and that asymmetry is the point:
+ *
+ * - The **retired List** is one document for everything, so it takes the whole
+ *   cross-generation union. That is the convergence move — a membership living
+ *   only in a fragment reaches armada by riding here.
+ * - A **fragment** is §8's answer to one event being too small, so it takes its
+ *   OWN page plus the new entry and nothing else. Folding the union into a page
+ *   would undo the packing and walk it into the relay's refusal line.
+ *
+ * A member with no List at all gets the retired kind, which is what the
+ * ecosystem reads today; one holding only fragments gets a fragment, because
+ * re-minting a generation they have migrated off is not this client's call.
+ */
+function planWrites(
+  slots: WriteSlot[],
+  entry: CommunityListEntry,
+  communityId: string,
+): ListWrite[] {
+  const justJoined: CommunityList = { entries: [entry], tombstones: [] };
+  if (slots.length === 0) {
+    return [{ kind: KIND_COMMUNITY_LIST_LEGACY, d: "", list: justJoined }];
+  }
+
+  const fragments = slots.filter((slot) => slot.kind === KIND_COMMUNITY_LIST);
+  const legacy = slots.find((slot) => slot.kind === KIND_COMMUNITY_LIST_LEGACY);
+  const writes: ListWrite[] = [];
+
+  if (legacy) {
+    writes.push({
+      kind: KIND_COMMUNITY_LIST_LEGACY,
+      d: "",
+      list: mergeCommunityLists([
+        ...slots.map((slot) => ({ list: slot.list })),
+        { list: justJoined },
+      ]),
+      replaces: legacy,
+    });
+  }
+
+  // Re-joining rewrites the page that already holds the membership; otherwise
+  // the freshest page, which is the one whoever maintains this generation last
+  // touched. Equal ages break to the lowest index, so two devices deciding
+  // independently pick the same page.
+  const holding = fragments.find((slot) =>
+    slot.list.entries.some(
+      (e) => e.community_id?.toLowerCase() === communityId,
+    ),
+  );
+  const newest = fragments.reduce<WriteSlot | undefined>(
+    (best, slot) =>
+      !best ||
+      slot.createdAt > best.createdAt ||
+      (slot.createdAt === best.createdAt && slot.d < best.d)
+        ? slot
+        : best,
+    undefined,
+  );
+  const fragment = holding ?? newest;
+  if (fragment) {
+    writes.push({
+      kind: KIND_COMMUNITY_LIST,
+      d: fragment.d,
+      list: mergeCommunityLists([
+        { list: fragment.list },
+        { list: justJoined },
+      ]),
+      replaces: fragment,
+    });
+  }
+  return writes;
+}
+
+/**
+ * Sign every planned write, check them ALL, then publish.
+ *
+ * Signing and sizing both documents before either goes out is what keeps a
+ * partial join from happening: a fragment that overflows must not be discovered
+ * after the retired List has already landed, leaving the member's clients
+ * disagreeing about what they hold with no way to tell which is right.
+ *
+ * @returns the kinds actually published, in the order they went out.
+ */
+async function writeMembership(
+  slots: WriteSlot[],
+  entry: CommunityListEntry,
+  communityId: string,
+  { pubkey, signer }: { pubkey: string; signer: JoinSigner },
+): Promise<number[]> {
+  const nip44 = signer.nip44;
+  if (!nip44) throw new JoinError("This signer cannot join: NIP-44 is needed.");
+
+  const signed = [];
+  for (const write of planWrites(slots, entry, communityId)) {
+    const json = serializeCommunityList(
+      write.list,
+      // §8 fixes unpadded base64url for the fragmented kind; the retired one
+      // predates that rule and is written in hex by the clients still reading it.
+      write.kind === KIND_COMMUNITY_LIST ? "base64url" : "hex",
+    );
+    const event = await signer.signEvent({
+      kind: write.kind,
+      content: await nip44.encrypt(pubkey, json),
+      // The fragmented kind is addressable and keyed by its index; the retired
+      // one is replaceable and carries no identifier at all.
+      tags: write.kind === KIND_COMMUNITY_LIST ? [["d", write.d]] : [],
+      // Relays resolve a replacement on `created_at` alone and break ties on the
+      // LOWEST id, so a write sharing a second with the copy it replaces can be
+      // silently discarded (CORD-02 §8).
+      created_at: Math.max(
+        Math.floor(Date.now() / 1000),
+        (write.replaces?.createdAt ?? 0) + 1,
+      ),
+    });
+    // Measured on the FULLY ENCODED event, after encryption and signing: the
+    // NIP-44 plaintext understates it by roughly a third, so a List that passes
+    // a plaintext check can still be refused by every relay — freezing the
+    // member's memberships at their last accepted state with no error raised
+    // anywhere.
+    if (JSON.stringify(event).length > LIST_MAX_BYTES) {
+      throw new JoinError(
+        "Your Community List is too large for one event, and splitting it across fragments is not something this client does. Join in Armada, which can repack it.",
+      );
+    }
+    signed.push(event);
+  }
+
+  const written: number[] = [];
+  for (const event of signed) {
+    try {
+      await publishEvent(event);
+      written.push(event.kind);
+    } catch (error) {
+      // The FIRST failure is the join failing: nothing landed. A later one is
+      // not — the membership is already in a document every reader unions
+      // from, and the generations converge on the next join or repack. Failing
+      // the whole join there would tell the member they are not in a community
+      // they are in.
+      if (written.length === 0) {
+        throw new JoinError(
+          `Your membership could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      console.warn(
+        `[concord] the membership landed, but kind ${event.kind} was not updated:`,
+        error,
+      );
+    }
+  }
+  return written;
 }
 
 /**
@@ -111,57 +288,9 @@ export async function joinFromInvite(
       "Your Community List could not be read from any relay just now, so nothing was written — joining would have replaced the memberships it holds.",
     );
   }
-  const holding = slots.find((slot) =>
-    slot.list.entries.some(
-      (e) => e.community_id?.toLowerCase() === communityId,
-    ),
-  );
-  const legacy = slots.find((slot) => slot.kind === KIND_COMMUNITY_LIST_LEGACY);
-  // Re-joining rewrites the fragment that already holds the membership;
-  // otherwise the generation the member's other clients actually read.
-  const target = holding ?? legacy ?? slots[0];
-  const kind = target?.kind ?? KIND_COMMUNITY_LIST_LEGACY;
-  const d = target?.d ?? "";
-
-  const merged = mergeCommunityLists([
-    { list: target?.list },
-    { list: { entries: [entry], tombstones: [] } as CommunityList },
-  ]);
-  const json = serializeCommunityList(
-    merged,
-    kind === KIND_COMMUNITY_LIST ? "base64url" : "hex",
-  );
-
-  const content = await signer.nip44.encrypt(pubkey, json);
-  const signed = await signer.signEvent({
-    kind,
-    content,
-    // The fragmented kind is addressable and keyed by its index; the retired
-    // one is replaceable and carries no identifier at all.
-    tags: kind === KIND_COMMUNITY_LIST ? [["d", d]] : [],
-    // Relays resolve a replacement on `created_at` alone and break ties on the
-    // LOWEST id, so a write sharing a second with the copy it replaces can be
-    // silently discarded (CORD-02 §8).
-    created_at: Math.max(
-      Math.floor(Date.now() / 1000),
-      (target?.createdAt ?? 0) + 1,
-    ),
-  });
-
-  // Measured on the FULLY ENCODED event, after encryption and signing: the
-  // NIP-44 plaintext understates it by roughly a third, so a List that passes a
-  // plaintext check can still be refused by every relay — freezing the member's
-  // memberships at their last accepted state with no error raised anywhere.
-  if (JSON.stringify(signed).length > LIST_MAX_BYTES) {
-    throw new JoinError(
-      "Your Community List is too large for one event, and splitting it across fragments is not something this client does. Join in Armada, which can repack it.",
-    );
-  }
-
-  await publishEvent(signed).catch((error: unknown) => {
-    throw new JoinError(
-      `Your membership could not be saved: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  const written = await writeMembership(slots, entry, communityId, {
+    pubkey,
+    signer,
   });
 
   // The vault is what the rest of the client reads, and it is also what proves
@@ -171,7 +300,7 @@ export async function joinFromInvite(
 
   const outcome: JoinOutcome = {
     communityId,
-    listKind: kind,
+    listKinds: written,
     guestbook: "published",
   };
   try {

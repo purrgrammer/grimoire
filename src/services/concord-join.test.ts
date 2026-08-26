@@ -74,11 +74,20 @@ function bundleOf(over: Partial<InviteBundle> = {}): InviteBundle {
   };
 }
 
-/** What the published list event decrypts back to. */
-function publishedList() {
-  const event = publishEvent.mock.calls[0][0];
+/** 32 bytes of hex as the unpadded base64url a fragment is written in. */
+function b64(hex: string): string {
+  let bin = "";
+  for (let i = 0; i < hex.length; i += 2) {
+    bin += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** What the nth published list event decrypts back to. */
+function publishedList(n = 0) {
+  const event = publishEvent.mock.calls[n][0];
   return JSON.parse(nip44.decrypt(event.content, selfKey)) as {
-    entries: Array<{ community_id: string }>;
+    entries: Array<Record<string, unknown> & { community_id: string }>;
   };
 }
 
@@ -110,7 +119,7 @@ describe("joinFromInvite", () => {
     const bundle = bundleOf();
     const outcome = await joinFromInvite(bundle, pubkey, signer);
 
-    expect(outcome.listKind).toBe(KIND_COMMUNITY_LIST_LEGACY);
+    expect(outcome.listKinds).toEqual([KIND_COMMUNITY_LIST_LEGACY]);
     const list = publishedList();
     // The existing membership survives — this is the whole read-modify-write.
     expect(list.entries.map((e) => e.community_id).sort()).toEqual(
@@ -166,6 +175,128 @@ describe("joinFromInvite", () => {
     const event = publishEvent.mock.calls[0][0];
     expect(event.kind).toBe(KIND_COMMUNITY_LIST);
     expect(event.tags).toEqual([["d", "1"]]);
+  });
+
+  it("writes BOTH generations when the member holds both", async () => {
+    // The two documents drift apart otherwise: armada reads only the retired
+    // kind, whoever wrote the fragment reads only fragments, and a join lands
+    // in one of them.
+    const onlyInFragment = {
+      community_id: "bb".repeat(32),
+      current: { owner: "cc".repeat(32), mystery: 7 },
+      added_at: 5,
+    };
+    readListSlotsForWrite.mockResolvedValue({
+      slots: [
+        {
+          kind: KIND_COMMUNITY_LIST,
+          d: "0",
+          eventId: "y",
+          createdAt: 1_700_000_500,
+          list: { entries: [onlyInFragment], tombstones: [] },
+        },
+        {
+          kind: KIND_COMMUNITY_LIST_LEGACY,
+          d: "",
+          eventId: "x",
+          createdAt: 1_700_000_000,
+          list: {
+            entries: [{ community_id: "aa".repeat(32) }],
+            tombstones: [],
+          },
+        },
+      ],
+      unreadable: 0,
+    });
+    const bundle = bundleOf();
+    const outcome = await joinFromInvite(bundle, pubkey, signer);
+
+    expect(outcome.listKinds).toEqual([
+      KIND_COMMUNITY_LIST_LEGACY,
+      KIND_COMMUNITY_LIST,
+    ]);
+
+    // The retired List takes the whole union — that is what reaches armada —
+    // and the fragment's entry rides through verbatim, unknown fields intact.
+    const legacy = publishedList(0);
+    expect(legacy.entries.map((e) => e.community_id).sort()).toEqual(
+      ["aa".repeat(32), "bb".repeat(32), bundle.community_id].sort(),
+    );
+    expect(
+      legacy.entries.find((e) => e.community_id === "bb".repeat(32)),
+    ).toEqual(onlyInFragment);
+
+    // The fragment takes its own page plus the join, never the union — and it
+    // is spelled the way §8 fixes for the fragmented kind.
+    const fragment = publishedList(1);
+    expect(fragment.entries.map((e) => e.community_id).sort()).toEqual(
+      [b64("bb".repeat(32)), b64(bundle.community_id)].sort(),
+    );
+
+    // Each write outranks the copy IT replaces, not the other one's.
+    expect(publishEvent.mock.calls[0][0].created_at).toBeGreaterThan(
+      1_700_000_000,
+    );
+    expect(publishEvent.mock.calls[1][0].created_at).toBeGreaterThan(
+      1_700_000_500,
+    );
+    expect(publishEvent.mock.calls[1][0].tags).toEqual([["d", "0"]]);
+  });
+
+  it("rewrites the fragment already holding the membership, not the newest", async () => {
+    const communityId = bundleOf().community_id;
+    readListSlotsForWrite.mockResolvedValue({
+      slots: [
+        {
+          kind: KIND_COMMUNITY_LIST,
+          d: "0",
+          eventId: "y",
+          createdAt: 1_700_000_000,
+          list: { entries: [{ community_id: communityId }], tombstones: [] },
+        },
+        {
+          kind: KIND_COMMUNITY_LIST,
+          d: "1",
+          eventId: "z",
+          createdAt: 1_700_000_900,
+          list: { entries: [], tombstones: [] },
+        },
+      ],
+      unreadable: 0,
+    });
+    await joinFromInvite(bundleOf(), pubkey, signer);
+    expect(publishEvent.mock.calls).toHaveLength(1);
+    expect(publishEvent.mock.calls[0][0].tags).toEqual([["d", "0"]]);
+  });
+
+  it("keeps the join when only the second generation fails to publish", async () => {
+    // The membership is already in a document every reader unions from, so
+    // telling the member they are not in the community would be a lie.
+    readListSlotsForWrite.mockResolvedValue({
+      slots: [
+        {
+          kind: KIND_COMMUNITY_LIST_LEGACY,
+          d: "",
+          eventId: "x",
+          createdAt: 1_700_000_000,
+          list: { entries: [], tombstones: [] },
+        },
+        {
+          kind: KIND_COMMUNITY_LIST,
+          d: "0",
+          eventId: "y",
+          createdAt: 1_700_000_500,
+          list: { entries: [], tombstones: [] },
+        },
+      ],
+      unreadable: 0,
+    });
+    publishEvent.mockImplementationOnce(async () => undefined);
+    publishEvent.mockImplementationOnce(async () => {
+      throw new Error("every relay refused it");
+    });
+    const outcome = await joinFromInvite(bundleOf(), pubkey, signer);
+    expect(outcome.listKinds).toEqual([KIND_COMMUNITY_LIST_LEGACY]);
   });
 
   it("refuses an expired invite, before anything is signed", async () => {
