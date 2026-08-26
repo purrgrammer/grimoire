@@ -7,8 +7,10 @@ import {
   Search,
   Shapes,
   Trash2,
+  TriangleAlert,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { toast } from "sonner";
 
@@ -25,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserName } from "@/components/nostr/UserName";
+import { cn } from "@/lib/utils";
 import { useAddWindow } from "@/core/state";
 import { useAccount } from "@/hooks/useAccount";
 import {
@@ -222,6 +225,9 @@ function NappletRow({
  * handlers and no default the command errors, and the only place the user can
  * settle it is here. So the row states what the command would do, not just what
  * is installed.
+ *
+ * A row in a shared panel rather than a card of its own: a role is a setting,
+ * not a launchable thing, and the grid above already means "click to run".
  */
 function RoleRow({
   role,
@@ -241,23 +247,28 @@ function RoleRow({
       : undefined;
 
   return (
-    <div className="flex items-start gap-3 rounded border border-border/40 p-3">
-      <Shapes className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+      <Shapes className="mt-1 size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <code className="font-mono text-sm">app {role.archetype}</code>
+        {/* Wraps rather than truncates: at a narrow pane the archetype is the
+            information, and the resolved title is what may be cut. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+            app {role.archetype}
+          </code>
           {usage ? (
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
               → {role.resolved?.title} ·{" "}
               <code className="font-mono">{usage}</code>
             </span>
           ) : role.resolved ? (
-            <span className="truncate text-xs text-muted-foreground">
-              → {role.resolved.title}
-              {role.defaultDTag && " (default)"}
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="truncate">→ {role.resolved.title}</span>
+              {role.defaultDTag && <Label>default</Label>}
             </span>
           ) : (
-            <span className="text-xs text-amber-500">
+            <span className="flex items-center gap-1 text-xs text-warning">
+              <TriangleAlert className="size-3 shrink-0" />
               {role.candidates.filter((c) => c.kind === "napplet").length}{" "}
               napplets · pick one
             </span>
@@ -270,11 +281,14 @@ function RoleRow({
               return (
                 <button
                   key={candidate.dTag}
-                  className={`rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors ${
+                  type="button"
+                  className={cn(
+                    "rounded-md border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     isDefault
-                      ? "border-primary text-primary"
-                      : "border-border/60 text-muted-foreground hover:text-foreground"
-                  }`}
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
+                  )}
                   title={
                     isDefault
                       ? "Clear this default"
@@ -293,13 +307,48 @@ function RoleRow({
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 shrink-0"
+          className="h-7 shrink-0 text-muted-foreground hover:text-foreground"
           onClick={() => onRun(role.resolved!)}
         >
           <Play className="size-3.5" />
           Run
         </Button>
       )}
+    </div>
+  );
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  count,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  count: number;
+  /** Status that belongs next to the count — "searching…", a warning. */
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="size-3.5 text-muted-foreground" />
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
+      <span className="text-xs tabular-nums text-muted-foreground/60">
+        {count}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** A section with nothing in it still needs to say why. */
+function EmptyPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border/60 px-4 py-6 text-center text-xs text-muted-foreground">
+      {children}
     </div>
   );
 }
@@ -494,6 +543,21 @@ export function NappletsViewer() {
     return (discovered ?? []).filter((c) => match(c) && !own.has(c.coordinate));
   }, [discovered, installed, match]);
 
+  /* Four different facts read as one empty list otherwise: still searching, a
+     relay that never answered, a search that filtered everything out, and an
+     account that follows nobody. */
+  const contactsEmpty =
+    discovered === null || discoveryFailed ? null : query.trim() ? (
+      <>
+        Nothing your contacts publish matches{" "}
+        <span className="font-mono text-foreground">{query.trim()}</span>.
+      </>
+    ) : (authors?.length ?? 0) === 0 ? (
+      "You do not follow anyone yet, so there is nothing to discover."
+    ) : (
+      "None of the people you follow have published a napplet."
+    );
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header, laid out the way `spells` and `spellbooks` lay theirs out:
@@ -527,16 +591,26 @@ export function NappletsViewer() {
           pane can be 300px wide on a large display, and `md:` would call that a
           desktop and lay three columns into it — which is exactly what it did,
           truncating every title to "KoboldA…". */}
-      <div className="@container flex-1 space-y-6 overflow-y-auto p-4">
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            Yours ({mine.length})
-          </h3>
+      <div className="@container flex-1 space-y-8 overflow-y-auto p-4">
+        <section className="space-y-3">
+          <SectionHeading icon={Boxes} title="Yours" count={mine.length} />
           {mine.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Napplets you run show up here. Try one from below, or{" "}
-              <code className="font-mono">app &lt;naddr&gt;</code>.
-            </p>
+            <EmptyPanel>
+              {installed.length > 0 && query.trim() ? (
+                <>
+                  No app you have run matches{" "}
+                  <span className="font-mono text-foreground">
+                    {query.trim()}
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  Napplets you run show up here. Try one from below, or{" "}
+                  <code className="font-mono">app &lt;naddr&gt;</code>.
+                </>
+              )}
+            </EmptyPanel>
           ) : (
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {mine.map((candidate) => (
@@ -564,63 +638,89 @@ export function NappletsViewer() {
         </section>
 
         {roles.length > 0 && (
-          <section className="space-y-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-              <Shapes className="size-4" />
-              Roles ({roles.length})
-            </h3>
-            {roles.map((role) => (
-              <RoleRow
-                key={role.archetype}
-                role={role}
-                onRun={(candidate) => {
-                  // The command string records the role, not the resolved
-                  // napplet: re-running it later should honour whatever the
-                  // default is then. The props still pin this exact napplet, so
-                  // a restored window is not silently a different one.
-                  if (candidate.kind === "napplet") {
-                    addWindow(
-                      "app",
-                      { pointer: candidate.pointer },
-                      `app ${role.archetype}`,
-                      undefined,
-                    );
-                    return;
-                  }
-                  openBuiltinArchetype(role.archetype, "open").catch((error) =>
-                    toast.error(
-                      error instanceof Error ? error.message : String(error),
-                    ),
-                  );
-                }}
-                onChoose={async (dTag) => {
-                  if (dTag) setDefaultHandler(role.archetype, dTag);
-                  else clearDefaultHandler(role.archetype);
-                  await refreshInstalled();
-                }}
+          <section className="space-y-3">
+            <div className="space-y-1">
+              <SectionHeading
+                icon={Shapes}
+                title="Roles"
+                count={roles.length}
               />
-            ))}
+              <p className="text-xs text-muted-foreground/70">
+                Which app answers{" "}
+                <code className="font-mono">app &lt;role&gt;</code>. With more
+                than one candidate the command refuses to guess, so pick the
+                default here.
+              </p>
+            </div>
+            <Card className="divide-y divide-border/60 overflow-hidden">
+              {roles.map((role) => (
+                <RoleRow
+                  key={role.archetype}
+                  role={role}
+                  onRun={(candidate) => {
+                    // The command string records the role, not the resolved
+                    // napplet: re-running it later should honour whatever the
+                    // default is then. The props still pin this exact napplet, so
+                    // a restored window is not silently a different one.
+                    if (candidate.kind === "napplet") {
+                      addWindow(
+                        "app",
+                        { pointer: candidate.pointer },
+                        `app ${role.archetype}`,
+                        undefined,
+                      );
+                      return;
+                    }
+                    openBuiltinArchetype(role.archetype, "open").catch(
+                      (error) =>
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                        ),
+                    );
+                  }}
+                  onChoose={async (dTag) => {
+                    if (dTag) setDefaultHandler(role.archetype, dTag);
+                    else clearDefaultHandler(role.archetype);
+                    await refreshInstalled();
+                  }}
+                />
+              ))}
+            </Card>
           </section>
         )}
 
-        <section className="space-y-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Users className="size-4" />
-            From your contacts ({theirs.length})
+        <section className="space-y-3">
+          <SectionHeading
+            icon={Users}
+            title="From your contacts"
+            count={theirs.length}
+          >
             {discovered === null && (authors?.length ?? 0) > 0 && (
-              <span className="font-normal">· searching…</span>
-            )}
-            {discoveryFailed && (
-              <span className="font-normal text-warning">
-                · relays did not answer
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                searching…
               </span>
             )}
-          </h3>
+          </SectionHeading>
+
+          {/* A partial answer is worth saying out loud: the list below is not
+              "what your contacts publish", it is what one relay admitted to. */}
+          {discoveryFailed && (
+            <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+              <TriangleAlert className="size-3.5 shrink-0" />
+              <span>
+                The relays did not answer — this list may be incomplete.
+              </span>
+            </div>
+          )}
+
           {!account?.pubkey ? (
-            <p className="text-xs text-muted-foreground">
+            <EmptyPanel>
               Sign in to see what the people you follow publish.
-            </p>
-          ) : (
+            </EmptyPanel>
+          ) : theirs.length > 0 ? (
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {theirs.map((candidate) => (
                 <NappletRow
@@ -630,7 +730,9 @@ export function NappletsViewer() {
                 />
               ))}
             </div>
-          )}
+          ) : contactsEmpty ? (
+            <EmptyPanel>{contactsEmpty}</EmptyPanel>
+          ) : null}
         </section>
       </div>
     </div>
