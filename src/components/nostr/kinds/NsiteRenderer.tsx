@@ -45,7 +45,7 @@ function NsiteIcon({
 }
 
 /*
- * Running an nsite locally is parked, not abandoned — see the tracking issue.
+ * Running an nsite locally is parked, not abandoned — see issue #324.
  *
  * Everything behind this works and is verified in development: the manifest is
  * checked, every file is hashed, and the site runs on an origin of its own so
