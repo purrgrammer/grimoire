@@ -9,6 +9,40 @@ import { getEmojiTags, type EmojiTag } from "@/lib/emoji-helpers";
 export type ProfileWithEmojis = ProfileContent & { emojis?: EmojiTag[] };
 
 /**
+ * A profile whose `emojis` is the event's NIP-30 TAGS and nothing else.
+ *
+ * `getProfileContent` hands back the kind 0's JSON verbatim — every field the
+ * author chose to publish, at whatever type they published it. This type says
+ * `emojis?: EmojiTag[]`, which is an assertion over untrusted input, not a
+ * fact: a profile carrying `"emojis": "🔥"` in its content satisfies every
+ * length check downstream and then fails on `.map`, which is what took out
+ * every feed row that rendered that person's name.
+ *
+ * So the content's own field is dropped — destructured out rather than
+ * deleted, because `getProfileContent` memoizes its result on the event and
+ * mutating it would poison every later read — and replaced by the tags.
+ */
+export function withEmojiTags(
+  profile: ProfileContent,
+  emojis: EmojiTag[],
+): ProfileWithEmojis {
+  const { emojis: _fromContent, ...rest } = profile as ProfileWithEmojis;
+  return emojis.length > 0 ? { ...rest, emojis } : rest;
+}
+
+/**
+ * The same guarantee for a row read back out of Dexie, which was written before
+ * this was enforced and can still hold whatever the content carried.
+ */
+export function sanitizeCachedProfile(
+  profile: ProfileWithEmojis,
+): ProfileWithEmojis {
+  return Array.isArray(profile.emojis)
+    ? profile
+    : withEmojiTags(profile as ProfileContent, []);
+}
+
+/**
  * Hook to fetch and cache user profile metadata
  *
  * Uses AbortController to prevent race conditions when:
@@ -49,7 +83,7 @@ export function useProfile(
     db.profiles.get(pubkey).then((cachedProfile) => {
       if (controller.signal.aborted) return;
       if (cachedProfile) {
-        setProfile(cachedProfile);
+        setProfile(sanitizeCachedProfile(cachedProfile));
       }
     });
 
@@ -74,9 +108,10 @@ export function useProfile(
         // Only update state and cache if not aborted
         if (controller.signal.aborted) return;
 
-        const emojis = getEmojiTags(fetchedEvent);
-        const withEmojis: ProfileWithEmojis =
-          emojis.length > 0 ? { ...profileData, emojis } : profileData;
+        const withEmojis = withEmojiTags(
+          profileData,
+          getEmojiTags(fetchedEvent),
+        );
 
         setProfile(withEmojis);
 

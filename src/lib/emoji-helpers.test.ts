@@ -42,6 +42,22 @@ describe("parseEmojiSegments", () => {
   it("returns nothing for empty text", () => {
     expect(parseEmojiSegments("", emojis)).toEqual([]);
   });
+
+  /**
+   * A kind 0 is whatever its author published. One carrying `"emojis": "\uD83D\uDD25"` in
+   * its content reached here as a string, cleared a `length > 0` check and died
+   * on `.map` — crashing every feed row that rendered that person's name.
+   */
+  it("treats a non-array `emojis` as no emoji at all", () => {
+    const notAnArray = "\uD83D\uDD25" as unknown as EmojiTag[];
+    expect(parseEmojiSegments(":H: hi", notAnArray)).toEqual([
+      { type: "text", value: ":H: hi" },
+    ]);
+    expect(emojiShortcodesToPlainText(":H: hi", notAnArray)).toBe(":H: hi");
+    expect(
+      parseEmojiSegments("hi", { shortcode: "H" } as unknown as EmojiTag[]),
+    ).toEqual([{ type: "text", value: "hi" }]);
+  });
 });
 
 describe("emojiShortcodesToPlainText", () => {

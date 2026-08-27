@@ -63,7 +63,13 @@ export function parseEmojiSegments(
   emojis?: EmojiTag[],
 ): EmojiSegment[] {
   if (!text) return [];
-  if (!emojis || emojis.length === 0) return [{ type: "text", value: text }];
+  // `Array.isArray`, not a truthiness-and-length test. `emojis` reaches here
+  // from a kind 0's own JSON by way of `useProfile`, and a profile that
+  // publishes `"emojis": "🔥"` satisfies `emojis.length > 0` all the way to
+  // `emojis.map`, which a string does not have — one such profile crashed every
+  // feed row that rendered its name.
+  if (!Array.isArray(emojis) || emojis.length === 0)
+    return [{ type: "text", value: text }];
 
   const byShortcode = new Map(emojis.map((e) => [e.shortcode, e.url]));
   const segments: EmojiSegment[] = [];
