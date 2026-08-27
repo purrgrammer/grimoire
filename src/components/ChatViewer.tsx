@@ -114,6 +114,7 @@ import {
 } from "@/lib/chat/threads";
 import { ThreadPane, THREAD_PANE_DEFAULT_WIDTH } from "./chat/ThreadPane";
 import { layoutThreadPane } from "./chat/thread-pane-layout";
+import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 import { MessageActivity } from "./chat/MessageActivity";
 import { useSettings } from "@/hooks/useSettings";
 import { cn } from "@/lib/utils";
@@ -1335,17 +1336,7 @@ export function ChatViewer({
    * report a desktop. Observed rather than measured once — a mosaic split resizes
    * its tiles continuously as the divider is dragged.
    */
-  const windowBox = useRef<HTMLDivElement>(null);
-  const [windowWidth, setWindowWidth] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    const box = windowBox.current;
-    if (!box) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setWindowWidth(entry.contentRect.width);
-    });
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, []);
+  const [windowBox, windowWidth] = useMeasuredWidth();
   const threadRootId =
     openThread.conversationId === conversation?.id
       ? openThread.rootId
@@ -1502,10 +1493,25 @@ export function ChatViewer({
      * Send would go as a plain message with no sign anything changed.
      */
     const ownsChannelReply = replyToId === replyToRef.current;
-    const clearChannelReply = () => {
-      if (!ownsChannelReply) return;
-      replyToRef.current = undefined;
-      setReplyTo(undefined);
+    const clearSentReply = () => {
+      if (ownsChannelReply) {
+        replyToRef.current = undefined;
+        setReplyTo(undefined);
+      }
+      /**
+       * And the same for the thread pane, which picks its own target: a send
+       * answering one particular reply has to drop it, or the pane goes on
+       * quoting a message the reader already answered.
+       *
+       * Tested inside the updater rather than against a value captured when the
+       * send started — that value can be a render old by the time an await
+       * returns, and no ref is needed to ask the question at commit time.
+       */
+      setThreadReply((prev) =>
+        replyToId !== undefined && prev.messageId === replyToId
+          ? { ...prev, messageId: undefined }
+          : prev,
+      );
     };
 
     // Check if this is a slash command
@@ -1533,7 +1539,7 @@ export function ChatViewer({
       } finally {
         setIsSending(false);
         // Clear reply context after slash command execution
-        clearChannelReply();
+        clearSentReply();
       }
       return;
     }
@@ -1566,7 +1572,7 @@ export function ChatViewer({
       });
       // Clear reply context immediately (ref + state) so the next send
       // cannot read a stale value before React re-renders.
-      clearChannelReply();
+      clearSentReply();
     } catch (error) {
       console.error("[Chat] Failed to send message:", error);
       const errorMessage =
