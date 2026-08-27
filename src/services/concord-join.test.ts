@@ -299,6 +299,76 @@ describe("joinFromInvite", () => {
     expect(outcome.listKinds).toEqual([KIND_COMMUNITY_LIST_LEGACY]);
   });
 
+  it("drops the union rather than the join when it will not fit", async () => {
+    // Convergence is worth one event, never a refused join: the generations
+    // stay apart, which is where they already were.
+    const huge = {
+      community_id: "bb".repeat(32),
+      current: { owner: "cc".repeat(32), name: "x".repeat(70_000) },
+      added_at: 5,
+    };
+    const mine = { community_id: "aa".repeat(32) };
+    readListSlotsForWrite.mockResolvedValue({
+      slots: [
+        {
+          kind: KIND_COMMUNITY_LIST,
+          d: "0",
+          eventId: "y",
+          createdAt: 1_700_000_500,
+          list: { entries: [huge], tombstones: [] },
+        },
+        {
+          kind: KIND_COMMUNITY_LIST_LEGACY,
+          d: "",
+          eventId: "x",
+          createdAt: 1_700_000_000,
+          list: { entries: [mine], tombstones: [] },
+        },
+      ],
+      unreadable: 0,
+    });
+    const bundle = bundleOf();
+    const outcome = await joinFromInvite(bundle, pubkey, signer);
+
+    // The retired List still lands — with its own contents plus the join, and
+    // without the oversized membership the union would have carried across.
+    expect(outcome.listKinds).toEqual([KIND_COMMUNITY_LIST_LEGACY]);
+    expect(
+      publishedList(0)
+        .entries.map((e) => e.community_id)
+        .sort(),
+    ).toEqual([mine.community_id, bundle.community_id].sort());
+    // The fragment write has no narrower form, so it is dropped outright.
+    expect(publishEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses the join only when nothing fits at all", async () => {
+    readListSlotsForWrite.mockResolvedValue({
+      slots: [
+        {
+          kind: KIND_COMMUNITY_LIST_LEGACY,
+          d: "",
+          eventId: "x",
+          createdAt: 1_700_000_000,
+          list: {
+            entries: [
+              {
+                community_id: "aa".repeat(32),
+                current: { name: "x".repeat(70_000) },
+              },
+            ],
+            tombstones: [],
+          },
+        },
+      ],
+      unreadable: 0,
+    });
+    await expect(joinFromInvite(bundleOf(), pubkey, signer)).rejects.toThrow(
+      /too large/,
+    );
+    expect(publishEvent).not.toHaveBeenCalled();
+  });
+
   it("refuses an expired invite, before anything is signed", async () => {
     const stale = bundleOf({ expires_at: Date.now() - 1000 });
     await expect(joinFromInvite(stale, pubkey, signer)).rejects.toThrow(

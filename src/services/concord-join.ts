@@ -45,6 +45,7 @@ import {
 } from "@/services/concord-communities";
 import { publishWrap } from "@/services/concord-publish";
 import { publishEvent } from "@/services/hub";
+import type { NostrEvent } from "@/types/nostr";
 
 /** The signer surface a join needs: sign, and NIP-44 both ways. */
 export interface JoinSigner extends StreamSigner {
@@ -82,6 +83,13 @@ interface ListWrite {
   list: CommunityList;
   /** The copy being replaced, whose `created_at` the write must outrank. */
   replaces?: WriteSlot;
+  /**
+   * What to write instead when {@link list} does not fit in one event.
+   *
+   * Only the convergence half of a write is ever optional: carrying the other
+   * generation's memberships across is worth an event, never a refused join.
+   */
+  ifTooLarge?: CommunityList;
 }
 
 /**
@@ -128,6 +136,14 @@ function planWrites(
         ...slots.map((slot) => ({ list: slot.list })),
         { list: justJoined },
       ]),
+      // Convergence is what the union buys, and it is worth exactly one event.
+      // A union that outgrows one drops back to this document's own contents
+      // plus the join: the generations stay apart, which is the state we were
+      // already in, rather than the member being unable to join at all.
+      ifTooLarge: mergeCommunityLists([
+        { list: legacy.list },
+        { list: justJoined },
+      ]),
       replaces: legacy,
     });
   }
@@ -166,12 +182,16 @@ function planWrites(
 }
 
 /**
- * Sign every planned write, check them ALL, then publish.
+ * Sign every planned write, size them ALL, then publish.
  *
- * Signing and sizing both documents before either goes out is what keeps a
- * partial join from happening: a fragment that overflows must not be discovered
- * after the retired List has already landed, leaving the member's clients
- * disagreeing about what they hold with no way to tell which is right.
+ * Sizing both documents before either goes out is what keeps a partial join
+ * from happening: a fragment that overflows must not be discovered after the
+ * retired List has already landed, leaving the member's clients disagreeing
+ * about what they hold with no way to tell which is right.
+ *
+ * An overflowing write narrows if it can (`ifTooLarge`) and is dropped if it
+ * still cannot fit — joining outranks converging. The join only FAILS when
+ * nothing fits at all, which is the member genuinely needing a repack.
  *
  * @returns the kinds actually published, in the order they went out.
  */
@@ -184,15 +204,14 @@ async function writeMembership(
   const nip44 = signer.nip44;
   if (!nip44) throw new JoinError("This signer cannot join: NIP-44 is needed.");
 
-  const signed = [];
-  for (const write of planWrites(slots, entry, communityId)) {
+  const sign = async (write: ListWrite, list: CommunityList) => {
     const json = serializeCommunityList(
-      write.list,
+      list,
       // §8 fixes unpadded base64url for the fragmented kind; the retired one
       // predates that rule and is written in hex by the clients still reading it.
       write.kind === KIND_COMMUNITY_LIST ? "base64url" : "hex",
     );
-    const event = await signer.signEvent({
+    return signer.signEvent({
       kind: write.kind,
       content: await nip44.encrypt(pubkey, json),
       // The fragmented kind is addressable and keyed by its index; the retired
@@ -206,17 +225,26 @@ async function writeMembership(
         (write.replaces?.createdAt ?? 0) + 1,
       ),
     });
-    // Measured on the FULLY ENCODED event, after encryption and signing: the
-    // NIP-44 plaintext understates it by roughly a third, so a List that passes
-    // a plaintext check can still be refused by every relay — freezing the
-    // member's memberships at their last accepted state with no error raised
-    // anywhere.
-    if (JSON.stringify(event).length > LIST_MAX_BYTES) {
-      throw new JoinError(
-        "Your Community List is too large for one event, and splitting it across fragments is not something this client does. Join in Armada, which can repack it.",
-      );
+  };
+  // Measured on the FULLY ENCODED event, after encryption and signing: the
+  // NIP-44 plaintext understates it by roughly a third, so a List that passes a
+  // plaintext check can still be refused by every relay — freezing the member's
+  // memberships at their last accepted state with no error raised anywhere.
+  const fits = (event: NostrEvent) =>
+    JSON.stringify(event).length <= LIST_MAX_BYTES;
+
+  const signed: NostrEvent[] = [];
+  for (const write of planWrites(slots, entry, communityId)) {
+    let event = await sign(write, write.list);
+    if (!fits(event) && write.ifTooLarge) {
+      event = await sign(write, write.ifTooLarge);
     }
-    signed.push(event);
+    if (fits(event)) signed.push(event);
+  }
+  if (signed.length === 0) {
+    throw new JoinError(
+      "Your Community List is too large for one event, and splitting it across fragments is not something this client does. Join in Armada, which can repack it.",
+    );
   }
 
   const written: number[] = [];
