@@ -213,6 +213,17 @@ document, so an agent asking what grimoire can do gets the same answer with no
   the agent as a bare failure with no reason — so the wrapper round-trips the
   result and turns a throw into `{ error }`.
 
+**Chrome and Edge need an origin-trial token.** WebMCP is not shipped: the API
+exists only for an origin that carries a token, delivered as the `Origin-Trial`
+response header in `vercel.json` beside the header below. `grimoire.rocks`'s
+token is registered for that origin alone and **expires 2026-11-17** — after
+that, or on any other origin, `document.modelContext` is simply absent and the
+adapter no-ops. Registration is at
+<https://developer.chrome.com/origintrials/#/register_trial/4163014905550602241>.
+Localhost is not covered, so the dev server exercises the IPA surface only; to
+drive the WebMCP path locally, shim `document.modelContext` in `index.html`
+before `main.tsx` loads.
+
 **`Origin-Agent-Cluster: ?1` is required.** `registerTool()` rejects with
 `SecurityError` unless the document is in an origin-keyed agent cluster, and that
 is a response header with no `<meta>` equivalent — a page cannot opt in from
