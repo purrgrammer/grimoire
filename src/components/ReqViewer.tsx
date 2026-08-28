@@ -877,6 +877,25 @@ export default function ReqViewer({
     [needsAccount, filter, accountPubkey, contacts],
   );
 
+  // An alias that resolves to nothing — `$me` with no account, `$contacts`
+  // before (or without) a kind:3 — leaves an empty `authors`/`#p`/`#P` behind.
+  // An empty array is not "no constraint": relay selection reads it as "no
+  // pubkeys to route by" and falls back to AGGREGATOR_RELAYS, and a REQ with
+  // `"#p": []` is a firehose on every relay that ignores empty tag lists. That
+  // pair is the reported bug — `req -p $me -k 1` opening relay.primal.net,
+  // which is in nobody's inbox list. Run no query at all instead.
+  const aliasResolvedEmpty = useMemo(() => {
+    if (!needsAccount) return false;
+    return (["authors", "#p", "#P"] as const).some((key) => {
+      const original = filter[key];
+      return (
+        Array.isArray(original) &&
+        original.length > 0 &&
+        (resolvedFilter[key]?.length ?? 0) === 0
+      );
+    });
+  }, [needsAccount, filter, resolvedFilter]);
+
   // NIP-05 resolution already happened in argParser before window creation
   // The filter prop already contains resolved pubkeys
   // We just display the NIP-05 identifiers for user reference
@@ -914,6 +933,11 @@ export default function ReqViewer({
       return relays;
     }
 
+    // Nothing to route by — see `aliasResolvedEmpty`.
+    if (aliasResolvedEmpty) {
+      return [];
+    }
+
     // Wait for outbox relay selection to complete before subscribing
     // This prevents multiple reconnections during discovery/selection phases
     if (relaySelectionPhase !== "ready") {
@@ -921,7 +945,7 @@ export default function ReqViewer({
     }
 
     return selectedRelays;
-  }, [relays, relaySelectionPhase, selectedRelays]);
+  }, [relays, relaySelectionPhase, selectedRelays, aliasResolvedEmpty]);
 
   // Normalize relay URLs for consistent lookups in relayStates
   // RelayStateManager normalizes all URLs (adds trailing slash, lowercase, etc.)
@@ -1563,12 +1587,23 @@ export default function ReqViewer({
             </div>
           )}
 
-          {/* Loading: Before EOSE received */}
-          {loading && events.length === 0 && !eoseReceived && (
-            <div className="p-4">
-              <TimelineSkeleton count={5} />
+          {/* An alias resolved to nothing, so no REQ was sent (see
+              `aliasResolvedEmpty`) — say so instead of spinning forever. */}
+          {aliasResolvedEmpty && (
+            <div className="text-center text-muted-foreground font-mono text-sm p-4">
+              Waiting for your contact list — no query sent yet
             </div>
           )}
+
+          {/* Loading: Before EOSE received */}
+          {!aliasResolvedEmpty &&
+            loading &&
+            events.length === 0 &&
+            !eoseReceived && (
+              <div className="p-4">
+                <TimelineSkeleton count={5} />
+              </div>
+            )}
 
           {/* EOSE received, no events, not streaming */}
           {eoseReceived && events.length === 0 && !stream && !error && (

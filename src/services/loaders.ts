@@ -81,7 +81,6 @@ function extractRelayContext(event: NostrEvent): {
 export const AGGREGATOR_RELAYS = [
   "wss://nos.lol/",
   "wss://relay.snort.social/",
-  "wss://relay.primal.net/",
   "wss://relay.damus.io/",
 ];
 
