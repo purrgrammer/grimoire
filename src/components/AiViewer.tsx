@@ -70,8 +70,8 @@ import { BackendSelect } from "./ai/BackendSelect";
 import { ConversationIndex } from "./ai/ConversationIndex";
 import { ModelDownload } from "./ai/ModelDownload";
 import { ReplyCodeBlock } from "./ai/ReplyCodeBlock";
-import { COMMAND_FENCE, resolveCommand } from "@/lib/ai-commands";
-import { refuseIfNeeded } from "@/lib/ai-tools";
+import { COMMAND_FENCE } from "@/lib/ai-commands";
+import { createWindowExecutor } from "@/lib/ai-window-tool";
 import { AI_TOOLS, createToolExecutors } from "@/lib/ai-registry";
 import { TurnSteps } from "./ai/TurnSteps";
 import type { ToolRun } from "@/types/tool-part";
@@ -561,29 +561,13 @@ export default function AiViewer({
     [injected, turns],
   );
 
-  // `open_window` needs the window state, so it is built here; the read-only
-  // executors are pure and live in the lib.
+  // `grimoire.window` needs the window state, so it is injected here; the
+  // read-only executors are pure and live in the lib. The executor itself is
+  // shared with the WebMCP surface — both must refuse the same commands.
   const executors = useMemo(
     () =>
       createToolExecutors({
-        // The only tool needing React state: everything else is pure and lives
-        // in the registry beside its schema.
-        "grimoire.window": async (args: unknown) => {
-          const command = (args as { command?: unknown })?.command;
-          if (typeof command !== "string") {
-            return { error: "command must be a string." };
-          }
-          const refusal = refuseIfNeeded(command);
-          if (refusal) return { error: refusal };
-          const resolved = await resolveCommand(command, pubkey);
-          addWindow(
-            resolved.appId,
-            resolved.props,
-            resolved.commandString,
-            resolved.customTitle,
-          );
-          return { opened: command, appId: resolved.appId };
-        },
+        "grimoire.window": createWindowExecutor(addWindow, pubkey),
       }),
     [addWindow, pubkey],
   );

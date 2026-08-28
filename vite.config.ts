@@ -6,6 +6,19 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/*
+ * WebMCP (`document.modelContext`) refuses to register a tool unless the
+ * document sits in an origin-keyed agent cluster, and that is decided by a
+ * response header — there is no `<meta>` equivalent and no way to opt in from
+ * script. Without it every `registerTool()` rejects with `SecurityError` and
+ * the browser's agent sees a page with no tools at all. Set here for `dev` and
+ * `preview`; the deployed origin sets it in `vercel.json`.
+ *
+ * Origin-keying only narrows what may reach this document synchronously
+ * (same-site `document.domain` access, which nothing here uses).
+ */
+const ORIGIN_KEYED = { "Origin-Agent-Cluster": "?1" };
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -35,6 +48,10 @@ export default defineConfig({
      * that protection was defending.
      */
     allowedHosts: [".localhost"],
+    headers: ORIGIN_KEYED,
+  },
+  preview: {
+    headers: ORIGIN_KEYED,
   },
   build: {
     rollupOptions: {

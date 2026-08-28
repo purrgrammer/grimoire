@@ -7,6 +7,7 @@ import { useBlossomServerCacheSync } from "@/hooks/useBlossomServerCacheSync";
 import { useEmojiSearchSync } from "@/hooks/useEmojiSearchSync";
 import { useFavoriteListsSync } from "@/hooks/useFavoriteListsSync";
 import { useRelayState } from "@/hooks/useRelayState";
+import { useModelContextTools } from "@/hooks/useModelContextTools";
 import relayStateManager from "@/services/relay-state-manager";
 import { TabBar } from "../TabBar";
 import { CallAudioHost } from "../call/CallAudioHost";
@@ -57,6 +58,12 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
 
   // Sync relay state with Jotai
   useRelayState();
+
+  // Publish grimoire's tools to the browser's own agent (WebMCP). Held at the
+  // shell because the tools belong to the document, not to whichever window is
+  // open — an agent asking what this page can do gets the same answer with no
+  // `ai` window in sight. A no-op where `document.modelContext` is absent.
+  useModelContextTools();
 
   // Keyboard shortcut: Cmd/Ctrl+K
   useEffect(() => {

@@ -113,6 +113,11 @@ network. The wire schema, the executor table, the system prompt's tool paragraph
 and the transcript's renderers are all derived from it, so a tool's name exists
 once.
 
+Two surfaces read that registry, and each entry's `surfaces` says which of them
+gets it: **IPA**, where grimoire owns the loop and the conversation, and
+**WebMCP**, where the browser's own agent calls into the page. See *The browser's
+agent (WebMCP)* below.
+
 **A dot is not portable.** OpenAI-shaped function names are
 `^[a-zA-Z0-9_-]{1,64}$`, and IPA relays to whichever provider the user's
 extension holds a key for — so the namespace travels as an underscore
@@ -131,11 +136,13 @@ and re-prompts whenever the set widens.
 - **`grimoire.spells`** — the user's saved spells, as alias plus the `req` each
   one runs, so Hex can open one or run its filter rather than guessing what a
   spell does. Local rows only; nothing here saves, publishes or deletes.
-- **`grimoire.command`** — commands offered as buttons the user presses. The same
-  validator as a ```grimoire fence, which still works and is the whole story on a
-  provider with no tools. Nothing runs until a click.
+- **`grimoire.command`** — commands handed to the user to run, validated by the
+  same check as a ```grimoire fence, which still works and is the whole story on
+  a provider with no tools. In Hex's reply they render as buttons; anywhere else
+  they are the lines to quote. Nothing runs until the user runs it.
 - **`grimoire.window`** — runs a read-only grimoire command. The only tool
-  needing React state, so the viewer supplies its executor. `post`, `zap` and
+  needing application state, so its executor is injected — by the viewer for
+  IPA, by the shell for WebMCP. `post`, `zap` and
   `wallet` are refused and must be offered instead.
 - **`nostr.req`** — a full NIP-01 filter (`ids`, `authors`, `kinds`, `since`,
   `until`, `search`, single-letter tags via a `tags` object), `$me` and
@@ -150,8 +157,11 @@ and re-prompts whenever the set widens.
   EventStore first and relays second. Without it a model that meets an entity in
   a tag or a question can only repeat it, since bech32 is not readable by
   inspection.
-- **`nostr.publish`** — drafts an event and stops. The card in the transcript
-  carries the button, and the signer is asked from that click; `publishDraft()`
+- **`nostr.draft`** (IPA only) — drafts an event and stops. Named for what it
+  does: `publish` was the one thing it never did, and the name is what a model
+  reads before the description. `canonicalId()` still maps the old
+  `nostr.publish` and `nostr_publish`, because transcripts persist. The card in
+  the transcript carries the button, and the signer is asked from that click; `publishDraft()`
   is not reachable from the loop. `sanitizeDraft` refuses the kinds one click
   must not be able to rewrite — 0, 3, anything replaceable or addressable — plus
   what spends or must be encrypted. The kind is checked again in the action,
@@ -165,6 +175,51 @@ No tool signs, publishes, spends or follows. Tool arguments are shaped by
 whatever the model read — including note text, which is untrusted — so the only
 side effects available are a window the user drives themselves and a draft they
 press a button to sign.
+
+## The browser's agent (WebMCP)
+
+[WebMCP](https://webmachinelearning.github.io/webmcp/) is the same idea from the
+other side: the page declares its tools with `document.modelContext
+.registerTool()`, and whatever agent the browser carries calls them instead of
+driving the UI by pixels. Chrome 149 and Edge 150 ship it behind an origin
+trial; Brave's Leo and ChatGPT Desktop implement it; Firefox and Safari have
+positions only.
+
+`src/services/webmcp.ts` registers the same registry entries, and
+`useModelContextTools()` mounts it **at the shell** — the tools belong to the
+document, so an agent asking what grimoire can do gets the same answer with no
+`ai` window open. `grimoire.window`'s executor is shared with the viewer
+(`createWindowExecutor`), because both surfaces must refuse the same commands.
+
+- **One tool is not exposed.** `nostr.draft` answers with a card that carries a
+  signing button, and outside Hex's transcript there is nothing for the user to
+  press — the consent step the tool exists for would be missing. Exposing it
+  needs the draft card to open as a window of its own first. Everything else,
+  `grimoire.command` included, is reachable: its return is a validated command
+  list, which an agent can present in whatever UI it has.
+- **`prompt` never reaches a WebMCP agent.** It sees `description`, the parameter
+  descriptions and the annotations — nothing else. Anything a caller must know
+  belongs in the description; anything that must not happen belongs in the
+  executor, which is where the refusals already are.
+- **The names keep their dots.** WebMCP allows `[A-Za-z0-9_.-]{1,128}`, so
+  `nostr.req` registers as itself and no `wireName()` mangling is needed on this
+  side.
+- **Annotations are part of the contract.** `readOnlyHint` is false only for
+  `grimoire.window` and `nostr.draft`; `untrustedContentHint` is true for
+  `nostr.req` and `nostr.resolve`, which is the first time that long-standing
+  property of Nostr reads is something a caller can act on.
+- **A result must be JSON-serializable and a failure must not throw.** The user
+  agent serializes whatever the executor resolves with, and a rejection reaches
+  the agent as a bare failure with no reason — so the wrapper round-trips the
+  result and turns a throw into `{ error }`.
+
+**`Origin-Agent-Cluster: ?1` is required.** `registerTool()` rejects with
+`SecurityError` unless the document is in an origin-keyed agent cluster, and that
+is a response header with no `<meta>` equivalent — a page cannot opt in from
+script. It is set in `vite.config.ts` (dev and preview) and `vercel.json` (the
+deployed origin). A static host that will not send it — an nsite gateway, for
+instance — serves a grimoire whose tools no agent can see; everything else works,
+which is what makes it easy to miss. The console warns per refused tool.
 
 ## Grounding
 

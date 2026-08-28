@@ -69,14 +69,14 @@ function proposalOf(
 }
 
 /**
- * The event a `nostr.publish` call drafted.
+ * The event a `nostr.draft` call drafted.
  *
  * Re-validated here rather than trusted: this render is the thing with a
  * signing button on it, and the output travelled through a stored conversation
  * to reach it.
  */
 function draftOf(run: ToolRun): EventDraft | undefined {
-  if (idOf(run) !== "nostr.publish" || run.state !== "output-available") {
+  if (idOf(run) !== "nostr.draft" || run.state !== "output-available") {
     return undefined;
   }
   const draft = sanitizeDraft(run.output);

@@ -100,7 +100,7 @@ describe("the tool surface", () => {
       "grimoire_window",
       "nostr_req",
       "nostr_resolve",
-      "nostr_publish",
+      "nostr_draft",
     ]);
   });
 
@@ -119,10 +119,14 @@ describe("the tool surface", () => {
     expect(canonicalId("nostr.req")).toBe("nostr.req");
     // Something the model invented stays itself rather than becoming a tool.
     expect(canonicalId("rm_rf")).toBe("rm_rf");
+    // Renamed after transcripts already stored it: `publish` said the one
+    // thing the tool does not do.
+    expect(canonicalId("nostr_publish")).toBe("nostr.draft");
+    expect(canonicalId("nostr.publish")).toBe("nostr.draft");
   });
 
   it("has no executor that signs or spends", () => {
-    // `nostr.publish` drafts; the signature happens on a button press, in
+    // `nostr.draft` drafts; the signature happens on a button press, in
     // `publishDraft`, which no executor can reach.
     const ids = [...new Set(Object.keys(executors).map(canonicalId))].sort();
     expect(ids).toEqual([
@@ -130,7 +134,7 @@ describe("the tool surface", () => {
       "grimoire.help",
       "grimoire.spells",
       "grimoire.window",
-      "nostr.publish",
+      "nostr.draft",
       "nostr.req",
       "nostr.resolve",
     ]);
@@ -171,9 +175,9 @@ describe("grimoire.command", () => {
   });
 });
 
-describe("nostr.publish", () => {
+describe("nostr.draft", () => {
   it("drafts without publishing, and says so", async () => {
-    const result = (await call("nostr.publish", {
+    const result = (await call("nostr.draft", {
       kind: 1,
       content: "gm",
       tags: [["t", "nostr"]],
@@ -186,27 +190,23 @@ describe("nostr.publish", () => {
   it("refuses the kinds that would overwrite the user's own state", async () => {
     // One clicked card must not be able to rewrite an identity or a follow list.
     for (const kind of [0, 3, 10002]) {
-      expect(await call("nostr.publish", { kind, content: "x" })).toMatchObject(
-        {
-          error: expect.stringContaining(String(kind)),
-        },
-      );
+      expect(await call("nostr.draft", { kind, content: "x" })).toMatchObject({
+        error: expect.stringContaining(String(kind)),
+      });
     }
   });
 
   it("refuses what it cannot draft as plaintext, or what spends", async () => {
     for (const kind of [4, 1059, 9734]) {
-      expect(await call("nostr.publish", { kind, content: "x" })).toMatchObject(
-        {
-          error: expect.any(String),
-        },
-      );
+      expect(await call("nostr.draft", { kind, content: "x" })).toMatchObject({
+        error: expect.any(String),
+      });
     }
   });
 
   it("rejects malformed tags rather than drafting them", async () => {
     expect(
-      await call("nostr.publish", { kind: 1, content: "x", tags: [[]] }),
+      await call("nostr.draft", { kind: 1, content: "x", tags: [[]] }),
     ).toMatchObject({ error: expect.stringContaining("tag") });
   });
 });

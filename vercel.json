@@ -20,6 +20,15 @@
           "value": "public, max-age=3600"
         }
       ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Origin-Agent-Cluster",
+          "value": "?1"
+        }
+      ]
     }
   ],
   "rewrites": [
