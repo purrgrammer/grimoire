@@ -65,6 +65,20 @@ export function RelayLink({
   const displayUrl = formatRelayUrlForDisplay(url);
   const isInsecure = isInsecureRelay(url);
 
+  /**
+   * A relay's NIP-11 `name` is chosen by its operator and is not unique. Six
+   * different nostr.land hosts each report some variant of "nostr.land", so
+   * showing the name alone made rows visually identical — and a relay on the
+   * kind-10006 blocked list indistinguishable from one being queried.
+   *
+   * So the URL is always rendered: it is the identity, and the only thing that
+   * can be compared against a blocked list or a relay hint. The name is
+   * decoration, and is what gets truncated first when space runs out.
+   */
+  const relayName = relayInfo?.name?.trim();
+  const showName =
+    !!relayName && relayName.toLowerCase() !== displayUrl.toLowerCase();
+
   return (
     <div
       className={cn(
@@ -110,11 +124,27 @@ export function RelayLink({
             </HoverCardContent>
           </HoverCard>
         )}
+        {showName && (
+          <span
+            className={cn("text-xs truncate min-w-0", urlClassname)}
+            title={relayName}
+          >
+            {relayName}
+          </span>
+        )}
         <span
-          className={cn("text-xs truncate", urlClassname)}
-          title={displayUrl}
+          className={cn(
+            "text-xs",
+            // The name shrinks before the URL does: losing the end of a
+            // decorative label is recoverable, losing the identity is not.
+            showName
+              ? "shrink-0 font-mono text-muted-foreground/70"
+              : "truncate",
+            urlClassname,
+          )}
+          title={url}
         >
-          {relayInfo?.name || displayUrl}
+          {displayUrl}
         </span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
