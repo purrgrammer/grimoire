@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import type { Subscription } from "rxjs";
+import { use$ } from "applesauce-react/hooks";
 import pool from "@/services/relay-pool";
+import { blocked$, filterBlockedRelays } from "@/services/blocked-relays";
 import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore } from "applesauce-react/hooks";
 import { isNostrEvent } from "@/lib/type-guards";
@@ -118,33 +121,100 @@ export function useReqTimelineEnhanced(
   const stableFilters = useStableValue(filters);
   const stableRelays = useStableArray(relays);
 
-  // Initialize relay states when relays change
-  useEffect(() => {
-    queryStartedAt.current = Date.now();
+  // A blocked relay never gets a subscription, so it can never report EOSE.
+  // Left in the state map its row stays `pending`/`waiting` forever, the
+  // all-relays-EOSE check below can never be satisfied, and the window sits in
+  // LOADING until the 15s deadline — which then labels the relay as having
+  // timed out rather than as one the user blocked. `blocked` is the reactive
+  // trigger: the kind-10006 list usually arrives after mount, and a relay
+  // pruned mid-flight has to leave this list too.
+  const blocked = use$(blocked$);
+  const activeRelays = useMemo(
+    // `blocked` is read here rather than only depended on: it is what makes the
+    // memo recompute when the list lands, and `filterBlockedRelays` reads the
+    // same set from the service.
+    () => (blocked?.size ? filterBlockedRelays(stableRelays) : stableRelays),
+    [stableRelays, blocked],
+  );
+  const stableActiveRelays = useStableArray(activeRelays);
 
-    const initialStates = new Map<string, ReqRelayState>();
-    for (const url of relays) {
-      initialStates.set(url, {
-        url,
-        connectionState: "pending",
-        subscriptionState: "waiting",
-        eventCount: 0,
-      });
-    }
-    setRelayStates(initialStates);
-  }, [stableRelays]);
+  // What actually identifies the query, as opposed to the relay set that
+  // happens to serve it. Relay selection is revised repeatedly after mount —
+  // late kind:10002 arrivals for `$contacts` are hundreds of pubkeys trickling
+  // in, and the blocked list lands after startup too — and each revision
+  // re-runs the subscribe effect below. Wiping the events on those is what the
+  // feed flicker is: the list is replaced by a skeleton and repopulated, three
+  // times on a measured `$contacts` load. Events are keyed by id and stay valid
+  // whichever relay served them, so only a real query change clears them.
+  const queryKey = useMemo(
+    () => JSON.stringify([id, stableFilters, limit ?? null, stream ?? null]),
+    [id, stableFilters, limit, stream],
+  );
+  const queryKeyRef = useRef<string | null>(null);
+
+  /**
+   * Live per-relay REQs, keyed by relay URL, outliving any single effect run.
+   *
+   * Held in a ref rather than rebuilt per effect because relay selection is
+   * revised repeatedly after mount, and the subscriptions have to survive those
+   * revisions. Torn down on unmount by the effect below, and on a query change
+   * by the subscribe effect itself.
+   */
+  const subscriptionsRef = useRef(new Map<string, Subscription>());
+
+  // Unmount only. Deliberately separate from the subscribe effect: that effect
+  // re-runs whenever the relay set changes, and closing everything in its
+  // cleanup is precisely the churn this design removes.
+  useEffect(
+    () => () => {
+      for (const sub of subscriptionsRef.current.values()) sub.unsubscribe();
+      subscriptionsRef.current.clear();
+    },
+    [],
+  );
+
+  // Add rows for relays that joined and drop rows for relays that left, but
+  // KEEP the state of relays that were already there. Rebuilding the whole map
+  // reset a relay that had already reached EOSE back to "waiting", so the
+  // all-relays-EOSE check below could never settle and the window sat in
+  // LOADING until the deadline — on every relay revision, of which a
+  // `$contacts` load has several.
+  useEffect(() => {
+    setRelayStates((prev) => {
+      const desired = new Set(activeRelays);
+      const next = new Map<string, ReqRelayState>();
+      let changed = prev.size !== desired.size;
+
+      for (const url of activeRelays) {
+        const existing = prev.get(url);
+        if (existing) {
+          next.set(url, existing);
+          continue;
+        }
+        changed = true;
+        next.set(url, {
+          url,
+          connectionState: "pending",
+          subscriptionState: "waiting",
+          eventCount: 0,
+        });
+      }
+
+      return changed ? next : prev;
+    });
+  }, [stableActiveRelays]);
 
   // Sync connection states from RelayStateManager
   // This runs whenever globalRelayStates updates
   useEffect(() => {
-    if (relays.length === 0) return;
+    if (activeRelays.length === 0) return;
 
     setRelayStates((prev) => {
       const next = new Map(prev);
       let changed = false;
 
       // Sync state for all relays in our query
-      for (const url of relays) {
+      for (const url of activeRelays) {
         const globalState = globalRelayStates[url];
         const currentState = prev.get(url);
 
@@ -176,19 +246,28 @@ export function useReqTimelineEnhanced(
 
       return changed ? next : prev;
     });
-  }, [globalRelayStates, relays]);
+  }, [globalRelayStates, activeRelays]);
 
   // Subscribe to events
   useEffect(() => {
-    if (relays.length === 0) {
+    if (activeRelays.length === 0) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const queryChanged = queryKeyRef.current !== queryKey;
+    queryKeyRef.current = queryKey;
+
+    // A different query is a different question: every relay has to be asked
+    // again, and the events already collected answer something else.
+    if (queryChanged) {
+      for (const sub of subscriptionsRef.current.values()) sub.unsubscribe();
+      subscriptionsRef.current.clear();
+      queryStartedAt.current = Date.now();
+      setEventsMap(new Map());
+    }
+
     setError(null);
-    setEoseReceived(false);
-    setEventsMap(new Map());
 
     // Normalize filters to array
     const filterArray = Array.isArray(filters) ? filters : [filters];
@@ -202,7 +281,22 @@ export function useReqTimelineEnhanced(
     // CRITICAL FIX: Subscribe to each relay INDIVIDUALLY to get per-relay EOSE
     // Previously used pool.subscription() which only emits EOSE when ALL relays finish
     // Now we track each relay separately for accurate per-relay EOSE detection
-    const subscriptions = relays.map((url) => {
+    // Per-relay subscriptions bypass the pool's group() filter, so blocked
+    // relays have to be dropped here or this hook would open exactly the
+    // sockets the rest of the app refuses to.
+    // Close the relays that left the set. Their REQ is over either way; doing
+    // it here rather than in the cleanup below is what lets the survivors keep
+    // theirs.
+    const desired = new Set(activeRelays);
+    for (const [url, sub] of subscriptionsRef.current) {
+      if (desired.has(url)) continue;
+      sub.unsubscribe();
+      subscriptionsRef.current.delete(url);
+    }
+
+    const openSubscription = (url: string) => {
+      // deliberate per-relay subscription for per-relay EOSE; list filtered above.
+      // eslint-disable-next-line no-restricted-syntax
       const relay = pool.relay(url);
 
       // Use per-relay chunked filters if available, otherwise use the full filter
@@ -342,7 +436,28 @@ export function useReqTimelineEnhanced(
             // This relay's observable completed
           },
         );
-    });
+    };
+
+    // Open a REQ only for relays that do not already have one. This is the
+    // whole point: a relay already streaming keeps its in-flight REQ when the
+    // relay SET changes, instead of every relay being torn down and re-asked
+    // on each revision of relay selection.
+    let opened = 0;
+    for (const url of activeRelays) {
+      if (subscriptionsRef.current.has(url)) continue;
+      subscriptionsRef.current.set(url, openSubscription(url));
+      opened++;
+    }
+
+    // Only claim to be waiting if something is actually outstanding. A relay
+    // set that merely SHRANK — which is what blocking a relay does to every
+    // mounted hook — opens no REQ, and a relay that already EOSE'd will never
+    // emit EOSE again. Resetting unconditionally left every open window
+    // reporting PARTIAL until the 15s deadline, with nothing in flight.
+    if (queryChanged || opened > 0) {
+      setEoseReceived(false);
+      setLoading(true);
+    }
 
     // Without a bound, one silent relay pins the timeline in LOADING forever.
     // Subscriptions stay open, so late events still arrive.
@@ -381,15 +496,18 @@ export function useReqTimelineEnhanced(
       }
     }, EOSE_TIMEOUT_MS);
 
-    // Cleanup: unsubscribe from all relays
+    // Only the timer. Closing the subscriptions here would undo the whole
+    // point: this effect re-runs on every relay revision, and tearing them
+    // down each time is exactly the REQ churn being fixed. Teardown on unmount
+    // is handled by its own effect below.
     return () => {
       clearTimeout(eoseDeadline);
-      subscriptions.forEach((sub) => sub.unsubscribe());
     };
   }, [
     id,
     stableFilters,
-    stableRelays,
+    queryKey,
+    stableActiveRelays,
     relaySetFromFilterMap,
     limit,
     stream,
