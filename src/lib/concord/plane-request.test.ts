@@ -9,7 +9,8 @@ import type { NostrEvent } from "nostr-tools";
 
 import { fakeEvent, startMockRelay, type MockRelay } from "@/test/mock-relay";
 
-import { planeRequest } from "./plane-request";
+import { planeRequest, planeStream } from "./plane-request";
+import { setBlockedRelays } from "@/services/blocked-relays";
 import {
   _resetStreamAuthRegistry,
   authenticateStreams,
@@ -31,6 +32,7 @@ afterEach(async () => {
   await relay?.close();
   relay = undefined;
   _resetStreamAuthRegistry();
+  setBlockedRelays([], null);
 });
 
 const KIND_WRAP = 1059;
@@ -195,5 +197,48 @@ describe("the paged mock relay honours real filter semantics", () => {
     expect(page.outcome).toBe("eose");
     // Newest-first, `until` inclusive, capped by the relay at 2.
     expect(page.events.map((e) => e.created_at)).toEqual([200, 100]);
+  });
+});
+
+describe("planeRequest and blocked relays", () => {
+  it("does not open a plane socket to a blocked relay", async () => {
+    // A plane read reaches a single relay BY NAME, so it never passes through
+    // the pool's group() filter and needs its own guard. Reported as `error`
+    // rather than a new outcome: `error` is already documented as not evidence
+    // about the plane, so the sweep cannot mistake a blocked relay for an
+    // empty one.
+    relay = await startMockRelay({ kind: "normal", events: [] });
+    pool = new RelayPool();
+    setBlockedRelays([relay.url], "c".repeat(64));
+
+    const result = await planeRequest(
+      relay.url,
+      { kinds: [KIND_WRAP] },
+      { pool, timeout: 1000 },
+    );
+
+    expect(result.outcome).toBe("error");
+    expect(result.reason).toMatch(/blocked relays list/i);
+    expect(result.events).toEqual([]);
+    expect(relay.reqCount()).toBe(0);
+  });
+
+  it("ends a plane stream to a blocked relay without connecting", async () => {
+    relay = await startMockRelay({ kind: "normal", events: [] });
+    pool = new RelayPool();
+    setBlockedRelays([relay.url], "c".repeat(64));
+
+    const messages: string[] = [];
+    await new Promise<void>((resolve) => {
+      planeStream(relay!.url, [{ kinds: [KIND_WRAP] }], { pool }).subscribe({
+        next: (m) => messages.push(m.type),
+        complete: () => resolve(),
+      });
+    });
+
+    // One terminal message and nothing else — the loop above it must not be
+    // left waiting on a stream that will never speak.
+    expect(messages).toEqual(["ended"]);
+    expect(relay.reqCount()).toBe(0);
   });
 });

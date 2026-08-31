@@ -244,7 +244,7 @@ describe("eventLoader", () => {
       expect(relays).toContain("wss://cached.com/");
       expect(relays).toContain("wss://r-tag.com/");
       expect(relays).toContain("wss://e-tag.com/");
-      // mergeRelaySets normalizes aggregator relays with trailing slash
+      // mergeRelaySets normalizes fallback relays with trailing slash
       expect(relays).toContain("wss://nos.lol/");
     });
   });
@@ -323,7 +323,7 @@ describe("eventLoader", () => {
       const result = eventLoader({ id: "test123" }, event);
 
       expect(result).toBeDefined();
-      // mergeRelaySets normalizes aggregator relays with trailing slash
+      // mergeRelaySets normalizes fallback relays with trailing slash
       expect((result as any)._testPointer.relays).toContain("wss://nos.lol/");
     });
 
@@ -373,7 +373,7 @@ describe("eventLoader", () => {
       );
     });
 
-    it("should fall back to aggregators when no other relays available", () => {
+    it("should fall back to the fallback relays when no other relays available", () => {
       vi.mocked(eventStore.getEvent).mockReturnValue(undefined);
       vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([]);
 
@@ -383,7 +383,7 @@ describe("eventLoader", () => {
 
       const relays = (result as any)._testPointer.relays;
 
-      // Should only have aggregator relays (normalized with trailing slash)
+      // Should only have fallback relays (normalized with trailing slash)
       expect(relays).toContain("wss://nos.lol/");
       expect(relays).toContain("wss://relay.snort.social/");
       expect(relays).toContain("wss://relay.damus.io/");

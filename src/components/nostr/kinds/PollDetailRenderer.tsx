@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { UserName } from "../UserName";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RelayLink } from "../RelayLink";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import {
   getPollQuestion,
   getPollOptions,
@@ -45,9 +45,9 @@ export function PollDetailRenderer({ event }: { event: NostrEvent }) {
   // Determine relays to fetch responses from
   const relays = useMemo(() => {
     if (pollRelays.length > 0) {
-      return [...pollRelays, ...AGGREGATOR_RELAYS];
+      return [...pollRelays, ...FALLBACK_RELAYS];
     }
-    return AGGREGATOR_RELAYS;
+    return FALLBACK_RELAYS;
   }, [pollRelays]);
 
   // Fetch poll responses

@@ -34,14 +34,14 @@
  *   is still correlatable by a relay that cares to try. This removes the
  *   cryptographic link, not the network-level one.
  * - Resolving the recipient's kind-10050 runs through the ordinary store loader
- *   on the SINGLETON pool, which fans out to the aggregator relays. So an
+ *   on the SINGLETON pool, which fans out to the fallback relays. So an
  *   authenticated socket asks a handful of well-known relays who a wrap is
  *   about to go to, moments before it goes. The wrap itself stays anonymous;
  *   the interest does not.
  */
 
-import { RelayPool } from "applesauce-relay";
+import { BlockingRelayPool } from "./blocking-relay-pool";
 
-const dmPublishPool = new RelayPool();
+const dmPublishPool = new BlockingRelayPool();
 
 export default dmPublishPool;

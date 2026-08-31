@@ -15,6 +15,7 @@ import { firstValueFrom, timeout, catchError, of } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
 import pool from "@/services/relay-pool";
+import { isRelayBlocked } from "@/services/blocked-relays";
 import { getRelayInfo } from "@/lib/nip11";
 import { RelayLink } from "./nostr/RelayLink";
 import { FilterSummaryBadges } from "./nostr/FilterSummaryBadges";
@@ -78,6 +79,16 @@ async function countFromRelay(
   url: string,
   filter: NostrFilter,
 ): Promise<RelayCountResult> {
+  // Before the NIP-11 lookup, not after: a blocked relay should get no traffic
+  // at all, not even the HTTP info fetch.
+  if (isRelayBlocked(url)) {
+    return {
+      url,
+      status: "error",
+      error: "On your blocked relays list (kind 10006)",
+    };
+  }
+
   try {
     // Check NIP-45 support first (uses cached relay info when available)
     const nip45Supported = await checkNip45Support(url);
@@ -92,6 +103,8 @@ async function countFromRelay(
     }
 
     // Try the COUNT request
+    // COUNT is inherently per-relay; guarded by the isRelayBlocked() check above.
+    // eslint-disable-next-line no-restricted-syntax
     const relay = pool.relay(url);
     const result = await firstValueFrom(
       relay.count(filter as Filter).pipe(

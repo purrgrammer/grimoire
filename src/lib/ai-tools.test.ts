@@ -14,7 +14,7 @@ vi.mock("@/services/nip-text", () => ({
 }));
 
 vi.mock("@/services/loaders", () => ({
-  AGGREGATOR_RELAYS: ["wss://default.example"],
+  FALLBACK_RELAYS: ["wss://default.example"],
   addressLoader: (...args: unknown[]) => addressLoader(...args),
   eventLoader: (...args: unknown[]) => eventLoader(...args),
 }));

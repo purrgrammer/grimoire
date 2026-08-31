@@ -6,6 +6,89 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-plugin-prettier";
 import prettierConfig from "eslint-config-prettier";
 
+/**
+ * Relay and bundling invariants the compiler cannot see. Every entry here
+ * corresponds to a bug that shipped green, so these apply everywhere —
+ * application code AND tests.
+ */
+const relaySyntaxRules = [
+  {
+    selector:
+      'CallExpression[callee.object.name="pool"][callee.property.name=/^(subscription|request)$/][arguments.length<3]',
+    message:
+      "pool.subscription()/pool.request() need an options argument: pass { eventStore } so events reach the shared store (applesauce defaults to a throwaway one). For an EOSE signal use streamWithEose(), and for one-shot fetches requestEvents()/requestEvent(), from @/lib/relay-subscription.",
+  },
+  {
+    // applesauce turns `true` into repeat({ delay: () => of(null) }) — a
+    // synchronous loop, measured at >20k REQ frames/sec against a relay
+    // that CLOSEs after EOSE.
+    selector: 'Property[key.name="resubscribe"][value.value=true]',
+    message:
+      "resubscribe: true has no backoff and floods relays that close after EOSE. Pass a delay instead, e.g. { delay: 5000 }.",
+  },
+  {
+    // Vite cannot statically analyse these: it warns, never emits the
+    // chunk, and the import fails in production while working in dev.
+    selector: "ImportExpression > TemplateLiteral[expressions.length>0]",
+    message:
+      "Vite cannot analyse a template-literal dynamic import, so the chunk is never bundled and it fails in production. Use the library's own lazy registry or import.meta.glob.",
+  },
+  {
+    // A Concord plane REQ is authored by DERIVED stream keys, never the
+    // user, so applesauce's auth handling is actively wrong for it: with
+    // waitForAuth on it either deadlocks or resubscribes at round-trip
+    // speed (~17k REQ/s, measured), and requestEvents() swallows the
+    // auth-required CLOSED into an empty array, so the sweep cannot tell
+    // a gated plane from an absent one. Both failures are silent.
+    selector:
+      'Property[key.name="waitForAuth"][value.value=true], Property[key.name="waitForAuth"][value.type="Identifier"]',
+    message:
+      "Concord plane reads must keep waitForAuth: false — applesauce re-authenticates as the USER, which never satisfies a stream-authored filter. Go through planeRequest() in @/lib/concord/plane-request.",
+  },
+  {
+    // Kehto's prelude injector finds its insertion point by string-matching
+    // a policy meta. A decoy meta hidden in an attribute on <html> survives
+    // our DOM pass (attribute serialization does not escape `<`), so
+    // anything that runs after us matches the decoy, splices into the
+    // attribute value, and the real policy ends up in <body> where it does
+    // nothing. Shipped exactly that way once.
+    // Narrow to injector wrappers: reading the result, e.g. in a test, is
+    // fine — only *writing more document around it* is the hazard.
+    selector:
+      'CallExpression[callee.name=/^inject/] > CallExpression[callee.name="injectCspMeta"]',
+    message:
+      "injectCspMeta must be the outermost injection: anything applied after it can displace the policy out of <head>, and the document then ships with no CSP.",
+  },
+];
+
+/**
+ * Blocked-relay enforcement, kept out of test files.
+ *
+ * A test constructs a plain `RelayPool` and reaches single relays by name on
+ * purpose — it is testing the transport, not the user's block list, and making
+ * tests depend on global blocked state would make them order-dependent.
+ */
+const blockedRelaySyntaxRules = [
+  {
+    // Every multi-relay op in applesauce funnels through group(), so
+    // BlockingRelayPool.group() is the ONE place the NIP-51 kind-10006
+    // blocked list is enforced. `pool.relay(url)` goes straight past it
+    // and also REGISTERS the relay, which drags liveness and the auth
+    // manager along. The guarded callers each carry an eslint-disable
+    // naming their reason.
+    selector: 'CallExpression[callee.property.name="relay"]',
+    message:
+      "Direct pool.relay() bypasses BlockingRelayPool.group(), the single chokepoint enforcing the kind-10006 blocked relay list. Use pool.req/subscription/request/publish, or check isRelayBlocked() from @/services/blocked-relays first and add an eslint-disable saying so.",
+  },
+  {
+    // A plain RelayPool honours no block list. There are five pools in
+    // this tree and every one of them must be a BlockingRelayPool.
+    selector: 'NewExpression[callee.name="RelayPool"]',
+    message:
+      "Use BlockingRelayPool from @/services/blocking-relay-pool: a plain RelayPool ignores the kind-10006 blocked relay list, so anything reading through it can reach relays the user blocked.",
+  },
+];
+
 export default tseslint.config(
   // .agents holds vendored agent skills (installed via `npx skills add`);
   // .claude holds agent config and git worktrees. Neither is our source.
@@ -38,58 +121,9 @@ export default tseslint.config(
       ],
       "prettier/prettier": "error",
 
-      // applesauce v6: pool.subscription() defaults to a throwaway event store,
-      // so omitting options silently drops events. See CLAUDE.md.
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector:
-            'CallExpression[callee.object.name="pool"][callee.property.name=/^(subscription|request)$/][arguments.length<3]',
-          message:
-            "pool.subscription()/pool.request() need an options argument: pass { eventStore } so events reach the shared store (applesauce defaults to a throwaway one). For an EOSE signal use streamWithEose(), and for one-shot fetches requestEvents()/requestEvent(), from @/lib/relay-subscription.",
-        },
-        {
-          // applesauce turns `true` into repeat({ delay: () => of(null) }) — a
-          // synchronous loop, measured at >20k REQ frames/sec against a relay
-          // that CLOSEs after EOSE.
-          selector: 'Property[key.name="resubscribe"][value.value=true]',
-          message:
-            "resubscribe: true has no backoff and floods relays that close after EOSE. Pass a delay instead, e.g. { delay: 5000 }.",
-        },
-        {
-          // Vite cannot statically analyse these: it warns, never emits the
-          // chunk, and the import fails in production while working in dev.
-          selector: "ImportExpression > TemplateLiteral[expressions.length>0]",
-          message:
-            "Vite cannot analyse a template-literal dynamic import, so the chunk is never bundled and it fails in production. Use the library's own lazy registry or import.meta.glob.",
-        },
-        {
-          // A Concord plane REQ is authored by DERIVED stream keys, never the
-          // user, so applesauce's auth handling is actively wrong for it: with
-          // waitForAuth on it either deadlocks or resubscribes at round-trip
-          // speed (~17k REQ/s, measured), and requestEvents() swallows the
-          // auth-required CLOSED into an empty array, so the sweep cannot tell
-          // a gated plane from an absent one. Both failures are silent.
-          selector:
-            'Property[key.name="waitForAuth"][value.value=true], Property[key.name="waitForAuth"][value.type="Identifier"]',
-          message:
-            "Concord plane reads must keep waitForAuth: false — applesauce re-authenticates as the USER, which never satisfies a stream-authored filter. Go through planeRequest() in @/lib/concord/plane-request.",
-        },
-        {
-          // Kehto's prelude injector finds its insertion point by string-matching
-          // a policy meta. A decoy meta hidden in an attribute on <html> survives
-          // our DOM pass (attribute serialization does not escape `<`), so
-          // anything that runs after us matches the decoy, splices into the
-          // attribute value, and the real policy ends up in <body> where it does
-          // nothing. Shipped exactly that way once.
-          // Narrow to injector wrappers: reading the result, e.g. in a test, is
-          // fine — only *writing more document around it* is the hazard.
-          selector:
-            'CallExpression[callee.name=/^inject/] > CallExpression[callee.name="injectCspMeta"]',
-          message:
-            "injectCspMeta must be the outermost injection: anything applied after it can displace the policy out of <head>, and the document then ships with no CSP.",
-        },
-      ],
+      // Invariants the compiler cannot see, each one from a bug that shipped.
+      // See relaySyntaxRules and blockedRelaySyntaxRules above.
+      "no-restricted-syntax": ["error", ...relaySyntaxRules],
 
       // The whole containment argument for a pre-1.0 dependency is that a
       // breaking change lands in one file. It leaked to five before this rule
@@ -134,6 +168,22 @@ export default tseslint.config(
     // The seam itself, and the tests that pin our constants to Kehto's.
     files: ["src/services/kehto.ts", "**/*.test.{ts,tsx}"],
     rules: { "no-restricted-imports": "off" },
+  },
+  {
+    // Application code only — see blockedRelaySyntaxRules above.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "src/test/**"],
+    // Both arrays, not just the blocked-relay ones: a later flat-config
+    // object REPLACES a rule's entire options array, so listing only the new
+    // entries here silently disabled all five relaySyntaxRules in every
+    // application file — and a disabled rule reports zero errors.
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...relaySyntaxRules,
+        ...blockedRelaySyntaxRules,
+      ],
+    },
   },
   prettierConfig,
 );

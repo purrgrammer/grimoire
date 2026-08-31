@@ -7,10 +7,10 @@
  * p-tagged user's inbox relays. What was wrong is *when* it asked.
  * `selectRelaysForFilter` gives each kind:10002 one second; on a cold start it
  * loses that race, every pointer comes back with no relays, and the result is
- * AGGREGATOR_RELAYS. The hook then committed that result — phase "ready" — and
+ * FALLBACK_RELAYS. The hook then committed that result — phase "ready" — and
  * never looked again, because its effect only keyed on the filter's pubkeys.
  * The relay list arriving two seconds later changed nothing, and the window
- * queried aggregators for the rest of its life.
+ * queried fallback relays for the rest of its life.
  *
  * So there are two invariants here, and neither is visible to the compiler:
  * a pure-fallback selection must not be reported ready straight away, and a
@@ -68,6 +68,7 @@ function fallbackResult(): RelaySelectionResult {
       isFallback: true,
     })),
     isOptimized: false,
+    blocked: [],
   };
 }
 
@@ -78,6 +79,7 @@ function inboxResult(): RelaySelectionResult {
       { relay: INBOX[0], writers: [], readers: [pubkey], isFallback: false },
     ],
     isOptimized: true,
+    blocked: [],
   };
 }
 
@@ -113,7 +115,7 @@ describe("useOutboxRelays", () => {
     await waitFor(() => expect(selectRelaysForFilter).toHaveBeenCalled());
 
     // The caller (ReqViewer) subscribes only once the phase is "ready", so
-    // holding here is what keeps the REQ off the aggregators.
+    // holding here is what keeps the REQ off the fallback relays.
     expect(result.current.phase).not.toBe("ready");
   });
 

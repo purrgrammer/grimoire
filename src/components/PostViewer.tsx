@@ -43,7 +43,7 @@ import publishService, {
 import { NoteFactory } from "applesauce-common/factories";
 import { toApplesauceEmojis } from "@/lib/emoji-helpers";
 import { useGrimoire } from "@/core/state";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { use$ } from "applesauce-react/hooks";
 import { getAuthIcon } from "@/lib/relay-status-utils";
@@ -85,13 +85,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   // Get relay pool state for connection status
   const relayPoolMap = use$(pool.relays$);
 
-  // Get active account's write relays from Grimoire state, fallback to aggregators
+  // Get active account's write relays from Grimoire state, fallback to the shared fallback relays
   const writeRelays = useMemo(() => {
-    if (!state.activeAccount?.relays) return AGGREGATOR_RELAYS;
+    if (!state.activeAccount?.relays) return FALLBACK_RELAYS;
     const userWriteRelays = state.activeAccount.relays
       .filter((r) => r.write)
       .map((r) => r.url);
-    return userWriteRelays.length > 0 ? userWriteRelays : AGGREGATOR_RELAYS;
+    return userWriteRelays.length > 0 ? userWriteRelays : FALLBACK_RELAYS;
   }, [state.activeAccount?.relays]);
 
   // Update relay states when write relays change

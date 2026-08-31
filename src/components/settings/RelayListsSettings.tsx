@@ -24,6 +24,9 @@ import { useAccount } from "@/hooks/useAccount";
 import { useRelayInfo } from "@/hooks/useRelayInfo";
 import { publishEvent } from "@/services/hub";
 import accountManager from "@/services/accounts";
+import { NostrConnectSigner } from "applesauce-signers";
+import { normalizeRelayURL } from "@/lib/relay-url";
+import { useGrimoire } from "@/core/state";
 import { cn } from "@/lib/utils";
 import {
   type RelayEntry,
@@ -36,6 +39,50 @@ import {
   getRelayMode,
   modeToFlags,
 } from "@/lib/relay-list-utils";
+
+/**
+ * Warns when a newly blocked relay is one the app itself depends on.
+ *
+ * Not a refusal: the user's list is the user's list. But a silent brick is not
+ * an acceptable way to honour it.
+ */
+function warnIfBlockingOwnInfrastructure(
+  blockedDraft: RelayEntry[],
+  walletRelays: string[],
+) {
+  if (blockedDraft.length === 0) return;
+
+  const blocked = new Set(blockedDraft.map((entry) => entry.url));
+  const account = accountManager.active$.value;
+
+  const signerRelays: string[] =
+    account?.signer instanceof NostrConnectSigner ? account.signer.relays : [];
+
+  const collide = (relays: string[]) =>
+    relays.filter((url) => {
+      try {
+        return blocked.has(normalizeRelayURL(url));
+      } catch {
+        return false;
+      }
+    });
+
+  const signerHits = collide(signerRelays);
+  if (signerHits.length > 0) {
+    toast.warning(
+      `Blocked your remote signer's relay (${signerHits.join(", ")}). Signing will stop working until you unblock it.`,
+      { duration: 12000 },
+    );
+  }
+
+  const walletHits = collide(walletRelays);
+  if (walletHits.length > 0) {
+    toast.warning(
+      `Blocked your wallet's relay (${walletHits.join(", ")}). The wallet will stop responding until you unblock it.`,
+      { duration: 12000 },
+    );
+  }
+}
 
 // --- Config ---
 
@@ -363,6 +410,8 @@ function RelayListAccordion({
 
 export function RelayListsSettings() {
   const { pubkey, canSign } = useAccount();
+  const { state } = useGrimoire();
+  const walletRelays = state.nwcConnection?.relays;
   const eventStore = useEventStore();
   const [saving, setSaving] = useState(false);
 
@@ -488,6 +537,13 @@ export function RelayListsSettings() {
       }
 
       toast.success("Relay lists updated");
+
+      // Blocking is enforced for real now, so blocking your own remote signer's
+      // relay stops you signing anything and blocking your wallet relay stops
+      // the wallet — both of which look like the app breaking for no reason.
+      // This is the last point where the user still has the context to connect
+      // cause and effect.
+      warnIfBlockingOwnInfrastructure(drafts[10006] ?? [], walletRelays ?? []);
     } catch (err) {
       console.error("Failed to publish relay lists:", err);
       toast.error(
@@ -496,7 +552,7 @@ export function RelayListsSettings() {
     } finally {
       setSaving(false);
     }
-  }, [canSign, saving, drafts, dirtyKinds]);
+  }, [canSign, saving, drafts, dirtyKinds, walletRelays]);
 
   if (!pubkey) {
     return (

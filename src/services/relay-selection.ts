@@ -21,15 +21,17 @@ import {
   mergeRelaySets,
 } from "applesauce-core/helpers";
 import { selectOptimalRelays } from "applesauce-core/helpers";
-import { addressLoader, AGGREGATOR_RELAYS } from "./loaders";
+import { addressLoader, FALLBACK_RELAYS } from "./loaders";
 import { parseReplaceableAddress } from "applesauce-core/helpers/pointers";
 import { getRepositoryRelays } from "@/lib/nip34-helpers";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import liveness from "./relay-liveness";
+import { isRelayBlocked, filterBlockedRelays } from "./blocked-relays";
 import eventStore from "./event-store";
 import accountManager from "./accounts";
 import relayListCache from "./relay-list-cache";
 import type {
+  BlockedRelayExclusion,
   RelaySelectionResult,
   RelaySelectionReasoning,
   RelaySelectionOptions,
@@ -63,13 +65,68 @@ export async function fetchRelayList(
 }
 
 /**
+ * Collects blocked relays a selection had to drop, and who wanted them.
+ *
+ * A callback rather than a return value because `sanitizeRelays` runs once per
+ * pubkey, deep inside the outbox/inbox helpers, and the caller needs the union.
+ */
+type BlockedRecorder = (relay: string) => void;
+
+interface BlockedCollector {
+  /** A recorder that attributes drops to `pubkey` in the given role. */
+  for: (pubkey: string, role: "writers" | "readers") => BlockedRecorder;
+  /** Records a blocked fallback relay, which no pubkey listed. */
+  noteFallback: (relay: string) => void;
+  /** Everything dropped so far, as the selection result reports it. */
+  result: () => BlockedRelayExclusion[];
+}
+
+function createBlockedCollector(): BlockedCollector {
+  const byRelay = new Map<
+    string,
+    { writers: Set<string>; readers: Set<string> }
+  >();
+
+  const entry = (relay: string) => {
+    let found = byRelay.get(relay);
+    if (!found) {
+      found = { writers: new Set(), readers: new Set() };
+      byRelay.set(relay, found);
+    }
+    return found;
+  };
+
+  return {
+    for: (pubkey, role) => (relay) => entry(relay)[role].add(pubkey),
+    noteFallback: (relay) => void entry(relay),
+    result: () =>
+      [...byRelay.entries()].map(([relay, { writers, readers }]) => ({
+        relay,
+        writers: [...writers],
+        readers: [...readers],
+      })),
+  };
+}
+
+/**
  * Sanitizes relay URLs by removing localhost and TOR relays
  *
  * @param relays - Array of relay URLs
  * @returns Filtered array without localhost or TOR relays
  */
-function sanitizeRelays(relays: string[]): string[] {
+function sanitizeRelays(relays: string[], record?: BlockedRecorder): string[] {
   return relays.filter((url) => {
+    // Relays the user blocked (NIP-51 kind 10006). Filtered HERE, as the first
+    // check, rather than after the liveness pass below: every caller follows
+    // `liveness.filter()` with an "if that emptied the list, use the sanitized
+    // set anyway" fallback, and a blocked relay must not come back through it.
+    // Reported through `record` rather than dropped silently, so the query can
+    // say which of its contacts' relays it skipped and why.
+    if (isRelayBlocked(url)) {
+      record?.(url);
+      return false;
+    }
+
     // Remove localhost relays (ws://localhost, ws://127.0.0.1, ws://[::1])
     if (/^wss?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(url)) {
       console.debug(`[RelaySelection] Filtered localhost relay: ${url}`);
@@ -129,6 +186,7 @@ function deriveAuthorsFromEventRefs(
 async function getOutboxRelaysForPubkey(
   eventStore: IEventStore,
   pubkey: string,
+  record?: BlockedRecorder,
 ): Promise<string[]> {
   try {
     // Check cache first
@@ -138,7 +196,7 @@ async function getOutboxRelaysForPubkey(
         `[RelaySelection] Using cached outbox relays for ${pubkey.slice(0, 8)} (${cachedRelays.length} relays)`,
       );
       // Apply sanity filters (remove localhost, TOR)
-      const sanitized = sanitizeRelays(cachedRelays);
+      const sanitized = sanitizeRelays(cachedRelays, record);
 
       // Still filter for health even if cached
       try {
@@ -184,7 +242,7 @@ async function getOutboxRelaysForPubkey(
       .filter((url): url is string => url !== null);
 
     // Apply sanity filters (remove localhost, TOR)
-    const sanitized = sanitizeRelays(normalized);
+    const sanitized = sanitizeRelays(normalized, record);
 
     // Filter unhealthy relays (dead/blacklisted)
     try {
@@ -226,6 +284,7 @@ async function getOutboxRelaysForPubkey(
 async function getInboxRelaysForPubkey(
   eventStore: IEventStore,
   pubkey: string,
+  record?: BlockedRecorder,
 ): Promise<string[]> {
   try {
     // Check cache first
@@ -235,7 +294,7 @@ async function getInboxRelaysForPubkey(
         `[RelaySelection] Using cached inbox relays for ${pubkey.slice(0, 8)} (${cachedRelays.length} relays)`,
       );
       // Apply sanity filters (remove localhost, TOR)
-      const sanitized = sanitizeRelays(cachedRelays);
+      const sanitized = sanitizeRelays(cachedRelays, record);
 
       // Still filter for health even if cached
       try {
@@ -281,7 +340,7 @@ async function getInboxRelaysForPubkey(
       .filter((url): url is string => url !== null);
 
     // Apply sanity filters (remove localhost, TOR)
-    const sanitized = sanitizeRelays(normalized);
+    const sanitized = sanitizeRelays(normalized, record);
 
     // Filter unhealthy relays (dead/blacklisted)
     try {
@@ -369,7 +428,10 @@ function buildReasoning(
  * @param fallbackRelays - Relay URLs to use as fallback
  * @returns RelaySelectionResult with fallback relays
  */
-function createFallbackResult(fallbackRelays: string[]): RelaySelectionResult {
+function createFallbackResult(
+  fallbackRelays: string[],
+  blocked: BlockedRelayExclusion[] = [],
+): RelaySelectionResult {
   return {
     relays: fallbackRelays,
     reasoning: fallbackRelays.map((relay) => ({
@@ -379,6 +441,7 @@ function createFallbackResult(fallbackRelays: string[]): RelaySelectionResult {
       isFallback: true,
     })),
     isOptimized: false,
+    blocked,
   };
 }
 
@@ -413,9 +476,21 @@ export async function selectRelaysForFilter(
   const {
     maxRelays = 42,
     maxRelaysPerUser = 6,
-    fallbackRelays = AGGREGATOR_RELAYS,
+    fallbackRelays: rawFallbackRelays = FALLBACK_RELAYS,
     timeout = 1000,
   } = options;
+
+  const blockedCollector = createBlockedCollector();
+
+  // The fallback path never reaches `sanitizeRelays`, so a blocked fallback relay
+  // would come back through it — the one route by which a relay the user
+  // blocked could still end up in a selection result. Recorded with no writers
+  // or readers: nobody listed it, it is just where we would have looked.
+  const fallbackRelays = rawFallbackRelays.filter((url) => {
+    if (!isRelayBlocked(url)) return true;
+    blockedCollector.noteFallback(url);
+    return false;
+  });
 
   // Extract pubkeys from filter
   let authors = filter.authors || [];
@@ -433,7 +508,7 @@ export async function selectRelaysForFilter(
       console.debug(
         "[RelaySelection] No authors, #p tags, or event refs, using fallback relays",
       );
-      return createFallbackResult(fallbackRelays);
+      return createFallbackResult(fallbackRelays, blockedCollector.result());
     }
   }
 
@@ -452,7 +527,11 @@ export async function selectRelaysForFilter(
   // Take up to maxRelaysPerUser for each user to ensure redundancy
   const authorPointers: ProfilePointer[] = await Promise.all(
     authors.map(async (pubkey) => {
-      const relays = await getOutboxRelaysForPubkey(eventStore, pubkey);
+      const relays = await getOutboxRelaysForPubkey(
+        eventStore,
+        pubkey,
+        blockedCollector.for(pubkey, "writers"),
+      );
       return {
         pubkey,
         relays: relays.slice(0, maxRelaysPerUser),
@@ -462,7 +541,11 @@ export async function selectRelaysForFilter(
 
   const pTagPointers: ProfilePointer[] = await Promise.all(
     pTags.map(async (pubkey) => {
-      const relays = await getInboxRelaysForPubkey(eventStore, pubkey);
+      const relays = await getInboxRelaysForPubkey(
+        eventStore,
+        pubkey,
+        blockedCollector.for(pubkey, "readers"),
+      );
       return {
         pubkey,
         relays: relays.slice(0, maxRelaysPerUser),
@@ -503,7 +586,7 @@ export async function selectRelaysForFilter(
     console.debug(
       "[RelaySelection] All users have no relay lists, using fallback",
     );
-    return createFallbackResult(fallbackRelays);
+    return createFallbackResult(fallbackRelays, blockedCollector.result());
   }
 
   // When both authors and p-tags exist, select from each group separately
@@ -591,6 +674,7 @@ export async function selectRelaysForFilter(
     relays,
     reasoning,
     isOptimized: true,
+    blocked: blockedCollector.result(),
   };
 }
 
@@ -601,7 +685,7 @@ export async function selectRelaysForFilter(
  * 1. Author's outbox relays (kind 10002)
  * 2. Caller-provided write relays (e.g. from Grimoire state)
  * 3. Additional relay hints (seen relays, explicit hints)
- * 4. Aggregator relays (fallback)
+ * 4. Fallback relays
  *
  * @param authorPubkey - Pubkey of the event author
  * @param options - Write relays and hints to merge
@@ -631,10 +715,12 @@ export async function selectRelaysForPublish(
     relaySets.push(relayHints);
   }
 
-  // 4. Aggregator relays as fallback
-  relaySets.push(AGGREGATOR_RELAYS);
+  // 4. Fallback relays
+  relaySets.push(FALLBACK_RELAYS);
 
-  return mergeRelaySets(...relaySets);
+  // This path reads `relayListCache` directly and never calls
+  // `sanitizeRelays`, so it filters here or not at all.
+  return filterBlockedRelays(mergeRelaySets(...relaySets));
 }
 
 /** Maximum number of relays for interactions */
@@ -649,7 +735,7 @@ const MIN_RELAYS_PER_PARTY = 3;
  * Strategy per NIP-65:
  * - Author's outbox relays: where we publish our content
  * - Target's inbox relays: where the target reads mentions/interactions
- * - Fallback aggregators if neither has preferences
+ * - Fallback relays if neither has preferences
  *
  * @param authorPubkey - Pubkey of the interaction author (person reacting/replying)
  * @param targetPubkey - Pubkey of the target (person being reacted to/replied to)
@@ -682,16 +768,23 @@ export async function selectRelaysForInteraction(
   // Build relay list with priority ordering using mergeRelaySets
   // Priority: first N from each party, then remaining from each
   // mergeRelaySets handles deduplication and normalization
-  const relays = mergeRelaySets(
-    outboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
-    inboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
-    outboxRelays.slice(MIN_RELAYS_PER_PARTY),
-    inboxRelays.slice(MIN_RELAYS_PER_PARTY),
+  const relays = filterBlockedRelays(
+    mergeRelaySets(
+      outboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
+      inboxRelays.slice(0, MIN_RELAYS_PER_PARTY),
+      outboxRelays.slice(MIN_RELAYS_PER_PARTY),
+      inboxRelays.slice(MIN_RELAYS_PER_PARTY),
+    ),
   ).slice(0, MAX_INTERACTION_RELAYS);
 
-  // Fallback to aggregator relays if empty
+  // Fallback to fallback relays if empty. Filtered too — a fallback that
+  // reintroduces a blocked relay is the whole reason this list is checked in
+  // more than one place.
   if (relays.length === 0) {
-    return AGGREGATOR_RELAYS.slice(0, MAX_INTERACTION_RELAYS);
+    return filterBlockedRelays(FALLBACK_RELAYS).slice(
+      0,
+      MAX_INTERACTION_RELAYS,
+    );
   }
 
   return relays;
@@ -744,9 +837,9 @@ export async function selectRelaysForCommentThread(
   // Merge + fallback
   let relays = mergeRelaySets(...relaySets);
   if (relays.length < 3) {
-    relays = mergeRelaySets(relays, AGGREGATOR_RELAYS);
+    relays = mergeRelaySets(relays, FALLBACK_RELAYS);
   }
-  return relays.slice(0, 10);
+  return filterBlockedRelays(relays).slice(0, 10);
 }
 
 /**

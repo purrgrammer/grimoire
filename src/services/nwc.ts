@@ -12,17 +12,19 @@
  */
 
 import { WalletConnect } from "applesauce-wallet-connect";
-import { RelayPool } from "applesauce-relay";
+import { parseWalletConnectURI } from "applesauce-wallet-connect/helpers";
 import type { NWCConnection } from "@/types/app";
 import {
   type TransactionsState,
   INITIAL_TRANSACTIONS_STATE,
 } from "@/types/wallet";
 import { BehaviorSubject, Subscription, firstValueFrom, timeout } from "rxjs";
+import { BlockingRelayPool } from "./blocking-relay-pool";
+import { blocked$, isRelayBlocked } from "./blocked-relays";
 
 // Dedicated relay pool for NWC — isolated from the shared app pool and relay
 // liveness tracking, which can deprioritize or skip the wallet relay
-const nwcPool = new RelayPool();
+const nwcPool = new BlockingRelayPool();
 WalletConnect.pool = nwcPool;
 
 // Internal state
@@ -143,6 +145,50 @@ function subscribeToNotifications(wallet: WalletConnect) {
  * Creates a new wallet connection from a NWC URI.
  * Used when user connects a new wallet.
  */
+/**
+ * The relays the live wallet connection uses, for the blocked-relay watcher.
+ *
+ * `WalletConnect` does not expose its relays on the instance, so they are
+ * recorded here when a connection is restored.
+ */
+let activeWalletRelays: string[] = [];
+
+/**
+ * Reports a wallet whose every relay is blocked as a connection error.
+ *
+ * A wallet relay is infrastructure the user configured deliberately, not spam
+ * they stumbled into — but the block is still honoured, because "never connect"
+ * would mean nothing otherwise. What must not happen is honouring it silently:
+ * the pool drops the relay, every NWC request goes to a zero-relay group, and
+ * the wallet stops answering while still reporting "connected".
+ *
+ * Checked reactively rather than once at restore. `restoreWallet` runs on mount
+ * (`useWallet`), which is before the kind-10006 event has arrived over the
+ * network, so a one-shot check almost always sees an empty set — and the prune
+ * that follows would then kill the socket behind a wallet claiming to be
+ * connected.
+ */
+function failIfWalletRelaysBlocked(relays: string[]): boolean {
+  if (relays.length === 0) return false;
+  if (!relays.every((url) => isRelayBlocked(url))) return false;
+
+  lastError$.next(
+    new Error(
+      `Every wallet relay is on your blocked relays list (kind 10006): ${relays.join(", ")}`,
+    ),
+  );
+  connectionStatus$.next("error");
+  return true;
+}
+
+// Re-checked whenever the list changes, including the arrival that follows
+// startup. Only ever downgrades a live wallet to "error"; it never claims a
+// wallet is healthy.
+blocked$.subscribe(() => {
+  if (wallet$.value === null) return;
+  failIfWalletRelaysBlocked(activeWalletRelays);
+});
+
 export function createWalletFromURI(connectionString: string): WalletConnect {
   connectionStatus$.next("connecting");
   lastError$.next(null);
@@ -150,8 +196,24 @@ export function createWalletFromURI(connectionString: string): WalletConnect {
   const wallet = WalletConnect.fromConnectURI(connectionString);
   wallet$.next(wallet);
 
+  // Recorded here too, not only in `restoreWallet`. `WalletConnect` does not
+  // expose its relays on the instance, and leaving this stale meant two
+  // failures: a newly connected wallet whose only relay is blocked reported
+  // nothing (the empty-list early return below swallowed it), and blocking the
+  // PREVIOUS wallet's relay reported the new, working wallet as broken.
+  try {
+    activeWalletRelays = parseWalletConnectURI(connectionString).relays;
+  } catch {
+    // An unparseable URI is the dialog's problem, not ours; fromConnectURI
+    // above would already have thrown for anything truly malformed.
+    activeWalletRelays = [];
+  }
+
   supportSubscription?.unsubscribe();
   supportSubscription = wallet.support$.subscribe();
+
+  if (failIfWalletRelaysBlocked(activeWalletRelays)) return wallet;
+
   subscribeToNotifications(wallet);
   refreshBalance(); // Fetch initial balance
 
@@ -175,6 +237,7 @@ export async function restoreWallet(
   });
 
   wallet$.next(wallet);
+  activeWalletRelays = connection.relays;
 
   supportSubscription?.unsubscribe();
   supportSubscription = wallet.support$.subscribe();
@@ -183,6 +246,12 @@ export async function restoreWallet(
   if (connection.balance !== undefined) {
     balance$.next(connection.balance);
   }
+
+  // After the teardown and the cached-balance display above, so reporting a
+  // blocked relay cannot skip either. Returning here avoids sitting in
+  // "connecting" for the 10s validation timeout and then reporting a
+  // meaningless "Connection timeout".
+  if (failIfWalletRelaysBlocked(connection.relays)) return wallet;
 
   // Validate connection by waiting for support info
   try {
@@ -226,6 +295,7 @@ export function clearWallet(): void {
     notificationRetryTimeout = null;
   }
 
+  activeWalletRelays = [];
   wallet$.next(null);
   balance$.next(undefined);
   connectionStatus$.next("disconnected");

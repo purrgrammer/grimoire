@@ -33,8 +33,8 @@
  * small.
  */
 
-import { RelayPool } from "applesauce-relay";
+import { BlockingRelayPool } from "./blocking-relay-pool";
 
-const concordPool = new RelayPool();
+const concordPool = new BlockingRelayPool();
 
 export default concordPool;

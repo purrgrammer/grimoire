@@ -110,7 +110,7 @@ export function ChatMessageContextMenu({
    * Whether this message's id can be handed outward at all.
    *
    * A private message's id is a rumor id: it exists on no relay, so "Open
-   * Event" fetches `{ids:[…]}` from the aggregators and "Copy ID" produces an
+   * Event" fetches `{ids:[…]}` from the fallback relays and "Copy ID" produces an
    * `nevent` that any client will try to resolve. Either one announces to a
    * relay that the conversation happened — which is precisely what the gift
    * wrap around it was for.

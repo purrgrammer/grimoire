@@ -79,9 +79,11 @@ export function normalizeRelayURL(url: string): string {
   }
 
   try {
-    // Ensure protocol
+    // Ensure protocol. The check is case-insensitive: a `WSS://` URL used to
+    // have `wss://` prepended, producing garbage that compared equal to nothing
+    // — which for the blocked-relay list was an evasion vector.
     let normalized = trimmed;
-    if (!normalized.startsWith("ws://") && !normalized.startsWith("wss://")) {
+    if (!/^wss?:\/\//i.test(normalized)) {
       normalized = `wss://${normalized}`;
     }
 

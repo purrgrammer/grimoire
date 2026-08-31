@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
 import { relayListCache } from "@/services/relay-list-cache";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { useLiveTimeline } from "@/hooks/useLiveTimeline";
 
 interface ZapstoreAppDetailRendererProps {
@@ -171,7 +171,7 @@ export function ZapstoreAppDetailRenderer({
   // Build relay list for fetching releases:
   // 1. Seen relays (where we received this app event)
   // 2. Publisher's outbox relays (NIP-65)
-  // 3. Aggregator relays (fallback)
+  // 3. Fallback relays
   const relays = useMemo(() => {
     const relaySet = new Set<string>();
 
@@ -191,8 +191,8 @@ export function ZapstoreAppDetailRenderer({
       }
     }
 
-    // Add aggregator relays
-    for (const relay of AGGREGATOR_RELAYS) {
+    // Add fallback relays
+    for (const relay of FALLBACK_RELAYS) {
       relaySet.add(relay);
     }
 

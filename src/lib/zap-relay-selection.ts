@@ -7,11 +7,11 @@
  * Priority order:
  * 1. Recipient's inbox (read) relays - so recipient sees the zap
  * 2. Sender's inbox (read) relays - so sender can verify the zap receipt
- * 3. Fallback aggregator relays - if neither party has relay preferences
+ * 3. Fallback fallback relays - if neither party has relay preferences
  */
 
 import { relayListCache } from "@/services/relay-list-cache";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 
 /** Maximum number of relays to include in zap request */
 const MAX_ZAP_RELAYS = 10;
@@ -45,7 +45,7 @@ export interface ZapRelaySelectionResult {
  * Strategy:
  * - Prioritize recipient's inbox relays (they need to see the zap)
  * - Add sender's inbox relays (they want to verify/see the receipt)
- * - Use fallback aggregators if neither has preferences
+ * - Use fallback relays if neither has preferences
  * - Deduplicate and limit to MAX_ZAP_RELAYS
  */
 export async function selectZapRelays(
@@ -110,10 +110,10 @@ export async function selectZapRelays(
     relaySet.add(relay);
   }
 
-  // Fallback to aggregator relays if we don't have enough
+  // Fallback to fallback relays if we don't have enough
   if (relaySet.size === 0) {
-    sources.fallback = [...AGGREGATOR_RELAYS];
-    for (const relay of AGGREGATOR_RELAYS) {
+    sources.fallback = [...FALLBACK_RELAYS];
+    for (const relay of FALLBACK_RELAYS) {
       if (relaySet.size >= MAX_ZAP_RELAYS) break;
       relaySet.add(relay);
     }

@@ -24,6 +24,7 @@
 
 import { Subscription } from "rxjs";
 import pool from "./relay-pool";
+import { isRelayBlocked } from "./blocked-relays";
 import { normalizeRelayURL } from "@/lib/relay-url";
 
 /**
@@ -52,6 +53,13 @@ export function authenticateDmRelays(relays: string[]): Subscription {
       if (subscription.closed) return;
 
       for (const url of urls) {
+        // Never hand a blocked relay to the auth manager: `pool.relay()`
+        // registers it, and authenticating identifies the user to a relay they
+        // asked never to be connected to.
+        if (isRelayBlocked(url)) continue;
+
+        // NIP-42 is per-socket; blocked relays are skipped by the continue above.
+        // eslint-disable-next-line no-restricted-syntax
         const relay = pool.relay(url);
         // Idempotent, and required: the manager only knows about relays it has
         // been handed, and one reached for the first time by a DM read has

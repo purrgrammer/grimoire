@@ -8,6 +8,7 @@ import type {
 } from "@/types/relay-state";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import pool from "./relay-pool";
+import { isRelayBlocked } from "./blocked-relays";
 import relayAuthManager from "./relay-auth";
 
 const MAX_NOTICES = 20;
@@ -67,6 +68,19 @@ class RelayStateManager {
       this.monitorRelay(relay);
     });
 
+    // Drop a relay's state when it leaves the pool. Nothing did this before, so
+    // every removed relay leaked its subscription and lingered in the UI as a
+    // permanently `disconnected` row. Pruning a blocked relay made that visible:
+    // the relay the user just blocked would sit in the list forever.
+    const removeSub = pool.remove$.subscribe((relay) => {
+      this.removeRelay(relay.url);
+    });
+    const previousAuthUnsubscribe = this.authUnsubscribe;
+    this.authUnsubscribe = () => {
+      previousAuthUnsubscribe?.();
+      removeSub.unsubscribe();
+    };
+
     // Poll for new relays every second and store interval ID for cleanup
     this.pollingIntervalId = setInterval(() => {
       pool.relays.forEach((relay) => {
@@ -84,6 +98,15 @@ class RelayStateManager {
   ensureRelayMonitored(relayUrl: string): boolean {
     try {
       const normalizedUrl = normalizeRelayURL(relayUrl);
+
+      // `pool.relay()` CREATES and registers the relay, which fires `add$` and
+      // brings liveness and the auth manager along with it. Without this guard
+      // the 1s poll below would also re-adopt a relay the moment it is pruned,
+      // and the two would fight forever.
+      if (isRelayBlocked(normalizedUrl)) return false;
+
+      // monitoring reaches a relay by name; guarded by the isRelayBlocked() check above.
+      // eslint-disable-next-line no-restricted-syntax
       const relay = pool.relay(normalizedUrl);
       if (relay && !this.subscriptions.has(relay.url)) {
         this.monitorRelay(relay);
@@ -98,6 +121,29 @@ class RelayStateManager {
   /**
    * Subscribe to a single relay's observables
    */
+  /**
+   * Stop tracking a relay and forget its state.
+   *
+   * Driven by `pool.remove$`, so it covers every removal — a pruned blocked
+   * relay, or any other. Without it `subscriptions` and `relayStates` only ever
+   * grew, and a removed relay stayed in the UI as a dead row.
+   */
+  removeRelay(url: string) {
+    const unsubscribe = this.subscriptions.get(url);
+    if (unsubscribe) {
+      try {
+        unsubscribe();
+      } catch {
+        /* a relay already torn down is still worth forgetting */
+      }
+    }
+
+    const tracked = this.subscriptions.delete(url);
+    const hadState = this.relayStates.delete(url);
+
+    if (tracked || hadState) this.notifyListeners();
+  }
+
   private monitorRelay(relay: Relay) {
     const url = relay.url;
 

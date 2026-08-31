@@ -8,9 +8,9 @@ vi.mock("@/services/relay-list-cache", () => ({
   },
 }));
 
-// Mock the loaders for AGGREGATOR_RELAYS
+// Mock the loaders for FALLBACK_RELAYS
 vi.mock("@/services/loaders", () => ({
-  AGGREGATOR_RELAYS: [
+  FALLBACK_RELAYS: [
     "wss://nos.lol/",
     "wss://relay.snort.social/",
     "wss://relay.primal.net/",

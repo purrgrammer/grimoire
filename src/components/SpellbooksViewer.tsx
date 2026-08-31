@@ -43,7 +43,7 @@ import { parseSpellbook } from "@/lib/spellbook-manager";
 import type { SpellbookEvent, ParsedSpellbook } from "@/types/spell";
 import { SPELLBOOK_KIND } from "@/constants/kinds";
 import { UserName } from "./nostr/UserName";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { lastValueFrom } from "rxjs";
 import { nip19 } from "nostr-tools";
 import type { AddressPointer } from "nostr-tools/nip19";
@@ -292,7 +292,7 @@ export function SpellbooksViewer() {
     useReqTimeline(
       filterType === "discover" ? "discover-spellbooks" : "none",
       filterType === "discover" ? { kinds: [SPELLBOOK_KIND], limit: 50 } : [],
-      AGGREGATOR_RELAYS,
+      FALLBACK_RELAYS,
       { stream: true },
     );
 

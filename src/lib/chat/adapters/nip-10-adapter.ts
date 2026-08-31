@@ -29,7 +29,7 @@ import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
 import { settingsManager } from "@/services/settings";
 import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import { getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
@@ -671,9 +671,9 @@ export class Nip10Adapter extends ChatProtocolAdapter {
     // Merge all relay sets (handles deduplication and normalization)
     let relays = mergeRelaySets(...relaySets);
 
-    // 6. Fallback to aggregator relays if we have too few
+    // 6. Fallback to fallback relays if we have too few
     if (relays.length < 3) {
-      relays = mergeRelaySets(relays, AGGREGATOR_RELAYS);
+      relays = mergeRelaySets(relays, FALLBACK_RELAYS);
     }
 
     // Limit to 10 relays max for performance
@@ -735,8 +735,8 @@ export class Nip10Adapter extends ChatProtocolAdapter {
       if (outbox.length > 0) return outbox.slice(0, 5);
     }
 
-    // Fallback to aggregator relays
-    return AGGREGATOR_RELAYS;
+    // Fallback to fallback relays
+    return FALLBACK_RELAYS;
   }
 
   /**

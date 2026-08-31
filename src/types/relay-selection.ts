@@ -17,6 +17,29 @@ export interface RelaySelectionResult {
 
   /** True if using NIP-65 optimization, false if using fallback */
   isOptimized: boolean;
+
+  /**
+   * Relays this selection dropped because they are on the user's NIP-51
+   * kind-10006 blocked list.
+   *
+   * Recorded rather than silently discarded: without it a `$contacts` query
+   * reports "42 relays" with no hint that six of the relays its contacts
+   * actually publish to were skipped, which reads as missing coverage with no
+   * cause. Required, not optional, so a new selection path cannot forget it.
+   */
+  blocked: BlockedRelayExclusion[];
+}
+
+/** A relay excluded from a selection by the blocked-relay list, and who wanted it. */
+export interface BlockedRelayExclusion {
+  /** Relay URL (normalized) */
+  relay: string;
+
+  /** Pubkeys that publish here (outbox), and so lose coverage */
+  writers: string[];
+
+  /** Pubkeys that read here (inbox) */
+  readers: string[];
 }
 
 /**

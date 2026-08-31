@@ -36,15 +36,15 @@ import type {
 export type RelaySelectionPhase = "discovering" | "selecting" | "ready";
 
 /**
- * How long to keep waiting for a kind:10002 before committing to aggregators.
+ * How long to keep waiting for a kind:10002 before committing to the fallback relays.
  *
  * `selectRelaysForFilter` gives each relay list one second, which a cold start
  * routinely loses: Dexie is empty, the EventStore has not been filled yet, and
  * every pointer comes back with no relays — so the whole query falls back to
- * AGGREGATOR_RELAYS. Committing that immediately sends the REQ to relays the
+ * FALLBACK_RELAYS. Committing that immediately sends the REQ to relays the
  * user never listed (the `req -p $me` → relay.primal.net report). Instead hold
  * the selection unready until either the relay list lands (see the kind:10002
- * watch below) or this deadline passes, at which point aggregators really are
+ * watch below) or this deadline passes, at which point the fallback relays really are
  * the only answer left.
  */
 const FALLBACK_GRACE_MS = 5000;
@@ -69,6 +69,7 @@ export function useOutboxRelays(
     relays: options?.fallbackRelays || [],
     reasoning: [],
     isOptimized: false,
+    blocked: [],
   });
   const [loading, setLoading] = useState(true);
   const [phase, setPhase] = useState<RelaySelectionPhase>("discovering");
@@ -194,7 +195,7 @@ export function useOutboxRelays(
 
         // `isOptimized: false` means every pubkey in the filter came back
         // without a relay list, so `selection.relays` is nothing but
-        // aggregators. Stay unready (the caller subscribes to no relays) until
+        // fallback relays. Stay unready (the caller subscribes to no relays) until
         // the grace period runs out — a kind:10002 arrival re-runs this effect.
         const isPureFallback = !selection.isOptimized && pubkeys.length > 0;
         const graceExpired =

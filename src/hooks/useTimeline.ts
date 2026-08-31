@@ -3,7 +3,7 @@ import type { NostrEvent, Filter } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
 import { createTimelineLoader } from "@/services/loaders";
 import pool from "@/services/relay-pool";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { useStableValue, useStableArray } from "./useStable";
 
 interface UseTimelineOptions {
@@ -46,7 +46,7 @@ export function useTimeline(
 
     const loader = createTimelineLoader(
       pool,
-      relays.concat(AGGREGATOR_RELAYS),
+      relays.concat(FALLBACK_RELAYS),
       filters,
       {
         eventStore,

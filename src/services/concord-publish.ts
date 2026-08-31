@@ -49,6 +49,7 @@ import { map, take, timeout } from "rxjs/operators";
 import type { NostrEvent } from "nostr-tools";
 
 import concordPool from "@/services/concord-relay-pool";
+import { isRelayBlocked } from "./blocked-relays";
 
 /** How long to wait for the first accepting relay. */
 export const PUBLISH_TIMEOUT_MS = 15_000;
@@ -66,9 +67,22 @@ function publishToRelay(
   wrap: NostrEvent,
   timeoutMs: number,
 ): Promise<{ ok: boolean; message: string }> {
+  // Single-relay by name, so the pool's group() filter never sees it. Resolved
+  // as a rejection rather than skipped: the caller reports which relays took a
+  // wrap and which did not.
+  if (isRelayBlocked(url)) {
+    return Promise.resolve({
+      ok: false,
+      message: "relay is on your blocked relays list (kind 10006)",
+    });
+  }
+
+  // One relay's answer for one wrap; blocked relays are rejected above.
+  // eslint-disable-next-line no-restricted-syntax
+  const relay = concordPool.relay(url);
+
   return firstValueFrom(
-    concordPool
-      .relay(url)
+    relay
       .multiplex(
         () => ["EVENT", wrap],
         // Unsubscribe has nothing to say about an EVENT — there is no

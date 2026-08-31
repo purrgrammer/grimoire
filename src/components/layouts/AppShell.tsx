@@ -3,6 +3,7 @@ import { Terminal } from "lucide-react";
 import { useAccountSync } from "@/hooks/useAccountSync";
 import { useDmIngest } from "@/hooks/useDmIngest";
 import { useRelayListCacheSync } from "@/hooks/useRelayListCacheSync";
+import { useBlockedRelaysSync } from "@/hooks/useBlockedRelaysSync";
 import { useBlossomServerCacheSync } from "@/hooks/useBlossomServerCacheSync";
 import { useEmojiSearchSync } from "@/hooks/useEmojiSearchSync";
 import { useFavoriteListsSync } from "@/hooks/useFavoriteListsSync";
@@ -38,6 +39,10 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
   // conversation, an agent transcript — is then a pure reader of the local
   // mirror, which is what they all claim to be.
   useDmIngest();
+
+  // Enforce the kind:10006 blocked relay list. Must be mounted app-wide: the
+  // pools read the set synchronously on every read and publish.
+  useBlockedRelaysSync();
 
   // Auto-cache kind:10002 relay lists from EventStore to Dexie
   useRelayListCacheSync();

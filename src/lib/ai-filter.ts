@@ -5,7 +5,11 @@ import { isValidRelayURL } from "./relay-url";
 
 import accountManager from "@/services/accounts";
 import eventStore from "@/services/event-store";
-import { AGGREGATOR_RELAYS, addressLoader } from "@/services/loaders";
+import {
+  FALLBACK_RELAYS,
+  INDEXER_RELAYS,
+  addressLoader,
+} from "@/services/loaders";
 import type { NostrFilter } from "@/types/nostr";
 
 /**
@@ -131,7 +135,7 @@ export function sanitizeFilter(args: unknown): SanitizedFilter {
  * right answer; `SEARCH_RELAY_FALLBACK` is for an account that has never set one.
  */
 function defaultRelays(filter: NostrFilter): string[] {
-  if (typeof filter.search !== "string") return AGGREGATOR_RELAYS;
+  if (typeof filter.search !== "string") return FALLBACK_RELAYS;
   const configured = searchRelays();
   return configured.length > 0 ? configured : [SEARCH_RELAY_FALLBACK];
 }
@@ -252,7 +256,7 @@ async function loadContacts(pubkey: string): Promise<string[]> {
 
   try {
     const event = await firstValueFrom(
-      addressLoader({ kind: 3, pubkey, relays: AGGREGATOR_RELAYS }).pipe(
+      addressLoader({ kind: 3, pubkey, relays: INDEXER_RELAYS }).pipe(
         timeout(CONTACTS_TIMEOUT),
         take(1),
       ),

@@ -7,6 +7,11 @@ import type {
   RelayReqOptions,
 } from "applesauce-relay";
 import { normalizeURL } from "applesauce-core/helpers";
+import {
+  blocked$,
+  filterBlockedRelays,
+  isRelayBlocked,
+} from "@/services/blocked-relays";
 import defaultPool from "@/services/relay-pool";
 import defaultEventStore from "@/services/event-store";
 
@@ -61,12 +66,19 @@ export async function requestEvents(
 ): Promise<NostrEvent[]> {
   const { pool, bound, requestOptions } = splitTimeout(options);
 
+  // Nothing left to ask. The pool would drop these relays anyway, but an empty
+  // group does not complete on its own: `relays$` is a BehaviorSubject that
+  // never completes, so the request would sit until `bound` elapsed — a 10s
+  // stall on every lookup whose only relays are blocked.
+  const targets = filterBlockedRelays(relays);
+  if (targets.length === 0) return [];
+
   // Collect as we go so a timeout still yields what did arrive.
   const collected: NostrEvent[] = [];
 
   return firstValueFrom(
     pool
-      .request(relays, filters, {
+      .request(targets, filters, {
         eventStore: defaultEventStore,
         ...requestOptions,
       })
@@ -96,9 +108,13 @@ export async function requestEvent(
 ): Promise<NostrEvent | null> {
   const { pool, bound, requestOptions } = splitTimeout(options);
 
+  // See requestEvents: an empty group never completes on its own.
+  const targets = filterBlockedRelays(relays);
+  if (targets.length === 0) return null;
+
   return firstValueFrom(
     pool
-      .request(relays, [filter], {
+      .request(targets, [filter], {
         eventStore: defaultEventStore,
         ...requestOptions,
       })
@@ -155,9 +171,15 @@ export function streamWithEose(
     reconnect = 5,
   } = options ?? {};
 
+  // Blocked relays are dropped by the pool before a socket is opened, so they
+  // can never settle. They must come out of `expected` too, or `settled.size`
+  // never reaches it and EOSE waits for the full backstop — which, since chat
+  // rendering is gated on EOSE, shows as an empty conversation for 15s.
   // `message.from` is the relay's normalized URL, so normalize (and dedupe)
   // the expected set or the settled-count comparison can never be satisfied.
-  const expected = new Set(relays.map((url) => normalizeURL(url)));
+  const expected = new Set(
+    filterBlockedRelays(relays).map((url) => normalizeURL(url)),
+  );
   const targets = [...expected];
 
   return new Observable<NostrEvent>((subscriber) => {
@@ -182,6 +204,27 @@ export function streamWithEose(
     };
 
     const eoseTimer = setTimeout(emitEose, eoseTimeout);
+
+    // Filtering at subscribe time only covers relays already blocked. A cold
+    // load opens subscriptions BEFORE the kind-10006 event arrives over the
+    // network, and pruning then closes the socket by unsubscribing it — which
+    // drops the in-flight REQ without an EOSE, CLOSED, ERROR or complete, so
+    // that relay can never settle and EOSE waits out the full backstop. Chat is
+    // gated on EOSE, so that is a blank conversation for 15 seconds on every
+    // reload. A relay that can no longer answer has to leave `expected`.
+    const blockedSub = blocked$.subscribe(() => {
+      if (eoseEmitted) return;
+
+      let dropped = false;
+      for (const url of [...expected]) {
+        if (!isRelayBlocked(url) || settled.has(url)) continue;
+        expected.delete(url);
+        dropped = true;
+      }
+
+      if (!dropped) return;
+      if (settled.size >= expected.size) emitEose();
+    });
 
     const sub = pool
       .req(targets, filters, { resubscribe, reconnect })
@@ -248,6 +291,7 @@ export function streamWithEose(
 
     return () => {
       clearTimeout(eoseTimer);
+      blockedSub.unsubscribe();
       sub.unsubscribe();
     };
   });

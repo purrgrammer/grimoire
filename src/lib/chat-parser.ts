@@ -15,7 +15,7 @@ import { getOutboxes } from "applesauce-core/helpers/mailboxes";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import eventStore from "@/services/event-store";
 import pool from "@/services/relay-pool";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { Nip17Adapter } from "./chat/adapters/nip-17-adapter";
 import { isNip05, resolveNip05 } from "@/lib/nip05";
 // Import other adapters as they're implemented
@@ -348,7 +348,7 @@ async function fetchEventForDispatch(
   const cached = eventStore.getEvent(eventId);
   if (cached) return cached;
 
-  // Build relay list: hints + author outbox + aggregator fallback
+  // Build relay list: hints + author outbox + fallback relays
   const relaySets: string[][] = [];
   if (relayHints.length > 0) relaySets.push(relayHints);
 
@@ -360,7 +360,7 @@ async function fetchEventForDispatch(
     }
   }
 
-  relaySets.push(AGGREGATOR_RELAYS);
+  relaySets.push(FALLBACK_RELAYS);
   const relays = mergeRelaySets(...relaySets);
 
   const filter = { ids: [eventId], limit: 1 };

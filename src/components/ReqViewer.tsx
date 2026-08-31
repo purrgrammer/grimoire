@@ -30,7 +30,7 @@ import { useReqTimelineEnhanced } from "@/hooks/useReqTimelineEnhanced";
 import { useAddWindow, useGrimoire } from "@/core/state";
 import { useRelayState } from "@/hooks/useRelayState";
 import { useOutboxRelays } from "@/hooks/useOutboxRelays";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { FeedEvent } from "./nostr/Feed";
 import { KindBadge } from "./KindBadge";
 import { UserName } from "./nostr/UserName";
@@ -64,6 +64,9 @@ import {
   AccordionTrigger,
 } from "./ui/accordion";
 import { RelayLink } from "./nostr/RelayLink";
+import { Label } from "./ui/label";
+import { isRelayBlocked } from "@/services/blocked-relays";
+import type { BlockedRelayExclusion } from "@/types/relay-selection";
 import type { Filter } from "nostr-tools";
 import type { NostrFilter } from "@/types/nostr";
 import type { RelaySelectionReasoning } from "@/types/relay-selection";
@@ -880,7 +883,7 @@ export default function ReqViewer({
   // An alias that resolves to nothing — `$me` with no account, `$contacts`
   // before (or without) a kind:3 — leaves an empty `authors`/`#p`/`#P` behind.
   // An empty array is not "no constraint": relay selection reads it as "no
-  // pubkeys to route by" and falls back to AGGREGATOR_RELAYS, and a REQ with
+  // pubkeys to route by" and falls back to FALLBACK_RELAYS, and a REQ with
   // `"#p": []` is a firehose on every relay that ignores empty tag lists. That
   // pair is the reported bug — `req -p $me -k 1` opening relay.primal.net,
   // which is in nobody's inbox list. Run no query at all instead.
@@ -902,11 +905,11 @@ export default function ReqViewer({
 
   // NIP-65 outbox relay selection
   // Fallback relays for follows without kind:10002 relay lists.
-  // Use AGGREGATOR_RELAYS (popular general relays), NOT the user's personal relays.
+  // Use FALLBACK_RELAYS (popular general relays), NOT the user's personal relays.
   // The user's relays (both read and write) are specific to their network —
   // assigning them as outbox for hundreds of unknown follows inflates counts
   // and sends unnecessary queries to small/niche relays.
-  const fallbackRelays = AGGREGATOR_RELAYS;
+  const fallbackRelays = FALLBACK_RELAYS;
 
   // Stable outbox options (fallbackRelays is a module constant)
   const outboxOptions = useMemo(
@@ -922,15 +925,17 @@ export default function ReqViewer({
   const {
     relays: selectedRelays,
     reasoning,
+    blocked: selectionBlocked,
     phase: relaySelectionPhase,
   } = useOutboxRelays(resolvedFilter, outboxOptions);
 
   // Use explicit relays if provided, otherwise use NIP-65 selected relays
   // Wait for relay selection to complete before subscribing to prevent multiple reconnections
   const finalRelays = useMemo(() => {
-    // Explicit relays always used immediately
+    // Explicit relays always used immediately — minus any the user blocked, so
+    // the count in the dropdown header matches what is actually queried.
     if (relays) {
-      return relays;
+      return relays.filter((url) => !isRelayBlocked(url));
     }
 
     // Nothing to route by — see `aliasResolvedEmpty`.
@@ -946,6 +951,34 @@ export default function ReqViewer({
 
     return selectedRelays;
   }, [relays, relaySelectionPhase, selectedRelays, aliasResolvedEmpty]);
+
+  /**
+   * Relays this query cannot use because they are on the kind-10006 list.
+   *
+   * Two sources, because the two paths lose the information differently. An
+   * explicit `req wss://…` keeps the URL the user typed, so the block is
+   * visible here and nowhere else — without this the header counts a relay it
+   * never queries. Outbox selection drops blocked relays before it builds its
+   * reasoning, so it has to report them itself.
+   */
+  const blockedRelays = useMemo((): BlockedRelayExclusion[] => {
+    if (relays) {
+      return relays
+        .filter((url) => isRelayBlocked(url))
+        .map((relay) => ({ relay, writers: [], readers: [] }));
+    }
+    if (selectionBlocked?.length) return selectionBlocked;
+
+    // Selection reports nothing when it never ran — an alias that resolved to
+    // nothing, or a phase that has not reached "ready". That is exactly the
+    // state to explain, because the worst case lands here: every fallback
+    // relay blocked means there is nowhere left to discover relay lists from,
+    // so the window shows "Fallback Relays (0)" and no cause. Report the
+    // blocked fallbacks directly.
+    return fallbackRelays
+      .filter((url) => isRelayBlocked(url))
+      .map((relay) => ({ relay, writers: [], readers: [] }));
+  }, [relays, selectionBlocked, fallbackRelays]);
 
   // Normalize relay URLs for consistent lookups in relayStates
   // RelayStateManager normalizes all URLs (adds trailing slash, lowercase, etc.)
@@ -1489,6 +1522,56 @@ export default function ReqViewer({
                           Disconnected ({disconnectedRelays.length})
                         </div>
                         {disconnectedRelays.map(renderRelay)}
+                      </div>
+                    )}
+
+                    {/*
+                      Blocked Section. These relays are NOT in the counts above:
+                      they were never queried. Shown so a thin result set has a
+                      visible cause — the alternative is a query that quietly
+                      skips the relays its own contacts publish to.
+                    */}
+                    {blockedRelays.length > 0 && (
+                      <div className="py-2 border-t border-border">
+                        <div className="px-3 pb-1 flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            Blocked ({blockedRelays.length})
+                          </span>
+                          <button
+                            className="text-[10px] text-accent underline decoration-dotted cursor-crosshair"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addWindow("kind", { number: 10006 });
+                            }}
+                          >
+                            kind 10006
+                          </button>
+                        </div>
+                        {blockedRelays.map(({ relay, writers, readers }) => (
+                          <div
+                            key={relay}
+                            className="px-3 py-1 flex items-center gap-2 min-w-0 opacity-60"
+                          >
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                              <RelayLink url={relay} showInboxOutbox={false} />
+                            </div>
+                            {writers.length > 0 && (
+                              <Label size="sm">
+                                {writers.length} writer
+                                {writers.length !== 1 ? "s" : ""}
+                              </Label>
+                            )}
+                            {readers.length > 0 && (
+                              <Label size="sm">
+                                {readers.length} reader
+                                {readers.length !== 1 ? "s" : ""}
+                              </Label>
+                            )}
+                          </div>
+                        ))}
+                        <div className="px-3 pt-1 text-[10px] text-muted-foreground">
+                          Excluded from this query.
+                        </div>
                       </div>
                     )}
                   </>

@@ -74,7 +74,7 @@ export async function createZapRequest(
   }
 
   // Get relays for zap receipt publication
-  // Priority: explicit relays > recipient's inbox > sender's inbox > fallback aggregators
+  // Priority: explicit relays > recipient's inbox > sender's inbox > fallback relays
   const zapRelayResult = await selectZapRelays({
     recipientPubkey: params.recipientPubkey,
     senderPubkey,

@@ -2,12 +2,13 @@
  * Tests for NIP-65 Relay Selection
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { selectRelaysForFilter } from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import relayListCache from "./relay-list-cache";
+import { setBlockedRelays } from "./blocked-relays";
 
 // Helper to create valid test events
 function createRelayListEvent(
@@ -344,6 +345,97 @@ describe("selectRelaysForFilter", () => {
       // Should only include valid relay - normalized with trailing slash
       expect(result.relays).toContain("wss://valid-relay.com/");
       expect(result.relays).not.toContain("not-a-valid-url");
+    });
+  });
+
+  describe("blocked relays (NIP-51 kind 10006)", () => {
+    const OWNER = "f".repeat(64);
+
+    afterEach(() => {
+      setBlockedRelays([], null);
+    });
+
+    it("excludes a blocked relay and reports who wanted it", async () => {
+      // Silently dropping it makes a thin result set look like missing
+      // coverage with no cause, so the exclusion is part of the result.
+      const event = createRelayListEvent(testSecretKeys[0], [
+        ["r", "wss://good.example.com", "write"],
+        ["r", "wss://spam.example.com", "write"],
+      ]);
+      eventStore.add(event);
+      setBlockedRelays(["wss://spam.example.com"], OWNER);
+
+      const result = await selectRelaysForFilter(eventStore, {
+        authors: [testPubkeys[0]],
+        kinds: [1],
+      });
+
+      expect(result.relays).not.toContain("wss://spam.example.com/");
+      expect(result.relays).toContain("wss://good.example.com/");
+      expect(result.blocked.map((b) => b.relay)).toEqual([
+        "wss://spam.example.com/",
+      ]);
+      expect(result.blocked[0].writers).toEqual([testPubkeys[0]]);
+      expect(result.blocked[0].readers).toEqual([]);
+    });
+
+    it("attributes a relay blocked for a #p tag as a reader", async () => {
+      const event = createRelayListEvent(testSecretKeys[1], [
+        ["r", "wss://inbox.example.com", "read"],
+        ["r", "wss://spam.example.com", "read"],
+      ]);
+      eventStore.add(event);
+      setBlockedRelays(["wss://spam.example.com"], OWNER);
+
+      const result = await selectRelaysForFilter(eventStore, {
+        "#p": [testPubkeys[1]],
+        kinds: [1],
+      });
+
+      expect(result.relays).not.toContain("wss://spam.example.com/");
+      expect(result.blocked[0].readers).toEqual([testPubkeys[1]]);
+      expect(result.blocked[0].writers).toEqual([]);
+    });
+
+    it("reports a blocked fallback relay with no writers or readers", async () => {
+      // Nobody listed it; it is just where selection would otherwise have
+      // looked. The fallback path never reaches sanitizeRelays.
+      setBlockedRelays(["wss://aggregator.example.com"], OWNER);
+
+      const result = await selectRelaysForFilter(
+        eventStore,
+        { authors: [testPubkeys[2]], kinds: [1] },
+        {
+          fallbackRelays: [
+            "wss://aggregator.example.com/",
+            "wss://other.example.com/",
+          ],
+        },
+      );
+
+      expect(result.relays).not.toContain("wss://aggregator.example.com/");
+      expect(result.blocked.map((b) => b.relay)).toContain(
+        "wss://aggregator.example.com/",
+      );
+      const entry = result.blocked.find(
+        (b) => b.relay === "wss://aggregator.example.com/",
+      );
+      expect(entry?.writers).toEqual([]);
+      expect(entry?.readers).toEqual([]);
+    });
+
+    it("reports nothing blocked when the list is empty", async () => {
+      const event = createRelayListEvent(testSecretKeys[3], [
+        ["r", "wss://good.example.com", "write"],
+      ]);
+      eventStore.add(event);
+
+      const result = await selectRelaysForFilter(eventStore, {
+        authors: [testPubkeys[3]],
+        kinds: [1],
+      });
+
+      expect(result.blocked).toEqual([]);
     });
   });
 });

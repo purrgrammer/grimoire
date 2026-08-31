@@ -95,7 +95,7 @@ import blossomServerCache from "./blossom-server-cache";
 import { fetchUserServers } from "./blossom";
 import { getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
-import { AGGREGATOR_RELAYS } from "./loaders";
+import { FALLBACK_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
 import { selectRelaysForFilter, fetchRelayList } from "./relay-selection";
 import { requestEvent, streamWithEose } from "@/lib/relay-subscription";
@@ -334,7 +334,7 @@ function buildAdapter(): ShellAdapter {
               /*
                * Cache-only, like `blossomServerCache.getServers` was. A pubkey
                * the reader has never looked at therefore routed to nothing and
-               * the router fell back to the aggregators for everyone —
+               * the router fell back to the fallback relays for everyone —
                * "outbox.query timed out" on a napplet whose whole job is
                * reading one person's events. Fetching on a miss is what makes
                * this the outbox model rather than a fixed relay list.
@@ -348,7 +348,7 @@ function buildAdapter(): ShellAdapter {
         );
         return new Map(entries);
       },
-      fallbackRelays: AGGREGATOR_RELAYS,
+      fallbackRelays: FALLBACK_RELAYS,
       // Kehto defaults this to 4s, which is under the floor the rest of grimoire
       // uses: a relay can legitimately take several seconds to EOSE, and a
       // bounded query that gives up first reports "no events" rather than "not

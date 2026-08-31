@@ -4,6 +4,7 @@ import { startMockRelay, type MockRelay } from "@/test/mock-relay";
 import dmPublishPool from "@/services/dm-publish-pool";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { publishGiftWrap, resetGiftWrapRefusals } from "./publish";
+import { setBlockedRelays } from "@/services/blocked-relays";
 
 /**
  * The gift-wrap publish path, which exists to NOT do something: identify the
@@ -36,6 +37,7 @@ beforeEach(() => resetGiftWrapRefusals());
 afterEach(async () => {
   dmPublishPool.close();
   await Promise.all(relays.splice(0).map((r) => r.close()));
+  setBlockedRelays([], null);
 });
 
 describe("publishGiftWrap", () => {
@@ -116,5 +118,43 @@ describe("publishGiftWrap", () => {
 
     expect(results).toHaveLength(1);
     expect(r.accepted()).toHaveLength(1);
+  });
+
+  it("reports a blocked inbox relay as undeliverable rather than sending", async () => {
+    // A single-relay publish bypasses the pool's group() filter, so this path
+    // needs its own guard. Reported, not skipped: a wrap that reached none of a
+    // peer's inbox relays is undelivered, and the sender has to be told which
+    // relays took it — silence here would look like a delivered message.
+    const r = await relay({ kind: "normal" });
+    setBlockedRelays([r.url], "b".repeat(64));
+
+    const results = await publishGiftWrap(giftWrap(), [r.url]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].ok).toBe(false);
+    expect(results[0].error).toMatch(/blocked relays list/i);
+    // Not conflated with the auth refusal, which is a different failure.
+    expect(results[0].authRequired).toBe(false);
+    // Nothing left the client.
+    expect(r.accepted()).toEqual([]);
+  });
+
+  it("still delivers to a peer's unblocked inbox relays", async () => {
+    const allowed = await relay({ kind: "normal" });
+    const blocked = await relay({ kind: "normal" });
+    setBlockedRelays([blocked.url], "b".repeat(64));
+
+    const results = await publishGiftWrap(giftWrap(), [
+      allowed.url,
+      blocked.url,
+    ]);
+
+    const byRelay = new Map(
+      results.map((d) => [normalizeRelayURL(d.relay), d.ok]),
+    );
+    expect(byRelay.get(normalizeRelayURL(allowed.url))).toBe(true);
+    expect(byRelay.get(normalizeRelayURL(blocked.url))).toBe(false);
+    expect(allowed.accepted()).toHaveLength(1);
+    expect(blocked.accepted()).toEqual([]);
   });
 });

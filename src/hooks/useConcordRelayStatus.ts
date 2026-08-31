@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { startWith } from "rxjs/operators";
 
 import concordPool from "@/services/concord-relay-pool";
+import { filterBlockedRelays } from "@/services/blocked-relays";
 
 /**
  * `url → connected`, for the urls given. Absent means "not known yet" rather
@@ -48,7 +49,9 @@ export function useConcordRelayStatus(
     // is the cascading-render pattern the React Compiler rules flag. Delivering
     // the seed through the stream puts the write in a callback where it
     // belongs.
-    const subs = list.map((url) => {
+    const subs = filterBlockedRelays(list).map((url) => {
+      // per-relay connection status; the list is filtered through filterBlockedRelays() above.
+      // eslint-disable-next-line no-restricted-syntax
       const relay = concordPool.relay(url);
       return (
         relay.connected$

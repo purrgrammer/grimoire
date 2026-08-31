@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { use$ } from "applesauce-react/hooks";
 import {
   Wifi,
   WifiOff,
@@ -19,6 +20,7 @@ import {
 import { useRelayState } from "@/hooks/useRelayState";
 import type { RelayState } from "@/types/relay-state";
 import { RelayLink } from "./nostr/RelayLink";
+import { Label } from "./ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
@@ -31,12 +33,17 @@ import {
 } from "./ui/dropdown-menu";
 import { isAuthPreference } from "@/lib/type-guards";
 import liveness from "@/services/relay-liveness";
+import { blocked$ } from "@/services/blocked-relays";
+
+/** Stable empty set so `use$` returning undefined does not remount the list. */
+const EMPTY_BLOCKED: ReadonlySet<string> = new Set();
 
 /**
  * CONN viewer - displays connection and auth status for all relays in the pool
  */
 function ConnViewer() {
   const { relays } = useRelayState();
+  const blocked = use$(blocked$) ?? EMPTY_BLOCKED;
 
   const relayList = Object.values(relays);
 
@@ -51,6 +58,11 @@ function ConnViewer() {
 
   // Get all seen relays for liveness section
   const seenRelays = liveness.getSeenRelays().sort();
+
+  // Blocked relays are pruned out of the pool, so without their own section the
+  // window would just be missing them and the user would have no way to tell an
+  // enforced block from a relay that simply never appeared.
+  const blockedRelays = [...blocked].sort();
 
   return (
     <div className="h-full w-full flex flex-col bg-background text-foreground">
@@ -82,6 +94,24 @@ function ConnViewer() {
             </div>
             {disconnectedRelays.map((relay) => (
               <RelayCard key={relay.url} relay={relay} />
+            ))}
+          </>
+        )}
+
+        {/* Blocked (kind 10006) */}
+        {blockedRelays.length > 0 && (
+          <>
+            <div className="px-4 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground">
+              Blocked ({blockedRelays.length})
+            </div>
+            {blockedRelays.map((url) => (
+              <div
+                key={url}
+                className="px-4 py-2 flex items-center gap-2 border-b border-border/50"
+              >
+                <RelayLink url={url} />
+                <Label size="sm">kind 10006</Label>
+              </div>
             ))}
           </>
         )}

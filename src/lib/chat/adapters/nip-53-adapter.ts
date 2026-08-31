@@ -32,7 +32,7 @@ import {
 } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
 import accountManager from "@/services/accounts";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { getEventPointerFromETag } from "applesauce-core/helpers/pointers";
 import { mergeRelaySets } from "applesauce-core/helpers";
 import {
@@ -655,7 +655,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
     }
 
     // Default fallback relays for live activities
-    return AGGREGATOR_RELAYS;
+    return FALLBACK_RELAYS;
   }
 
   /**

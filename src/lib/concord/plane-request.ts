@@ -32,6 +32,7 @@ import { AuthRequiredError, RelayClosedError } from "applesauce-relay";
 import type { RelayPool } from "applesauce-relay";
 
 import defaultPool from "@/services/concord-relay-pool";
+import { isRelayBlocked } from "@/services/blocked-relays";
 
 /** How a plane read ended. */
 export type PlaneReadOutcome =
@@ -87,6 +88,20 @@ export async function planeRequest(
   let outcome: PlaneReadOutcome = "timeout";
   let reason: string | undefined;
 
+  // A plane read goes to a single relay by name, so it bypasses the pool's
+  // group() filter entirely. Reported as "error" rather than a new outcome:
+  // "error" is already documented as not evidence about the plane, so no
+  // consumer mistakes a blocked relay for an empty one.
+  if (isRelayBlocked(relayUrl)) {
+    return {
+      events,
+      outcome: "error",
+      reason: "relay is on your blocked relays list (kind 10006)",
+    };
+  }
+
+  // a plane read is single-relay by design; guarded by isRelayBlocked() above.
+  // eslint-disable-next-line no-restricted-syntax
   const messages = pool.relay(relayUrl).req([filter], {
     // See the module docstring. Changing either of these reintroduces a
     // silent-failure mode that has already been measured.
@@ -177,6 +192,20 @@ export function planeStream(
   const pool = options.pool ?? defaultPool;
 
   return new Observable<PlaneStreamMessage>((subscriber) => {
+    // Single-relay by name, so the pool's group() filter never sees it. Ends
+    // the stream the way every other non-evidence failure ends it.
+    if (isRelayBlocked(relayUrl)) {
+      subscriber.next({
+        type: "ended",
+        outcome: "error",
+        reason: "relay is on your blocked relays list (kind 10006)",
+      });
+      subscriber.complete();
+      return;
+    }
+
+    // see planeRequest; guarded by isRelayBlocked() above.
+    // eslint-disable-next-line no-restricted-syntax
     const messages = pool.relay(relayUrl).req(filters, {
       // See the module docstring. Changing any of these reintroduces a
       // silent-failure mode that has already been measured.

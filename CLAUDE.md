@@ -72,7 +72,16 @@ use the singletons in `src/services/`.
 > rather than satisfied. Reads (`{kinds:[1059],"#p":[self]}` on the user's own
 > inbox) stay on the singleton pool, authenticated — that is your own mailbox.
 >
-> Nothing else may spawn a pool.
+> **Exception 3: NWC** (`src/services/nwc.ts`). Assigned to
+> `WalletConnect.pool`, isolated so relay liveness cannot deprioritize or skip
+> the wallet relay.
+>
+> **Exception 4: a scroll execution** (`src/lib/scroll-runtime.ts`). A private
+> pool and EventStore per run, torn down with the run.
+>
+> Nothing else may spawn a pool — and every pool must be a
+> **`BlockingRelayPool`** (`src/services/blocking-relay-pool.ts`), never a bare
+> `RelayPool`, or it honours no blocked-relay list. An eslint rule enforces both.
 
 ### Window system
 
@@ -190,6 +199,44 @@ all — it blocks. Don't treat absence of messages as completion.
 **Chat rendering is gated on EOSE deliberately.** The list needs a stable bottom
 anchor before it can render as events stream in; `eventStore.timeline()` emits
 growing subsets, so removing the gate renders messages offscreen.
+
+**Blocked relays (NIP-51 kind 10006) are enforced in `group()`.** Every
+multi-relay op in applesauce funnels through `RelayPool.group()`, so
+`BlockingRelayPool` filters there — one chokepoint that also covers the loaders,
+which resolve relay hints internally where no call-site filter could reach.
+`src/services/blocked-relays.ts` holds the set; it imports nothing but URL
+helpers, because the obvious `accountManager` import closes a cycle through the
+pool and would silently yield an empty blocklist at startup. Account wiring lives
+in `blocked-relays-sync.ts`.
+
+- `pool.relay(url)` bypasses `group()` **and** registers the relay. Nine call
+  sites need it; each carries an eslint-disable and an `isRelayBlocked()` guard.
+- **Filtering at the pool alone breaks EOSE.** `streamWithEose` counts settled
+  relays against the caller's list, so a relay the pool dropped can never settle
+  and EOSE waits out the 15s backstop — which, since chat is gated on EOSE, is a
+  blank conversation. It filters before computing `expected`.
+- **An empty group does not complete for reads.** `relays$` is a BehaviorSubject
+  that never completes, so `pool.request([])` hangs until the caller's timeout
+  (10s default). `requestEvents`/`requestEvent` short-circuit on an empty target
+  list. `publish` differs — `take(1)` makes it complete `[]` at once, which is
+  why a fully blocked publish needed an explicit undeliverable path.
+- Blocking is not liveness. Pruning a blocked relay does **not** record a
+  failure: `pool.remove()` emits `remove$` synchronously, detaching liveness's
+  `close$` watcher before the async WebSocket `onclose` can land.
+
+**Discovery relays and content relays are different sets.** `INDEXER_RELAYS`
+(`src/services/loaders.ts`) resolves replaceable events — kinds 0, 3, 10002 and
+the other lists — for pubkeys we hold no hint for; `FALLBACK_RELAYS` is a
+content and publish fallback. They were one list until a blocked-relay report
+showed why they must not be: blocking spammy content relays is a statement about
+content, and while discovery shared the list it took relay-list resolution down
+with it — measured as Connected (2), no contact list, and no query sent.
+
+- The three `createAddressLoader` instances use indexers. `createEventLoader`
+  (by id) uses aggregators; indexers do not hold arbitrary events.
+  `createEventLoaderForStore` answers both, so it gets both.
+- Indexers are **not** exempt from the kind-10006 block. The claim is only that
+  the default discovery set is disjoint from a typical blocklist.
 
 **Event creation uses factory classes**, not the removed `EventFactory` /
 `blueprint()`. See `docs/applesauce.md`.

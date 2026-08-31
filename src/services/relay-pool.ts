@@ -1,5 +1,5 @@
-import { RelayPool } from "applesauce-relay";
+import { BlockingRelayPool } from "./blocking-relay-pool";
 
-const pool = new RelayPool();
+const pool = new BlockingRelayPool();
 
 export default pool;

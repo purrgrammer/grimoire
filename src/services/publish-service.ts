@@ -17,6 +17,7 @@ import { Subject, Observable } from "rxjs";
 import { filter } from "rxjs/operators";
 import type { NostrEvent } from "nostr-tools";
 import pool from "./relay-pool";
+import { isRelayBlocked } from "./blocked-relays";
 import eventStore from "./event-store";
 
 // ============================================================================
@@ -166,6 +167,18 @@ class PublishService {
 
     // Publish to each relay individually for status tracking
     const publishPromises = relays.map(async (relay) => {
+      // The pool drops blocked relays before a socket opens, which leaves
+      // `pool.publish()` resolving `[]` — indistinguishable below from a relay
+      // that rejected the event. Say what actually happened instead: "Relay
+      // rejected event" for a relay the user themselves blocked sends anyone
+      // debugging this in exactly the wrong direction.
+      if (isRelayBlocked(relay)) {
+        const error = "Relay is on your blocked relays list (kind 10006)";
+        publishEvent.results.set(relay, { status: "error", error });
+        this.emitStatus(publishId, relay, "error", error);
+        return { relay, success: false as const, error };
+      }
+
       this.emitStatus(publishId, relay, "publishing");
       publishEvent.results.set(relay, { status: "publishing" });
 

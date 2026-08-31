@@ -22,7 +22,7 @@ import type { Filter } from "nostr-tools";
 import { requestEvents } from "@/lib/relay-subscription";
 import pool from "@/services/relay-pool";
 import eventStore from "@/services/event-store";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { getRepositoryRelays } from "@/lib/nip34-helpers";
 import { channelScope, emitWireScopes } from "@/lib/concord/wire-bus";
 import {
@@ -65,7 +65,7 @@ function activityFilter(coordinate: string): Filter {
 /**
  * Where a repository is read from: the channel's own hints first — armada
  * recorded them at attach time, from the remote the user actually uses — then
- * whatever the announcement names, and the aggregators as a floor so a channel
+ * whatever the announcement names, and the fallback relays as a floor so a channel
  * whose hints have gone stale still finds something.
  */
 function relaysFor(attachment: GitRepositoryAttachment): string[] {
@@ -76,7 +76,7 @@ function relaysFor(attachment: GitRepositoryAttachment): string[] {
   );
   const announced = announcement ? getRepositoryRelays(announcement) : [];
   return [
-    ...new Set([...attachment.relayHints, ...announced, ...AGGREGATOR_RELAYS]),
+    ...new Set([...attachment.relayHints, ...announced, ...FALLBACK_RELAYS]),
   ];
 }
 

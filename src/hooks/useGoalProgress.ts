@@ -12,7 +12,7 @@ import {
   getGoalBeneficiaries,
 } from "@/lib/nip75-helpers";
 import { getZapAmount, getZapSender } from "applesauce-common/helpers/zap";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 import { relayListCache } from "@/services/relay-list-cache";
 
 export interface Contributor {
@@ -46,7 +46,7 @@ export interface GoalProgressResult {
  *
  * Handles:
  * - Parsing goal metadata from event
- * - Selecting relays (goal relays → user inbox relays → aggregators)
+ * - Selecting relays (goal relays → user inbox relays → fallback relays)
  * - Fetching zap receipts
  * - Calculating total raised and contributor breakdown
  */
@@ -76,15 +76,15 @@ export function useGoalProgress(event: NostrEvent): GoalProgressResult {
     });
   }, [userPubkey]);
 
-  // Determine which relays to use: goal relays → user inbox → aggregators
+  // Determine which relays to use: goal relays → user inbox → fallback relays
   const relays = useMemo(() => {
     if (goalRelays.length > 0) {
-      return [...goalRelays, ...AGGREGATOR_RELAYS];
+      return [...goalRelays, ...FALLBACK_RELAYS];
     }
     if (userInboxRelays.length > 0) {
-      return [...userInboxRelays, ...AGGREGATOR_RELAYS];
+      return [...userInboxRelays, ...FALLBACK_RELAYS];
     }
-    return AGGREGATOR_RELAYS;
+    return FALLBACK_RELAYS;
   }, [goalRelays, userInboxRelays]);
 
   // Fetch zaps for this goal

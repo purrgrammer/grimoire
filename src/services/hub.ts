@@ -28,7 +28,7 @@ function getStateWriteRelays(): string[] {
  * 1. Author's outbox relays (kind 10002)
  * 2. User's configured write relays (from Grimoire state)
  * 3. Seen relays from the event
- * 4. Aggregator relays (fallback)
+ * 4. Fallback relays
  *
  * An explicit `relays` list overrides all of that. applesauce's `PublishMethod`
  * is `(event, relays?)`, and an action that passes relays means it: outbox

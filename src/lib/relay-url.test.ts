@@ -20,6 +20,18 @@ describe("normalizeRelayURL", () => {
     expect(withTrailingSlash).toBe(withoutTrailingSlash);
   });
 
+  it("should recognize an uppercase scheme instead of prepending another", () => {
+    // A case-sensitive check turned "WSS://host" into "wss://WSS://host", which
+    // compared equal to nothing — an evasion vector for the blocked-relay list,
+    // whose entries are hand-typed.
+    expect(normalizeRelayURL("WSS://relay.example.com")).toBe(
+      "wss://relay.example.com/",
+    );
+    expect(normalizeRelayURL("Ws://relay.example.com")).toBe(
+      "ws://relay.example.com/",
+    );
+  });
+
   it("should add wss:// protocol when missing", () => {
     const result = normalizeRelayURL("relay.example.com");
     expect(result).toBe("wss://relay.example.com/");

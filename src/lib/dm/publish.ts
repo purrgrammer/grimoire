@@ -24,6 +24,7 @@ import { AuthRequiredError } from "applesauce-relay";
 import type { NostrEvent } from "nostr-tools";
 import dmPublishPool from "@/services/dm-publish-pool";
 import { normalizeRelayURL, isValidRelayURL } from "@/lib/relay-url";
+import { isRelayBlocked } from "@/services/blocked-relays";
 
 /** A relay that demands auth is answered fast, not waited out. */
 const PUBLISH_TIMEOUT_MS = 10_000;
@@ -78,6 +79,18 @@ export async function publishGiftWrap(
 
   return Promise.all(
     targets.map(async (relay): Promise<GiftWrapDelivery> => {
+      // A single-relay publish, so the pool's group() filter never sees it.
+      // Reported rather than skipped: a gift wrap that reached none of a peer's
+      // inbox relays is undeliverable, and the sender needs to know why.
+      if (isRelayBlocked(relay)) {
+        return {
+          relay,
+          ok: false,
+          authRequired: false,
+          error: "Relay is on your blocked relays list (kind 10006)",
+        };
+      }
+
       if (refusedRelays.has(relay)) {
         return {
           relay,
@@ -88,6 +101,9 @@ export async function publishGiftWrap(
       }
 
       try {
+        // A gift wrap is published one relay at a time so the sender can be
+        // told which relays took it; blocked relays are rejected above.
+        // eslint-disable-next-line no-restricted-syntax
         const response = await dmPublishPool
           .relay(relay)
           .publish(wrap, { retries: 0, timeout: PUBLISH_TIMEOUT_MS });

@@ -12,13 +12,13 @@ import type { NostrEvent } from "@/types/nostr";
 import type { Filter } from "nostr-tools";
 import type { Subscription } from "rxjs";
 import { firstValueFrom, timeout as rxTimeout } from "rxjs";
-import { RelayPool } from "applesauce-relay";
+import { BlockingRelayPool } from "@/services/blocking-relay-pool";
 import { EventStore } from "applesauce-core";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 import globalEventStore from "@/services/event-store";
 import { streamWithEose } from "@/lib/relay-subscription";
 import { selectRelaysForFilter } from "@/services/relay-selection";
-import { AGGREGATOR_RELAYS, eventLoader } from "@/services/loaders";
+import { FALLBACK_RELAYS, eventLoader } from "@/services/loaders";
 import type { ScrollParam, ParamValue } from "@/lib/nip5c-helpers";
 import { isNostrEvent } from "@/lib/type-guards";
 
@@ -122,7 +122,7 @@ export async function runScroll(
   const usePresenceBytes = options.presenceBytes ?? true;
 
   // Dedicated instances for this execution
-  const privatePool = new RelayPool();
+  const privatePool = new BlockingRelayPool();
   const privateEventStore = new EventStore();
 
   let nextHandleId = 1;
@@ -424,7 +424,7 @@ export async function runScroll(
             );
             relays = result.relays;
           } catch {
-            relays = [...AGGREGATOR_RELAYS];
+            relays = [...FALLBACK_RELAYS];
           }
         }
 
@@ -810,13 +810,13 @@ export async function runScroll(
       dropHandle(h);
     }
     handles.clear();
-    // Force-close all private relay connections
-    for (const [, relay] of privatePool.relays) {
-      try {
-        relay.close();
-      } catch {
-        /* ignore */
-      }
+    // Force-close all private relay connections. `close()` rather than closing
+    // each relay by hand: it does the same teardown and also unsubscribes the
+    // pool's blocked-relay watcher, which otherwise leaks once per execution.
+    try {
+      privatePool.close();
+    } catch {
+      /* ignore */
     }
     instance = null;
   }

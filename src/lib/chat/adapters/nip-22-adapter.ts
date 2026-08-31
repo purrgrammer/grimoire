@@ -66,7 +66,7 @@ import {
   getExternalIdentifierLabel,
   inferExternalIdentifierType,
 } from "@/lib/nip73-helpers";
-import { AGGREGATOR_RELAYS } from "@/services/loaders";
+import { FALLBACK_RELAYS } from "@/services/loaders";
 
 /**
  * NIP-22 Adapter - Comment Threading for Any Event Kind
@@ -277,7 +277,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         limit: 1,
       };
       const events = await requestEvents(
-        relayHints.length > 0 ? relayHints : AGGREGATOR_RELAYS,
+        relayHints.length > 0 ? relayHints : FALLBACK_RELAYS,
         [filter],
       );
       fetchedEvent = events[0];
@@ -1169,6 +1169,6 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         if (outbox.length > 0) return outbox;
       }
     }
-    return AGGREGATOR_RELAYS;
+    return FALLBACK_RELAYS;
   }
 }
