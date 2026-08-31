@@ -136,15 +136,6 @@ const RELAY_LIST_KINDS: RelayListKindUIConfig[] = [
     tagName: "relay",
     hasMarkers: false,
   },
-  {
-    kind: 10051,
-    name: "KeyPackage Relays",
-    description:
-      "Relays where you publish MLS KeyPackage events. Anyone who wants to start an encrypted group chat with you looks up this list.",
-    nip: "Marmot",
-    tagName: "relay",
-    hasMarkers: false,
-  },
 ];
 
 // --- Components ---
@@ -436,11 +427,6 @@ export function RelayListsSettings() {
     () => (pubkey ? eventStore.replaceable(10050, pubkey, "") : undefined),
     [pubkey],
   );
-  const event10051 = use$(
-    () => (pubkey ? eventStore.replaceable(10051, pubkey, "") : undefined),
-    [pubkey],
-  );
-
   const eventsMap: Record<number, NostrEvent | undefined> = useMemo(
     () => ({
       10002: event10002,
@@ -448,9 +434,8 @@ export function RelayListsSettings() {
       10007: event10007,
       10012: event10012,
       10050: event10050,
-      10051: event10051,
     }),
-    [event10002, event10006, event10007, event10012, event10050, event10051],
+    [event10002, event10006, event10007, event10012, event10050],
   );
 
   // Local draft state: kind -> entries
