@@ -66,14 +66,10 @@ export function RelayLink({
   const isInsecure = isInsecureRelay(url);
 
   /**
-   * A relay's NIP-11 `name` is chosen by its operator and is not unique. Six
-   * different nostr.land hosts each report some variant of "nostr.land", so
-   * showing the name alone made rows visually identical — and a relay on the
-   * kind-10006 blocked list indistinguishable from one being queried.
-   *
-   * So the URL is always rendered: it is the identity, and the only thing that
-   * can be compared against a blocked list or a relay hint. The name is
-   * decoration, and is what gets truncated first when space runs out.
+   * A relay's NIP-11 `name` is chosen by its operator and is not unique — six
+   * different nostr.land hosts each report some variant of "nostr.land" — so
+   * the name alone cannot identify a relay. The URL is the identity, but
+   * showing both inline was too noisy, so it moves to hover.
    */
   const relayName = relayInfo?.name?.trim();
   const showName =
@@ -124,28 +120,31 @@ export function RelayLink({
             </HoverCardContent>
           </HoverCard>
         )}
-        {showName && (
+        {showName ? (
+          <HoverCard openDelay={200}>
+            <HoverCardTrigger asChild>
+              <span className={cn("text-xs truncate min-w-0", urlClassname)}>
+                {relayName}
+              </span>
+            </HoverCardTrigger>
+            <HoverCardContent
+              side="top"
+              className="w-auto max-w-96 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* The operator-chosen name is not unique, so the URL is the
+                  only way to tell two same-named relays apart. */}
+              <span className="font-mono break-all">{url}</span>
+            </HoverCardContent>
+          </HoverCard>
+        ) : (
           <span
-            className={cn("text-xs truncate min-w-0", urlClassname)}
-            title={relayName}
+            className={cn("text-xs truncate", urlClassname)}
+            title={displayUrl}
           >
-            {relayName}
+            {displayUrl}
           </span>
         )}
-        <span
-          className={cn(
-            "text-xs",
-            // The name shrinks before the URL does: losing the end of a
-            // decorative label is recoverable, losing the identity is not.
-            showName
-              ? "shrink-0 font-mono text-muted-foreground/70"
-              : "truncate",
-            urlClassname,
-          )}
-          title={url}
-        >
-          {displayUrl}
-        </span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {showInboxOutbox && read && (
