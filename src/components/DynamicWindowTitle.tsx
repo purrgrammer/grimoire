@@ -477,13 +477,17 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
   const eventTitle = useMemo(() => {
     if (appId !== "open" || !event) return null;
 
+    // Kinds whose content is not prose have no detail to show; the window then
+    // reads `Payment Targets - alice`, not `Payment Targets: {} - alice`.
+    const detail = getEventDisplayTitle(event, false);
+
     return (
       <div className="flex items-center gap-1">
         <div className="flex items-center gap-0">
           {getKindName(event.kind)}
-          <span>:</span>
+          {detail && <span>:</span>}
         </div>
-        {getEventDisplayTitle(event, false)}
+        {detail}
         <span> - </span>
         <UserName
           pubkey={semanticAuthorPubkey || event.pubkey}

@@ -42,12 +42,12 @@ export function useTimeline(
 
   // Load events into store
   useEffect(() => {
-    if (relays.length === 0) return;
+    if (stableRelays.length === 0) return;
 
     const loader = createTimelineLoader(
       pool,
-      relays.concat(FALLBACK_RELAYS),
-      filters,
+      stableRelays.concat(FALLBACK_RELAYS),
+      stableFilters,
       {
         eventStore,
         limit,
@@ -71,10 +71,17 @@ export function useTimeline(
     return () => subscription.unsubscribe();
   }, [id, stableRelays, limit, eventStore, stableFilters]);
 
-  // Watch store for matching events
+  // Watch store for matching events.
+  //
+  // Keyed on the filters too, not `id` alone. Every caller today derives `id`
+  // from whatever the filter is built from, so the two move together — but that
+  // is a convention, not a guarantee, and a caller that held `id` steady while
+  // changing the filter would keep observing the old timeline while the effect
+  // above loaded events for the new one: fresh events in the store, stale set
+  // on screen.
   const timeline = use$(() => {
-    return eventStore.timeline(filters, false);
-  }, [id]);
+    return eventStore.timeline(stableFilters, false);
+  }, [id, stableFilters, eventStore]);
 
   const hasItems = timeline ? timeline.length > 0 : false;
   return {

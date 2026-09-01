@@ -11,6 +11,7 @@ import {
 import { getCodeName } from "@/lib/nip-c0-helpers";
 import { getAppName } from "@/lib/nip89-helpers";
 import { getKindInfo } from "@/constants/kinds";
+import { getKindSchema } from "@/lib/nostr-schema";
 
 /**
  * Get a human-readable display title for any event
@@ -73,6 +74,12 @@ export function getEventDisplayTitle(
   if (showKind) {
     return `Kind ${event.kind}`;
   }
+
+  // Content is only a title when it is prose. A kind whose schema declares an
+  // empty or JSON content has nothing to show — returning it verbatim is how a
+  // kind 10133 window ended up titled `Payment Targets: {}`.
+  const contentType = getKindSchema(event.kind)?.content?.type;
+  if (contentType === "empty" || contentType === "json") return "";
 
   return event.content;
 }
