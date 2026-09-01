@@ -11,6 +11,7 @@ import {
   mergeRelaySets,
   isSafeRelayURL,
 } from "applesauce-core/helpers/relays";
+import { getOutboxes } from "applesauce-core/helpers/mailboxes";
 import {
   getEventPointerFromETag,
   getAddressPointerFromATag,
@@ -20,6 +21,25 @@ import pool from "./relay-pool";
 import eventStore from "./event-store";
 import { relayListCache } from "./relay-list-cache";
 import type { NostrEvent } from "@/types/nostr";
+
+/**
+ * A pubkey's NIP-65 write relays, or `[]` when they are not known yet.
+ *
+ * `relayListCache.getOutboxRelaysSync` reads a 100-entry LRU, and a session
+ * that resolves a follow list holds far more than that — 425 kind-10002s
+ * against a cache of 100 was measured here, so the entry for any given profile
+ * had usually been evicted and every outbox step in this file silently did
+ * nothing. The EventStore holds the same events with no cap, so it answers
+ * whatever the memory cache has dropped. Dexie is not consulted: it is async,
+ * and every caller here is synchronous.
+ */
+function outboxRelaysFor(pubkey: string): string[] {
+  const cached = relayListCache.getOutboxRelaysSync(pubkey);
+  if (cached?.length) return cached;
+
+  const relayList = eventStore.getReplaceable(10002, pubkey, "");
+  return relayList ? getOutboxes(relayList) : [];
+}
 
 /**
  * Extract relay context from a Nostr event for comprehensive relay selection
@@ -122,6 +142,7 @@ export const INDEXER_RELAYS = [
   "wss://purplepag.es/",
   "wss://user.kindpag.es/",
   "wss://indexer.coracle.social/",
+  "wss://relay.vertexlab.io/",
 ];
 
 // Base event loader (used internally)
@@ -185,13 +206,12 @@ export function eventLoader(
   // Check if event already exists in store
   const existingEvent = eventStore.getEvent(pointer.id);
   if (existingEvent) {
-    cachedOutboxRelays =
-      relayListCache.getOutboxRelaysSync(existingEvent.pubkey) || [];
+    cachedOutboxRelays = outboxRelaysFor(existingEvent.pubkey);
   }
 
   // If not in store but we have author hint (from reply "p" tag)
   if (cachedOutboxRelays.length === 0 && authorHint) {
-    cachedOutboxRelays = relayListCache.getOutboxRelaysSync(authorHint) || [];
+    cachedOutboxRelays = outboxRelaysFor(authorHint);
   }
 
   // Limit cached relays to top 3 to avoid too many connections
@@ -252,12 +272,55 @@ export function eventLoader(
  * resolves from a cheap replaceable-only relay, and it survives a blocklist
  * that covers every content relay.
  */
-export const addressLoader = createAddressLoader(pool, {
+const baseAddressLoader = createAddressLoader(pool, {
   eventStore,
   extraRelays: [...INDEXER_RELAYS, ...FALLBACK_RELAYS],
 });
 
-// Profile loader with batching - combines multiple profile requests within 200ms
+/**
+ * Kinds that ARE how a pubkey's relays are discovered. Routing these by outbox
+ * is circular — you would need the relay list to fetch the relay list — so
+ * they go to the indexers, which is what indexers are for.
+ */
+const DISCOVERY_KINDS = new Set([0, 3, 10002]);
+
+/** How many cached outbox relays to add; the same cap `eventLoader` uses. */
+const MAX_OUTBOX_RELAYS = 3;
+
+type AddressLoaderArgs = Parameters<typeof baseAddressLoader>;
+
+/**
+ * Add the author's NIP-65 write relays to a pointer that carries no hint.
+ *
+ * `eventLoader` above has done this since it was written; `createAddressLoader`
+ * never has. Its order is cache → pointer relay hints → `extraRelays` → lookup
+ * relays, so a hint-less pointer is served entirely by `extraRelays` — the
+ * indexers plus the content fallback. Neither holds a kind 10063 or 10133, so
+ * a user's own Blossom servers and payment targets resolved only when some
+ * other subscription happened to drag them into the store.
+ *
+ * `outboxRelaysFor` is a synchronous lookup, so this costs nothing and is
+ * simply skipped when the relay list is not known yet. Nothing about the
+ * loader's completion semantics changes — callers waiting on `complete` still
+ * see the same stream.
+ */
+function withOutboxRelays(pointer: AddressLoaderArgs[0]): AddressLoaderArgs[0] {
+  if (pointer.relays?.length) return pointer;
+  if (DISCOVERY_KINDS.has(pointer.kind)) return pointer;
+
+  const outbox = outboxRelaysFor(pointer.pubkey);
+  if (!outbox.length) return pointer;
+
+  return { ...pointer, relays: outbox.slice(0, MAX_OUTBOX_RELAYS) };
+}
+
+export function addressLoader(...args: AddressLoaderArgs) {
+  const [pointer, ...rest] = args;
+  return baseAddressLoader(withOutboxRelays(pointer), ...rest);
+}
+
+// Profile loader with batching - combines multiple profile requests within
+// 200ms. Kind 0 is a discovery kind, so no outbox step applies.
 export const profileLoader = createAddressLoader(pool, {
   eventStore,
   bufferTime: 200, // Batch requests within 200ms window
@@ -267,11 +330,16 @@ export const profileLoader = createAddressLoader(pool, {
 // Batched address loader for components that fan out over many pointers at
 // once. A NKBIP-01 publication index can list 100+ sections; one REQ per
 // pointer makes relays rate-limit and the tail never resolves.
-export const batchedAddressLoader = createAddressLoader(pool, {
+const baseBatchedAddressLoader = createAddressLoader(pool, {
   eventStore,
   bufferTime: 200,
   extraRelays: [...INDEXER_RELAYS, ...FALLBACK_RELAYS],
 });
+
+export function batchedAddressLoader(...args: AddressLoaderArgs) {
+  const [pointer, ...rest] = args;
+  return baseBatchedAddressLoader(withOutboxRelays(pointer), ...rest);
+}
 
 // Timeline loader factory - creates loader for event feeds
 export { createTimelineLoader };

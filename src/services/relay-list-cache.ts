@@ -15,7 +15,21 @@ import type { IEventStore } from "applesauce-core/event-store";
 import type { Subscription } from "rxjs";
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_MEMORY_CACHE = 100; // LRU cache size
+/**
+ * LRU size, in pubkeys.
+ *
+ * Sized against a follow list, because that is what fills it: resolving one
+ * puts a relay list in the store for every person followed, and a 100-entry
+ * cache measured 425 relay lists against it in a single session — so the entry
+ * for any given profile had almost always been evicted by the time anything
+ * asked for it. An entry is one kind-10002 event plus two small arrays, so a
+ * thousand of them is a couple of megabytes.
+ *
+ * This is a latency knob, not a correctness one: `loaders.ts` reads the
+ * EventStore when the cache misses, and the async accessors fall through to
+ * Dexie. Raising it only saves those lookups.
+ */
+const MAX_MEMORY_CACHE = 1000;
 
 class RelayListCache {
   private eventStoreSubscription: Subscription | null = null;
@@ -128,12 +142,17 @@ class RelayListCache {
         updatedAt: Date.now(),
       };
 
-      await db.relayLists.put(cachedEntry);
-
-      // Also populate memory cache
+      // Memory first, then Dexie: the synchronous readers below run on the
+      // same tick an event arrives, and awaiting the write before publishing
+      // it leaves them a hole to miss through.
       this.memoryCache.set(event.pubkey, cachedEntry);
-      this.cacheOrder.push(event.pubkey);
+      // `updateLRU`, not `push` — re-caching a pubkey used to append a second
+      // entry, so `cacheOrder` outgrew `memoryCache` and eviction shifted a
+      // stale duplicate, dropping a pubkey that was still current.
+      this.updateLRU(event.pubkey);
       this.evictOldest();
+
+      await db.relayLists.put(cachedEntry);
 
       console.debug(
         `[RelayListCache] Cached relay list for ${event.pubkey.slice(0, 8)} (${normalizedWrite.length} write, ${normalizedRead.length} read)`,

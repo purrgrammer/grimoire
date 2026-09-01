@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { eventLoader } from "./loaders";
+import { addressLoader, batchedAddressLoader, eventLoader } from "./loaders";
 import type { NostrEvent } from "@/types/nostr";
 import { SeenRelaysSymbol } from "applesauce-core/helpers/relays";
 import type { EventPointer } from "nostr-tools/nip19";
@@ -12,6 +12,7 @@ vi.mock("./relay-pool", () => ({
 vi.mock("./event-store", () => ({
   default: {
     getEvent: vi.fn(),
+    getReplaceable: vi.fn(),
   },
 }));
 
@@ -32,7 +33,14 @@ vi.mock("applesauce-loaders/loaders", () => ({
         _testPointer: pointer,
       }) as any,
   ),
-  createAddressLoader: vi.fn(() => () => ({ subscribe: () => {} })),
+  createAddressLoader: vi.fn(
+    () => (pointer: unknown) =>
+      ({
+        subscribe: () => ({ unsubscribe: () => {} }),
+        // Return pointer so we can inspect it in tests
+        _testPointer: pointer,
+      }) as any,
+  ),
   createTimelineLoader: vi.fn(),
   createEventLoaderForStore: vi.fn(),
 }));
@@ -431,5 +439,102 @@ describe("eventLoader", () => {
       // Should still work with r tags and p tags
       expect((result as any)._testPointer.relays).toContain("wss://r-tag.com/");
     });
+  });
+});
+
+describe("addressLoader outbox routing", () => {
+  const OUTBOX = ["wss://a.example/", "wss://b.example/"];
+  const pointer = (kind: number, extra = {}) => ({
+    kind,
+    pubkey: "author-pubkey",
+    identifier: "",
+    ...extra,
+  });
+  const relaysOf = (result: unknown) =>
+    (result as { _testPointer: { relays?: string[] } })._testPointer.relays;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("adds the author's write relays to a hint-less list pointer", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(OUTBOX);
+
+    expect(relaysOf(addressLoader(pointer(10133)))).toEqual(OUTBOX);
+    expect(relayListCache.getOutboxRelaysSync).toHaveBeenCalledWith(
+      "author-pubkey",
+    );
+  });
+
+  it("caps the relays it adds at three", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([
+      "wss://1/",
+      "wss://2/",
+      "wss://3/",
+      "wss://4/",
+    ]);
+
+    expect(relaysOf(addressLoader(pointer(10063)))).toHaveLength(3);
+  });
+
+  it("leaves a pointer that already carries relay hints alone", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(OUTBOX);
+
+    expect(
+      relaysOf(addressLoader(pointer(30023, { relays: ["wss://hint/"] }))),
+    ).toEqual(["wss://hint/"]);
+    expect(relayListCache.getOutboxRelaysSync).not.toHaveBeenCalled();
+  });
+
+  it("never routes discovery kinds by outbox — that would be circular", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(OUTBOX);
+
+    for (const kind of [0, 3, 10002]) {
+      expect(relaysOf(addressLoader(pointer(kind)))).toBeUndefined();
+    }
+    expect(relayListCache.getOutboxRelaysSync).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the loader's own relays when nothing knows the author's", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(null);
+    vi.mocked(eventStore.getReplaceable).mockReturnValue(undefined);
+    expect(relaysOf(addressLoader(pointer(10133)))).toBeUndefined();
+
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue([]);
+    expect(relaysOf(addressLoader(pointer(10133)))).toBeUndefined();
+  });
+
+  it("reads the relay list out of the store when the LRU has evicted it", () => {
+    // The memory cache holds 100 pubkeys; a session that resolves a follow
+    // list holds hundreds of relay lists, so this is the common case, not the
+    // edge case.
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(null);
+    vi.mocked(eventStore.getReplaceable).mockReturnValue({
+      kind: 10002,
+      pubkey: "author-pubkey",
+      created_at: 0,
+      content: "",
+      sig: "",
+      id: "relay-list",
+      tags: [
+        ["r", "wss://write.relay.io/", "write"],
+        ["r", "wss://read.relay.io/", "read"],
+      ],
+    } as never);
+
+    expect(relaysOf(addressLoader(pointer(10133)))).toEqual([
+      "wss://write.relay.io/",
+    ]);
+    expect(eventStore.getReplaceable).toHaveBeenCalledWith(
+      10002,
+      "author-pubkey",
+      "",
+    );
+  });
+
+  it("routes the batched loader the same way", () => {
+    vi.mocked(relayListCache.getOutboxRelaysSync).mockReturnValue(OUTBOX);
+
+    expect(relaysOf(batchedAddressLoader(pointer(30023)))).toEqual(OUTBOX);
   });
 });
