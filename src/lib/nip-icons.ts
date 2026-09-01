@@ -518,6 +518,12 @@ export const NIP_METADATA: Record<string, NIPInfo> = {
     description: "Voice Messages",
     icon: Music,
   },
+  A3: {
+    id: "A3",
+    name: "Payment Targets",
+    description: "payto: Payment Targets",
+    icon: Wallet,
+  },
   A4: {
     id: "A4",
     name: "Public Messages",

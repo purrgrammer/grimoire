@@ -1243,6 +1243,21 @@ kinds:
     tags:
       - *relaytag
 
+  10133:
+    description: Payment Targets
+    in_use: true
+    content:
+      type: empty
+    tags:
+      -
+        name: payto
+        next:
+          type: free
+          required: true
+          next:
+            type: free
+            required: true
+
   10009:
     description: User groups
     in_use: true

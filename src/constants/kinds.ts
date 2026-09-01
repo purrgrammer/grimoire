@@ -108,6 +108,7 @@ export interface EventKind {
 export const SPELL_KIND = 777;
 export const SPELLBOOK_KIND = 30777;
 export const SCROLL_KIND = 1227;
+export const PAYMENT_TARGETS_KIND = 10133;
 
 // NKBIP-01 is published as a community NIP (kind 30817), not a nostr-protocol
 // NIP, so the badge resolves to that event. No relay hints: outbox resolves it.
@@ -1023,6 +1024,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
     description: "Good wiki relays",
     nip: "54",
     icon: Radio,
+  },
+  [PAYMENT_TARGETS_KIND]: {
+    kind: PAYMENT_TARGETS_KIND,
+    name: "Payment Targets",
+    description: "Payment addresses across networks",
+    nip: "A3",
+    icon: Wallet,
   },
   10154: {
     kind: 10154,

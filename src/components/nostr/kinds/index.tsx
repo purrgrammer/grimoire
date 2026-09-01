@@ -32,6 +32,10 @@ import {
   BlossomServerListRenderer,
   BlossomServerListDetailRenderer,
 } from "./BlossomServerListRenderer";
+import {
+  PaymentTargetsRenderer,
+  PaymentTargetsDetailRenderer,
+} from "./PaymentTargetsRenderer";
 import { Kind10317Renderer } from "./GraspListRenderer";
 import { Kind10317DetailRenderer } from "./GraspListDetailRenderer";
 import {
@@ -291,6 +295,7 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   10063: BlossomServerListRenderer, // Blossom User Server List (BUD-03)
   10101: WikiAuthorsRenderer, // Good Wiki Authors (NIP-51)
   10102: WikiRelaysRenderer, // Good Wiki Relays (NIP-51)
+  10133: PaymentTargetsRenderer, // Payment Targets (NIP-A3)
   10166: MonitorAnnouncementRenderer, // Relay Monitor Announcement (NIP-66)
   10317: Kind10317Renderer, // User Grasp List (NIP-34)
   10777: FavoriteSpellsRenderer, // Favorite Spells (Grimoire)
@@ -444,6 +449,7 @@ const detailRenderers: Record<
   10063: BlossomServerListDetailRenderer, // Blossom User Server List Detail (BUD-03)
   10101: WikiAuthorsDetailRenderer, // Good Wiki Authors Detail (NIP-51)
   10102: WikiRelaysDetailRenderer, // Good Wiki Relays Detail (NIP-51)
+  10133: PaymentTargetsDetailRenderer, // Payment Targets Detail (NIP-A3)
   10166: MonitorAnnouncementDetailRenderer, // Relay Monitor Announcement Detail (NIP-66)
   10317: Kind10317DetailRenderer, // User Grasp List Detail (NIP-34)
   10777: FavoriteSpellsDetailRenderer, // Favorite Spells Detail (Grimoire)

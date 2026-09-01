@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { PrivateKeySigner } from "applesauce-signers";
 import { generateSecretKey } from "nostr-tools";
-import QRCode from "qrcode";
+import { generateQrWithAvatar } from "@/lib/qr-avatar";
+import { getAvatarShape } from "@/lib/avatar-shape";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -190,64 +191,11 @@ export function ZapComposer({
   /** QR for the invoice, with the recipient's picture in the middle. */
   const generateQrCode = async (invoiceText: string) => {
     try {
-      const qrDataUrl = await QRCode.toDataURL(invoiceText, {
-        width: 300,
-        margin: 2,
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
-
-      const profilePicUrl = recipientProfile?.picture;
-      if (!profilePicUrl) return qrDataUrl;
-
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return qrDataUrl;
-
-      const qrImage = new Image();
-      await new Promise((resolve, reject) => {
-        qrImage.onload = resolve;
-        qrImage.onerror = reject;
-        qrImage.src = qrDataUrl;
-      });
-
-      canvas.width = qrImage.width;
-      canvas.height = qrImage.height;
-      ctx.drawImage(qrImage, 0, 0);
-
-      const profileImage = new Image();
-      profileImage.crossOrigin = "anonymous";
-      await new Promise((resolve) => {
-        profileImage.onload = resolve;
-        // Silently fail if the image doesn't load.
-        profileImage.onerror = () => resolve(null);
-        profileImage.src = profilePicUrl;
-      });
-
-      if (profileImage.complete && profileImage.naturalHeight !== 0) {
-        const size = canvas.width * 0.25;
-        const x = (canvas.width - size) / 2;
-        const y = (canvas.height - size) / 2;
-
-        ctx.fillStyle = "#FFFFFF";
-        ctx.beginPath();
-        ctx.arc(
-          canvas.width / 2,
-          canvas.height / 2,
-          size / 2 + 4,
-          0,
-          2 * Math.PI,
-        );
-        ctx.fill();
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, canvas.height / 2, size / 2, 0, 2 * Math.PI);
-        ctx.clip();
-        ctx.drawImage(profileImage, x, y, size, size);
-        ctx.restore();
-      }
-
-      return canvas.toDataURL();
+      return await generateQrWithAvatar(
+        invoiceText,
+        recipientProfile?.picture,
+        getAvatarShape(recipientProfile),
+      );
     } catch (error) {
       console.error("QR code generation error:", error);
       throw new Error("Failed to generate QR code");

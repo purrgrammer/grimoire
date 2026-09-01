@@ -10,7 +10,6 @@ import {
   Send,
   Wifi,
   HardDrive,
-  Zap,
 } from "lucide-react";
 import { kinds, nip19 } from "nostr-tools";
 import { useEventStore, use$ } from "applesauce-react/hooks";
@@ -34,6 +33,10 @@ import type { Subscription } from "rxjs";
 import { useGrimoire } from "@/core/state";
 import { AskHexButton } from "./ai/AskHexButton";
 import { USER_SERVER_LIST_KIND, getServersFromEvent } from "@/services/blossom";
+import { PAYMENT_TARGETS_KIND } from "@/constants/kinds";
+import { getPaytoTargets, mergeProfilePayments } from "@/lib/payto";
+import { getAvatarShape } from "@/lib/avatar-shape";
+import { PaymentTargetList } from "./nostr/PaymentTarget";
 import blossomServerCache from "@/services/blossom-server-cache";
 
 export interface ProfileViewerProps {
@@ -126,6 +129,51 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
     [eventStore, resolvedPubkey],
   );
 
+  // Fetch payment targets (kind 10133, NIP-A3) from the author's own write
+  // relays. `createAddressLoader` has no outbox step — cache, pointer relay
+  // hints, `extraRelays`, lookup relays — and its `extraRelays` are indexers
+  // plus the content fallback, neither of which carries a kind 10133. Without
+  // the hint a profile's payment targets simply never resolve; the pointer's
+  // `relays` is the only place NIP-65 routing can enter.
+  //
+  // A string, not the array, so the effect refires exactly once when the
+  // mailbox event arrives rather than on every render.
+  const outboxKey = outboxRelays.join(",");
+
+  useEffect(() => {
+    if (!resolvedPubkey) return;
+
+    const relays = outboxKey ? outboxKey.split(",") : undefined;
+
+    const subscription = addressLoader({
+      kind: PAYMENT_TARGETS_KIND,
+      pubkey: resolvedPubkey,
+      identifier: "",
+      relays,
+    }).subscribe({
+      error: (err) => {
+        console.debug(
+          `[ProfileViewer] Failed to fetch payment targets for ${resolvedPubkey.slice(0, 8)}:`,
+          err,
+        );
+      },
+    });
+
+    return () => subscription.unsubscribe();
+  }, [resolvedPubkey, outboxKey]);
+
+  const paymentTargetsEvent = use$(
+    () =>
+      resolvedPubkey
+        ? eventStore.replaceable(PAYMENT_TARGETS_KIND, resolvedPubkey, "")
+        : undefined,
+    [eventStore, resolvedPubkey],
+  );
+  const paymentTargets = paymentTargetsEvent
+    ? getPaytoTargets(paymentTargetsEvent)
+    : [];
+  const payments = mergeProfilePayments(paymentTargets, profile);
+
   // Blossom servers state (kind 10063)
   const [blossomServers, setBlossomServers] = useState<string[]>([]);
 
@@ -170,18 +218,21 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
         }
       });
 
-    // Also fetch from network to get latest data
+    // Also fetch from network to get latest data, from the author's own write
+    // relays — same reason as the payment targets above: the loader has no
+    // outbox step, and a kind 10063 does not live on an indexer.
     const networkSubscription = addressLoader({
       kind: USER_SERVER_LIST_KIND,
       pubkey: resolvedPubkey,
       identifier: "",
+      relays: outboxKey ? outboxKey.split(",") : undefined,
     }).subscribe();
 
     return () => {
       storeSubscription.unsubscribe();
       networkSubscription.unsubscribe();
     };
-  }, [resolvedPubkey, eventStore]);
+  }, [resolvedPubkey, eventStore, outboxKey]);
 
   // Combine all relays (inbox + outbox) for nprofile
   const allRelays = [...new Set([...inboxRelays, ...outboxRelays])];
@@ -434,43 +485,32 @@ export function ProfileViewer({ pubkey }: ProfileViewerProps) {
                   href={profile.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-accent underline decoration-dotted"
+                  // A profile URL can be a single unbreakable token — an nsite
+                  // host is 70+ characters — so it wraps rather than pushing
+                  // the pane sideways.
+                  className="text-sm text-accent underline decoration-dotted break-all"
                 >
                   {profile.website}
                 </a>
               </div>
             )}
 
-            {/* Lightning Address */}
-            {profile.lud16 && (
+            {/* Payments — the profile's own lud16/lud06 and its NIP-A3
+                payment targets in one list, deduped */}
+            {payments.length > 0 && (
               <div className="flex flex-col gap-1">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Lightning Address
+                  Payments
                 </div>
-                <button
-                  onClick={() =>
+                <PaymentTargetList
+                  targets={payments}
+                  showLabels={false}
+                  pictureUrl={profile.picture}
+                  pictureShape={getAvatarShape(profile)}
+                  onLightningClick={() =>
                     addWindow("zap", { recipientPubkey: resolvedPubkey })
                   }
-                  className="flex items-center gap-2 w-full text-left hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors group"
-                  title="Send zap"
-                >
-                  <Zap className="size-4 text-yellow-500 group-hover:text-yellow-600 transition-colors flex-shrink-0" />
-                  <code className="text-sm font-mono flex-1 min-w-0 truncate">
-                    {profile.lud16}
-                  </code>
-                </button>
-              </div>
-            )}
-
-            {/* LUD06 (LNURL) */}
-            {profile.lud06 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  LNURL
-                </div>
-                <code className="text-sm font-mono break-all">
-                  {profile.lud06}
-                </code>
+                />
               </div>
             )}
           </div>
