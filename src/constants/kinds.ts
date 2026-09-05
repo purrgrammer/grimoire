@@ -1592,6 +1592,13 @@ export const EVENT_KINDS: Record<number | string, EventKind> = {
   //   nip: "NUD: Custom Feeds",
   //   icon: Rss,
   // },
+  31871: {
+    kind: 31871,
+    name: "Attestation",
+    description: "Attestation of an assertion",
+    nip: "",
+    icon: ShieldCheck,
+  },
   31922: {
     kind: 31922,
     name: "Calendar Event",
