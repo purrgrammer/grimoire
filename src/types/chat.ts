@@ -77,6 +77,15 @@ export interface ConversationMetadata {
   description?: string; // Group/thread description
   icon?: string; // Group icon/picture URL
   /**
+   * The event whose content the title was cut from, when it was.
+   *
+   * A thread is named for its root note's first line, and that line is raw
+   * content: `nostr:npub1…`, `nostr:nevent1…` and media URLs. The string
+   * `title` stays for plain-text uses; the header renders this instead, so the
+   * references resolve.
+   */
+  titleEvent?: NostrEvent;
+  /**
    * Whether this room takes text messages at all.
    *
    * A NIP-29 group states its `supported_kinds`, and a group that lists none is

@@ -184,6 +184,7 @@ export class Nip10Adapter extends ChatProtocolAdapter {
         rootEventId: rootId,
         providedEventId: providedEvent.id,
         description: rootEvent.content.slice(0, 200), // First 200 chars
+        titleEvent: rootEvent.content.trim() ? rootEvent : undefined,
         relays: conversationRelays,
       },
       unreadCount: 0,

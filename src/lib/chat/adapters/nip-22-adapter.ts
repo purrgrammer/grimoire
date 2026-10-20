@@ -319,6 +319,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
         commentRootType: "address",
         commentRootEventId: fetchedEvent?.id,
         commentRootAddress: address,
+        titleEvent: fetchedEvent ? this.titleEventOf(fetchedEvent) : undefined,
         commentRootKind: String(address.kind),
         relays,
       },
@@ -374,6 +375,7 @@ export class Nip22Adapter extends ChatProtocolAdapter {
       metadata: {
         commentRootType: isAddressable ? "address" : "event",
         commentRootEventId: providedEvent.id,
+        titleEvent: this.titleEventOf(providedEvent),
         commentRootAddress:
           isAddressable && dTag !== undefined
             ? {
@@ -951,15 +953,28 @@ export class Nip22Adapter extends ChatProtocolAdapter {
     } as CommentPointer;
   }
 
+  private titleTag(event: NostrEvent): string | undefined {
+    return (
+      getTagValue(event, "title") ||
+      getTagValue(event, "name") ||
+      getTagValue(event, "subject")
+    );
+  }
+
+  /**
+   * The root event, when `extractTitle` named the thread from its content
+   */
+  private titleEventOf(event: NostrEvent): NostrEvent | undefined {
+    if (this.titleTag(event) || !event.content.trim()) return undefined;
+    return event;
+  }
+
   /**
    * Extract title from root event
    */
   private extractTitle(event: NostrEvent): string {
     // Try common title tags
-    const title =
-      getTagValue(event, "title") ||
-      getTagValue(event, "name") ||
-      getTagValue(event, "subject");
+    const title = this.titleTag(event);
     if (title) {
       return title.length <= 60 ? title : title.slice(0, 57) + "...";
     }

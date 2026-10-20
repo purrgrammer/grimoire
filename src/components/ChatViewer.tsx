@@ -2051,7 +2051,9 @@ export function ChatViewer({
                       className="text-sm font-semibold truncate cursor-help text-left"
                       onClick={() => setTooltipOpen(!tooltipOpen)}
                     >
-                      {customTitle || conversation.title}
+                      {customTitle || (
+                        <ConversationTitle conversation={conversation} />
+                      )}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent
@@ -2073,8 +2075,11 @@ export function ChatViewer({
                             }}
                           />
                         )}
-                        <span className="font-semibold">
-                          {conversation.title}
+                        <span className="font-semibold min-w-0">
+                          <ConversationTitle
+                            conversation={conversation}
+                            className="whitespace-normal"
+                          />
                         </span>
                       </div>
                       {/* Description */}
@@ -2488,6 +2493,38 @@ export function ChatViewer({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A conversation's title, with the references in it resolved.
+ *
+ * A thread named for its root note's first line carries that line raw in
+ * `title`; rendering it through `RichText` turns `nostr:npub1…` into a name
+ * and an event reference into a `[kind]` placeholder, and keeps media out.
+ */
+function ConversationTitle({
+  conversation,
+  className = "whitespace-nowrap",
+}: {
+  conversation: Conversation;
+  className?: string;
+}) {
+  const titleEvent = conversation.metadata?.titleEvent;
+  const firstLine = useMemo(
+    () =>
+      titleEvent
+        ? { ...titleEvent, content: titleEvent.content.trim().split("\n")[0] }
+        : undefined,
+    [titleEvent],
+  );
+  if (!firstLine) return <>{conversation.title}</>;
+  return (
+    <RichText
+      event={firstLine}
+      className={`inline [&_img]:size-3.5 ${className}`}
+      options={{ showMedia: false, showEventEmbeds: false }}
+    />
   );
 }
 
