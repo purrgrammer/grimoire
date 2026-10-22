@@ -9,7 +9,7 @@ import {
 import { MAX_QUERY_LIMIT } from "./ai-filter";
 import { READABLE_COMMANDS } from "./ai-commands";
 
-import type { InferenceTool } from "@/types/inference";
+import type { InferenceFunctionTool } from "@/types/inference";
 
 /**
  * The tool registry: every capability Hex has, named `<namespace>.<action>`.
@@ -442,15 +442,17 @@ export function toolsForSurface(surface: ToolSurface): ToolDefinition[] {
   return TOOL_REGISTRY.filter((tool) => tool.surfaces.includes(surface));
 }
 
-/** The registry as an IPA `tools` array. */
-export const AI_TOOLS: InferenceTool[] = toolsForSurface("ipa").map((tool) => ({
-  type: "function",
-  function: {
-    name: wireName(tool.id),
-    description: tool.description,
-    parameters: tool.parameters,
-  },
-}));
+/** The registry as an IPA `tools` array (function tools only). */
+export const AI_TOOLS: InferenceFunctionTool[] = toolsForSurface("ipa").map(
+  (tool) => ({
+    type: "function",
+    function: {
+      name: wireName(tool.id),
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  }),
+);
 
 /**
  * Executors keyed by wire name, which is what the loop looks up.

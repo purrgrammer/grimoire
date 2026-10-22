@@ -26,6 +26,7 @@
 import {
   createCatalogIntentResolver,
   manifestToIntentCatalogEntry,
+  parseNappletManifest,
   type IntentCatalogEntry,
   type IntentTargetController,
 } from "./kehto";
@@ -33,7 +34,7 @@ import {
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
 import { BUILTIN_ARCHETYPES, builtinHandlerDTag } from "./napplet-builtins";
 import defaultEventStore from "./event-store";
-import { getNappletArchetypes, getNappletTitle } from "@/lib/nip5d-helpers";
+import { getNappletTitle } from "@/lib/nip5d-helpers";
 
 /* -------------------------------------------------------------------------- */
 /*  User state                                                                 */
@@ -66,24 +67,79 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * What the host knows about one catalog entry, beyond what Kehto's entry holds.
+ *
+ * Kehto identifies a handler by an opaque, publisher-scoped catalog ID
+ * (`nip5d:<kind>:<pubkey>:<d-tag>`), never by the bare d-tag — two publishers can
+ * both ship a napplet called `profile`. The host's own preferences and UI are
+ * still keyed by d-tag, so each entry carries its d-tag and, for an installed
+ * napplet, the library coordinate it was loaded from.
+ */
+export interface CatalogRecord {
+  /** Kehto's catalog ID: the only identity Kehto's API accepts or returns. */
+  id: string;
+  dTag: string;
+  title?: string;
+  /** Library coordinate of an installed napplet; absent for a built-in. */
+  coordinate?: string;
+}
+
+/** The catalog as Kehto wants it, and what the host knows about each entry. */
+export interface IntentCatalogSnapshot {
+  entries: IntentCatalogEntry[];
+  records: Map<string, CatalogRecord>;
+}
+
+/**
+ * The records from the most recent load.
+ *
+ * Kehto's resolver reloads the catalog at the start of every `available`,
+ * `handlers` and `invoke`, and then calls its *synchronous* hooks
+ * (`getDefaultHandler`, `authorizeExplicitHandler`) — which need to translate
+ * between a catalog ID and the d-tag the user's preferences are stored under.
+ * They read this rather than hitting the library again.
+ */
+let lastRecords = new Map<string, CatalogRecord>();
+
+/**
+ * The one catalog ID for a d-tag, or `undefined` if there is none or several.
+ *
+ * Preferences predate catalog IDs and are keyed by d-tag. If two installed
+ * napplets share one, the preference does not say which was meant, so it
+ * resolves to nothing and the user is asked — failing closed is the point of
+ * Kehto's publisher-scoped IDs.
+ */
+function catalogIdForDTag(dTag: string): string | undefined {
+  let found: string | undefined;
+  for (const record of lastRecords.values()) {
+    if (record.dTag !== dTag) continue;
+    if (found !== undefined) return undefined;
+    found = record.id;
+  }
+  return found;
+}
+
+/**
  * Build the intent catalog from installed manifests.
  *
- * The library records the coordinate; the `archetype` tags are read from the
+ * The library records the coordinate; the routing declarations are read from the
  * manifest event. Only a napplet the user has actually run is listed, which is
  * the spec's "installed-napplet catalog" — and it was verified (signature,
  * aggregate, every blob hash) before the library recorded it.
  *
- * **Per-row, and defensively.** `manifestToIntentCatalogEntry` *throws* on a
- * convention that is not exactly `napplet:<slug>/<action>` or a slug outside
- * `[a-z0-9][a-z0-9-]*`, and those tags are third-party input. Building the batch
- * in one expression meant one malformed tag — `["archetype","profile"]` with no
- * convention is an easy authoring slip — rejected the whole catalog, and the
- * resolver reloads it for every `available`, `handlers` and `dispatch`. So a
- * single bad tag in any installed napplet disabled NAP-INTENT for all of them.
+ * **Per-row, and defensively.** `parseNappletManifest` and
+ * `manifestToIntentCatalogEntry` *throw* on a convention that is not exactly
+ * `napplet:<slug>/<action>` or a slug outside `[a-z0-9][a-z0-9-]*`, and those
+ * tags are third-party input. Building the batch in one expression meant one
+ * malformed tag — `["archetype","profile"]` with no convention is an easy
+ * authoring slip — rejected the whole catalog, and the resolver reloads it for
+ * every `available`, `handlers` and `dispatch`. So a single bad tag in any
+ * installed napplet disabled NAP-INTENT for all of them.
  */
-export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
+export async function loadIntentCatalogSnapshot(): Promise<IntentCatalogSnapshot> {
   const rows = await listNapplets();
   const entries: IntentCatalogEntry[] = [];
+  const records = new Map<string, CatalogRecord>();
 
   for (const row of rows) {
     const pointer = pointerFromCoordinate(row.coordinate);
@@ -101,17 +157,26 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
       );
     if (!event) continue;
 
-    const archetypes = getNappletArchetypes(event);
-    if (archetypes.length === 0) continue;
-
     try {
+      // Normalizes both manifest formats and derives the catalog ID from the
+      // event's kind, author and d-tag, so it cannot be spoofed by a title.
+      const manifest = parseNappletManifest(event);
+      if (manifest.archetypes.length === 0) continue;
+      if (records.has(manifest.catalogId)) continue;
+
       entries.push(
         manifestToIntentCatalogEntry({
-          dTag: pointer.identifier,
+          catalogId: manifest.catalogId,
           title: getNappletTitle(event) ?? row.title,
-          archetypes,
+          archetypes: manifest.archetypes,
         }),
       );
+      records.set(manifest.catalogId, {
+        id: manifest.catalogId,
+        dTag: pointer.identifier,
+        title: getNappletTitle(event) ?? row.title,
+        coordinate: row.coordinate,
+      });
     } catch (error) {
       console.warn(
         `[napplet] skipping "${pointer.identifier}" in the intent catalog: malformed archetype tags`,
@@ -130,19 +195,36 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
   );
   for (const builtin of BUILTIN_ARCHETYPES) {
     if (claimed.has(builtin.archetype)) continue;
+    const id = builtinHandlerDTag(builtin.archetype);
     entries.push(
       manifestToIntentCatalogEntry({
-        dTag: builtinHandlerDTag(builtin.archetype),
+        catalogId: id,
         title: builtin.title,
         archetypes: builtin.actions.map((action) => ({
           slug: builtin.archetype,
           convention: `napplet:${builtin.archetype}/${action}`,
+          // The built-in reads its target from the payload tolerantly (see
+          // `napplet-builtins`), so there is no fixed parameter list to advertise.
+          params: [],
         })),
       }),
     );
+    records.set(id, { id, dTag: id, title: builtin.title });
   }
 
-  return entries;
+  lastRecords = records;
+  return { entries, records };
+}
+
+export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
+  return (await loadIntentCatalogSnapshot()).entries;
+}
+
+/** The host's record for a catalog ID, from a fresh load of the catalog. */
+export async function findCatalogRecord(
+  id: string,
+): Promise<CatalogRecord | undefined> {
+  return (await loadIntentCatalogSnapshot()).records.get(id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -150,6 +232,8 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
 /* -------------------------------------------------------------------------- */
 
 export interface IntentChooserCandidate {
+  /** Kehto's catalog ID: what the choice resolves to. Unique, unlike a d-tag. */
+  id: string;
   dTag: string;
   title?: string;
 }
@@ -159,7 +243,7 @@ export interface NappletIntentChoice {
   archetype: string;
   sender: string;
   candidates: IntentChooserCandidate[];
-  resolve: (choice: { dTag: string; remember: boolean } | null) => void;
+  resolve: (choice: { id: string; remember: boolean } | null) => void;
 }
 
 /** Long enough to be a real decision, short enough not to be a leak. */
@@ -216,8 +300,12 @@ function askUserToChoose(
         choices.delete(key);
         emitChoices();
         if (!choice) return resolveChoice(undefined);
-        if (choice.remember) setDefaultHandler(archetype, choice.dTag);
-        resolveChoice(choice.dTag);
+        // Preferences are keyed by d-tag (see `catalogIdForDTag`), so this
+        // stores the chosen entry's, not its catalog ID.
+        const chosen = candidates.find((c) => c.id === choice.id);
+        if (!chosen) return resolveChoice(undefined);
+        if (choice.remember) setDefaultHandler(archetype, chosen.dTag);
+        resolveChoice(chosen.id);
       },
     });
     emitChoices();
@@ -230,19 +318,40 @@ export function createNappletIntentResolver(options: {
   return createCatalogIntentResolver({
     loadCatalog: loadIntentCatalog,
     targets: options.targets,
-    getDefaultHandler,
+
+    // The stored default is a d-tag; Kehto wants a catalog ID. See
+    // `catalogIdForDTag` for why an ambiguous one resolves to nothing.
+    getDefaultHandler: (archetype) => {
+      const dTag = getDefaultHandler(archetype);
+      return dTag === undefined ? undefined : catalogIdForDTag(dTag);
+    },
 
     chooseHandler: (archetype, candidates, sender) =>
       askUserToChoose(
         archetype,
-        candidates.map((c) => ({ dTag: c.dTag, title: c.title })),
-        sender,
+        candidates.map((c) => ({
+          id: c.id,
+          dTag: lastRecords.get(c.id)?.dTag ?? c.id,
+          title: c.title,
+        })),
+        lastRecords.get(sender)?.dTag ?? sender,
       ),
 
     // "The handler: '<dTag>' form SHOULD require that the user has authorized
     // cross-napplet targeting for the caller." Without that, a napplet could
     // address another directly and skip archetype resolution entirely.
-    authorizeExplicitHandler: (sender, handler) =>
-      isExplicitTargetingAuthorized(sender, handler),
+    //
+    // Authorizations are stored by d-tag, so both ends are translated; a catalog
+    // ID with no record (the catalog changed under the call) is refused.
+    authorizeExplicitHandler: (sender, handler) => {
+      const from = lastRecords.get(sender);
+      const to = lastRecords.get(handler);
+      if (!from || !to) return false;
+      // A d-tag two installed napplets share cannot say which one was
+      // authorized, so neither end may be ambiguous.
+      if (catalogIdForDTag(from.dTag) !== from.id) return false;
+      if (catalogIdForDTag(to.dTag) !== to.id) return false;
+      return isExplicitTargetingAuthorized(from.dTag, to.dTag);
+    },
   });
 }

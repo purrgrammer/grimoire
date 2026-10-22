@@ -27,7 +27,7 @@ import { canonicalId } from "@/lib/ai-registry";
 import { cn } from "@/lib/utils";
 
 import type { ToolSupport } from "@/services/inference";
-import type { InferenceTool } from "@/types/inference";
+import type { InferenceFunctionTool } from "@/types/inference";
 
 function firstSentence(text?: string): string {
   if (!text) return "";
@@ -56,7 +56,7 @@ export function AgentPanel({
   /** From the last `done` chunk; the extension chooses it, not grimoire. */
   model?: string;
   toolSupport: ToolSupport;
-  tools: InferenceTool[];
+  tools: InferenceFunctionTool[];
 }) {
   const [open, setOpen] = useState(false);
 

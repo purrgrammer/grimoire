@@ -488,6 +488,9 @@ function buildAdapter(): ShellAdapter {
         resolver: createNappletIntentResolver({
           targets: createNappletTargetController(),
         }),
+        // The sender Kehto passes to policy: a verified catalog ID, or nothing,
+        // in which case the invoke is rejected.
+        resolveSender: getNappletCatalogId,
       }),
       common: createNappletCommonService(),
       lists: createNappletListsService(),
@@ -682,8 +685,37 @@ export function getNappletBridge(): ShellBridge {
   return bridge;
 }
 
+/**
+ * The catalog ID of the verified manifest running in each live window.
+ *
+ * NAP-INTENT names the calling napplet by catalog ID, and Kehto asks the host
+ * to map an authenticated runtime window to it *synchronously*. The window's
+ * `OriginIdentity` is only a d-tag and an aggregate hash, which cannot say which
+ * publisher's napplet this is, so the viewer records the ID alongside it when it
+ * registers the frame — from the manifest that was just verified, never from
+ * anything the napplet sent.
+ */
+const windowCatalogIds = new Map<string, string>();
+
+export function setNappletCatalogId(windowId: string, catalogId: string): void {
+  windowCatalogIds.set(windowId, catalogId);
+}
+
+/** The verified catalog ID for a runtime window, if it has one. */
+export function getNappletCatalogId(windowId: string): string | undefined {
+  return windowCatalogIds.get(windowId);
+}
+
+/** Every live window running this catalog entry. */
+export function windowsForCatalogId(catalogId: string): string[] {
+  return [...windowCatalogIds]
+    .filter(([, id]) => id === catalogId)
+    .map(([windowId]) => windowId);
+}
+
 /** Tear down one napplet window. The bridge outlives it. */
 export function destroyNappletWindow(windowId: string): void {
+  windowCatalogIds.delete(windowId);
   // Kehto's ShellBridge has no destroyWindow, so the runtime call and the
   // registry call are both ours to make. Skipping the first leaks that
   // window's subscriptions and INC state.
@@ -800,6 +832,12 @@ export async function fetchManifestEvent(
 
 export interface ResolvedNappletView {
   identity: OriginIdentity;
+  /**
+   * Kehto's publisher-scoped catalog ID for the verified manifest
+   * (`nip5d:<kind>:<pubkey>:<d-tag>`). Unlike the d-tag in `identity`, two
+   * authors cannot share one.
+   */
+  catalogId: string;
   /** Verified `/index.html`, before CSP and namespace injection. */
   indexHtml: string;
   requires: readonly string[];
@@ -913,6 +951,7 @@ export async function resolveNappletFromEvent(
       dTag: resolved.dTag,
       aggregateHash: resolved.aggregateHash,
     }),
+    catalogId: resolved.manifest.catalogId,
     indexHtml: resolved.indexHtml,
     requires: resolved.manifest.requires,
     fileCount: resolved.files.size,

@@ -18,6 +18,7 @@ import type {
   Inference as IpaInference,
   InferenceChunk,
   InferenceRequest,
+  Tool as IpaTool,
 } from "ipa-tools";
 
 export type {
@@ -35,6 +36,13 @@ export type {
   ToolChoice,
   Usage,
 } from "ipa-tools";
+
+/**
+ * A function tool: the only kind of `Tool` carrying a name, description and
+ * schema. Since ipa-tools 0.4 `Tool` also admits `{ type: "web_search" }`, which
+ * has no `function`, so anything that reads those fields takes this instead.
+ */
+export type InferenceFunctionTool = Extract<IpaTool, { type: "function" }>;
 
 export type Inference = IpaInference & {
   /**
