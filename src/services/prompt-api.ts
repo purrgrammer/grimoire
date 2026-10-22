@@ -1,5 +1,7 @@
 import { makeInferenceError } from "ipa-tools";
 
+import { contentText } from "@/lib/message-content";
+
 import type {
   BackendAvailability,
   Inference,
@@ -196,7 +198,7 @@ export function splitMessages(messages: Message[]): {
         systems.push(message.content);
         break;
       case "user":
-        prompts.push({ role: "user", content: message.content });
+        prompts.push({ role: "user", content: contentText(message.content) });
         break;
       case "assistant": {
         const calls = message.toolCalls?.length
@@ -207,7 +209,9 @@ export function splitMessages(messages: Message[]): {
               )
               .join("\n")
           : "";
-        const content = [message.content, calls].filter(Boolean).join("\n");
+        const content = [contentText(message.content), calls]
+          .filter(Boolean)
+          .join("\n");
         if (content) prompts.push({ role: "assistant", content });
         break;
       }

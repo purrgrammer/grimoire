@@ -1,7 +1,7 @@
 import { ChevronDown, FileText, Wrench } from "lucide-react";
 import { useState } from "react";
 
-import type { InferenceTool } from "@/types/inference";
+import type { InferenceFunctionTool } from "@/types/inference";
 
 import {
   Collapsible,
@@ -74,7 +74,7 @@ export function ToolsDisclosure({
    * calling, and hiding it made the answer to "do we pass tools?" invisible.
    */
   offered: boolean;
-  tools: InferenceTool[];
+  tools: InferenceFunctionTool[];
 }) {
   const [open, setOpen] = useState(false);
   if (tools.length === 0) return null;

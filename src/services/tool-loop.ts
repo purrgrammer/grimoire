@@ -1,3 +1,4 @@
+import { contentText } from "@/lib/message-content";
 import {
   makeInferenceError,
   parseToolArguments,
@@ -121,7 +122,8 @@ export async function runToolLoop(
           model = chunk.model;
           usage = chunk.usage;
           if (chunk.message.role === "assistant") {
-            content = chunk.message.content ?? content;
+            if (chunk.message.content != null)
+              content = contentText(chunk.message.content);
             if (chunk.message.reasoning) {
               roundReasoning = chunk.message.reasoning;
               onReasoningDelta?.(reasoningRounds());

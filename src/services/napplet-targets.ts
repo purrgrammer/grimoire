@@ -33,12 +33,18 @@ import { nip19 } from "nostr-tools";
 
 import { grimoireStateAtom } from "@/core/state";
 import * as Logic from "@/core/logic";
-import { getNappletBridge, originRegistry } from "./napplet-host";
+import {
+  getNappletBridge,
+  originRegistry,
+  windowsForCatalogId,
+} from "./napplet-host";
 import {
   getDeclaredDomains,
   BUILTIN_OPEN_CAPABILITY,
 } from "./napplet-capabilities";
-import { listNapplets, pointerFromCoordinate } from "./napplet-library";
+import { pointerFromCoordinate } from "./napplet-library";
+import { findCatalogRecord } from "./napplet-intent";
+import type { IntentTargetController } from "./kehto";
 import { intentTopic, waitForNappletReady } from "./napplet-readiness";
 import {
   buildBuiltinWindow,
@@ -57,18 +63,25 @@ import { getNappletDecision, rememberNappletDecision } from "./napplet-acl";
  */
 const READY_TIMEOUT_MS = 20_000;
 
-/** A live session for this dTag, if exactly one exists. */
-function liveWindowFor(dTag: string): string | undefined {
+/**
+ * A live session for this catalog entry, if exactly one exists.
+ *
+ * Matched on the catalog ID recorded when the window's manifest was verified —
+ * publisher, kind and d-tag — not on the d-tag alone, so another author's napplet
+ * with the same name is never mistaken for the handler.
+ */
+function liveWindowFor(catalogId: string): string | undefined {
   const bridge = getNappletBridge();
-  const matches = bridge.runtime.sessionRegistry
-    .getAllEntries()
-    .filter((entry) => entry.dTag === dTag);
+  const live = new Set(
+    bridge.runtime.sessionRegistry.getAllEntries().map((e) => e.windowId),
+  );
+  const matches = windowsForCatalogId(catalogId).filter((id) => live.has(id));
   // Ambiguity fails closed: with two instances there is no "the" target.
-  return matches.length === 1 ? matches[0].windowId : undefined;
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 /**
- * Open a napplet by dTag from the installed catalog, returning its window id.
+ * Open a napplet by catalog ID from the installed catalog, returning its window id.
  *
  * Only catalogued napplets can be opened: the pointer comes from the library,
  * never from anything the calling napplet supplied, so a caller cannot name a
@@ -78,12 +91,11 @@ function liveWindowFor(dTag: string): string | undefined {
  * the id is recovered by diffing. Threading it out of `logic.ts` would be
  * cleaner but that signature is shared with every other command.
  */
-async function openHandler(dTag: string): Promise<string | undefined> {
-  const rows = await listNapplets();
-  const row = rows.find((entry) => entry.identifier === dTag);
-  if (!row) return undefined;
+async function openHandler(catalogId: string): Promise<string | undefined> {
+  const record = await findCatalogRecord(catalogId);
+  if (!record?.coordinate) return undefined;
 
-  const pointer = pointerFromCoordinate(row.coordinate);
+  const pointer = pointerFromCoordinate(record.coordinate);
   if (!pointer || "id" in pointer) return undefined;
 
   const store = getDefaultStore();
@@ -122,25 +134,22 @@ function readinessFailure(dTag: string, windowId: string): string {
 }
 
 /**
- * The verified identity behind a dTag, when there is exactly one answer.
+ * The verified identity running in the calling napplet's window.
  *
- * A decision is remembered per *version*, so a dTag alone cannot key one. With
- * no live session, or with two running different aggregates, there is no "the"
- * version and the answer is asked fresh rather than guessed at.
+ * A decision is remembered per *version*, so it is keyed by dTag and aggregate
+ * hash. The source window is runtime-attested, so this is exact — there is no
+ * guessing between two instances of the same napplet. Without one, the answer is
+ * asked fresh rather than guessed at.
  */
-function identityForDTag(
-  dTag: string,
+function identityForWindow(
+  windowId: string | undefined,
 ): { dTag: string; aggregateHash: string } | undefined {
-  const bridge = getNappletBridge();
-  const hashes = new Set<string>();
-  for (const entry of bridge.runtime.sessionRegistry.getAllEntries()) {
-    if (entry.dTag !== dTag) continue;
-    const frame = originRegistry.getIframeWindow(entry.windowId);
-    const identity = frame ? originRegistry.getIdentity(frame) : undefined;
-    if (identity) hashes.add(identity.aggregateHash);
-  }
-  const [only] = [...hashes];
-  return hashes.size === 1 ? { dTag, aggregateHash: only } : undefined;
+  if (!windowId) return undefined;
+  const frame = originRegistry.getIframeWindow(windowId);
+  const identity = frame ? originRegistry.getIdentity(frame) : undefined;
+  return identity
+    ? { dTag: identity.dTag, aggregateHash: identity.aggregateHash }
+    : undefined;
 }
 
 /**
@@ -163,7 +172,7 @@ async function openBuiltinForNapplet(
   archetype: string,
   action: string,
   payload: unknown,
-  sender: string,
+  sourceWindowId: string | undefined,
 ): Promise<string> {
   const window = await buildBuiltinWindow(
     archetype,
@@ -173,7 +182,7 @@ async function openBuiltinForNapplet(
     true,
   );
 
-  const identity = identityForDTag(sender);
+  const identity = identityForWindow(sourceWindowId);
   const remembered = identity
     ? getNappletDecision(
         identity.dTag,
@@ -206,68 +215,80 @@ async function openBuiltinForNapplet(
   return openBuiltinWindow(window);
 }
 
-export function createNappletTargetController() {
+/**
+ * Why a delivery failed, for the console.
+ *
+ * Kehto answers the calling napplet as soon as `accept` returns — a successful
+ * result means the host has taken responsibility for delivery, not that it
+ * happened — so a failure here no longer reaches the caller as an error. The
+ * napplet author's only trace of it is this.
+ */
+function reportDeliveryFailure(error: unknown): void {
+  console.warn(
+    "[napplet] intent delivery failed:",
+    error instanceof Error ? error.message : error,
+  );
+}
+
+export function createNappletTargetController(): IntentTargetController {
   return {
-    async dispatch(params: {
-      readonly handler: string;
-      /** The calling napplet's dTag. Kehto puts it on every dispatch. */
-      readonly sender: string;
-      readonly archetype: string;
-      readonly action: string;
-      readonly payload?: unknown;
-      readonly behavior?: Readonly<{ newWindow?: boolean; reuse?: boolean }>;
-    }): Promise<{ windowId: string }> {
-      const { handler, sender, archetype, action, payload, behavior } = params;
+    accept(params) {
+      const { handler, archetype, action, payload, behavior, sourceWindowId } =
+        params;
+      const completion = deliver();
+      // Observed here as well as by Kehto, which swallows it: this is the one
+      // place that can say what went wrong.
+      completion.catch(reportDeliveryFailure);
+      return { completion };
 
-      // Grimoire itself resolved as the handler: confirm, then open the native
-      // window. No readiness dance — there is no frame to wait for — but this
-      // path leaves the napplet sandbox, so it needs a decision the sandbox
-      // cannot make for the user.
-      const builtin = parseBuiltinHandlerDTag(handler);
-      if (builtin) {
-        return {
-          windowId: await openBuiltinForNapplet(
-            builtin,
-            action,
-            payload,
-            sender,
-          ),
-        };
+      async function deliver(): Promise<void> {
+        // Grimoire itself resolved as the handler: confirm, then open the native
+        // window. No readiness dance — there is no frame to wait for — but this
+        // path leaves the napplet sandbox, so it needs a decision the sandbox
+        // cannot make for the user.
+        const builtin = parseBuiltinHandlerDTag(handler);
+        if (builtin) {
+          await openBuiltinForNapplet(builtin, action, payload, sourceWindowId);
+          return;
+        }
+
+        const record = await findCatalogRecord(handler);
+        const name = record?.dTag ?? handler;
+
+        // Reuse unless the caller explicitly asked for a new window. Reuse is a
+        // hint, not a promise — a napplet cannot demand its own instance count.
+        // Kehto's behavior carries `reuse`; `reuse: false` is the new-window ask.
+        const existing =
+          behavior?.reuse === false ? undefined : liveWindowFor(handler);
+        const windowId = existing ?? (await openHandler(handler));
+        if (!windowId) {
+          throw new Error(`no installed napplet "${name}"`);
+        }
+
+        const ready = await waitForNappletReady(
+          windowId,
+          archetype,
+          action,
+          READY_TIMEOUT_MS,
+        );
+        if (!ready) throw new Error(readinessFailure(name, windowId));
+
+        const frame = originRegistry.getIframeWindow(windowId);
+        if (!frame) {
+          // The window was closed between becoming ready and now.
+          throw new Error(`"${name}" went away before delivery`);
+        }
+
+        frame.postMessage(
+          {
+            type: "inc.event",
+            topic: intentTopic(archetype, action),
+            sender: "shell",
+            ...(payload === undefined ? {} : { payload }),
+          },
+          "*",
+        );
       }
-
-      // Reuse unless the caller explicitly asked for a new window. Reuse is a
-      // hint, not a promise — a napplet cannot demand its own instance count.
-      const existing = behavior?.newWindow ? undefined : liveWindowFor(handler);
-      const windowId = existing ?? (await openHandler(handler));
-      if (!windowId) {
-        throw new Error(`no installed napplet with dTag "${handler}"`);
-      }
-
-      const ready = await waitForNappletReady(
-        windowId,
-        archetype,
-        action,
-        READY_TIMEOUT_MS,
-      );
-      if (!ready) throw new Error(readinessFailure(handler, windowId));
-
-      const frame = originRegistry.getIframeWindow(windowId);
-      if (!frame) {
-        // The window was closed between becoming ready and now.
-        throw new Error(`"${handler}" went away before delivery`);
-      }
-
-      frame.postMessage(
-        {
-          type: "inc.event",
-          topic: intentTopic(archetype, action),
-          sender: "shell",
-          ...(payload === undefined ? {} : { payload }),
-        },
-        "*",
-      );
-
-      return { windowId };
     },
   };
 }

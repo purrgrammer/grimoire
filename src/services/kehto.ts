@@ -53,12 +53,14 @@ export {
 } from "@kehto/services";
 
 export type {
+  IntentCandidate,
   IntentCatalogEntry,
   IntentTargetController,
 } from "@kehto/services";
 
 export {
   resolveNapplet,
+  parseNappletManifest,
   fetchBlob,
   openNappletArtifactCache,
   NappletResolutionError,

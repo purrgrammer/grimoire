@@ -45,6 +45,7 @@ import {
   injectCspMeta,
   injectNappletNamespacePrelude,
   destroyNappletWindow,
+  setNappletCatalogId,
   resyncNappletTap,
   originRegistry,
   publishNappletTheme,
@@ -418,6 +419,8 @@ function NappletFrame({
         title: view.title || view.identity.dTag || "Napplet",
         pubkey: view.manifestEvent.pubkey,
       });
+
+      setNappletCatalogId(windowId, view.catalogId);
 
       const register = () => {
         if (!frame?.contentWindow) return;
