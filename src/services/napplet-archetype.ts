@@ -28,7 +28,11 @@ import type { AddressPointer } from "@/lib/open-parser";
 import { APP_ID_OVERRIDE } from "@/lib/command-parser";
 import { getNappletArchetypes } from "@/lib/nip5d-helpers";
 import { getDefaultHandler } from "./napplet-intent-defaults";
-import { listNapplets, pointerFromCoordinate } from "./napplet-library";
+import {
+  installedNappletCatalogId,
+  listNapplets,
+  pointerFromCoordinate,
+} from "./napplet-library";
 import {
   BUILTIN_ARCHETYPES,
   builtinHandlerDTag,
@@ -92,7 +96,7 @@ export async function listArchetypeRoles(): Promise<ArchetypeRole[]> {
     if (!pointer || "id" in pointer) continue;
     const candidate: ArchetypeCandidate = {
       kind: "napplet",
-      dTag: pointer.identifier,
+      dTag: installedNappletCatalogId(row)!,
       title: row.title || pointer.identifier,
       pointer,
     };
@@ -169,7 +173,7 @@ export async function resolveArchetype(
   if (!role.resolved) {
     const names = role.candidates
       .filter((candidate) => candidate.kind === "napplet")
-      .map((candidate) => candidate.dTag)
+      .map((candidate) => candidate.title)
       .join(", ");
     throw new Error(
       `Several installed napplets handle "${archetype}": ${names}. Run one by address, or set a default in \`apps\`.`,

@@ -1,3 +1,8 @@
+import { getNappletCatalogId } from "@/services/kehto";
+import {
+  setWindowCatalogId,
+  clearWindowCatalogId,
+} from "@/services/napplet-library";
 import {
   useCallback,
   useEffect,
@@ -81,7 +86,6 @@ interface NappletError {
   message: string;
   /** Integrity failures are a security signal, not a transient fault. */
   integrity: boolean;
-  missing?: string[];
 }
 
 const INTEGRITY_CODES = new Set([
@@ -227,6 +231,7 @@ function NappletFrame({
   const containerRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<Stage>("fetching-manifest");
   const [error, setError] = useState<NappletError | null>(null);
+  const [missingCapabilities, setMissingCapabilities] = useState<string[]>([]);
   const [resolved, setResolved] = useState<ResolvedNappletView | null>(null);
   const [progress, setProgress] = useState<{
     done: number;
@@ -333,22 +338,12 @@ function NappletFrame({
       );
 
       const environment = getNappletEnvironment(view.identity);
-      const missing = getMissingRequiredNaps(
-        view.requires,
-        environment.capabilities.domains,
+      // Requirements describe compatibility, not permission to launch. Keep
+      // the advertised environment unchanged so the napplet can detect missing
+      // domains and gracefully degrade its own features.
+      setMissingCapabilities(
+        getMissingRequiredNaps(view.requires, environment.capabilities.domains),
       );
-      if (missing.length > 0) {
-        setResolved(view);
-        setError({
-          code: "unsupported-requires",
-          message:
-            "This napplet requires capabilities grimoire does not expose.",
-          integrity: false,
-          missing,
-        });
-        setStage("error");
-        return;
-      }
 
       // Built before the frame exists, so a document whose policy could not be
       // placed fails closed with no napplet running — see `injectCspMeta`.
@@ -421,6 +416,7 @@ function NappletFrame({
 
       const register = () => {
         if (!frame?.contentWindow) return;
+        setWindowCatalogId(windowId, getNappletCatalogId(view.manifestEvent));
         originRegistry.register(frame.contentWindow, windowId, view.identity);
         originRegistry.setEnvironment(frame.contentWindow, environment);
       };
@@ -445,6 +441,7 @@ function NappletFrame({
     return () => {
       cancelled.current = true;
       unregisterNappletIdentity(windowId);
+      clearWindowCatalogId(windowId);
       destroyNappletWindow(windowId);
       if (frame) {
         if (onLoad) frame.removeEventListener("load", onLoad);
@@ -483,6 +480,29 @@ function NappletFrame({
         </div>
       )}
 
+      {stage === "ready" && missingCapabilities.length > 0 && (
+        <div
+          role="status"
+          className="flex shrink-0 items-start gap-2 border-b border-warning/40 bg-card px-3 py-2 text-xs text-card-foreground"
+        >
+          <AlertCircle
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-warning"
+          />
+          <div className="space-y-1">
+            <p>
+              This napplet may not work correctly because grimoire does not
+              support some required capabilities.
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {missingCapabilities.map((capability) => (
+                <Label key={capability}>{capability}</Label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* No chrome, like an nsite: the author and the name are in the window
           title, and permissions are listed per app in `apps`. What had nowhere
           else to go rides on the frame's own tooltip. */}
@@ -496,7 +516,7 @@ function NappletFrame({
         ]
           .filter(Boolean)
           .join(" — ")}
-        className={stage === "ready" ? "relative flex-1" : "hidden"}
+        className={stage === "ready" ? "relative min-h-0 flex-1" : "hidden"}
       />
 
       {debug && showMessages && (
@@ -536,13 +556,6 @@ function NappletErrorPanel({
               : "Could not open this napplet"}
           </h3>
           <p className="text-xs text-muted-foreground">{error.message}</p>
-          {error.missing && error.missing.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              {error.missing.map((nap) => (
-                <Label key={nap}>{nap}</Label>
-              ))}
-            </div>
-          )}
           <div className="flex items-center gap-2 pt-1">
             <Label>{error.code}</Label>
             {!error.integrity && (

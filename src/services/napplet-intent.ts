@@ -25,6 +25,7 @@
 
 import {
   createCatalogIntentResolver,
+  getNappletCatalogId,
   manifestToIntentCatalogEntry,
   type IntentCatalogEntry,
   type IntentTargetController,
@@ -32,7 +33,6 @@ import {
 
 import { listNapplets, pointerFromCoordinate } from "./napplet-library";
 import { BUILTIN_ARCHETYPES, builtinHandlerDTag } from "./napplet-builtins";
-import defaultEventStore from "./event-store";
 import { getNappletArchetypes, getNappletTitle } from "@/lib/nip5d-helpers";
 
 /* -------------------------------------------------------------------------- */
@@ -87,18 +87,11 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
 
   for (const row of rows) {
     const pointer = pointerFromCoordinate(row.coordinate);
-    if (!pointer || "id" in pointer) continue;
+    if (!pointer) continue;
 
     // The manifest recorded with the row is the verified one. The EventStore is
-    // only a fallback: it holds every event from every feed and `req`, so a
-    // coordinate can resolve there to a version the user never ran.
-    const event =
-      row.manifest ??
-      defaultEventStore.getReplaceable(
-        pointer.kind,
-        pointer.pubkey,
-        pointer.identifier || undefined,
-      );
+    // not an installation source: a replacement there may never have been run.
+    const event = row.manifest;
     if (!event) continue;
 
     const archetypes = getNappletArchetypes(event);
@@ -107,14 +100,14 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
     try {
       entries.push(
         manifestToIntentCatalogEntry({
-          dTag: pointer.identifier,
+          catalogId: getNappletCatalogId(event),
           title: getNappletTitle(event) ?? row.title,
           archetypes,
         }),
       );
     } catch (error) {
       console.warn(
-        `[napplet] skipping "${pointer.identifier}" in the intent catalog: malformed archetype tags`,
+        `[napplet] skipping "${row.coordinate}" in the intent catalog: malformed archetype tags`,
         error,
       );
     }
@@ -132,11 +125,12 @@ export async function loadIntentCatalog(): Promise<IntentCatalogEntry[]> {
     if (claimed.has(builtin.archetype)) continue;
     entries.push(
       manifestToIntentCatalogEntry({
-        dTag: builtinHandlerDTag(builtin.archetype),
+        catalogId: builtinHandlerDTag(builtin.archetype),
         title: builtin.title,
         archetypes: builtin.actions.map((action) => ({
           slug: builtin.archetype,
           convention: `napplet:${builtin.archetype}/${action}`,
+          params: [],
         })),
       }),
     );
@@ -235,7 +229,7 @@ export function createNappletIntentResolver(options: {
     chooseHandler: (archetype, candidates, sender) =>
       askUserToChoose(
         archetype,
-        candidates.map((c) => ({ dTag: c.dTag, title: c.title })),
+        candidates.map((c) => ({ dTag: c.id, title: c.title })),
         sender,
       ),
 

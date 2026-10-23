@@ -110,3 +110,38 @@ export async function forgetNapplet(coordinate: string): Promise<void> {
 }
 
 export type { InstalledNapplet };
+
+/** Verified catalog identity for each mounted napplet document. */
+const windowCatalog = new Map<string, string>();
+
+export function setWindowCatalogId(windowId: string, catalogId: string): void {
+  windowCatalog.set(windowId, catalogId);
+}
+
+export function getWindowCatalogId(windowId: string): string | undefined {
+  return windowCatalog.get(windowId);
+}
+
+export function clearWindowCatalogId(windowId: string): void {
+  windowCatalog.delete(windowId);
+}
+
+/** Publisher-safe ID without importing the runtime into the command registry. */
+export function installedNappletCatalogId(row: {
+  coordinate: string;
+  manifest?: NostrEvent;
+}): string | undefined {
+  const event = row.manifest;
+  if (event?.kind === 5129) return `nip5d:5129:${event.id}`;
+  if (event?.kind === 15129) return `nip5d:15129:${event.pubkey}`;
+  if (event?.kind === 35129) {
+    const identifier = event.tags.find((tag) => tag[0] === "d")?.[1];
+    if (identifier) return `nip5d:35129:${event.pubkey}:${identifier}`;
+  }
+  const pointer = pointerFromCoordinate(row.coordinate);
+  if (!pointer) return undefined;
+  if ("id" in pointer) return `nip5d:5129:${pointer.id}`;
+  return pointer.kind === 15129
+    ? `nip5d:15129:${pointer.pubkey}`
+    : `nip5d:${row.coordinate}`;
+}

@@ -2,7 +2,8 @@
 
 Content-addressed, sandboxed mini-applications published to Nostr and run inside
 a grimoire window. A manifest names its files; grimoire verifies the signature,
-fetches every file from Blossom, checks each file hash and the NIP-5A aggregate,
+fetches the signed HTML artifact from Blossom (or legacy path-tagged files),
+checks the artifact hash (or each file hash and the NIP-5A aggregate),
 and only then renders the bytes in a sandboxed iframe that can reach nothing
 except what the user grants it.
 
@@ -22,6 +23,15 @@ shield, and both render `NappletDecisions` so they cannot drift.
 
 `--debug` opens the host↔napplet traffic drawer. It is for the person *writing*
 a napplet, so it is off unless asked for.
+
+Current npm integration: `@kehto/nip` 0.7.0, `@kehto/services` 0.25.1,
+`@kehto/shell` 0.24.4, and `@napplet/core` / `@napplet/nap` 0.34.0.
+Transitive runtime 0.26.0, ACL 0.19.1 and firewall 0.6.1 share the compatible
+Napplet peer range `>=0.32.0 <0.35.0`.
+
+Current manifests use `R` for required domains and independent `z` / `i` tags
+for roles and queryless intent contracts, including ordered parameter names.
+Legacy `requires` / `archetype` tags remain supported.
 
 ## Where it lives
 
@@ -51,6 +61,12 @@ those packages everywhere else. Type-only imports are exempt: they are erased at
 build and a breaking type change fails `tsc` loudly. Before that rule existed
 the same claim was a comment in `napplet-host.ts`, and it was false for five
 files, one of them written in the same change as the comment.
+
+Required domains are a compatibility declaration, not a launch gate. If a
+verified napplet requires domains grimoire does not expose, it still loads with
+a warning listing the missing capabilities. The environment stays unchanged;
+the napplet is responsible for detecting unsupported features and degrading
+gracefully. Verification, sandboxing and user consent still apply.
 
 ## Load-bearing decisions
 
@@ -134,11 +150,22 @@ back to the built-in command that already fills the role. The mapping produces a
 definition of "how to open a profile" — NIP-05 resolution and relay hints
 included.
 
-**Readiness is not a live session.** The spec says deliver only once the handler
-"is ready" and never says how a shell should know. `shell.ready` is the wrong
-answer: it is the *runtime* handshake, and it fires long before the napplet's
-own code has subscribed to the topic the payload arrives on. See
-`napplet-readiness.ts`.
+**Intent acceptance retains delivery work.** `IntentTargetController.accept()`
+returns a completion promise immediately; the successful source result means the
+host accepted responsibility, not that the target has finished receiving it.
+The target controller waits for a live shell session, then sends the protected
+`intent.deliver` envelope with the selected convention and runtime-attested sender.
+Kehto queues delivery until `intent.onDelivery` or a compatible legacy INC
+listener is installed. The old `inc.subscribe` / `<role>:ready` observer is no
+longer used to gate intent delivery.
+
+**Catalog identities include publisher and kind.** Routing uses
+`nip5d:35129:<pubkey>:<identifier>` (or the root/snapshot equivalent), never a
+bare d-tag. The host maps each verified iframe to that ID and supplies it through
+`resolveSender`; caller message fields cannot supply the sender. Old bare d-tag
+defaults and explicit-target permissions no longer match; users must select them
+again rather than inheriting authority across publishers. Only cached verified
+manifests enter the catalog; an EventStore replacement is not an installed update.
 
 `app <archetype>` reads only the launcher's cached (already-verified) manifests,
 so it touches no relay and cannot be steered by one. Resolution is narrow — the

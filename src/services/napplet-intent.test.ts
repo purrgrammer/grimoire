@@ -98,12 +98,26 @@ describe("intent catalog", () => {
       {
         coordinate: `35129:${"a".repeat(64)}:broken`,
         title: "Broken",
-        manifest: { tags: [["archetype", "profile"]] },
+        manifest: {
+          kind: 35129,
+          pubkey: "a".repeat(64),
+          tags: [
+            ["d", "broken"],
+            ["archetype", "profile"],
+          ],
+        },
       },
       {
         coordinate: `35129:${"a".repeat(64)}:underscored`,
         title: "Underscored",
-        manifest: { tags: [["archetype", "my_role", "napplet:my_role/open"]] },
+        manifest: {
+          kind: 35129,
+          pubkey: "a".repeat(64),
+          tags: [
+            ["d", "underscored"],
+            ["archetype", "my_role", "napplet:my_role/open"],
+          ],
+        },
       },
     ];
     const spy = vi
@@ -113,15 +127,47 @@ describe("intent catalog", () => {
     const entries = await loadIntentCatalog();
     spy.mockRestore();
 
-    expect(entries.map((e) => e.dTag)).not.toContain("broken");
-    expect(entries.map((e) => e.dTag)).not.toContain("underscored");
+    expect(entries.map((e) => e.id)).not.toContain("broken");
+    expect(entries.map((e) => e.id)).not.toContain("underscored");
     // The built-ins still made it, which is the point: the batch survived.
     expect(entries.length).toBeGreaterThan(0);
   });
 
+  it("keeps publishers separate and preserves current contract parameters", async () => {
+    const rows = ["a", "b"].map((letter) => ({
+      coordinate: `35129:${letter.repeat(64)}:viewer`,
+      title: "Viewer",
+      manifest: {
+        kind: 35129,
+        pubkey: letter.repeat(64),
+        tags: [
+          ["d", "viewer"],
+          ["z", "profile"],
+          ["i", "napplet:profile/open", "pubkey"],
+        ],
+      },
+    }));
+    const spy = vi
+      .spyOn(library, "listNapplets")
+      .mockResolvedValue(rows as never);
+    try {
+      const entries = (await loadIntentCatalog()).filter(
+        (entry) => entry.archetypes.profile,
+      );
+      expect(entries.map((entry) => entry.id)).toEqual(
+        rows.map((row) => `nip5d:${row.coordinate}`),
+      );
+      expect(entries[0].archetypes.profile.contracts).toEqual([
+        { convention: "napplet:profile/open", params: ["pubkey"] },
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("advertises grimoire's built-in roles when nothing is installed", async () => {
     const entries = await loadIntentCatalog();
-    expect(entries.map((entry) => entry.dTag)).toEqual(
+    expect(entries.map((entry) => entry.id)).toEqual(
       BUILTIN_ARCHETYPE_SLUGS.map(builtinHandlerDTag),
     );
 
@@ -129,8 +175,10 @@ describe("intent catalog", () => {
     // `napplet:<archetype>/open` convention.
     for (const entry of entries) {
       const [slug] = Object.keys(entry.archetypes);
-      expect(entry.dTag).toBe(builtinHandlerDTag(slug));
-      expect(entry.archetypes[slug].actions).toEqual(["open"]);
+      expect(entry.id).toBe(builtinHandlerDTag(slug));
+      expect(entry.archetypes[slug].contracts.map((c) => c.convention)).toEqual(
+        [`napplet:${slug}/open`],
+      );
     }
   });
 });

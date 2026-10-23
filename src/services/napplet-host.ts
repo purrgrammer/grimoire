@@ -93,7 +93,7 @@ import type { Subscription } from "rxjs";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
 import { fetchUserServers } from "./blossom";
-import { getCachedManifest } from "./napplet-library";
+import { getWindowCatalogId, getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
 import { FALLBACK_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
@@ -485,6 +485,7 @@ function buildAdapter(): ShellAdapter {
           : null;
       }),
       intent: createIntentService({
+        resolveSender: getWindowCatalogId,
         resolver: createNappletIntentResolver({
           targets: createNappletTargetController(),
         }),
