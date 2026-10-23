@@ -326,17 +326,63 @@ describe("syncDmInbox", () => {
     expect(result).toMatchObject({ fetched: 0, written: 0 });
   });
 
-  it("records how far back it has walked, and only ever further", async () => {
+  it("leaves the walk's resume cursor alone", async () => {
+    // The cursor belongs to `backfillDmHistory`. A top-up reports the MINIMUM
+    // over its merged pages, so one shallow relay holding an ancient wrap used
+    // to drag the cursor there and the walk resumed past everything between.
     const wrap = await wrapMessage(bob, ALICE, "old");
     const r = await relay({ kind: "normal", events: [wrap] });
+    await db.dmKv.put({ key: `${ALICE}:cursor`, value: 1 });
 
     await syncDmInbox(ALICE, alice, { relays: [r.url] });
-    const first = await db.dmKv.get(`${ALICE}:cursor`);
 
-    await syncDmInbox(ALICE, alice, { relays: [r.url] });
-    const second = await db.dmKv.get(`${ALICE}:cursor`);
+    expect((await db.dmKv.get(`${ALICE}:cursor`))?.value).toBe(1);
+  });
 
-    expect(second?.value).toBe(first?.value);
+  it("opens nothing once it has been told to stop", async () => {
+    const wrap = await wrapMessage(bob, ALICE, "too late");
+    const r = await relay({ kind: "normal", events: [wrap] });
+    const stop = new AbortController();
+    stop.abort();
+
+    const result = await syncDmInbox(ALICE, alice, {
+      relays: [r.url],
+      signal: stop.signal,
+    });
+
+    expect(result.written).toBe(0);
+    expect(await db.dmRumors.count()).toBe(0);
+    expect(await db.dmSeenWraps.count()).toBe(0);
+  });
+});
+
+describe("unlockWraps cancellation", () => {
+  it("writes and marks nothing when stopped while the signer was working", async () => {
+    // Logout stops the pipeline and THEN wipes the tables. A wave already
+    // inside `decrypt` must not write into the wiped tables, and above all
+    // must not leave seen marks for rows the wipe took — a seen mark with no
+    // row is a message that never comes back.
+    const wrap = await wrapMessage(bob, ALICE, "mid-flight");
+    const stop = new AbortController();
+    const real = alice.nip44.decrypt.bind(alice.nip44);
+    const spy = vi
+      .spyOn(alice.nip44, "decrypt")
+      .mockImplementation(async (pubkey, text) => {
+        stop.abort();
+        return real(pubkey, text);
+      });
+
+    const outcome = await unlockWraps(
+      ALICE,
+      alice,
+      [overTheWire(wrap)],
+      stop.signal,
+    );
+    spy.mockRestore();
+
+    expect(outcome.written).toBe(0);
+    expect(await db.dmRumors.count()).toBe(0);
+    expect(await db.dmSeenWraps.count()).toBe(0);
   });
 });
 
