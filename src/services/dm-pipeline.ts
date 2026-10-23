@@ -276,7 +276,13 @@ export function topUpDmInbox(
     try {
       const relays = await inboxRelays(viewer, run);
       if (relays.length === 0) return;
-      await syncDmInbox(viewer, using, { relays, pages: 2 });
+      await syncDmInbox(viewer, using, {
+        relays,
+        pages: 2,
+        // The run's own, when there is one: stopping the pipeline (logout)
+        // must stop a top-up that is already inside the signer.
+        ...(run ? { signal: run.abort.signal } : {}),
+      });
     } catch (error) {
       console.warn("[dm] could not top up the inbox:", error);
     } finally {
@@ -318,7 +324,11 @@ export function pageDmInboxBefore(
     try {
       const relays = await inboxRelays(viewer, run);
       if (relays.length === 0) return;
-      await syncDmInbox(viewer, using, { relays, until: before });
+      await syncDmInbox(viewer, using, {
+        relays,
+        until: before,
+        ...(run ? { signal: run.abort.signal } : {}),
+      });
     } catch (error) {
       console.warn("[dm] could not page the inbox back:", error);
     } finally {
@@ -451,7 +461,11 @@ async function start(viewer: string, run: Run, gen: number): Promise<void> {
   try {
     // The fresh end first, so a reader who opens the pane sees today's mail
     // before a long walk starts.
-    await syncDmInbox(viewer, run.signer, { relays, pages: 2 });
+    await syncDmInbox(viewer, run.signer, {
+      relays,
+      pages: 2,
+      signal: run.abort.signal,
+    });
     if (!live()) return;
 
     // Then the whole history, once PER RELAY SET. A wrap says nothing about
