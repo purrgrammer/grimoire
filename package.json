@@ -90,7 +90,7 @@
     "hash-sum": "^2.0.0",
     "hls-video-element": "^1.5.11",
     "hls.js": "^1.7.3",
-    "ipa-tools": "^0.6.0",
+    "ipa-tools": "^2.0.0",
     "jotai": "^2.20.2",
     "js-yaml": "^5.4.3",
     "json-schema-to-ts": "^3.1.1",
