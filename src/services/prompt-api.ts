@@ -4,9 +4,10 @@ import { contentText } from "@/lib/message-content";
 
 import type {
   BackendAvailability,
+  ChatChunk,
   Inference,
   InferenceBackend,
-  InferenceChunk,
+  InferenceChunkFor,
   InferenceRequest,
   Message,
 } from "ipa-tools";
@@ -96,19 +97,32 @@ export function createPromptApiBackend(): InferenceBackend {
 function promptApiInference(api: PromptApi): Inference {
   return {
     getFeatures: () => ({ toolCalling: false, options: {} }),
-    request(request: InferenceRequest): AsyncIterable<InferenceChunk> {
-      return {
+    request<R extends InferenceRequest>(
+      request: R,
+    ): AsyncIterable<InferenceChunkFor<R>> {
+      // Chat is the only method this backend advertises. ipa-tools 1.0 requires
+      // an implementation to reject an unadvertised method *before* yielding,
+      // so the check sits outside the generator body, which does not run until
+      // first pull.
+      if (!isChatRequest(request)) {
+        throw makeInferenceError(
+          "invalid_request",
+          "The on-device model only answers chat requests.",
+        );
+      }
+      const chat = request;
+      const stream: AsyncIterable<ChatChunk> = {
         async *[Symbol.asyncIterator]() {
-          if (request.tools?.length) {
+          if (chat.tools?.length) {
             throw makeInferenceError(
               "invalid_request",
               "The on-device model cannot call tools.",
             );
           }
-          throwIfAborted(request.signal);
+          throwIfAborted(chat.signal);
           yield { type: "accepted" };
 
-          const { system, prompts } = splitMessages(request.messages);
+          const { system, prompts } = splitMessages(chat.messages);
           if (prompts.length === 0) {
             throw makeInferenceError(
               "invalid_request",
@@ -117,13 +131,13 @@ function promptApiInference(api: PromptApi): Inference {
           }
 
           const turn = await createSession(api, system, {
-            signal: request.signal,
+            signal: chat.signal,
           });
           try {
             let text = "";
             for await (const part of readStream(
-              turn.promptStreaming(prompts, { signal: request.signal }),
-              request.signal,
+              turn.promptStreaming(prompts, { signal: chat.signal }),
+              chat.signal,
             )) {
               // Chrome has shipped both deltas and full-text-so-far chunks.
               // Telling them apart by prefix means either behaviour renders
@@ -146,8 +160,17 @@ function promptApiInference(api: PromptApi): Inference {
           }
         },
       };
+      // Narrowed above: `R` is a chat request, so its chunk type is ChatChunk.
+      return stream as AsyncIterable<InferenceChunkFor<R>>;
     },
   };
+}
+
+/** A chat request is the one carrying `messages`. */
+function isChatRequest(
+  request: InferenceRequest,
+): request is Extract<InferenceRequest, { messages: unknown }> {
+  return "messages" in request;
 }
 
 async function createSession(

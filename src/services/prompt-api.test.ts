@@ -155,6 +155,25 @@ describe("streaming", () => {
     expect(inference.getFeatures?.().toolCalling).toBe(false);
   });
 
+  it("refuses an unadvertised method before the stream is pulled", async () => {
+    // ipa-tools 1.0 widened `InferenceRequest` to chat | decide | transcribe |
+    // synthesize and requires an implementation to reject a method it does not
+    // advertise *before* yielding. Throwing from inside the generator body
+    // would defer it to the first pull, so a caller that only checks whether a
+    // stream was returned would think the request had been accepted.
+    const mock = createMockPromptApi();
+    const inference = await inferenceOf(mock);
+    const decide = {
+      method: "decide",
+      state: "{}",
+      questions: [{ id: "q", prompt: "pick", type: "boolean" }],
+    } as unknown as Parameters<typeof inference.request>[0];
+
+    expect(() => inference.request(decide)).toThrowError(
+      expect.objectContaining({ code: "invalid_request" }),
+    );
+  });
+
   it("ignores option keys it does not advertise", async () => {
     // `runToolLoop` sends `reasoningEffort` unconditionally, which the spec says
     // an implementation must ignore rather than reject.

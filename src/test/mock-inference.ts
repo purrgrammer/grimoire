@@ -1,6 +1,8 @@
 import type {
+  ChatChunk,
+  ChatRequest,
   Inference,
-  InferenceChunk,
+  InferenceChunkFor,
   InferenceErrorCode,
   InferenceFeatures,
   InferenceRequest,
@@ -46,8 +48,12 @@ export type MockInferenceBehaviour =
     };
 
 export interface MockInference extends Inference {
-  /** Requests received, for asserting the caller isn't re-requesting. */
-  requests: InferenceRequest[];
+  /**
+   * Requests received, for asserting the caller isn't re-requesting. Chat-only:
+   * grimoire sends nothing else, and the union ipa-tools 1.0 introduced would
+   * hide `messages` from every assertion for no gain.
+   */
+  requests: ChatRequest[];
 }
 
 /**
@@ -58,17 +64,28 @@ export function createMockInference(
   behaviour: MockInferenceBehaviour,
   features: InferenceFeatures = {},
 ): MockInference {
-  const requests: InferenceRequest[] = [];
+  const requests: ChatRequest[] = [];
   let round = 0;
 
   return {
     requests,
     getFeatures: () => features,
-    request(request: InferenceRequest): AsyncIterable<InferenceChunk> {
-      requests.push(request);
-      return {
+    request<R extends InferenceRequest>(
+      request: R,
+    ): AsyncIterable<InferenceChunkFor<R>> {
+      // Chat only, like the real injectors grimoire talks to. Rejecting before
+      // the generator body matches what ipa-tools 1.0 asks of implementations.
+      if (!("messages" in request)) {
+        throw reconstructedError(
+          "invalid_request",
+          "The mock only answers chat requests.",
+        );
+      }
+      const chat = request as unknown as ChatRequest;
+      requests.push(chat);
+      const stream: AsyncIterable<ChatChunk> = {
         async *[Symbol.asyncIterator]() {
-          throwIfAborted(request);
+          throwIfAborted(chat);
           yield { type: "accepted" };
 
           if (behaviour.kind === "tool-calls") {
@@ -117,8 +134,8 @@ export function createMockInference(
             await new Promise<void>((_resolve, reject) => {
               // Re-check inside the promise: abort can land between the
               // generator starting and this listener being attached.
-              throwIfAborted(request);
-              request.signal?.addEventListener(
+              throwIfAborted(chat);
+              chat.signal?.addEventListener(
                 "abort",
                 () => reject(reconstructedError("aborted", "Request aborted")),
                 { once: true },
@@ -134,19 +151,19 @@ export function createMockInference(
           const reasoning =
             behaviour.kind === "normal" ? (behaviour.reasoning ?? []) : [];
           for (const content of reasoning) {
-            throwIfAborted(request);
+            throwIfAborted(chat);
             yield { type: "reasoning_delta", content };
           }
 
           const deltas = behaviour.deltas ?? [];
           for (const content of deltas) {
-            throwIfAborted(request);
+            throwIfAborted(chat);
             yield { type: "delta", content };
           }
 
           if (behaviour.kind === "no-done") return;
 
-          throwIfAborted(request);
+          throwIfAborted(chat);
           yield {
             type: "done",
             model: behaviour.model ?? "mock-model",
@@ -159,6 +176,8 @@ export function createMockInference(
           };
         },
       };
+      // Narrowed above: `R` is a chat request, so its chunk type is ChatChunk.
+      return stream as AsyncIterable<InferenceChunkFor<R>>;
     },
   };
 }
@@ -183,7 +202,7 @@ export function installMockInference(mock: Inference | undefined): () => void {
   };
 }
 
-function throwIfAborted(request: InferenceRequest): void {
+function throwIfAborted(request: ChatRequest): void {
   if (request.signal?.aborted) {
     throw reconstructedError("aborted", "Request aborted");
   }

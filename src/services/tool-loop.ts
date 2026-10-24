@@ -6,8 +6,9 @@ import {
 } from "./inference";
 
 import type {
+  ChatChunk,
+  ChatRequest,
   DoneChunk,
-  Inference,
   InferenceMessage,
   InferenceTool,
   ToolCall,
@@ -27,7 +28,11 @@ import type { ToolRun } from "@/types/tool-part";
 export type ToolExecutors = Record<string, (args: unknown) => Promise<unknown>>;
 
 export interface ToolLoopOptions {
-  request: Inference["request"];
+  /**
+   * Chat-only: the loop exists to relay function calls, which only chat has.
+   * ipa-tools keeps `runTools()` chat-only for the same reason.
+   */
+  request: (request: ChatRequest) => AsyncIterable<ChatChunk>;
   messages: InferenceMessage[];
   /** Omit when the injector does not advertise toolCalling. */
   tools?: InferenceTool[];
