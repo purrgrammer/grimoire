@@ -31,10 +31,11 @@ import {
 
 import type { BackendAvailability } from "ipa-tools";
 import type {
+  ChatChunk,
+  ChatRequest,
   DoneChunk,
   Inference,
   InferenceFeatures,
-  InferenceRequest,
 } from "@/types/inference";
 
 // Re-exported so callers keep one import site for the whole surface.
@@ -147,7 +148,13 @@ export function listBackends() {
 }
 
 export interface ResolvedRequest {
-  request: Inference["request"];
+  /**
+   * Chat-only. ipa-tools 1.0 made `Inference["request"]` generic over a
+   * request union (chat | decide | transcribe | synthesize); grimoire only
+   * ever sends chat, and a generic signature here would force every caller to
+   * prove which method it meant for no gain.
+   */
+  request: (request: ChatRequest) => AsyncIterable<ChatChunk>;
   tools: ToolSupport;
   /** True when the answer will come from the page's own model, not an injector. */
   onDevice?: boolean;
@@ -221,7 +228,7 @@ export function resolveRequest(
 }
 
 /** Drain a stream to its single `done` chunk, ignoring deltas. */
-export async function complete(request: InferenceRequest): Promise<DoneChunk> {
+export async function complete(request: ChatRequest): Promise<DoneChunk> {
   let done: DoneChunk | undefined;
   for await (const chunk of resolveRequest().request(request)) {
     if (chunk.type === "done") done = chunk;

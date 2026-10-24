@@ -15,15 +15,18 @@
  */
 
 import type {
+  ChatChunk,
+  ChatRequest,
   Inference as IpaInference,
-  InferenceChunk,
-  InferenceRequest,
   Tool as IpaTool,
 } from "ipa-tools";
 
 export type {
+  ChatChunk,
+  ChatRequest,
   DoneChunk,
   InferenceChunk,
+  InferenceChunkFor,
   InferenceError,
   InferenceErrorCode,
   InferenceFeatures,
@@ -54,7 +57,14 @@ export type Inference = IpaInference & {
    * preferred whenever it advertises support.
    */
   experimental?: {
-    request?(request: InferenceRequest): AsyncIterable<InferenceChunk>;
+    /**
+     * Chat-only, like everything grimoire asks of a provider. Since ipa-tools
+     * 1.0 `InferenceRequest` is a union (chat | decide | transcribe |
+     * synthesize) and the spec's `request` is generic over it; this namespace
+     * predates that split and only ever carried chat, so it stays concrete
+     * rather than claiming methods no injector implements here.
+     */
+    request?(request: ChatRequest): AsyncIterable<ChatChunk>;
     runTools?(options: unknown): Promise<unknown>;
   };
 };
