@@ -93,7 +93,7 @@ import type { Subscription } from "rxjs";
 import relayStateManager from "./relay-state-manager";
 import blossomServerCache from "./blossom-server-cache";
 import { fetchUserServers } from "./blossom";
-import { getCachedManifest } from "./napplet-library";
+import { getWindowCatalogId, getCachedManifest } from "./napplet-library";
 import relayListCache from "./relay-list-cache";
 import { FALLBACK_RELAYS } from "./loaders";
 import { getProfileContent } from "applesauce-core/helpers";
@@ -485,12 +485,10 @@ function buildAdapter(): ShellAdapter {
           : null;
       }),
       intent: createIntentService({
+        resolveSender: getWindowCatalogId,
         resolver: createNappletIntentResolver({
           targets: createNappletTargetController(),
         }),
-        // The sender Kehto passes to policy: a verified catalog ID, or nothing,
-        // in which case the invoke is rejected.
-        resolveSender: getNappletCatalogId,
       }),
       common: createNappletCommonService(),
       lists: createNappletListsService(),
@@ -685,37 +683,8 @@ export function getNappletBridge(): ShellBridge {
   return bridge;
 }
 
-/**
- * The catalog ID of the verified manifest running in each live window.
- *
- * NAP-INTENT names the calling napplet by catalog ID, and Kehto asks the host
- * to map an authenticated runtime window to it *synchronously*. The window's
- * `OriginIdentity` is only a d-tag and an aggregate hash, which cannot say which
- * publisher's napplet this is, so the viewer records the ID alongside it when it
- * registers the frame — from the manifest that was just verified, never from
- * anything the napplet sent.
- */
-const windowCatalogIds = new Map<string, string>();
-
-export function setNappletCatalogId(windowId: string, catalogId: string): void {
-  windowCatalogIds.set(windowId, catalogId);
-}
-
-/** The verified catalog ID for a runtime window, if it has one. */
-export function getNappletCatalogId(windowId: string): string | undefined {
-  return windowCatalogIds.get(windowId);
-}
-
-/** Every live window running this catalog entry. */
-export function windowsForCatalogId(catalogId: string): string[] {
-  return [...windowCatalogIds]
-    .filter(([, id]) => id === catalogId)
-    .map(([windowId]) => windowId);
-}
-
 /** Tear down one napplet window. The bridge outlives it. */
 export function destroyNappletWindow(windowId: string): void {
-  windowCatalogIds.delete(windowId);
   // Kehto's ShellBridge has no destroyWindow, so the runtime call and the
   // registry call are both ours to make. Skipping the first leaks that
   // window's subscriptions and INC state.

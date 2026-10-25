@@ -25,6 +25,7 @@ export type { NsitePath as NappletPath };
 export interface NappletArchetype {
   slug: string;
   convention: string;
+  params: string[];
 }
 
 export function getNappletTitle(event: NostrEvent): string | undefined {
@@ -58,20 +59,38 @@ export function getNappletAggregateHash(event: NostrEvent): string | undefined {
   return getNsiteAggregateHash(event);
 }
 
-/** Bare NAP domain names the napplet declares it needs, from `requires` tags. */
+/** Required domains from current R tags or legacy requires tags. */
 export function getNappletRequires(event: NostrEvent): string[] {
   return getOrComputeCachedValue(event, NappletRequiresSymbol, () => [
     ...new Set(
-      event.tags.filter((t) => t[0] === "requires" && t[1]).map((t) => t[1]),
+      event.tags
+        .filter((t) => (t[0] === "R" || t[0] === "requires") && t[1])
+        .map((t) => t[1]),
     ),
   ]);
 }
 
-/** Convention contracts the napplet fulfills, from `archetype` tags. */
+/** Current z/i routing tags, with legacy archetype pairs for older manifests. */
 export function getNappletArchetypes(event: NostrEvent): NappletArchetype[] {
-  return getOrComputeCachedValue(event, NappletArchetypesSymbol, () =>
-    event.tags
+  return getOrComputeCachedValue(event, NappletArchetypesSymbol, () => {
+    const roles = new Set(
+      event.tags.filter((t) => t[0] === "z" && t.length === 2).map((t) => t[1]),
+    );
+    if (event.tags.some((t) => t[0] === "z" || t[0] === "i")) {
+      return event.tags.flatMap(([tag, convention, ...params]) => {
+        const match =
+          tag === "i" && typeof convention === "string"
+            ? /^napplet:([a-z0-9][a-z0-9-]*)\/[^/?#\s]+$/.exec(convention)
+            : null;
+        return match &&
+          roles.has(match[1]) &&
+          params.every((p) => p && !/\s/.test(p))
+          ? [{ slug: match[1], convention, params }]
+          : [];
+      });
+    }
+    return event.tags
       .filter((t) => t[0] === "archetype" && t[1])
-      .map((t) => ({ slug: t[1], convention: t[2] ?? "" })),
-  );
+      .map((t) => ({ slug: t[1], convention: t[2] ?? "", params: [] }));
+  });
 }

@@ -6,8 +6,8 @@
  * else. Type-only imports are exempt: they are erased at build time and a
  * breaking type change fails `tsc` loudly rather than at runtime.
  *
- * The point is blast radius. Every package is pre-1.0 (`@kehto/shell` 0.19,
- * `@kehto/runtime` 0.21, `@napplet/core` 0.31) and NIP-5D is a draft, so minor
+ * The point is blast radius. Every package is pre-1.0 (`@kehto/shell` 0.24,
+ * `@kehto/runtime` 0.26, `@napplet/core` 0.34) and NIP-5D is a draft, so minor
  * bumps will break. Before this file the claim "all Kehto imports live in one
  * place" was a comment in `napplet-host.ts`, and it was false for five files —
  * including one written in the same change as the comment. A re-export module
@@ -56,6 +56,7 @@ export type {
   IntentCandidate,
   IntentCatalogEntry,
   IntentTargetController,
+  IntentDispatchParams,
 } from "@kehto/services";
 
 export {
@@ -65,6 +66,7 @@ export {
   openNappletArtifactCache,
   NappletResolutionError,
   NAPPLET_KINDS,
+  getNappletCatalogId,
 } from "@kehto/nip/5d";
 
 export type { NappletArtifactCache } from "@kehto/nip/5d";

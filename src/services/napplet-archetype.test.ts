@@ -86,11 +86,23 @@ describe("archetype resolution", () => {
     });
   });
 
+  it("uses the same root catalog ID as the runtime", async () => {
+    rows.push({
+      coordinate: `15129:${PUBKEY}:`,
+      title: "Root",
+      manifest: manifest([["profile", "napplet:profile/open"]]),
+    });
+    setDefaultHandler("profile", `nip5d:15129:${PUBKEY}`);
+    expect(await resolveArchetype("profile")).toMatchObject({
+      dTag: `nip5d:15129:${PUBKEY}`,
+    });
+  });
+
   it("prefers an installed napplet over the built-in", async () => {
     install("profileview", [["profile", "napplet:profile/open"]]);
     await expect(resolveArchetype("profile")).resolves.toMatchObject({
       kind: "napplet",
-      dTag: "profileview",
+      dTag: `nip5d:35129:${PUBKEY}:profileview`,
       pointer: { kind: 35129, pubkey: PUBKEY, identifier: "profileview" },
     });
   });
@@ -99,16 +111,16 @@ describe("archetype resolution", () => {
     install("one", [["profile", "c"]]);
     install("two", [["profile", "c"]]);
     await expect(resolveArchetype("profile")).rejects.toThrow(
-      /several installed napplets handle "profile": one, two/i,
+      /several installed napplets handle "profile"/i,
     );
   });
 
   it("uses the user's default to break a tie", async () => {
     install("one", [["profile", "c"]]);
     install("two", [["profile", "c"]]);
-    setDefaultHandler("profile", "two");
+    setDefaultHandler("profile", `nip5d:35129:${PUBKEY}:two`);
     await expect(resolveArchetype("profile")).resolves.toMatchObject({
-      dTag: "two",
+      dTag: `nip5d:35129:${PUBKEY}:two`,
     });
   });
 
@@ -167,17 +179,19 @@ describe("archetype resolution", () => {
 
     const byName = Object.fromEntries(roles.map((r) => [r.archetype, r]));
     // One napplet beats the built-in without a choice being needed.
-    expect(byName.note.resolved).toMatchObject({ dTag: "solo" });
+    expect(byName.note.resolved).toMatchObject({
+      dTag: `nip5d:35129:${PUBKEY}:solo`,
+    });
     // Two do not, and the built-in must not join that tie.
     expect(byName.profile.resolved).toBeUndefined();
     // A role only grimoire fills resolves to grimoire.
     expect(byName.relay.resolved).toMatchObject({ kind: "builtin" });
 
-    setDefaultHandler("profile", "two");
+    setDefaultHandler("profile", `nip5d:35129:${PUBKEY}:two`);
     const settled = await listArchetypeRoles();
     expect(settled.find((r) => r.archetype === "profile")).toMatchObject({
-      defaultDTag: "two",
-      resolved: expect.objectContaining({ dTag: "two" }),
+      defaultDTag: `nip5d:35129:${PUBKEY}:two`,
+      resolved: expect.objectContaining({ dTag: `nip5d:35129:${PUBKEY}:two` }),
     });
   });
 });

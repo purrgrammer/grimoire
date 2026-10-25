@@ -60,9 +60,10 @@ describe("nip5d-helpers", () => {
       ["requires", "theme"],
       ["requires", "theme"],
       ["requires", "relay"],
+      ["R", "resource"],
       ["requires"],
     ]);
-    expect(getNappletRequires(event)).toEqual(["theme", "relay"]);
+    expect(getNappletRequires(event)).toEqual(["theme", "relay", "resource"]);
   });
 
   it("parses archetype tags, tolerating a missing convention", () => {
@@ -72,8 +73,25 @@ describe("nip5d-helpers", () => {
       ["archetype"],
     ]);
     expect(getNappletArchetypes(event)).toEqual([
-      { slug: "viewer", convention: "nap-viewer/1" },
-      { slug: "editor", convention: "" },
+      { slug: "viewer", convention: "nap-viewer/1", params: [] },
+      { slug: "editor", convention: "", params: [] },
+    ]);
+  });
+
+  it("matches current z/i contracts only to their declared role", () => {
+    const event = makeEvent([
+      ["z", "profile"],
+      ["i", "napplet:profile/open", "pubkey"],
+      ["i", "napplet:note/open", "id"],
+      ["i", "napplet:profile/edit", "bad param"],
+      ["archetype", "legacy", "napplet:legacy/open"],
+    ]);
+    expect(getNappletArchetypes(event)).toEqual([
+      {
+        slug: "profile",
+        convention: "napplet:profile/open",
+        params: ["pubkey"],
+      },
     ]);
   });
 

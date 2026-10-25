@@ -16,7 +16,7 @@ import {
 } from "@/services/napplet-intent";
 
 function ChooserDialog({ choice }: { choice: NappletIntentChoice }) {
-  const [selected, setSelected] = useState(choice.candidates[0]?.id ?? "");
+  const [selected, setSelected] = useState(choice.candidates[0]?.dTag ?? "");
   const [remember, setRemember] = useState(false);
 
   return (
@@ -28,8 +28,8 @@ function ChooserDialog({ choice }: { choice: NappletIntentChoice }) {
             Open with…
           </DialogTitle>
           <DialogDescription>
-            {/* The sender is the runtime-attested catalog entry's dTag, not
-                anything the calling napplet supplied. */}
+            {/* The sender is the runtime-attested dTag, not anything the
+                calling napplet supplied. */}
             <span className="font-medium text-foreground">{choice.sender}</span>{" "}
             wants to open something that handles{" "}
             <span className="font-mono">{choice.archetype}</span>.
@@ -39,15 +39,15 @@ function ChooserDialog({ choice }: { choice: NappletIntentChoice }) {
         <div className="flex flex-col gap-1">
           {choice.candidates.map((candidate) => (
             <label
-              key={candidate.id}
+              key={candidate.dTag}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/40"
             >
               <input
                 type="radio"
                 name="intent-handler"
                 className="accent-primary"
-                checked={selected === candidate.id}
-                onChange={() => setSelected(candidate.id)}
+                checked={selected === candidate.dTag}
+                onChange={() => setSelected(candidate.dTag)}
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">
@@ -81,7 +81,7 @@ function ChooserDialog({ choice }: { choice: NappletIntentChoice }) {
           </Button>
           <Button
             disabled={!selected}
-            onClick={() => choice.resolve({ id: selected, remember })}
+            onClick={() => choice.resolve({ dTag: selected, remember })}
           >
             Open
           </Button>

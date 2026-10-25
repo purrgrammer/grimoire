@@ -145,7 +145,7 @@ export function getPointerRelays(
 
 /**
  * NAP domains a manifest requires that the shell does not offer.
- * A non-empty result means the napplet must not be rendered.
+ * Used for a compatibility warning; missing domains do not block loading.
  */
 export function getMissingRequiredNaps(
   requires: readonly string[],
