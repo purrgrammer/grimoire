@@ -107,6 +107,26 @@ describe("archetype resolution", () => {
     });
   });
 
+  it("counts a napplet with several actions for one role once", async () => {
+    rows.push({
+      coordinate: `35129:${PUBKEY}:notepad`,
+      title: "Notepad",
+      manifest: {
+        ...manifest([]),
+        tags: [
+          ["d", "notepad"],
+          ["z", "text-editor"],
+          ["i", "napplet:text-editor/open"],
+          ["i", "napplet:text-editor/edit"],
+        ],
+      },
+    });
+    await expect(resolveArchetype("text-editor")).resolves.toMatchObject({
+      kind: "napplet",
+      dTag: `nip5d:35129:${PUBKEY}:notepad`,
+    });
+  });
+
   it("refuses to guess between competing napplets", async () => {
     install("one", [["profile", "c"]]);
     install("two", [["profile", "c"]]);

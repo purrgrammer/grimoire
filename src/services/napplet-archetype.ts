@@ -100,7 +100,11 @@ export async function listArchetypeRoles(): Promise<ArchetypeRole[]> {
       title: row.title || pointer.identifier,
       pointer,
     };
-    for (const { slug } of getNappletArchetypes(row.manifest)) {
+    // One `i` tag per action, so a slug repeats; the napplet is one candidate.
+    const slugs = new Set(
+      getNappletArchetypes(row.manifest).map((a) => a.slug),
+    );
+    for (const slug of slugs) {
       const list = byArchetype.get(slug) ?? [];
       list.push(candidate);
       byArchetype.set(slug, list);
