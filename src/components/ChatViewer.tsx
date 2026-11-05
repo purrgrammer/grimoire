@@ -1,6 +1,14 @@
 import { useMemo, useState, memo, useCallback, useRef, useEffect } from "react";
 import { use$ } from "applesauce-react/hooks";
-import { from, catchError, of, map } from "rxjs";
+import {
+  BehaviorSubject,
+  combineLatest,
+  startWith,
+  from,
+  catchError,
+  of,
+  map,
+} from "rxjs";
 import { Virtuoso } from "react-virtuoso";
 import {
   Loader2,
@@ -104,6 +112,8 @@ import {
   FIRST_ITEM_INDEX_BASE,
 } from "./chat/prepend-anchor";
 import { usePaintedContainer } from "./chat/use-painted-container";
+import type { RelayLoadState } from "@/lib/relay-subscription";
+import { RelayLoadNotice } from "./chat/RelayLoadNotice";
 import { timelineState } from "./chat/timeline-state";
 import { draftKey } from "@/services/chat-drafts";
 import { mentionsPubkey } from "@/lib/chat/mentions";
@@ -1122,11 +1132,24 @@ export function ChatViewer({
     };
   }, [adapter, conversation]);
 
-  // Load messages for this conversation (reactive)
-  const messages = use$(
-    () => (conversation ? adapter.loadMessages(conversation) : undefined),
-    [adapter, conversation],
-  );
+  // Keep relay outcomes scoped to the same load as the messages. Switching
+  // conversations must not inherit another relay's warning, and synchronous
+  // status callbacks must not set React state while this factory runs.
+  const messageLoad = use$(() => {
+    if (!conversation) return undefined;
+    const relayState$ = new BehaviorSubject<RelayLoadState | undefined>(
+      undefined,
+    );
+    const messages$ = adapter.loadMessages(conversation, {
+      onStatus: (state) => relayState$.next(state),
+    });
+    return combineLatest({
+      messages: messages$.pipe(startWith(undefined)),
+      relayState: relayState$,
+    });
+  }, [adapter, conversation]);
+  const messages = messageLoad?.messages;
+  const relayLoad = messageLoad?.relayState;
 
   const { settings } = useSettings();
   const collapseThreads = settings?.appearance?.collapseThreads ?? true;
@@ -1432,6 +1455,7 @@ export function ChatViewer({
     messages,
     rows: messagesWithMarkers.length,
     painted,
+    incomplete: relayLoad?.status === "partial",
   });
 
   /**
@@ -2196,6 +2220,8 @@ export function ChatViewer({
           belowHeader
         )}
 
+        <RelayLoadNotice state={relayLoad} />
+
         {/* Message timeline with virtualization */}
         <div
           ref={timelineBox}
@@ -2373,7 +2399,9 @@ export function ChatViewer({
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              No messages yet. Start the conversation!
+              {timeline === "incomplete"
+                ? "Message history is incomplete."
+                : "No messages yet. Start the conversation!"}
             </div>
           )}
         </div>

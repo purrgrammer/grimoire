@@ -36,3 +36,13 @@ describe("timelineState", () => {
     expect(state([], 0, false)).toBe("empty");
   });
 });
+
+it("does not call an auth-gated or timed-out empty read an empty conversation", () => {
+  expect(
+    timelineState({ messages: [], rows: 0, painted: true, incomplete: true }),
+  ).toBe("incomplete");
+  // Available history must still be rendered alongside the warning.
+  expect(
+    timelineState({ messages: [{}], rows: 1, painted: true, incomplete: true }),
+  ).toBe("list");
+});

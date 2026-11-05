@@ -1,3 +1,4 @@
+import type { RelayLoadState } from "@/lib/relay-subscription";
 import type { NostrEvent } from "./nostr";
 import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 import type { OnchainZapClaim } from "@/lib/onchain-zap";
@@ -407,6 +408,8 @@ export interface ChatCommandResult {
  * Message loading options
  */
 export interface LoadMessagesOptions {
+  /** Initial relay read outcome; may recover after late authentication/EOSE. */
+  onStatus?: (state: RelayLoadState) => void;
   limit?: number;
   before?: number; // Unix timestamp
   after?: number; // Unix timestamp
