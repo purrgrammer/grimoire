@@ -253,15 +253,21 @@ export function streamWithEose(
     // The pool's status stream exposes the missing signal even if the relay
     // never sends an AUTH challenge. Do not opt out of waitForAuth: that would
     // tear down the read and prevent late authentication from repairing it.
+    //
+    // `authRequiredForRead` is sticky: applesauce clears it only when the
+    // socket resets, not when AUTH succeeds. An authenticated relay is not
+    // blocking reads, so a later REQ on the same connection must wait for its
+    // real EOSE instead of releasing the chat gate at once as "auth-required".
     const authSub = pool.status$.subscribe((statuses) => {
       let changed = false;
       for (const [url, result] of results) {
         const status = statuses[url];
         if (!status || result === "eose") continue;
-        if (status.authRequiredForRead && result !== "auth-required") {
+        const blocked = status.authRequiredForRead && !status.authenticated;
+        if (blocked && result !== "auth-required") {
           results.set(url, "auth-required");
           changed = true;
-        } else if (!status.authRequiredForRead && result === "auth-required") {
+        } else if (!blocked && result === "auth-required") {
           results.set(url, "pending");
           changed = true;
         }

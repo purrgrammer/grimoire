@@ -5,6 +5,7 @@ import {
   getPublicKey,
 } from "nostr-tools/pure";
 import { RelayPool } from "applesauce-relay";
+import { firstValueFrom } from "rxjs";
 import {
   requestEvents,
   streamWithEose,
@@ -393,6 +394,59 @@ describe("streamWithEose load outcomes (#273)", () => {
       expect(r.reqCount()).toBe(2);
     } finally {
       sub.unsubscribe();
+    }
+  });
+
+  it("does not flag a later read on an already-authenticated relay", async () => {
+    // applesauce clears authRequiredForRead only on socket reset, so it is
+    // still set after AUTH succeeds. A second read on that connection is not
+    // blocked and must not release the EOSE gate before its real EOSE.
+    const key = generateSecretKey();
+    const event = fakeEvent({ pubkey: getPublicKey(key) });
+    const r = await relay({ kind: "nip42-gated", events: [event] });
+    const p = pool();
+    const filters = [{ authors: [event.pubkey] }];
+    const firstStates: RelayLoadState[] = [];
+    const first = streamWithEose([r.url], filters, {
+      pool: p,
+      store: null,
+      onStatus: (state) => firstStates.push(state),
+    }).subscribe();
+    let second: { unsubscribe: () => void } | undefined;
+    try {
+      await vi.waitFor(() =>
+        expect(firstStates.at(-1)?.status).toBe("partial"),
+      );
+      await p.relays.get(`${r.url}/`)!.authenticate({
+        signEvent: async (template) => finalizeEvent(template, key),
+      });
+      await vi.waitFor(() =>
+        expect(firstStates.at(-1)?.status).toBe("complete"),
+      );
+      // The precondition this test exists for: the flag outlives the AUTH.
+      const statuses = await firstValueFrom(p.status$);
+      expect(statuses[`${r.url}/`]).toMatchObject({
+        authRequiredForRead: true,
+        authenticated: true,
+      });
+
+      const states: RelayLoadState[] = [];
+      const events: string[] = [];
+      const onEose = vi.fn();
+      second = streamWithEose([r.url], filters, {
+        pool: p,
+        store: null,
+        eoseTimeout: 10_000,
+        onEose,
+        onStatus: (state) => states.push(state),
+      }).subscribe((e) => events.push(e.id));
+      await vi.waitFor(() => expect(states.at(-1)?.status).toBe("complete"));
+      expect(states.map((state) => state.status)).not.toContain("partial");
+      expect(onEose).toHaveBeenCalledTimes(1);
+      expect(events).toEqual([event.id]);
+    } finally {
+      first.unsubscribe();
+      second?.unsubscribe();
     }
   });
 
