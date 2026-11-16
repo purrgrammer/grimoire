@@ -1,8 +1,10 @@
 import {
   BehaviorSubject,
+  type Observable,
   type Subscription,
   combineLatest,
   firstValueFrom,
+  of,
   race,
 } from "rxjs";
 import { filter, startWith, take, map as rxMap } from "rxjs/operators";
@@ -115,6 +117,7 @@ export class RelayAuthManager {
         status: "none",
         challenge: relay.challenge,
         challengeReceivedAt: null,
+        authRequired: false,
       });
     }
 
@@ -123,6 +126,13 @@ export class RelayAuthManager {
       connected: relay.connected$.pipe(startWith(relay.connected)),
       challenge: relay.challenge$.pipe(startWith(relay.challenge)),
       authenticated: relay.authenticated$.pipe(startWith(relay.authenticated)),
+      // A relay may refuse a REQ/EVENT with `auth-required` instead of (or
+      // long after) volunteering a challenge. Watching only challenge$ misses
+      // that: the read stalls inside applesauce and nobody is ever asked.
+      authRequired: combineLatest([
+        withFalse(relay.authRequiredForRead$),
+        withFalse(relay.authRequiredForPublish$),
+      ]).pipe(rxMap(([read, publish]) => read || publish)),
     }).subscribe((values) => {
       this.handleRelayUpdate(url, relay, values);
     });
@@ -158,18 +168,36 @@ export class RelayAuthManager {
     if (!state || !relay) {
       throw new Error(`Relay ${relayUrl} is not being monitored`);
     }
-    if (!state.challenge) {
+    // The manager's copy is cleared when a prompt is rejected, but the relay
+    // still holds the challenge it sent for this socket. An explicit request
+    // (e.g. "Authenticate" next to a read the relay refused) may use it.
+    const challenge = state.challenge ?? relay.challenge;
+    if (!challenge) {
       throw new Error(`No auth challenge for ${relayUrl}`);
     }
     if (!this.signer) {
       throw new Error("No signer available for authentication");
     }
 
-    // Transition via state machine
-    const transition = transitionAuthState(state.status, {
-      type: "USER_ACCEPTED",
-    });
-    state.status = transition.newStatus;
+    if (
+      state.status === "none" ||
+      state.status === "rejected" ||
+      state.status === "failed"
+    ) {
+      // The user asked for this relay explicitly, which overrides an earlier
+      // "not this session" dismissal. A stored "never" preference is left
+      // alone: it only stops prompts, and this is not a prompt.
+      this.sessionRejections.delete(this.normalizeForKey(url));
+      state.status = "authenticating";
+      state.challenge = challenge;
+      state.challengeReceivedAt ??= Date.now();
+    } else {
+      // Transition via state machine
+      const transition = transitionAuthState(state.status, {
+        type: "USER_ACCEPTED",
+      });
+      state.status = transition.newStatus;
+    }
     this.emitState();
 
     try {
@@ -392,16 +420,22 @@ export class RelayAuthManager {
       connected: boolean;
       challenge: string | null;
       authenticated: boolean;
+      authRequired: boolean;
     },
   ): void {
     const state = this._relayStates.get(url);
     if (!state) return;
 
     const wasConnected = state.connected;
+    // applesauce keeps the auth-required flag set after AUTH succeeds (it is
+    // reset only with the socket), so an authenticated relay is not blocked.
+    const authRequired = values.authRequired && !values.authenticated;
+    const authJustRequired = authRequired && !state.authRequired;
     const now = Date.now();
 
     // Update connection state
     state.connected = values.connected;
+    state.authRequired = authRequired;
 
     // Determine auth event from observable values
     let authEvent: AuthEvent | null = null;
@@ -423,7 +457,24 @@ export class RelayAuthManager {
         preference,
       };
     }
-    // Priority 4: Challenge cleared without auth success
+    // Priority 4: The relay just refused a REQ/EVENT with auth-required and
+    // holds a challenge we never acted on. Re-arm the prompt rather than let
+    // the operation wait on an authentication nobody was asked for — e.g. a
+    // challenge that arrived on connect but predates the monitor, or a prompt
+    // that expired before anything actually needed auth.
+    else if (authJustRequired && values.challenge) {
+      if (state.status === "challenge_received") {
+        state.challengeReceivedAt = now;
+      } else if (state.status === "none" || state.status === "rejected") {
+        const preference = this.preferences.get(this.normalizeForKey(url));
+        authEvent = {
+          type: "CHALLENGE_RECEIVED",
+          challenge: values.challenge,
+          preference,
+        };
+      }
+    }
+    // Priority 5: Challenge cleared without auth success
     else if (
       !values.challenge &&
       !values.authenticated &&
@@ -594,6 +645,11 @@ export class RelayAuthManager {
     // Emit states snapshot after pendingChallenges is updated
     this.states$.next(snapshotStates(this._relayStates));
   }
+}
+
+/** Optional relay signals default to "not required". */
+function withFalse(source?: Observable<boolean>): Observable<boolean> {
+  return source ? source.pipe(startWith(false)) : of(false);
 }
 
 /**

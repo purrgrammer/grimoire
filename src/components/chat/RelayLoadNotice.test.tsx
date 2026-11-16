@@ -15,8 +15,10 @@ describe("RelayLoadNotice", () => {
     );
     expect(html).toContain('role="status"');
     expect(html).toContain("Authentication required");
-    expect(html).toContain("Without an AUTH challenge");
-    expect(html).toContain("wss://auth.example/");
+    expect(html).toContain("sent no AUTH challenge");
+    expect(html).not.toContain(">Authenticate<");
+    // Rendered through RelayLink, not as a raw URL.
+    expect(html).toContain('title="auth.example"');
     expect(html).not.toContain("No messages yet");
   });
 

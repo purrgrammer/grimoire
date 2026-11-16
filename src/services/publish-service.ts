@@ -13,9 +13,25 @@
  * All publishing in Grimoire should go through this service.
  */
 
-import { Subject, Observable } from "rxjs";
-import { filter } from "rxjs/operators";
+import {
+  Subject,
+  Observable,
+  NEVER,
+  firstValueFrom,
+  from,
+  race,
+  timer,
+} from "rxjs";
+import {
+  distinctUntilChanged,
+  filter,
+  map,
+  switchMap,
+  take,
+} from "rxjs/operators";
 import type { NostrEvent } from "nostr-tools";
+import type { RelayStatus } from "applesauce-relay";
+import { normalizeURL } from "applesauce-core/helpers";
 import pool from "./relay-pool";
 import { isRelayBlocked } from "./blocked-relays";
 import eventStore from "./event-store";
@@ -77,6 +93,30 @@ export interface PublishOptions {
   skipEventStore?: boolean;
   /** Custom publish ID (for retry operations) */
   publishId?: string;
+}
+
+/**
+ * How long a relay may sit on `auth-required` with no AUTH challenge before the
+ * publish is reported as failed. Some relays send the challenge right after the
+ * refusal, so this is a grace period, not zero.
+ */
+const AUTH_CHALLENGE_GRACE_MS = 2_000;
+
+/** A relay refused the EVENT with `auth-required` and gave us nothing to sign. */
+export const AUTH_NO_CHALLENGE_ERROR =
+  "auth-required: relay requires authentication but sent no AUTH challenge";
+
+/** A relay refused the EVENT with `auth-required` and auth never completed. */
+export const AUTH_REQUIRED_ERROR =
+  "auth-required: relay requires authentication (NIP-42), which was not completed";
+
+/** True when a publish failure is the relay demanding NIP-42 authentication. */
+export function isAuthRequiredPublishError(error: string | undefined): boolean {
+  return !!error?.startsWith("auth-required:");
+}
+
+function isPublishBlockedOnAuth(status: RelayStatus | undefined): boolean {
+  return !!status?.authRequiredForPublish && !status.authenticated;
 }
 
 // ============================================================================
@@ -184,7 +224,41 @@ class PublishService {
 
       try {
         // pool.publish returns array of { from: string, ok: boolean, message?: string }
-        const responses = await pool.publish([relay], event);
+        const publishing = pool.publish([relay], event);
+        // group() registered the relay synchronously, so its status is here.
+        const status$ = pool.relays.get(normalizeURL(relay))?.status$;
+        let latest: RelayStatus | undefined;
+        const responses = await firstValueFrom(
+          race(
+            from(publishing),
+            status$
+              ? status$.pipe(
+                  map((status) => {
+                    latest = status;
+                    return isPublishBlockedOnAuth(status) && !status.challenge;
+                  }),
+                  distinctUntilChanged(),
+                  // applesauce holds a refused EVENT until authenticated$ and
+                  // only gives up at its 30s publish timeout, reported as a
+                  // bare "Timeout". With no challenge nothing can ever satisfy
+                  // it, so stop waiting. (If a challenge does arrive later and
+                  // the user authenticates, the held EVENT may still go out;
+                  // a retry republishes the same id, which relays dedupe.)
+                  switchMap((stuck) =>
+                    stuck ? timer(AUTH_CHALLENGE_GRACE_MS) : NEVER,
+                  ),
+                  take(1),
+                  map(() => [
+                    {
+                      ok: false,
+                      from: relay,
+                      message: AUTH_NO_CHALLENGE_ERROR,
+                    },
+                  ]),
+                )
+              : NEVER,
+          ),
+        );
         const response = responses[0];
 
         // Check if relay accepted the event
@@ -193,8 +267,14 @@ class PublishService {
           this.emitStatus(publishId, relay, "success");
           return { relay, success: true as const };
         } else {
-          // Relay rejected the event
-          const error = response?.message || "Relay rejected event";
+          // Relay rejected the event. A refusal that was really the relay
+          // waiting for AUTH surfaces from applesauce as "Timeout" — name it.
+          const error =
+            response &&
+            !isAuthRequiredPublishError(response.message) &&
+            isPublishBlockedOnAuth(latest)
+              ? AUTH_REQUIRED_ERROR
+              : response?.message || "Relay rejected event";
           publishEvent.results.set(relay, { status: "error", error });
           this.emitStatus(publishId, relay, "error", error);
           return { relay, success: false as const, error };

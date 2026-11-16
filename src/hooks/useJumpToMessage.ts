@@ -32,6 +32,8 @@ import { toast } from "sonner";
 import type { VirtuosoHandle } from "react-virtuoso";
 
 import type { ChatProtocolAdapter } from "@/lib/chat/adapters/base-adapter";
+import { describeIncompleteRead } from "@/lib/chat/incomplete-read";
+import { IncompleteRelayReadError } from "@/lib/relay-subscription";
 import type { Conversation, Message } from "@/types/chat";
 
 /**
@@ -261,6 +263,10 @@ export function useJumpToMessage({
           if (!widened) hasMore = false;
         }
       } catch (error) {
+        // The relay never answered the page — not "beyond the history".
+        if (error instanceof IncompleteRelayReadError) {
+          toast.info(describeIncompleteRead(error));
+        }
         console.warn("[Chat] jump failed:", error);
       } finally {
         running.current = false;

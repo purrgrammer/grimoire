@@ -1,4 +1,4 @@
-import { firstValueFrom, Observable, of, timer } from "rxjs";
+import { firstValueFrom, Observable, of, Subscription, timer } from "rxjs";
 import { catchError, take, takeUntil, tap, toArray } from "rxjs/operators";
 import type { Filter, NostrEvent } from "nostr-tools";
 import type {
@@ -128,6 +128,110 @@ export async function requestEvent(
       ),
     { defaultValue: null },
   );
+}
+
+/**
+ * A read that came back empty without any relay confirming it was done.
+ *
+ * "No relay answered" and "there is nothing there" are different facts, and a
+ * paginating caller that cannot tell them apart concludes the history has
+ * ended — e.g. a NIP-29 relay that refuses `auth-required` without an AUTH
+ * challenge looked exactly like the start of the group.
+ */
+export class IncompleteRelayReadError extends Error {
+  readonly relays: Readonly<Record<string, RelayLoadResult>>;
+
+  /** Relays that refused the read until we authenticate. */
+  readonly authRequired: string[];
+
+  constructor(relays: Readonly<Record<string, RelayLoadResult>>) {
+    const authRequired = Object.entries(relays)
+      .filter(([, result]) => result === "auth-required")
+      .map(([url]) => url);
+    super(
+      authRequired.length > 0
+        ? `Authentication required by ${authRequired.join(", ")}`
+        : "No relay finished loading",
+    );
+    this.name = "IncompleteRelayReadError";
+    this.relays = relays;
+    this.authRequired = authRequired;
+  }
+}
+
+/**
+ * Throw if a page came back empty and no relay actually reached EOSE.
+ * A page with events, or one any relay confirmed, is returned as-is.
+ */
+export function assertReadComplete(outcome: RequestOutcome): NostrEvent[] {
+  const results = Object.values(outcome.relays);
+  if (
+    outcome.events.length === 0 &&
+    results.length > 0 &&
+    !results.includes("eose")
+  ) {
+    throw new IncompleteRelayReadError(outcome.relays);
+  }
+  return outcome.events;
+}
+
+export interface RequestOutcome {
+  events: NostrEvent[];
+  relays: Readonly<Record<string, RelayLoadResult>>;
+}
+
+/**
+ * One-shot fetch that also says how each relay finished.
+ *
+ * Use where an empty result has to be told apart from an incomplete one —
+ * pagination, mostly. Built on `streamWithEose`, so an `auth-required` refusal
+ * (with or without a challenge) settles the relay at once instead of running
+ * down the 10s bound, and blocked relays are dropped the same way.
+ */
+export function requestEventsWithOutcome(
+  relays: string[],
+  filters: Filter[],
+  options?: {
+    pool?: RelayPool;
+    store?: typeof defaultEventStore | null;
+    timeout?: number;
+  },
+): Promise<RequestOutcome> {
+  return new Promise<RequestOutcome>((resolve) => {
+    const events: NostrEvent[] = [];
+    let latest: RelayLoadState = { status: "loading", relays: {} };
+    // Holds the stream so `finish` can tear it down even when it settles
+    // synchronously inside subscribe(): adding a teardown to an already
+    // closed Subscription runs it at once.
+    const sub = new Subscription();
+
+    const finish = () => {
+      if (sub.closed) return;
+      sub.unsubscribe();
+      resolve({ events, relays: latest.relays });
+    };
+
+    sub.add(
+      streamWithEose(relays, filters, {
+        pool: options?.pool,
+        store: options?.store,
+        eoseTimeout: options?.timeout ?? REQUEST_TIMEOUT_MS,
+        // A one-shot never reopens; it is torn down as soon as it settles.
+        resubscribe: false,
+        onStatus: (state) => {
+          latest = state;
+          if (!Object.values(state.relays).includes("pending")) finish();
+        },
+      }).subscribe({
+        next: (event) => events.push(event),
+        error: (error) => {
+          console.warn("[relay] request did not complete cleanly:", error);
+          finish();
+        },
+        complete: finish,
+      }),
+    );
+  });
 }
 
 /** Per-relay result of the initial stored-event read. Live EOSE can repair a partial result. */

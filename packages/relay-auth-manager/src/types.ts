@@ -25,6 +25,14 @@ export interface RelayAuthState {
   status: AuthStatus;
   challenge: string | null;
   challengeReceivedAt: number | null;
+  /**
+   * The relay refused a REQ or EVENT on this connection with `auth-required`
+   * (`CLOSED` / `OK false`) and we are not authenticated. A relay can do that
+   * without ever sending an AUTH challenge, in which case there is nothing to
+   * sign and `challenge` stays null — consumers should say so rather than
+   * offering an authentication that cannot happen.
+   */
+  authRequired: boolean;
 }
 
 /**
@@ -48,6 +56,13 @@ export interface AuthRelay {
   readonly connected: boolean;
   readonly authenticated: boolean;
   readonly challenge: string | null;
+  /**
+   * Emits true once the relay answers a REQ with `CLOSED auth-required`.
+   * Optional so relays without the signal still satisfy the interface.
+   */
+  authRequiredForRead$?: Observable<boolean>;
+  /** Emits true once the relay answers an EVENT with `OK false auth-required`. */
+  authRequiredForPublish$?: Observable<boolean>;
   authenticate(signer: AuthSigner): Promise<unknown>;
 }
 

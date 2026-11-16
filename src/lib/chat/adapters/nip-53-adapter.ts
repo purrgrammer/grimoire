@@ -31,7 +31,9 @@ import { toApplesauceEmoji, type EmojiTag } from "@/lib/emoji-helpers";
 import eventStore from "@/services/event-store";
 import {
   requestEvent,
+  assertReadComplete,
   requestEvents,
+  requestEventsWithOutcome,
   streamWithEose,
 } from "@/lib/relay-subscription";
 import { publishEventToRelays } from "@/services/hub";
@@ -338,8 +340,11 @@ export class Nip53Adapter extends ChatProtocolAdapter {
       limit: 50,
     };
 
-    // One-shot request to fetch older messages
-    const events = await requestEvents(relays, [filter]);
+    // One-shot request to fetch older messages. An empty page no relay
+    // confirmed (auth-required, timeout) throws rather than ending pagination.
+    const events = assertReadComplete(
+      await requestEventsWithOutcome(relays, [filter]),
+    );
 
     // Convert events to messages
     const messages = dropReplayedOnchainZaps(events)

@@ -1,0 +1,520 @@
+{
+ "capturedAt": "2026-11-16",
+ "browser": "Google Chrome headless (new), fresh temp profile per capture",
+ "server": "local production builds served with vite preview: PR 35731ff on :4401, origin/main 87f3a9d on :4402",
+ "mockRelayCounters": {
+  "noChallenge": {
+   "REQ": 8,
+   "AUTH": 0,
+   "EVENT": 0
+  },
+  "challenge": {
+   "REQ": 8,
+   "AUTH": 0,
+   "EVENT": 0
+  },
+  "olderRefused": {
+   "REQ": 507,
+   "AUTH": 0,
+   "EVENT": 0
+  },
+  "normal": {
+   "REQ": 14,
+   "AUTH": 0,
+   "EVENT": 0
+  }
+ },
+ "captures": [
+  {
+   "file": "pr-no-challenge-desktop.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50400'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "sent no AUTH challenge",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 28,
+    "CLOSE": 19
+   },
+   "websocketsOpened": [
+    "ws://localhost:50400/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR"
+   ],
+   "visibleText": "grimoire\nec:b56b\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nlocalhost:50400\nAuthentication required, but the relay sent no AUTH challenge, so authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-no-challenge-desktop.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50400'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "Authentication required",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 27,
+    "CLOSE": 19
+   },
+   "websocketsOpened": [
+    "ws://localhost:50400/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n47:b185\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nws://localhost:50400/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-challenge-readonly-desktop.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50401'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "account that can sign",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 27,
+    "CLOSE": 19
+   },
+   "websocketsOpened": [
+    "ws://localhost:50401/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR"
+   ],
+   "visibleText": "grimoire\n74:c95e\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nlocalhost:50401\nAuthentication required. Sign in with an account that can sign.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-challenge-readonly-desktop.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50401'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "Authentication required",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:50401/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nd2:39db\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nws://localhost:50401/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-older-refused-toast-desktop.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": true,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 125,
+    "CLOSE": 73
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "Couldn't load older messages: ws://localhost:50402/ requires authentication.\ngrimoire\na8:bcde\ngroup\n0\n1/1\nNIP-29\nLoad older messages\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\n092b:e282\n21:47\nfixture message 29\nSign in to post"
+  },
+  {
+   "file": "pr-older-refused-after-desktop.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": true,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 131,
+    "CLOSE": 109
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n65:6541\ngroup\n0\n1/1\nNIP-29\nLoad older messages\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\n092b:e282\n21:47\nfixture message 29\nSign in to post"
+  },
+  {
+   "file": "main-older-refused-after-desktop.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": false,
+   "secondsToState": "1.1",
+   "framesSentByType": {
+    "REQ": 144,
+    "CLOSE": 122
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n00:a4df\ngroup\n0\n1/1\nNIP-29\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\n092b:e282\n21:47\nfixture message 29\n092b:e282\n21:48\nfixture message 30\n092b:e282\n21:49\nfixture message 31\nSign in to post"
+  },
+  {
+   "file": "pr-normal-messages-desktop.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A55958'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 3",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 32,
+    "CLOSE": 3
+   },
+   "websocketsOpened": [
+    "ws://localhost:55958/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n21:cbc0\ngroup\n0\n1/1\nNIP-29\nToday\na98e:3694\n21:26\nfixture message 1\na98e:3694\n21:27\nfixture message 2\na98e:3694\n21:28\nfixture message 3\nSign in to post",
+   "note": "re-captured with a 3s settle; at ~1s the header connection count reads 0/1 on both main and this PR (timing)"
+  },
+  {
+   "file": "pr-no-challenge-mobile.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50400'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "sent no AUTH challenge",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:50400/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR"
+   ],
+   "visibleText": "grimoire\nf3:11e6\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nlocalhost:50400\nAuthentication required, but the relay sent no AUTH challenge, so authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-no-challenge-mobile.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50400'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "Authentication required",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.4",
+   "framesSentByType": {
+    "REQ": 27,
+    "CLOSE": 19
+   },
+   "websocketsOpened": [
+    "ws://localhost:50400/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n5c:7e9b\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nws://localhost:50400/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-challenge-readonly-mobile.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50401'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "account that can sign",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.3",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:50401/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR"
+   ],
+   "visibleText": "grimoire\n46:40e8\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nlocalhost:50401\nAuthentication required. Sign in with an account that can sign.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-challenge-readonly-mobile.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50401'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "Authentication required",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "10.6",
+   "framesSentByType": {
+    "REQ": 27,
+    "CLOSE": 19
+   },
+   "websocketsOpened": [
+    "ws://localhost:50401/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nb2:96ec\ngroup\n0\n1/1\nNIP-29\n\nMessage history may be incomplete.\n\nws://localhost:50401/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-older-refused-toast-mobile.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": true,
+   "secondsToState": "1.1",
+   "framesSentByType": {
+    "REQ": 124,
+    "CLOSE": 89
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "Couldn't load older messages: ws://localhost:50402/ requires authentication.\ngrimoire\ne7:4ec5\ngroup\n0\n1/1\nNIP-29\nLoad older messages\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\nSign in to post"
+  },
+  {
+   "file": "pr-older-refused-after-mobile.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": true,
+   "secondsToState": "1.1",
+   "framesSentByType": {
+    "REQ": 124,
+    "CLOSE": 103
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\na0:18ff\ngroup\n0\n1/1\nNIP-29\nLoad older messages\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\nSign in to post"
+  },
+  {
+   "file": "main-older-refused-after-mobile.png",
+   "build": "87f3a9d (origin/main)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A50402'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 60",
+   "clicked": "Load older messages",
+   "reached": false,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 130,
+    "CLOSE": 109
+   },
+   "websocketsOpened": [
+    "ws://localhost:50402/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nc1:f191\ngroup\n0\n1/1\nNIP-29\nToday\n092b:e282\n21:29\nfixture message 11\n092b:e282\n21:30\nfixture message 12\n092b:e282\n21:31\nfixture message 13\n092b:e282\n21:32\nfixture message 14\n092b:e282\n21:33\nfixture message 15\n092b:e282\n21:34\nfixture message 16\n092b:e282\n21:35\nfixture message 17\n092b:e282\n21:36\nfixture message 18\n092b:e282\n21:37\nfixture message 19\n092b:e282\n21:38\nfixture message 20\n092b:e282\n21:39\nfixture message 21\n092b:e282\n21:40\nfixture message 22\n092b:e282\n21:41\nfixture message 23\n092b:e282\n21:42\nfixture message 24\n092b:e282\n21:43\nfixture message 25\n092b:e282\n21:44\nfixture message 26\n092b:e282\n21:45\nfixture message 27\n092b:e282\n21:46\nfixture message 28\n092b:e282\n21:47\nfixture message 29\nSign in to post"
+  },
+  {
+   "file": "pr-normal-messages-mobile.png",
+   "build": "35731ff (PR head)",
+   "url": "http://localhost:<preview>/run?cmd=chat%20%22ws%3A%2F%2Flocalhost%3A55958'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly, random pubkey, no signer",
+   "waitedFor": "fixture message 3",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 32,
+    "CLOSE": 3
+   },
+   "websocketsOpened": [
+    "ws://localhost:55958/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\n6f:f90d\ngroup\n0\n1/1\nNIP-29\nToday\na98e:3694\n21:26\nfixture message 1\na98e:3694\n21:27\nfixture message 2\na98e:3694\n21:28\nfixture message 3\nSign in to post",
+   "note": "re-captured with a 3s settle; at ~1s the header connection count reads 0/1 on both main and this PR (timing)"
+  }
+ ]
+}
