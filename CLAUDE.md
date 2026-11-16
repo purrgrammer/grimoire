@@ -345,6 +345,36 @@ promoted by eslint 10 and `eslint-plugin-react-hooks` 7 (the React Compiler set:
 `warn` in `eslint.config.js`, with the reasoning inline there. Don't add new
 violations — the current count is the ceiling.
 
+### Visual evidence on every PR
+
+Every PR description carries a **Visual evidence** section that a reviewer can
+check against the PR's head commit. It is a merge requirement, in addition to
+everything above — green checks do not replace it.
+
+- **Source and commit.** Screenshots come from the Vercel preview of the head
+  commit, or from a production build of that same commit served locally
+  (`npm run build && npm run preview`). State which, and the SHA. The preview
+  sits behind Vercel Authentication, so without team access use the local
+  build. If the head moves in a way that touches what was captured, recapture.
+- **Flows, states, viewports.** Capture every flow and state the change adds or
+  alters — loading, empty, error and partial states included — at a desktop
+  (≥1280px wide) and a mobile (~390px wide) viewport.
+- **No regression.** Also capture the neighbouring states the change must not
+  alter (a chat with messages, an empty chat). When behaviour changes, pair the
+  new capture with the same state on `main`.
+- **Clean, isolated session.** Capture in a fresh browser profile, not anyone's
+  logged-in session. Relay edge cases come from `src/test/mock-relay.ts`, not a
+  live relay. NIP-29 chat will not open without an active account; a read-only
+  account (`type: "readonly"`) has no signer, so it reads but can neither AUTH
+  nor sign. Quote a mock group — `chat "ws://localhost:<port>'group"` —
+  because `parseGroupArgs` only rejoins `host'group` when the host has a dot.
+  Say which captures used mocks and which reached a real relay.
+- **Not evidence:** a unit render (`renderToStaticMarkup`), a description of
+  what the screen should show, or a capture from another commit.
+- **No UI change:** write `Visual evidence: N/A — <reason>` (docs, CI config,
+  tests only). A relay, subscription or state change that a window consumes is
+  not N/A: capture the window that consumes it.
+
 ## Slash Commands
 
 `/verify` · `/test` · `/lint-fix` · `/commit-push-pr` · `/review [PR#|branch]` · `/sync-nips`

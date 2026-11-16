@@ -130,14 +130,24 @@ export async function requestEvent(
   );
 }
 
+/** Per-relay result of the initial stored-event read. Live EOSE can repair a partial result. */
+export type RelayLoadResult =
+  "pending" | "eose" | "auth-required" | "timeout" | "closed" | "error";
+
+export interface RelayLoadState {
+  status: "loading" | "complete" | "partial";
+  relays: Readonly<Record<string, RelayLoadResult>>;
+}
+
 /**
  * Stream events and signal end-of-stored-events, for callers that genuinely
  * need the boundary (WASM scroll programs, REQ state tracking).
  *
  * v6 dropped the virtual `"EOSE"` string from pool subscriptions, so this reads
  * the structured `pool.req()` messages instead. A relay counts as settled on
- * EOSE, CLOSED or ERROR — one that rejects the REQ never sends EOSE and must
- * not stall the batch — with a timeout backstop for relays that go silent.
+ * EOSE, CLOSED, ERROR or an auth wait — a refused REQ must not stall the batch.
+ * A timeout backstop bounds relays that go silent. onStatus distinguishes a
+ * real EOSE from these incomplete outcomes; onEose remains a loading gate.
  *
  * Unlike `pool.subscription()`, `pool.req()` does not deduplicate across
  * relays, so events are deduped by id here.
@@ -148,7 +158,10 @@ export function streamWithEose(
   options?: {
     pool?: RelayPool;
     store?: typeof defaultEventStore | null;
+    /** Legacy loading gate: settled does NOT necessarily mean a real EOSE. */
     onEose?: () => void;
+    /** Reactive outcome, including auth waits, timeouts and late recovery. */
+    onStatus?: (state: RelayLoadState) => void;
     /** Backstop for relays that connect but never EOSE. Default 15s. */
     eoseTimeout?: number;
     /**
@@ -166,44 +179,101 @@ export function streamWithEose(
     pool = defaultPool,
     store = defaultEventStore,
     onEose,
+    onStatus,
     eoseTimeout = 15_000,
     resubscribe = { delay: RESUBSCRIBE_DELAY_MS },
     reconnect = 5,
   } = options ?? {};
 
   // Blocked relays are dropped by the pool before a socket is opened, so they
-  // can never settle. They must come out of `expected` too, or `settled.size`
-  // never reaches it and EOSE waits for the full backstop — which, since chat
-  // rendering is gated on EOSE, shows as an empty conversation for 15s.
+  // can never settle. They must come out of the tracked targets too, or EOSE
+  // waits for the full backstop — delaying chat rendering for 15s.
   // `message.from` is the relay's normalized URL, so normalize (and dedupe)
-  // the expected set or the settled-count comparison can never be satisfied.
-  const expected = new Set(
-    filterBlockedRelays(relays).map((url) => normalizeURL(url)),
-  );
-  const targets = [...expected];
+  // targets so each relay has exactly one outcome.
+  const targets = [...new Set(filterBlockedRelays(relays).map(normalizeURL))];
 
   return new Observable<NostrEvent>((subscriber) => {
     if (targets.length === 0) {
+      onStatus?.({ status: "complete", relays: {} });
       onEose?.();
       subscriber.complete();
       return;
     }
 
-    const settled = new Set<string>();
+    const results = new Map<string, RelayLoadResult>(
+      targets.map((url) => [url, "pending"]),
+    );
     // Scoped to this subscription on purpose: deduping against the shared
     // EventStore would drop events it already holds from another source, and
     // those would never reach the caller.
     const seen = new Set<string>();
     let eoseEmitted = false;
 
+    let eoseTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastStatus = "";
+
     const emitEose = () => {
       if (eoseEmitted) return;
       eoseEmitted = true;
-      clearTimeout(eoseTimer);
       onEose?.();
     };
 
-    const eoseTimer = setTimeout(emitEose, eoseTimeout);
+    const report = () => {
+      const values = [...results.values()];
+      const pending = values.includes("pending");
+      const partial = values.some(
+        (value) => value !== "pending" && value !== "eose",
+      );
+      const state: RelayLoadState = {
+        status: partial ? "partial" : pending ? "loading" : "complete",
+        relays: Object.fromEntries(results),
+      };
+      const key = JSON.stringify(state);
+      if (key !== lastStatus) {
+        lastStatus = key;
+        onStatus?.(state);
+      }
+      if (!pending) {
+        clearTimeout(eoseTimer);
+        eoseTimer = undefined;
+        emitEose();
+      } else if (eoseTimer === undefined) {
+        eoseTimer = setTimeout(() => {
+          eoseTimer = undefined;
+          for (const [url, result] of results) {
+            if (result === "pending") results.set(url, "timeout");
+          }
+          report();
+        }, eoseTimeout);
+      }
+    };
+    report();
+
+    // req() swallows AuthRequiredError while waiting for authenticated$.
+    // The pool's status stream exposes the missing signal even if the relay
+    // never sends an AUTH challenge. Do not opt out of waitForAuth: that would
+    // tear down the read and prevent late authentication from repairing it.
+    //
+    // `authRequiredForRead` is sticky: applesauce clears it only when the
+    // socket resets, not when AUTH succeeds. An authenticated relay is not
+    // blocking reads, so a later REQ on the same connection must wait for its
+    // real EOSE instead of releasing the chat gate at once as "auth-required".
+    const authSub = pool.status$.subscribe((statuses) => {
+      let changed = false;
+      for (const [url, result] of results) {
+        const status = statuses[url];
+        if (!status || result === "eose") continue;
+        const blocked = status.authRequiredForRead && !status.authenticated;
+        if (blocked && result !== "auth-required") {
+          results.set(url, "auth-required");
+          changed = true;
+        } else if (!blocked && result === "auth-required") {
+          results.set(url, "pending");
+          changed = true;
+        }
+      }
+      if (changed) report();
+    });
 
     // Filtering at subscribe time only covers relays already blocked. A cold
     // load opens subscriptions BEFORE the kind-10006 event arrives over the
@@ -211,19 +281,15 @@ export function streamWithEose(
     // drops the in-flight REQ without an EOSE, CLOSED, ERROR or complete, so
     // that relay can never settle and EOSE waits out the full backstop. Chat is
     // gated on EOSE, so that is a blank conversation for 15 seconds on every
-    // reload. A relay that can no longer answer has to leave `expected`.
+    // reload. A relay that can no longer answer must leave the tracked results.
     const blockedSub = blocked$.subscribe(() => {
-      if (eoseEmitted) return;
-
       let dropped = false;
-      for (const url of [...expected]) {
-        if (!isRelayBlocked(url) || settled.has(url)) continue;
-        expected.delete(url);
+      for (const url of [...results.keys()]) {
+        if (!isRelayBlocked(url)) continue;
+        results.delete(url);
         dropped = true;
       }
-
-      if (!dropped) return;
-      if (settled.size >= expected.size) emitEose();
+      if (dropped) report();
     });
 
     const sub = pool
@@ -272,8 +338,22 @@ export function streamWithEose(
             case "EOSE":
             case "CLOSED":
             case "ERROR":
-              settled.add(message.from);
-              if (settled.size >= expected.size) emitEose();
+              // This outcome describes the initial history read. A relay may
+              // close its live tail AFTER a real EOSE without invalidating it.
+              if (
+                results.has(message.from) &&
+                results.get(message.from) !== "eose"
+              ) {
+                results.set(
+                  message.from,
+                  message.type === "EOSE"
+                    ? "eose"
+                    : message.type === "ERROR"
+                      ? "error"
+                      : "closed",
+                );
+                report();
+              }
               break;
             default:
               break;
@@ -284,7 +364,10 @@ export function streamWithEose(
           subscriber.error(error);
         },
         complete: () => {
-          emitEose();
+          for (const [url, result] of results) {
+            if (result === "pending") results.set(url, "closed");
+          }
+          report();
           subscriber.complete();
         },
       });
@@ -292,6 +375,7 @@ export function streamWithEose(
     return () => {
       clearTimeout(eoseTimer);
       blockedSub.unsubscribe();
+      authSub.unsubscribe();
       sub.unsubscribe();
     };
   });

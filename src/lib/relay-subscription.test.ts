@@ -1,6 +1,16 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  finalizeEvent,
+  generateSecretKey,
+  getPublicKey,
+} from "nostr-tools/pure";
 import { RelayPool } from "applesauce-relay";
-import { requestEvents, streamWithEose } from "./relay-subscription";
+import { firstValueFrom } from "rxjs";
+import {
+  requestEvents,
+  streamWithEose,
+  type RelayLoadState,
+} from "./relay-subscription";
 import { startMockRelay, fakeEvent, type MockRelay } from "@/test/mock-relay";
 import { setBlockedRelays } from "@/services/blocked-relays";
 
@@ -272,4 +282,211 @@ describe("streamWithEose and blocked relays", () => {
     // settles it, not the timer.
     expect(eoseAt!).toBeLessThan(2000);
   });
+});
+
+describe("streamWithEose load outcomes (#273)", () => {
+  it("reports auth-required without a challenge, before the EOSE backstop", async () => {
+    const r = await relay({ kind: "auth-required" });
+    const states: RelayLoadState[] = [];
+    const onEose = vi.fn();
+    const sub = streamWithEose([r.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      eoseTimeout: 10_000,
+      onEose,
+      onStatus: (state) => states.push(state),
+    }).subscribe();
+    try {
+      await vi.waitFor(() =>
+        expect(states.at(-1)).toEqual({
+          status: "partial",
+          relays: { [`${r.url}/`]: "auth-required" },
+        }),
+      );
+      expect(onEose).toHaveBeenCalledTimes(1);
+      expect(r.reqCount()).toBe(1);
+    } finally {
+      sub.unsubscribe();
+    }
+  });
+
+  it("distinguishes a silent timeout from a genuinely empty EOSE", async () => {
+    const silent = await relay({ kind: "silent" });
+    const empty = await relay({ kind: "normal" });
+    const states: RelayLoadState[] = [];
+    const sub = streamWithEose([silent.url, empty.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      eoseTimeout: 200,
+      onStatus: (state) => states.push(state),
+    }).subscribe();
+    try {
+      await vi.waitFor(() =>
+        expect(states.at(-1)).toEqual({
+          status: "partial",
+          relays: {
+            [`${silent.url}/`]: "timeout",
+            [`${empty.url}/`]: "eose",
+          },
+        }),
+      );
+    } finally {
+      sub.unsubscribe();
+    }
+  });
+
+  it("keeps healthy-relay events while another relay needs auth", async () => {
+    const auth = await relay({ kind: "auth-required" });
+    const event = fakeEvent({ id: "e".repeat(64) });
+    const healthy = await relay({ kind: "normal", events: [event] });
+    const states: RelayLoadState[] = [];
+    const events: string[] = [];
+    const sub = streamWithEose([auth.url, healthy.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      eoseTimeout: 10_000,
+      onStatus: (state) => states.push(state),
+    }).subscribe((e) => events.push(e.id));
+    try {
+      await vi.waitFor(() =>
+        expect(states.at(-1)?.relays).toEqual({
+          [`${auth.url}/`]: "auth-required",
+          [`${healthy.url}/`]: "eose",
+        }),
+      );
+      expect(states.at(-1)?.status).toBe("partial");
+      expect(events).toEqual([event.id]);
+    } finally {
+      sub.unsubscribe();
+    }
+  });
+
+  it("recovers on the same subscription after late authentication", async () => {
+    const key = generateSecretKey();
+    const event = fakeEvent({ pubkey: getPublicKey(key) });
+    const r = await relay({ kind: "nip42-gated", events: [event] });
+    const p = pool();
+    const states: RelayLoadState[] = [];
+    const events: string[] = [];
+    const onEose = vi.fn();
+    const sub = streamWithEose([r.url], [{ authors: [event.pubkey] }], {
+      pool: p,
+      store: null,
+      eoseTimeout: 200,
+      onEose,
+      onStatus: (state) => states.push(state),
+    }).subscribe((e) => events.push(e.id));
+    try {
+      await vi.waitFor(() => expect(states.at(-1)?.status).toBe("partial"));
+      // Authentication can happen after the initial loading gate has opened.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await p.relays.get(`${r.url}/`)!.authenticate({
+        signEvent: async (template) => finalizeEvent(template, key),
+      });
+      await vi.waitFor(() =>
+        expect(states.at(-1)).toEqual({
+          status: "complete",
+          relays: { [`${r.url}/`]: "eose" },
+        }),
+      );
+      expect(events).toEqual([event.id]);
+      expect(onEose).toHaveBeenCalledTimes(1);
+      expect(r.reqCount()).toBe(2);
+    } finally {
+      sub.unsubscribe();
+    }
+  });
+
+  it("does not flag a later read on an already-authenticated relay", async () => {
+    // applesauce clears authRequiredForRead only on socket reset, so it is
+    // still set after AUTH succeeds. A second read on that connection is not
+    // blocked and must not release the EOSE gate before its real EOSE.
+    const key = generateSecretKey();
+    const event = fakeEvent({ pubkey: getPublicKey(key) });
+    const r = await relay({ kind: "nip42-gated", events: [event] });
+    const p = pool();
+    const filters = [{ authors: [event.pubkey] }];
+    const firstStates: RelayLoadState[] = [];
+    const first = streamWithEose([r.url], filters, {
+      pool: p,
+      store: null,
+      onStatus: (state) => firstStates.push(state),
+    }).subscribe();
+    let second: { unsubscribe: () => void } | undefined;
+    try {
+      await vi.waitFor(() =>
+        expect(firstStates.at(-1)?.status).toBe("partial"),
+      );
+      await p.relays.get(`${r.url}/`)!.authenticate({
+        signEvent: async (template) => finalizeEvent(template, key),
+      });
+      await vi.waitFor(() =>
+        expect(firstStates.at(-1)?.status).toBe("complete"),
+      );
+      // The precondition this test exists for: the flag outlives the AUTH.
+      const statuses = await firstValueFrom(p.status$);
+      expect(statuses[`${r.url}/`]).toMatchObject({
+        authRequiredForRead: true,
+        authenticated: true,
+      });
+
+      const states: RelayLoadState[] = [];
+      const events: string[] = [];
+      const onEose = vi.fn();
+      second = streamWithEose([r.url], filters, {
+        pool: p,
+        store: null,
+        eoseTimeout: 10_000,
+        onEose,
+        onStatus: (state) => states.push(state),
+      }).subscribe((e) => events.push(e.id));
+      await vi.waitFor(() => expect(states.at(-1)?.status).toBe("complete"));
+      expect(states.map((state) => state.status)).not.toContain("partial");
+      expect(onEose).toHaveBeenCalledTimes(1);
+      expect(events).toEqual([event.id]);
+    } finally {
+      first.unsubscribe();
+      second?.unsubscribe();
+    }
+  });
+
+  it("removes an auth-required relay from the outcome when it is blocked", async () => {
+    const r = await relay({ kind: "auth-required" });
+    const states: RelayLoadState[] = [];
+    const sub = streamWithEose([r.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      onStatus: (state) => states.push(state),
+    }).subscribe();
+    try {
+      await vi.waitFor(() => expect(states.at(-1)?.status).toBe("partial"));
+      setBlockedRelays([r.url], OWNER);
+      expect(states.at(-1)).toEqual({ status: "complete", relays: {} });
+    } finally {
+      sub.unsubscribe();
+    }
+  });
+});
+
+it("retains a real EOSE outcome when the relay closes the live subscription", async () => {
+  const r = await relay({ kind: "close-after-eose" });
+  const states: RelayLoadState[] = [];
+  const sub = streamWithEose([r.url], [{ kinds: [1] }], {
+    pool: pool(),
+    store: null,
+    resubscribe: false,
+    onStatus: (state) => states.push(state),
+  }).subscribe();
+  try {
+    await vi.waitFor(() =>
+      expect(states.some((state) => state.status === "complete")).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(states.at(-1)).toEqual({
+      status: "complete",
+      relays: { [`${r.url}/`]: "eose" },
+    });
+  } finally {
+    sub.unsubscribe();
+  }
 });

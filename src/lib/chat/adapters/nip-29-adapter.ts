@@ -304,6 +304,7 @@ export class Nip29Adapter extends ChatProtocolAdapter {
 
     const subscription = streamWithEose([relayUrl], [filter], {
       onEose: () => eoseReceived$.next(true),
+      onStatus: options?.onStatus,
     }).subscribe();
 
     // Store subscription for cleanup

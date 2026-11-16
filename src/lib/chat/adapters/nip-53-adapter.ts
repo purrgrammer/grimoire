@@ -259,6 +259,7 @@ export class Nip53Adapter extends ChatProtocolAdapter {
 
     const subscription = streamWithEose(relays, [filter], {
       onEose: () => eoseReceived$.next(true),
+      onStatus: options?.onStatus,
     }).subscribe();
 
     // Store subscription for cleanup

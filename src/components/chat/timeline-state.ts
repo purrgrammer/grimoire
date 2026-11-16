@@ -13,12 +13,13 @@
  * A gate that is still shut is a WAIT. Only a timeline that has arrived, with
  * nothing in it, is empty.
  */
-export type TimelineState = "list" | "waiting" | "empty";
+export type TimelineState = "list" | "waiting" | "empty" | "incomplete";
 
 export function timelineState({
   messages,
   rows,
   painted,
+  incomplete = false,
 }: {
   /** Undefined until the adapter has emitted — adapters do not emit until EOSE. */
   messages: unknown[] | undefined;
@@ -26,7 +27,10 @@ export function timelineState({
   rows: number;
   /** Whether the container has been measured in a painting document. */
   painted: boolean;
+  /** A relay needs auth, timed out, or refused the read. */
+  incomplete?: boolean;
 }): TimelineState {
   if (rows > 0) return painted ? "list" : "waiting";
+  if (incomplete) return "incomplete";
   return messages === undefined ? "waiting" : "empty";
 }

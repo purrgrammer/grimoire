@@ -1,0 +1,428 @@
+{
+ "capturedAt": "2026-11-16",
+ "browser": "Google Chrome headless, fresh temp profile per capture",
+ "server": "local production build: npx vite build && npx vite preview",
+ "mockRelayCounters": {
+  "REQsReceived": {
+   "auth": 8,
+   "silent": 8,
+   "normal": 14,
+   "empty": 8
+  },
+  "pubkeysAuthenticated": [],
+  "eventsPublishedToMocks": 0
+ },
+ "captures": [
+  {
+   "file": "pr-auth-required-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49620'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Authentication required",
+   "secondsToState": "11.1",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:49620/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49620/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-auth-required-mobile.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49620'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Authentication required",
+   "secondsToState": "11.1",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:49620/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49620/: Authentication required. Respond to the relay auth prompt if available. Without an AUTH challenge from the relay, authentication is not possible.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-auth-required-desktop.png",
+   "build": "5a121aa (origin/main, baseline)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49620'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "25.6",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49620/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "main-auth-required-mobile.png",
+   "build": "5a121aa (origin/main, baseline)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49620'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "25.6",
+   "framesSentByType": {
+    "REQ": 31,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49620/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "pr-silent-timeout-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49621'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Timed out waiting",
+   "secondsToState": "26.1",
+   "framesSentByType": {
+    "REQ": 30,
+    "CLOSE": 28
+   },
+   "websocketsOpened": [
+    "ws://localhost:49621/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49621/: Timed out waiting for stored messages.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-silent-timeout-mobile.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49621'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Timed out waiting",
+   "secondsToState": "26.2",
+   "framesSentByType": {
+    "REQ": 33,
+    "CLOSE": 31
+   },
+   "websocketsOpened": [
+    "ws://localhost:49621/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49621/: Timed out waiting for stored messages.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-relay-down-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts) — nothing listening on port (down)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49624'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Timed out waiting",
+   "secondsToState": "25.7",
+   "framesSentByType": {
+    "REQ": 29,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49624/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'ws://localhost:PORT/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n0/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49624/: Timed out waiting for stored messages.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "pr-relay-down-mobile.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts) — nothing listening on port (down)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49624'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Timed out waiting",
+   "secondsToState": "25.8",
+   "framesSentByType": {
+    "REQ": 29,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49624/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'ws://localhost:PORT/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n0/1\nNIP-29\nMessage history may be incomplete.\nws://localhost:49624/: Timed out waiting for stored messages.\nMessage history is incomplete.\nSign in to post"
+  },
+  {
+   "file": "main-relay-down-desktop.png",
+   "build": "5a121aa (origin/main, baseline)",
+   "relay": "local mock (src/test/mock-relay.ts) — nothing listening on port (down)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49624'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "25.6",
+   "framesSentByType": {
+    "REQ": 29,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49624/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'ws://localhost:PORT/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n0/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "main-relay-down-mobile.png",
+   "build": "5a121aa (origin/main, baseline)",
+   "relay": "local mock (src/test/mock-relay.ts) — nothing listening on port (down)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49624'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "25.6",
+   "framesSentByType": {
+    "REQ": 29,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "ws://localhost:49624/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'ws://localhost:PORT/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n0/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "pr-normal-messages-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49622'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "third one",
+   "secondsToState": "1.5",
+   "framesSentByType": {
+    "REQ": 32,
+    "CLOSE": 3
+   },
+   "websocketsOpened": [
+    "ws://localhost:49622/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nToday\nc363:255f\n18:17\ngm, this is a local fixture message\nc363:255f\n18:18\nsecond fixture message\nc363:255f\n18:19\nthird one — history loaded fully\nSign in to post"
+  },
+  {
+   "file": "pr-normal-messages-mobile.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49622'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "third one",
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 32,
+    "CLOSE": 3
+   },
+   "websocketsOpened": [
+    "ws://localhost:49622/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nToday\nc363:255f\n18:17\ngm, this is a local fixture message\nc363:255f\n18:18\nsecond fixture message\nc363:255f\n18:19\nthird one — history loaded fully\nSign in to post"
+  },
+  {
+   "file": "pr-normal-empty-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49623'group%22",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "1.1",
+   "framesSentByType": {
+    "REQ": 23,
+    "CLOSE": 3
+   },
+   "websocketsOpened": [
+    "ws://localhost:49623/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "pr-normal-empty-mobile.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "local mock (src/test/mock-relay.ts)",
+   "command": "chat%20%22ws%3A%2F%2Flocalhost%3A49623'group%22",
+   "viewport": "390x844@2x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "No messages yet",
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 26,
+    "CLOSE": 10
+   },
+   "websocketsOpened": [
+    "ws://localhost:49623/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [],
+   "visibleText": "grimoire\nfb:71fe\ngroup\n0\n1/1\nNIP-29\nNo messages yet. Start the conversation!\nSign in to post"
+  },
+  {
+   "file": "live-0xchat-welcome-desktop.png",
+   "build": "5ca4678 (PR functional head)",
+   "relay": "real relay (wss://groups.0xchat.com, NXDOMAIN)",
+   "command": "chat%20groups.0xchat.com'NkeVhXuWHGKKJCpn",
+   "viewport": "1440x900@1x",
+   "account": "readonly test pubkey (no signer)",
+   "waitedFor": "Timed out waiting",
+   "secondsToState": "25.6",
+   "framesSentByType": {
+    "REQ": 29,
+    "CLOSE": 29
+   },
+   "websocketsOpened": [
+    "wss://groups.0xchat.com/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "log: WebSocket connection to 'wss://groups.0xchat.com/' failed: Error in connection establishment: net::ERR_NAME_NOT_RESOLVED"
+   ],
+   "visibleText": "grimoire\nfb:71fe\nNkeVhXuWHGKKJCpn\n0\n0/1\nNIP-29\nMessage history may be incomplete.\nwss://groups.0xchat.com/: Timed out waiting for stored messages.\nMessage history is incomplete.\nSign in to post"
+  }
+ ]
+}
