@@ -29,7 +29,9 @@ import type { ChatAction, GetActionsOptions } from "@/types/chat-actions";
 import eventStore from "@/services/event-store";
 import {
   requestEvent,
+  assertReadComplete,
   requestEvents,
+  requestEventsWithOutcome,
   streamWithEose,
 } from "@/lib/relay-subscription";
 import { publishEventToRelays, publishEvent } from "@/services/hub";
@@ -352,8 +354,12 @@ export class Nip29Adapter extends ChatProtocolAdapter {
       limit: 50,
     };
 
-    // One-shot request to fetch older messages
-    const events = await requestEvents([relayUrl], [filter]);
+    // One-shot request to fetch older messages. An empty page the relay never
+    // confirmed (auth-required, timeout) throws instead of reading as the start
+    // of the group, which would end pagination for good.
+    const events = assertReadComplete(
+      await requestEventsWithOutcome([relayUrl], [filter]),
+    );
 
     // Convert events to messages
     const messages = events.map((event) => {

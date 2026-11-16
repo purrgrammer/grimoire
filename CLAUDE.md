@@ -192,6 +192,7 @@ before it.
 | Need | Use |
 | --- | --- |
 | One-shot fetch | `requestEvents()` / `requestEvent()` — `pool.request()` completes itself |
+| One-shot fetch where "empty" must differ from "never answered" (pagination) | `requestEventsWithOutcome()` + `assertReadComplete()` |
 | Stream, don't care about EOSE | `pool.subscription(relays, filters, { eventStore })` |
 | Stream and need the EOSE boundary | `streamWithEose()` (`src/lib/relay-subscription.ts`) |
 | Per-relay state tracking | subscribe to each `relay.subscription()` individually |

@@ -7,7 +7,10 @@ import {
 import { RelayPool } from "applesauce-relay";
 import { firstValueFrom } from "rxjs";
 import {
+  assertReadComplete,
+  IncompleteRelayReadError,
   requestEvents,
+  requestEventsWithOutcome,
   streamWithEose,
   type RelayLoadState,
 } from "./relay-subscription";
@@ -489,4 +492,92 @@ it("retains a real EOSE outcome when the relay closes the live subscription", as
   } finally {
     sub.unsubscribe();
   }
+});
+
+describe("requestEventsWithOutcome (#273)", () => {
+  it("settles an auth-required refusal at once and says so", async () => {
+    const r = await relay({ kind: "auth-required" });
+
+    const started = Date.now();
+    const outcome = await requestEventsWithOutcome([r.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      timeout: 5_000,
+    });
+
+    expect(outcome).toEqual({
+      events: [],
+      relays: { [`${r.url}/`]: "auth-required" },
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(() => assertReadComplete(outcome)).toThrow(IncompleteRelayReadError);
+  });
+
+  it("reports a silent relay as a timeout, not an empty result", async () => {
+    const r = await relay({ kind: "silent" });
+
+    const outcome = await requestEventsWithOutcome([r.url], [{ kinds: [1] }], {
+      pool: pool(),
+      store: null,
+      timeout: 300,
+    });
+
+    expect(outcome.relays).toEqual({ [`${r.url}/`]: "timeout" });
+    expect(() => assertReadComplete(outcome)).toThrow(/No relay finished/);
+  });
+
+  it("returns events with a real EOSE, and an empty EOSE is a real empty", async () => {
+    const full = await relay({
+      kind: "normal",
+      events: [fakeEvent({ id: "1".repeat(64) })],
+    });
+    const empty = await relay({ kind: "normal", events: [] });
+    const p = pool();
+
+    const got = await requestEventsWithOutcome([full.url], [{ kinds: [1] }], {
+      pool: p,
+      store: null,
+    });
+    expect(assertReadComplete(got).map((e) => e.id)).toEqual(["1".repeat(64)]);
+
+    const none = await requestEventsWithOutcome([empty.url], [{ kinds: [1] }], {
+      pool: p,
+      store: null,
+    });
+    expect(none.relays).toEqual({ [`${empty.url}/`]: "eose" });
+    expect(assertReadComplete(none)).toEqual([]);
+  });
+
+  it("keeps events from one relay when another refuses", async () => {
+    const full = await relay({
+      kind: "normal",
+      events: [fakeEvent({ id: "2".repeat(64) })],
+    });
+    const auth = await relay({ kind: "auth-required" });
+
+    const outcome = await requestEventsWithOutcome(
+      [full.url, auth.url],
+      [{ kinds: [1] }],
+      { pool: pool(), store: null, timeout: 5_000 },
+    );
+
+    expect(outcome.relays).toEqual({
+      [`${full.url}/`]: "eose",
+      [`${auth.url}/`]: "auth-required",
+    });
+    expect(assertReadComplete(outcome).map((e) => e.id)).toEqual([
+      "2".repeat(64),
+    ]);
+  });
+
+  it("resolves immediately when every relay is blocked", async () => {
+    setBlockedRelays(["wss://blocked.example/"], OWNER);
+    const outcome = await requestEventsWithOutcome(
+      ["wss://blocked.example"],
+      [{ kinds: [1] }],
+      { pool: pool(), store: null },
+    );
+    expect(outcome).toEqual({ events: [], relays: {} });
+    expect(assertReadComplete(outcome)).toEqual([]);
+  });
 });

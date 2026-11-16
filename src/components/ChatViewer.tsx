@@ -112,8 +112,12 @@ import {
   FIRST_ITEM_INDEX_BASE,
 } from "./chat/prepend-anchor";
 import { usePaintedContainer } from "./chat/use-painted-container";
-import type { RelayLoadState } from "@/lib/relay-subscription";
+import {
+  IncompleteRelayReadError,
+  type RelayLoadState,
+} from "@/lib/relay-subscription";
 import { RelayLoadNotice } from "./chat/RelayLoadNotice";
+import { describeIncompleteRead } from "@/lib/chat/incomplete-read";
 import { timelineState } from "./chat/timeline-state";
 import { draftKey } from "@/services/chat-drafts";
 import { mentionsPubkey } from "@/lib/chat/mentions";
@@ -1832,7 +1836,13 @@ export function ChatViewer({
         setHasMore(false);
       }
     } catch (error) {
-      console.error("Failed to load older messages:", error);
+      // Not the end of the history: the relay never answered. Keep "load
+      // older" available and say why, instead of quietly giving up.
+      if (error instanceof IncompleteRelayReadError) {
+        toast.error(describeIncompleteRead(error));
+      } else {
+        console.error("Failed to load older messages:", error);
+      }
     } finally {
       setIsLoadingOlder(false);
     }
