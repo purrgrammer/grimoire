@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { nip19 } from "nostr-tools";
+import { getDefaultStore } from "jotai";
+import { grimoireStateAtom, standaloneWindowAtom } from "@/core/state";
 import {
   BUILTIN_ARCHETYPES,
   BUILTIN_ARCHETYPE_SLUGS,
@@ -8,6 +10,7 @@ import {
   findBuiltinArchetype,
   isBuiltinArchetype,
   buildBuiltinWindow,
+  openBuiltinWindow,
 } from "./napplet-builtins";
 
 const PUBKEY =
@@ -253,5 +256,53 @@ describe("a convention payload, which nests its target", () => {
         target: { type: "event", id: "not-an-id" },
       }),
     ).rejects.toThrow(/needs something to open/);
+  });
+});
+
+describe("openBuiltinWindow", () => {
+  const store = getDefaultStore();
+  const initial = store.get(grimoireStateAtom);
+  afterEach(() => {
+    store.set(standaloneWindowAtom, null);
+    store.set(grimoireStateAtom, initial);
+    localStorage.removeItem("grimoire_v6");
+  });
+
+  const window = {
+    appId: "profile" as const,
+    props: { pubkey: PUBKEY },
+    commandString: `profile ${nip19.npubEncode(PUBKEY)}`,
+  };
+
+  it("adds the window to the active workspace and returns its id", () => {
+    const id = openBuiltinWindow(window);
+    const state = store.get(grimoireStateAtom);
+    expect(state.windows[id]).toMatchObject(window);
+    expect(state.workspaces[state.activeWorkspaceId].windowIds).toEqual([id]);
+  });
+
+  // #313: from /run, the same call also brings the route's window in. The id
+  // used to be recovered by diffing the window map, which then found two.
+  it("returns the handler's id, not the /run window's, from a single-window route", () => {
+    const run = {
+      id: "pop-out:man kind",
+      appId: "man" as const,
+      props: { cmd: "kind" },
+      commandString: "man kind",
+    };
+    store.set(standaloneWindowAtom, {
+      owner: {},
+      window: run,
+      revealed: false,
+    });
+    const id = openBuiltinWindow(window);
+    const state = store.get(grimoireStateAtom);
+    expect(id).not.toBe(run.id);
+    expect(state.windows[id]).toMatchObject(window);
+    expect(state.workspaces[state.activeWorkspaceId].windowIds).toEqual([
+      run.id,
+      id,
+    ]);
+    expect(store.get(standaloneWindowAtom)?.revealed).toBe(true);
   });
 });

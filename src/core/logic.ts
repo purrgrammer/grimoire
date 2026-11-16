@@ -59,22 +59,30 @@ export const createWorkspace = (
   };
 };
 
+/** What it takes to open a window. */
+export interface AddWindowPayload {
+  appId: string;
+  props: any;
+  commandString?: string;
+  customTitle?: string;
+  spellId?: string;
+  /**
+   * The id to give the window. Minted when absent; supplied by a caller that
+   * needs to know the id it opened without diffing the state for it.
+   */
+  id?: string;
+}
+
 /**
  * Adds a window to the global store and to the active workspace.
  */
 export const addWindow = (
   state: GrimoireState,
-  payload: {
-    appId: string;
-    props: any;
-    commandString?: string;
-    customTitle?: string;
-    spellId?: string;
-  },
+  payload: AddWindowPayload,
 ): GrimoireState => {
   const activeId = state.activeWorkspaceId;
   const ws = state.workspaces[activeId];
-  const newWindowId = uuidv4();
+  const newWindowId = payload.id ?? uuidv4();
   const newWindow: WindowInstance = {
     id: newWindowId,
     appId: payload.appId as any,
@@ -103,6 +111,80 @@ export const addWindow = (
     },
   };
 };
+
+/**
+ * Places a window that was on screen outside every workspace — the one a
+ * single-window route such as `/run` renders — into the active workspace,
+ * keeping its id.
+ *
+ * The id is kept because state is keyed by it: an `ai` conversation and a post
+ * draft are stored under the window id, so a fresh id would show the same
+ * command with its conversation gone.
+ *
+ * One id lives in exactly one workspace — `removeWindow` deletes the window
+ * record, which would orphan a second placement — so:
+ * - already in the active workspace: unchanged, never duplicated;
+ * - in another workspace: moved here, since that is the window the user is
+ *   looking at and the reveal must show it;
+ * - nowhere: inserted the way any new window is, by `layoutConfig`.
+ *
+ * When the id is already placed in some workspace, that record is kept over
+ * `window`: it is the live one and may carry edits (a retitle) the standalone
+ * copy never saw. A record no workspace places — `deleteWorkspace` leaves
+ * those behind — is stale, and `window` replaces it.
+ */
+export const adoptWindow = (
+  state: GrimoireState,
+  window: WindowInstance,
+): GrimoireState => {
+  const activeId = state.activeWorkspaceId;
+  const active = state.workspaces[activeId];
+  if (!active) return state;
+  if (active.windowIds.includes(window.id)) return state;
+
+  const placed = Object.values(state.workspaces).some((ws) =>
+    ws.windowIds.includes(window.id),
+  );
+  const workspaces = { ...state.workspaces };
+  for (const ws of Object.values(state.workspaces)) {
+    if (ws.id === activeId || !ws.windowIds.includes(window.id)) continue;
+    workspaces[ws.id] = {
+      ...ws,
+      layout: removeFromLayout(ws.layout, window.id),
+      windowIds: ws.windowIds.filter((id) => id !== window.id),
+    };
+  }
+  workspaces[activeId] = {
+    ...active,
+    layout: insertWindow(active.layout, window.id, state.layoutConfig),
+    windowIds: [...active.windowIds, window.id],
+  };
+
+  return {
+    ...state,
+    windows: {
+      ...state.windows,
+      [window.id]: (placed && state.windows[window.id]) || window,
+    },
+    workspaces,
+  };
+};
+
+/**
+ * Opens a window from a single-window route, bringing that route's window
+ * along: `standalone` is adopted into the active workspace first, then the
+ * requested window is added beside it — the state the user would have reached
+ * by opening the route's command in the workspace and clicking from there.
+ *
+ * `standalone` is null while the route has nothing on screen to bring (still
+ * loading, or an error); the requested window is then added on its own.
+ */
+export const addWindowAlongside = (
+  state: GrimoireState,
+  standalone: WindowInstance | null,
+  payload: AddWindowPayload,
+): GrimoireState =>
+  addWindow(standalone ? adoptWindow(state, standalone) : state, payload);
 
 /**
  * Recursively removes a window from the layout tree.

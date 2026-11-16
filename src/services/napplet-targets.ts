@@ -2,11 +2,9 @@
 
 import type { IntentDispatchParams, IntentTargetController } from "./kehto";
 
-import { getDefaultStore } from "jotai";
 import { nip19 } from "nostr-tools";
 
-import { grimoireStateAtom } from "@/core/state";
-import * as Logic from "@/core/logic";
+import { openPersistedWindow } from "@/core/state";
 import { getNappletBridge, originRegistry } from "./napplet-host";
 import {
   getDeclaredDomains,
@@ -53,9 +51,9 @@ function liveWindowFor(dTag: string): string | undefined {
  * never from anything the calling napplet supplied, so a caller cannot name a
  * coordinate and have the shell fetch it.
  *
- * `Logic.addWindow` mints the id internally and returns only the new state, so
- * the id is recovered by diffing. Threading it out of `logic.ts` would be
- * cleaner but that signature is shared with every other command.
+ * The id comes back from `openPersistedWindow`, not from diffing the window
+ * map: opened from `/run`, one call adds the pop-out's window too, and the diff
+ * would have returned that one.
  */
 async function openHandler(dTag: string): Promise<string | undefined> {
   const rows = await listNapplets();
@@ -65,18 +63,11 @@ async function openHandler(dTag: string): Promise<string | undefined> {
   const pointer = pointerFromCoordinate(row.coordinate);
   if (!pointer) return undefined;
 
-  const store = getDefaultStore();
-  const before = new Set(Object.keys(store.get(grimoireStateAtom).windows));
-  store.set(grimoireStateAtom, (prev) =>
-    Logic.addWindow(prev, {
-      appId: "app",
-      props: { pointer },
-      commandString: `app ${"id" in pointer ? nip19.neventEncode({ ...pointer, kind: row.kind, author: row.pubkey }) : nip19.naddrEncode(pointer)}`,
-    }),
-  );
-  return Object.keys(store.get(grimoireStateAtom).windows).find(
-    (id) => !before.has(id),
-  );
+  return openPersistedWindow({
+    appId: "app",
+    props: { pointer },
+    commandString: `app ${"id" in pointer ? nip19.neventEncode({ ...pointer, kind: row.kind, author: row.pubkey }) : nip19.naddrEncode(pointer)}`,
+  });
 }
 
 /**
