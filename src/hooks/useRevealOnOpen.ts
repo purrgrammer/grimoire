@@ -15,9 +15,16 @@ import type { WindowInstance } from "@/types/app";
  * `window` must be referentially stable (memoize it); pass null while there is
  * nothing on screen to bring along — loading, or an error — and a window
  * opened meanwhile is revealed on its own.
+ *
+ * `sourceId` is the workspace window this view was popped out of, if any
+ * (`POP_OUT_SOURCE_PARAM`): while it is still in the active workspace, the
+ * reveal shows it instead of placing `window` as a copy beside it.
  */
-export function useRevealOnOpen(window: WindowInstance | null): void {
-  const revealed = useStandaloneWindow(window);
+export function useRevealOnOpen(
+  window: WindowInstance | null,
+  sourceId?: string | null,
+): void {
+  const revealed = useStandaloneWindow(window, sourceId);
   const navigate = useNavigate();
 
   useEffect(() => {

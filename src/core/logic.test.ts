@@ -867,6 +867,66 @@ describe("adoptWindow / addWindowAlongside (single-window routes, #313)", () => 
     expect(back.windows[runWindow.id].customTitle).toBe("renamed");
   });
 
+  describe("popped out of a workspace window (sourceId)", () => {
+    // `w-a` is `man req` on the dashboard; its pop-out tab shows the same
+    // window under a command-derived id.
+    const popped: WindowInstance = {
+      id: "pop-out:man req",
+      appId: "man",
+      props: { cmd: "req" },
+      commandString: "man req",
+    };
+
+    it("adds only the requested window while the source is on screen", () => {
+      const next = addWindowAlongside(persisted(), popped, requested, "w-a");
+      expect(next.workspaces["ws-1"].windowIds).toEqual([
+        "w-a",
+        "w-b",
+        "new-window",
+      ]);
+      expect(next.windows[popped.id]).toBeUndefined();
+    });
+
+    it("adopts the copy when the source was closed meanwhile", () => {
+      const next = addWindowAlongside(persisted(), popped, requested, "gone");
+      expect(next.workspaces["ws-1"].windowIds).toEqual([
+        "w-a",
+        "w-b",
+        popped.id,
+        "new-window",
+      ]);
+    });
+
+    it("adopts the copy when the source sits in another workspace", () => {
+      const next = addWindowAlongside(persisted(), popped, requested, "w-c");
+      expect(next.workspaces["ws-1"].windowIds).toContain(popped.id);
+      // The user's window in the other workspace is left where it is.
+      expect(next.workspaces["ws-2"].windowIds).toEqual(["w-c"]);
+    });
+
+    it("does not trust a source id that names a different app", () => {
+      const next = addWindowAlongside(persisted(), popped, requested, "w-b");
+      expect(next.workspaces["ws-1"].windowIds).toContain(popped.id);
+    });
+
+    it("never matches by command: a same-command window without a source stays separate", () => {
+      const sameCommand = {
+        ...persisted(),
+        windows: {
+          ...persisted().windows,
+          "w-a": { ...persisted().windows["w-a"], commandString: "man req" },
+        },
+      };
+      const next = addWindowAlongside(sameCommand, popped, requested);
+      expect(next.workspaces["ws-1"].windowIds).toEqual([
+        "w-a",
+        "w-b",
+        popped.id,
+        "new-window",
+      ]);
+    });
+  });
+
   it("replaces a stale record no workspace places", () => {
     const stale = {
       ...persisted(),

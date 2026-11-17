@@ -178,13 +178,33 @@ export const adoptWindow = (
  *
  * `standalone` is null while the route has nothing on screen to bring (still
  * loading, or an error); the requested window is then added on its own.
+ *
+ * `sourceId` names the workspace window the route was popped out of. While
+ * that window is still in the active workspace showing the same app, it IS the
+ * route's window — in another tab — and the reveal adds only the requested
+ * window; adopting `standalone` too would place a copy beside the original.
+ * Closed meanwhile, or moved to another workspace, and `standalone` is adopted
+ * as usual. Windows are never matched by command: two windows running the
+ * same command are legitimately separate.
  */
 export const addWindowAlongside = (
   state: GrimoireState,
   standalone: WindowInstance | null,
   payload: AddWindowPayload,
-): GrimoireState =>
-  addWindow(standalone ? adoptWindow(state, standalone) : state, payload);
+  sourceId?: string | null,
+): GrimoireState => {
+  if (!standalone) return addWindow(state, payload);
+  const active = state.workspaces[state.activeWorkspaceId];
+  const source = sourceId ? state.windows[sourceId] : undefined;
+  const sourceOnScreen =
+    !!source &&
+    source.appId === standalone.appId &&
+    !!active?.windowIds.includes(source.id);
+  return addWindow(
+    sourceOnScreen ? state : adoptWindow(state, standalone),
+    payload,
+  );
+};
 
 /**
  * Recursively removes a window from the layout tree.

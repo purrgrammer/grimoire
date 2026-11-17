@@ -153,6 +153,8 @@ const activeGrimoireStateAtom = atom(
 export interface StandaloneWindow {
   owner: object;
   window: WindowInstance | null;
+  /** The workspace window this route was popped out of, if any. */
+  sourceId?: string | null;
   revealed: boolean;
 }
 
@@ -183,7 +185,12 @@ export const openWindowAtom = atom(
       // The persisted state even inside a temporary session: that is the
       // workspace the dashboard shows, since DashboardPage discards the session.
       set(grimoireStateAtom, (prev) =>
-        Logic.addWindowAlongside(prev, standalone.window, request),
+        Logic.addWindowAlongside(
+          prev,
+          standalone.window,
+          request,
+          standalone.sourceId,
+        ),
       );
       set(standaloneWindowAtom, { ...standalone, revealed: true });
       return request.id;
@@ -220,18 +227,21 @@ export function openPersistedWindow(
  * Pass a referentially stable window (memoize it): a new object re-registers
  * it as not yet revealed.
  */
-export function useStandaloneWindow(window: WindowInstance | null): boolean {
+export function useStandaloneWindow(
+  window: WindowInstance | null,
+  sourceId?: string | null,
+): boolean {
   const [owner] = useState(() => ({}));
   const standalone = useAtomValue(standaloneWindowAtom);
   const setStandalone = useSetAtom(standaloneWindowAtom);
 
   useEffect(() => {
-    setStandalone({ owner, window, revealed: false });
+    setStandalone({ owner, window, sourceId, revealed: false });
     // Clear only our own registration: the next route may already have
     // registered by the time this one's cleanup runs.
     return () =>
       setStandalone((current) => (current?.owner === owner ? null : current));
-  }, [owner, window, setStandalone]);
+  }, [owner, window, sourceId, setStandalone]);
 
   return standalone?.owner === owner && standalone.revealed;
 }

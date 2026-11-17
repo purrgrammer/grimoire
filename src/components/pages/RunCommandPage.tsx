@@ -7,7 +7,10 @@ import {
 import { useGrimoire } from "@/core/state";
 import { WindowRenderer } from "@/components/WindowRenderer";
 import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
-import { runCommandWindow } from "@/lib/standalone-window";
+import {
+  POP_OUT_SOURCE_PARAM,
+  runCommandWindow,
+} from "@/lib/standalone-window";
 
 /**
  * RunCommandPage - Standalone command execution route
@@ -78,7 +81,9 @@ export default function RunCommandPage() {
         : null,
     [parsed],
   );
-  useRevealOnOpen(windowInstance);
+  // Popped out of a workspace window: that window, not a copy, is what the
+  // reveal shows beside the new one.
+  useRevealOnOpen(windowInstance, searchParams.get(POP_OUT_SOURCE_PARAM));
 
   if (loading) {
     return (

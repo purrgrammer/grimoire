@@ -14,6 +14,7 @@ import { useState } from "react";
 import { WindowInstance } from "@/types/app";
 import { commandLauncherEditModeAtom } from "@/core/command-launcher-state";
 import { reconstructCommand } from "@/lib/command-reconstructor";
+import { popOutUrl } from "@/lib/standalone-window";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,11 +105,9 @@ export function WindowToolbar({
     // Get command string (existing or reconstructed)
     const commandString = window.commandString || reconstructCommand(window);
 
-    // Construct the /run URL with the command as a query parameter
-    const popOutUrl = `/run?cmd=${encodeURIComponent(commandString)}`;
-
-    // Open in a new window/tab
-    globalThis.window.open(popOutUrl, "_blank");
+    // The /run URL carries the command and this window's id, so revealing the
+    // workspace from the new tab shows this window rather than a copy of it.
+    globalThis.window.open(popOutUrl(commandString, window.id), "_blank");
   };
 
   // Copy functionality for NIPs
