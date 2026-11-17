@@ -2,17 +2,28 @@
 
 ## What these captures are and are not
 
-- **Builds.** Local production builds (`vite build && vite preview`). The
-  branch is at its functional head **`fce8512`**, rebased onto `origin/main`
-  with #370. The baseline is **`origin/main` at `d9ecde6`**, built from
-  `git archive` in a temp directory. Later commits on this branch add a unit test (`c284ce7`) and this folder; neither changes app code.
+- **Builds.** Local production builds (`vite build && vite preview`).
+  - **This branch:** its functional head **`a5343c3`**, which includes the
+    pop-out fix. The build was made from that commit's app code; later edits
+    touched only a test's timeout and this folder.
+  - **`main`:** `origin/main` at **`d9ecde6`**, built from `git archive` in a
+    temp directory.
+  - **Before the pop-out fix:** the `popout-*-before-*` captures come from the
+    previous PR head, **`51084d1`**.
 - **Not the Vercel preview.** No Vercel session was used.
 - **Browser.** Headless Google Chrome, driven over the DevTools protocol, with
   a fresh temporary profile for every scenario. No extensions, no login, no
   account and no keys. Nothing was signed or published.
 - **No network.** Chrome ran with
   `--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost`, so no relay or
-  other host resolved, only the local preview server.
+  other host resolved, only localhost.
+  - The pop-out captures read from a **local fixture relay** at
+    `ws://localhost:4390`. It serves two kind-1 notes signed by a throwaway
+    in-memory key. It answers `EVENT` and `AUTH` with a refusal, and none
+    were sent.
+  - Ask Hex shows only when inference is reachable, so a stub
+    `globalThis.LanguageModel` that answers `"unavailable"` stood in for one.
+    Opening the window sends nothing.
   - The man pages and the kinds list render from bundled data.
   - The npub preview shows its loading skeleton, because no relay is
     reachable. That is expected here.
@@ -30,7 +41,32 @@ emulation.
 - the number of mosaic tiles on screen;
 - console errors and exceptions.
 
-All 14 runs logged **0 console errors and 0 exceptions**.
+The runs from earlier scenarios logged **0 console errors and 0 exceptions**.
+
+## Pop out a dashboard window, then Ask Hex / Chat from its event menu
+
+This regression was found in review of this PR. Every step is a real click
+or key press in the UI:
+1. A fresh profile opens `req -k 1 ws://localhost:4390` with Cmd+K.
+2. That window's **More actions → Pop out window**.
+3. The URL it opens, in the same profile. The new tab shares `localStorage`.
+4. The first note's **⋯** menu → **Ask Hex** or **Chat**.
+
+| Step | Before the fix (`51084d1`) | After (`a5343c3`) |
+| --- | --- | --- |
+| Dashboard with the one window | [desktop](./popout-ask-hex-dashboard-original-desktop.png) · [mobile](./popout-ask-hex-dashboard-original-mobile.png) | same flow, one window |
+| The popped-out `/run` | same view; only the relative times differ ("6m ago") | [desktop](./popout-run-desktop.png) · [mobile](./popout-run-mobile.png) |
+| Ask Hex | **3 tiles**: the original `req`, a `pop-out:req …` copy of it, and `ASK KIND 1` — [desktop](./popout-ask-hex-before-desktop.png) · [mobile](./popout-ask-hex-before-mobile.png) | **2 tiles**: the original and `ASK KIND 1` — [desktop](./popout-ask-hex-after-desktop.png) · [mobile](./popout-ask-hex-after-mobile.png) |
+| Chat | **3 tiles**, with the same copy — [desktop](./popout-chat-before-desktop.png) · [mobile](./popout-chat-before-mobile.png) | **2 tiles**: the original and the NIP-10 chat — [desktop](./popout-chat-after-desktop.png) · [mobile](./popout-chat-after-mobile.png) |
+
+**Cause.** Each click made one state write and one `pushState`, and added one
+requested window, so no handler ran twice. The copy came from identity: the
+`/run` window's id is derived from the command (`pop-out:<cmd>`), so the
+reveal could not tell it was the dashboard window seen in another tab.
+
+**Fix.** The pop-out URL now carries `&window=<id>`. While that window is
+still in the active workspace, the reveal adds only the requested window.
+`scenarios.json` (`popout-*`) records the ids before and after.
 
 ## `/run?cmd=man kind`, then click **nips** under SEE ALSO
 
@@ -76,12 +112,12 @@ navigates by itself on these routes; the reveal does it. If both navigated,
 
 ## Not covered
 
-- **Ask Hex, AI command chips and `grimoire.window`.** They go through the
-  same `useGrimoire().addWindow` / `useAddWindow` path the captured clicks
-  use. Driving them needs an inference provider.
+- **AI command chips and `grimoire.window`.** Same `useAddWindow` /
+  `useGrimoire().addWindow` path as the captured clicks. Driving them needs a
+  working inference provider. Ask Hex itself is captured above, from the
+  event menu.
 - **Clicked `nostr:` references and `UserName` / `RelayLink` in a `/run` or
-  preview window.** Same path again. Rendering their content needs relays, and
-  these captures had none.
+  preview window.** Same path again. None of them was clicked here.
 - **Napplet intents (`openBuiltinWindow`).** Covered by unit tests only.
 - **`/note1…`, `/nevent1…` and `/naddr1…` previews.** None was captured:
   without relays they only show a loading state.
@@ -89,3 +125,10 @@ navigates by itself on these routes; the reveal does it. If both navigated,
   - Their window builders are unit-tested in
     `src/lib/standalone-window.test.ts`.
   - The hook itself is tested on `/run` only.
+- **The `ai` conversation from the popped-out tab is not carried over.** In
+  the pop-out case the reveal shows the original window. A conversation typed
+  in the popped-out tab is keyed by `pop-out:<cmd>`, so it does not appear on
+  the dashboard. That split already existed for pop-outs on `main`.
+- **Pop-out URLs opened before this change** have no `window=` parameter.
+  They still add the `/run` window as their own window, because nothing
+  identifies their source.
