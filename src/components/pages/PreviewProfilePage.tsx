@@ -1,13 +1,17 @@
 import { useParams, useNavigate } from "react-router";
 import { useNip19Decode } from "@/hooks/useNip19Decode";
 import { ProfileViewer } from "../ProfileViewer";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
+import { profilePreviewWindow } from "@/lib/standalone-window";
 
 /**
  * PreviewProfilePage - Preview a Nostr profile from an npub identifier
  * Route: /:identifier (where identifier starts with npub1)
- * This page shows a single profile view without affecting user's workspace layout
+ * This page shows a single profile view without affecting user's workspace layout.
+ * Opening another window from it moves the profile into the workspace beside
+ * the new one and shows the dashboard (`useRevealOnOpen`).
  */
 export default function PreviewProfilePage() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -15,6 +19,16 @@ export default function PreviewProfilePage() {
 
   // Decode the npub identifier (synchronous, memoized)
   const { decoded, error } = useNip19Decode(identifier, "npub");
+
+  // The window this page is showing, as the workspace would hold it.
+  const previewWindow = useMemo(
+    () =>
+      identifier && decoded?.type === "npub"
+        ? profilePreviewWindow(identifier, decoded.data)
+        : null,
+    [identifier, decoded],
+  );
+  useRevealOnOpen(previewWindow);
 
   // Show error toast when error occurs
   useEffect(() => {

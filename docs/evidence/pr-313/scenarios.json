@@ -1,0 +1,2056 @@
+{
+ "capturedAt": "2026-11-16",
+ "browser": "Google Chrome headless (new), fresh temp profile per scenario, --host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
+ "server": "vite preview of local production builds",
+ "driver": "CDP script (not committed); seeds grimoire_v6 with two windows",
+ "runs": {
+  "main-launcher-desktop": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "1440x900 @1x",
+   "scenario": "launcher",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "launcher-after-enter",
+     "historyBefore": 3,
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "bd205cc5-774e-4404-9216-2afc69ec55c9"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "bd205cc5-774e-4404-9216-2afc69ec55c9",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "bd205cc5-774e-4404-9216-2afc69ec55c9": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-launcher-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-launcher-mobile": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "launcher",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "launcher-after-enter",
+     "historyBefore": 3,
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "4e2a4574-c078-4101-9c39-580b6665d3f5"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "4e2a4574-c078-4101-9c39-580b6665d3f5",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "4e2a4574-c078-4101-9c39-580b6665d3f5": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-launcher-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-npub-desktop": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "1440x900 @1x",
+   "scenario": "npub",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "npub-initial",
+     "path": "/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-npub-initial-desktop.png"
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "171b8066-1ad0-4921-881f-7e21ed429726"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "171b8066-1ad0-4921-881f-7e21ed429726",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "171b8066-1ad0-4921-881f-7e21ed429726": "man {\"cmd\":\"profile\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-npub-after-launcher-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-npub-mobile": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "npub",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "npub-initial",
+     "path": "/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-npub-initial-mobile.png"
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "8ff365a7-9b2e-494a-a097-9a8149f923f1"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "8ff365a7-9b2e-494a-a097-9a8149f923f1",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "8ff365a7-9b2e-494a-a097-9a8149f923f1": "man {\"cmd\":\"profile\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-npub-after-launcher-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-run-desktop": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "1440x900 @1x",
+   "scenario": "run",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-1-run-initial-desktop.png"
+    },
+    {
+     "step": "run-before-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-2-run-before-click-desktop.png"
+    },
+    {
+     "step": "after-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "96b3df89-c535-40d6-93ff-3c57834a2771"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "96b3df89-c535-40d6-93ff-3c57834a2771",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "96b3df89-c535-40d6-93ff-3c57834a2771": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-3-after-click-desktop.png"
+    },
+    {
+     "step": "dashboard-after-navigating-manually",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "96b3df89-c535-40d6-93ff-3c57834a2771"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "96b3df89-c535-40d6-93ff-3c57834a2771",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "96b3df89-c535-40d6-93ff-3c57834a2771": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-4-dashboard-manual-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-run-mobile": {
+   "build": "origin/main @ d9ecde6",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "run",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "main-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-1-run-initial-mobile.png"
+    },
+    {
+     "step": "run-before-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-2-run-before-click-mobile.png"
+    },
+    {
+     "step": "after-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 0,
+     "rawCapture": "main-3-after-click-mobile.png"
+    },
+    {
+     "step": "dashboard-after-navigating-manually",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141",
+       "splitPercentage": 50
+      },
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "ab75eb9a-7f3c-46fc-a68c-30f4ed6e2141": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 3,
+     "rawCapture": "main-4-dashboard-manual-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "popout-ask-hex-after-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "pop-out then event menu: Ask Hex",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req+-k+1+ws%3A%2F%2Flocalhost%3A4390&window=30a354e4-63e5-45c4-a081-ac9667024a2a",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "30a354e4-63e5-45c4-a081-ac9667024a2a"
+     ],
+     "windows": {
+      "30a354e4-63e5-45c4-a081-ac9667024a2a": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "30a354e4-63e5-45c4-a081-ac9667024a2a"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "30a354e4-63e5-45c4-a081-ac9667024a2a"
+     ],
+     "windows": {
+      "30a354e4-63e5-45c4-a081-ac9667024a2a": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "30a354e4-63e5-45c4-a081-ac9667024a2a"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "30a354e4-63e5-45c4-a081-ac9667024a2a",
+      "e3febf37-1bba-4e73-a91f-07b11731534f"
+     ],
+     "windows": {
+      "30a354e4-63e5-45c4-a081-ac9667024a2a": "req | req -k 1 ws://localhost:4390",
+      "e3febf37-1bba-4e73-a91f-07b11731534f": "ai | ai nevent1qvzqqqqqqypzp0q0lz2dvpzszkw9ca3asms49kz8ye43589ddx209ljqrd24ecxpqy28wue69uhkcmmrv9kxsmmnwsargveexqhsqgy7edwcz9qtr0rcytpa03yaa3vql56uqptzg95mluyz8qw44j3r7yldtuuj"
+     },
+     "tiles": 2,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": "30a354e4-63e5-45c4-a081-ac9667024a2a",
+      "second": "e3febf37-1bba-4e73-a91f-07b11731534f",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-ask-hex-after-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x",
+   "scenario": "pop-out then event menu: Ask Hex",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req+-k+1+ws%3A%2F%2Flocalhost%3A4390&window=92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b"
+     ],
+     "windows": {
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b"
+     ],
+     "windows": {
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b",
+      "495058ec-d2da-40a6-b919-ac5d4f5103a3"
+     ],
+     "windows": {
+      "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b": "req | req -k 1 ws://localhost:4390",
+      "495058ec-d2da-40a6-b919-ac5d4f5103a3": "ai | ai nevent1qvzqqqqqqypzp0q0lz2dvpzszkw9ca3asms49kz8ye43589ddx209ljqrd24ecxpqy28wue69uhkcmmrv9kxsmmnwsargveexqhsqgy7edwcz9qtr0rcytpa03yaa3vql56uqptzg95mluyz8qw44j3r7yldtuuj"
+     },
+     "tiles": 2,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": "92cf5931-c5a4-4fbf-9ea9-d54ca66b8f9b",
+      "second": "495058ec-d2da-40a6-b919-ac5d4f5103a3",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-ask-hex-before-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ 51084d1 (previous PR head)",
+   "viewport": "1440x900 @1x",
+   "scenario": "pop-out then event menu: Ask Hex",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req%20-k%201%20ws%3A%2F%2Flocalhost%3A4390",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5"
+     ],
+     "windows": {
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "4f9c7949-f6a0-4161-8458-f42cb1206bf5"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5"
+     ],
+     "windows": {
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "4f9c7949-f6a0-4161-8458-f42cb1206bf5"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5",
+      "pop-out:req -k 1 ws://localhost:4390",
+      "c6db02ab-ba7a-4d5d-a01d-bf3f62ddc19a"
+     ],
+     "windows": {
+      "4f9c7949-f6a0-4161-8458-f42cb1206bf5": "req | req -k 1 ws://localhost:4390",
+      "pop-out:req -k 1 ws://localhost:4390": "req | req -k 1 ws://localhost:4390",
+      "c6db02ab-ba7a-4d5d-a01d-bf3f62ddc19a": "ai | ai nevent1qvzqqqqqqypzp0q0lz2dvpzszkw9ca3asms49kz8ye43589ddx209ljqrd24ecxpqy28wue69uhkcmmrv9kxsmmnwsargveexqhsqgy7edwcz9qtr0rcytpa03yaa3vql56uqptzg95mluyz8qw44j3r7yldtuuj"
+     },
+     "tiles": 3,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": {
+       "direction": "column",
+       "first": "4f9c7949-f6a0-4161-8458-f42cb1206bf5",
+       "second": "c6db02ab-ba7a-4d5d-a01d-bf3f62ddc19a",
+       "splitPercentage": 50
+      },
+      "second": "pop-out:req -k 1 ws://localhost:4390",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-ask-hex-before-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ 51084d1 (previous PR head)",
+   "viewport": "390x844 @2x",
+   "scenario": "pop-out then event menu: Ask Hex",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req%20-k%201%20ws%3A%2F%2Flocalhost%3A4390",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "a535d9fa-027d-4280-b4be-bef6c18374aa"
+     ],
+     "windows": {
+      "a535d9fa-027d-4280-b4be-bef6c18374aa": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "a535d9fa-027d-4280-b4be-bef6c18374aa"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "a535d9fa-027d-4280-b4be-bef6c18374aa"
+     ],
+     "windows": {
+      "a535d9fa-027d-4280-b4be-bef6c18374aa": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "a535d9fa-027d-4280-b4be-bef6c18374aa"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "a535d9fa-027d-4280-b4be-bef6c18374aa",
+      "pop-out:req -k 1 ws://localhost:4390",
+      "9850a900-026d-4a84-93ca-490d36321fb5"
+     ],
+     "windows": {
+      "a535d9fa-027d-4280-b4be-bef6c18374aa": "req | req -k 1 ws://localhost:4390",
+      "pop-out:req -k 1 ws://localhost:4390": "req | req -k 1 ws://localhost:4390",
+      "9850a900-026d-4a84-93ca-490d36321fb5": "ai | ai nevent1qvzqqqqqqypzp0q0lz2dvpzszkw9ca3asms49kz8ye43589ddx209ljqrd24ecxpqy28wue69uhkcmmrv9kxsmmnwsargveexqhsqgy7edwcz9qtr0rcytpa03yaa3vql56uqptzg95mluyz8qw44j3r7yldtuuj"
+     },
+     "tiles": 3,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": {
+       "direction": "column",
+       "first": "a535d9fa-027d-4280-b4be-bef6c18374aa",
+       "second": "9850a900-026d-4a84-93ca-490d36321fb5",
+       "splitPercentage": 50
+      },
+      "second": "pop-out:req -k 1 ws://localhost:4390",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-chat-after-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "pop-out then event menu: Chat",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req+-k+1+ws%3A%2F%2Flocalhost%3A4390&window=3584b7d7-2ad2-464d-be72-793f55a20f96",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "3584b7d7-2ad2-464d-be72-793f55a20f96"
+     ],
+     "windows": {
+      "3584b7d7-2ad2-464d-be72-793f55a20f96": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "3584b7d7-2ad2-464d-be72-793f55a20f96"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "3584b7d7-2ad2-464d-be72-793f55a20f96"
+     ],
+     "windows": {
+      "3584b7d7-2ad2-464d-be72-793f55a20f96": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "3584b7d7-2ad2-464d-be72-793f55a20f96"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "3584b7d7-2ad2-464d-be72-793f55a20f96",
+      "5157d9c1-004a-4821-8fd6-1624e9ae93f8"
+     ],
+     "windows": {
+      "3584b7d7-2ad2-464d-be72-793f55a20f96": "req | req -k 1 ws://localhost:4390",
+      "5157d9c1-004a-4821-8fd6-1624e9ae93f8": "chat | "
+     },
+     "tiles": 2,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": "3584b7d7-2ad2-464d-be72-793f55a20f96",
+      "second": "5157d9c1-004a-4821-8fd6-1624e9ae93f8",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-chat-after-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x",
+   "scenario": "pop-out then event menu: Chat",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req+-k+1+ws%3A%2F%2Flocalhost%3A4390&window=7e843e36-4c64-4d98-a8e6-f428e99ad9ae",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae"
+     ],
+     "windows": {
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "7e843e36-4c64-4d98-a8e6-f428e99ad9ae"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae"
+     ],
+     "windows": {
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "7e843e36-4c64-4d98-a8e6-f428e99ad9ae"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae",
+      "f8d54461-86c7-4000-825a-906ae3865f22"
+     ],
+     "windows": {
+      "7e843e36-4c64-4d98-a8e6-f428e99ad9ae": "req | req -k 1 ws://localhost:4390",
+      "f8d54461-86c7-4000-825a-906ae3865f22": "chat | "
+     },
+     "tiles": 2,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": "7e843e36-4c64-4d98-a8e6-f428e99ad9ae",
+      "second": "f8d54461-86c7-4000-825a-906ae3865f22",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-chat-before-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ 51084d1 (previous PR head)",
+   "viewport": "1440x900 @1x",
+   "scenario": "pop-out then event menu: Chat",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req%20-k%201%20ws%3A%2F%2Flocalhost%3A4390",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6"
+     ],
+     "windows": {
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6"
+     ],
+     "windows": {
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6",
+      "pop-out:req -k 1 ws://localhost:4390",
+      "31627392-3790-4f74-98e0-95f61c3d78c5"
+     ],
+     "windows": {
+      "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6": "req | req -k 1 ws://localhost:4390",
+      "pop-out:req -k 1 ws://localhost:4390": "req | req -k 1 ws://localhost:4390",
+      "31627392-3790-4f74-98e0-95f61c3d78c5": "chat | "
+     },
+     "tiles": 3,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": {
+       "direction": "column",
+       "first": "3d7c99bd-3c15-42fe-8c0d-aebb1a4862a6",
+       "second": "31627392-3790-4f74-98e0-95f61c3d78c5",
+       "splitPercentage": 50
+      },
+      "second": "pop-out:req -k 1 ws://localhost:4390",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "popout-chat-before-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ 51084d1 (previous PR head)",
+   "viewport": "390x844 @2x",
+   "scenario": "pop-out then event menu: Chat",
+   "relay": "local fixture relay ws://localhost:4390 (2 kind-1 notes signed by a throwaway in-memory key); DNS blocked for everything else",
+   "popOutUrl": "/run?cmd=req%20-k%201%20ws%3A%2F%2Flocalhost%3A4390",
+   "steps": [
+    {
+     "step": "dashboard-original",
+     "path": "/",
+     "windowIds": [
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315"
+     ],
+     "windows": {
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 1,
+     "pushes": 0,
+     "layout": "1da217ed-9e98-4f6c-bcbd-36fad41ba315"
+    },
+    {
+     "step": "popped-out-run",
+     "path": "/run",
+     "windowIds": [
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315"
+     ],
+     "windows": {
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315": "req | req -k 1 ws://localhost:4390"
+     },
+     "tiles": 0,
+     "pushes": 0,
+     "layout": "1da217ed-9e98-4f6c-bcbd-36fad41ba315"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "windowIds": [
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315",
+      "pop-out:req -k 1 ws://localhost:4390",
+      "db4ca046-ffed-40b7-8186-7b849e9e4d12"
+     ],
+     "windows": {
+      "1da217ed-9e98-4f6c-bcbd-36fad41ba315": "req | req -k 1 ws://localhost:4390",
+      "pop-out:req -k 1 ws://localhost:4390": "req | req -k 1 ws://localhost:4390",
+      "db4ca046-ffed-40b7-8186-7b849e9e4d12": "chat | "
+     },
+     "tiles": 3,
+     "pushes": 1,
+     "layout": {
+      "direction": "row",
+      "first": {
+       "direction": "column",
+       "first": "1da217ed-9e98-4f6c-bcbd-36fad41ba315",
+       "second": "db4ca046-ffed-40b7-8186-7b849e9e4d12",
+       "splitPercentage": 50
+      },
+      "second": "pop-out:req -k 1 ws://localhost:4390",
+      "splitPercentage": 50
+     }
+    }
+   ],
+   "error": null
+  },
+  "pr-extra-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "extra",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "first-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 4
+    },
+    {
+     "step": "after-back",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 0
+    },
+    {
+     "step": "second-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "4a6d9b32-fbbe-42e5-8436-05d404eece40",
+        "splitPercentage": 50
+       },
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0": "man {\"cmd\":\"nips\"}",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40": "man {\"cmd\":\"kinds\"}"
+     },
+     "tiles": 5
+    },
+    {
+     "step": "error-page",
+     "path": "/run?cmd=notacommand",
+     "historyLength": 5,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "4a6d9b32-fbbe-42e5-8436-05d404eece40",
+        "splitPercentage": 50
+       },
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0": "man {\"cmd\":\"nips\"}",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40": "man {\"cmd\":\"kinds\"}"
+     },
+     "tiles": 0,
+     "text": "Command Error\n\nUnknown command: notacommand\n\nCommand: notacommand"
+    },
+    {
+     "step": "error-page-after-launcher",
+     "path": "/",
+     "historyLength": 6,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40",
+      "a705d313-56fc-44f4-86f8-41c3d33c93a5"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "4a6d9b32-fbbe-42e5-8436-05d404eece40",
+        "splitPercentage": 50
+       },
+       "second": {
+        "direction": "column",
+        "first": "pop-out:man kind",
+        "second": "a705d313-56fc-44f4-86f8-41c3d33c93a5",
+        "splitPercentage": 50
+       },
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "0c35fb87-567b-421d-96f1-c5f955a0ebd0",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "0c35fb87-567b-421d-96f1-c5f955a0ebd0": "man {\"cmd\":\"nips\"}",
+      "4a6d9b32-fbbe-42e5-8436-05d404eece40": "man {\"cmd\":\"kinds\"}",
+      "a705d313-56fc-44f4-86f8-41c3d33c93a5": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 6
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-extra-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "extra",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "first-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "269d1462-c3cf-4690-9469-39a3143e7df8"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "269d1462-c3cf-4690-9469-39a3143e7df8",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "269d1462-c3cf-4690-9469-39a3143e7df8": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 4
+    },
+    {
+     "step": "after-back",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "269d1462-c3cf-4690-9469-39a3143e7df8"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "269d1462-c3cf-4690-9469-39a3143e7df8",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "269d1462-c3cf-4690-9469-39a3143e7df8": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 0
+    },
+    {
+     "step": "second-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "269d1462-c3cf-4690-9469-39a3143e7df8",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "61147f62-f45e-4b99-ab0f-d839ea542b10",
+        "splitPercentage": 50
+       },
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "269d1462-c3cf-4690-9469-39a3143e7df8",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "269d1462-c3cf-4690-9469-39a3143e7df8": "man {\"cmd\":\"nips\"}",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10": "man {\"cmd\":\"kinds\"}"
+     },
+     "tiles": 5
+    },
+    {
+     "step": "error-page",
+     "path": "/run?cmd=notacommand",
+     "historyLength": 5,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "269d1462-c3cf-4690-9469-39a3143e7df8",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "61147f62-f45e-4b99-ab0f-d839ea542b10",
+        "splitPercentage": 50
+       },
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "269d1462-c3cf-4690-9469-39a3143e7df8",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "269d1462-c3cf-4690-9469-39a3143e7df8": "man {\"cmd\":\"nips\"}",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10": "man {\"cmd\":\"kinds\"}"
+     },
+     "tiles": 0,
+     "text": "Command Error\n\nUnknown command: notacommand\n\nCommand: notacommand"
+    },
+    {
+     "step": "error-page-after-launcher",
+     "path": "/",
+     "historyLength": 6,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "269d1462-c3cf-4690-9469-39a3143e7df8",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10",
+      "fd68dfa1-70b3-4200-9b38-4e904cc4f204"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "61147f62-f45e-4b99-ab0f-d839ea542b10",
+        "splitPercentage": 50
+       },
+       "second": {
+        "direction": "column",
+        "first": "pop-out:man kind",
+        "second": "fd68dfa1-70b3-4200-9b38-4e904cc4f204",
+        "splitPercentage": 50
+       },
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "269d1462-c3cf-4690-9469-39a3143e7df8",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "269d1462-c3cf-4690-9469-39a3143e7df8": "man {\"cmd\":\"nips\"}",
+      "61147f62-f45e-4b99-ab0f-d839ea542b10": "man {\"cmd\":\"kinds\"}",
+      "fd68dfa1-70b3-4200-9b38-4e904cc4f204": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 6
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-launcher-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "launcher",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "launcher-after-enter",
+     "historyBefore": 3,
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "f9787ed8-3a79-4374-b2a7-311d3d60f03b"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "f9787ed8-3a79-4374-b2a7-311d3d60f03b",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "f9787ed8-3a79-4374-b2a7-311d3d60f03b": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-launcher-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-launcher-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "launcher",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "launcher-after-enter",
+     "historyBefore": 3,
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "b1cd59a8-11cf-4016-8617-28734fc7192b"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "b1cd59a8-11cf-4016-8617-28734fc7192b",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "b1cd59a8-11cf-4016-8617-28734fc7192b": "man {\"cmd\":\"open\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-launcher-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-npub-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "npub",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "npub-initial",
+     "path": "/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-npub-initial-desktop.png"
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+      "57a9eaea-bacd-4a05-8259-55843b77e953"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "57a9eaea-bacd-4a05-8259-55843b77e953",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6": "profile {\"pubkey\":\"3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d\"}",
+      "57a9eaea-bacd-4a05-8259-55843b77e953": "man {\"cmd\":\"profile\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-npub-after-launcher-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-npub-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "npub",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "npub-initial",
+     "path": "/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-npub-initial-mobile.png"
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+      "fa70b74d-9e3e-4a59-9424-0aebf7fb9f0f"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "fa70b74d-9e3e-4a59-9424-0aebf7fb9f0f",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6": "profile {\"pubkey\":\"3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d\"}",
+      "fa70b74d-9e3e-4a59-9424-0aebf7fb9f0f": "man {\"cmd\":\"profile\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-npub-after-launcher-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-run-desktop": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "1440x900 @1x",
+   "scenario": "run",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-desktop.png"
+    },
+    {
+     "step": "run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-1-run-initial-desktop.png"
+    },
+    {
+     "step": "run-before-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-2-run-before-click-desktop.png"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "b2337353-ff9c-4c1f-a074-20ac7f31e13a"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "b2337353-ff9c-4c1f-a074-20ac7f31e13a",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "b2337353-ff9c-4c1f-a074-20ac7f31e13a": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-3-after-click-desktop.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-run-mobile": {
+   "build": "fix/run-reveal-workspace-313 @ a5343c3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "run",
+   "steps": [
+    {
+     "step": "seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 2,
+     "rawCapture": "pr-0-seeded-dashboard-mobile.png"
+    },
+    {
+     "step": "run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-1-run-initial-mobile.png"
+    },
+    {
+     "step": "run-before-click",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": "seed-man-req",
+      "second": "seed-kinds",
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}"
+     },
+     "tiles": 0,
+     "rawCapture": "pr-2-run-before-click-mobile.png"
+    },
+    {
+     "step": "after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": "default",
+     "windowIds": [
+      "seed-man-req",
+      "seed-kinds",
+      "pop-out:man kind",
+      "eb5f82fd-3fe2-4457-9af5-13537c261c9c"
+     ],
+     "layout": {
+      "direction": "column",
+      "first": {
+       "direction": "row",
+       "first": "seed-man-req",
+       "second": "pop-out:man kind",
+       "splitPercentage": 50
+      },
+      "second": {
+       "direction": "row",
+       "first": "seed-kinds",
+       "second": "eb5f82fd-3fe2-4457-9af5-13537c261c9c",
+       "splitPercentage": 50
+      },
+      "splitPercentage": 40
+     },
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "eb5f82fd-3fe2-4457-9af5-13537c261c9c": "man {\"cmd\":\"nips\"}"
+     },
+     "tiles": 4,
+     "rawCapture": "pr-3-after-click-mobile.png"
+    }
+   ],
+   "error": null,
+   "consoleErrors": [],
+   "exceptions": []
+  }
+ }
+}

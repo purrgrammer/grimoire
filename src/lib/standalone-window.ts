@@ -1,0 +1,92 @@
+import type { WindowInstance } from "@/types/app";
+import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
+
+/**
+ * Windows that single-window routes render outside the workspace: `/run` and
+ * the NIP-19 previews. Each is a real `WindowInstance`, because opening any
+ * other window from such a route moves it into the workspace
+ * (`useStandaloneWindow`).
+ */
+
+/**
+ * The id of a standalone window, derived from its command.
+ *
+ * Per-command, not a constant: anything keyed by window id — an `ai`
+ * conversation, a post draft — is shared by every page that carries the same
+ * id, so a single `"pop-out"` made two unrelated `/run` chats one conversation.
+ * Stable across a reload, and kept when the window moves into the workspace, so
+ * the conversation goes with it.
+ */
+export function standaloneWindowId(commandString: string): string {
+  return `pop-out:${commandString}`;
+}
+
+/**
+ * The query parameter a pop-out adds to `/run`: the id of the workspace window
+ * it was popped out of.
+ *
+ * The `/run` window's own id is derived from the command, so on its own it
+ * cannot tell "this is that dashboard window, in another tab" from "this is a
+ * command someone pasted". Without the source id, revealing the workspace from
+ * a popped-out tab placed a `pop-out:<cmd>` copy beside the original.
+ */
+export const POP_OUT_SOURCE_PARAM = "window";
+
+/** The URL "Pop out window" opens for a workspace window. */
+export function popOutUrl(commandString: string, sourceId: string): string {
+  const params = new URLSearchParams({
+    cmd: commandString,
+    [POP_OUT_SOURCE_PARAM]: sourceId,
+  });
+  return `/run?${params.toString()}`;
+}
+
+/** The window behind `/run?cmd=<commandString>`. */
+export function runCommandWindow(parsed: {
+  appId: WindowInstance["appId"];
+  props: unknown;
+  commandString: string;
+  customTitle?: string;
+}): WindowInstance {
+  return {
+    id: standaloneWindowId(parsed.commandString),
+    appId: parsed.appId,
+    props: parsed.props,
+    customTitle: parsed.customTitle,
+    commandString: parsed.commandString,
+  };
+}
+
+/**
+ * The window `/<npub>` shows: the `profile` command for that npub, so it is
+ * the same window `/run?cmd=profile <npub>` would be.
+ */
+export function profilePreviewWindow(
+  npub: string,
+  pubkey: string,
+): WindowInstance {
+  const commandString = `profile ${npub}`;
+  return {
+    id: standaloneWindowId(commandString),
+    appId: "profile",
+    props: { pubkey },
+    commandString,
+  };
+}
+
+/**
+ * The window `/<note|nevent|naddr>` shows: the `open` command for that
+ * identifier, so it is the same window `/run?cmd=open <identifier>` would be.
+ */
+export function eventPreviewWindow(
+  identifier: string,
+  pointer: EventPointer | AddressPointer,
+): WindowInstance {
+  const commandString = `open ${identifier}`;
+  return {
+    id: standaloneWindowId(commandString),
+    appId: "open",
+    props: { pointer },
+    commandString,
+  };
+}

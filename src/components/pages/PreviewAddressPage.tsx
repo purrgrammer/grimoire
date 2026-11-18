@@ -1,15 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useNip19Decode } from "@/hooks/useNip19Decode";
 import { PreviewDetail } from "./PreviewDetail";
 import { nip19 } from "nostr-tools";
 import { toast } from "sonner";
+import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
+import { eventPreviewWindow } from "@/lib/standalone-window";
 
 /**
  * PreviewAddressPage - Preview or redirect naddr identifiers
  * Route: /:identifier (where identifier starts with naddr1)
  * For spellbooks (kind 30777), redirects to /:actor/:identifier
- * For all other addressable events, shows detail view
+ * For all other addressable events, shows detail view; opening another window
+ * from it moves the event into the workspace beside the new one and shows the
+ * dashboard (`useRevealOnOpen`).
  */
 export default function PreviewAddressPage() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -17,6 +21,17 @@ export default function PreviewAddressPage() {
 
   // Decode the naddr identifier (synchronous, memoized)
   const { decoded, error } = useNip19Decode(identifier, "naddr");
+
+  // The window this page is showing, as the workspace would hold it. None for
+  // a spellbook, which redirects to a route that renders the workspace.
+  const previewWindow = useMemo(
+    () =>
+      identifier && decoded?.type === "naddr" && decoded.data.kind !== 30777
+        ? eventPreviewWindow(identifier, decoded.data)
+        : null,
+    [identifier, decoded],
+  );
+  useRevealOnOpen(previewWindow);
 
   // Handle redirect for spellbooks
   useEffect(() => {

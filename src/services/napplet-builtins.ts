@@ -24,8 +24,7 @@
 import { getDefaultStore } from "jotai";
 import { nip19 } from "nostr-tools";
 
-import { grimoireStateAtom } from "@/core/state";
-import * as Logic from "@/core/logic";
+import { grimoireStateAtom, openPersistedWindow } from "@/core/state";
 import { parseAndExecuteCommand } from "@/lib/command-parser";
 import { BUILTIN_HANDLER_PREFIX } from "@/lib/napplet-parser";
 
@@ -351,20 +350,15 @@ export async function openBuiltinArchetype(
  * Split from `buildBuiltinWindow` so a caller can interpose a decision between
  * the two — see `napplet-targets`, where a napplet-originated intent must be
  * confirmed before grimoire opens anything.
+ *
+ * The id comes back from `openPersistedWindow`, not from diffing the window
+ * map: opened from `/run`, one call adds the pop-out's window too, and the diff
+ * would have returned that one.
  */
 export function openBuiltinWindow(window: BuiltinWindow): string {
-  const store = getDefaultStore();
-  const before = new Set(Object.keys(store.get(grimoireStateAtom).windows));
-  store.set(grimoireStateAtom, (prev) =>
-    Logic.addWindow(prev, {
-      appId: window.appId,
-      props: window.props,
-      commandString: window.commandString,
-    }),
-  );
-  const windowId = Object.keys(store.get(grimoireStateAtom).windows).find(
-    (id) => !before.has(id),
-  );
-  if (!windowId) throw new Error("could not open a window");
-  return windowId;
+  return openPersistedWindow({
+    appId: window.appId,
+    props: window.props,
+    commandString: window.commandString,
+  });
 }

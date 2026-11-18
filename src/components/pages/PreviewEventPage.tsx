@@ -4,11 +4,15 @@ import { useNip19Decode } from "@/hooks/useNip19Decode";
 import type { EventPointer } from "nostr-tools/nip19";
 import { PreviewDetail } from "./PreviewDetail";
 import { toast } from "sonner";
+import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
+import { eventPreviewWindow } from "@/lib/standalone-window";
 
 /**
  * PreviewEventPage - Preview a Nostr event from a nevent or note identifier
  * Route: /:identifier (where identifier starts with nevent1 or note1)
- * This page shows a single event view without affecting user's workspace layout
+ * This page shows a single event view without affecting user's workspace layout.
+ * Opening another window from it moves the event into the workspace beside the
+ * new one and shows the dashboard (`useRevealOnOpen`).
  */
 export default function PreviewEventPage() {
   const { identifier } = useParams<{ identifier: string }>();
@@ -29,6 +33,14 @@ export default function PreviewEventPage() {
     }
     return null;
   }, [decoded]);
+
+  // The window this page is showing, as the workspace would hold it.
+  const previewWindow = useMemo(
+    () =>
+      identifier && pointer ? eventPreviewWindow(identifier, pointer) : null,
+    [identifier, pointer],
+  );
+  useRevealOnOpen(previewWindow);
 
   // Show error toast when error occurs
   useEffect(() => {

@@ -1,5 +1,6 @@
-import { useEffect, useCallback } from "react";
-import { atom, useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useCallback, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { atom, getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
 import {
   GrimoireState,
@@ -134,12 +135,120 @@ const activeGrimoireStateAtom = atom(
 );
 
 /**
- * Lightweight hook that returns only the addWindow callback.
- * Does NOT subscribe to state changes — safe for use in deeply nested components
- * (e.g., MarkdownContent, NostrMention) that only need to open windows.
+ * A single-window route on screen — `/run` or a NIP-19 preview — and the window
+ * it shows outside every workspace.
+ *
+ * Those routes render one window and no workspace, so a window opened from
+ * there — Ask Hex, a command chip, `grimoire.window`, a clicked mention — used
+ * to land in a workspace nobody could see. While a route is registered
+ * (`useStandaloneWindow`), the next window opened brings the route's window
+ * along into the persisted active workspace (`Logic.addWindowAlongside`) and
+ * flips `revealed`; the route then navigates to the dashboard, which shows both.
+ *
+ * `window` is null while the route has nothing to bring along — still loading,
+ * or showing an error — and the requested window is then revealed on its own.
+ * `owner` identifies the registering component, so one that unmounts cannot
+ * clear another's registration.
  */
-export const useAddWindow = () => {
-  const dispatch = useSetAtom(activeGrimoireStateAtom);
+export interface StandaloneWindow {
+  owner: object;
+  window: WindowInstance | null;
+  /** The workspace window this route was popped out of, if any. */
+  sourceId?: string | null;
+  revealed: boolean;
+}
+
+export const standaloneWindowAtom = atom<StandaloneWindow | null>(null);
+
+/**
+ * A request to open a window. `persisted` targets the dashboard behind any
+ * spellbook preview rather than the state on screen: the napplet services have
+ * always written there, and still do.
+ */
+interface OpenWindowRequest {
+  payload: Logic.AddWindowPayload;
+  persisted: boolean;
+}
+
+/**
+ * The single place a window is opened, so every opener — the `addWindow`
+ * hooks and the services outside React — honours a standalone route without
+ * knowing about it. Returns the new window's id.
+ */
+export const openWindowAtom = atom(
+  null,
+  (get, set, { payload, persisted }: OpenWindowRequest): string => {
+    const request = { ...payload, id: payload.id ?? uuidv4() };
+    const standalone = get(standaloneWindowAtom);
+
+    if (standalone && !standalone.revealed) {
+      // The persisted state even inside a temporary session: that is the
+      // workspace the dashboard shows, since DashboardPage discards the session.
+      set(grimoireStateAtom, (prev) =>
+        Logic.addWindowAlongside(
+          prev,
+          standalone.window,
+          request,
+          standalone.sourceId,
+        ),
+      );
+      set(standaloneWindowAtom, { ...standalone, revealed: true });
+      return request.id;
+    }
+
+    // Once revealed, anything else opened before the route unmounts lands in
+    // the same workspace the plain way — the route's window is already there.
+    const updater = (prev: GrimoireState) => Logic.addWindow(prev, request);
+    if (persisted) {
+      set(grimoireStateAtom, updater);
+    } else {
+      set(activeGrimoireStateAtom, { type: "UPDATE", updater });
+    }
+    return request.id;
+  },
+);
+
+/**
+ * Open a window from outside React, in the persisted dashboard. Returns its id.
+ */
+export function openPersistedWindow(
+  payload: Logic.AddWindowPayload,
+  store: ReturnType<typeof getDefaultStore> = getDefaultStore(),
+): string {
+  return store.set(openWindowAtom, { payload, persisted: true });
+}
+
+/**
+ * Register the calling route as a single-window view showing `window` outside
+ * the workspace, for as long as it stays mounted.
+ *
+ * Returns true once another window has been opened and `window` has been
+ * placed in the workspace beside it — the caller's cue to navigate to `/`.
+ * Pass a referentially stable window (memoize it): a new object re-registers
+ * it as not yet revealed.
+ */
+export function useStandaloneWindow(
+  window: WindowInstance | null,
+  sourceId?: string | null,
+): boolean {
+  const [owner] = useState(() => ({}));
+  const standalone = useAtomValue(standaloneWindowAtom);
+  const setStandalone = useSetAtom(standaloneWindowAtom);
+
+  useEffect(() => {
+    setStandalone({ owner, window, sourceId, revealed: false });
+    // Clear only our own registration: the next route may already have
+    // registered by the time this one's cleanup runs.
+    return () =>
+      setStandalone((current) => (current?.owner === owner ? null : current));
+  }, [owner, window, sourceId, setStandalone]);
+
+  return standalone?.owner === owner && standalone.revealed;
+}
+
+/** The `addWindow` callback that `useAddWindow` and `useGrimoire` hand out. */
+const useOpenWindow = () => {
+  const open = useSetAtom(openWindowAtom);
 
   return useCallback(
     (
@@ -149,21 +258,21 @@ export const useAddWindow = () => {
       customTitle?: string,
       spellId?: string,
     ) => {
-      dispatch({
-        type: "UPDATE",
-        updater: (prev) =>
-          Logic.addWindow(prev, {
-            appId,
-            props,
-            commandString,
-            customTitle,
-            spellId,
-          }),
+      open({
+        payload: { appId, props, commandString, customTitle, spellId },
+        persisted: false,
       });
     },
-    [dispatch],
+    [open],
   );
 };
+
+/**
+ * Lightweight hook that returns only the addWindow callback.
+ * Does NOT subscribe to state changes — safe for use in deeply nested components
+ * (e.g., MarkdownContent, NostrMention) that only need to open windows.
+ */
+export const useAddWindow = useOpenWindow;
 
 // The Hook
 export const useGrimoire = () => {
@@ -212,26 +321,7 @@ export const useGrimoire = () => {
     [setState],
   );
 
-  const addWindow = useCallback(
-    (
-      appId: AppId,
-      props: any,
-      commandString?: string,
-      customTitle?: string,
-      spellId?: string,
-    ) => {
-      setState((prev) =>
-        Logic.addWindow(prev, {
-          appId,
-          props,
-          commandString,
-          customTitle,
-          spellId,
-        }),
-      );
-    },
-    [setState],
-  );
+  const addWindow = useOpenWindow();
 
   const updateWindow = useCallback(
     (

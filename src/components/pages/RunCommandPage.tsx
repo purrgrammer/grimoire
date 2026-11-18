@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   parseAndExecuteCommand,
@@ -6,6 +6,11 @@ import {
 } from "@/lib/command-parser";
 import { useGrimoire } from "@/core/state";
 import { WindowRenderer } from "@/components/WindowRenderer";
+import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
+import {
+  POP_OUT_SOURCE_PARAM,
+  runCommandWindow,
+} from "@/lib/standalone-window";
 
 /**
  * RunCommandPage - Standalone command execution route
@@ -14,6 +19,10 @@ import { WindowRenderer } from "@/components/WindowRenderer";
  *
  * Executes a command and displays the result without affecting the workspace layout.
  * This allows windows to be "popped out" into separate browser windows/tabs.
+ *
+ * Opening another window from here — Ask Hex, a command chip, a clicked
+ * mention — moves this window into the active workspace beside the new one and
+ * shows the dashboard (`useRevealOnOpen`).
  */
 export default function RunCommandPage() {
   const [searchParams] = useSearchParams();
@@ -58,6 +67,24 @@ export default function RunCommandPage() {
     parseCommand();
   }, [cmdParam, state.activeAccount?.pubkey]);
 
+  // The window this page shows — and, once another window opens from here, the
+  // one moved into the workspace beside it. Memoized so it stays registered.
+  const windowInstance = useMemo(
+    () =>
+      parsed && !parsed.error && parsed.command && parsed.props
+        ? runCommandWindow({
+            appId: parsed.command.appId,
+            props: parsed.props,
+            commandString: parsed.fullInput,
+            customTitle: parsed.globalFlags?.windowProps?.title,
+          })
+        : null,
+    [parsed],
+  );
+  // Popped out of a workspace window: that window, not a copy, is what the
+  // reveal shows beside the new one.
+  useRevealOnOpen(windowInstance, searchParams.get(POP_OUT_SOURCE_PARAM));
+
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
@@ -66,7 +93,7 @@ export default function RunCommandPage() {
     );
   }
 
-  if (!parsed || parsed.error || !parsed.command || !parsed.props) {
+  if (!windowInstance) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
         <div className="max-w-md rounded-lg border border-border bg-card p-6">
@@ -85,20 +112,6 @@ export default function RunCommandPage() {
       </div>
     );
   }
-
-  // Construct a minimal WindowInstance for rendering.
-  //
-  // The id is per-command, not a constant: anything keyed by window id — an `ai`
-  // conversation, a post draft — is shared by every page that carries the same
-  // id, so a single `"pop-out"` made two unrelated `/run` chats one conversation.
-  // Stable across a reload, because it is derived from the command itself.
-  const windowInstance = {
-    id: `pop-out:${parsed.fullInput}`,
-    appId: parsed.command.appId,
-    props: parsed.props,
-    customTitle: parsed.globalFlags?.windowProps?.title,
-    commandString: parsed.fullInput,
-  };
 
   return (
     <WindowRenderer window={windowInstance} onClose={() => window.close()} />
