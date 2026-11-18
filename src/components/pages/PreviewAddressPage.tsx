@@ -31,7 +31,7 @@ export default function PreviewAddressPage() {
         : null,
     [identifier, decoded],
   );
-  useRevealOnOpen(previewWindow);
+  useRevealOnOpen(previewWindow, "active-workspace");
 
   // Handle redirect for spellbooks
   useEffect(() => {

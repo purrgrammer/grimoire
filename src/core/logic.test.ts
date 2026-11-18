@@ -5,6 +5,7 @@ import {
   addWindow,
   adoptWindow,
   addWindowAlongside,
+  addWindowInOwnWorkspace,
   removeWindow,
   reorderWorkspaces,
   updateWindow,
@@ -867,66 +868,6 @@ describe("adoptWindow / addWindowAlongside (single-window routes, #313)", () => 
     expect(back.windows[runWindow.id].customTitle).toBe("renamed");
   });
 
-  describe("popped out of a workspace window (sourceId)", () => {
-    // `w-a` is `man req` on the dashboard; its pop-out tab shows the same
-    // window under a command-derived id.
-    const popped: WindowInstance = {
-      id: "pop-out:man req",
-      appId: "man",
-      props: { cmd: "req" },
-      commandString: "man req",
-    };
-
-    it("adds only the requested window while the source is on screen", () => {
-      const next = addWindowAlongside(persisted(), popped, requested, "w-a");
-      expect(next.workspaces["ws-1"].windowIds).toEqual([
-        "w-a",
-        "w-b",
-        "new-window",
-      ]);
-      expect(next.windows[popped.id]).toBeUndefined();
-    });
-
-    it("adopts the copy when the source was closed meanwhile", () => {
-      const next = addWindowAlongside(persisted(), popped, requested, "gone");
-      expect(next.workspaces["ws-1"].windowIds).toEqual([
-        "w-a",
-        "w-b",
-        popped.id,
-        "new-window",
-      ]);
-    });
-
-    it("adopts the copy when the source sits in another workspace", () => {
-      const next = addWindowAlongside(persisted(), popped, requested, "w-c");
-      expect(next.workspaces["ws-1"].windowIds).toContain(popped.id);
-      // The user's window in the other workspace is left where it is.
-      expect(next.workspaces["ws-2"].windowIds).toEqual(["w-c"]);
-    });
-
-    it("does not trust a source id that names a different app", () => {
-      const next = addWindowAlongside(persisted(), popped, requested, "w-b");
-      expect(next.workspaces["ws-1"].windowIds).toContain(popped.id);
-    });
-
-    it("never matches by command: a same-command window without a source stays separate", () => {
-      const sameCommand = {
-        ...persisted(),
-        windows: {
-          ...persisted().windows,
-          "w-a": { ...persisted().windows["w-a"], commandString: "man req" },
-        },
-      };
-      const next = addWindowAlongside(sameCommand, popped, requested);
-      expect(next.workspaces["ws-1"].windowIds).toEqual([
-        "w-a",
-        "w-b",
-        popped.id,
-        "new-window",
-      ]);
-    });
-  });
-
   it("replaces a stale record no workspace places", () => {
     const stale = {
       ...persisted(),
@@ -970,6 +911,150 @@ describe("adoptWindow / addWindowAlongside (single-window routes, #313)", () => 
     const closed = removeWindow(opened, runWindow.id);
     expect(closed.windows[runWindow.id]).toBeUndefined();
     expect(closed.workspaces["ws-1"].windowIds).not.toContain(runWindow.id);
+  });
+});
+
+describe("addWindowInOwnWorkspace (/run opens in a tab of its own, #371)", () => {
+  const ROW: LayoutConfig = {
+    insertionMode: "row",
+    splitPercentage: 50,
+    insertionPosition: "second",
+  };
+  const existingLayout: MosaicNode<string> = {
+    direction: "column",
+    first: "w-a",
+    second: "w-b",
+    splitPercentage: 30,
+  };
+  // Tab 1 is focused and holds two windows; tab 2 holds a third.
+  const persisted = (): GrimoireState => ({
+    __version: 8,
+    windows: {
+      "w-a": { id: "w-a", appId: "man", props: { cmd: "req" } },
+      "w-b": { id: "w-b", appId: "nip", props: { number: "01" } },
+      "w-c": { id: "w-c", appId: "kind", props: { number: "1" } },
+    },
+    activeWorkspaceId: "ws-1",
+    layoutConfig: ROW,
+    workspaces: {
+      "ws-1": {
+        id: "ws-1",
+        number: 1,
+        windowIds: ["w-a", "w-b"],
+        layout: existingLayout,
+      },
+      "ws-2": { id: "ws-2", number: 2, windowIds: ["w-c"], layout: "w-c" },
+    },
+  });
+  const runWindow: WindowInstance = {
+    id: "pop-out:man kind",
+    appId: "man",
+    props: { cmd: "kind" },
+    commandString: "man kind",
+  };
+  const requested = {
+    id: "new-window",
+    appId: "nip",
+    props: { number: "19" },
+    commandString: "nip 19",
+  };
+  const created = (state: GrimoireState) => {
+    const ws = Object.values(state.workspaces).filter(
+      (w) => w.id !== "ws-1" && w.id !== "ws-2",
+    );
+    expect(ws).toHaveLength(1);
+    return ws[0];
+  };
+
+  it("opens a new workspace holding the run window and the requested one, selected", () => {
+    const next = addWindowInOwnWorkspace(persisted(), runWindow, requested);
+    const ws = created(next);
+    expect(next.activeWorkspaceId).toBe(ws.id);
+    expect(ws.number).toBe(3);
+    expect(ws.windowIds).toEqual([runWindow.id, "new-window"]);
+    expect(ws.layout).toEqual({
+      direction: "row",
+      first: runWindow.id,
+      second: "new-window",
+      splitPercentage: 50,
+    });
+    expect(next.windows[runWindow.id]).toEqual(runWindow);
+  });
+
+  it("leaves the focused workspace, its layout and the other workspaces untouched", () => {
+    const before = persisted();
+    const next = addWindowInOwnWorkspace(before, runWindow, requested);
+    expect(next.workspaces["ws-1"]).toBe(before.workspaces["ws-1"]);
+    expect(next.workspaces["ws-2"]).toBe(before.workspaces["ws-2"]);
+    expect(next.windows["w-a"]).toBe(before.windows["w-a"]);
+    expect(next.windows["w-b"]).toBe(before.windows["w-b"]);
+    expect(next.windows["w-c"]).toBe(before.windows["w-c"]);
+  });
+
+  it("takes the lowest free workspace number, like the TabBar's + button", () => {
+    const gap = persisted();
+    gap.workspaces["ws-2"] = { ...gap.workspaces["ws-2"], number: 3 };
+    expect(
+      created(addWindowInOwnWorkspace(gap, runWindow, requested)).number,
+    ).toBe(2);
+  });
+
+  it("uses the focused workspace while it is empty — a fresh profile", () => {
+    const empty: GrimoireState = {
+      ...persisted(),
+      windows: {},
+      workspaces: {
+        "ws-1": { id: "ws-1", number: 1, windowIds: [], layout: null },
+      },
+    };
+    const next = addWindowInOwnWorkspace(empty, runWindow, requested);
+    expect(Object.keys(next.workspaces)).toEqual(["ws-1"]);
+    expect(next.activeWorkspaceId).toBe("ws-1");
+    expect(next.workspaces["ws-1"].windowIds).toEqual([
+      runWindow.id,
+      "new-window",
+    ]);
+  });
+
+  it("opens the second window from the same route in the workspace it made, not another", () => {
+    const once = addWindowInOwnWorkspace(persisted(), runWindow, requested);
+    // Back on the focused tab, the user returns to the same /run and opens again.
+    const twice = addWindowInOwnWorkspace(
+      { ...once, activeWorkspaceId: "ws-1" },
+      runWindow,
+      { ...requested, id: "another-window" },
+    );
+    const ws = created(twice);
+    expect(twice.activeWorkspaceId).toBe(ws.id);
+    expect(ws.windowIds).toEqual([
+      runWindow.id,
+      "new-window",
+      "another-window",
+    ]);
+    expect(Object.keys(twice.workspaces)).toHaveLength(3);
+    expect(twice.workspaces["ws-1"]).toEqual(persisted().workspaces["ws-1"]);
+  });
+
+  it("gives a pop-out its own copy and leaves the original in its workspace", () => {
+    // `w-a` is `man req` on tab 1; its pop-out shows the same command under
+    // the command-derived id.
+    const popped: WindowInstance = {
+      id: "pop-out:man req",
+      appId: "man",
+      props: { cmd: "req" },
+      commandString: "man req",
+    };
+    const before = persisted();
+    const next = addWindowInOwnWorkspace(before, popped, requested);
+    expect(created(next).windowIds).toEqual([popped.id, "new-window"]);
+    expect(next.workspaces["ws-1"]).toBe(before.workspaces["ws-1"]);
+    expect(next.windows["w-a"]).toBe(before.windows["w-a"]);
+  });
+
+  it("opens only the requested window, still in a workspace of its own, when the route had nothing on screen", () => {
+    const next = addWindowInOwnWorkspace(persisted(), null, requested);
+    expect(created(next).windowIds).toEqual(["new-window"]);
+    expect(next.workspaces["ws-1"].windowIds).toEqual(["w-a", "w-b"]);
   });
 });
 

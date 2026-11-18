@@ -28,7 +28,7 @@ export default function PreviewProfilePage() {
         : null,
     [identifier, decoded],
   );
-  useRevealOnOpen(previewWindow);
+  useRevealOnOpen(previewWindow, "active-workspace");
 
   // Show error toast when error occurs
   useEffect(() => {

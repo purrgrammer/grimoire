@@ -105,9 +105,7 @@ export function WindowToolbar({
     // Get command string (existing or reconstructed)
     const commandString = window.commandString || reconstructCommand(window);
 
-    // The /run URL carries the command and this window's id, so revealing the
-    // workspace from the new tab shows this window rather than a copy of it.
-    globalThis.window.open(popOutUrl(commandString, window.id), "_blank");
+    globalThis.window.open(popOutUrl(commandString), "_blank");
   };
 
   // Copy functionality for NIPs

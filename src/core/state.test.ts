@@ -90,11 +90,12 @@ describe("openWindowAtom without a single-window route", () => {
   });
 });
 
-describe("openWindowAtom from a single-window route", () => {
+describe("openWindowAtom from a preview route (active-workspace placement)", () => {
   beforeEach(() => {
     store.set(standaloneWindowAtom, {
       owner,
       window: runWindow,
+      placement: "active-workspace",
       revealed: false,
     });
   });
@@ -109,6 +110,7 @@ describe("openWindowAtom from a single-window route", () => {
     expect(store.get(standaloneWindowAtom)).toEqual({
       owner,
       window: runWindow,
+      placement: "active-workspace",
       revealed: true,
     });
   });
@@ -155,7 +157,12 @@ describe("openWindowAtom from a single-window route", () => {
   });
 
   it("reveals the requested window alone when the route had nothing on screen", () => {
-    store.set(standaloneWindowAtom, { owner, window: null, revealed: false });
+    store.set(standaloneWindowAtom, {
+      owner,
+      window: null,
+      placement: "active-workspace",
+      revealed: false,
+    });
     const id = open(nip19);
     expect(workspace().windowIds).toEqual(["w-a", "w-b", id]);
     expect(store.get(standaloneWindowAtom)?.revealed).toBe(true);
@@ -168,5 +175,111 @@ describe("openWindowAtom from a single-window route", () => {
     expect(id).not.toBe(runWindow.id);
     expect(store.get(grimoireStateAtom).windows[id]).toMatchObject(nip19);
     expect(workspace().windowIds).toEqual(["w-a", "w-b", runWindow.id, id]);
+  });
+});
+
+/**
+ * Follow-up to #371: `/run` places its window and the requested one in a
+ * workspace of their own — a new tab, selected — and the tab the user had
+ * focused keeps its windows and layout.
+ */
+describe("openWindowAtom from /run (own-workspace placement)", () => {
+  const register = (window: WindowInstance | null = runWindow) =>
+    store.set(standaloneWindowAtom, {
+      owner,
+      window,
+      placement: "own-workspace",
+      revealed: false,
+    });
+  const created = () => {
+    const state = store.get(grimoireStateAtom);
+    const ws = Object.values(state.workspaces).filter((w) => w.id !== "ws-1");
+    expect(ws).toHaveLength(1);
+    return ws[0];
+  };
+
+  beforeEach(() => register());
+
+  it("opens a new, selected workspace with the route's window and the new one", () => {
+    const id = open(nip19);
+    const ws = created();
+    expect(store.get(grimoireStateAtom).activeWorkspaceId).toBe(ws.id);
+    expect(ws.number).toBe(2);
+    expect(ws.windowIds).toEqual([runWindow.id, id]);
+    expect(store.get(standaloneWindowAtom)?.revealed).toBe(true);
+  });
+
+  it("leaves the focused workspace, its windows and its layout as they were", () => {
+    open(nip19);
+    expect(workspace()).toEqual(seeded().workspaces["ws-1"]);
+    expect(store.get(grimoireStateAtom).windows["w-a"]).toEqual(
+      seeded().windows["w-a"],
+    );
+    expect(store.get(grimoireStateAtom).windows["w-b"]).toEqual(
+      seeded().windows["w-b"],
+    );
+  });
+
+  it("writes the new workspace through to localStorage, where the dashboard reads it", () => {
+    open(nip19);
+    const saved = JSON.parse(localStorage.getItem("grimoire_v6") ?? "null");
+    expect(saved.activeWorkspaceId).toBe(created().id);
+    expect(saved.workspaces[created().id].windowIds).toEqual(
+      created().windowIds,
+    );
+    expect(saved.workspaces["ws-1"].windowIds).toEqual(["w-a", "w-b"]);
+  });
+
+  it("adds a second window opened before navigating to the same new workspace", () => {
+    const first = open(nip19);
+    const second = open({ appId: "kind", props: { number: "1" } });
+    expect(created().windowIds).toEqual([runWindow.id, first, second]);
+  });
+
+  it("returns to the workspace that already holds the route's window instead of making another", () => {
+    const first = open(nip19);
+    const made = created();
+    // The user switches back to tab 1, then comes back to the same /run.
+    store.set(grimoireStateAtom, (prev) => ({
+      ...prev,
+      activeWorkspaceId: "ws-1",
+    }));
+    register();
+    const second = open({ appId: "kind", props: { number: "1" } });
+
+    expect(Object.keys(store.get(grimoireStateAtom).workspaces)).toHaveLength(
+      2,
+    );
+    expect(store.get(grimoireStateAtom).activeWorkspaceId).toBe(made.id);
+    expect(created().windowIds).toEqual([runWindow.id, first, second]);
+    expect(workspace().windowIds).toEqual(["w-a", "w-b"]);
+  });
+
+  it("uses the focused workspace while it is empty", () => {
+    store.set(grimoireStateAtom, (prev) => ({
+      ...prev,
+      windows: {},
+      workspaces: {
+        "ws-1": { id: "ws-1", number: 1, windowIds: [], layout: null },
+      },
+    }));
+    const id = open(nip19);
+    expect(Object.keys(store.get(grimoireStateAtom).workspaces)).toEqual([
+      "ws-1",
+    ]);
+    expect(workspace().windowIds).toEqual([runWindow.id, id]);
+  });
+
+  it("reveals the requested window alone, still in its own workspace, when the route had nothing on screen", () => {
+    register(null);
+    const id = open(nip19);
+    expect(created().windowIds).toEqual([id]);
+    expect(workspace().windowIds).toEqual(["w-a", "w-b"]);
+  });
+
+  it("serves the services outside React the same way", () => {
+    const id = openPersistedWindow(nip19, store);
+    expect(id).not.toBe(runWindow.id);
+    expect(created().windowIds).toEqual([runWindow.id, id]);
   });
 });

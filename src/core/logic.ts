@@ -178,32 +178,51 @@ export const adoptWindow = (
  *
  * `standalone` is null while the route has nothing on screen to bring (still
  * loading, or an error); the requested window is then added on its own.
- *
- * `sourceId` names the workspace window the route was popped out of. While
- * that window is still in the active workspace showing the same app, it IS the
- * route's window — in another tab — and the reveal adds only the requested
- * window; adopting `standalone` too would place a copy beside the original.
- * Closed meanwhile, or moved to another workspace, and `standalone` is adopted
- * as usual. Windows are never matched by command: two windows running the
- * same command are legitimately separate.
  */
 export const addWindowAlongside = (
   state: GrimoireState,
   standalone: WindowInstance | null,
   payload: AddWindowPayload,
-  sourceId?: string | null,
+): GrimoireState =>
+  addWindow(standalone ? adoptWindow(state, standalone) : state, payload);
+
+/**
+ * Opens a window from `/run` in a workspace of its own — a new tab holding
+ * only the route's window and the requested one, selected — rather than in
+ * whichever tab the user had focused, which keeps its windows and layout.
+ *
+ * The workspace used, in order:
+ * - the one that already holds `standalone` (the user came back to the same
+ *   `/run` after an earlier reveal): selected, and the requested window joins
+ *   it — never a tab per reveal, never the route's window twice;
+ * - the active one while it is empty — a fresh profile, or a tab just
+ *   created — since the app discards empty workspaces on every switch;
+ * - otherwise a new workspace, numbered like the TabBar's "+" button.
+ *
+ * A pop-out's original stays in its own tab: `standalone` carries the
+ * `pop-out:<cmd>` id, so the new tab shows that window, not the original
+ * moved over.
+ */
+export const addWindowInOwnWorkspace = (
+  state: GrimoireState,
+  standalone: WindowInstance | null,
+  payload: AddWindowPayload,
 ): GrimoireState => {
-  if (!standalone) return addWindow(state, payload);
+  const home =
+    standalone &&
+    Object.values(state.workspaces).find((ws) =>
+      ws.windowIds.includes(standalone.id),
+    );
   const active = state.workspaces[state.activeWorkspaceId];
-  const source = sourceId ? state.windows[sourceId] : undefined;
-  const sourceOnScreen =
-    !!source &&
-    source.appId === standalone.appId &&
-    !!active?.windowIds.includes(source.id);
-  return addWindow(
-    sourceOnScreen ? state : adoptWindow(state, standalone),
-    payload,
-  );
+  const target = home
+    ? { ...state, activeWorkspaceId: home.id }
+    : active && active.windowIds.length === 0
+      ? state
+      : createWorkspace(
+          state,
+          findLowestAvailableWorkspaceNumber(state.workspaces),
+        );
+  return addWindowAlongside(target, standalone, payload);
 };
 
 /**

@@ -293,6 +293,7 @@ describe("openBuiltinWindow", () => {
     store.set(standaloneWindowAtom, {
       owner: {},
       window: run,
+      placement: "own-workspace",
       revealed: false,
     });
     const id = openBuiltinWindow(window);

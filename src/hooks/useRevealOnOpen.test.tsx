@@ -25,6 +25,7 @@ import {
   grimoireStateAtom,
   standaloneWindowAtom,
   useGrimoire,
+  type RevealPlacement,
 } from "@/core/state";
 import { useRevealOnOpen } from "./useRevealOnOpen";
 import { runCommandWindow } from "@/lib/standalone-window";
@@ -55,7 +56,7 @@ const seeded = (): GrimoireState => ({
   },
 });
 
-function RunProbe() {
+function RunProbe({ placement }: { placement: RevealPlacement }) {
   const window = useMemo(
     () =>
       runCommandWindow({
@@ -65,7 +66,7 @@ function RunProbe() {
       }),
     [],
   );
-  useRevealOnOpen(window);
+  useRevealOnOpen(window, placement);
   const { addWindow } = useGrimoire();
   return (
     <div>
@@ -86,11 +87,14 @@ function DashboardProbe() {
 
 let store: ReturnType<typeof createStore>;
 
-function mount(initial = "/run?cmd=man%20kind") {
+function mount(
+  placement: RevealPlacement = "active-workspace",
+  initial = "/run?cmd=man%20kind",
+) {
   const router = createMemoryRouter(
     [
       { path: "/", element: <DashboardProbe /> },
-      { path: "/run", element: <RunProbe /> },
+      { path: "/run", element: <RunProbe placement={placement} /> },
     ],
     { initialEntries: [initial] },
   );
@@ -116,7 +120,7 @@ afterEach(() => {
   localStorage.removeItem("grimoire_v6");
 });
 
-describe("useRevealOnOpen on /run", () => {
+describe("useRevealOnOpen with active-workspace placement (the previews)", () => {
   it("shows only the run view at first and touches no workspace", () => {
     const router = mount();
     expect(screen.getByText("run view")).toBeTruthy();
@@ -190,6 +194,64 @@ describe("useRevealOnOpen on /run", () => {
     const ids = workspace().windowIds;
     expect(ids).toHaveLength(4);
     expect(ids.filter((id) => id === RUN_ID)).toHaveLength(1);
+  });
+});
+
+/**
+ * Follow-up to #371: `/run` reveals into a tab of its own. The navigation half
+ * is the same; the state half is covered in `state.test.ts`.
+ */
+describe("useRevealOnOpen with own-workspace placement (/run)", () => {
+  const created = () => {
+    const state = store.get(grimoireStateAtom);
+    const ws = Object.values(state.workspaces).filter((w) => w.id !== "ws-1");
+    expect(ws).toHaveLength(1);
+    return ws[0];
+  };
+
+  it("clicking a NIP badge shows the dashboard on a new tab with both windows", async () => {
+    const router = mount("own-workspace");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /19/ }));
+    });
+
+    expect(router.state.location.pathname).toBe("/");
+    const ws = created();
+    expect(store.get(grimoireStateAtom).activeWorkspaceId).toBe(ws.id);
+    expect(ws.windowIds[0]).toBe(RUN_ID);
+    expect(ws.windowIds).toHaveLength(2);
+    expect(screen.getByTestId("dashboard").textContent).toBe(
+      ws.windowIds.join(","),
+    );
+    expect(workspace()).toEqual(seeded().workspaces["ws-1"]);
+    expect(store.get(standaloneWindowAtom)).toBeNull();
+  });
+
+  it("two clicks before the route unmounts make one tab", async () => {
+    mount("own-workspace");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /19/ }));
+      fireEvent.click(screen.getByText("open kind"));
+    });
+    expect(created().windowIds).toHaveLength(3);
+    expect(created().windowIds.filter((id) => id === RUN_ID)).toHaveLength(1);
+  });
+
+  it("returning to the same /run and clicking again reuses that tab", async () => {
+    const router = mount("own-workspace");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /19/ }));
+    });
+    await act(async () => {
+      await router.navigate("/run?cmd=man%20kind");
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("open kind"));
+    });
+    expect(router.state.location.pathname).toBe("/");
+    expect(created().windowIds).toHaveLength(3);
+    expect(created().windowIds.filter((id) => id === RUN_ID)).toHaveLength(1);
+    expect(workspace()).toEqual(seeded().workspaces["ws-1"]);
   });
 });
 

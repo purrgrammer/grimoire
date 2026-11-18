@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { nip19 } from "nostr-tools";
 import {
-  POP_OUT_SOURCE_PARAM,
   popOutUrl,
   eventPreviewWindow,
   profilePreviewWindow,
@@ -68,12 +67,12 @@ describe("standalone windows", () => {
     expect(eventPreviewWindow(naddr, address).id).toBe(`pop-out:open ${naddr}`);
   });
 
-  it("pop-out URLs carry the command and the source window, round-trippable", () => {
+  it("pop-out URLs carry the command, round-trippable", () => {
     const command = `req -k 1 -t "a&b" wss://relay.example/?x=1`;
-    const url = popOutUrl(command, "w-1");
+    const url = popOutUrl(command);
     expect(url.startsWith("/run?")).toBe(true);
     const params = new URL(url, "https://grimoire.test").searchParams;
     expect(params.get("cmd")).toBe(command);
-    expect(params.get(POP_OUT_SOURCE_PARAM)).toBe("w-1");
+    expect([...params.keys()]).toEqual(["cmd"]);
   });
 });

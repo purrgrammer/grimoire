@@ -21,24 +21,9 @@ export function standaloneWindowId(commandString: string): string {
   return `pop-out:${commandString}`;
 }
 
-/**
- * The query parameter a pop-out adds to `/run`: the id of the workspace window
- * it was popped out of.
- *
- * The `/run` window's own id is derived from the command, so on its own it
- * cannot tell "this is that dashboard window, in another tab" from "this is a
- * command someone pasted". Without the source id, revealing the workspace from
- * a popped-out tab placed a `pop-out:<cmd>` copy beside the original.
- */
-export const POP_OUT_SOURCE_PARAM = "window";
-
 /** The URL "Pop out window" opens for a workspace window. */
-export function popOutUrl(commandString: string, sourceId: string): string {
-  const params = new URLSearchParams({
-    cmd: commandString,
-    [POP_OUT_SOURCE_PARAM]: sourceId,
-  });
-  return `/run?${params.toString()}`;
+export function popOutUrl(commandString: string): string {
+  return `/run?${new URLSearchParams({ cmd: commandString }).toString()}`;
 }
 
 /** The window behind `/run?cmd=<commandString>`. */

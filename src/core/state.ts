@@ -135,6 +135,17 @@ const activeGrimoireStateAtom = atom(
 );
 
 /**
+ * Where a single-window route's reveal places its window and the requested one.
+ *
+ * - `"own-workspace"` (`/run`): a workspace of their own — a new tab, or the
+ *   one that already holds the route's window — so the tab the user had
+ *   focused keeps its windows and layout (`Logic.addWindowInOwnWorkspace`).
+ * - `"active-workspace"` (the NIP-19 previews): beside the windows of the
+ *   persisted active workspace (`Logic.addWindowAlongside`).
+ */
+export type RevealPlacement = "own-workspace" | "active-workspace";
+
+/**
  * A single-window route on screen — `/run` or a NIP-19 preview — and the window
  * it shows outside every workspace.
  *
@@ -142,8 +153,8 @@ const activeGrimoireStateAtom = atom(
  * there — Ask Hex, a command chip, `grimoire.window`, a clicked mention — used
  * to land in a workspace nobody could see. While a route is registered
  * (`useStandaloneWindow`), the next window opened brings the route's window
- * along into the persisted active workspace (`Logic.addWindowAlongside`) and
- * flips `revealed`; the route then navigates to the dashboard, which shows both.
+ * along into the persisted state, where `placement` says, and flips
+ * `revealed`; the route then navigates to the dashboard, which shows both.
  *
  * `window` is null while the route has nothing to bring along — still loading,
  * or showing an error — and the requested window is then revealed on its own.
@@ -153,8 +164,7 @@ const activeGrimoireStateAtom = atom(
 export interface StandaloneWindow {
   owner: object;
   window: WindowInstance | null;
-  /** The workspace window this route was popped out of, if any. */
-  sourceId?: string | null;
+  placement: RevealPlacement;
   revealed: boolean;
 }
 
@@ -185,12 +195,9 @@ export const openWindowAtom = atom(
       // The persisted state even inside a temporary session: that is the
       // workspace the dashboard shows, since DashboardPage discards the session.
       set(grimoireStateAtom, (prev) =>
-        Logic.addWindowAlongside(
-          prev,
-          standalone.window,
-          request,
-          standalone.sourceId,
-        ),
+        standalone.placement === "own-workspace"
+          ? Logic.addWindowInOwnWorkspace(prev, standalone.window, request)
+          : Logic.addWindowAlongside(prev, standalone.window, request),
       );
       set(standaloneWindowAtom, { ...standalone, revealed: true });
       return request.id;
@@ -223,25 +230,25 @@ export function openPersistedWindow(
  * the workspace, for as long as it stays mounted.
  *
  * Returns true once another window has been opened and `window` has been
- * placed in the workspace beside it — the caller's cue to navigate to `/`.
- * Pass a referentially stable window (memoize it): a new object re-registers
- * it as not yet revealed.
+ * placed in a workspace beside it, where `placement` says — the caller's cue
+ * to navigate to `/`. Pass a referentially stable window (memoize it): a new
+ * object re-registers it as not yet revealed.
  */
 export function useStandaloneWindow(
   window: WindowInstance | null,
-  sourceId?: string | null,
+  placement: RevealPlacement,
 ): boolean {
   const [owner] = useState(() => ({}));
   const standalone = useAtomValue(standaloneWindowAtom);
   const setStandalone = useSetAtom(standaloneWindowAtom);
 
   useEffect(() => {
-    setStandalone({ owner, window, sourceId, revealed: false });
+    setStandalone({ owner, window, placement, revealed: false });
     // Clear only our own registration: the next route may already have
     // registered by the time this one's cleanup runs.
     return () =>
       setStandalone((current) => (current?.owner === owner ? null : current));
-  }, [owner, window, sourceId, setStandalone]);
+  }, [owner, window, placement, setStandalone]);
 
   return standalone?.owner === owner && standalone.revealed;
 }
