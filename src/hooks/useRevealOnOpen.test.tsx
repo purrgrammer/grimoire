@@ -10,7 +10,7 @@
  * and real openers inside it — `NIPBadge` (`useAddWindow`) and a button on
  * `useGrimoire().addWindow` — under StrictMode, so effects run twice.
  */
-import { StrictMode, useMemo } from "react";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   render,
@@ -18,6 +18,7 @@ import {
   act,
   fireEvent,
   cleanup,
+  waitFor,
 } from "@testing-library/react";
 import { Provider, createStore } from "jotai";
 import { createMemoryRouter, RouterProvider } from "react-router";
@@ -76,6 +77,51 @@ function RunProbe({ placement }: { placement: RevealPlacement }) {
         open kind
       </button>
     </div>
+  );
+}
+
+/** Busy-render for longer than one scheduler slice (5ms). */
+function outlastSchedulerSlice() {
+  const start = performance.now();
+  while (performance.now() - start < 10) {
+    // spin
+  }
+}
+
+/**
+ * RunCommandPage's shape: nothing to bring along while the command parses,
+ * then the window and its content in one commit. The content holds the
+ * opener, so it is clickable the instant it is on screen.
+ *
+ * The render is padded past the scheduler's time slice (5ms) so React
+ * yields after the commit and passive effects run in a later task — which is
+ * what a real page does when a window takes a frame to render.
+ */
+function LateRunProbe() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
+  const window = useMemo(
+    () =>
+      ready
+        ? runCommandWindow({
+            appId: "man",
+            props: { cmd: "kind" },
+            commandString: "man kind",
+          })
+        : null,
+    [ready],
+  );
+  useRevealOnOpen(window, "own-workspace");
+  const { addWindow } = useGrimoire();
+  if (!ready) return <span>loading</span>;
+  outlastSchedulerSlice();
+  return (
+    <button onClick={() => addWindow("kind", { number: "1" }, "kind 1")}>
+      open kind
+    </button>
   );
 }
 
@@ -251,6 +297,51 @@ describe("useRevealOnOpen with own-workspace placement (/run)", () => {
     expect(router.state.location.pathname).toBe("/");
     expect(created().windowIds).toHaveLength(3);
     expect(created().windowIds.filter((id) => id === RUN_ID)).toHaveLength(1);
+    expect(workspace()).toEqual(seeded().workspaces["ws-1"]);
+  });
+
+  it("reveals the run window when the click lands before its passive effects ran", async () => {
+    // Seen in CI (QA run 44398997389) and locally, 2 of 25 runs of the
+    // RunCommandPage test: Ask Hex clicked as soon as the window was on
+    // screen opened the ai window alone in a new tab, and the tab stayed on
+    // /run. The window must be registered in the commit that shows it, not
+    // in a passive effect that a click can get ahead of.
+    const router = createMemoryRouter(
+      [
+        { path: "/", element: <DashboardProbe /> },
+        { path: "/run", element: <LateRunProbe /> },
+      ],
+      { initialEntries: ["/run?cmd=man%20kind"] },
+    );
+    render(
+      <StrictMode>
+        <Provider store={store}>
+          <RouterProvider router={router} />
+        </Provider>
+      </StrictMode>,
+    );
+
+    // Click from the mutation observer: a microtask right after the commit,
+    // ahead of any task React scheduled for its passive effects.
+    let clicked = false;
+    const observer = new MutationObserver(() => {
+      const button = screen.queryByText("open kind");
+      if (button && !clicked) {
+        clicked = true;
+        fireEvent.click(button);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    try {
+      await waitFor(() => expect(clicked).toBe(true));
+    } finally {
+      observer.disconnect();
+    }
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    const ws = created();
+    expect(ws.windowIds).toEqual([RUN_ID, expect.any(String)]);
+    expect(store.get(grimoireStateAtom).activeWorkspaceId).toBe(ws.id);
     expect(workspace()).toEqual(seeded().workspaces["ws-1"]);
   });
 });

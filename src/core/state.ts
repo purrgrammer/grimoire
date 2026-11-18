@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useLayoutEffect, useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { atom, getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
@@ -242,7 +242,14 @@ export function useStandaloneWindow(
   const standalone = useAtomValue(standaloneWindowAtom);
   const setStandalone = useSetAtom(standaloneWindowAtom);
 
-  useEffect(() => {
+  // A layout effect: the registration lands in the commit that puts `window`
+  // on screen. As a passive effect it ran in a later task, and a click on the
+  // window in between — Ask Hex the instant it rendered — opened its window
+  // under the registration from the loading state (`window: null`), so the
+  // requested window went to a tab alone and the re-registration that followed
+  // reset `revealed`, leaving the tab on the route. Flaky in CI, 2 in 25 runs
+  // locally (`useRevealOnOpen.test.tsx` pins it).
+  useLayoutEffect(() => {
     setStandalone({ owner, window, placement, revealed: false });
     // Clear only our own registration: the next route may already have
     // registered by the time this one's cleanup runs.
