@@ -65,6 +65,7 @@
     "@tiptap/starter-kit": "^3.32.2",
     "@tiptap/suggestion": "^3.29.2",
     "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
     "ai": "^7.0.154",
     "applesauce-accounts": "^6.2.0",
     "applesauce-actions": "^6.2.0",
