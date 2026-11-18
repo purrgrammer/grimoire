@@ -10,6 +10,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initializeErrorHandling } from "./lib/error-handler";
 import { ThemeProvider } from "./lib/themes";
 import { initSupporters } from "./services/supporters";
+import { Analytics } from "@vercel/analytics/react";
 // Side-effect import: the module initializes the log on load. It has to run at
 // startup, not when the log window first opens, or everything before that point
 // goes unrecorded. The log is a fixed-size ring buffer, so this costs no memory
@@ -41,6 +42,7 @@ createRoot(document.getElementById("root")!).render(
             }}
           />
           <Root />
+          <Analytics />
         </TooltipProvider>
       </EventStoreProvider>
     </ThemeProvider>
