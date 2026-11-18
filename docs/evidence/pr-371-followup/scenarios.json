@@ -1,0 +1,2871 @@
+{
+ "capturedAt": "2026-11-18",
+ "browser": "Google Chrome headless (new), fresh temp profile per scenario, --host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
+ "server": "vite preview of local production builds",
+ "driver": "CDP script (not committed); seeds grimoire_v6 with tab 1 (two windows, column 40/60) and tab 2 (one window)",
+ "fields": {
+  "activeWorkspace": "number of the persisted active workspace",
+  "workspaces": "persisted workspaces by number, with windowIds and layout",
+  "tiles": "mosaic tiles on screen",
+  "tabs": "TabBar buttons on screen"
+ },
+ "runs": {
+  "main-direct-desktop": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "1440x900 @1x",
+   "scenario": "direct",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-direct-run-initial-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "fa38a968-87db-47b7-a939-116212172369"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "fa38a968-87db-47b7-a939-116212172369",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-after-click-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "fa38a968-87db-47b7-a939-116212172369": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "fa38a968-87db-47b7-a939-116212172369"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "fa38a968-87db-47b7-a939-116212172369",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-tab-1-after-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "fa38a968-87db-47b7-a939-116212172369": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "4-after-reload",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "fa38a968-87db-47b7-a939-116212172369"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "fa38a968-87db-47b7-a939-116212172369",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "fa38a968-87db-47b7-a939-116212172369": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-direct-mobile": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "direct",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-seeded-dashboard-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-direct-run-initial-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d46a5183-ceef-47e8-ad91-ce82683f2b9b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d46a5183-ceef-47e8-ad91-ce82683f2b9b",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-after-click-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d46a5183-ceef-47e8-ad91-ce82683f2b9b": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d46a5183-ceef-47e8-ad91-ce82683f2b9b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d46a5183-ceef-47e8-ad91-ce82683f2b9b",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-direct-tab-1-after-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d46a5183-ceef-47e8-ad91-ce82683f2b9b": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "4-after-reload",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d46a5183-ceef-47e8-ad91-ce82683f2b9b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d46a5183-ceef-47e8-ad91-ce82683f2b9b",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d46a5183-ceef-47e8-ad91-ce82683f2b9b": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-empty-desktop": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "1440x900 @1x",
+   "scenario": "empty",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [],
+       "layout": null
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-empty-run-initial-desktop.png",
+     "windows": {}
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "pop-out:man kind",
+        "d2a6e6fb-11bc-4a40-b9d9-56020f3225ad"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "d2a6e6fb-11bc-4a40-b9d9-56020f3225ad",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1"
+     ],
+     "file": "main-empty-after-click-desktop.png",
+     "windows": {
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d2a6e6fb-11bc-4a40-b9d9-56020f3225ad": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-empty-mobile": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "empty",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [],
+       "layout": null
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-empty-run-initial-mobile.png",
+     "windows": {}
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "pop-out:man kind",
+        "e5bcaf10-db5b-4853-a3bf-dc93617c1e36"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "e5bcaf10-db5b-4853-a3bf-dc93617c1e36",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1"
+     ],
+     "file": "main-empty-after-click-mobile.png",
+     "windows": {
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "e5bcaf10-db5b-4853-a3bf-dc93617c1e36": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-extra-desktop": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "1440x900 @1x",
+   "scenario": "extra",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-extra-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "first-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "after-back",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "second-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+        "85b7c799-22a1-475d-a9e5-e200a9711652"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": "seed-man-req",
+          "second": "85b7c799-22a1-475d-a9e5-e200a9711652",
+          "splitPercentage": 50
+         },
+         "second": "pop-out:man kind",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 5,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}",
+      "85b7c799-22a1-475d-a9e5-e200a9711652": "man {\"cmd\":\"kinds\"}"
+     }
+    },
+    {
+     "step": "launcher-after-enter",
+     "path": "/",
+     "historyLength": 6,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+        "85b7c799-22a1-475d-a9e5-e200a9711652",
+        "9e02798d-7dea-45db-bbd3-34dbf99c3f63"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": "seed-man-req",
+          "second": "85b7c799-22a1-475d-a9e5-e200a9711652",
+          "splitPercentage": 50
+         },
+         "second": {
+          "direction": "column",
+          "first": "pop-out:man kind",
+          "second": "9e02798d-7dea-45db-bbd3-34dbf99c3f63",
+          "splitPercentage": 50
+         },
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": "seed-kinds",
+         "second": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 6,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}",
+      "85b7c799-22a1-475d-a9e5-e200a9711652": "man {\"cmd\":\"kinds\"}",
+      "9e02798d-7dea-45db-bbd3-34dbf99c3f63": "man {\"cmd\":\"open\"}"
+     }
+    },
+    {
+     "step": "error-page-after-launcher",
+     "path": "/",
+     "historyLength": 8,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+        "85b7c799-22a1-475d-a9e5-e200a9711652",
+        "9e02798d-7dea-45db-bbd3-34dbf99c3f63",
+        "140ad047-737a-4ee3-8e1d-633719d0a0a4"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": "seed-man-req",
+          "second": "85b7c799-22a1-475d-a9e5-e200a9711652",
+          "splitPercentage": 50
+         },
+         "second": {
+          "direction": "column",
+          "first": "pop-out:man kind",
+          "second": "9e02798d-7dea-45db-bbd3-34dbf99c3f63",
+          "splitPercentage": 50
+         },
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": "seed-kinds",
+          "second": "140ad047-737a-4ee3-8e1d-633719d0a0a4",
+          "splitPercentage": 50
+         },
+         "second": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 7,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "text": "REQ - Active subscription to Nostr relays with filters\nREQ\nGrimoire Manual\nREQ\nNAME\nreq - Query Nostr relays using filte",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}",
+      "85b7c799-22a1-475d-a9e5-e200a9711652": "man {\"cmd\":\"kinds\"}",
+      "9e02798d-7dea-45db-bbd3-34dbf99c3f63": "man {\"cmd\":\"open\"}",
+      "140ad047-737a-4ee3-8e1d-633719d0a0a4": "man {\"cmd\":\"open\"}"
+     }
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 10,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "pop-out:man kind",
+        "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+        "85b7c799-22a1-475d-a9e5-e200a9711652",
+        "9e02798d-7dea-45db-bbd3-34dbf99c3f63",
+        "140ad047-737a-4ee3-8e1d-633719d0a0a4",
+        "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+        "3ba0c383-0081-4084-926c-45487177e65b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": {
+           "direction": "row",
+           "first": "seed-man-req",
+           "second": "3ba0c383-0081-4084-926c-45487177e65b",
+           "splitPercentage": 50
+          },
+          "second": "85b7c799-22a1-475d-a9e5-e200a9711652",
+          "splitPercentage": 50
+         },
+         "second": {
+          "direction": "column",
+          "first": "pop-out:man kind",
+          "second": "9e02798d-7dea-45db-bbd3-34dbf99c3f63",
+          "splitPercentage": 50
+         },
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "row",
+         "first": {
+          "direction": "column",
+          "first": "seed-kinds",
+          "second": "140ad047-737a-4ee3-8e1d-633719d0a0a4",
+          "splitPercentage": 50
+         },
+         "second": {
+          "direction": "column",
+          "first": "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d",
+          "second": "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+          "splitPercentage": 50
+         },
+         "splitPercentage": 50
+        },
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 9,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "d1e01c7e-5a65-4b86-9ab8-6e8231e7586d": "man {\"cmd\":\"nips\"}",
+      "85b7c799-22a1-475d-a9e5-e200a9711652": "man {\"cmd\":\"kinds\"}",
+      "9e02798d-7dea-45db-bbd3-34dbf99c3f63": "man {\"cmd\":\"open\"}",
+      "140ad047-737a-4ee3-8e1d-633719d0a0a4": "man {\"cmd\":\"open\"}",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6": "profile {\"pubkey\":\"3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d\"}",
+      "3ba0c383-0081-4084-926c-45487177e65b": "man {\"cmd\":\"profile\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-popout-desktop": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "1440x900 @1x",
+   "scenario": "popout",
+   "popOutUrl": "/run?cmd=man+req&window=seed-man-req",
+   "clickedSeeAlso": "kind",
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-popout-run",
+     "path": "/run?cmd=man+req&window=seed-man-req",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-popout-popout-run-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "ac22f197-2a6e-414d-b07d-1992c631300b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "ac22f197-2a6e-414d-b07d-1992c631300b",
+         "splitPercentage": 50
+        },
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-after-click-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "ac22f197-2a6e-414d-b07d-1992c631300b": "man {\"cmd\":\"kind\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "ac22f197-2a6e-414d-b07d-1992c631300b"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "ac22f197-2a6e-414d-b07d-1992c631300b",
+         "splitPercentage": 50
+        },
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-tab-1-after-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "ac22f197-2a6e-414d-b07d-1992c631300b": "man {\"cmd\":\"kind\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "main-popout-mobile": {
+   "build": "origin/main @ 1cd40a0",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "popout",
+   "popOutUrl": "/run?cmd=man+req&window=seed-man-req",
+   "clickedSeeAlso": "kind",
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-seeded-dashboard-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-popout-run",
+     "path": "/run?cmd=man+req&window=seed-man-req",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "main-popout-popout-run-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "3b566958-15c5-4662-b186-943e68f04a4c"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "3b566958-15c5-4662-b186-943e68f04a4c",
+         "splitPercentage": 50
+        },
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-after-click-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "3b566958-15c5-4662-b186-943e68f04a4c": "man {\"cmd\":\"kind\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds",
+        "3b566958-15c5-4662-b186-943e68f04a4c"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": {
+         "direction": "row",
+         "first": "seed-man-req",
+         "second": "3b566958-15c5-4662-b186-943e68f04a4c",
+         "splitPercentage": 50
+        },
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "main-popout-tab-1-after-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "3b566958-15c5-4662-b186-943e68f04a4c": "man {\"cmd\":\"kind\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-direct-desktop": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "1440x900 @1x",
+   "scenario": "direct",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "pr-direct-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-direct-run-initial-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "79134569-b027-4fcd-9d61-60c126766488"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "79134569-b027-4fcd-9d61-60c126766488",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-direct-after-click-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "79134569-b027-4fcd-9d61-60c126766488": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "79134569-b027-4fcd-9d61-60c126766488"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "79134569-b027-4fcd-9d61-60c126766488",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-direct-tab-1-after-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "79134569-b027-4fcd-9d61-60c126766488": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "4-after-reload",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "79134569-b027-4fcd-9d61-60c126766488"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "79134569-b027-4fcd-9d61-60c126766488",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "79134569-b027-4fcd-9d61-60c126766488": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-direct-mobile": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "direct",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "pr-direct-seeded-dashboard-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-direct-run-initial-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "05abdd96-7348-4f48-80a6-95ce14270a0e"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "05abdd96-7348-4f48-80a6-95ce14270a0e",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-direct-after-click-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "05abdd96-7348-4f48-80a6-95ce14270a0e": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "05abdd96-7348-4f48-80a6-95ce14270a0e"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "05abdd96-7348-4f48-80a6-95ce14270a0e",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-direct-tab-1-after-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "05abdd96-7348-4f48-80a6-95ce14270a0e": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "4-after-reload",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "05abdd96-7348-4f48-80a6-95ce14270a0e"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "05abdd96-7348-4f48-80a6-95ce14270a0e",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "05abdd96-7348-4f48-80a6-95ce14270a0e": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-empty-desktop": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "1440x900 @1x",
+   "scenario": "empty",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [],
+       "layout": null
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-empty-run-initial-desktop.png",
+     "windows": {}
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "pop-out:man kind",
+        "37cc13fe-0bf7-41fe-bd40-d9a67e78dbd5"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "37cc13fe-0bf7-41fe-bd40-d9a67e78dbd5",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1"
+     ],
+     "file": "pr-empty-after-click-desktop.png",
+     "windows": {
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "37cc13fe-0bf7-41fe-bd40-d9a67e78dbd5": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-empty-mobile": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "empty",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "1-run-initial",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [],
+       "layout": null
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-empty-run-initial-mobile.png",
+     "windows": {}
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "pop-out:man kind",
+        "058cd2cd-9866-4cde-9725-61280dc4b720"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "058cd2cd-9866-4cde-9725-61280dc4b720",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1"
+     ],
+     "file": "pr-empty-after-click-mobile.png",
+     "windows": {
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "058cd2cd-9866-4cde-9725-61280dc4b720": "man {\"cmd\":\"nips\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-extra-desktop": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "1440x900 @1x",
+   "scenario": "extra",
+   "popOutUrl": null,
+   "clickedSeeAlso": null,
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "pr-extra-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "first-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "after-back",
+     "path": "/run?cmd=man%20kind",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}"
+     }
+    },
+    {
+     "step": "second-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "b451553d-46ea-4536-840b-1fbb25ae3538"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": {
+         "direction": "column",
+         "first": "pop-out:man kind",
+         "second": "b451553d-46ea-4536-840b-1fbb25ae3538",
+         "splitPercentage": 50
+        },
+        "second": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}",
+      "b451553d-46ea-4536-840b-1fbb25ae3538": "man {\"cmd\":\"kinds\"}"
+     }
+    },
+    {
+     "step": "launcher-after-enter",
+     "path": "/",
+     "historyLength": 6,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "b451553d-46ea-4536-840b-1fbb25ae3538",
+        "04a3eab0-cae7-4f9c-9092-e73068c806d2"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": {
+         "direction": "column",
+         "first": "pop-out:man kind",
+         "second": "b451553d-46ea-4536-840b-1fbb25ae3538",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "column",
+         "first": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+         "second": "04a3eab0-cae7-4f9c-9092-e73068c806d2",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 4,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}",
+      "b451553d-46ea-4536-840b-1fbb25ae3538": "man {\"cmd\":\"kinds\"}",
+      "04a3eab0-cae7-4f9c-9092-e73068c806d2": "man {\"cmd\":\"open\"}"
+     }
+    },
+    {
+     "step": "error-page-after-launcher",
+     "path": "/",
+     "historyLength": 8,
+     "activeWorkspace": 4,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "b451553d-46ea-4536-840b-1fbb25ae3538",
+        "04a3eab0-cae7-4f9c-9092-e73068c806d2"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": {
+         "direction": "column",
+         "first": "pop-out:man kind",
+         "second": "b451553d-46ea-4536-840b-1fbb25ae3538",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "column",
+         "first": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+         "second": "04a3eab0-cae7-4f9c-9092-e73068c806d2",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 50
+       }
+      },
+      {
+       "number": 4,
+       "windowIds": [
+        "57850dfe-5e4a-4041-a9e7-8a524a2ad613"
+       ],
+       "layout": "57850dfe-5e4a-4041-a9e7-8a524a2ad613"
+      }
+     ],
+     "tiles": 1,
+     "tabs": [
+      "1",
+      "2",
+      "3",
+      "4"
+     ],
+     "text": "OPEN - Open and view a Nostr event\nOPEN\nGrimoire Manual\nOPEN\nNAME\nopen - Open a detailed view of a Nostr event\nSYNOPSIS\n",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}",
+      "b451553d-46ea-4536-840b-1fbb25ae3538": "man {\"cmd\":\"kinds\"}",
+      "04a3eab0-cae7-4f9c-9092-e73068c806d2": "man {\"cmd\":\"open\"}",
+      "57850dfe-5e4a-4041-a9e7-8a524a2ad613": "man {\"cmd\":\"open\"}"
+     }
+    },
+    {
+     "step": "npub-after-launcher",
+     "path": "/",
+     "historyLength": 10,
+     "activeWorkspace": 4,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man kind",
+        "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+        "b451553d-46ea-4536-840b-1fbb25ae3538",
+        "04a3eab0-cae7-4f9c-9092-e73068c806d2"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": {
+         "direction": "column",
+         "first": "pop-out:man kind",
+         "second": "b451553d-46ea-4536-840b-1fbb25ae3538",
+         "splitPercentage": 50
+        },
+        "second": {
+         "direction": "column",
+         "first": "1906ce15-6e0e-4149-a02f-ab67f43ea8b7",
+         "second": "04a3eab0-cae7-4f9c-9092-e73068c806d2",
+         "splitPercentage": 50
+        },
+        "splitPercentage": 50
+       }
+      },
+      {
+       "number": 4,
+       "windowIds": [
+        "57850dfe-5e4a-4041-a9e7-8a524a2ad613",
+        "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+        "5f12c613-74a4-43fe-87dc-c35cfd7685ad"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": {
+         "direction": "column",
+         "first": "57850dfe-5e4a-4041-a9e7-8a524a2ad613",
+         "second": "5f12c613-74a4-43fe-87dc-c35cfd7685ad",
+         "splitPercentage": 50
+        },
+        "second": "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 3,
+     "tabs": [
+      "1",
+      "2",
+      "3",
+      "4"
+     ],
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+      "1906ce15-6e0e-4149-a02f-ab67f43ea8b7": "man {\"cmd\":\"nips\"}",
+      "b451553d-46ea-4536-840b-1fbb25ae3538": "man {\"cmd\":\"kinds\"}",
+      "04a3eab0-cae7-4f9c-9092-e73068c806d2": "man {\"cmd\":\"open\"}",
+      "57850dfe-5e4a-4041-a9e7-8a524a2ad613": "man {\"cmd\":\"open\"}",
+      "pop-out:profile npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6": "profile {\"pubkey\":\"3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d\"}",
+      "5f12c613-74a4-43fe-87dc-c35cfd7685ad": "man {\"cmd\":\"profile\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-popout-desktop": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "1440x900 @1x",
+   "scenario": "popout",
+   "popOutUrl": "/run?cmd=man+req",
+   "clickedSeeAlso": "kind",
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "pr-popout-seeded-dashboard-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-popout-run",
+     "path": "/run?cmd=man+req",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-popout-popout-run-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man req",
+        "4b6fed56-a08a-4f51-acff-03b650a28773"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man req",
+        "second": "4b6fed56-a08a-4f51-acff-03b650a28773",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-popout-after-click-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man req": "man {\"cmd\":\"req\"}",
+      "4b6fed56-a08a-4f51-acff-03b650a28773": "man {\"cmd\":\"kind\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man req",
+        "4b6fed56-a08a-4f51-acff-03b650a28773"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man req",
+        "second": "4b6fed56-a08a-4f51-acff-03b650a28773",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-popout-tab-1-after-desktop.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man req": "man {\"cmd\":\"req\"}",
+      "4b6fed56-a08a-4f51-acff-03b650a28773": "man {\"cmd\":\"kind\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  },
+  "pr-popout-mobile": {
+   "build": "this branch @ 30c52f3",
+   "viewport": "390x844 @2x, touch",
+   "scenario": "popout",
+   "popOutUrl": "/run?cmd=man+req",
+   "clickedSeeAlso": "kind",
+   "steps": [
+    {
+     "step": "0-seeded-dashboard",
+     "path": "/",
+     "historyLength": 2,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2"
+     ],
+     "file": "pr-popout-seeded-dashboard-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "1-popout-run",
+     "path": "/run?cmd=man+req",
+     "historyLength": 3,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      }
+     ],
+     "tiles": 0,
+     "tabs": [],
+     "file": "pr-popout-popout-run-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}"
+     }
+    },
+    {
+     "step": "2-after-click",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 3,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man req",
+        "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man req",
+        "second": "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-popout-after-click-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man req": "man {\"cmd\":\"req\"}",
+      "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754": "man {\"cmd\":\"kind\"}"
+     }
+    },
+    {
+     "step": "3-tab-1-after",
+     "path": "/",
+     "historyLength": 4,
+     "activeWorkspace": 1,
+     "workspaces": [
+      {
+       "number": 1,
+       "windowIds": [
+        "seed-man-req",
+        "seed-kinds"
+       ],
+       "layout": {
+        "direction": "column",
+        "first": "seed-man-req",
+        "second": "seed-kinds",
+        "splitPercentage": 40
+       }
+      },
+      {
+       "number": 2,
+       "windowIds": [
+        "seed-nip-01"
+       ],
+       "layout": "seed-nip-01"
+      },
+      {
+       "number": 3,
+       "windowIds": [
+        "pop-out:man req",
+        "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754"
+       ],
+       "layout": {
+        "direction": "row",
+        "first": "pop-out:man req",
+        "second": "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754",
+        "splitPercentage": 50
+       }
+      }
+     ],
+     "tiles": 2,
+     "tabs": [
+      "1",
+      "2",
+      "3"
+     ],
+     "file": "pr-popout-tab-1-after-mobile.png",
+     "windows": {
+      "seed-man-req": "man {\"cmd\":\"req\"}",
+      "seed-kinds": "kinds {}",
+      "seed-nip-01": "nip {\"number\":\"01\"}",
+      "pop-out:man req": "man {\"cmd\":\"req\"}",
+      "b1ce90c8-84c5-4f3d-b41f-4c90ccb85754": "man {\"cmd\":\"kind\"}"
+     }
+    }
+   ],
+   "consoleErrors": [],
+   "exceptions": []
+  }
+ }
+}
