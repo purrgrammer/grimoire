@@ -40,7 +40,7 @@ export default function PreviewEventPage() {
       identifier && pointer ? eventPreviewWindow(identifier, pointer) : null,
     [identifier, pointer],
   );
-  useRevealOnOpen(previewWindow);
+  useRevealOnOpen(previewWindow, "active-workspace");
 
   // Show error toast when error occurs
   useEffect(() => {

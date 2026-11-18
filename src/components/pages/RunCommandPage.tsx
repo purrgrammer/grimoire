@@ -7,10 +7,7 @@ import {
 import { useGrimoire } from "@/core/state";
 import { WindowRenderer } from "@/components/WindowRenderer";
 import { useRevealOnOpen } from "@/hooks/useRevealOnOpen";
-import {
-  POP_OUT_SOURCE_PARAM,
-  runCommandWindow,
-} from "@/lib/standalone-window";
+import { runCommandWindow } from "@/lib/standalone-window";
 
 /**
  * RunCommandPage - Standalone command execution route
@@ -21,8 +18,9 @@ import {
  * This allows windows to be "popped out" into separate browser windows/tabs.
  *
  * Opening another window from here — Ask Hex, a command chip, a clicked
- * mention — moves this window into the active workspace beside the new one and
- * shows the dashboard (`useRevealOnOpen`).
+ * mention — puts this window and the new one in a workspace of their own, a
+ * new tab, and shows the dashboard there (`useRevealOnOpen`). The tab the user
+ * had focused keeps its windows and layout.
  */
 export default function RunCommandPage() {
   const [searchParams] = useSearchParams();
@@ -68,7 +66,7 @@ export default function RunCommandPage() {
   }, [cmdParam, state.activeAccount?.pubkey]);
 
   // The window this page shows — and, once another window opens from here, the
-  // one moved into the workspace beside it. Memoized so it stays registered.
+  // one placed in the new tab beside it. Memoized so it stays registered.
   const windowInstance = useMemo(
     () =>
       parsed && !parsed.error && parsed.command && parsed.props
@@ -81,9 +79,7 @@ export default function RunCommandPage() {
         : null,
     [parsed],
   );
-  // Popped out of a workspace window: that window, not a copy, is what the
-  // reveal shows beside the new one.
-  useRevealOnOpen(windowInstance, searchParams.get(POP_OUT_SOURCE_PARAM));
+  useRevealOnOpen(windowInstance, "own-workspace");
 
   if (loading) {
     return (
