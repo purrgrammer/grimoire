@@ -1,0 +1,1146 @@
+{
+ "pr-direct-desktop": {
+  "build": "39c1e71",
+  "viewport": "desktop",
+  "scenario": "direct",
+  "steps": [
+   {
+    "step": "0-seeded-dashboard",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2"
+    ],
+    "file": "pr-direct-seeded-dashboard-desktop.png",
+    "consoleErrors": 1,
+    "exceptions": 0
+   },
+   {
+    "step": "1-run-initial",
+    "path": "/run?cmd=man%20kind",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-direct-run-initial-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "7bbaaf18-4845-4de5-8994-aac7fa7f453a"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "7bbaaf18-4845-4de5-8994-aac7fa7f453a",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "7bbaaf18-4845-4de5-8994-aac7fa7f453a": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-direct-after-click-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "3-tab-1-after",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "7bbaaf18-4845-4de5-8994-aac7fa7f453a"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "7bbaaf18-4845-4de5-8994-aac7fa7f453a",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "7bbaaf18-4845-4de5-8994-aac7fa7f453a": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-direct-tab-1-after-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "4-after-reload",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "7bbaaf18-4845-4de5-8994-aac7fa7f453a"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "7bbaaf18-4845-4de5-8994-aac7fa7f453a",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "7bbaaf18-4845-4de5-8994-aac7fa7f453a": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "consoleErrors": 3,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object"
+  ],
+  "exceptions": []
+ },
+ "pr-direct-mobile": {
+  "build": "39c1e71",
+  "viewport": "mobile",
+  "scenario": "direct",
+  "steps": [
+   {
+    "step": "0-seeded-dashboard",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2"
+    ],
+    "file": "pr-direct-seeded-dashboard-mobile.png",
+    "consoleErrors": 1,
+    "exceptions": 0
+   },
+   {
+    "step": "1-run-initial",
+    "path": "/run?cmd=man%20kind",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-direct-run-initial-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-direct-after-click-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "3-tab-1-after",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-direct-tab-1-after-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "4-after-reload",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "f3be91a0-ceaf-4125-90ca-e9f1b5fdf408": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "consoleErrors": 3,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object"
+  ],
+  "exceptions": []
+ },
+ "pr-popout-desktop": {
+  "build": "39c1e71",
+  "viewport": "desktop",
+  "scenario": "popout",
+  "popOutUrl": "/run?cmd=man+req",
+  "steps": [
+   {
+    "step": "1-popout-run",
+    "path": "/run?cmd=man+req",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-popout-popout-run-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man req",
+       "5942970a-7d6e-473a-8ab5-a5e6c224fcab"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man req",
+       "second": "5942970a-7d6e-473a-8ab5-a5e6c224fcab",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man req": "man {\"cmd\":\"req\"}",
+     "5942970a-7d6e-473a-8ab5-a5e6c224fcab": "man {\"cmd\":\"kind\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-popout-after-click-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "3-tab-1-after",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man req",
+       "5942970a-7d6e-473a-8ab5-a5e6c224fcab"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man req",
+       "second": "5942970a-7d6e-473a-8ab5-a5e6c224fcab",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man req": "man {\"cmd\":\"req\"}",
+     "5942970a-7d6e-473a-8ab5-a5e6c224fcab": "man {\"cmd\":\"kind\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-popout-tab-1-after-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object"
+  ],
+  "exceptions": []
+ },
+ "pr-popout-mobile": {
+  "build": "39c1e71",
+  "viewport": "mobile",
+  "scenario": "popout",
+  "popOutUrl": "/run?cmd=man+req",
+  "steps": [
+   {
+    "step": "1-popout-run",
+    "path": "/run?cmd=man+req",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}"
+    },
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-popout-popout-run-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man req",
+       "46dba2b5-815d-4940-a896-511301ed4d3d"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man req",
+       "second": "46dba2b5-815d-4940-a896-511301ed4d3d",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man req": "man {\"cmd\":\"req\"}",
+     "46dba2b5-815d-4940-a896-511301ed4d3d": "man {\"cmd\":\"kind\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-popout-after-click-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "3-tab-1-after",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man req",
+       "46dba2b5-815d-4940-a896-511301ed4d3d"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man req",
+       "second": "46dba2b5-815d-4940-a896-511301ed4d3d",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man req": "man {\"cmd\":\"req\"}",
+     "46dba2b5-815d-4940-a896-511301ed4d3d": "man {\"cmd\":\"kind\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-popout-tab-1-after-mobile.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object"
+  ],
+  "exceptions": []
+ },
+ "pr-empty-desktop": {
+  "build": "39c1e71",
+  "viewport": "desktop",
+  "scenario": "empty",
+  "steps": [
+   {
+    "step": "1-run-initial",
+    "path": "/run?cmd=man%20kind",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [],
+      "layout": null
+     }
+    ],
+    "windows": {},
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-empty-run-initial-desktop.png",
+    "consoleErrors": 0,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "pop-out:man kind",
+       "3c26250b-3c72-4a7d-a02e-f8d9118bccd6"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "3c26250b-3c72-4a7d-a02e-f8d9118bccd6",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "3c26250b-3c72-4a7d-a02e-f8d9118bccd6": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1"
+    ],
+    "file": "pr-empty-after-click-desktop.png",
+    "consoleErrors": 0,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [],
+  "exceptions": []
+ },
+ "pr-empty-mobile": {
+  "build": "39c1e71",
+  "viewport": "mobile",
+  "scenario": "empty",
+  "steps": [
+   {
+    "step": "1-run-initial",
+    "path": "/run?cmd=man%20kind",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [],
+      "layout": null
+     }
+    ],
+    "windows": {},
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-empty-run-initial-mobile.png",
+    "consoleErrors": 0,
+    "exceptions": 0
+   },
+   {
+    "step": "2-after-click",
+    "path": "/",
+    "activeWorkspace": 1,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "pop-out:man kind",
+       "0d58a6ea-7755-45b7-9cff-718603535e27"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "0d58a6ea-7755-45b7-9cff-718603535e27",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "0d58a6ea-7755-45b7-9cff-718603535e27": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1"
+    ],
+    "file": "pr-empty-after-click-mobile.png",
+    "consoleErrors": 0,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [],
+  "exceptions": []
+ },
+ "pr-extra-desktop": {
+  "build": "39c1e71",
+  "viewport": "desktop",
+  "scenario": "extra",
+  "steps": [
+   {
+    "step": "1-after-first-click",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "208c1530-4099-45b4-bdf3-c83e7287e431"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": "pop-out:man kind",
+       "second": "208c1530-4099-45b4-bdf3-c83e7287e431",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "208c1530-4099-45b4-bdf3-c83e7287e431": "man {\"cmd\":\"nips\"}"
+    },
+    "tiles": 2,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "2-back-then-open-again",
+    "path": "/",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "208c1530-4099-45b4-bdf3-c83e7287e431",
+       "f2d9c211-5471-466c-b365-04101412d1c2"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "208c1530-4099-45b4-bdf3-c83e7287e431",
+        "splitPercentage": 50
+       },
+       "second": "f2d9c211-5471-466c-b365-04101412d1c2",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "208c1530-4099-45b4-bdf3-c83e7287e431": "man {\"cmd\":\"nips\"}",
+     "f2d9c211-5471-466c-b365-04101412d1c2": "man {\"cmd\":\"kinds\"}"
+    },
+    "tiles": 3,
+    "tabs": [
+     "1",
+     "2",
+     "3"
+    ],
+    "file": "pr-extra-back-again-desktop.png",
+    "consoleErrors": 2,
+    "exceptions": 0
+   },
+   {
+    "step": "3-npub-preview",
+    "path": "/npub1sg6plzptd64u62a878hep2kev88swjh3tw00gjsfl8f237lmu63q0uf63m",
+    "activeWorkspace": 3,
+    "workspaces": [
+     {
+      "number": 1,
+      "windowIds": [
+       "seed-man-req",
+       "seed-kinds"
+      ],
+      "layout": {
+       "direction": "column",
+       "first": "seed-man-req",
+       "second": "seed-kinds",
+       "splitPercentage": 40
+      }
+     },
+     {
+      "number": 2,
+      "windowIds": [
+       "seed-nip-01"
+      ],
+      "layout": "seed-nip-01"
+     },
+     {
+      "number": 3,
+      "windowIds": [
+       "pop-out:man kind",
+       "208c1530-4099-45b4-bdf3-c83e7287e431",
+       "f2d9c211-5471-466c-b365-04101412d1c2"
+      ],
+      "layout": {
+       "direction": "row",
+       "first": {
+        "direction": "row",
+        "first": "pop-out:man kind",
+        "second": "208c1530-4099-45b4-bdf3-c83e7287e431",
+        "splitPercentage": 50
+       },
+       "second": "f2d9c211-5471-466c-b365-04101412d1c2",
+       "splitPercentage": 50
+      }
+     }
+    ],
+    "windows": {
+     "seed-man-req": "man {\"cmd\":\"req\"}",
+     "seed-kinds": "kinds {}",
+     "seed-nip-01": "nip {\"number\":\"01\"}",
+     "pop-out:man kind": "man {\"cmd\":\"kind\"}",
+     "208c1530-4099-45b4-bdf3-c83e7287e431": "man {\"cmd\":\"nips\"}",
+     "f2d9c211-5471-466c-b365-04101412d1c2": "man {\"cmd\":\"kinds\"}"
+    },
+    "tiles": 0,
+    "tabs": [],
+    "file": "pr-extra-npub-preview-desktop.png",
+    "consoleErrors": 3,
+    "exceptions": 0
+   }
+  ],
+  "consoleErrors": [
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object",
+   "[ErrorHandler] Object"
+  ],
+  "exceptions": []
+ }
+}
