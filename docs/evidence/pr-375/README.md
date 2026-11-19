@@ -75,7 +75,8 @@ with an `ids` filter.
 | --------------------------- | ------ | ------- |
 | Fixture feed                | 0      | 0       |
 | Real-data feed              | 0      | 0       |
-| REQs received by the mock   | 4      | 4       |
+| REQs the mock received, fixture feed | 4      | 4       |
+| REQs the mock received, real-data feed | 2      | 2       |
 
 After a row is clicked, both builds look up the one opened event. The count
 of those frames varied between 8 and 13 from run to run on both builds, with
