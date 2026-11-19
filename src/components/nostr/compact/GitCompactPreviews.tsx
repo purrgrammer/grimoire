@@ -17,8 +17,8 @@
  * title, its repository is shown only once the preview is wide enough for
  * both (a container query, not a viewport one — a tiled window can be as
  * narrow as a phone). When a row has no title, the repository is the most
- * identifying thing it has and stays at every width. Commit ids are context
- * in every row and follow the same threshold.
+ * identifying thing it has and stays. Commit ids are context in every row and
+ * follow the same threshold. Under 10rem a row keeps a single thing.
  *
  * NOTHING HERE FETCHES. A status and a PR update point at another event, and
  * the title of that event is the best thing the row could show — but a feed
@@ -71,24 +71,43 @@ const ROW = "@container flex w-full min-w-0 items-center gap-1.5 text-sm";
 const WIDE_ONLY = "hidden @sm:block";
 
 /**
- * The repository. Beside a title it is capped at 40% of the preview and gone
- * on a narrow one; without a title it is the row's identity and only
- * truncates when the line runs out.
+ * Dropped by a preview under 10rem, which is what a phone gives each of two
+ * side-by-side windows: about eight characters. Splitting those between a
+ * repository and a verb left "d… m…", so such a row keeps one thing.
+ */
+const NOT_TINY = "hidden @[10rem]:block";
+
+/**
+ * A short word that keeps its width ("pushed", "merged"). Under 10rem it may
+ * truncate instead: a word that refused to shrink there was sliced mid-letter
+ * by the row's edge.
+ */
+const SHORT_WORD = "min-w-0 truncate @[10rem]:shrink-0";
+
+/**
+ * The repository, and what it gives way to.
+ *
+ * - `title`: beside a title it is capped at 40% of the preview and gone on a
+ *   narrow one.
+ * - `word`: with no title it is the row's identity and stays, truncating when
+ *   the line runs out, until the preview is too small for it and the verb.
+ * - `nothing`: it is all the row has.
  */
 function Repo({
   repo,
-  titled,
+  yieldsTo,
 }: {
   repo: GitRepositoryRef | undefined;
-  titled: boolean;
+  yieldsTo: "title" | "word" | "nothing";
 }) {
   if (!repo) return null;
   return (
     <span
       className={cn(
         "min-w-0 truncate text-muted-foreground",
-        titled && "max-w-[40%] shrink-0",
-        titled && WIDE_ONLY,
+        yieldsTo === "title" && "max-w-[40%] shrink-0",
+        yieldsTo === "title" && WIDE_ONLY,
+        yieldsTo === "word" && NOT_TINY,
       )}
       title={repo.identifier}
     >
@@ -108,21 +127,24 @@ function Title({ children }: { children: string }) {
 
 /**
  * Muted words that stand where a title would be, or beside one. `fixed` words
- * are short and never cut ("pushed"); `capped` ones keep their width up to
+ * are short and keep their width ("pushed"); `capped` ones keep theirs up to
  * 45% of the preview (a branch name); the rest truncate like a title.
  */
 function Words({
   children,
   fit = "truncate",
+  className,
 }: {
   children: string;
   fit?: "truncate" | "fixed" | "capped";
+  className?: string;
 }) {
   return (
     <span
       className={cn(
         "text-muted-foreground",
-        fit === "fixed" && "shrink-0",
+        className,
+        fit === "fixed" && SHORT_WORD,
         fit === "capped" && "max-w-[45%] shrink-0 truncate",
         fit === "truncate" && "min-w-0 truncate",
       )}
@@ -174,7 +196,7 @@ const VERB_KIND: Record<GitStatusVerb, number> = {
 
 function Verb({ verb }: { verb: GitStatusVerb }) {
   return (
-    <span className={cn("shrink-0", getStatusColorClass(VERB_KIND[verb]))}>
+    <span className={cn(SHORT_WORD, getStatusColorClass(VERB_KIND[verb]))}>
       {verb}
     </span>
   );
@@ -189,13 +211,16 @@ const UNTITLED: Record<number, string> = {
 /** Issue (1621), pull request (1618) and patch (1617): repository and title. */
 export function GitTicketCompactPreview({ event }: { event: NostrEvent }) {
   const subject = getGitSubject(event);
+  const repo = getGitRepositoryRef(event);
   return (
     <span className={ROW}>
-      <Repo repo={getGitRepositoryRef(event)} titled={!!subject} />
+      <Repo repo={repo} yieldsTo={subject ? "title" : "nothing"} />
       {subject ? (
         <Title>{subject}</Title>
       ) : (
-        <Words>{UNTITLED[event.kind] ?? "Untitled"}</Words>
+        <Words className={repo && NOT_TINY}>
+          {UNTITLED[event.kind] ?? "Untitled"}
+        </Words>
       )}
     </span>
   );
@@ -212,7 +237,10 @@ export function PullRequestUpdateCompactPreview({
   const title = pullRequest ? getGitSubject(pullRequest) : undefined;
   return (
     <span className={ROW}>
-      <Repo repo={getGitRepositoryRef(event)} titled={!!title} />
+      <Repo
+        repo={getGitRepositoryRef(event)}
+        yieldsTo={title ? "title" : "word"}
+      />
       <Words fit="fixed">{commit ? "pushed" : "updated"}</Words>
       {commit && <Commit hash={commit} />}
       {title ? (
@@ -234,7 +262,10 @@ export function GitStatusCompactPreview({ event }: { event: NostrEvent }) {
   const comment = getStatusComment(event);
   return (
     <span className={ROW}>
-      <Repo repo={getGitRepositoryRef(event)} titled={!!title} />
+      <Repo
+        repo={getGitRepositoryRef(event)}
+        yieldsTo={title ? "title" : "word"}
+      />
       {verb && <Verb verb={verb} />}
       {title ? (
         <Title>{title}</Title>
@@ -285,7 +316,9 @@ export function RepositoryStateCompactPreview({
       ) : (
         <Words>Unnamed repository</Words>
       )}
-      <Words fit="capped">{branch ?? refs}</Words>
+      <Words fit="capped" className={repo && NOT_TINY}>
+        {branch ?? refs}
+      </Words>
       {commit && <Commit hash={commit} />}
     </span>
   );

@@ -126,7 +126,7 @@ describe("tickets (1617, 1618, 1621)", () => {
     );
   });
 
-  it("keeps the repository visible at every width only when untitled", () => {
+  it("hides the repository on a narrow row only when there is a title", () => {
     const titled = render(<GitTicketCompactPreview event={issue} />);
     expect(titled.container.querySelector("[title=paff]")?.className).toContain(
       "hidden @sm:block",
@@ -139,6 +139,56 @@ describe("tickets (1617, 1618, 1621)", () => {
     );
     expect(
       untitled.container.querySelector("[title=paff]")?.className,
+    ).not.toContain("hidden");
+  });
+});
+
+describe("what a row drops as it narrows", () => {
+  const classOf = (C: Preview, event: NostrEvent, text: string) => {
+    const { container } = render(<C event={event} />);
+    const el = [...container.querySelectorAll("span, code")].find(
+      (node) => node.children.length === 0 && node.textContent === text,
+    );
+    cleanup();
+    return el?.className ?? "missing";
+  };
+
+  it("drops commit ids below 24rem", () => {
+    expect(
+      classOf(PullRequestUpdateCompactPreview, pullRequestUpdate, "58f8b4b"),
+    ).toContain("hidden @sm:block");
+    expect(classOf(GitStatusCompactPreview, statusMerged, "58f8b4b")).toContain(
+      "hidden @sm:block",
+    );
+    expect(
+      classOf(RepositoryStateCompactPreview, repositoryState, "58f8b4b"),
+    ).toContain("hidden @sm:block");
+  });
+
+  it("keeps an untitled row's repository until 10rem, then only the verb", () => {
+    const repo = classOf(GitStatusCompactPreview, statusClosed, "wyrd");
+    expect(repo).toContain("hidden @[10rem]:block");
+    expect(repo).not.toContain("@sm:block");
+    const verb = classOf(GitStatusCompactPreview, statusClosed, "closed");
+    expect(verb).not.toContain("hidden");
+    expect(verb).toContain("truncate");
+  });
+
+  it("never drops the one thing a row has", () => {
+    expect(
+      classOf(RepositoryStateCompactPreview, repositoryState, "PIPE-NERD"),
+    ).not.toContain("hidden");
+    expect(
+      classOf(RepositoryStateCompactPreview, repositoryState, "main"),
+    ).toContain("hidden @[10rem]:block");
+    expect(
+      classOf(GitTicketCompactPreview, gitEvent(1621, []), "Untitled issue"),
+    ).not.toContain("hidden");
+    expect(
+      classOf(GitStatusCompactPreview, gitEvent(1632, []), "closed"),
+    ).not.toContain("hidden");
+    expect(
+      classOf(GitTicketCompactPreview, issue, issue.tags[2][1]),
     ).not.toContain("hidden");
   });
 });
