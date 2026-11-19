@@ -1,0 +1,595 @@
+{
+ "capturedAt": "2026-11-19",
+ "browser": "Google Chrome headless (new), fresh temp profile per capture, no account",
+ "server": "local production builds served with vite preview: PR 4279bc0, origin/main f0c6a7a",
+ "mockRelayCounters": {
+  "main": {
+   "REQ": 4,
+   "EVENT": 0,
+   "AUTH": 0
+  },
+  "pr": {
+   "REQ": 4,
+   "EVENT": 0,
+   "AUTH": 0
+  },
+  "main-real": {
+   "REQ": 2,
+   "EVENT": 0,
+   "AUTH": 0
+  },
+  "pr-real": {
+   "REQ": 2,
+   "EVENT": 0,
+   "AUTH": 0
+  },
+  "main-opened": {
+   "REQ": 6,
+   "EVENT": 0,
+   "AUTH": 0
+  },
+  "pr-opened": {
+   "REQ": 6,
+   "EVENT": 0,
+   "AUTH": 0
+  }
+ },
+ "captures": [
+  {
+   "file": "main-desktop.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 15,
+    "CLOSE": 13
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n23\n1/1\nDanny the Cyber Guy\n30m ago\nDanConwayDev\n58m ago\nMaintainer With An Extremely Long Display Name\nOpened issue\n1h ago\nfiatjaf\nFixed in nostr:nevent1qqsw8rjmt46gykfv6q8cw549dduuauugl4l8mdhnxtgtyl9lckf example.com/commit/abc and released\n1h ago\n9f4e:42a0\n2h ago\nDanConwayDev\n2h ago\nfiatjaf\nnot worth it\n3h ago\nfiatjaf\nwork in progress\n3h ago\nDanConwayDev\n4h ago\nDanny the Cyber Guy\n4h ago\n9f4e:42a0\n5h ago\nDanConwayDev\ngamestr\n5h ago\n9f4e:42a0\n6h ago\nMaintainer With An Extremely Long Display Name\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that support neither\n7h ago\n9f4e:42a0\n<img src=x onerror=alert(1)> line two <b>bold</b> ‮evil\n7h ago\n9f4e:42a0\n8h ago\n9f4e:42a0\n8h ago\nMaintainer With An Extremely Long Display Name\nA plain note from the same long-named author, to show a neighbouring non-git row.\n9h ago\nfiatjaf\ngm\n"
+  },
+  {
+   "file": "main-mobile.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 15,
+    "CLOSE": 13
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 4,
+    "problems": [
+     "row overflow: Maintainer With An Extremely Long Display Name Ope",
+     "child 1 outside row: Maintainer With An Extremely Long Display Name Ope",
+     "child 2 outside row: Maintainer With An Extremely Long Display Name Ope",
+     "child 3 outside row: Maintainer With An Extremely Long Display Name Ope",
+     "row overflow: Maintainer With An Extremely Long Display Name 6h ",
+     "child 1 outside row: Maintainer With An Extremely Long Display Name 6h "
+    ]
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n23\n1/1\nDanny the Cyber Guy\n30m ago\nDanConwayDev\n58m ago\nMaintainer With An Extremely Long Display Name\nOpened issue\n1h ago\nfiatjaf\nFixed in nostr:nevent1qqsw8rjmt46gykfv6q8cw549dduuauugl4l8mdhnxtgtyl9lckf example.com/commit/abc and released\n1h ago\n9f4e:42a0\n2h ago\nDanConwayDev\n2h ago\nfiatjaf\nnot worth it\n3h ago\nfiatjaf\nwork in progress\n3h ago\nDanConwayDev\n4h ago\nDanny the Cyber Guy\n4h ago\n9f4e:42a0\n5h ago\nDanConwayDev\ngamestr\n5h ago\n9f4e:42a0\n6h ago\nMaintainer With An Extremely Long Display Name\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that support neither\n7h ago\n9f4e:42a0\n<img src=x onerror=alert(1)> line two <b>bold</b> ‮evil\n7h ago\n9f4e:42a0\n8h ago\n9f4e:42a0\n8h ago\nMaintainer With An Extremely Long Display Name\nA plain note from the same long-named author, to show a neighbouring non-git row.\n9h ago\nfiatjaf\ngm\n"
+  },
+  {
+   "file": "pr-desktop.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 17,
+    "CLOSE": 15
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n23\n1/1\nDanny the Cyber Guy\ndarkmatter-linux\npushed\nbb82030\nto a pull request\n30m ago\nDanConwayDev\ndarkmatter-linux\nmerged\nca0df2c\n58m ago\nMaintainer With An Extremely Long Display Name\npaff\nopened\nOpened issue\n1h ago\nfiatjaf\npaff\nresolved\nFixed in and released\n1h ago\n9f4e:42a0\nMORP-Box\npushed\n6ca202c\nto a pull request\n2h ago\nDanConwayDev\nSakura\nmerged\n2h ago\nfiatjaf\nwyrd\nclosed\nnot worth it\n3h ago\nfiatjaf\ndarkmatter-linux\ndraft\nwork in progress\n3h ago\nDanConwayDev\nPIPE-NERD\nmain\n33112ee\n4h ago\nDanny the Cyber Guy\noffline-speech-to-text-transcription-toolkit\n2 refs\n4h ago\n9f4e:42a0\nempty-state\nno refs\n5h ago\nDanConwayDev\ngamestr\nLeaderboards and achievements for games, published as nostr events\n5h ago\n9f4e:42a0\nkilowallet-desktop\n6h ago\nMaintainer With An Extremely Long Display Name\nUntitled patch\n6h ago\nDanny the Cyber Guy\na-repository-with-a-really-long-kebab-case-identifier-that-k"
+  },
+  {
+   "file": "pr-mobile.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 17,
+    "CLOSE": 15
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n23\n1/1\nDanny the Cyber Guy\ndarkmatter-linux\npushed\nto a pull request\n30m ago\nDanConwayDev\ndarkmatter-linux\nmerged\n58m ago\nMaintainer With An Extremely Long Display Name\npaff\nopened\nOpened issue\n1h ago\nfiatjaf\npaff\nresolved\nFixed in and released\n1h ago\n9f4e:42a0\nMORP-Box\npushed\nto a pull request\n2h ago\nDanConwayDev\nSakura\nmerged\n2h ago\nfiatjaf\nwyrd\nclosed\nnot worth it\n3h ago\nfiatjaf\ndarkmatter-linux\ndraft\nwork in progress\n3h ago\nDanConwayDev\nPIPE-NERD\nmain\n4h ago\nDanny the Cyber Guy\noffline-speech-to-text-transcription-toolkit\n2 refs\n4h ago\n9f4e:42a0\nempty-state\nno refs\n5h ago\nDanConwayDev\ngamestr\nLeaderboards and achievements for games, published as nostr events\n5h ago\n9f4e:42a0\nkilowallet-desktop\n6h ago\nMaintainer With An Extremely Long Display Name\nUntitled patch\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that su"
+  },
+  {
+   "file": "main-real-desktop.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "ago",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "0.8",
+   "framesSentByType": {
+    "REQ": 14,
+    "CLOSE": 7
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "replay of public signed events sampled from wss://relay.ngit.dev",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 30,
+    "rowHeightsPx": {
+     "28": 30
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n134\n1/1\nBCH Reply Guy\n20m ago\nRowan\nreview and CI gate satisfied\n20m ago\nRowan\n25m ago\nGrawk Physics Lead\n26m ago\nGrawk Physics Lead\n26m ago\ngreenart7c3\n26m ago\nGrawk Physics Geometry\nGH-17 expanding host\n27m ago\nFive\n28m ago\nGrawk Physics Lead\n29m ago\n20f3:4a7e\n29m ago\nflorian\n30m ago\nRowan\n31m ago\nVyram Kraven\nSigner error keeps appearing.\n32m ago\nDanny the Cyber Guy\n32m ago\nVyram Kraven\nNew Channels Messages Not Loading In Communities\n34m ago\nGrawk Physics Geometry\nGH-16 escape Theorem W: compact slice\n35m ago\nflorian\nnostube\n36m ago\nCordn App\n37m ago\nOffline Speech to Text\n41m ago\nnomadshiba | XBT\n41m ago\narchjourney\n41m ago\ndd17:5e67\n44m ago\nMORP Cleaner\n49m ago\ndoroboneko\n51m ago\nRowan\n53m ago\nRowan\nwork in progress\n53m ago\nRowan\nfix(sync): bound reconciliation evidence below the mailbox ceiling\n54m ago\nnomadshiba | XBT\n55m ago\nmapeira-vps\n56m ago\nMORP Builder\n57m ago"
+  },
+  {
+   "file": "main-real-mobile.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "ago",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "0.8",
+   "framesSentByType": {
+    "REQ": 16,
+    "CLOSE": 8
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "replay of public signed events sampled from wss://relay.ngit.dev",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 28,
+    "rowHeightsPx": {
+     "28": 28
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n134\n1/1\nBCH Reply Guy\n20m ago\nRowan\nreview and CI gate satisfied\n20m ago\nRowan\n25m ago\nGrawk Physics Lead\n26m ago\nGrawk Physics Lead\n26m ago\ngreenart7c3\n26m ago\nGrawk Physics Geometry\nGH-17 expanding host\n27m ago\nFive\n28m ago\nGrawk Physics Lead\n29m ago\n20f3:4a7e\n29m ago\nflorian\n30m ago\nRowan\n31m ago\nVyram Kraven\nSigner error keeps appearing.\n32m ago\nDanny the Cyber Guy\n32m ago\nVyram Kraven\nNew Channels Messages Not Loading In Communities\n34m ago\nGrawk Physics Geometry\nGH-16 escape Theorem W: compact slice\n35m ago\nflorian\nnostube\n36m ago\nCordn App\n38m ago\nOffline Speech to Text\n41m ago\nnomadshiba | XBT\n41m ago\narchjourney\n41m ago\ndd17:5e67\n44m ago\nMORP Cleaner\n49m ago\ndoroboneko\n51m ago\nRowan\n53m ago\nRowan\nwork in progress\n53m ago\nRowan\nfix(sync): bound reconciliation evidence below the mailbox ceiling\n54m ago\nnomadshiba | XBT\n56m ago"
+  },
+  {
+   "file": "pr-real-desktop.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "ago",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "1.0",
+   "framesSentByType": {
+    "REQ": 16,
+    "CLOSE": 15
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "replay of public signed events sampled from wss://relay.ngit.dev",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 30,
+    "rowHeightsPx": {
+     "28": 30
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n134\n1/1\nBCH Reply Guy\nbchnostr\nmain\n7f11c3f\n20m ago\nRowan\nwyrd\nopened\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\nreview and CI gate satisfied\n20m ago\nRowan\nwyrd\npushed\n5f8ddbe\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\n25m ago\nGrawk Physics Lead\nphysics\nmain\n6a53f21\n26m ago\nGrawk Physics Lead\nphysics\nmerged\nGH-16 escape Theorem W: compact slice\n26m ago\ngreenart7c3\nAmber\nmaster\nd354d22\n27m ago\nGrawk Physics Geometry\nphysics\nGH-17 expanding host\n27m ago\nFive\nfreedom-builders\nmain\n317e578\n28m ago\nGrawk Physics Lead\nphysics\nmerged\nGH-15 CTC-free host: occurrences under (c)\n29m ago\n20f3:4a7e\nnuts\nmain\n8f83a97\n29m ago\nflorian\nnostube\nmain\ndec179c\n30m ago\nRowan\nwyrd\npushed\ncd21e84\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\n32m ago\nVyram Kraven\nposterchanai\nSigner error keeps ap"
+  },
+  {
+   "file": "pr-real-mobile.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "waitedFor": "ago",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "0.8",
+   "framesSentByType": {
+    "REQ": 14,
+    "CLOSE": 7
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "replay of public signed events sampled from wss://relay.ngit.dev",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 28,
+    "rowHeightsPx": {
+     "28": 28
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 0,
+   "visibleText": "LIVE\n134\n1/1\nBCH Reply Guy\nbchnostr\nmain\n20m ago\nRowan\nopened\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\nreview and CI gate satisfied\n20m ago\nRowan\npushed\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\n25m ago\nGrawk Physics Lead\nphysics\nmain\n26m ago\nGrawk Physics Lead\nmerged\nGH-16 escape Theorem W: compact slice\n26m ago\ngreenart7c3\nAmber\nmaster\n27m ago\nGrawk Physics Geometry\nGH-17 expanding host\n27m ago\nFive\nfreedom-builders\nmain\n28m ago\nGrawk Physics Lead\nmerged\nGH-15 CTC-free host: occurrences under (c)\n29m ago\n20f3:4a7e\nnuts\nmain\n29m ago\nflorian\nnostube\nmain\n30m ago\nRowan\npushed\nfeat(desktop): define desktop lifecycle contract, remove tray as product surface\n32m ago\nVyram Kraven\nSigner error keeps appearing.\n32m ago\nDanny the Cyber Guy\npushed\nAdd experimental device linking on Linux\n33m ago\nVyram Kraven\nNew Channe"
+  },
+  {
+   "file": "main-opened-desktop.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "afterClick": {
+    "clicked": "fiatjaf not worth it 3h ago",
+    "targetsBefore": 6,
+    "targets": [
+     "http://localhost:<preview>/"
+    ]
+   },
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 30,
+    "CLOSE": 16
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 8,
+   "visibleText": "Note, Patch, Pull Request, +8\nLIVE\n23\n1/1\nDanny the Cyber Guy\n30m ago\nDanConwayDev\n58m ago\nMaintainer With An Extremely Long Display Name\nOpened issue\n1h ago\nfiatjaf\nFixed in nostr:nevent1qqsw8rjmt46gykfv6q8cw549dduuauugl4l8mdhnxtgtyl9lckf example.com/commit/abc and released\n1h ago\n9f4e:42a0\n2h ago\nDanConwayDev\n2h ago\nfiatjaf\nnot worth it\n3h ago\nfiatjaf\nwork in progress\n3h ago\nDanConwayDev\n4h ago\nDanny the Cyber Guy\n4h ago\n9f4e:42a0\n5h ago\nDanConwayDev\ngamestr\n5h ago\n9f4e:42a0\n6h ago\nMaintainer With An Extremely Long Display Name\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that support neither\n7h ago\n9f4e:42a0\n<img src=x onerror=alert(1)> line two <b>bold</b> ‮evil\n7h ago\n9f4e:42a0\n8h ago\n9f4e:42a0\n8h ago\nMaintainer With An Extremely Long Display Name\nA plain note from the same long-named author, to show a neighbouring n"
+  },
+  {
+   "file": "main-opened-mobile.png",
+   "build": "f0c6a7a (origin/main)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "afterClick": {
+    "clicked": "fiatjaf not worth it 3h ago",
+    "targetsBefore": 6,
+    "targets": [
+     "http://localhost:<preview>/"
+    ]
+   },
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 30,
+    "CLOSE": 16
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 9,
+    "problems": [
+     "row overflow: Danny the Cyber Guy 30m ago",
+     "child 1 outside row: Danny the Cyber Guy 30m ago",
+     "child 2 outside row: Danny the Cyber Guy 30m ago",
+     "child 3 outside row: Danny the Cyber Guy 30m ago",
+     "row overflow: DanConwayDev 59m ago",
+     "child 3 outside row: DanConwayDev 59m ago"
+    ]
+   },
+   "idLookupsSent": 8,
+   "visibleText": "Note, Patch, Pull Request, +8\nLIVE\n23\n1/1\nDanny the Cyber Guy\n30m ago\nDanConwayDev\n59m ago\nMaintainer With An Extremely Long Display Name\nOpened issue\n1h ago\nfiatjaf\nFixed in nostr:nevent1qqsw8rjmt46gykfv6q8cw549dduuauugl4l8mdhnxtgtyl9lckf example.com/commit/abc and released\n1h ago\n9f4e:42a0\n2h ago\nDanConwayDev\n2h ago\nfiatjaf\nnot worth it\n3h ago\nfiatjaf\nwork in progress\n3h ago\nDanConwayDev\n4h ago\nDanny the Cyber Guy\n4h ago\n9f4e:42a0\n5h ago\nDanConwayDev\ngamestr\n5h ago\n9f4e:42a0\n6h ago\nMaintainer With An Extremely Long Display Name\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that support neither\n7h ago\n9f4e:42a0\n<img src=x onerror=alert(1)> line two <b>bold</b> ‮evil\n7h ago\n9f4e:42a0\n8h ago\n9f4e:42a0\n8h ago\nMaintainer With An Extremely Long Display Name\nA plain note from the same long-named author, to show a neighbouring n"
+  },
+  {
+   "file": "pr-opened-desktop.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "1440x900@1x",
+   "account": "none (fresh profile, logged out)",
+   "afterClick": {
+    "clicked": "fiatjaf wyrd closed not worth it 3h ago",
+    "targetsBefore": 6,
+    "targets": [
+     "http://localhost:<preview>/"
+    ]
+   },
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 38,
+    "CLOSE": 22
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 13,
+   "visibleText": "Note, Patch, Pull Request, +8\nLIVE\n23\n1/1\nDanny the Cyber Guy\ndarkmatter-linux\npushed\nbb82030\nto a pull request\n30m ago\nDanConwayDev\ndarkmatter-linux\nmerged\nca0df2c\n58m ago\nMaintainer With An Extremely Long Display Name\npaff\nopened\nOpened issue\n1h ago\nfiatjaf\npaff\nresolved\nFixed in and released\n1h ago\n9f4e:42a0\nMORP-Box\npushed\n6ca202c\nto a pull request\n2h ago\nDanConwayDev\nSakura\nmerged\n2h ago\nfiatjaf\nwyrd\nclosed\nnot worth it\n3h ago\nfiatjaf\ndarkmatter-linux\ndraft\nwork in progress\n3h ago\nDanConwayDev\nPIPE-NERD\nmain\n33112ee\n4h ago\nDanny the Cyber Guy\noffline-speech-to-text-transcription-toolkit\n2 refs\n4h ago\n9f4e:42a0\nempty-state\nno refs\n5h ago\nDanConwayDev\ngamestr\nLeaderboards and achievements for games, published as nostr events\n5h ago\n9f4e:42a0\nkilowallet-desktop\n6h ago\nMaintainer With An Extremely Long Display Name\nUntitled patch\n6h ago\nDanny the Cyber Guy\na-repository-with-a-really-lon"
+  },
+  {
+   "file": "pr-opened-mobile.png",
+   "build": "4279bc0 (PR head)",
+   "viewport": "390x844@2x",
+   "account": "none (fresh profile, logged out)",
+   "afterClick": {
+    "clicked": "fiatjaf wyrd closed not worth it 3h ago",
+    "targetsBefore": 6,
+    "targets": [
+     "http://localhost:<preview>/"
+    ]
+   },
+   "waitedFor": "gm",
+   "clicked": null,
+   "reached": true,
+   "secondsToState": "2.3",
+   "framesSentByType": {
+    "REQ": 36,
+    "CLOSE": 33
+   },
+   "websocketsOpened": [
+    "ws://localhost:<port>/",
+    "wss://indexer.coracle.social/",
+    "wss://nos.lol/",
+    "wss://purplepag.es/",
+    "wss://relay.damus.io/",
+    "wss://relay.snort.social/",
+    "wss://relay.vertexlab.io/",
+    "wss://user.kindpag.es/"
+   ],
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "WebSocket connection to 'wss://relay.damus.io/' failed: Error during WebSocket handshake: Unexpected response code: 503",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()"
+   ],
+   "source": "unsigned local fixtures",
+   "url": "http://localhost:<port>/run?cmd=req -k 1,1617,1618,1619,1621,1630,1631,1632,1633,30617,30618 -l 200 --view compact ws://localhost:<port>",
+   "layout": {
+    "rows": 23,
+    "rowHeightsPx": {
+     "28": 23
+    },
+    "documentOverflowsViewport": false,
+    "rowsOverflowingOrColliding": 0,
+    "problems": []
+   },
+   "idLookupsSent": 13,
+   "visibleText": "Note, Patch, Pull Request, +8\nLIVE\n23\n1/1\nDanny the Cyber Guy\npushed\nto a pull request\n30m ago\nDanConwayDev\nmerged\n59m ago\nMaintainer With An Extremely Long Display Name\nopened\nOpened issue\n1h ago\nfiatjaf\nresolved\nFixed in and released\n1h ago\n9f4e:42a0\npushed\nto a pull request\n2h ago\nDanConwayDev\nmerged\n2h ago\nfiatjaf\nclosed\nnot worth it\n3h ago\nfiatjaf\ndraft\nwork in progress\n3h ago\nDanConwayDev\nPIPE-NERD\n4h ago\nDanny the Cyber Guy\noffline-speech-to-text-transcription-toolkit\n4h ago\n9f4e:42a0\nempty-state\n5h ago\nDanConwayDev\ngamestr\nLeaderboards and achievements for games, published as nostr events\n5h ago\n9f4e:42a0\nkilowallet-desktop\n6h ago\nMaintainer With An Extremely Long Display Name\nUntitled patch\n6h ago\nDanny the Cyber Guy\nRender Kitty graphics and Nerd Font icons in Terminal, with a fallback for terminals that support neither\n7h ago\n9f4e:42a0\n<img src=x onerror=alert(1)> line two <b>"
+  }
+ ]
+}

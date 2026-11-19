@@ -15,6 +15,14 @@ const REPLACEABLE_END = 20000;
 const PARAMETERIZED_REPLACEABLE_START = 30000;
 const PARAMETERIZED_REPLACEABLE_END = 40000;
 
+/**
+ * The author keeps the width of its name, up to 30% of the row, and
+ * truncates past that. Uncapped, a long display name took the whole line on
+ * a phone: the preview got no width and the timestamp was pushed off the
+ * right edge. On a wide row 30% is more than any name needs.
+ */
+const AUTHOR = "shrink-0 max-w-[30%]";
+
 interface CompactEventRowProps {
   event: NostrEvent;
 }
@@ -80,12 +88,9 @@ export function CompactEventRow({ event }: CompactEventRowProps) {
 
       {/* Author */}
       {event.kind === kinds.Zap && getZapSender(event) ? (
-        <UserName
-          pubkey={getZapSender(event) as string}
-          className="shrink-0 truncate"
-        />
+        <UserName pubkey={getZapSender(event) as string} className={AUTHOR} />
       ) : (
-        <UserName pubkey={event.pubkey} className="shrink-0 truncate" />
+        <UserName pubkey={event.pubkey} className={AUTHOR} />
       )}
 
       {/* Kind-specific or default preview */}
