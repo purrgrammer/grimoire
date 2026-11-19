@@ -99,6 +99,13 @@ import { GenericRepostCompactPreview } from "./GenericRepostCompactPreview";
 import { ZapCompactPreview } from "./ZapCompactPreview";
 import { OnchainZapCompactPreview } from "./OnchainZapCompactPreview";
 import { VoiceMessageCompactPreview } from "./VoiceMessageCompactPreview";
+import {
+  GitStatusCompactPreview,
+  GitTicketCompactPreview,
+  PullRequestUpdateCompactPreview,
+  RepositoryCompactPreview,
+  RepositoryStateCompactPreview,
+} from "./GitCompactPreviews";
 
 registerCompactRenderer(6, RepostCompactPreview);
 registerCompactRenderer(7, ReactionCompactPreview);
@@ -107,3 +114,17 @@ registerCompactRenderer(9735, ZapCompactPreview);
 registerCompactRenderer(8333, OnchainZapCompactPreview);
 registerCompactRenderer(1222, VoiceMessageCompactPreview);
 registerCompactRenderer(1244, VoiceMessageCompactPreview);
+
+// NIP-34 git events. The default preview has only a title to go on, and a
+// status, a PR update and a repository state have none — see
+// GitCompactPreviews.tsx for what each row says instead.
+registerCompactRenderer(1617, GitTicketCompactPreview);
+registerCompactRenderer(1618, GitTicketCompactPreview);
+registerCompactRenderer(1619, PullRequestUpdateCompactPreview);
+registerCompactRenderer(1621, GitTicketCompactPreview);
+registerCompactRenderer(1630, GitStatusCompactPreview);
+registerCompactRenderer(1631, GitStatusCompactPreview);
+registerCompactRenderer(1632, GitStatusCompactPreview);
+registerCompactRenderer(1633, GitStatusCompactPreview);
+registerCompactRenderer(30617, RepositoryCompactPreview);
+registerCompactRenderer(30618, RepositoryStateCompactPreview);
