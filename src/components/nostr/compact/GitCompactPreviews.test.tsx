@@ -32,23 +32,21 @@ import {
 /**
  * What a row says, for each git kind, with and without the event it points at.
  *
- * The EventStore is replaced by a map, so "the ticket is in hand" and "the
- * ticket never arrived" are both one line of setup. The loaders are replaced
- * by spies that must stay untouched: a compact row reads the store and never
- * asks a relay, and the last test fails if a later change reaches for
- * `useNostrEvent` to fill a title in.
+ * `useStoredEvent` is replaced by a map, so "the ticket is in hand" and "the
+ * ticket never arrived" are both one line of setup; that the hook itself
+ * never loads is `useStoredEvent.test.ts`. The loaders are replaced by spies
+ * that must stay untouched: the last test fails if a later change reaches
+ * for `useNostrEvent` to fill a title in.
  */
 const stored = new Map<string, NostrEvent>();
 const storeReads = vi.fn();
 
-vi.mock("applesauce-react/hooks", () => ({
-  useEventStore: () => ({
-    event: (id: string) => {
-      storeReads(id);
-      return stored.get(id);
-    },
-  }),
-  use$: (factory: () => unknown) => factory(),
+vi.mock("@/hooks/useStoredEvent", () => ({
+  useStoredEvent: (id: string | undefined) => {
+    if (!id) return undefined;
+    storeReads(id);
+    return stored.get(id);
+  },
 }));
 
 const loaderCalls = vi.hoisted(() => vi.fn());

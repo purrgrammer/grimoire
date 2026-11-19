@@ -24,10 +24,11 @@
  * the title of that event is the best thing the row could show — but a feed
  * of statuses would then send a lookup per row, and send it again each time a
  * row whose ticket no relay holds scrolls back into view. So the ticket is
- * read from the EventStore and nowhere else: in a git feed it has usually
- * arrived through the same subscription, and the row picks it up reactively
- * when it does. Until then the row is built from tags alone and still reads
- * as a sentence — "wyrd closed not worth it".
+ * read with `useStoredEvent`, which watches the EventStore and never loads
+ * (`eventStore.event()` would: see that hook). In a git feed the ticket has
+ * usually arrived through the same subscription, and the row picks it up
+ * reactively when it does. Until then the row is built from tags alone and
+ * still reads as a sentence — "wyrd closed not worth it".
  *
  * The row opens the event, as every compact row does. Nothing inside the
  * preview is a second click target: on a 390px line the author already is
@@ -39,9 +40,9 @@
  */
 
 import type { NostrEvent } from "@/types/nostr";
-import { use$, useEventStore } from "applesauce-react/hooks";
 import { getTagValue } from "applesauce-core/helpers";
 import { cn } from "@/lib/utils";
+import { useStoredEvent } from "@/hooks/useStoredEvent";
 import {
   getRepositoryDescription,
   getRepositoryName,
@@ -62,15 +63,6 @@ import {
   type GitStatusVerb,
 } from "@/lib/git-compact";
 import { getStatusColorClass } from "../StatusIndicator";
-
-/**
- * An event that is already in the EventStore, or `undefined`. Reactive: it
- * fills in if the event arrives later. It never asks a relay.
- */
-function useStoredEvent(id: string | undefined): NostrEvent | undefined {
-  const eventStore = useEventStore();
-  return use$(() => (id ? eventStore.event(id) : undefined), [id]);
-}
 
 /** The preview is its own query container: see "context yields" above. */
 const ROW = "@container flex w-full min-w-0 items-center gap-1.5 text-sm";
