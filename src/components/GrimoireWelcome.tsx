@@ -11,14 +11,14 @@ interface GrimoireWelcomeProps {
 const EXAMPLE_COMMANDS = [
   { command: "help", description: "Browse the command reference" },
   {
-    command: "chat groups.0xchat.com'NkeVhXuWHGKKJCpn",
-    description: "Join the Grimoire welcome chat",
-  },
-  {
     command: "profile fiatjaf.com",
     description: "Explore a Nostr profile",
   },
   { command: "req -k 1 -l 20", description: "Query recent notes" },
+  {
+    command: "req -k 777,30777 -a verbiricha@grimoire.rocks",
+    description: "Browse spells and spellbooks by verbiricha",
+  },
 ];
 
 export function GrimoireWelcome({
@@ -26,7 +26,7 @@ export function GrimoireWelcome({
   onExecuteCommand,
 }: GrimoireWelcomeProps) {
   return (
-    <div className="h-full w-full flex items-center justify-center">
+    <div className="h-full w-full flex items-center justify-center px-4">
       <div className="flex flex-col items-center gap-8">
         {/* Desktop: ASCII art */}
         <div className="hidden md:block">
