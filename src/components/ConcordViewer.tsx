@@ -62,7 +62,6 @@ import {
   buildBrowserGroupUpdate,
   buildConcordDmUpdate,
   buildConcordWindowUpdate,
-  type BrowserCommand,
 } from "@/lib/concord/window-props";
 import { Nip29GroupList } from "./nip29/Nip29GroupList";
 import { groupKey, type GroupSelection } from "@/lib/nip29/group-selection";
@@ -132,14 +131,6 @@ interface ConcordViewerProps {
   groupRelay?: string;
   /** The window these props belong to, when there is one to write back to. */
   windowId?: string;
-  /**
-   * Which command mounted this browser.
-   *
-   * `concord` is the community-first window that already exists in published
-   * spellbooks; `chat` is the unified one. The same component either way — the
-   * only difference is the command a navigation writes back.
-   */
-  command?: BrowserCommand;
 }
 
 /**
@@ -156,7 +147,6 @@ export function ConcordViewer({
   groupId,
   groupRelay,
   windowId,
-  command = "concord",
 }: ConcordViewerProps) {
   const isMobile = useIsMobile();
   const { state: grimoire, updateWindow } = useGrimoire();
@@ -585,10 +575,10 @@ export function ConcordViewer({
       if (!existing) return;
       updateWindow(
         windowId,
-        buildConcordWindowUpdate(existing, idHex, channelIdHex, command),
+        buildConcordWindowUpdate(existing, idHex, channelIdHex),
       );
     },
-    [command, grimoire.windows, updateWindow, windowId],
+    [grimoire.windows, updateWindow, windowId],
   );
 
   const handleChannelSelect = useCallback(
@@ -654,11 +644,11 @@ export function ConcordViewer({
       if (windowId) {
         const existing = grimoire.windows[windowId]?.props;
         if (existing)
-          updateWindow(windowId, buildConcordDmUpdate(existing, peer, command));
+          updateWindow(windowId, buildConcordDmUpdate(existing, peer));
       }
       if (isMobile) setSidebarOpen(false);
     },
-    [command, grimoire.windows, isMobile, updateWindow, windowId],
+    [grimoire.windows, isMobile, updateWindow, windowId],
   );
 
   /**
@@ -825,13 +815,12 @@ export function ConcordViewer({
               existing,
               selection.groupId,
               selection.relayUrl,
-              command,
             ),
           );
       }
       if (isMobile) setSidebarOpen(false);
     },
-    [command, grimoire.windows, isMobile, updateWindow, windowId],
+    [grimoire.windows, isMobile, updateWindow, windowId],
   );
 
   /**
@@ -1577,7 +1566,7 @@ function CommunityRow({
   const icon = useConcordImage(community.icon);
   const label = community.name || community.idHex.slice(0, 8);
   const hasUnread = (community.unread?.count ?? 0) > 0;
-  // The full id, not the prefix the row displays: it is what `concord <id>`
+  // The full id, not the prefix the row displays: it is what `chat <id>`
   // takes back, and what names the community in a filter or a bug report.
   const copyId = () => void navigator.clipboard.writeText(community.idHex);
   return (

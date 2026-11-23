@@ -12,22 +12,30 @@ describe("reconstructCommand", () => {
   // The toolbar falls back to this whenever a window has no stored
   // `commandString` — copy-command and save-as-spell both go through it — so a
   // missing case is a spell that reopens on the wrong thing.
-  it("names the community a Concord window is on", () => {
-    expect(reconstructCommand(win("concord", { communityId: COMMUNITY }))).toBe(
-      `concord ${COMMUNITY}`,
-    );
-  });
-
-  it("leaves the channel out, because a channel has no address to type", () => {
+  it("rebuilds a chat browser on a community as bare chat", () => {
+    // `chat <identifier>` is a single-conversation window; the browser's
+    // selection rides in its props, never in the command.
     expect(
       reconstructCommand(
-        win("concord", { communityId: COMMUNITY, channelId: "c".repeat(64) }),
+        win("chat", {
+          identifier: { type: "browser" },
+          communityId: COMMUNITY,
+          channelId: "c".repeat(64),
+        }),
       ),
-    ).toBe(`concord ${COMMUNITY}`);
+    ).toBe("chat");
   });
 
-  it("falls back to the bare command before a community is chosen", () => {
-    expect(reconstructCommand(win("concord", {}))).toBe("concord");
+  it("names a saved window of a removed app by its own app id, not a replacement", () => {
+    // `concord` was removed; a window saved by it must not be rebuilt as some
+    // other command that would then run as if the user had typed it.
+    expect(reconstructCommand(win("concord", { communityId: COMMUNITY }))).toBe(
+      "concord",
+    );
+    expect(reconstructCommand(win("ai", { prompt: "hi" }))).toBe("ai");
+    expect(reconstructCommand(win("agent", { agent: "a".repeat(64) }))).toBe(
+      "agent",
+    );
   });
 
   it("still falls through to the app id for a window it knows nothing about", () => {

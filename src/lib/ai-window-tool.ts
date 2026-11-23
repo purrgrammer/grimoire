@@ -8,10 +8,8 @@ import type { AppId } from "@/types/app";
  * The executor behind `grimoire.window`, which needs application state.
  *
  * Every other tool is pure and lives beside its schema in the registry; this
- * one adds a window, so the caller supplies `addWindow` — Hex's viewer from its
- * own render, the WebMCP host from the shell. Shared because both surfaces
- * must refuse the same commands: the refusal list is the safety property, and
- * two copies of it drift.
+ * one adds a window, so the caller — the WebMCP host in the shell — supplies
+ * `addWindow`. The refusal list is the safety property.
  */
 export function createWindowExecutor(
   addWindow: (

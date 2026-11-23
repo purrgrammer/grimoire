@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 /**
  * The mempool.space mark, for a link to a Bitcoin transaction.
  *
- * Vendored under `public/` rather than hotlinked, for the same reason Hex's
- * face is: a mark that only renders when someone else's CDN is reachable is
- * not much of a mark. It also matters more here than for an avatar — loading
+ * Vendored under `public/` rather than hotlinked: a mark that only renders
+ * when someone else's CDN is reachable is not much of a mark. It also matters
+ * more here than for an avatar would — loading
  * it from mempool.space would tell them, on render and without the reader
  * doing anything, that this person is looking at a page about a transaction.
  * Following the link says that deliberately; the icon should not say it first.

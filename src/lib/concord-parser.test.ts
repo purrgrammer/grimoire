@@ -3,9 +3,9 @@
  *
  * `resolveStoredCommunity` exists so `chat` can share its single argument with
  * every NIP-19 identifier there is: it must answer "this is a community I hold"
- * or nothing at all, never "probably". `parseConcordCommand` is the lenient one
- * — `concord` has no other meaning for its argument, so an unresolved query is
- * carried through as a prefix rather than refused.
+ * or nothing at all, never "probably". `call` is the lenient one — its first
+ * argument has no other Concord meaning, so an unresolved query is carried
+ * through as a prefix rather than refused.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BehaviorSubject } from "rxjs";
@@ -39,7 +39,7 @@ vi.mock("@/services/concord-state", () => ({
   readStoredState: vi.fn(async () => undefined),
 }));
 
-const { resolveStoredCommunity, parseConcordCommand, parseCallCommand } =
+const { resolveStoredCommunity, parseCallCommand } =
   await import("./concord-parser");
 
 describe("resolveStoredCommunity", () => {
@@ -80,29 +80,6 @@ describe("resolveStoredCommunity", () => {
   });
 });
 
-describe("parseConcordCommand", () => {
-  beforeEach(() => active$.next({ pubkey: VIEWER }));
-
-  it("resolves a hit to its full id and a title", async () => {
-    await expect(parseConcordCommand(["Bitcoin", "Builders"])).resolves.toEqual(
-      {
-        communityId: BUILDERS,
-        dynamicTitle: "Bitcoin Builders",
-      },
-    );
-  });
-
-  it("carries a miss through as a prefix — the vault may not have synced", async () => {
-    await expect(parseConcordCommand(["nostrica"])).resolves.toEqual({
-      communityId: "nostrica",
-    });
-  });
-
-  it("opens the whole list with no argument", async () => {
-    await expect(parseConcordCommand([])).resolves.toEqual({});
-  });
-});
-
 describe("parseCallCommand", () => {
   beforeEach(() => active$.next({ pubkey: VIEWER }));
 
@@ -112,6 +89,20 @@ describe("parseCallCommand", () => {
     await expect(parseCallCommand(["bitcoin", "general"])).resolves.toEqual({
       protocol: "concord",
       communityId: BUILDERS,
+    });
+  });
+
+  it("resolves a community with no channel to its full id", async () => {
+    await expect(parseCallCommand(["bitcoin"])).resolves.toEqual({
+      protocol: "concord",
+      communityId: BUILDERS,
+    });
+  });
+
+  it("carries a miss through as a prefix — the vault may not have synced", async () => {
+    await expect(parseCallCommand(["NostRica"])).resolves.toEqual({
+      protocol: "concord",
+      communityId: "nostrica",
     });
   });
 
@@ -133,7 +124,7 @@ describe("parseCallCommand", () => {
   });
 
   // Only when the first token looks like a host: a two-word community name is
-  // not a group, and `parseConcordCommand` joins its arguments into one query.
+  // not a group, so the first word is read as the community.
   it("does not rejoin two words that are a community name", async () => {
     const parsed = await parseCallCommand(["bitcoin", "builders"]);
     expect(parsed.protocol).toBe("concord");

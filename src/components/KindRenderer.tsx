@@ -10,7 +10,6 @@ import {
   getContentTypeDescription,
 } from "@/lib/nostr-schema";
 import { CenteredContent } from "./ui/CenteredContent";
-import { AskHexButton } from "./ai/AskHexButton";
 import {
   isReplaceableKind,
   isEphemeralKind,
@@ -55,13 +54,6 @@ export default function KindRenderer({ kind }: { kind: number }) {
           <h1 className="text-2xl font-bold mb-1">{kindInfo.name}</h1>
           <p className="text-muted-foreground">{kindInfo.description}</p>
         </div>
-        {/* Grounded in this kind's registry entry and the NIP that defines it. */}
-        <AskHexButton
-          className="self-start text-xs"
-          label={`ASK HEX KIND ${kind}`}
-          target={{ type: "kind", value: String(kind) }}
-          title={`Ask Hex about kind ${kind}`}
-        />
       </div>
 
       {/* Details Grid */}

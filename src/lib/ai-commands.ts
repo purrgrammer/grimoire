@@ -4,7 +4,8 @@ import type { AppId } from "@/types/app";
 import { manPages } from "@/types/man";
 
 /**
- * Grimoire commands proposed by a model.
+ * Grimoire commands proposed by an agent (WebMCP's `grimoire.command` and
+ * `grimoire.window`).
  *
  * The model writes commands; the page decides whether they may run. Two rules
  * make that safe. Only names in `manPages` are recognised at all, so an
@@ -31,9 +32,6 @@ export const PROPOSAL_DENIED: ReadonlySet<AppId> = new Set([
 export const READABLE_COMMANDS: string[] = Object.keys(manPages)
   .filter((name) => !PROPOSAL_DENIED.has(manPages[name].appId))
   .sort();
-
-/** Fence language a model uses to propose commands. */
-export const COMMAND_FENCE = "grimoire";
 
 export interface ProposedCommand {
   /** The line as written, shown on the chip. */
@@ -75,14 +73,6 @@ export function proposeCommand(line: string): ProposedCommand | undefined {
         }
       : {}),
   };
-}
-
-/** Validate a whole fenced block, dropping lines that are not commands. */
-export function proposeCommands(block: string): ProposedCommand[] {
-  return block
-    .split("\n")
-    .map(proposeCommand)
-    .filter((proposed): proposed is ProposedCommand => proposed != null);
 }
 
 export interface ResolvedCommand {

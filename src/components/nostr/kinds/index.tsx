@@ -62,11 +62,6 @@ import { Kind39701Renderer } from "./BookmarkRenderer";
 import { GenericRelayListRenderer } from "./GenericRelayListRenderer";
 import { PublicChatsRenderer } from "./PublicChatsRenderer";
 import { LiveActivityRenderer } from "./LiveActivityRenderer";
-import { AgentTurnRenderer } from "./AgentTurnRenderer";
-import {
-  AgentDefinitionRenderer,
-  AgentSessionHeadRenderer,
-} from "./AgentSessionRenderers";
 import { LiveActivityDetailRenderer } from "./LiveActivityDetailRenderer";
 import { SpellRenderer, SpellDetailRenderer } from "./SpellRenderer";
 import {
@@ -174,7 +169,6 @@ import { memo } from "react";
 import { NostrEvent } from "@/types/nostr";
 import { getEventFallbackDisplay } from "@/lib/event-fallback";
 import { BaseEventContainer, type BaseEventProps } from "./BaseEventRenderer";
-import { ExplainKindButton } from "../ExplainKindButton";
 import { P2pOrderRenderer } from "./P2pOrderRenderer";
 import { P2pOrderDetailRenderer } from "./P2pOrderDetailRenderer";
 import { BadgeDefinitionRenderer } from "./BadgeDefinitionRenderer";
@@ -334,9 +328,6 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30166: RelayDiscoveryRenderer, // Relay Discovery (NIP-66)
   30267: ZapstoreAppSetRenderer, // Zapstore App Collection
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
-  1777: AgentTurnRenderer, // Agent session turn (NIP-xx)
-  31777: AgentSessionHeadRenderer, // Agent session head (NIP-xx)
-  31779: AgentDefinitionRenderer, // Agent definition (NIP-xx)
   30382: TrustedAssertionRenderer, // User Assertion (NIP-85)
   30383: TrustedAssertionRenderer, // Event Assertion (NIP-85)
   30384: TrustedAssertionRenderer, // Address Assertion (NIP-85)
@@ -390,11 +381,6 @@ const DefaultKindRenderer = memo(function DefaultKindRenderer({
             {display.type === "content" ? display.text : "(empty content)"}
           </pre>
         )}
-        {/* No renderer for this kind, so offer the one thing that can still
-            say what it is. Click-triggered — see ExplainKindButton. */}
-        <div className="mt-1 flex justify-end">
-          <ExplainKindButton event={event} />
-        </div>
       </div>
     </BaseEventContainer>
   );

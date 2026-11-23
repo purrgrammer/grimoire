@@ -35,9 +35,8 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
   useAccountSync();
 
   // One gift-wrap ingester for the whole app, held here rather than by whichever
-  // window happens to be open. Every pane that shows a wrapped event — a
-  // conversation, an agent transcript — is then a pure reader of the local
-  // mirror, which is what they all claim to be.
+  // window happens to be open. Every pane that shows a wrapped event is then a
+  // pure reader of the local mirror, which is what they all claim to be.
   useDmIngest();
 
   // Enforce the kind:10006 blocked relay list. Must be mounted app-wide: the
@@ -66,8 +65,7 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
 
   // Publish grimoire's tools to the browser's own agent (WebMCP). Held at the
   // shell because the tools belong to the document, not to whichever window is
-  // open — an agent asking what this page can do gets the same answer with no
-  // `ai` window in sight. A no-op where `document.modelContext` is absent.
+  // open. A no-op where `document.modelContext` is absent.
   useModelContextTools();
 
   // Keyboard shortcut: Cmd/Ctrl+K

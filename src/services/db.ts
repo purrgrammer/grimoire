@@ -10,7 +10,6 @@ import type {
   SpellbookContent,
   SpellbookEvent,
 } from "@/types/spell";
-import type { ToolRun } from "@/types/tool-part";
 
 export interface Profile extends ProfileContent {
   pubkey: string;
@@ -509,47 +508,6 @@ export interface DmKvRow {
 export const OUTBOX_NEVER = Number.MAX_SAFE_INTEGER;
 
 /**
- * One AI conversation, keyed by the window that holds it. Windows are restored
- * from localStorage on load; this is what makes their turns come back with them.
- *
- * The turn shape is the whole stored record, `toolRuns` included: a row read
- * back has to render the same as the turn that was written, and a type that
- * omits half of it makes a reload look like a different conversation.
- */
-export interface AiConversation {
-  windowId: string; // Primary key
-  /**
-   * What the conversation is grounded in, as `ai` took it: an event, a profile,
-   * a kind or a NIP. Stored because reopening from the index passes only the
-   * conversation id, and without this the subject vanished from a window that
-   * had been asking about it.
-   */
-  target?: { type: "event" | "kind" | "nip"; value: string };
-  turns: Array<{
-    role: "user" | "assistant";
-    content: string;
-    /** Unix seconds. */
-    at?: number;
-    /** Written before reasoning was kept per round. */
-    reasoning?: string;
-    reasoningRounds?: string[];
-    model?: string;
-    usage?: { inputTokens?: number; outputTokens?: number };
-    toolRuns?: ToolRun[];
-    /**
-     * Nostr objects this turn named, kept with it.
-     *
-     * A transcript is full of `nostr:` URIs, and the EventStore is memory: a
-     * conversation reopened tomorrow would render a person as a stub and an
-     * attached note as a dead reference. The events come back into the store on
-     * load, so a mention renders as what it named however long ago it was said.
-     */
-    mentions?: { events?: NostrEvent[]; pubkeys?: string[] };
-  }>;
-  updatedAt: number;
-}
-
-/**
  * A napplet the user has run, so it can be found again.
  *
  * Local rather than a NIP-51 set because nothing specs a kind for a napplet
@@ -609,7 +567,6 @@ export class GrimoireDb extends Dexie {
   dmConversations!: Table<DmConversationRow>;
   dmSeenWraps!: Table<DmSeenWrapRow>;
   dmKv!: Table<DmKvRow>;
-  aiConversations!: Table<AiConversation>;
   napplets!: Table<InstalledNapplet>;
 
   constructor(name: string) {
@@ -1164,7 +1121,10 @@ export class GrimoireDb extends Dexie {
       dmKv: "&key",
     });
 
-    // Version 28: AI conversations, one row per window
+    // Version 28: AI conversations, one row per window. The `ai` window that
+    // read and wrote it was removed; the declaration stays because a Dexie
+    // schema is cumulative, and leaving it untouched keeps existing rows rather
+    // than deleting them in a migration.
     this.version(28).stores({
       aiConversations: "&windowId, updatedAt",
     });

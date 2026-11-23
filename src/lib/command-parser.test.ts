@@ -262,19 +262,46 @@ describe("parseCommandInput - regression tests", () => {
 
 describe("parseCommandInput - shell-quote token shapes", () => {
   it("keeps a question mark instead of stringifying a glob object", () => {
-    const parsed = parseCommandInput("ai what is a relay?");
+    const parsed = parseCommandInput("post what is a relay?");
     expect(parsed.args.join(" ")).toBe("what is a relay?");
     expect(parsed.args.join(" ")).not.toContain("[object Object]");
   });
 
   it("keeps an asterisk", () => {
-    const parsed = parseCommandInput("ai explain kind 1* please");
+    const parsed = parseCommandInput("post explain kind 1* please");
     expect(parsed.args.join(" ")).toBe("explain kind 1* please");
   });
 
   it("keeps a pipe as literal text", () => {
-    const parsed = parseCommandInput("ai a | b");
+    const parsed = parseCommandInput("post a | b");
     expect(parsed.args.join(" ")).toBe("a | b");
+  });
+});
+
+describe("removed commands", () => {
+  // `ai`, `agent` and `concord` were removed. A link, a typed line or a saved
+  // command string naming one must not resolve to any window — and must not be
+  // quietly answered by some other command either.
+  it.each([
+    ["ai what is a relay?", "ai"],
+    ["agent npub1xyz", "agent"],
+    ["concord Bitcoin Builders", "concord"],
+  ])("refuses %s as an unknown command", (input, name) => {
+    const parsed = parseCommandInput(input);
+    expect(parsed.command).toBeUndefined();
+    expect(parsed.error).toBe(`Unknown command: ${name}`);
+  });
+
+  it("offers none of them in the man pages", () => {
+    expect(Object.keys(manPages)).not.toContain("ai");
+    expect(Object.keys(manPages)).not.toContain("agent");
+    expect(Object.keys(manPages)).not.toContain("concord");
+    // Nothing still points readers at them, either.
+    for (const page of Object.values(manPages)) {
+      expect(page.seeAlso ?? [], page.name).not.toContain("concord");
+      expect(page.seeAlso ?? [], page.name).not.toContain("ai");
+      expect(page.seeAlso ?? [], page.name).not.toContain("agent");
+    }
   });
 });
 

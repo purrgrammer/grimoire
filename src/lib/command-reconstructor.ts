@@ -270,13 +270,6 @@ export function reconstructCommand(window: WindowInstance): string {
         return "chat";
       }
 
-      // The community only. A channel has no user-typeable address — there is
-      // no vault-side channel index to resolve a name against — so the channel
-      // rides in the window's props and never in the command. Round-trips
-      // exactly: `parseConcordCommand` takes the same id hex back.
-      case "concord":
-        return props.communityId ? `concord ${props.communityId}` : "concord";
-
       // A call names the channel it is in. Without this, editing a call window
       // rewrites its props to nothing and the pane goes blank.
       case "call":

@@ -24,7 +24,6 @@ import {
   channelUnreadSummary,
   type ChannelUnread,
 } from "@/services/concord-rumor-store";
-import { loadStoredCommunities } from "@/services/concord-communities";
 import { readStoredState } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import type { Community } from "@/lib/concord/types";
@@ -178,55 +177,4 @@ function foldKey(folds: Map<string, FoldOfCommunity>): string {
         `${id}:${fold.channelIds.join("+")}!${[...fold.banned].sort().join("+")}`,
     )
     .join(",");
-}
-
-/**
- * Everything waiting, across every community this account has stored.
- *
- * What a window tile can show: the reader is not looking at the sidebar, so a
- * per-channel number is no use — one number saying "there is something" is.
- * `enabled` is a gate rather than a caller-side `if`, because this runs from
- * the window-title hook, which every open window mounts: without it, ten
- * windows would each re-read the vault to decorate one Concord tile.
- */
-export function useConcordUnreadTotal(enabled: boolean): number {
-  const pubkey = use$(accountManager.active$)?.pubkey;
-  const [foldsOf, setFoldsOf] = useState<Map<string, FoldOfCommunity>>(
-    () => new Map(),
-  );
-
-  useEffect(() => {
-    if (!enabled || !pubkey) return;
-    let cancelled = false;
-    void (async () => {
-      const communities = await loadStoredCommunities(pubkey).catch(() => []);
-      const found = await foldsOfCommunities(communities);
-      if (!cancelled) setFoldsOf(found);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, pubkey]);
-
-  const directoryKey = foldKey(foldsOf);
-
-  const total = useLiveQuery(async () => {
-    if (!enabled || !pubkey) return 0;
-    const nowSecs = Math.floor(Date.now() / 1000);
-    let count = 0;
-    for (const [communityId, fold] of foldsOf) {
-      count += (
-        await communityUnread(
-          pubkey,
-          communityId,
-          fold.channelIds,
-          nowSecs,
-          fold.banned,
-        )
-      ).count;
-    }
-    return count;
-  }, [enabled, pubkey, directoryKey]);
-
-  return total ?? 0;
 }

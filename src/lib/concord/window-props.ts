@@ -9,23 +9,27 @@
  * whoever wrote the newest call.
  *
  * The window's props are also the reload story: `grimoire_v6` persists them, so
- * what this writes is what a Concord window comes back as.
+ * what this writes is what a browser window comes back as.
  */
+
+/**
+ * Whether a window is the chat browser: bare `chat`, which names no single
+ * conversation. The same test `WindowRenderer` routes on.
+ */
+export function isBrowserWindow(window: {
+  appId: string;
+  props?: { identifier?: { type?: string } } | null;
+}): boolean {
+  if (window.appId !== "chat") return false;
+  const identifier = window.props?.identifier;
+  return !identifier || identifier.type === "browser";
+}
 
 /** The subset of a window this helper is allowed to move. */
 export interface ConcordWindowUpdate {
   props: Record<string, unknown>;
   commandString: string;
 }
-
-/**
- * Which command this window answers to.
- *
- * The same browser is mounted under both: `concord` for the community-first
- * window that already exists in published spellbooks, `chat` for the unified
- * one that also lists private conversations and relay groups.
- */
-export type BrowserCommand = "concord" | "chat";
 
 /**
  * Everything that names a selection, so a write can drop what it replaces.
@@ -47,27 +51,19 @@ function withoutSelection(existingProps: Record<string, unknown> | undefined) {
 }
 
 /**
- * The command a window of this kind reopens with.
+ * The command a browser window reopens with: bare `chat`, always.
  *
- * `chat` stays BARE, always. Its appId dispatches on props: `chat <identifier>`
- * is a single-conversation window, so rebuilding the command with an argument
- * would reopen the browser as one pane with no sidebar at all. Concord has no
- * such ambiguity — its appId always means the browser — so it can carry the
- * community in the command the way a reader would type it.
+ * Its appId dispatches on props: `chat <identifier>` is a single-conversation
+ * window, so rebuilding the command with an argument would reopen the browser
+ * as one pane with no sidebar at all. The selection rides in the props.
  */
-function commandFor(
-  command: BrowserCommand,
-  communityIdHex: string | undefined,
-): string {
-  if (command === "chat") return "chat";
-  return communityIdHex ? `concord ${communityIdHex}` : "concord";
-}
+const BROWSER_COMMAND = "chat";
 
 /**
  * The props a Concord window should carry after navigating to this channel.
  *
  * `communityId` is written as the RESOLVED full id even when the window opened
- * on a prefix (`concord 3fa2` is a legal command), so the first navigation
+ * on a prefix (`chat 3fa2` is a legal command), so the first navigation
  * upgrades the window to something that resolves exactly on reload.
  *
  * `channelId` is dropped rather than left stale when there is no channel to
@@ -83,7 +79,6 @@ export function buildConcordWindowUpdate(
   existingProps: Record<string, unknown> | undefined,
   communityIdHex: string,
   channelIdHex?: string,
-  command: BrowserCommand = "concord",
 ): ConcordWindowUpdate {
   return {
     props: {
@@ -91,10 +86,7 @@ export function buildConcordWindowUpdate(
       communityId: communityIdHex,
       ...(channelIdHex ? { channelId: channelIdHex } : {}),
     },
-    // The command has no channel argument — a channel has no user-typeable
-    // address — so the reconstructed command names the community only, and the
-    // channel rides in the props beside it.
-    commandString: commandFor(command, communityIdHex),
+    commandString: BROWSER_COMMAND,
   };
 }
 
@@ -108,16 +100,11 @@ export function buildConcordWindowUpdate(
 export function buildConcordDmUpdate(
   existingProps: Record<string, unknown> | undefined,
   peerHex: string,
-  command: BrowserCommand = "concord",
 ): ConcordWindowUpdate {
   const rest = withoutSelection(existingProps);
-  const communityId =
-    typeof rest.communityId === "string" ? rest.communityId : undefined;
   return {
     props: { ...rest, dmPeer: peerHex },
-    // Still the community's command: a DM has no place in `concord`'s argument
-    // grammar, and `chat npub…` is the address a reader would type for one.
-    commandString: commandFor(command, communityId),
+    commandString: BROWSER_COMMAND,
   };
 }
 
@@ -132,13 +119,10 @@ export function buildBrowserGroupUpdate(
   existingProps: Record<string, unknown> | undefined,
   groupId: string,
   relayUrl: string,
-  command: BrowserCommand = "concord",
 ): ConcordWindowUpdate {
   const rest = withoutSelection(existingProps);
-  const communityId =
-    typeof rest.communityId === "string" ? rest.communityId : undefined;
   return {
     props: { ...rest, groupId, groupRelay: relayUrl },
-    commandString: commandFor(command, communityId),
+    commandString: BROWSER_COMMAND,
   };
 }

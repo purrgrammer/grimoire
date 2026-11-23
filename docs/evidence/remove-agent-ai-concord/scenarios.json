@@ -1,0 +1,818 @@
+[
+  {
+    "file": "pr-legacy-windows-desktop.png",
+    "build": "pr",
+    "scenario": "legacy-windows",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "ai",
+          "agent",
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "AI ai is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Close window AI AI AGENT agent is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Close window AGENT AGENT CONCORD concord is no longer available This window was saved by a command Grimoire removed, so there is nothing to sho"
+  },
+  {
+    "file": "pr-legacy-windows-mobile.png",
+    "build": "pr",
+    "scenario": "legacy-windows",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "ai",
+          "agent",
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "AI ai is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Close window AI AI AGENT agent is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Close window AGENT AGENT CONCORD concord is no longer available This window was saved by a command Grimoire removed, so there is nothing to sho"
+  },
+  {
+    "file": "main-legacy-windows-desktop.png",
+    "build": "main",
+    "scenario": "legacy-windows",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "ai",
+          "agent",
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "AI GM What problem does Nostr actually solve? Explain relays like I run one What is a replaceable event? Send Ctrl ↵ to send, Enter for a new line AI AI AGENT Sign in to read the transcripts addressed to you. AGENT AGENT Concord Direct messages Groups Invites Sign in with a signer that supports NIP-44 to read your Concord communities — the list is encrypted to yourself. No channels here can be ope"
+  },
+  {
+    "file": "main-legacy-windows-mobile.png",
+    "build": "main",
+    "scenario": "legacy-windows",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "ai",
+          "agent",
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "AI GM What problem does Nostr actually solve? Explain relays like I run one What is a replaceable event? Send Ctrl ↵ to send, Enter for a new line AI AI AGENT Sign in to read the transcripts addressed to you. AGENT AGENT Concord No channels here can be opened with the keys you hold. Concord Concord Chat No channels here can be opened with the keys you hold. Chat Chat 1"
+  },
+  {
+    "file": "pr-concord-open-chat-desktop.png",
+    "build": "pr",
+    "scenario": "concord-open-chat",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CONCORD concord is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Use chat instead. Open chat Close window CONCORD CONCORD Chat Direct messages Groups Invites Sign in with a signer that supports NIP-44 to read your Concord communities — the list is encrypted to yourself. No channels here can be opened with the keys you hold. Chat Chat 1"
+  },
+  {
+    "file": "pr-concord-open-chat-mobile.png",
+    "build": "pr",
+    "scenario": "concord-open-chat",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "concord",
+          "chat"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CONCORD concord is no longer available This window was saved by a command Grimoire removed, so there is nothing to show here. Use chat instead. Open chat Close window CONCORD CONCORD Chat No channels here can be opened with the keys you hold. Chat Chat 1"
+  },
+  {
+    "file": "pr-ask-hex-sites-desktop.png",
+    "build": "pr",
+    "scenario": "ask-hex-sites",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "kind",
+          "nip",
+          "profile"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 31,
+      "CLOSE": 13,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pu"
+  },
+  {
+    "file": "pr-ask-hex-sites-mobile.png",
+    "build": "pr",
+    "scenario": "ask-hex-sites",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "kind",
+          "nip",
+          "profile"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 31,
+      "CLOSE": 13,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pu"
+  },
+  {
+    "file": "main-ask-hex-sites-desktop.png",
+    "build": "main",
+    "scenario": "ask-hex-sites",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "kind",
+          "nip",
+          "profile"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 36,
+      "CLOSE": 15,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Ask Hex Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.roc"
+  },
+  {
+    "file": "main-ask-hex-sites-mobile.png",
+    "build": "main",
+    "scenario": "ask-hex-sites",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "kind",
+          "nip",
+          "profile"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 31,
+      "CLOSE": 13,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Ask Hex Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.roc"
+  },
+  {
+    "file": "pr-palette-a-desktop.png",
+    "build": "pr",
+    "scenario": "palette-a",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "pr-palette-a-mobile.png",
+    "build": "pr",
+    "scenario": "palette-a",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "main-palette-a-desktop.png",
+    "build": "main",
+    "scenario": "palette-a",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "main-palette-a-mobile.png",
+    "build": "main",
+    "scenario": "palette-a",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "pr-palette-concord-desktop.png",
+    "build": "pr",
+    "scenario": "palette-concord",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "pr-palette-concord-mobile.png",
+    "build": "pr",
+    "scenario": "palette-concord",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "main-palette-concord-desktop.png",
+    "build": "main",
+    "scenario": "palette-concord",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "main-palette-concord-mobile.png",
+    "build": "main",
+    "scenario": "palette-concord",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "CHAT - Join and participate in NIP-29 relay-based group chats CHAT Grimoire Manual CHAT NAME chat - Join and participate in Nostr chat conversations SYNOPSIS chat [identifier|recipients|community] DESCRIPTION Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one side"
+  },
+  {
+    "file": "pr-run-ai-link-desktop.png",
+    "build": "pr",
+    "scenario": "run-ai-link",
+    "viewport": "desktop",
+    "path": "/run?cmd=ai%20what%20is%20a%20relay%3F",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": []
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Command Error Unknown command: ai Command: ai what is a relay?"
+  },
+  {
+    "file": "pr-run-ai-link-mobile.png",
+    "build": "pr",
+    "scenario": "run-ai-link",
+    "viewport": "mobile",
+    "path": "/run?cmd=ai%20what%20is%20a%20relay%3F",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": []
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Command Error Unknown command: ai Command: ai what is a relay?"
+  },
+  {
+    "file": "main-run-ai-link-desktop.png",
+    "build": "main",
+    "scenario": "run-ai-link",
+    "viewport": "desktop",
+    "path": "/run?cmd=ai%20what%20is%20a%20relay%3F",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": []
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Hex on-device Ask Hex No extension found, so this runs on the browser's own model — nothing leaves the machine. The first answer downloads it. What problem does Nostr actually solve? Explain relays like I run one What is a replaceable event? what is a relay? Send"
+  },
+  {
+    "file": "main-run-ai-link-mobile.png",
+    "build": "main",
+    "scenario": "run-ai-link",
+    "viewport": "mobile",
+    "path": "/run?cmd=ai%20what%20is%20a%20relay%3F",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": []
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Hex on-device Ask Hex No extension found, so this runs on the browser's own model — nothing leaves the machine. The first answer downloads it. What problem does Nostr actually solve? Explain relays like I run one What is a replaceable event? what is a relay? Send"
+  },
+  {
+    "file": "pr-run-reveal-initial-desktop.png",
+    "build": "pr",
+    "scenario": "run-reveal-initial",
+    "viewport": "desktop",
+    "path": "/run?cmd=kind%201",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pubkey "
+  },
+  {
+    "file": "pr-run-reveal-initial-mobile.png",
+    "build": "pr",
+    "scenario": "run-reveal-initial",
+    "viewport": "mobile",
+    "path": "/run?cmd=kind%201",
+    "activeWorkspace": "ws-1",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pubkey "
+  },
+  {
+    "file": "pr-run-reveal-after-click-desktop.png",
+    "build": "pr",
+    "scenario": "run-reveal-after-click",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "3f719de9-d23c-4c36-a942-8966702cc687",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      },
+      {
+        "id": "3f719de9-d23c-4c36-a942-8966702cc687",
+        "number": 3,
+        "apps": [
+          "kind",
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pu"
+  },
+  {
+    "file": "pr-run-reveal-after-click-mobile.png",
+    "build": "pr",
+    "scenario": "run-reveal-after-click",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "d95628d4-a42e-42e3-b53b-17edd4e6e979",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      },
+      {
+        "id": "d95628d4-a42e-42e3-b53b-17edd4e6e979",
+        "number": 3,
+        "apps": [
+          "kind",
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.rocks) p pu"
+  },
+  {
+    "file": "main-run-reveal-after-click-desktop.png",
+    "build": "main",
+    "scenario": "run-reveal-after-click",
+    "viewport": "desktop",
+    "path": "/",
+    "activeWorkspace": "6f23e1c5-e61d-4731-abc3-2b10be602885",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      },
+      {
+        "id": "6f23e1c5-e61d-4731-abc3-2b10be602885",
+        "number": 3,
+        "apps": [
+          "kind",
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 7,
+      "CLOSE": 7,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Ask Hex Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.roc"
+  },
+  {
+    "file": "main-run-reveal-after-click-mobile.png",
+    "build": "main",
+    "scenario": "run-reveal-after-click",
+    "viewport": "mobile",
+    "path": "/",
+    "activeWorkspace": "934c5c74-391c-4edc-a17f-66fa5d5d06a2",
+    "tabs": [
+      {
+        "id": "ws-1",
+        "number": 1,
+        "apps": [
+          "man"
+        ]
+      },
+      {
+        "id": "ws-2",
+        "number": 2,
+        "apps": [
+          "nip"
+        ]
+      },
+      {
+        "id": "934c5c74-391c-4edc-a17f-66fa5d5d06a2",
+        "number": 3,
+        "apps": [
+          "kind",
+          "nip"
+        ]
+      }
+    ],
+    "frames": {
+      "REQ": 8,
+      "CLOSE": 8,
+      "EVENT": 0,
+      "AUTH": 0,
+      "other": 0
+    },
+    "errors": [],
+    "textExcerpt": "Note Note Short Text Note Ask Hex Kind Number 1 Category Core Protocol Event Type Regular Storage Stored by relays Defined in NIP-10 Conventions Grimoire Support Rich rendering Content Free-form text or markdown Supported Tags name value other parameters e id relay (e.g. wss://grimoire.rocks), reply | root, pubkey q id relay (e.g. wss://grimoire.rocks), pubkey q addr relay (e.g. wss://grimoire.roc"
+  }
+]

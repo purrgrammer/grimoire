@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { proposeCommand, proposeCommands } from "./ai-commands";
+import { proposeCommand } from "./ai-commands";
 
 describe("proposeCommand", () => {
   it("recognises a real command, and carries what the palette shows", () => {
@@ -38,26 +38,5 @@ describe("proposeCommand", () => {
       proposeCommand("relay wss://relay.example")?.refusal,
     ).toBeUndefined();
     expect(proposeCommand("kinds")?.refusal).toBeUndefined();
-  });
-});
-
-describe("proposeCommands", () => {
-  it("keeps the commands and drops the prose", () => {
-    const block = [
-      "# these two are worth a look",
-      "nip 65",
-      "not-a-command --flag",
-      "kinds",
-      "",
-    ].join("\n");
-
-    expect(proposeCommands(block).map((p) => p.command)).toEqual([
-      "nip 65",
-      "kinds",
-    ]);
-  });
-
-  it("returns nothing for a block with no commands", () => {
-    expect(proposeCommands("just some text\nand more")).toEqual([]);
   });
 });

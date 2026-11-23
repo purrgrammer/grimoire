@@ -1,4 +1,3 @@
-import { parseAgentCommand } from "@/lib/agent-parser";
 import { parseReqCommand } from "../lib/req-parser";
 import { parseCountCommand } from "../lib/count-parser";
 import type { AppId } from "./app";
@@ -8,15 +7,10 @@ import { parseAppCommand } from "@/lib/napplet-parser";
 import { parseProfileCommand } from "@/lib/profile-parser";
 import { parseRelayCommand } from "@/lib/relay-parser";
 import { resolveNip05Batch, resolveDomainDirectoryBatch } from "@/lib/nip05";
-import {
-  parseCallCommand,
-  parseConcordCommand,
-  resolveStoredCommunity,
-} from "@/lib/concord-parser";
+import { parseCallCommand, resolveStoredCommunity } from "@/lib/concord-parser";
 import { parseChatCommand } from "@/lib/chat-parser";
 import { parseBlossomCommand } from "@/lib/blossom-parser";
 import { parseZapCommand } from "@/lib/zap-parser";
-import { parseAiCommand } from "@/lib/ai-parser";
 
 export interface ManPageEntry {
   name: string;
@@ -610,66 +604,11 @@ export const manPages: Record<string, ManPageEntry> = {
       "call 3fa2c1 9d4e                          By community and channel id prefix",
       "call relay.example.com'bitcoin-dev        A relay group's audio/video space",
     ],
-    seeAlso: ["concord", "chat"],
+    seeAlso: ["chat"],
     appId: "call",
     category: "Nostr",
     argParser: async (args: string[]) => parseCallCommand(args),
   },
-  agent: {
-    name: "agent",
-    section: "1",
-    synopsis: "agent [naddr | <agent-npub> [session-id]]",
-    description:
-      "Read an agent's transcript. An agent — grimoire's own `ai` sessions, a bot like Hex, a coding agent running on your machine — publishes what it did as events (NIP-xx): a session head, one turn per message, and ephemeral deltas while it types. The private copy arrives in your inbox as gift wraps, so this window holds no subscription of its own and works with no relay reachable: everything it shows was decrypted once by the DM inbox and stored locally. ORDERING: a gift wrap's timestamp is randomised up to two days into the past, so a transcript sorted by it would render in near-random order. Order comes from a sequence number inside the sealed payload instead, and each event names the one before it — which is what lets this window say a transcript has a HOLE in it, or has FORKED, rather than quietly showing you a plausible history that never happened. A missing turn is reported; a missing delta is not, because everything a delta carried is repeated in the turn that closes it. TRUST: an agent's key is named inside its own session address, so an event signed by anyone else is dropped before it can be rendered — and for a wrapped copy the seal's signature is the proof, never the wrap's, which is a throwaway key by design. A session is shown as run by a human only when both halves of the binding hold: the agent names its operator, and the operator lists the agent in their kind-30000 set with `d` of `agents`.",
-    options: [
-      {
-        flag: "[naddr]",
-        description:
-          "An naddr for a kind-31777 session head. Carries the agent and the session id together.",
-      },
-      {
-        flag: "[<agent-npub> [session-id]]",
-        description:
-          "An agent's npub or hex pubkey, optionally with the session id the head is filed under. Omit both to browse every session addressed to you.",
-      },
-    ],
-    examples: [
-      "agent                                     Browse every transcript addressed to you",
-      "agent naddr1...                           Open one session",
-      "agent npub1...                            Sessions from one agent",
-      "agent npub1... 3a7c1f9e...                Open a session by id",
-    ],
-    seeAlso: ["chat", "kind", "profile"],
-    appId: "agent",
-    category: "Nostr",
-    argParser: async (args: string[]) => parseAgentCommand(args),
-  },
-  concord: {
-    name: "concord",
-    section: "1",
-    synopsis: "concord [community]",
-    description:
-      'DEPRECATED — superseded by `chat`, which opens the same browser with private conversations and relay groups beside the communities, and takes the same community argument. It still works and is not going anywhere yet. Browse your Concord communities — end-to-end encrypted community channels (CORD-01…08). Opens the community list with channels, members and history; pass a community to jump straight to one. Read-only as to membership and moderation: communities are created, joined, moderated and re-keyed in Armada, and this reads the encrypted membership list Armada publishes. There is no shareable public address to type, because a community id is a hex commitment and its channels live at derived pubkeys — so the optional argument matches against your OWN decrypted list, by name or id prefix. Unread badges, the NEW divider and the tile count are LOCAL: read positions are stored per account on this device, never published (no CORD document defines a read marker), and they are erased when you sign out. They accrue only while a Concord window is open, since that is what holds the subscriptions. MENTIONS: typing @ in a channel suggests that channel\'s own members rather than everyone you have ever seen, and naming someone adds a `p` tag INSIDE the encrypted rumor — sealed, so it names a member to the channel and nothing to any relay, and so no relay filter can ever find it. A message that names you is highlighted in the timeline and badges its channel with an `@`. A threaded reply to your message counts as naming you, because a reply carries a `p` tag for the message it answers; Armada reads it the same way, and it is the rule rather than an accident. NOTIFICATIONS: right-click a channel or a community for All messages / Mentions only / Nothing, cascading channel → community → the default in Settings; the levels live on this device, are never published, and are erased when you sign out. Desktop alerts are off until you switch them on in Settings, which is also what asks the browser for permission. They fire only while a Concord window is open, stay quiet about the channel you are looking at, and never announce anything older than the moment the window opened — a backfill of a week away is history, not news. Chrome on Android and Safari on iOS only show notifications through a service worker, which Grimoire does not use for this: there you get the badges and no alerts. NAVIGATION: clicking a reply preview walks the history backwards until it finds the message it answers, up to ten pages, and says so rather than spinning when the message is beyond what this device can read; the calendar button in the channel header does the same for a date, landing on the first message of that day. DELIVERY: a message you send is queued first and published behind you, so the composer clears at once and a send no relay took shows as "Not sent" in the timeline with Retry and Discard beside it instead of vanishing into a toast. The queue survives a reload and drains itself when a relay comes back. What is stored is the message, not a sealed copy of it: every attempt is rebuilt and signed afresh, so a message that waited carries the time it was finally sent rather than the time it was typed, and a reply whose parent was deleted in the meantime fails outright and says why. Queueing needs your signer, though — a remote bunker that is unreachable refuses the message before it can be queued at all, and the composer keeps your text. Refusals that are not about the network — a ban, a dissolved community, sending too fast — still stop the message before it is queued, exactly as before, and reactions and deletions are never queued: they either go or they tell you. DRAFTS: what you have half-typed stays with the channel you typed it in, reply target included, and is still there after a reload. If the message you were replying to is gone by the time you come back, the reply target drops itself and your text stays. Drafts are per account, live only on this device, and are erased when you sign out. SEARCH: the box above the channel list searches the messages this device has already decrypted — no relay can read them, so there is nothing else to search. Two characters in, results replace the channel: every channel you can open, newest match first, with a toggle to narrow it to the one you are reading. A result is always something the channel itself would show you, because the search runs the same fold the timeline does — a banned author\'s message, a message past its disappearing timer and a message a moderator removed are not in it, and an edited message matches what it says now. Clicking a result opens that channel and pages back for the message; a match deeper than ten pages stays where it is, which is why the result shows the message rather than merely pointing at it. MODERATION: a message a moderator took down leaves a row saying who wrote it and who removed it, with the words gone — a message you deleted yourself leaves nothing, because announcing it would undo the deletion. The guestbook entry under the channel list shows who joined, who left, who was removed and by whom, and who is currently banned; a ban is dated "as of", because what is recorded is the last edit to the banlist naming them rather than the moment it happened.',
-    options: [
-      {
-        flag: "[community]",
-        description:
-          "Optional. Community name (case-insensitive, prefix-matched) or a community_id prefix. Omit to browse them all.",
-      },
-    ],
-    examples: [
-      "concord                                   Browse your Concord communities",
-      "concord Bitcoin Builders                  Open by name",
-      "concord bitcoin                           Open by name prefix",
-      "concord 3fa2c1                            Open by community_id prefix",
-    ],
-    seeAlso: ["chat", "profile"],
-    appId: "concord",
-    category: "Nostr",
-    argParser: async (args: string[]) => parseConcordCommand(args),
-  },
-  // Plural of `app`, the way `nips` is of `nip`: one runs a napplet, the other
-  // lists them.
   apps: {
     name: "apps",
     section: "1",
@@ -732,7 +671,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "chat [identifier|recipients|community]",
     description:
-      "Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one sidebar, each sorted by its most recent message. A Concord community can be named directly — by name or id prefix, matched against your own decrypted list exactly as `concord` does, which `chat` supersedes. Each window keeps its own place, so two of them open two channels. Supports NIP-17 private direct messages, NIP-29 relay-based groups, NIP-53 live activity chat, NIP-10 thread chat, NIP-22 comment threads on any event kind, and multi-room group list interface. A direct message is gift-wrapped (NIP-59): the outer event is signed by a throwaway key, so the relay holding it cannot tell who sent it, and grimoire never authenticates on the socket it publishes one over. Messages are decrypted once and mirrored locally, so a conversation opens with no signer prompt; the first time an account reads its inbox it is asked for permission, because opening a backlog of wraps means two decryptions each. NIP-22 comments work as a catch-all: any event that isn't kind 1 (NIP-10) or a relay group/live activity gets a comment thread. You can also comment on URLs and hashtags. In a room that can page backwards — a relay group, a live chat, a Concord channel — clicking a reply preview fetches history until it finds the message being answered, and the calendar button in the header jumps to a date. A thread or a comment set is loaded whole, so neither applies there. A private conversation can be named by npub, nprofile or NIP-05, and several of them comma-separated open a group — where the participants ARE the conversation's identity, so one unresolvable recipient is refused rather than quietly dropped, and nobody can be added later without starting a different conversation.",
+      "Join and participate in Nostr chat conversations. With no argument it opens the browser: private conversations, NIP-29 relay groups and Concord communities as collapsible sections in one sidebar, each sorted by its most recent message. A Concord community can be named directly — by name or id prefix, matched against your own decrypted list. Each window keeps its own place, so two of them open two channels. Supports NIP-17 private direct messages, NIP-29 relay-based groups, NIP-53 live activity chat, NIP-10 thread chat, NIP-22 comment threads on any event kind, and multi-room group list interface. A direct message is gift-wrapped (NIP-59): the outer event is signed by a throwaway key, so the relay holding it cannot tell who sent it, and grimoire never authenticates on the socket it publishes one over. Messages are decrypted once and mirrored locally, so a conversation opens with no signer prompt; the first time an account reads its inbox it is asked for permission, because opening a backlog of wraps means two decryptions each. NIP-22 comments work as a catch-all: any event that isn't kind 1 (NIP-10) or a relay group/live activity gets a comment thread. You can also comment on URLs and hashtags. In a room that can page backwards — a relay group, a live chat, a Concord channel — clicking a reply preview fetches history until it finds the message being answered, and the calendar button in the header jumps to a date. A thread or a comment set is loaded whole, so neither applies there. A private conversation can be named by npub, nprofile or NIP-05, and several of them comma-separated open a group — where the participants ARE the conversation's identity, so one unresolvable recipient is refused rather than quietly dropped, and nobody can be added later without starting a different conversation.",
     options: [
       {
         flag: "<identifier>",
@@ -777,7 +716,7 @@ export const manPages: Record<string, ManPageEntry> = {
       // "identifier in, protocol out" — there is no protocol to return.
       if (args.length === 0) return { identifier: { type: "browser" } };
 
-      // A Concord community, named the way `concord` names one. It is tried
+      // A Concord community, by name or id prefix. It is tried
       // FIRST and only on a HIT, because a community has no address a stranger
       // could type: what matches is this account's own decrypted list, so a
       // match is unambiguous, and a miss must fall through to every identifier
@@ -1086,42 +1025,6 @@ export const manPages: Record<string, ManPageEntry> = {
     seeAlso: ["conn", "relay", "post"],
     appId: "log",
     category: "System",
-    defaultProps: {},
-  },
-  ai: {
-    name: "ai",
-    section: "1",
-    synopsis: "ai [--conversation <id>] [--system <text>] [target] [prompt...]",
-    description:
-      "Chat with a language model through the Inference Provider API (window.inference). An extension you install owns the API keys, provider, and model — grimoire never sees them, and the extension asks your permission per origin. Without such an extension this window explains what to install.",
-    options: [
-      {
-        flag: "--conversation <id>",
-        description: "Reopen a stored conversation",
-      },
-      {
-        flag: "<target>",
-        description:
-          "A leading nevent/npub/naddr, kind number, or nip-XX grounds the chat in that object",
-      },
-      {
-        flag: "--system <text>",
-        description: "System prompt prepended to the conversation",
-      },
-      {
-        flag: "prompt...",
-        description: "Sent immediately when the window opens",
-      },
-    ],
-    examples: [
-      "ai                                   Open an empty chat",
-      "ai is nostr dead                     Ask on open",
-      'ai --system "Be terse." explain relays',
-    ],
-    seeAlso: ["settings", "man"],
-    appId: "ai",
-    category: "System",
-    argParser: (args: string[]) => parseAiCommand(args),
     defaultProps: {},
   },
 };
