@@ -42,9 +42,9 @@ export function RemovedAppNotice({
   return (
     <div
       role="status"
-      className="h-full w-full flex items-center justify-center p-6"
+      className="h-full w-full flex items-center justify-center p-4"
     >
-      <div className="max-w-sm space-y-3 text-center">
+      <div className="w-full min-w-0 max-w-sm space-y-3 text-center break-words">
         <Ban className="mx-auto size-8 text-muted-foreground" />
         <h2 className="font-semibold">
           <code className="font-mono">{app.command}</code> is no longer
@@ -60,7 +60,7 @@ export function RemovedAppNotice({
             </>
           )}
         </p>
-        <div className="flex justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           {app.replacement && (
             <Button size="sm" onClick={openReplacement}>
               Open {app.replacement}
