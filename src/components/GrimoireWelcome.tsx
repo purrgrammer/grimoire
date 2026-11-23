@@ -26,7 +26,7 @@ export function GrimoireWelcome({
   onExecuteCommand,
 }: GrimoireWelcomeProps) {
   return (
-    <div className="h-full w-full flex items-center justify-center">
+    <div className="h-full w-full flex items-center justify-center px-4">
       <div className="flex flex-col items-center gap-8">
         {/* Desktop: ASCII art */}
         <div className="hidden md:block">
