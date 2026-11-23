@@ -3,9 +3,9 @@
 ## What these captures are and are not
 
 - **Builds.** Local production builds (`vite build`) served with `vite preview`.
-  The PR build is **`51a1fa5`**, the last functional commit on this branch
+  The PR build is **`142aaf3`**, the last functional commit on this branch
   (later commits add only this folder; the captured `dist/` was checked
-  byte-identical to a rebuild of that commit). The baseline is `origin/main`
+  byte-identical to a rebuild of that commit for the earlier `51a1fa5` capture; the `142aaf3` capture is the `dist/` built from that commit's own verify run). The baseline is `origin/main`
   at **`db52bc9`**.
 - **Not the Vercel preview.** That preview sits behind Vercel Authentication.
 - **Browser.** Headless Google Chrome, a fresh temporary profile per capture
@@ -40,3 +40,10 @@ Measured layout (CSS px, from the page itself):
 
 Without the `px-4` gutter (`72ab47c` alone) the longer command stretched the
 cards to 388px, ending 0px from the right edge at 390px; `51a1fa5` fixes it.
+
+## Order (`142aaf3`)
+
+The PR captures were retaken after owner feedback moved the spells query to
+the end of the list: help, profile fiatjaf.com, req -k 1 -l 20, then
+`req -k 777,30777 -a verbiricha@grimoire.rocks`. Layout measurements are
+unchanged from `51a1fa5`.
