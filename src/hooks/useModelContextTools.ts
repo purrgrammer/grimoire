@@ -8,11 +8,10 @@ import { useAddWindow } from "@/core/state";
 /**
  * Publishes grimoire's tools to the browser's agent, for the whole app.
  *
- * Mounted at the shell rather than in the `ai` window: WebMCP tools belong to
- * the document, and an agent asking what this page can do should get the same
- * answer whether or not the user happens to have Hex open. It is also the only
- * place `grimoire.window` can come from — the executor adds a window, so it
- * needs the state hooks, and the shell outlives every window it opens.
+ * Mounted at the shell: WebMCP tools belong to the document, not to whichever
+ * window is open. It is also the only place `grimoire.window` can come from —
+ * the executor adds a window, so it needs the state hooks, and the shell
+ * outlives every window it opens.
  *
  * Nothing here runs in a browser without `document.modelContext`; the service
  * feature-detects and reports back unsupported.

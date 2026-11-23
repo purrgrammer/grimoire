@@ -302,9 +302,9 @@ describe("useRevealOnOpen with own-workspace placement (/run)", () => {
 
   it("reveals the run window when the click lands before its passive effects ran", async () => {
     // Seen in CI (QA run 44398997389) and locally, 2 of 25 runs of the
-    // RunCommandPage test: Ask Hex clicked as soon as the window was on
-    // screen opened the ai window alone in a new tab, and the tab stayed on
-    // /run. The window must be registered in the commit that shows it, not
+    // RunCommandPage test: an in-window button (then Ask Hex, since removed)
+    // clicked as soon as the window was on screen opened the requested window
+    // alone in a new tab, and the tab stayed on /run. The window must be registered in the commit that shows it, not
     // in a passive effect that a click can get ahead of.
     const router = createMemoryRouter(
       [

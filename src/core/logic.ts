@@ -117,9 +117,9 @@ export const addWindow = (
  * single-window route such as `/run` renders — into the active workspace,
  * keeping its id.
  *
- * The id is kept because state is keyed by it: an `ai` conversation and a post
- * draft are stored under the window id, so a fresh id would show the same
- * command with its conversation gone.
+ * The id is kept because state is keyed by it: a post draft is stored under
+ * the window id, so a fresh id would show the same command with its draft
+ * gone.
  *
  * One id lives in exactly one workspace — `removeWindow` deletes the window
  * record, which would orphan a second placement — so:

@@ -49,12 +49,6 @@ describe("buildConcordWindowUpdate", () => {
     expect("channelId" in update.props).toBe(false);
   });
 
-  it("names only the community in the command, since a channel has no address", () => {
-    expect(
-      buildConcordWindowUpdate(undefined, COMMUNITY, CHANNEL).commandString,
-    ).toBe(`concord ${COMMUNITY}`);
-  });
-
   it("survives a window with no props at all", () => {
     expect(buildConcordWindowUpdate(undefined, COMMUNITY).props).toEqual({
       communityId: COMMUNITY,
@@ -84,14 +78,14 @@ describe("buildConcordDmUpdate", () => {
 
   it("keeps the community, so closing the DM comes back to it", () => {
     expect(
-      buildConcordDmUpdate({ communityId: COMMUNITY }, PEER).commandString,
-    ).toBe(`concord ${COMMUNITY}`);
+      buildConcordDmUpdate({ communityId: COMMUNITY }, PEER).props,
+    ).toEqual({ communityId: COMMUNITY, dmPeer: PEER });
   });
 
   it("survives a window that never resolved a community", () => {
     const update = buildConcordDmUpdate(undefined, PEER);
     expect(update.props).toEqual({ dmPeer: PEER });
-    expect(update.commandString).toBe("concord");
+    expect(update.commandString).toBe("chat");
   });
 });
 
@@ -125,19 +119,15 @@ describe("the command a browser window reopens with", () => {
   // `chat` dispatches on props: `chat <identifier>` is a SINGLE-conversation
   // window. A browser window that rebuilt its command with an argument would
   // reopen as one pane with no sidebar, losing every other section.
-  it("stays bare for chat, whatever is selected", () => {
-    expect(
-      buildConcordWindowUpdate({}, COMMUNITY, CHANNEL, "chat").commandString,
-    ).toBe("chat");
-    expect(buildConcordDmUpdate({}, PEER, "chat").commandString).toBe("chat");
-    expect(
-      buildBrowserGroupUpdate({}, "bitcoin", RELAY, "chat").commandString,
-    ).toBe("chat");
-  });
-
-  it("still names the community for concord", () => {
+  it("stays bare chat, whatever is selected", () => {
     expect(buildConcordWindowUpdate({}, COMMUNITY, CHANNEL).commandString).toBe(
-      `concord ${COMMUNITY}`,
+      "chat",
+    );
+    expect(
+      buildConcordDmUpdate({ communityId: COMMUNITY }, PEER).commandString,
+    ).toBe("chat");
+    expect(buildBrowserGroupUpdate({}, "bitcoin", RELAY).commandString).toBe(
+      "chat",
     );
   });
 

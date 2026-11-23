@@ -1,4 +1,3 @@
-import { HexIcon } from "@/components/ai/Hex";
 import {
   Book,
   Podcast,
@@ -16,8 +15,6 @@ import {
   Bug,
   Wifi,
   MessageSquare,
-  MessagesSquare,
-  Bot,
   Phone,
   Hash,
   Zap,
@@ -36,11 +33,6 @@ export interface CommandIcon {
 }
 
 export const COMMAND_ICONS: Record<string, CommandIcon> = {
-  // Hex has a face rather than a glyph; the wrapper matches the lucide shape.
-  ai: {
-    icon: HexIcon as unknown as LucideIcon,
-    description: "Ask Hex, grimoire's assistant",
-  },
   // Documentation commands
   nip: {
     icon: Book,
@@ -105,14 +97,6 @@ export const COMMAND_ICONS: Record<string, CommandIcon> = {
   chat: {
     icon: MessageSquare,
     description: "Join and participate in NIP-29 relay-based group chats",
-  },
-  agent: {
-    icon: Bot,
-    description: "Read an agent's transcript, as it published it",
-  },
-  concord: {
-    icon: MessagesSquare,
-    description: "Browse your end-to-end encrypted Concord communities",
   },
   call: {
     icon: Phone,

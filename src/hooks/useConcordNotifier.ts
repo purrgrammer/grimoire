@@ -25,7 +25,10 @@ import {
 } from "@/lib/concord/notify";
 import { onWireScopes } from "@/lib/concord/wire-bus";
 import { useAddWindow, useGrimoire } from "@/core/state";
-import { buildConcordWindowUpdate } from "@/lib/concord/window-props";
+import {
+  buildConcordWindowUpdate,
+  isBrowserWindow,
+} from "@/lib/concord/window-props";
 import {
   invalidateChannelDirectory,
   resolveChannel,
@@ -183,14 +186,14 @@ export function useConcordNotifier(): void {
           });
           notification.onclick = () => {
             window.focus();
-            // Steer a Concord window that is already open on this community
+            // Steer a chat browser that is already open on this community
             // rather than stacking a new one: three notifications for the same
             // channel used to leave three identical windows behind. Adding one
             // is the fallback, for when none is open.
             const { windows, updateWindow: update } = navigate.current;
             const existing = Object.entries(windows).find(
               ([, w]) =>
-                w.appId === "concord" &&
+                isBrowserWindow(w) &&
                 (w.props as { communityId?: string } | undefined)
                   ?.communityId === entry.communityId,
             );
@@ -205,10 +208,15 @@ export function useConcordNotifier(): void {
                 ),
               );
             } else {
-              addWindow("concord", {
-                communityId: entry.communityId,
-                channelId: channelIdHex,
-              });
+              addWindow(
+                "chat",
+                {
+                  identifier: { type: "browser" },
+                  communityId: entry.communityId,
+                  channelId: channelIdHex,
+                },
+                "chat",
+              );
             }
             notification.close();
           };

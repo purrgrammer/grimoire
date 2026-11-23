@@ -20,17 +20,8 @@ Check these, in this order — each has caught a real bug:
 2. **A feed reaches a settled state.** `req -k 1 --limit 5` via Cmd+K should reach `LIVE` with `n/n` relays and stream events. Stuck on `LOADING` means EOSE handling is broken.
 3. **Chat loads messages.** `chat groups.0xchat.com'NkeVhXuWHGKKJCpn`. NIP-29 is the only enabled protocol, and NIP-29 relays commonly require AUTH.
 4. **Routes render.** `/`, `/run?cmd=profile%20fiatjaf.com`, `/note1…`, `/npub1…`, `/:actor/:identifier`, and a bad path (should show the 404 page inside `AppShell`, not react-router's dev screen).
-5. **The `ai` window mounts and is grounded.** Bare `ai` is the landing page — greeting, three openers, an autofocused composer, then stored conversations; `ai npub1…` previews the person through the kind 0 renderer; "Ask Hex" on an event opens a window whose embed resolves and is fully visible from the top. Every one of those has broken while the pipeline was green — twice as a crashed component that looked like an event failing to load, so read `read_console_messages` before believing what the pane shows.
-
-   **Do not send** unless the change is in the request path: each turn spends the user's own money through their extension. `ai "prompt"` auto-sends by design, so type into the composer and leave it there instead. When you must send, one turn is enough, and prefer a question that needs a tool (`summarize the last 5 notes from my contacts`) since the tool loop is where the bugs are.
-
-   Tool results render as the thing they returned, headed by the canonical tool id (`nostr.req`, `grimoire.help`): a feed for a query, badges for a lookup, command rows for a suggestion, and a draft card for `nostr.publish` — body, relay list with connection state, and a **Sign & publish** button. Never press that button; publishing is the user's signature, not yours. In a reply, check that `nostr:` references render as people and events and that `NIP-XX` is a link — both are re-linked by hand, since markdown never passes through applesauce's content pipeline.
-
-   Reopen a stored conversation from the index afterwards: the mentions must still render as people and notes, not bech32. They are kept on the turn precisely because the EventStore is memory.
-
-   Anything that opens a window from a `/run` page mutates state invisibly (issue #313), so drive the `ai` window from the app, not from `/run`, when the thing you are checking is a click that opens something.
-
-   To exercise the on-device fallback, disable the Inference Bridge extension first — with an injector present `resolveRequest()` never reaches it — and expect Chrome's model to download on the first send, which needs a real click and shows a progress bar.
+5. **A click that opens a window from `/run` reveals it.** `/run?cmd=kind%201`, then click the NIP badge: the dashboard comes back with a new tab holding the `/run` window and the `nip` one, and the previously focused tab untouched (issue #313).
+6. **Saved windows of removed commands stay inert.** A persisted or spellbook window whose appId is `ai`, `agent` or `concord` shows the "no longer available" notice and nothing else; `concord`'s "Open chat" opens the chat browser only when clicked.
 
 ## Gotchas that have wasted time here
 

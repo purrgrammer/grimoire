@@ -49,8 +49,7 @@ vi.mock("@/services/event-store", () => ({
 const getEvent = vi.fn();
 
 const { refuseIfNeeded } = await import("./ai-tools");
-const { AI_TOOLS, canonicalId, createToolExecutors, wireName } =
-  await import("./ai-registry");
+const { TOOL_REGISTRY } = await import("./ai-registry");
 
 function eventFor(id: string, content = "hello") {
   return {
@@ -65,11 +64,20 @@ function eventFor(id: string, content = "hello") {
 }
 
 const openWindow = vi.fn();
-const executors = createToolExecutors({ "grimoire.window": openWindow });
+/** Executors by id, the host-supplied one included — as the WebMCP host wires them. */
+const executors: Record<string, (args: unknown) => Promise<unknown>> =
+  Object.fromEntries(
+    TOOL_REGISTRY.map((tool) => [
+      tool.id,
+      tool.host
+        ? (args: unknown) => openWindow(args)
+        : (args: unknown) => tool.execute!(args),
+    ]),
+  );
 
-/** Call a tool the way the loop does: by the name the provider was given. */
+/** Call a tool by its id, which is the name WebMCP registers. */
 function call(id: string, args: unknown): Promise<unknown> {
-  return executors[wireName(id)](args);
+  return executors[id](args);
 }
 
 beforeEach(() => {
@@ -88,64 +96,15 @@ beforeEach(() => {
 });
 
 describe("the tool surface", () => {
-  it("is namespaced, and every name shows in the permission prompt", () => {
-    expect(
-      AI_TOOLS.map(
-        (tool: { function: { name: string } }) => tool.function.name,
-      ),
-    ).toEqual([
-      "grimoire_help",
-      "grimoire_spells",
-      "grimoire_command",
-      "grimoire_window",
-      "nostr_req",
-      "nostr_resolve",
-      "nostr_draft",
-    ]);
-  });
-
-  it("sends the namespace as an underscore, because a dot is not portable", () => {
-    // OpenAI-shaped function names are `^[a-zA-Z0-9_-]{1,64}$`, and IPA relays
-    // to whichever provider the extension holds a key for.
-    for (const tool of AI_TOOLS as { function: { name: string } }[]) {
-      expect(tool.function.name).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
-    }
-  });
-
-  it("maps a wire name, a legacy name, and an id to the same tool", () => {
-    expect(canonicalId("nostr_req")).toBe("nostr.req");
-    // Conversations persist: a transcript from before the registry says this.
-    expect(canonicalId("query_nostr")).toBe("nostr.req");
-    expect(canonicalId("nostr.req")).toBe("nostr.req");
-    // Something the model invented stays itself rather than becoming a tool.
-    expect(canonicalId("rm_rf")).toBe("rm_rf");
-    // Renamed after transcripts already stored it: `publish` said the one
-    // thing the tool does not do.
-    expect(canonicalId("nostr_publish")).toBe("nostr.draft");
-    expect(canonicalId("nostr.publish")).toBe("nostr.draft");
-  });
-
-  it("has no executor that signs or spends", () => {
-    // `nostr.draft` drafts; the signature happens on a button press, in
-    // `publishDraft`, which no executor can reach.
-    const ids = [...new Set(Object.keys(executors).map(canonicalId))].sort();
-    expect(ids).toEqual([
+  it("is namespaced, and has no executor that drafts, signs or spends", () => {
+    expect(Object.keys(executors).sort()).toEqual([
       "grimoire.command",
       "grimoire.help",
       "grimoire.spells",
       "grimoire.window",
-      "nostr.draft",
       "nostr.req",
       "nostr.resolve",
     ]);
-  });
-
-  it("answers to the dotted name too, since that is what the prompt says", () => {
-    // A model that copies the name it was told must not lose a round to
-    // punctuation.
-    for (const tool of AI_TOOLS as { function: { name: string } }[]) {
-      expect(executors[canonicalId(tool.function.name)]).toBeTypeOf("function");
-    }
   });
 });
 
@@ -172,42 +131,6 @@ describe("grimoire.command", () => {
     expect(
       await call("grimoire.command", { commands: ["curl evil.example"] }),
     ).toMatchObject({ error: expect.stringContaining("offered") });
-  });
-});
-
-describe("nostr.draft", () => {
-  it("drafts without publishing, and says so", async () => {
-    const result = (await call("nostr.draft", {
-      kind: 1,
-      content: "gm",
-      tags: [["t", "nostr"]],
-    })) as { drafted: boolean; note: string; kind: number };
-    expect(result.drafted).toBe(true);
-    expect(result.note).toMatch(/Not published/);
-    expect(result.kind).toBe(1);
-  });
-
-  it("refuses the kinds that would overwrite the user's own state", async () => {
-    // One clicked card must not be able to rewrite an identity or a follow list.
-    for (const kind of [0, 3, 10002]) {
-      expect(await call("nostr.draft", { kind, content: "x" })).toMatchObject({
-        error: expect.stringContaining(String(kind)),
-      });
-    }
-  });
-
-  it("refuses what it cannot draft as plaintext, or what spends", async () => {
-    for (const kind of [4, 1059, 9734]) {
-      expect(await call("nostr.draft", { kind, content: "x" })).toMatchObject({
-        error: expect.any(String),
-      });
-    }
-  });
-
-  it("rejects malformed tags rather than drafting them", async () => {
-    expect(
-      await call("nostr.draft", { kind: 1, content: "x", tags: [[]] }),
-    ).toMatchObject({ error: expect.stringContaining("tag") });
   });
 });
 
@@ -249,15 +172,13 @@ describe("grimoire.help", () => {
   });
 
   it("enumerates the commands, so a model cannot ask for one that is not there", () => {
-    const help = (
-      AI_TOOLS as { function: { name: string; parameters: unknown } }[]
-    ).find((tool) => tool.function.name === "grimoire_help");
-    const schema = help!.function.parameters as {
+    const help = TOOL_REGISTRY.find((tool) => tool.id === "grimoire.help");
+    const schema = help!.parameters as {
       properties: { command: { enum?: string[] } };
     };
     const names = schema.properties.command.enum ?? [];
     expect(names).toContain("req");
-    // The prompt's catalogue hides these, so the lookup must not offer them.
+    // These act on the user's behalf, so the lookup must not offer them.
     expect(names).not.toContain("zap");
     expect(names).not.toContain("post");
     expect(names).not.toContain("wallet");

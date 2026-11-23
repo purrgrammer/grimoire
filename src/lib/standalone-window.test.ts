@@ -11,7 +11,7 @@ import {
 /**
  * The windows single-window routes bring into the workspace (#313). Their ids
  * are what keeps a route's window from being placed twice, and what carries an
- * id-keyed `ai` conversation or draft across the move.
+ * id-keyed draft across the move.
  */
 describe("standalone windows", () => {
   const pubkey = "a".repeat(64);

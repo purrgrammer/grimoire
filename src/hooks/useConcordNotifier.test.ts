@@ -253,18 +253,27 @@ describe("useConcordNotifier", () => {
     emitWireScopes([`c2:${CHANNEL}`]);
     await waitFor(() => expect(raised).toHaveLength(1));
     raised[0]?.onclick?.();
-    expect(addWindow).toHaveBeenCalledWith("concord", {
-      communityId: COMMUNITY,
-      channelId: CHANNEL,
-    });
+    expect(addWindow).toHaveBeenCalledWith(
+      "chat",
+      {
+        identifier: { type: "browser" },
+        communityId: COMMUNITY,
+        channelId: CHANNEL,
+      },
+      "chat",
+    );
     expect(raised[0]?.closed).toBe(true);
   });
 
-  it("steers a Concord window already open on that community", async () => {
+  it("steers a chat browser already open on that community", async () => {
     // Three notifications for one channel used to leave three windows behind.
     windows.w1 = {
-      appId: "concord",
-      props: { communityId: COMMUNITY, channelId: "old" },
+      appId: "chat",
+      props: {
+        identifier: { type: "browser" },
+        communityId: COMMUNITY,
+        channelId: "old",
+      },
     };
     renderHook(() => useConcordNotifier());
     emitWireScopes([`c2:${CHANNEL}`]);
@@ -285,8 +294,8 @@ describe("useConcordNotifier", () => {
     // A different community — note COMMUNITY is "aa".repeat(32), so "a" x 64
     // would be the SAME id and this test would silently assert the opposite.
     windows.other = {
-      appId: "concord",
-      props: { communityId: "cc".repeat(32) },
+      appId: "chat",
+      props: { identifier: { type: "browser" }, communityId: "cc".repeat(32) },
     };
     renderHook(() => useConcordNotifier());
     emitWireScopes([`c2:${CHANNEL}`]);
@@ -294,9 +303,34 @@ describe("useConcordNotifier", () => {
     raised[0]?.onclick?.();
 
     expect(updateWindow).not.toHaveBeenCalled();
-    expect(addWindow).toHaveBeenCalledWith("concord", {
-      communityId: COMMUNITY,
-      channelId: CHANNEL,
-    });
+    expect(addWindow).toHaveBeenCalledWith(
+      "chat",
+      {
+        identifier: { type: "browser" },
+        communityId: COMMUNITY,
+        channelId: CHANNEL,
+      },
+      "chat",
+    );
+  });
+
+  it("does not steer a saved window of the removed concord app", async () => {
+    // A `concord` window from before the command was removed renders a notice
+    // and nothing else; navigating it would move a window nobody can read.
+    windows.legacy = {
+      appId: "concord",
+      props: { communityId: COMMUNITY, channelId: "old" },
+    };
+    renderHook(() => useConcordNotifier());
+    emitWireScopes([`c2:${CHANNEL}`]);
+    await waitFor(() => expect(raised).toHaveLength(1));
+    raised[0]?.onclick?.();
+
+    expect(updateWindow).not.toHaveBeenCalled();
+    expect(addWindow).toHaveBeenCalledWith(
+      "chat",
+      expect.objectContaining({ communityId: COMMUNITY, channelId: CHANNEL }),
+      "chat",
+    );
   });
 });

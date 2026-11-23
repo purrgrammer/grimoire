@@ -9,11 +9,10 @@ vi.mock("@/lib/ai-tools", () => ({
   proposeCommandTool: vi.fn(async () => ({ ok: true })),
   queryNostr: vi.fn(async () => ({ ok: true })),
   resolveTool: vi.fn(async () => ({ ok: true })),
-  draftEvent: vi.fn(async () => ({ ok: true })),
   refuseIfNeeded: vi.fn(() => undefined),
 }));
 
-import { toolsForSurface } from "@/lib/ai-registry";
+import { TOOL_REGISTRY } from "@/lib/ai-registry";
 import { modelContextAvailable, registerModelContextTools } from "./webmcp";
 
 interface Registered {
@@ -68,21 +67,21 @@ describe("webmcp registration", () => {
     expect(result).toEqual({ supported: false, registered: [], failed: [] });
   });
 
-  it("registers exactly the tools the registry exposes to webmcp", async () => {
+  it("registers exactly the tools in the registry", async () => {
     installModelContext();
 
     const result = await registerModelContextTools(host);
 
-    const expected = toolsForSurface("webmcp").map((tool) => tool.id);
+    const expected = TOOL_REGISTRY.map((tool) => tool.id);
     expect(result.registered).toEqual(expected);
     expect(result.failed).toEqual([]);
     expect(registered.map((tool) => tool.name)).toEqual(expected);
-    // Only the tool whose answer is a signing button stays out.
     expect(expected).toContain("grimoire.command");
+    // No tool drafts or signs an event.
     expect(expected).not.toContain("nostr.draft");
   });
 
-  it("registers under the canonical dotted id, not the IPA wire name", async () => {
+  it("registers under the dotted id, never an underscored one", async () => {
     installModelContext();
 
     await registerModelContextTools(host);
@@ -97,9 +96,7 @@ describe("webmcp registration", () => {
     await registerModelContextTools(host);
 
     const req = registered.find((tool) => tool.name === "nostr.req");
-    const definition = toolsForSurface("webmcp").find(
-      (tool) => tool.id === "nostr.req",
-    );
+    const definition = TOOL_REGISTRY.find((tool) => tool.id === "nostr.req");
     expect(req?.title).toBe(definition?.title);
     expect(req?.description).toBe(definition?.description);
     expect(req?.inputSchema).toEqual(definition?.parameters);
@@ -151,9 +148,7 @@ describe("webmcp registration", () => {
     const second = await registerModelContextTools(host);
 
     expect(second.failed).toEqual([]);
-    expect(second.registered).toEqual(
-      toolsForSurface("webmcp").map((tool) => tool.id),
-    );
+    expect(second.registered).toEqual(TOOL_REGISTRY.map((tool) => tool.id));
   });
 
   it("reports a refused tool without losing the rest", async () => {

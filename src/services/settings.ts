@@ -54,20 +54,6 @@ export interface NotificationSettings {
 }
 
 /**
- * Where inference happens.
- *
- * `backend` is a preference, not a guarantee: the chosen one may be absent, and
- * the window says so rather than failing. `"auto"` is the historical behaviour —
- * an injected extension if there is one, the browser's own model otherwise.
- *
- * Which provider and which model is never here. That is the extension's choice,
- * which is the point of the Inference Provider API.
- */
-export interface InferenceSettings {
-  backend: "auto" | "ipa" | "promptApi";
-}
-
-/**
  * Complete application settings structure
  */
 export interface AppSettings {
@@ -75,7 +61,6 @@ export interface AppSettings {
   post: PostSettings;
   appearance: AppearanceSettings;
   notifications: NotificationSettings;
-  inference: InferenceSettings;
 }
 
 // ============================================================================
@@ -103,17 +88,11 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   defaultLevel: "mentions",
 };
 
-/** Whatever answers. Choosing on-device is opt-in, not a default. */
-const DEFAULT_INFERENCE_SETTINGS: InferenceSettings = {
-  backend: "auto",
-};
-
 export const DEFAULT_SETTINGS: AppSettings = {
   __version: 1,
   post: DEFAULT_POST_SETTINGS,
   appearance: DEFAULT_APPEARANCE_SETTINGS,
   notifications: DEFAULT_NOTIFICATION_SETTINGS,
-  inference: DEFAULT_INFERENCE_SETTINGS,
 };
 
 // ============================================================================
@@ -144,11 +123,9 @@ function validateSettings(settings: unknown): AppSettings {
       ...((s.appearance as object) || {}),
     },
     // Merged onto the defaults like the sections above it, which is what lets a
-    // settings blob stored before notifications existed load unchanged.
-    inference: {
-      ...DEFAULT_INFERENCE_SETTINGS,
-      ...((s.inference as object) || {}),
-    },
+    // settings blob stored before notifications existed load unchanged. A
+    // section this version no longer has (the removed `inference`) is dropped
+    // here rather than carried forward.
     notifications: {
       ...DEFAULT_NOTIFICATION_SETTINGS,
       ...((s.notifications as object) || {}),

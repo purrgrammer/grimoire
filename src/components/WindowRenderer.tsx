@@ -2,6 +2,9 @@ import { Component, ReactNode, Suspense, lazy } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WindowInstance } from "@/types/app";
+import { getRemovedApp } from "@/lib/removed-apps";
+import { isBrowserWindow } from "@/lib/concord/window-props";
+import { RemovedAppNotice } from "./RemovedAppNotice";
 
 // Lazy load all viewer components for better code splitting
 const NipRenderer = lazy(() =>
@@ -32,11 +35,6 @@ const ChatViewer = lazy(() =>
 );
 const GroupListViewer = lazy(() =>
   import("./GroupListViewer").then((m) => ({ default: m.GroupListViewer })),
-);
-const AgentSessionViewer = lazy(() =>
-  import("./agent/AgentSessionViewer").then((m) => ({
-    default: m.AgentSessionViewer,
-  })),
 );
 const ConcordViewer = lazy(() =>
   import("./ConcordViewer").then((m) => ({ default: m.ConcordViewer })),
@@ -69,7 +67,6 @@ const SettingsViewer = lazy(() =>
 const EventLogViewer = lazy(() =>
   import("./EventLogViewer").then((m) => ({ default: m.EventLogViewer })),
 );
-const AiViewer = lazy(() => import("./AiViewer"));
 // Keeps the whole @kehto/* graph out of the main bundle.
 const NappletViewer = lazy(() =>
   import("./NappletViewer").then((m) => ({ default: m.NappletViewer })),
@@ -173,22 +170,26 @@ class WindowErrorBoundary extends Component<
  * one mechanism that can catch them.
  */
 function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
-  /**
-   * Bare `chat` names no conversation, so it is the browser — the same
-   * component `concord` mounts, listing private conversations, relay groups and
-   * communities in one sidebar.
-   *
-   * Routed by rewriting the appId rather than by a branch under `case "chat"`
-   * so there is ONE place that renders the browser. The command it came from
-   * still rides along, because a navigation writes the command back and
-   * `chat <identifier>` is a single-conversation window: rebuilding a browser
-   * window's command with an argument would reopen it as one pane.
-   */
-  const browser =
-    window.appId === "chat" &&
-    (!window.props.identifier || window.props.identifier.type === "browser");
+  // A window saved by an app that no longer exists — from this device's
+  // storage or a published spellbook. Checked before the switch so none of the
+  // removed code is reached, and no other app is substituted for it.
+  const removed = getRemovedApp(window.appId);
+  if (removed) {
+    return (
+      <RemovedAppNotice app={removed} props={window.props} onClose={onClose} />
+    );
+  }
 
-  switch (browser ? "concord" : window.appId) {
+  /**
+   * Bare `chat` names no conversation, so it is the browser, listing private
+   * conversations, relay groups and Concord communities in one sidebar.
+   *
+   * Routed to its own case rather than a branch under `case "chat"`, so there
+   * is ONE place that renders the browser.
+   */
+  const browser = isBrowserWindow(window);
+
+  switch (browser ? "chat-browser" : window.appId) {
     case "nip":
       return <NipRenderer nipId={window.props.number} />;
     case "apps":
@@ -298,13 +299,6 @@ function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
       return <PostViewer windowId={window.id} />;
     case "settings":
       return <SettingsViewer />;
-    case "agent":
-      return (
-        <AgentSessionViewer
-          agent={window.props.agent}
-          session={window.props.session}
-        />
-      );
     case "call":
       return (
         <CallWindow
@@ -316,25 +310,14 @@ function WindowContent({ window, onClose }: WindowRendererProps): ReactNode {
           windowId={window.id}
         />
       );
-    case "concord":
+    case "chat-browser":
       return (
         <ConcordViewer
-          command={browser ? "chat" : "concord"}
           communityId={window.props.communityId}
           channelId={window.props.channelId}
           dmPeer={window.props.dmPeer}
           groupId={window.props.groupId}
           groupRelay={window.props.groupRelay}
-          windowId={window.id}
-        />
-      );
-    case "ai":
-      return (
-        <AiViewer
-          conversation={window.props.conversation}
-          prompt={window.props.prompt}
-          system={window.props.system}
-          target={window.props.target}
           windowId={window.id}
         />
       );

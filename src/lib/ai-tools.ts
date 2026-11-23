@@ -2,7 +2,6 @@ import { nip19 } from "nostr-tools";
 
 import { READABLE_COMMANDS, proposeCommand } from "./ai-commands";
 import { resolveAliases, sanitizeFilter } from "./ai-filter";
-import { sanitizeDraft } from "./ai-draft";
 import { resolveEntity } from "./resolve-entity";
 import { requestEvents } from "./relay-subscription";
 
@@ -14,13 +13,12 @@ import { getNipText } from "@/services/nip-text";
 /**
  * What the registry's tools actually do.
  *
- * Schemas, ids and prompt lines live in `ai-registry.ts`; this file is the
- * implementations, so a tool's contract and its behaviour are not the same edit.
+ * Schemas and ids live in `ai-registry.ts`; this file is the implementations,
+ * so a tool's contract and its behaviour are not the same edit.
  *
  * None of them sign, publish, spend, or follow. Tool arguments are shaped by
- * whatever the model read — including note text, which is untrusted — so the
- * only side effects available are a window the user then drives themselves and
- * a draft they must press a button to sign.
+ * whatever the agent read — including note text, which is untrusted — so the
+ * only side effect available is a window the user then drives themselves.
  */
 
 /** Cap on returned content, so one long article cannot eat the window. */
@@ -115,8 +113,8 @@ const MAX_SPELLS = 40;
 /**
  * The user's saved spells, as alias and command.
  *
- * A spell is a `req` someone kept, so its command is the interesting part: Hex
- * can open it as a window or run the same filter itself. Local rows only —
+ * A spell is a `req` someone kept, so its command is the interesting part: an
+ * agent can open it as a window or run the same filter itself. Local rows only —
  * these are the user's own, and nothing here publishes or deletes one.
  */
 async function listSpells(): Promise<unknown> {
@@ -280,24 +278,5 @@ export async function proposeCommandTool(args: unknown): Promise<unknown> {
     ...(offered.length === 0
       ? { error: "None of those are commands the user can be offered." }
       : {}),
-  };
-}
-
-/**
- * An event drafted for the user to sign.
- *
- * Returns the draft and nothing else — the signer is asked by the button on the
- * card, from a real click. `sanitizeDraft` refuses the kinds that would let one
- * click rewrite the user's own state.
- */
-export async function draftEvent(args: unknown): Promise<unknown> {
-  const draft = sanitizeDraft(args);
-  if ("error" in draft) return draft;
-  return {
-    drafted: true,
-    // Said plainly, because a model told only "drafted" reports back that it
-    // published something.
-    note: "Not published. The user sees this draft with a button, and their signer is only asked if they press it.",
-    ...draft,
   };
 }

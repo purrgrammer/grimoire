@@ -27,18 +27,16 @@ timeline for its whole life, with no sidebar. `chat` with no argument opens the
 conversations, NIP-29 relay groups, Concord communities — each sorted by its
 most recent message, with `ChatViewer` rendering whichever one is selected.
 
-Two commands, one component. `ConcordViewer` is the browser; `concord` and bare
-`chat` both mount it, and the `command` prop is the only difference between
-them. It exists because navigation writes the window's command back:
+`ConcordViewer` is the browser component; bare `chat` mounts it. (A `concord`
+command used to mount it too; it was removed, and a window saved under its
+appId now renders the removed-app notice — see `src/lib/removed-apps.ts`.)
+Navigation writes the window's command back, and **`chat` stays BARE,
+always**: its appId dispatches on props, so a browser window that rebuilt its
+command as `chat relay'group` would reopen as a single-conversation pane with
+no sidebar at all. The selection rides in the props beside the command, never
+in it.
 
-- **`concord` rebuilds its command with the community** (`concord <id>`). Its
-  appId always means the browser, so there is no ambiguity to protect.
-- **`chat` stays BARE, always.** Its appId dispatches on props, so a browser
-  window that rebuilt its command as `chat relay'group` would reopen as a
-  single-conversation pane with no sidebar at all. The selection rides in the
-  props beside the command, never in it.
-
-`src/lib/concord/window-props.ts` is the one place either is written, and one
+`src/lib/concord/window-props.ts` is the one place those props are written, and one
 selection has three families: a channel, a private conversation and a relay
 group are mutually exclusive, so every write drops the other two. A window
 carrying both would reload showing one while the sidebar highlighted another.

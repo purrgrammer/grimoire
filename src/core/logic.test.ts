@@ -709,8 +709,8 @@ describe("updateWindow", () => {
 
   const window = (id: string, props: Record<string, unknown>) => ({
     id,
-    appId: "concord" as const,
-    props,
+    appId: "chat" as const,
+    props: { identifier: { type: "browser" }, ...props },
   });
 
   it("REPLACES props wholesale rather than merging them", () => {
@@ -728,9 +728,12 @@ describe("updateWindow", () => {
 
   it("keeps the fields the update did not name", () => {
     const state = stateWith({ a: window("a", { communityId: "aa" }) });
-    const result = updateWindow(state, "a", { commandString: "concord aa" });
-    expect(result.windows["a"].props).toEqual({ communityId: "aa" });
-    expect(result.windows["a"].appId).toBe("concord");
+    const result = updateWindow(state, "a", { commandString: "chat" });
+    expect(result.windows["a"].props).toEqual({
+      identifier: { type: "browser" },
+      communityId: "aa",
+    });
+    expect(result.windows["a"].appId).toBe("chat");
   });
 
   it("leaves every other window alone", () => {

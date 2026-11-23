@@ -1,11 +1,11 @@
 /**
- * `concord [community]` argument parsing.
+ * Resolving a Concord community named on the command line (`chat`, `call`).
  *
  * A Concord community has no shareable public address to type: its id is a hex
  * commitment and its channels live at derived pubkeys, both meaningless without
  * key material. So this resolves against the LOCAL vault instead — the member's
  * own decrypted Community List — by name (case-insensitive, prefix-matched) or
- * by an id prefix. With no argument it opens whatever the viewer holds.
+ * by an id prefix.
  */
 
 import { loadStoredCommunities } from "@/services/concord-communities";
@@ -13,7 +13,7 @@ import { readStoredState } from "@/services/concord-state";
 import accountManager from "@/services/accounts";
 import { parseGroupArgs } from "@/lib/nip29/group-selection";
 
-export interface ConcordCommandProps {
+export interface CommunityQueryProps {
   /** Full community_id (lowercase hex) when one was resolved. */
   communityId?: string;
   /** The window title to show, when a specific community was named. */
@@ -40,9 +40,9 @@ export interface CallCommandProps {
  * `call [community [channel]]`.
  *
  * A call has no address a person could type: its room name derives from the
- * channel key, so what is resolved here is the same LOCAL vault the `concord`
- * command searches — a community by name or id prefix, then a channel within it
- * by name or id prefix.
+ * channel key, so what is resolved here is the same LOCAL vault `chat`
+ * searches — a community by name or id prefix, then a channel within it by name
+ * or id prefix.
  *
  * It exists mostly so a window round-trips. The window is normally opened from
  * the channel header, which already knows exactly which channel it is, and that
@@ -78,7 +78,7 @@ export async function parseCallCommand(
     };
   }
 
-  const { communityId } = await parseConcordCommand([communityQuery]);
+  const { communityId } = await resolveCommunityQuery(communityQuery);
   if (!communityId || !channelQuery) {
     return communityId ? { protocol: "concord", communityId } : {};
   }
@@ -104,15 +104,15 @@ export async function parseCallCommand(
 /**
  * A community this account actually holds, or nothing.
  *
- * Split out from {@link parseConcordCommand} because `chat` needs to tell a
- * HIT from a miss, and that parser deliberately cannot: it carries an
- * unresolved query through as an id prefix. `chat` shares its argument with
+ * Split out from {@link resolveCommunityQuery} because `chat` needs to tell a
+ * HIT from a miss, and that one deliberately cannot: it carries an unresolved
+ * query through as an id prefix. `chat` shares its argument with
  * every NIP-19 identifier there is, so it may only claim a query the vault can
  * vouch for — a miss has to go on and be tried as a note, a profile or a group.
  */
 export async function resolveStoredCommunity(
   query: string,
-): Promise<Required<ConcordCommandProps> | undefined> {
+): Promise<Required<CommunityQueryProps> | undefined> {
   const pubkey = accountManager.active$.value?.pubkey;
   if (!pubkey || !query.trim()) return undefined;
 
@@ -121,8 +121,8 @@ export async function resolveStoredCommunity(
 
   // `undefined` rather than `false` when the query is not hex-shaped: `??`
   // only falls through on null and undefined, so a `false` here swallowed the
-  // name-prefix match behind it — `concord bitcoin`, this command's own
-  // documented example, resolved to nothing.
+  // name-prefix match behind it — `chat bitcoin`, a documented example,
+  // resolved to nothing.
   const byId = /^[0-9a-f]{4,64}$/.test(lower)
     ? communities.find((c) => c.idHex.startsWith(lower))
     : undefined;
@@ -139,20 +139,24 @@ export async function resolveStoredCommunity(
   };
 }
 
-export async function parseConcordCommand(
-  args: string[],
-): Promise<ConcordCommandProps> {
-  const query = args.join(" ").trim();
-  if (!query) return {};
+/**
+ * A community query as `call` needs it: the vault's hit when there is one, the
+ * raw query as an id prefix otherwise.
+ */
+async function resolveCommunityQuery(
+  query: string,
+): Promise<CommunityQueryProps> {
+  const trimmed = query.trim();
+  if (!trimmed) return {};
 
   const pubkey = accountManager.active$.value?.pubkey;
   // No account means no vault to search. Hand the raw query through as an id
-  // prefix: the viewer resolves prefixes too, and this way `concord <id>` still
+  // prefix: the viewer resolves prefixes too, and this way `call <id>` still
   // lands on the right community once a signer arrives.
-  if (!pubkey) return { communityId: query.toLowerCase() };
+  if (!pubkey) return { communityId: trimmed.toLowerCase() };
 
-  const hit = await resolveStoredCommunity(query);
+  const hit = await resolveStoredCommunity(trimmed);
   // Not found is not an error: the vault may simply not have synced yet, and
   // the viewer shows what it does have. Carry the query as a prefix.
-  return hit ?? { communityId: query.toLowerCase() };
+  return hit ?? { communityId: trimmed.toLowerCase() };
 }

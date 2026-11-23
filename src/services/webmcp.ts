@@ -1,4 +1,4 @@
-import { toolsForSurface, type ToolExecutor } from "@/lib/ai-registry";
+import { TOOL_REGISTRY, type ToolExecutor } from "@/lib/ai-registry";
 
 /**
  * WebMCP: grimoire's tools, registered with the browser's own agent.
@@ -6,10 +6,7 @@ import { toolsForSurface, type ToolExecutor } from "@/lib/ai-registry";
  * The page declares what it can do — `document.modelContext.registerTool()` —
  * and whatever agent the browser carries (Chrome/Edge origin trials, Brave's
  * Leo, ChatGPT Desktop) calls those tools instead of driving the UI by pixels.
- * Same registry Hex reads, so a tool is defined once and reached two ways:
- * Hex's own loop (`services/tool-loop.ts`) relays calls to an inference
- * provider, while here the loop belongs to the browser and grimoire only
- * answers.
+ * The loop belongs to the browser; grimoire only answers.
  *
  * https://webmachinelearning.github.io/webmcp/
  *
@@ -113,10 +110,9 @@ function wrap(id: string, executor: ToolExecutor) {
 }
 
 /**
- * Register every `webmcp` tool in the registry, for as long as `signal` lives.
+ * Register every tool in the registry, for as long as `signal` lives.
  *
- * `hosts` supplies the executors that need application state — the same
- * injection the IPA loop uses, keyed by canonical id. A `host` tool with
+ * `hosts` supplies the executors that need application state, keyed by id. A `host` tool with
  * nothing supplied is skipped rather than registered as a stub.
  */
 export async function registerModelContextTools(
@@ -130,7 +126,7 @@ export async function registerModelContextTools(
     const registered: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    for (const tool of toolsForSurface("webmcp")) {
+    for (const tool of TOOL_REGISTRY) {
       if (signal?.aborted) break;
       const executor = tool.host ? hosts[tool.id] : tool.execute;
       if (!executor) continue;
@@ -138,9 +134,7 @@ export async function registerModelContextTools(
       try {
         await context.registerTool(
           {
-            // The canonical id, dots and all: WebMCP names allow
-            // `[A-Za-z0-9_.-]`, so unlike IPA this surface needs no mangling
-            // and a stored transcript names the same tool either way.
+            // The id, dots and all: WebMCP names allow `[A-Za-z0-9_.-]`.
             name: tool.id,
             title: tool.title,
             description: tool.description,

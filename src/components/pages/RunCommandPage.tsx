@@ -17,7 +17,7 @@ import { runCommandWindow } from "@/lib/standalone-window";
  * Executes a command and displays the result without affecting the workspace layout.
  * This allows windows to be "popped out" into separate browser windows/tabs.
  *
- * Opening another window from here — Ask Hex, a command chip, a clicked
+ * Opening another window from here — a NIP badge, a clicked
  * mention — puts this window and the new one in a workspace of their own, a
  * new tab, and shows the dashboard there (`useRevealOnOpen`). The tab the user
  * had focused keeps its windows and layout.

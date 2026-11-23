@@ -11,11 +11,10 @@ import type { EventPointer, AddressPointer } from "nostr-tools/nip19";
 /**
  * The id of a standalone window, derived from its command.
  *
- * Per-command, not a constant: anything keyed by window id — an `ai`
- * conversation, a post draft — is shared by every page that carries the same
- * id, so a single `"pop-out"` made two unrelated `/run` chats one conversation.
- * Stable across a reload, and kept when the window moves into the workspace, so
- * the conversation goes with it.
+ * Per-command, not a constant: anything keyed by window id — a post draft —
+ * is shared by every page that carries the same id, so a single `"pop-out"`
+ * made two unrelated `/run` windows share one. Stable across a reload, and
+ * kept when the window moves into the workspace, so that state goes with it.
  */
 export function standaloneWindowId(commandString: string): string {
   return `pop-out:${commandString}`;

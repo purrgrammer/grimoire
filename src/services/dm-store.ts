@@ -28,12 +28,6 @@ import type { NostrEvent } from "nostr-tools";
 import { createConversationIdentifier } from "applesauce-common/helpers/messages";
 import type { Rumor } from "applesauce-common/helpers/gift-wrap";
 import db, { type DmRumorRow } from "./db";
-import {
-  KIND_AGENT_DEFINITION as AGENT_KIND_DEFINITION,
-  KIND_SESSION_CONTROL as AGENT_KIND_SESSION_CONTROL,
-  KIND_SESSION_HEAD as AGENT_KIND_SESSION_HEAD,
-  KIND_TURN as AGENT_KIND_TURN,
-} from "@/lib/agent-session/kinds";
 
 /** A legacy NIP-04 direct message. Public event, private-ish content. */
 export const DM_LEGACY_KIND = 4;
@@ -45,26 +39,7 @@ export const DM_DELETE_KIND = 5;
 export const DM_REACTION_KIND = 7;
 /** Kinds that act on another rumor rather than standing alone. */
 export const DM_SIDE_KINDS = [DM_DELETE_KIND, DM_REACTION_KIND];
-/**
- * An agent's transcript (NIP-xx), which rides this pipeline for its dedupe,
- * decryption and backfill but takes no part in the DM UI.
- *
- * Deliberately NOT in `DM_ROW_KINDS` or `DM_SIDE_KINDS`: `writeDmRows`
- * recomputes `lastAt` from row kinds alone, and the fold, the unread summary
- * and the sidebar all filter on them, so an agent event cannot appear in, bump
- * or badge a conversation. `src/services/agent-store.ts` reads them instead.
- */
-export const DM_AGENT_KINDS = [
-  AGENT_KIND_TURN,
-  AGENT_KIND_SESSION_HEAD,
-  AGENT_KIND_SESSION_CONTROL,
-  AGENT_KIND_DEFINITION,
-];
-const ACCEPTED_KINDS = new Set([
-  ...DM_ROW_KINDS,
-  ...DM_SIDE_KINDS,
-  ...DM_AGENT_KINDS,
-]);
+const ACCEPTED_KINDS = new Set([...DM_ROW_KINDS, ...DM_SIDE_KINDS]);
 
 /**
  * How far ahead of us a rumor's `created_at` may sit before we stop believing

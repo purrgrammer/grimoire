@@ -78,7 +78,6 @@ import { ChatMessageContextMenu } from "./chat/ChatMessageContextMenu";
 import { PinsHeaderButton, ConcordPinsList } from "./ConcordPinsBar";
 import { useNip29Pins } from "@/hooks/useNip29Pins";
 import { useAddWindow } from "@/core/state";
-import { MessageSessions } from "@/components/agent/MessageSessions";
 import { Button } from "./ui/button";
 import LoginDialog from "./nostr/LoginDialog";
 import type { EmojiTag, BlobAttachment } from "./editor/MentionEditor";
@@ -563,7 +562,7 @@ const MessageItem = memo(function MessageItem({
   onOpenThread,
   onCloseThread,
   threadActive,
-  activityView,
+  hideActivity,
   inThreadRootId,
 }: {
   message: Message;
@@ -592,14 +591,11 @@ const MessageItem = memo(function MessageItem({
   /** Whether the pane is already showing this message's thread. */
   threadActive?: boolean;
   /**
-   * How the follow-on activity under this message is drawn.
-   *
-   * `"merged"` is the channel: replies and runs on one line, opening the thread.
-   * `"sessions"` is inside the pane, where the thread is already open and every
-   * run gets its own row — the only place a second session is reachable, since
-   * the merged row speaks for one.
+   * Leaves out the "who replied" row under this message. Set inside the thread
+   * pane, where the thread is already open and the row would only point back
+   * at the pane it sits in.
    */
-  activityView?: "merged" | "sessions";
+  hideActivity?: boolean;
   /**
    * The thread this row is being rendered INSIDE, if any.
    *
@@ -930,25 +926,15 @@ const MessageItem = memo(function MessageItem({
               {message.content}
             </span>
           )}
-          {/* What came of this message: the replies folded under it and the runs
-              it set going, on one line. Renders nothing at all for the vast
-              majority of messages, which started nothing and got no reply.
-              `MessageActivity` for the channel, where one line is the budget;
-              the pane lists every run separately, because there it has room and
-              a second session needs its own way in. */}
-          {activityView === "sessions" ? (
-            <MessageSessions messageId={message.id} />
-          ) : (
+          {/* Who replied to this message, on one line. Renders nothing for the
+              vast majority of messages, which got no reply. */}
+          {!hideActivity && (
             <MessageActivity
-              messageId={message.id}
               thread={thread}
               unread={threadUnread}
               active={threadActive}
               onOpenThread={onOpenThread}
               onCloseThread={onCloseThread}
-              onOpenSession={(agent, session) =>
-                addWindow("agent", { agent, session })
-              }
             />
           )}
         </div>
@@ -2473,7 +2459,7 @@ export function ChatViewer({
               canReply={canSign}
               onReply={replyInThread}
               activePubkey={pubkey}
-              activityView="sessions"
+              hideActivity
             />
           }
           replies={threadView.replies.map((reply) => (
@@ -2490,7 +2476,7 @@ export function ChatViewer({
               activePubkey={pubkey}
               isFlashing={flashId === reply.id}
               inThreadRootId={threadView.root.id}
-              activityView="sessions"
+              hideActivity
             />
           ))}
           composer={

@@ -25,8 +25,6 @@ import { UserName } from "./nostr/UserName";
 import { getTagValues } from "@/lib/nostr-utils";
 import { getSemanticAuthor } from "@/lib/semantic-author";
 import { Nip29Adapter } from "@/lib/chat/adapters/nip-29-adapter";
-import { useConcordUnreadTotal } from "@/hooks/useConcordUnread";
-import { loadStoredCommunities } from "@/services/concord-communities";
 import { resolveChannel } from "@/services/concord-channel-directory";
 import type { ChatProtocol, ProtocolIdentifier } from "@/types/chat";
 import { useState, useEffect } from "react";
@@ -38,8 +36,6 @@ export interface WindowTitleData {
   title: string | ReactElement;
   icon?: LucideIcon;
   tooltip?: string;
-  /** Unread count for the tile's toolbar. Absent or 0 renders nothing. */
-  badge?: number;
 }
 
 /**
@@ -363,11 +359,6 @@ function generateRawCommand(appId: string, props: any): string {
         return `call ${props.communityId} ${props.channelId}`;
       }
       return props.communityId ? `call ${props.communityId}` : "call";
-
-    case "concord":
-      // `parseConcordCommand` joins its arguments into ONE query, so a second
-      // argument here would be read as part of the community's name.
-      return props.communityId ? `concord ${props.communityId}` : "concord";
 
     default:
       return appId;
@@ -872,25 +863,11 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       });
   }, [appId, props]);
 
-  // Concord windows carry an unread count on the tile, and name where the
-  // window IS: the open channel, and the community around it. The badge totals
-  // EVERY community, not just this window's, so it shows even for a bare
-  // `concord` window — whose props are all optional (WindowRenderer), which is
-  // also why the title falls back to plain "Concord": with no community there
-  // is nothing to name at title time.
-  //
-  // Both ids come from the window's own props, which navigation rewrites
-  // (`buildConcordWindowUpdate`), so the title follows the reader rather than
-  // the device-wide "last channel" every window shares.
-  const isConcord = appId === "concord";
+  // A call names the Concord channel it is in. Both ids come from the window's
+  // own props.
   const isCall = appId === "call";
-  const concordBadge = useConcordUnreadTotal(isConcord);
-  const concordCommunityId =
-    isConcord || isCall ? props.communityId : undefined;
-  const concordChannelId = isConcord || isCall ? props.channelId : undefined;
-  /** Which pane the window is showing, when it is not a channel. */
-  const concordView = isConcord ? props.view : undefined;
-  const [concordTitle, setConcordTitle] = useState<string>();
+  const concordCommunityId = isCall ? props.communityId : undefined;
+  const concordChannelId = isCall ? props.channelId : undefined;
   const [concordChannelName, setConcordChannelName] = useState<string>();
   // The running call knows its own channel's name even where the directory has
   // not been filled in yet, which is the case right after a fresh join.
@@ -909,27 +886,13 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     const channelId =
       typeof concordChannelId === "string" ? concordChannelId : undefined;
     void (async () => {
-      // The channel names the window; the community is the context beside it.
       // A channel whose fold has not landed here yet simply has no name, and
-      // the community-only title stands until it does.
+      // the call's own fallback title stands until it does.
       const channel = channelId
         ? await resolveChannel(accountPubkey, channelId).catch(() => undefined)
         : undefined;
       if (cancelled) return;
-      if (channel) {
-        setConcordTitle(`${channel.communityName} › ${channel.channelName}`);
-        setConcordChannelName(channel.channelName);
-        return;
-      }
-      const communities = await loadStoredCommunities(accountPubkey).catch(
-        () => [],
-      );
-      if (cancelled) return;
-      const wanted = String(concordCommunityId).toLowerCase();
-      const hit =
-        communities.find((c) => c.idHex === wanted) ??
-        communities.find((c) => c.idHex.startsWith(wanted));
-      if (hit?.name) setConcordTitle(hit.name);
+      if (channel) setConcordChannelName(channel.channelName);
     })();
     return () => {
       cancelled = true;
@@ -945,14 +908,12 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
     // Generate raw command for tooltip
     const rawCommand = generateRawCommand(appId, props);
 
-    const badge = concordBadge > 0 ? { badge: concordBadge } : {};
-
     // Priority 0: Custom title always wins (user override via --title flag)
     if (customTitle) {
       title = customTitle;
       icon = getCommandIcon(appId);
       tooltip = rawCommand;
-      return { title, icon, tooltip, ...badge };
+      return { title, icon, tooltip };
     }
 
     // Priority order for title selection (dynamic titles based on data)
@@ -1040,15 +1001,6 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
             : (callChannelName ?? staticTitle ?? "Call");
       icon = getCommandIcon("call");
       tooltip = rawCommand;
-    } else if (appId === "concord") {
-      // A pane that is not a channel names itself: the window is showing
-      // invites, not the room its props still remember.
-      title =
-        concordView === "invites"
-          ? "Invites"
-          : (concordTitle ?? staticTitle ?? "Concord");
-      icon = getCommandIcon("concord");
-      tooltip = rawCommand;
     } else {
       title = staticTitle || appId.toUpperCase();
       // The registry knows an icon for most appIds; the fallback used to drop
@@ -1057,13 +1009,10 @@ function useDynamicTitle(window: WindowInstance): WindowTitleData {
       tooltip = rawCommand;
     }
 
-    return { title, icon, tooltip, ...badge };
+    return { title, icon, tooltip };
   }, [
-    concordBadge,
-    concordTitle,
     concordChannelName,
     callChannelName,
-    concordView,
     appId,
     props,
     event,

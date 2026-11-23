@@ -35,8 +35,6 @@ import { EventJsonDialog } from "@/components/EventJsonDialog";
 import { EmojiPickerDialog } from "@/components/chat/EmojiPickerDialog";
 import { formatTimestamp } from "@/hooks/useLocale";
 import { nip19 } from "nostr-tools";
-import { isAnyInferenceReachable } from "@/services/inference";
-import { HexHoverAvatar } from "@/components/ai/Hex";
 import { getTagValue } from "applesauce-core/helpers";
 import { parseAddressPointer } from "@/lib/nip89-helpers";
 import { getSeenRelays } from "applesauce-core/helpers/relays";
@@ -190,30 +188,6 @@ function useEventActions(event: NostrEvent) {
     setJsonDialogOpen(true);
   }, []);
 
-  /**
-   * Open an `ai` window grounded in this event. Prefilled, not sent — the
-   * request is the user's to make, and it costs them.
-   */
-  const askAi = useCallback(() => {
-    const seenRelaysSet = getSeenRelays(event);
-    const relays = seenRelaysSet ? Array.from(seenRelaysSet) : [];
-    const bech32 = nip19.neventEncode({
-      id: event.id,
-      kind: event.kind,
-      author: event.pubkey,
-      ...(relays.length ? { relays } : {}),
-    });
-    addWindow(
-      "ai",
-      { target: { type: "event", value: bech32 } },
-      // The full command, never an abbreviation: this string is what the edit
-      // box re-runs, and a trimmed nevent rebuilds the window pointing at
-      // nothing. The short label goes in the title instead.
-      `ai ${bech32}`,
-      `ASK KIND ${event.kind}`,
-    );
-  }, [addWindow, event]);
-
   const zapEvent = useCallback(() => {
     const recipientPubkey = getSemanticAuthor(event);
 
@@ -293,9 +267,6 @@ function useEventActions(event: NostrEvent) {
     openEventDetail,
     copyEventId,
     viewEventJson,
-    askAi,
-    // Read once per render: an injector that appears later shows up on the next.
-    aiAvailable: isAnyInferenceReachable(),
     zapEvent,
     openChatWindow,
     handleToggleFavorite,
@@ -379,12 +350,6 @@ function EventMenuItems({
         )}
         {actions.copied ? "Copied!" : "Copy ID"}
       </Item>
-      {actions.aiAvailable && (
-        <Item className="group" onClick={actions.askAi}>
-          <HexHoverAvatar className="mr-2 size-4" />
-          Ask Hex
-        </Item>
-      )}
       <Item onClick={actions.viewEventJson}>
         <FileJson className="size-4 mr-2" />
         View JSON

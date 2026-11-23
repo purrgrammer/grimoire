@@ -150,7 +150,7 @@ export type RevealPlacement = "own-workspace" | "active-workspace";
  * it shows outside every workspace.
  *
  * Those routes render one window and no workspace, so a window opened from
- * there — Ask Hex, a command chip, `grimoire.window`, a clicked mention — used
+ * there — a NIP badge, `grimoire.window`, a clicked mention — used
  * to land in a workspace nobody could see. While a route is registered
  * (`useStandaloneWindow`), the next window opened brings the route's window
  * along into the persisted state, where `placement` says, and flips
@@ -244,7 +244,7 @@ export function useStandaloneWindow(
 
   // A layout effect: the registration lands in the commit that puts `window`
   // on screen. As a passive effect it ran in a later task, and a click on the
-  // window in between — Ask Hex the instant it rendered — opened its window
+  // window in between — a button clicked the instant it rendered — opened its window
   // under the registration from the loading state (`window: null`), so the
   // requested window went to a tab alone and the re-registration that followed
   // reset `revealed`, leaving the tab on the route. Flaky in CI, 2 in 25 runs

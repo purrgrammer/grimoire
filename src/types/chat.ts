@@ -260,8 +260,8 @@ export interface GroupIdentifier {
  * viewer's Community List holds — a channel id addresses nothing on its own, and
  * the stream it lives at derives from a secret. That is why this is never typed
  * by a user: it is produced by the community viewer from the folded channel
- * list, and the `concord` command resolves a community by NAME or id prefix
- * against the local vault instead.
+ * list, and `chat` resolves a community by NAME or id prefix against the
+ * local vault instead.
  */
 export interface ConcordIdentifier {
   type: "concord";
