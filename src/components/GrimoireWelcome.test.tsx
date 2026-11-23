@@ -33,6 +33,25 @@ describe("GrimoireWelcome suggestions", () => {
     expect(screen.queryByText("Join the Grimoire welcome chat")).toBeNull();
   });
 
+  it("lists the spells query last, after the existing suggestions", () => {
+    render(
+      <GrimoireWelcome onLaunchCommand={vi.fn()} onExecuteCommand={vi.fn()} />,
+    );
+
+    const list = screen.getByText("Try these commands:").parentElement!;
+    const commands = Array.from(
+      list.querySelectorAll("button"),
+      (button) => button.firstElementChild?.textContent,
+    );
+
+    expect(commands).toEqual([
+      "help",
+      "profile fiatjaf.com",
+      "req -k 1 -l 20",
+      SPELLS_COMMAND,
+    ]);
+  });
+
   it("executes the exact command string when clicked", () => {
     const onExecuteCommand = vi.fn();
     render(

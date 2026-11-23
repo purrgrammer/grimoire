@@ -11,14 +11,14 @@ interface GrimoireWelcomeProps {
 const EXAMPLE_COMMANDS = [
   { command: "help", description: "Browse the command reference" },
   {
-    command: "req -k 777,30777 -a verbiricha@grimoire.rocks",
-    description: "Browse spells and spellbooks by verbiricha",
-  },
-  {
     command: "profile fiatjaf.com",
     description: "Explore a Nostr profile",
   },
   { command: "req -k 1 -l 20", description: "Query recent notes" },
+  {
+    command: "req -k 777,30777 -a verbiricha@grimoire.rocks",
+    description: "Browse spells and spellbooks by verbiricha",
+  },
 ];
 
 export function GrimoireWelcome({
