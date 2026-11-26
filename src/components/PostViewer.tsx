@@ -40,14 +40,12 @@ import pool from "@/services/relay-pool";
 import publishService, {
   type RelayPublishStatus,
 } from "@/services/publish-service";
-import { NoteFactory } from "applesauce-common/factories";
-import { toApplesauceEmojis } from "@/lib/emoji-helpers";
+import { buildPostTemplate } from "@/lib/post-template";
 import { useGrimoire } from "@/core/state";
 import { FALLBACK_RELAYS } from "@/services/loaders";
 import { normalizeRelayURL } from "@/lib/relay-url";
 import { use$ } from "applesauce-react/hooks";
 import { getAuthIcon } from "@/lib/relay-status-utils";
-import { GRIMOIRE_CLIENT_TAG } from "@/constants/app";
 
 interface RelayPublishState {
   url: string;
@@ -351,46 +349,16 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       // Create and sign event first
       let event;
       try {
-        // NoteFactory auto-extracts hashtags, mentions and quotes from content
-        const noteDraft = NoteFactory.create(content.trim(), {
-          emojis: toApplesauceEmojis(emojiTags),
+        // One builder for preview and publish (src/lib/post-template.ts).
+        const built = await buildPostTemplate({
+          content,
+          emojiTags,
+          blobAttachments,
+          addressRefs,
+          includeClientTag: !!settings?.post?.includeClientTag,
+          selfPubkey: pubkey,
         });
-
-        // Add tags that applesauce doesn't handle yet
-        const additionalTags: string[][] = [];
-
-        // Add a tags for address references (naddr - not yet supported by applesauce)
-        for (const addr of addressRefs) {
-          additionalTags.push([
-            "a",
-            `${addr.kind}:${addr.pubkey}:${addr.identifier}`,
-          ]);
-        }
-
-        // Add client tag (if enabled)
-        if (settings?.post?.includeClientTag) {
-          additionalTags.push(GRIMOIRE_CLIENT_TAG);
-        }
-
-        // Add imeta tags for blob attachments (NIP-92)
-        for (const blob of blobAttachments) {
-          const imetaTag = [
-            "imeta",
-            `url ${blob.url}`,
-            `m ${blob.mimeType}`,
-            `x ${blob.sha256}`,
-            `size ${blob.size}`,
-          ];
-          if (blob.server) {
-            imetaTag.push(`server ${blob.server}`);
-          }
-          additionalTags.push(imetaTag);
-        }
-
-        // Merge additional tags with the factory-generated tags and sign
-        event = await noteDraft
-          .modifyPublicTags((tags) => [...tags, ...additionalTags])
-          .sign(signer);
+        event = await built.factory.sign(signer);
       } catch (error) {
         // Signing failed - user might have rejected it
         console.error("Failed to sign event:", error);
