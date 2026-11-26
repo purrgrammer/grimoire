@@ -996,7 +996,7 @@ export const manPages: Record<string, ManPageEntry> = {
     section: "1",
     synopsis: "post",
     description:
-      "Compose and publish a Nostr note (kind 1). Features a rich text editor with @mentions, :emoji: autocomplete, and image/video attachments. Select which relays to publish to, with write relays pre-selected by default. Track per-relay publish status (loading/success/error).",
+      "Compose and publish a Nostr note (kind 1). Features a rich text editor with @mentions, :emoji: autocomplete, and image/video attachments. Lists the people the note tags (mentions and the authors of quoted notes and events), lets you untag any of them, and adds their NIP-65 inbox relays below your write relays, each row saying whose inbox it is. Untick any relay; your choices and the draft survive reloads. Track per-relay publish status (loading/success/error).",
     examples: ["post    Open post composer"],
     seeAlso: ["req", "profile", "blossom"],
     appId: "post",
