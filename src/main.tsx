@@ -39,6 +39,8 @@ createRoot(document.getElementById("root")!).render(
                 // sonner ships its own system-ui stack; keep toasts on the app font.
                 fontFamily: "var(--font-mono)",
               },
+              // Secondary text follows the app theme (see index.css).
+              classNames: { description: "grimoire-toast-description" },
             }}
           />
           <Root />

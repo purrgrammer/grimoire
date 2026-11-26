@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { selectRelaysForFilter } from "./relay-selection";
+import { resolveInboxRelays, selectRelaysForFilter } from "./relay-selection";
 import { EventStore } from "applesauce-core";
 import type { NostrEvent } from "nostr-tools";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
@@ -437,5 +437,123 @@ describe("selectRelaysForFilter", () => {
 
       expect(result.blocked).toEqual([]);
     });
+  });
+});
+
+describe("resolveInboxRelays", () => {
+  let eventStore: EventStore;
+  const OWNER = "f".repeat(64);
+  const noFetch = async () => "not-found" as const;
+
+  beforeEach(async () => {
+    eventStore = new EventStore();
+    await relayListCache.clear();
+  });
+  afterEach(() => setBlockedRelays([], null));
+
+  it("returns only read relays, normalized, and reports blocked ones", async () => {
+    eventStore.add(
+      createRelayListEvent(testSecretKeys[3], [
+        ["r", "wss://Inbox.example.com", "read"],
+        ["r", "wss://both.example.com"],
+        ["r", "wss://outbox.example.com", "write"],
+        ["r", "wss://spam.example.com", "read"],
+        ["r", "ws://localhost:7777", "read"],
+      ]),
+    );
+    setBlockedRelays(["wss://spam.example.com"], OWNER);
+
+    const result = await resolveInboxRelays(testPubkeys[3], {
+      store: eventStore,
+      fetchList: noFetch,
+    });
+    expect(result).toEqual({
+      status: "resolved",
+      relays: ["wss://inbox.example.com/", "wss://both.example.com/"],
+      blocked: ["wss://spam.example.com/"],
+    });
+  });
+
+  it("fetches only when nothing is cached, and says no-list when nobody has one", async () => {
+    let calls = 0;
+    const result = await resolveInboxRelays(testPubkeys[4], {
+      store: eventStore,
+      fetchList: async () => {
+        calls++;
+        return "not-found";
+      },
+    });
+    expect(calls).toBe(1);
+    expect(result).toEqual({ status: "no-list" });
+  });
+
+  it("tells a timeout apart from a missing list", async () => {
+    const result = await resolveInboxRelays(testPubkeys[5], {
+      store: eventStore,
+      fetchList: async () => "timeout",
+    });
+    expect(result).toEqual({ status: "timeout" });
+    const failed = await resolveInboxRelays(testPubkeys[5], {
+      store: eventStore,
+      fetchList: async () => "error",
+    });
+    expect(failed.status).toBe("error");
+  });
+
+  it("uses a list that the fetch put into the store", async () => {
+    const result = await resolveInboxRelays(testPubkeys[6], {
+      store: eventStore,
+      fetchList: async () => {
+        eventStore.add(
+          createRelayListEvent(testSecretKeys[6], [
+            ["r", "wss://late.example.com", "read"],
+          ]),
+        );
+        return "found";
+      },
+    });
+    expect(result).toEqual({
+      status: "resolved",
+      relays: ["wss://late.example.com/"],
+      blocked: [],
+    });
+  });
+
+  it("prefers a newer list in the store over an older cached one", async () => {
+    const older = finalizeEvent(
+      {
+        kind: 10002,
+        created_at: Math.floor(Date.now() / 1000) - 100,
+        tags: [["r", "wss://old.example.com", "read"]],
+        content: "",
+      },
+      testSecretKeys[7],
+    );
+    await relayListCache.set(older);
+    eventStore.add(
+      createRelayListEvent(testSecretKeys[7], [
+        ["r", "wss://new.example.com", "read"],
+      ]),
+    );
+    const result = await resolveInboxRelays(testPubkeys[7], {
+      store: eventStore,
+      fetchList: noFetch,
+    });
+    expect(result.status === "resolved" && result.relays).toEqual([
+      "wss://new.example.com/",
+    ]);
+  });
+
+  it("resolves a list with no read relays to an empty set, not no-list", async () => {
+    eventStore.add(
+      createRelayListEvent(testSecretKeys[8], [
+        ["r", "wss://outbox.example.com", "write"],
+      ]),
+    );
+    const result = await resolveInboxRelays(testPubkeys[8], {
+      store: eventStore,
+      fetchList: noFetch,
+    });
+    expect(result).toEqual({ status: "resolved", relays: [], blocked: [] });
   });
 });

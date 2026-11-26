@@ -23,6 +23,7 @@ deliberately omits:
 | Tailwind v4 conventions | `docs/tailwind-v4.md` |
 | WebMCP (tools for the browser's own agent) | `docs/webmcp.md` |
 | Napplets (NIP-5D, Kehto runtime, capability consent) | `docs/napplets.md` |
+| POST composer: tagged people, inbox relays (NIP-65), drafts | `docs/post-composer.md` |
 
 The official **`applesauce` skill** (`.claude/skills/applesauce`) and the
 applesauce + nostrbook **MCP servers** (`.mcp.json`) are authoritative for

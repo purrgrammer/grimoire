@@ -648,3 +648,32 @@ body.animating-layout
 .rich-editor .ProseMirror::-webkit-scrollbar {
   display: none; /* Chrome/Safari/Opera */
 }
+
+/*
+ * Toast secondary text. sonner colours [data-description] from its own theme
+ * (#3f3f3f under its default "light" theme) while the toast background comes
+ * from the app theme, so on the dark theme a description measured 1.9:1.
+ * Follow the app's muted foreground instead. Unlayered and one class more
+ * specific than sonner's own rules, which are injected unlayered at runtime.
+ */
+[data-sonner-toast][data-styled="true"]
+  [data-description].grimoire-toast-description {
+  color: hsl(var(--muted-foreground));
+}
+
+/*
+ * Composer disclosure chevron (src/components/post/PostDisclosure.tsx).
+ * Keyed to the details that owns this summary: Tailwind's group-open matches
+ * any open .group ancestor, which turned a closed section's chevron too.
+ */
+.post-disclosure-chevron {
+  rotate: 0deg;
+}
+details[open] > summary > .post-disclosure-chevron {
+  rotate: 90deg;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .post-disclosure-chevron {
+    transition: rotate 150ms ease-out;
+  }
+}

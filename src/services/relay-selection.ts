@@ -12,8 +12,7 @@
 import type { NostrEvent } from "nostr-tools";
 import type { Filter as NostrFilter } from "nostr-tools";
 import type { ProfilePointer } from "nostr-tools/nip19";
-import { firstValueFrom, timeout as rxTimeout, of } from "rxjs";
-import { catchError } from "rxjs/operators";
+import { firstValueFrom, timeout as rxTimeout, TimeoutError } from "rxjs";
 import type { IEventStore } from "applesauce-core/event-store";
 import {
   getInboxes,
@@ -37,30 +36,38 @@ import type {
   RelaySelectionOptions,
 } from "@/types/relay-selection";
 
+/** How a {@link fetchRelayList} call ended. */
+export type RelayListFetchOutcome = "found" | "not-found" | "timeout" | "error";
+
 /**
  * Fetches a kind:10002 relay list event for a pubkey with timeout
  *
+ * Never throws. Most callers only need the event to have landed in the store
+ * and ignore the result; the outcome is there for a caller that has to tell
+ * "this person has no relay list" apart from "the indexers did not answer".
+ *
  * @param pubkey - Hex pubkey to fetch relay list for
  * @param timeoutMs - Timeout in milliseconds
- * @returns Promise that resolves when fetch completes or times out
  */
 export async function fetchRelayList(
   pubkey: string,
   timeoutMs: number,
-): Promise<void> {
+): Promise<RelayListFetchOutcome> {
   try {
-    await firstValueFrom(
+    const event = await firstValueFrom(
       addressLoader({ kind: 10002, pubkey, identifier: "" }).pipe(
         rxTimeout(timeoutMs),
-        catchError(() => of(null)),
       ),
+      { defaultValue: null },
     );
+    return event ? "found" : "not-found";
   } catch (err) {
     // Timeout or error - continue with fallback
     console.debug(
       `[RelaySelection] Failed to fetch relay list for ${pubkey.slice(0, 8)}`,
       err,
     );
+    return err instanceof TimeoutError ? "timeout" : "error";
   }
 }
 
@@ -723,6 +730,98 @@ export async function selectRelaysForPublish(
   return filterBlockedRelays(mergeRelaySets(...relaySets));
 }
 
+/**
+ * Where one tagged person reads mentions, as far as we can tell.
+ *
+ * - `resolved`: they published a kind:10002. `relays` is its read set after the
+ *   usual filters (blocked, localhost, .onion, liveness); `blocked` is what the
+ *   user's kind 10006 list removed. `relays` can be empty — a list with no
+ *   usable read relays is still an answer.
+ * - `no-list`: every indexer answered and none holds a relay list.
+ * - `timeout` / `error`: we could not find out. Not the same as `no-list`,
+ *   and the UI must not present it as one.
+ */
+export type InboxResolution =
+  | { status: "pending" }
+  | { status: "resolved"; relays: string[]; blocked: string[] }
+  | { status: "no-list" }
+  | { status: "timeout" }
+  | { status: "error"; message: string };
+
+export type SettledInboxResolution = Exclude<
+  InboxResolution,
+  { status: "pending" }
+>;
+
+/**
+ * Resolve a pubkey's NIP-65 read (inbox) relays, for publishing to them.
+ *
+ * The same path every other inbox lookup in the app takes —
+ * {@link relayListCache}, then the EventStore, then {@link fetchRelayList}
+ * against the indexers — and the same filters `selectRelaysForFilter` applies
+ * to `#p` readers. Relay hints from content (nprofile/nevent TLVs, tag hints)
+ * are never consulted: only a list the person signed says where they read.
+ */
+export async function resolveInboxRelays(
+  pubkey: string,
+  options: {
+    timeoutMs?: number;
+    store?: IEventStore;
+    /** Injectable for tests, which must not reach the indexers. */
+    fetchList?: typeof fetchRelayList;
+  } = {},
+): Promise<SettledInboxResolution> {
+  const {
+    timeoutMs = 5000,
+    store = eventStore,
+    fetchList = fetchRelayList,
+  } = options;
+  try {
+    // A newer list in the store beats an older cached one: the cache is fed
+    // by a store subscription that may not have run yet.
+    const inStore = store.getReplaceable(10002, pubkey, "") as
+      NostrEvent | undefined;
+    if (inStore) {
+      const cached = await relayListCache.get(pubkey);
+      if (!cached || cached.event.created_at < inStore.created_at) {
+        await relayListCache.set(inStore);
+      }
+    }
+
+    let known =
+      !!inStore || (await relayListCache.getInboxRelays(pubkey)) !== null;
+    if (!known) {
+      const outcome = await fetchList(pubkey, timeoutMs);
+      known =
+        !!store.getReplaceable(10002, pubkey, "") ||
+        (await relayListCache.getInboxRelays(pubkey)) !== null;
+      if (!known) {
+        if (outcome === "timeout") return { status: "timeout" };
+        if (outcome === "error")
+          return { status: "error", message: "Relay list lookup failed" };
+        return { status: "no-list" };
+      }
+    }
+
+    const collector = createBlockedCollector();
+    const relays = await getInboxRelaysForPubkey(
+      store,
+      pubkey,
+      collector.for(pubkey, "readers"),
+    );
+    return {
+      status: "resolved",
+      relays,
+      blocked: collector.result().map((b) => b.relay),
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /** Maximum number of relays for interactions */
 const MAX_INTERACTION_RELAYS = 10;
 
@@ -751,7 +850,7 @@ export async function selectRelaysForInteraction(
     relayListCache.getInboxRelays(targetPubkey),
   ]);
 
-  const needsFetch: Promise<void>[] = [];
+  const needsFetch: Promise<unknown>[] = [];
   if (!cachedOutbox) needsFetch.push(fetchRelayList(authorPubkey, 1000));
   if (!cachedInbox) needsFetch.push(fetchRelayList(targetPubkey, 1000));
   if (needsFetch.length > 0) await Promise.all(needsFetch);

@@ -1,0 +1,95 @@
+{
+  "identities": {
+    "Tester": "f478739d",
+    "Alice": "1727ced7",
+    "Bob": "866a203e",
+    "Carol": "2b05b821",
+    "Dave": "7e98cffc",
+    "Erin": "81463b25",
+    "Frank": "d56945c3"
+  },
+  "published": [
+    {
+      "relay": "wss://author-one.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://author-two.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://shared-inbox.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://erin-inbox.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://author-one.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://author-two.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://shared-inbox.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    },
+    {
+      "relay": "wss://erin-inbox.example.com/",
+      "kind": 1,
+      "p": ["1727ced7", "2b05b821", "7e98cffc", "d56945c3", "81463b25"],
+      "q": [
+        ["99999999", "2b05b821"],
+        ["cfa06c17", "81463b25"]
+      ]
+    }
+  ],
+  "pageErrors": [],
+  "blockedHttpOrigins": [
+    "blocked http https://raw.githubusercontent.com",
+    "blocked http https://author-one.example.com",
+    "blocked http https://author-two.example.com",
+    "blocked http https://alice-inbox.example.com",
+    "blocked http https://shared-inbox.example.com",
+    "blocked http https://bob-plain.example.com",
+    "blocked http https://erin-inbox.example.com"
+  ]
+}
