@@ -6,6 +6,7 @@ import type { InboxResolution } from "@/services/relay-selection";
 const VIA_LABEL: Record<RecipientVia, string> = {
   mention: "mentioned",
   "address-author": "author of a quoted event",
+  "quote-author": "author of a quoted note",
 };
 
 function viaText(via: RecipientVia[]): string {
@@ -42,6 +43,8 @@ function inboxText(resolution: InboxResolution): {
 
 interface PostRecipientsProps {
   recipients: PostRecipient[];
+  /** Quoted notes whose author is not known yet — and so not tagged. */
+  unresolvedQuotes: { id: string; status: "pending" | "not-found" }[];
   getInbox: (pubkey: string) => InboxResolution;
   disabled: boolean;
   onExclude: (pubkey: string) => void;
@@ -56,12 +59,13 @@ interface PostRecipientsProps {
  */
 export function PostRecipients({
   recipients,
+  unresolvedQuotes,
   getInbox,
   disabled,
   onExclude,
   onInclude,
 }: PostRecipientsProps) {
-  if (recipients.length === 0) return null;
+  if (recipients.length === 0 && unresolvedQuotes.length === 0) return null;
   const tagged = recipients.filter((r) => !r.excluded).length;
   const anyExcluded = recipients.some((r) => r.excluded);
 
@@ -121,6 +125,24 @@ export function PostRecipients({
             </li>
           );
         })}
+        {unresolvedQuotes.map((quote) => (
+          <li
+            key={quote.id}
+            className="py-1 text-xs text-muted-foreground"
+            data-testid={`quote-${quote.id}`}
+          >
+            {quote.status === "pending" ? (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                Quoted note: finding its author…
+              </span>
+            ) : (
+              <span className="text-amber-500">
+                Quoted note not found, so its author isn&apos;t tagged.
+              </span>
+            )}
+          </li>
+        ))}
       </ul>
       {anyExcluded && (
         <p className="text-xs text-muted-foreground">

@@ -33,8 +33,10 @@ import publishService from "@/services/publish-service";
 import {
   buildPostTemplate,
   getTaggedPubkeys,
+  type PostQuote,
   type PostRecipient,
 } from "@/lib/post-template";
+import { useQuoteAuthors } from "@/hooks/useQuoteAuthors";
 import {
   deriveRelayRows,
   effectiveSelection,
@@ -121,6 +123,21 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
   // Who the note tags, read off the same template Publish signs.
   const [recipients, setRecipients] = useState<PostRecipient[]>([]);
+  const [quotes, setQuotes] = useState<PostQuote[]>([]);
+  const quoteAuthors = useQuoteAuthors(quotes);
+  const quoteAuthorsRef = useRef(quoteAuthors.authors);
+  useEffect(() => {
+    quoteAuthorsRef.current = quoteAuthors.authors;
+  }, [quoteAuthors.authors]);
+  // Quoted notes whose author is not (yet) known, so not tagged.
+  const unresolvedQuotes = useMemo(
+    () =>
+      quotes.flatMap((q) => {
+        const r = quoteAuthors.get(q.id);
+        return r.status === "resolved" ? [] : [{ id: q.id, status: r.status }];
+      }),
+    [quotes, quoteAuthors],
+  );
   const excludedSet = useMemo(
     () => new Set(excludedRecipients),
     [excludedRecipients],
@@ -277,6 +294,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     const serialized = editor.getSerializedContent();
     if (!serialized.text.trim()) {
       setRecipients([]);
+      setQuotes([]);
       return;
     }
     try {
@@ -286,10 +304,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         blobAttachments: serialized.blobAttachments,
         addressRefs: serialized.addressRefs,
         includeClientTag: false,
+        quoteAuthors: quoteAuthorsRef.current,
         selfPubkey: pubkey,
       });
-      if (generation === analysisGenRef.current)
+      if (generation === analysisGenRef.current) {
         setRecipients(built.recipients);
+        setQuotes(built.quotes);
+      }
     } catch (err) {
       console.warn("[PostViewer] Failed to read recipients:", err);
     }
@@ -314,6 +335,15 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       analysisGen.current++;
     };
   }, []);
+
+  // A quoted note's author just became known: re-read who the note tags.
+  const authorsKey = [...quoteAuthors.authors.entries()].sort().join(",");
+  const lastAuthorsKeyRef = useRef(authorsKey);
+  useEffect(() => {
+    if (lastAuthorsKeyRef.current === authorsKey) return;
+    lastAuthorsKeyRef.current = authorsKey;
+    analyzeRecipients();
+  }, [authorsKey, analyzeRecipients]);
 
   const excludeRecipient = useCallback((pk: string) => {
     setExcludedRecipients((prev) => (prev.includes(pk) ? prev : [...prev, pk]));
@@ -420,10 +450,16 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       setIsPublishing(true);
       setPublishPhase("resolving");
 
-      // 1. The note, exactly as it will be signed.
+      // One deadline for everything Publish waits on.
+      const deadline = Date.now() + PUBLISH_INBOX_WAIT_MS;
+      const remaining = () => Math.max(0, deadline - Date.now());
+
+      // 1. The note, exactly as it will be signed. Quoted notes' authors are
+      //    tagged only once their events are in hand (useQuoteAuthors).
       let built: Awaited<ReturnType<typeof buildPostTemplate>>;
+      let quoteSnapshot: Awaited<ReturnType<typeof quoteAuthors.settle>>;
       try {
-        built = await buildPostTemplate({
+        const input = {
           content,
           emojiTags,
           blobAttachments,
@@ -431,6 +467,17 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           includeClientTag: !!settings?.post?.includeClientTag,
           excludedRecipients: new Set(excludedRecipients),
           selfPubkey: pubkey,
+        };
+        const draftQuotes = (await buildPostTemplate(input)).quotes;
+        quoteSnapshot = await quoteAuthors.settle(draftQuotes, remaining());
+        const verifiedAuthors = new Map(
+          [...quoteSnapshot].flatMap(([id, r]) =>
+            r.status === "resolved" ? [[id, r.author] as const] : [],
+          ),
+        );
+        built = await buildPostTemplate({
+          ...input,
+          quoteAuthors: verifiedAuthors,
         });
       } catch (error) {
         console.error("Failed to build note:", error);
@@ -446,7 +493,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       const tagged = getTaggedPubkeys(built.template).filter(
         (pk) => pk !== pubkey,
       );
-      const inboxSnapshot = await inboxes.settle(tagged, PUBLISH_INBOX_WAIT_MS);
+      const inboxSnapshot = await inboxes.settle(tagged, remaining());
 
       // 3. Freeze the relay list. From here on nothing that answers late can
       //    change where this note goes.
@@ -535,6 +582,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   : "."),
             );
           }
+          const untaggedQuotes = [...quoteSnapshot.values()].filter(
+            (r) => r.status !== "resolved",
+          ).length;
+          if (untaggedQuotes > 0)
+            notes.push(
+              `Couldn't confirm the author of ${untaggedQuotes} quoted note${untaggedQuotes === 1 ? "" : "s"}, so ${untaggedQuotes === 1 ? "it wasn't" : "they weren't"} tagged.`,
+            );
           const description = notes.length > 0 ? notes.join(" ") : undefined;
 
           if (successCount === selected.length) {
@@ -585,6 +639,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       windowId,
       excludedRecipients,
       inboxes,
+      quoteAuthors,
       ownWriteRelays,
       addedRelays,
       overrides,
@@ -609,6 +664,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     setOverrides({});
     setExcludedRecipients([]);
     setRecipients([]);
+    setQuotes([]);
     editorRef.current?.clear();
     editorRef.current?.focus();
   }, []);
@@ -762,6 +818,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         {!showPublishedPreview && (
           <PostRecipients
             recipients={shownRecipients}
+            unresolvedQuotes={unresolvedQuotes}
             getInbox={inboxes.get}
             disabled={isPublishing}
             onExclude={excludeRecipient}

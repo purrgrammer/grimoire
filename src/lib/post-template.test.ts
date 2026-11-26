@@ -192,4 +192,101 @@ describe("buildPostTemplate", () => {
       true,
     );
   });
+
+  describe("quoted notes' authors (NIP-10, NIP-18)", () => {
+    const quoteContent = `look nostr:${nip19.noteEncode(NOTE_ID)} and ${nevent(EVENT_ID, CAROL)}`;
+    const base = {
+      content: quoteContent,
+      emojiTags: [],
+      blobAttachments: [],
+      addressRefs: [],
+      includeClientTag: false,
+      selfPubkey: SELF,
+    };
+
+    it("does not tag an author from an nevent hint alone", async () => {
+      const { template, recipients, quotes } = await buildPostTemplate(base);
+      expect(getTaggedPubkeys(template)).toEqual([]);
+      expect(recipients).toEqual([]);
+      // applesauce's q tag, untouched: the hinted author stays in its slot.
+      expect(template.tags).toContainEqual([
+        "q",
+        EVENT_ID,
+        "wss://hint.example.com",
+        CAROL,
+      ]);
+      expect(quotes.map((q) => [q.id, q.hintedAuthor, q.author])).toEqual([
+        [NOTE_ID, undefined, undefined],
+        [EVENT_ID, CAROL, undefined],
+      ]);
+    });
+
+    it("tags a verified author and fills the q tag's pubkey", async () => {
+      const { template, recipients } = await buildPostTemplate({
+        ...base,
+        quoteAuthors: new Map([[NOTE_ID, ALICE]]),
+      });
+      expect(template.tags).toContainEqual(["q", NOTE_ID, "", ALICE]);
+      expect(getTaggedPubkeys(template)).toEqual([ALICE]);
+      expect(recipients).toEqual([
+        { pubkey: ALICE, via: ["quote-author"], excluded: false },
+      ]);
+    });
+
+    it("lets the verified author win over a contradicting nevent hint", async () => {
+      const { template } = await buildPostTemplate({
+        ...base,
+        quoteAuthors: new Map([[EVENT_ID, BOB]]),
+      });
+      expect(template.tags).toContainEqual([
+        "q",
+        EVENT_ID,
+        "wss://hint.example.com",
+        BOB,
+      ]);
+      expect(getTaggedPubkeys(template)).toEqual([BOB]);
+    });
+
+    it("merges a person both mentioned and quoted into one recipient", async () => {
+      const { template, recipients } = await buildPostTemplate({
+        ...base,
+        content: `${npub(ALICE)} ${quoteContent}`,
+        quoteAuthors: new Map([[NOTE_ID, ALICE]]),
+      });
+      expect(template.tags.filter((t) => t[0] === "p")).toHaveLength(1);
+      expect(recipients).toEqual([
+        { pubkey: ALICE, via: ["mention", "quote-author"], excluded: false },
+      ]);
+    });
+
+    it("adds no p tag for a quote of your own note", async () => {
+      const { template, recipients } = await buildPostTemplate({
+        ...base,
+        quoteAuthors: new Map([[NOTE_ID, SELF]]),
+      });
+      expect(getTaggedPubkeys(template)).toEqual([]);
+      expect(recipients).toEqual([]);
+      expect(template.tags).toContainEqual(["q", NOTE_ID, "", SELF]);
+    });
+
+    it("untagging a quoted author keeps the q tag", async () => {
+      const { template, recipients } = await buildPostTemplate({
+        ...base,
+        quoteAuthors: new Map([[NOTE_ID, ALICE]]),
+        excludedRecipients: new Set([ALICE]),
+      });
+      expect(getTaggedPubkeys(template)).toEqual([]);
+      expect(template.tags).toContainEqual(["q", NOTE_ID, "", ALICE]);
+      expect(recipients[0].excluded).toBe(true);
+    });
+
+    it("covers a bare note1 that applesauce repairs", async () => {
+      const { template } = await buildPostTemplate({
+        ...base,
+        content: `see ${nip19.noteEncode(NOTE_ID)}`,
+        quoteAuthors: new Map([[NOTE_ID, ALICE]]),
+      });
+      expect(getTaggedPubkeys(template)).toEqual([ALICE]);
+    });
+  });
 });

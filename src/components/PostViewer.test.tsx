@@ -125,6 +125,21 @@ const answer = (pubkey: string, r: Resolution) =>
     pendingCall.resolve(r);
   });
 
+// Quoted-event loads: each is a Subject the test completes (not found) or
+// leaves open. Finding the event is done by adding it to the real store.
+const loads = vi.hoisted(() => new Map<string, { complete: () => void }>());
+vi.mock("@/services/loaders", async (importOriginal) => {
+  const { Subject } = await import("rxjs");
+  return {
+    ...(await importOriginal<typeof import("@/services/loaders")>()),
+    eventLoader: (pointer: { id: string }) => {
+      const subject = new Subject<never>();
+      loads.set(pointer.id, subject);
+      return subject.asObservable();
+    },
+  };
+});
+
 const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
   warning: vi.fn(),
@@ -242,6 +257,7 @@ function okPublish(relays: string[]) {
 beforeEach(() => {
   localStorage.clear();
   inboxCalls.length = 0;
+  loads.clear();
   toastMock.success.mockReset();
   toastMock.warning.mockReset();
   toastMock.error.mockReset();
@@ -634,4 +650,127 @@ describe("PostViewer tagged people", () => {
       { description: "No inbox relay accepted it for 1 person." },
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// Quoted notes' authors
+// ---------------------------------------------------------------------------
+
+describe("PostViewer quoted notes", () => {
+  const signNote = (sk: Uint8Array, content: string) =>
+    finalizeEvent(
+      { kind: 1, created_at: Math.floor(Date.now() / 1000), tags: [], content },
+      sk,
+    );
+
+  it("tags the verified author of a quoted note and looks up their inboxes", async () => {
+    const carolSk = generateSecretKey();
+    const carol = getPublicKey(carolSk);
+    const quoted = signNote(carolSk, "quoted " + Math.random());
+    eventStore.add(quoted);
+
+    render(<PostViewer />);
+    await type(`look nostr:${nip19.noteEncode(quoted.id)}`);
+    await waitFor(() =>
+      expect(recipientRow(carol).textContent).toContain(
+        "author of a quoted note",
+      ),
+    );
+    await waitFor(() =>
+      expect(inboxCalls.map((c) => c.pubkey)).toContain(carol),
+    );
+    await answer(carol, {
+      status: "resolved",
+      relays: ["wss://carol.example.com/"],
+      blocked: [],
+    });
+
+    fireEvent.click(screen.getByText("Publish"));
+    await screen.findByTestId("published");
+    const { event, relays } = publishedCall();
+    expect(event.tags).toContainEqual(["p", carol]);
+    expect(event.tags).toContainEqual(["q", quoted.id, "", carol]);
+    expect(relays).toContain("wss://carol.example.com/");
+  });
+
+  it("trusts the signed event over an nevent author hint that disagrees", async () => {
+    const realSk = generateSecretKey();
+    const real = getPublicKey(realSk);
+    const claimed = getPublicKey(generateSecretKey());
+    const quoted = signNote(realSk, "real " + Math.random());
+    eventStore.add(quoted);
+
+    render(<PostViewer />);
+    await type(
+      `see nostr:${nip19.neventEncode({ id: quoted.id, author: claimed, kind: 1 })}`,
+    );
+    await waitFor(() => expect(recipientRow(real)).toBeTruthy());
+    expect(screen.queryByTestId(`recipient-${claimed}`)).toBeNull();
+
+    fireEvent.click(screen.getByText("Publish"));
+    await screen.findByTestId("published", undefined, { timeout: 5000 });
+    const { event } = publishedCall();
+    const pTags = event.tags.filter((t) => t[0] === "p").map((t) => t[1]);
+    expect(pTags).toEqual([real]);
+    expect(event.tags.find((t) => t[0] === "q")?.[3]).toBe(real);
+  }, 10000);
+
+  it("says a quoted note was not found and does not tag a guessed author", async () => {
+    const missing = "9".repeat(64);
+    const hinted = getPublicKey(generateSecretKey());
+    render(<PostViewer />);
+    await type(
+      `see nostr:${nip19.neventEncode({ id: missing, author: hinted, kind: 1 })}`,
+    );
+    expect(screen.getByTestId(`quote-${missing}`).textContent).toContain(
+      "finding its author",
+    );
+
+    await act(async () => loads.get(missing)?.complete());
+    expect(screen.getByTestId(`quote-${missing}`).textContent).toContain(
+      "not found",
+    );
+
+    fireEvent.click(screen.getByText("Publish"));
+    await screen.findByTestId("published");
+    const { event } = publishedCall();
+    expect(event.tags.filter((t) => t[0] === "p")).toEqual([]);
+    // The quote itself is untouched.
+    expect(event.tags.find((t) => t[0] === "q")?.[1]).toBe(missing);
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Published to all 2 relays",
+      {
+        description:
+          "Couldn't confirm the author of 1 quoted note, so it wasn't tagged.",
+      },
+    );
+  });
+
+  it("waits for a quoted note still loading at Publish, within the same 3s", async () => {
+    const daveSk = generateSecretKey();
+    const dave = getPublicKey(daveSk);
+    const quoted = signNote(daveSk, "slow " + Math.random());
+    render(<PostViewer />);
+    await type(`slow nostr:${nip19.noteEncode(quoted.id)}`);
+    fireEvent.click(screen.getByText("Publish"));
+    expect(await screen.findByText("Finding inboxes…")).toBeTruthy();
+
+    // The note arrives while Publish waits; Dave's inbox lookup then runs
+    // inside what is left of the deadline.
+    await act(async () => {
+      eventStore.add(quoted);
+    });
+    await waitFor(() =>
+      expect(inboxCalls.map((c) => c.pubkey)).toContain(dave),
+    );
+    await answer(dave, {
+      status: "resolved",
+      relays: ["wss://dave.example.com/"],
+      blocked: [],
+    });
+    await screen.findByTestId("published", undefined, { timeout: 5000 });
+    const { event, relays } = publishedCall();
+    expect(event.tags).toContainEqual(["p", dave]);
+    expect(relays).toContain("wss://dave.example.com/");
+  }, 10000);
 });
