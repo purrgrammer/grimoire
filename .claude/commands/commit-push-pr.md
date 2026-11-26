@@ -13,5 +13,9 @@ Instructions:
    - Clear title summarizing the change
    - Summary section with bullet points
    - Test plan section describing how to verify
+   - Visual evidence section (see CLAUDE.md, "Visual evidence on every PR").
+     Upload screenshots with `gh pr create --attach '<file>#<alt>'` (or
+     `gh pr edit`/`gh pr comment --attach` afterwards). Keep the images outside
+     the repository and never commit them.
 
 Do NOT push to main/master directly.
