@@ -48,6 +48,8 @@ import {
 } from "./FavoriteSpellsRenderer";
 import { Kind30023Renderer } from "./ArticleRenderer";
 import { Kind30023DetailRenderer } from "./ArticleDetailRenderer";
+import { ClassifiedRenderer } from "./ClassifiedRenderer";
+import { ClassifiedDetailRenderer } from "./ClassifiedDetailRenderer";
 import { PublicationIndexRenderer } from "./PublicationIndexRenderer";
 import { PublicationIndexDetailRenderer } from "./PublicationIndexDetailRenderer";
 import { PublicationSectionRenderer } from "./PublicationSectionRenderer";
@@ -328,6 +330,8 @@ const kindRenderers: Record<number, React.ComponentType<BaseEventProps>> = {
   30166: RelayDiscoveryRenderer, // Relay Discovery (NIP-66)
   30267: ZapstoreAppSetRenderer, // Zapstore App Collection
   30311: LiveActivityRenderer, // Live Streaming Event (NIP-53)
+  30402: ClassifiedRenderer, // Classified Listing (NIP-99)
+  30403: ClassifiedRenderer, // Draft or Inactive Classified Listing (NIP-99)
   30382: TrustedAssertionRenderer, // User Assertion (NIP-85)
   30383: TrustedAssertionRenderer, // Event Assertion (NIP-85)
   30384: TrustedAssertionRenderer, // Address Assertion (NIP-85)
@@ -477,6 +481,8 @@ const detailRenderers: Record<
   30166: RelayDiscoveryDetailRenderer, // Relay Discovery Detail (NIP-66)
   30267: ZapstoreAppSetDetailRenderer, // Zapstore App Collection Detail
   30311: LiveActivityDetailRenderer, // Live Streaming Event Detail (NIP-53)
+  30402: ClassifiedDetailRenderer, // Classified Listing Detail (NIP-99)
+  30403: ClassifiedDetailRenderer, // Draft or Inactive Classified Listing Detail (NIP-99)
   30382: TrustedAssertionDetailRenderer, // User Assertion Detail (NIP-85)
   30383: TrustedAssertionDetailRenderer, // Event Assertion Detail (NIP-85)
   30384: TrustedAssertionDetailRenderer, // Address Assertion Detail (NIP-85)

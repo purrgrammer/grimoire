@@ -99,6 +99,7 @@ import { GenericRepostCompactPreview } from "./GenericRepostCompactPreview";
 import { ZapCompactPreview } from "./ZapCompactPreview";
 import { OnchainZapCompactPreview } from "./OnchainZapCompactPreview";
 import { VoiceMessageCompactPreview } from "./VoiceMessageCompactPreview";
+import { ClassifiedCompactPreview } from "./ClassifiedCompactPreview";
 import {
   GitStatusCompactPreview,
   GitTicketCompactPreview,
@@ -128,3 +129,7 @@ registerCompactRenderer(1632, GitStatusCompactPreview);
 registerCompactRenderer(1633, GitStatusCompactPreview);
 registerCompactRenderer(30617, RepositoryCompactPreview);
 registerCompactRenderer(30618, RepositoryStateCompactPreview);
+
+// NIP-99 classified listings: title, price and (when wide) location on one line.
+registerCompactRenderer(30402, ClassifiedCompactPreview);
+registerCompactRenderer(30403, ClassifiedCompactPreview);

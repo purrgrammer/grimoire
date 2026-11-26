@@ -369,6 +369,17 @@ everything above — green checks do not replace it.
   nor sign. Quote a mock group — `chat "ws://localhost:<port>'group"` —
   because `parseGroupArgs` only rejoins `host'group` when the host has a dot.
   Say which captures used mocks and which reached a real relay.
+- **Attach screenshots to the PR; never commit them.** Upload captures with
+  the `--attach` flag of `gh pr create`, `gh pr edit` or `gh pr comment`
+  (gh ≥ 2.105), e.g. `gh pr comment <PR> --body-file evidence.md --attach
+  './pr-feed-mobile.png#Feed, 390px, this PR'`. A body reference such as
+  `![alt](./pr-feed-mobile.png)` is rewritten to the uploaded asset. Keep
+  the captures outside the repository (e.g. `/tmp`), and keep the text
+  provenance — build SHA, viewports, mocks, frame counts, steps to
+  reproduce — in the PR body or comment. Check that the images render on
+  the PR page before calling the evidence delivered; if an upload fails,
+  report it — don't fall back to committing images. `docs/evidence/` holds
+  captures from earlier PRs; leave them, but add no new ones.
 - **Not evidence:** a unit render (`renderToStaticMarkup`), a description of
   what the screen should show, or a capture from another commit.
 - **No UI change:** write `Visual evidence: N/A — <reason>` (docs, CI config,
