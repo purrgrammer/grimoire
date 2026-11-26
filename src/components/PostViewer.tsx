@@ -49,6 +49,7 @@ import {
 import { useRecipientInboxes } from "@/hooks/useRecipientInboxes";
 import type { InboxResolution } from "@/services/relay-selection";
 import { PostRecipients } from "./post/PostRecipients";
+import { PostDisclosure } from "./post/PostDisclosure";
 import {
   parsePostDraft,
   postDraftKey,
@@ -85,10 +86,6 @@ function resolvedRelays(resolution: InboxResolution | undefined): string[] {
   return resolution?.status === "resolved" ? resolution.relays : [];
 }
 
-function personCount(n: number) {
-  return `${n} ${n === 1 ? "person" : "people"}`;
-}
-
 export function PostViewer({ windowId }: PostViewerProps = {}) {
   const { pubkey, canSign, signer } = useAccount();
   const { searchProfiles } = useProfileSearch();
@@ -115,6 +112,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     useState<NostrEvent | null>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [newRelayInput, setNewRelayInput] = useState("");
+  // Disclosure state. Only the user changes it: late lookups never expand
+  // or collapse a section.
+  const [recipientsOpen, setRecipientsOpen] = useState(false);
+  const [relaysOpen, setRelaysOpen] = useState(true);
 
   // What the user decided. Everything else is derived (src/lib/post-relays.ts).
   const [addedRelays, setAddedRelays] = useState<string[]>([]);
@@ -179,6 +180,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const selectedRelays = useMemo(
     () => effectiveSelection(displayRows, overrides),
     [displayRows, overrides],
+  );
+  const effectiveSelectionSet = useMemo(
+    () => new Set(selectedRelays),
+    [selectedRelays],
   );
 
   // ---------------------------------------------------------------------------
@@ -562,32 +567,31 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             selected,
             publishResult.successful,
           );
-          const notes: string[] = [];
+          // Relay answers only: an OK means that relay stored the note, not
+          // that the person saw it.
+          const inboxParts: string[] = [];
           if (delivery.accepted.length > 0)
-            notes.push(
-              `Accepted by an inbox relay of ${personCount(delivery.accepted.length)} you tagged.`,
-            );
+            inboxParts.push(`accepted for ${delivery.accepted.length}`);
           if (delivery.rejected.length > 0)
-            notes.push(
-              `No inbox relay accepted it for ${personCount(delivery.rejected.length)}.`,
-            );
+            inboxParts.push(`refused for ${delivery.rejected.length}`);
           if (delivery.noInboxSelected.length > 0) {
             const stillLooking = delivery.noInboxSelected.filter(
               (pk) => inboxSnapshot.get(pk)?.status === "pending",
             ).length;
-            notes.push(
-              `Not sent to any inbox relay of ${personCount(delivery.noInboxSelected.length)}` +
-                (stillLooking > 0
-                  ? ` (${stillLooking} still being looked up).`
-                  : "."),
+            inboxParts.push(
+              `not sent for ${delivery.noInboxSelected.length}` +
+                (stillLooking > 0 ? ` (${stillLooking} still looking up)` : ""),
             );
           }
+          const notes: string[] = [];
+          if (inboxParts.length > 0)
+            notes.push(`Inbox relays: ${inboxParts.join(", ")}.`);
           const untaggedQuotes = [...quoteSnapshot.values()].filter(
             (r) => r.status !== "resolved",
           ).length;
           if (untaggedQuotes > 0)
             notes.push(
-              `Couldn't confirm the author of ${untaggedQuotes} quoted note${untaggedQuotes === 1 ? "" : "s"}, so ${untaggedQuotes === 1 ? "it wasn't" : "they weren't"} tagged.`,
+              `${untaggedQuotes} quoted note author${untaggedQuotes === 1 ? "" : "s"} not tagged.`,
             );
           const description = notes.length > 0 ? notes.join(" ") : undefined;
 
@@ -605,7 +609,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         } else {
           setFrozenRows(null);
           toast.error(
-            "Failed to publish to any relay. Please check your relay connections and try again.",
+            "No relay accepted the note. Check your relays and try again.",
           );
         }
       } catch (error) {
@@ -695,6 +699,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const authorRows = displayRows.filter((r) => r.section === "author");
   const inboxRows = displayRows.filter((r) => r.section === "recipients");
   const hasInboxSection = inboxRows.length > 0;
+  const countSelected = (list: RelayRow[]) =>
+    list.filter((r) => effectiveSelectionSet.has(r.url)).length;
   const renderRow = (row: RelayRow) => (
     <PostRelayRow
       key={row.url}
@@ -821,18 +827,23 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             unresolvedQuotes={unresolvedQuotes}
             getInbox={inboxes.get}
             disabled={isPublishing}
+            open={recipientsOpen}
+            onOpenChange={setRecipientsOpen}
             onExclude={excludeRecipient}
             onInclude={includeRecipient}
           />
         )}
 
         {/* Relay selection */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">
-              Relays ({selectedRelays.length} selected)
-            </span>
-            {!rowsLocked && hasActiveOverrides(displayRows, overrides) && (
+        <PostDisclosure
+          label="Relays"
+          meta={`${selectedRelays.length} of ${displayRows.length} selected`}
+          open={relaysOpen}
+          onOpenChange={setRelaysOpen}
+          testId="post-relays"
+        >
+          {!rowsLocked && hasActiveOverrides(displayRows, overrides) && (
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={resetRelaySelection}
@@ -840,13 +851,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
               >
                 Reset selection
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="space-y-1 max-h-80 overflow-y-auto">
             {hasInboxSection && (
               <h3 className="text-xs text-muted-foreground font-normal pt-1">
-                Your relays
+                Your relays · {countSelected(authorRows)} of {authorRows.length}
               </h3>
             )}
             {authorRows.map(renderRow)}
@@ -859,12 +870,9 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                   id="post-inbox-relays-heading"
                   className="text-xs text-muted-foreground font-normal"
                 >
-                  Tagged people&apos;s inboxes
+                  Tagged people&apos;s inboxes · {countSelected(inboxRows)} of{" "}
+                  {inboxRows.length}
                 </h3>
-                <p className="text-xs text-muted-foreground">
-                  The relays these people list for reading mentions (NIP-65).
-                  Untick any you don&apos;t want to send to.
-                </p>
                 {inboxRows.map(renderRow)}
               </section>
             )}
@@ -897,7 +905,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
               </Button>
             </div>
           )}
-        </div>
+        </PostDisclosure>
 
         {uploadDialog}
       </div>

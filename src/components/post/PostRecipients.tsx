@@ -1,44 +1,116 @@
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { UserName } from "@/components/nostr/UserName";
 import type { PostRecipient, RecipientVia } from "@/lib/post-template";
 import type { InboxResolution } from "@/services/relay-selection";
+import { PostDisclosure } from "./PostDisclosure";
 
 const VIA_LABEL: Record<RecipientVia, string> = {
-  mention: "mentioned",
-  "address-author": "author of a quoted event",
-  "quote-author": "author of a quoted note",
+  mention: "mention",
+  "address-author": "quoted event author",
+  "quote-author": "quoted note author",
 };
 
-function viaText(via: RecipientVia[]): string {
-  return via.map((v) => VIA_LABEL[v]).join(", ");
-}
+type InboxState = "pending" | "ok" | "problem";
 
-/** What we know about where this person reads, in words. */
+/** Where this person reads, in a few words. */
 function inboxText(resolution: InboxResolution): {
   text: string;
-  pending?: boolean;
-  warn?: boolean;
+  state: InboxState;
 } {
   switch (resolution.status) {
     case "pending":
-      return { text: "finding inbox relays…", pending: true };
+      return { text: "looking up…", state: "pending" };
     case "resolved": {
       const n = resolution.relays.length;
       const blocked =
         resolution.blocked.length > 0
-          ? ` (${resolution.blocked.length} blocked by you)`
+          ? ` (${resolution.blocked.length} blocked)`
           : "";
       if (n === 0)
-        return { text: `no usable inbox relays${blocked}`, warn: true };
-      return { text: `${n} inbox relay${n === 1 ? "" : "s"}${blocked}` };
+        return { text: `no usable inbox${blocked}`, state: "problem" };
+      return {
+        text: `${n} inbox${n === 1 ? "" : "es"}${blocked}`,
+        state: "ok",
+      };
     }
     case "no-list":
-      return { text: "no relay list found", warn: true };
+      return { text: "no relay list", state: "problem" };
     case "timeout":
-      return { text: "relay list lookup timed out", warn: true };
+      return { text: "lookup timed out", state: "problem" };
     case "error":
-      return { text: "couldn't look up relay list", warn: true };
+      return { text: "lookup failed", state: "problem" };
   }
+}
+
+/** Warning icon in the theme's warning colour; the words carry the meaning. */
+function WarnIcon() {
+  return (
+    <AlertTriangle
+      className="h-3 w-3 flex-shrink-0 text-warning"
+      aria-hidden="true"
+    />
+  );
+}
+
+interface RecipientsSummary {
+  tagged: number;
+  /** Inbox lookups and quote authors still in flight. */
+  pending: number;
+  /** Tagged people we found no usable inbox for (no list, timeout, failure). */
+  noInbox: number;
+  /** Quoted notes not found, so their author is not tagged. */
+  quotesMissing: number;
+  untagged: number;
+}
+
+/** Counts for the collapsed header. Quotes still loading count as pending. */
+function summarizeRecipients(
+  recipients: PostRecipient[],
+  unresolvedQuotes: { status: "pending" | "not-found" }[],
+  getInbox: (pubkey: string) => InboxResolution,
+): RecipientsSummary {
+  const summary = {
+    tagged: 0,
+    pending: 0,
+    noInbox: 0,
+    quotesMissing: 0,
+    untagged: 0,
+  };
+  for (const r of recipients) {
+    if (r.excluded) {
+      summary.untagged++;
+      continue;
+    }
+    summary.tagged++;
+    const state = inboxText(getInbox(r.pubkey)).state;
+    if (state === "pending") summary.pending++;
+    if (state === "problem") summary.noInbox++;
+  }
+  for (const q of unresolvedQuotes) {
+    if (q.status === "pending") summary.pending++;
+    else summary.quotesMissing++;
+  }
+  return summary;
+}
+
+function SummaryMeta({ summary }: { summary: RecipientsSummary }) {
+  const parts: string[] = [String(summary.tagged)];
+  if (summary.pending > 0) parts.push(`${summary.pending} looking up`);
+  if (summary.noInbox > 0) parts.push(`${summary.noInbox} no inbox`);
+  if (summary.quotesMissing > 0)
+    parts.push(`${summary.quotesMissing} quote not found`);
+  if (summary.untagged > 0) parts.push(`${summary.untagged} untagged`);
+  return (
+    <span className="inline-flex items-center gap-1">
+      {summary.pending > 0 && (
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      )}
+      {summary.pending === 0 && summary.noInbox + summary.quotesMissing > 0 && (
+        <WarnIcon />
+      )}
+      {parts.join(" · ")}
+    </span>
+  );
 }
 
 interface PostRecipientsProps {
@@ -47,6 +119,8 @@ interface PostRecipientsProps {
   unresolvedQuotes: { id: string; status: "pending" | "not-found" }[];
   getInbox: (pubkey: string) => InboxResolution;
   disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onExclude: (pubkey: string) => void;
   onInclude: (pubkey: string) => void;
 }
@@ -54,33 +128,35 @@ interface PostRecipientsProps {
 /**
  * Who the note tags, why, and where they read — with a way to untag.
  *
- * Untagging removes that person's `p` tag from the signed note (and with it
- * their inbox relays). The mention or quote stays in the text.
+ * Collapsed by default: the header carries the count and anything pending
+ * or wrong. Untagging removes that person's `p` tag from the signed note
+ * (and with it their inbox relays). The mention or quote stays in the text.
  */
 export function PostRecipients({
   recipients,
   unresolvedQuotes,
   getInbox,
   disabled,
+  open,
+  onOpenChange,
   onExclude,
   onInclude,
 }: PostRecipientsProps) {
   if (recipients.length === 0 && unresolvedQuotes.length === 0) return null;
-  const tagged = recipients.filter((r) => !r.excluded).length;
-  const anyExcluded = recipients.some((r) => r.excluded);
+  const summary = summarizeRecipients(recipients, unresolvedQuotes, getInbox);
 
   return (
-    <section aria-labelledby="post-recipients-heading" className="space-y-1">
-      <h3
-        id="post-recipients-heading"
-        className="text-sm text-muted-foreground font-normal"
-      >
-        Tagged people ({tagged})
-      </h3>
+    <PostDisclosure
+      label="Tagged"
+      meta={<SummaryMeta summary={summary} />}
+      open={open}
+      onOpenChange={onOpenChange}
+      testId="post-recipients"
+    >
       <ul className="space-y-1">
         {recipients.map((recipient) => {
           const inbox = recipient.excluded
-            ? { text: "not tagged" }
+            ? { text: "untagged", state: "ok" as InboxState }
             : inboxText(getInbox(recipient.pubkey));
           return (
             <li
@@ -89,23 +165,24 @@ export function PostRecipients({
               data-testid={`recipient-${recipient.pubkey}`}
             >
               <div
-                className={`min-w-0 flex-1 ${recipient.excluded ? "opacity-60" : ""}`}
+                className={`min-w-0 flex-1 ${recipient.excluded ? "opacity-70" : ""}`}
               >
                 <div className="text-sm truncate">
                   <UserName pubkey={recipient.pubkey} />
                 </div>
                 <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-1">
-                  <span>{viaText(recipient.via)}</span>
+                  <span>
+                    {recipient.via.map((v) => VIA_LABEL[v]).join(", ")}
+                  </span>
                   <span aria-hidden="true">·</span>
-                  <span
-                    className={`inline-flex items-center gap-1 ${"warn" in inbox && inbox.warn ? "text-amber-500" : ""}`}
-                  >
-                    {"pending" in inbox && inbox.pending && (
+                  <span className="inline-flex items-center gap-1">
+                    {inbox.state === "pending" && (
                       <Loader2
                         className="h-3 w-3 animate-spin"
                         aria-hidden="true"
                       />
                     )}
+                    {inbox.state === "problem" && <WarnIcon />}
                     {inbox.text}
                   </span>
                 </p>
@@ -120,7 +197,7 @@ export function PostRecipients({
                 }
                 className="flex-shrink-0 text-xs text-muted-foreground px-2 py-1 rounded-sm border border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {recipient.excluded ? "Tag again" : "Don't tag"}
+                {recipient.excluded ? "Tag" : "Untag"}
               </button>
             </li>
           );
@@ -128,29 +205,29 @@ export function PostRecipients({
         {unresolvedQuotes.map((quote) => (
           <li
             key={quote.id}
-            className="py-1 text-xs text-muted-foreground"
+            className="py-1 text-xs text-muted-foreground inline-flex items-center gap-1"
             data-testid={`quote-${quote.id}`}
           >
             {quote.status === "pending" ? (
-              <span className="inline-flex items-center gap-1">
+              <>
                 <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                Quoted note: finding its author…
-              </span>
+                Quoted note: looking up author…
+              </>
             ) : (
-              <span className="text-amber-500">
-                Quoted note not found, so its author isn&apos;t tagged.
-              </span>
+              <>
+                <WarnIcon />
+                Quoted note not found; author not tagged.
+              </>
             )}
           </li>
         ))}
       </ul>
-      {anyExcluded && (
-        <p className="text-xs text-muted-foreground">
-          Untagged people stay mentioned in the text, but the note carries no
-          tag for them — the tag clients use to notify — and their inbox relays
-          aren't added. The note is still public, so they can still see it.
+      {summary.untagged > 0 && (
+        <p className="text-xs text-muted-foreground pt-1">
+          Untagged people stay in the text but get no tag and no inbox copy. The
+          note is still public.
         </p>
       )}
-    </section>
+    </PostDisclosure>
   );
 }

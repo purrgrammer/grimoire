@@ -444,17 +444,17 @@ describe("PostViewer tagged people", () => {
     render(<PostViewer />);
     await type(`hi ${mention(ALICE)}`);
 
-    expect(recipientRow(ALICE).textContent).toContain("mentioned");
-    expect(recipientRow(ALICE).textContent).toContain("finding inbox relays");
+    expect(recipientRow(ALICE).textContent).toContain("mention");
+    expect(recipientRow(ALICE).textContent).toContain("looking up");
     expect(inboxCalls.map((c) => c.pubkey)).toEqual([ALICE]);
 
     await answer(ALICE, { status: "resolved", relays: [A1, W1], blocked: [] });
-    expect(screen.getByText("Tagged people's inboxes")).toBeTruthy();
+    expect(screen.getByText(/Tagged people's inboxes/)).toBeTruthy();
     expect(isChecked(A1)).toBe(true);
     // W1 is already the author's: one row, with Alice as a second reason.
     expect(document.querySelectorAll(`[id="${W1}"]`)).toHaveLength(1);
     expect(screen.getByText("also inbox of")).toBeTruthy();
-    expect(recipientRow(ALICE).textContent).toContain("2 inbox relays");
+    expect(recipientRow(ALICE).textContent).toContain("2 inboxes");
   });
 
   it("says when a person has no relay list, or the lookup timed out", async () => {
@@ -462,9 +462,9 @@ describe("PostViewer tagged people", () => {
     await type(`${mention(ALICE)} ${mention(BOB)}`);
     await answer(ALICE, { status: "no-list" });
     await answer(BOB, { status: "timeout" });
-    expect(recipientRow(ALICE).textContent).toContain("no relay list found");
+    expect(recipientRow(ALICE).textContent).toContain("no relay list");
     expect(recipientRow(BOB).textContent).toContain("lookup timed out");
-    expect(screen.queryByText("Tagged people's inboxes")).toBeNull();
+    expect(screen.queryByText(/Tagged people's inboxes/)).toBeNull();
   });
 
   it("keeps an unticked inbox relay off when the person's list changes later", async () => {
@@ -524,10 +524,10 @@ describe("PostViewer tagged people", () => {
     await answer(BOB, { status: "resolved", relays: [SHARED], blocked: [] });
 
     fireEvent.click(
-      within(recipientRow(ALICE)).getByRole("button", { name: "Don't tag" }),
+      within(recipientRow(ALICE)).getByRole("button", { name: "Untag" }),
     );
-    expect(recipientRow(ALICE).textContent).toContain("not tagged");
-    expect(screen.getByText(/stay mentioned in the text/)).toBeTruthy();
+    expect(recipientRow(ALICE).textContent).toContain("untagged");
+    expect(screen.getByText(/stay in the text but get no tag/)).toBeTruthy();
     expect(document.getElementById(A1)).toBeNull();
     expect(isChecked(SHARED)).toBe(true);
 
@@ -546,23 +546,23 @@ describe("PostViewer tagged people", () => {
     await type(`hi ${mention(ALICE)}`);
     await answer(ALICE, { status: "resolved", relays: [A1], blocked: [] });
     fireEvent.click(
-      within(recipientRow(ALICE)).getByRole("button", { name: "Don't tag" }),
+      within(recipientRow(ALICE)).getByRole("button", { name: "Untag" }),
     );
     // Editing (even removing and re-adding the mention) does not re-tag.
     await type("hi");
     await type(`hi ${mention(ALICE)} again`);
-    expect(recipientRow(ALICE).textContent).toContain("not tagged");
+    expect(recipientRow(ALICE).textContent).toContain("untagged");
     await pastDebounce();
 
     cleanup();
     render(<PostViewer />);
     await waitFor(() =>
       expect(screen.getByTestId(`recipient-${ALICE}`).textContent).toContain(
-        "not tagged",
+        "untagged",
       ),
     );
     fireEvent.click(
-      within(recipientRow(ALICE)).getByRole("button", { name: "Tag again" }),
+      within(recipientRow(ALICE)).getByRole("button", { name: "Tag" }),
     );
     // A fresh composer looks the person up again once they are tagged.
     await waitFor(() =>
@@ -579,10 +579,10 @@ describe("PostViewer tagged people", () => {
     await answer(ALICE, { status: "resolved", relays: [A1, A2], blocked: [] });
     fireEvent.click(checkbox(A2));
     fireEvent.click(
-      within(recipientRow(ALICE)).getByRole("button", { name: "Don't tag" }),
+      within(recipientRow(ALICE)).getByRole("button", { name: "Untag" }),
     );
     fireEvent.click(
-      within(recipientRow(ALICE)).getByRole("button", { name: "Tag again" }),
+      within(recipientRow(ALICE)).getByRole("button", { name: "Tag" }),
     );
     expect(isChecked(A1)).toBe(true);
     expect(isChecked(A2)).toBe(false);
@@ -600,7 +600,7 @@ describe("PostViewer tagged people", () => {
     expect(publishedCall().relays).toEqual([W1, W2, A1]);
     expect(toastMock.success).toHaveBeenCalledWith(
       "Published to all 3 relays",
-      { description: "Accepted by an inbox relay of 1 person you tagged." },
+      { description: "Inbox relays: accepted for 1." },
     );
   });
 
@@ -619,8 +619,7 @@ describe("PostViewer tagged people", () => {
     expect(toastMock.success).toHaveBeenCalledWith(
       "Published to all 2 relays",
       {
-        description:
-          "Not sent to any inbox relay of 1 person (1 still being looked up).",
+        description: "Inbox relays: not sent for 1 (1 still looking up).",
       },
     );
 
@@ -647,7 +646,7 @@ describe("PostViewer tagged people", () => {
     await screen.findByTestId("published");
     expect(toastMock.warning).toHaveBeenCalledWith(
       "Published to 2 of 3 relays",
-      { description: "No inbox relay accepted it for 1 person." },
+      { description: "Inbox relays: refused for 1." },
     );
   });
 });
@@ -672,9 +671,7 @@ describe("PostViewer quoted notes", () => {
     render(<PostViewer />);
     await type(`look nostr:${nip19.noteEncode(quoted.id)}`);
     await waitFor(() =>
-      expect(recipientRow(carol).textContent).toContain(
-        "author of a quoted note",
-      ),
+      expect(recipientRow(carol).textContent).toContain("quoted note author"),
     );
     await waitFor(() =>
       expect(inboxCalls.map((c) => c.pubkey)).toContain(carol),
@@ -723,7 +720,7 @@ describe("PostViewer quoted notes", () => {
       `see nostr:${nip19.neventEncode({ id: missing, author: hinted, kind: 1 })}`,
     );
     expect(screen.getByTestId(`quote-${missing}`).textContent).toContain(
-      "finding its author",
+      "looking up author",
     );
 
     await act(async () => loads.get(missing)?.complete());
@@ -740,8 +737,7 @@ describe("PostViewer quoted notes", () => {
     expect(toastMock.success).toHaveBeenCalledWith(
       "Published to all 2 relays",
       {
-        description:
-          "Couldn't confirm the author of 1 quoted note, so it wasn't tagged.",
+        description: "1 quoted note author not tagged.",
       },
     );
   });
@@ -773,4 +769,83 @@ describe("PostViewer quoted notes", () => {
     expect(event.tags).toContainEqual(["p", dave]);
     expect(relays).toContain("wss://dave.example.com/");
   }, 10000);
+});
+
+// ---------------------------------------------------------------------------
+// Disclosures
+// ---------------------------------------------------------------------------
+
+describe("PostViewer disclosures", () => {
+  const details = (testId: string) =>
+    screen.getByTestId(testId) as HTMLDetailsElement;
+  const summaryOf = (testId: string) =>
+    details(testId).querySelector("summary") as HTMLElement;
+  /** What a user toggling the native summary does: flips `open`, fires toggle. */
+  const toggle = (testId: string) =>
+    act(async () => {
+      const el = details(testId);
+      el.open = !el.open;
+      el.dispatchEvent(new Event("toggle"));
+    });
+
+  it("starts with tagged people collapsed and relays open", async () => {
+    render(<PostViewer />);
+    await type(`hi ${mention(ALICE)}`);
+    expect(details("post-recipients").open).toBe(false);
+    expect(details("post-relays").open).toBe(true);
+    // Native disclosure: a summary, no heading inside it.
+    expect(
+      summaryOf("post-recipients").querySelector("h1,h2,h3,h4"),
+    ).toBeNull();
+  });
+
+  it("sums up the tagged people in the collapsed header", async () => {
+    render(<PostViewer />);
+    await type(`${mention(ALICE)} ${mention(BOB)}`);
+    expect(summaryOf("post-recipients").textContent).toBe(
+      "Tagged2 · 2 looking up",
+    );
+    await answer(ALICE, { status: "resolved", relays: [A1], blocked: [] });
+    await answer(BOB, { status: "timeout" });
+    expect(summaryOf("post-recipients").textContent).toBe(
+      "Tagged2 · 1 no inbox",
+    );
+    fireEvent.click(
+      within(recipientRow(BOB)).getByRole("button", { name: "Untag" }),
+    );
+    expect(summaryOf("post-recipients").textContent).toBe(
+      "Tagged1 · 1 untagged",
+    );
+  });
+
+  it("stays as the user left it when lookups answer late", async () => {
+    render(<PostViewer />);
+    await type(`hi ${mention(ALICE)}`);
+    await answer(ALICE, { status: "resolved", relays: [A1], blocked: [] });
+    expect(details("post-recipients").open).toBe(false);
+
+    await toggle("post-recipients");
+    expect(details("post-recipients").open).toBe(true);
+    await toggle("post-relays");
+    expect(details("post-relays").open).toBe(false);
+
+    // A new mention and its late answer change neither section.
+    await type(`hi ${mention(ALICE)} ${mention(BOB)}`);
+    await answer(BOB, { status: "resolved", relays: [SHARED], blocked: [] });
+    expect(details("post-recipients").open).toBe(true);
+    expect(details("post-relays").open).toBe(false);
+    // Rows stay reachable while the section is closed.
+    expect(isChecked(SHARED)).toBe(true);
+  });
+
+  it("counts the effective selection in the relays header and each section", async () => {
+    render(<PostViewer />);
+    await type(`hi ${mention(ALICE)}`);
+    await answer(ALICE, { status: "resolved", relays: [A1, A2], blocked: [] });
+    expect(summaryOf("post-relays").textContent).toBe("Relays4 of 4 selected");
+    fireEvent.click(checkbox(A2));
+    expect(summaryOf("post-relays").textContent).toBe("Relays3 of 4 selected");
+    expect(screen.getByText(/Your relays · 2 of 2/)).toBeTruthy();
+    expect(screen.getByText(/Tagged people's inboxes · 1 of 2/)).toBeTruthy();
+  });
 });

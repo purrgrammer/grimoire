@@ -32,10 +32,10 @@ author. Nothing else decides it.
 
 | In the content | `p` tag | Shown as |
 | --- | --- | --- |
-| `npub` / `nprofile` (also a bare `npub1…`, which applesauce repairs) | yes | mentioned |
-| `naddr` (pubkey is part of the address) | yes | author of a quoted event |
-| `note` / `nevent` whose event is in hand | yes, from the **signed event's** pubkey | author of a quoted note |
-| `note` / `nevent` not found | no | "Quoted note not found, so its author isn't tagged" |
+| `npub` / `nprofile` (also a bare `npub1…`, which applesauce repairs) | yes | mention |
+| `naddr` (pubkey is part of the address) | yes | quoted event author |
+| `note` / `nevent` whose event is in hand | yes, from the **signed event's** pubkey | quoted note author |
+| `note` / `nevent` not found | no | "Quoted note not found; author not tagged." |
 | yourself | a self-mention keeps its `p`; a self-quote adds none | never listed |
 
 - A quoted author comes only from an event in the EventStore (signature
@@ -46,14 +46,14 @@ author. Nothing else decides it.
 
 ## Not tagging someone
 
-"Don't tag" removes that person's `p` tag from the signed note, and with it
+"Untag" removes that person's `p` tag from the signed note, and with it
 their inbox rows. The mention or quote stays in the text, and `q`/`a` tags
 stay. POST has no reply mode, so no `p` tag is structurally required; if a
 reply mode is added, the parent's author must not be removable.
 
 - The choice is kept per pubkey in the draft, so removing and re-adding the
   mention, or restoring the draft, does not silently tag them again.
-- "Tag again" restores the tag and the inbox lookup. Relay unticks made
+- "Tag" restores the tag and the inbox lookup. Relay unticks made
   before are kept.
 - The UI does not promise privacy: the note is public, and the tag is only
   what clients use to notify.
@@ -77,9 +77,19 @@ Inbox rows are checked by default for the first **4** relays of each person
 and at most **12** in total. Rows past a limit, and unencrypted `ws://`
 relays, are listed unchecked.
 
-Per-person states: finding inbox relays…, N inbox relays (and how many the
-blocklist removed), no usable inbox relays, no relay list found, relay list
-lookup timed out, couldn't look up relay list.
+Per-person states: looking up…, N inboxes (and how many the blocklist
+removed), no usable inbox, no relay list, lookup timed out, lookup failed.
+
+## Layout
+
+Two native `<details>` disclosures, opened and closed only by the user (a
+late lookup never changes them):
+
+- **Tagged**, collapsed by default. Its header gives the tagged count and
+  only what needs a look: `N looking up`, `N no inbox`, `N quote not found`,
+  `N untagged`.
+- **Relays**, open by default, header `N of M selected`. Inside, "Your relays"
+  and "Tagged people's inboxes" each show their own `selected of total`.
 
 ## Selection model
 
@@ -116,7 +126,7 @@ added relays. Only provable unticks carry over: an added relay missing from
    lookup that answers late cannot add a relay the note was not sent to.
 5. Sign that same factory and publish to the frozen selection.
 
-The result toast says, per tagged person, whether one of their inbox relays
+The result toast (`Inbox relays: accepted for N, refused for N, not sent for N`) says, per tagged person, whether one of their inbox relays
 **accepted** the note (a relay OK, not a delivery claim), whether none did,
 or whether none was in the publish (unticked, no list, still looking). It
 also counts quoted notes sent without their author tagged.

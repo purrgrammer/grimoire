@@ -37,9 +37,9 @@ function rowReasons(row: RelayRow): string[] {
   if (row.origins.some((o) => o.type === "fallback"))
     reasons.push("default relay");
   if (row.notAutoSelected === "insecure")
-    reasons.push("unencrypted, not selected automatically");
+    reasons.push("unencrypted, off by default");
   if (row.notAutoSelected === "limit")
-    reasons.push("not selected automatically, to limit connections");
+    reasons.push("over the limit, off by default");
   return reasons;
 }
 
