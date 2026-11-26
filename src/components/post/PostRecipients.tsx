@@ -101,7 +101,7 @@ function SummaryMeta({ summary }: { summary: RecipientsSummary }) {
     parts.push(`${summary.quotesMissing} quote not found`);
   if (summary.untagged > 0) parts.push(`${summary.untagged} untagged`);
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-start gap-1">
       {summary.pending > 0 && (
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
       )}

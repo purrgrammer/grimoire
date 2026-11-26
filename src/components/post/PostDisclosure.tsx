@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface PostDisclosureProps {
   /** Short label, e.g. "Tagged". Not a heading: summary drops headings. */
@@ -38,17 +37,17 @@ export function PostDisclosure({
         const next = e.currentTarget.open;
         if (next !== open) onOpenChange(next);
       }}
-      className={cn("group", className)}
+      className={className}
       data-testid={testId}
     >
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <ChevronRight
-          className="h-3.5 w-3.5 flex-shrink-0 transition-transform motion-reduce:transition-none group-open:rotate-90"
+          className="post-disclosure-chevron h-3.5 w-3.5 flex-shrink-0"
           aria-hidden="true"
         />
         <span className="text-foreground">{label}</span>
         {meta && (
-          <span className="min-w-0 truncate text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
             {meta}
           </span>
         )}
