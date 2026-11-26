@@ -6,7 +6,9 @@ import { useRelayState } from "@/hooks/useRelayState";
 import { getAuthIcon } from "@/lib/relay-status-utils";
 import pool from "@/services/relay-pool";
 import type { RelayPublishStatus } from "@/services/publish-service";
+import { UserName } from "@/components/nostr/UserName";
 import {
+  inboxPubkeys,
   isRowSelected,
   type RelayOverrides,
   type RelayRow,
@@ -27,14 +29,45 @@ interface PostRelayRowProps {
   onRetry: (url: string) => void;
 }
 
-/** Why a row is here, in words. Empty for the plain "your relay" case. */
+/** Why a row is here, in words, beyond whose inbox it is. */
 function rowReasons(row: RelayRow): string[] {
   const reasons: string[] = [];
   if (row.origins.some((o) => o.type === "manual"))
     reasons.push("added by you");
   if (row.origins.some((o) => o.type === "fallback"))
     reasons.push("default relay");
+  if (row.notAutoSelected === "insecure")
+    reasons.push("unencrypted, not selected automatically");
+  if (row.notAutoSelected === "limit")
+    reasons.push("not selected automatically, to limit connections");
   return reasons;
+}
+
+function RowProvenance({ row }: { row: RelayRow }) {
+  const readers = inboxPubkeys(row);
+  const reasons = rowReasons(row);
+  if (readers.length === 0 && reasons.length === 0) return null;
+  return (
+    <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-1">
+      {readers.length > 0 && (
+        <>
+          <span>{row.section === "author" ? "also inbox of" : "inbox of"}</span>
+          {readers.map((pubkey, i) => (
+            <span key={pubkey} className="inline-flex items-center">
+              <UserName pubkey={pubkey} className="text-xs" />
+              {i < readers.length - 1 && <span>,</span>}
+            </span>
+          ))}
+        </>
+      )}
+      {reasons.length > 0 && (
+        <span>
+          {readers.length > 0 ? "· " : ""}
+          {reasons.join(", ")}
+        </span>
+      )}
+    </p>
+  );
 }
 
 export function PostRelayRow({
@@ -52,7 +85,6 @@ export function PostRelayRow({
   const authIcon = getAuthIcon(getRelay(row.url));
   const selected = isRowSelected(row, overrides);
   const status = publish?.status ?? "pending";
-  const reasons = rowReasons(row);
 
   return (
     <div className="flex items-start justify-between gap-3 py-1">
@@ -87,11 +119,7 @@ export function PostRelayRow({
               className="text-sm"
             />
           </label>
-          {reasons.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {reasons.join(", ")}
-            </p>
-          )}
+          <RowProvenance row={row} />
         </div>
       </div>
 

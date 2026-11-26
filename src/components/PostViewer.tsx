@@ -30,13 +30,23 @@ import {
 } from "./editor/RichEditor";
 import { Kind1Renderer } from "./nostr/kinds";
 import publishService from "@/services/publish-service";
-import { buildPostTemplate } from "@/lib/post-template";
+import {
+  buildPostTemplate,
+  getTaggedPubkeys,
+  type PostRecipient,
+} from "@/lib/post-template";
 import {
   deriveRelayRows,
   effectiveSelection,
   hasActiveOverrides,
+  summarizeRecipientDelivery,
   tryNormalizeRelay,
+  type RecipientInbox,
+  type RelayRow,
 } from "@/lib/post-relays";
+import { useRecipientInboxes } from "@/hooks/useRecipientInboxes";
+import type { InboxResolution } from "@/services/relay-selection";
+import { PostRecipients } from "./post/PostRecipients";
 import {
   parsePostDraft,
   postDraftKey,
@@ -60,6 +70,22 @@ function isValidRelayInput(input: string): boolean {
 }
 
 const DRAFT_SAVE_DEBOUNCE_MS = 500;
+/** How long after a keystroke the tagged people are re-read off the note. */
+const RECIPIENT_ANALYSIS_DEBOUNCE_MS = 300;
+/**
+ * How long Publish waits for inbox lookups still in flight. Lookups start
+ * when a mention is typed, so this is normally not waited at all; past it the
+ * note goes out with what is known and the summary says who was left out.
+ */
+const PUBLISH_INBOX_WAIT_MS = 3000;
+
+function resolvedRelays(resolution: InboxResolution | undefined): string[] {
+  return resolution?.status === "resolved" ? resolution.relays : [];
+}
+
+function personCount(n: number) {
+  return `${n} ${n === 1 ? "person" : "people"}`;
+}
 
 export function PostViewer({ windowId }: PostViewerProps = {}) {
   const { pubkey, canSign, signer } = useAccount();
@@ -72,6 +98,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
   // Publish state
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishPhase, setPublishPhase] = useState<
+    "idle" | "resolving" | "signing"
+  >("idle");
+  // The rows a publish went out with. Shown instead of the live rows while
+  // publishing and in the published preview, so a lookup that answers after
+  // the snapshot cannot add a row the note was never sent to.
+  const [frozenRows, setFrozenRows] = useState<RelayRow[] | null>(null);
   const [publishStatus, setPublishStatus] = useState<
     Record<string, RelayPublishState>
   >({});
@@ -85,6 +118,23 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   const [addedRelays, setAddedRelays] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [excludedRecipients, setExcludedRecipients] = useState<string[]>([]);
+
+  // Who the note tags, read off the same template Publish signs.
+  const [recipients, setRecipients] = useState<PostRecipient[]>([]);
+  const excludedSet = useMemo(
+    () => new Set(excludedRecipients),
+    [excludedRecipients],
+  );
+  const shownRecipients = useMemo(
+    () =>
+      recipients.map((r) => ({ ...r, excluded: excludedSet.has(r.pubkey) })),
+    [recipients, excludedSet],
+  );
+  const taggedPubkeys = useMemo(
+    () => shownRecipients.filter((r) => !r.excluded).map((r) => r.pubkey),
+    [shownRecipients],
+  );
+  const inboxes = useRecipientInboxes(taggedPubkeys);
 
   // The account's NIP-65 write relays.
   const ownWriteRelays = useMemo(
@@ -101,12 +151,17 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         ownWrite: ownWriteRelays,
         fallback: FALLBACK_RELAYS,
         manual: addedRelays,
+        recipients: taggedPubkeys.map((pk): RecipientInbox => ({
+          pubkey: pk,
+          relays: resolvedRelays(inboxes.get(pk)),
+        })),
       }),
-    [ownWriteRelays, addedRelays],
+    [ownWriteRelays, addedRelays, taggedPubkeys, inboxes],
   );
+  const displayRows = frozenRows ?? rows;
   const selectedRelays = useMemo(
-    () => effectiveSelection(rows, overrides),
-    [rows, overrides],
+    () => effectiveSelection(displayRows, overrides),
+    [displayRows, overrides],
   );
 
   // ---------------------------------------------------------------------------
@@ -211,16 +266,60 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     scheduleDraftSave();
   }, [decisionsKey, scheduleDraftSave]);
 
+  // Re-read who the note tags. Async (the builder is), so each run carries a
+  // generation and a superseded run's answer is dropped.
+  const analysisGenRef = useRef(0);
+  const analysisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const analyzeRecipients = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const generation = ++analysisGenRef.current;
+    const serialized = editor.getSerializedContent();
+    if (!serialized.text.trim()) {
+      setRecipients([]);
+      return;
+    }
+    try {
+      const built = await buildPostTemplate({
+        content: serialized.text,
+        emojiTags: serialized.emojiTags,
+        blobAttachments: serialized.blobAttachments,
+        addressRefs: serialized.addressRefs,
+        includeClientTag: false,
+        selfPubkey: pubkey,
+      });
+      if (generation === analysisGenRef.current)
+        setRecipients(built.recipients);
+    } catch (err) {
+      console.warn("[PostViewer] Failed to read recipients:", err);
+    }
+  }, [pubkey]);
+
   const handleEditorChange = useCallback(() => {
     if (editorRef.current) setIsEditorEmpty(editorRef.current.isEmpty());
     scheduleDraftSave();
-  }, [scheduleDraftSave]);
+    if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
+    analysisTimeoutRef.current = setTimeout(
+      analyzeRecipients,
+      RECIPIENT_ANALYSIS_DEBOUNCE_MS,
+    );
+  }, [scheduleDraftSave, analyzeRecipients]);
 
   useEffect(() => {
+    const analysisGen = analysisGenRef;
     return () => {
       if (draftSaveTimeoutRef.current)
         clearTimeout(draftSaveTimeoutRef.current);
+      if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
+      analysisGen.current++;
     };
+  }, []);
+
+  const excludeRecipient = useCallback((pk: string) => {
+    setExcludedRecipients((prev) => (prev.includes(pk) ? prev : [...prev, pk]));
+  }, []);
+  const includeRecipient = useCallback((pk: string) => {
+    setExcludedRecipients((prev) => prev.filter((p) => p !== pk));
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -247,14 +346,14 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       toast.error("Invalid relay URL");
       return;
     }
-    if (rows.some((r) => r.url === normalizedUrl)) {
+    if (displayRows.some((r) => r.url === normalizedUrl)) {
       toast.error("Relay already in list");
       return;
     }
     setAddedRelays((prev) => [...prev, normalizedUrl]);
     setOverrides((prev) => ({ ...prev, [normalizedUrl]: true }));
     setNewRelayInput("");
-  }, [newRelayInput, rows]);
+  }, [newRelayInput, displayRows]);
 
   // ---------------------------------------------------------------------------
   // Publishing
@@ -317,18 +416,14 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         toast.error("Cannot publish empty note");
         return;
       }
-      const selected = selectedRelays;
-      if (selected.length === 0) {
-        toast.error("Please select at least one relay");
-        return;
-      }
 
       setIsPublishing(true);
+      setPublishPhase("resolving");
 
-      let event: NostrEvent;
+      // 1. The note, exactly as it will be signed.
+      let built: Awaited<ReturnType<typeof buildPostTemplate>>;
       try {
-        // One builder for preview and publish (src/lib/post-template.ts).
-        const built = await buildPostTemplate({
+        built = await buildPostTemplate({
           content,
           emojiTags,
           blobAttachments,
@@ -337,6 +432,45 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           excludedRecipients: new Set(excludedRecipients),
           selfPubkey: pubkey,
         });
+      } catch (error) {
+        console.error("Failed to build note:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to build note",
+        );
+        setIsPublishing(false);
+        setPublishPhase("idle");
+        return;
+      }
+
+      // 2. Its tagged people are its p tags. Wait, bounded, for their inboxes.
+      const tagged = getTaggedPubkeys(built.template).filter(
+        (pk) => pk !== pubkey,
+      );
+      const inboxSnapshot = await inboxes.settle(tagged, PUBLISH_INBOX_WAIT_MS);
+
+      // 3. Freeze the relay list. From here on nothing that answers late can
+      //    change where this note goes.
+      const snapshotRows = deriveRelayRows({
+        ownWrite: ownWriteRelays,
+        fallback: FALLBACK_RELAYS,
+        manual: addedRelays,
+        recipients: tagged.map((pk) => ({
+          pubkey: pk,
+          relays: resolvedRelays(inboxSnapshot.get(pk)),
+        })),
+      });
+      const selected = effectiveSelection(snapshotRows, overrides);
+      if (selected.length === 0) {
+        toast.error("Please select at least one relay");
+        setIsPublishing(false);
+        setPublishPhase("idle");
+        return;
+      }
+      setFrozenRows(snapshotRows);
+      setPublishPhase("signing");
+
+      let event: NostrEvent;
+      try {
         event = await built.factory.sign(signer);
       } catch (error) {
         // Signing failed - user might have rejected it
@@ -344,7 +478,9 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         toast.error(
           error instanceof Error ? error.message : "Failed to sign note",
         );
+        setFrozenRows(null);
         setIsPublishing(false);
+        setPublishPhase("idle");
         return; // Don't destroy the post, let user try again
       }
 
@@ -372,22 +508,55 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           localStorage.removeItem(postDraftKey(pubkey, windowId));
           editorRef.current?.clear();
           setShowPublishedPreview(true);
+
+          const delivery = summarizeRecipientDelivery(
+            tagged,
+            snapshotRows,
+            selected,
+            publishResult.successful,
+          );
+          const notes: string[] = [];
+          if (delivery.accepted.length > 0)
+            notes.push(
+              `Accepted by an inbox relay of ${personCount(delivery.accepted.length)} you tagged.`,
+            );
+          if (delivery.rejected.length > 0)
+            notes.push(
+              `No inbox relay accepted it for ${personCount(delivery.rejected.length)}.`,
+            );
+          if (delivery.noInboxSelected.length > 0) {
+            const stillLooking = delivery.noInboxSelected.filter(
+              (pk) => inboxSnapshot.get(pk)?.status === "pending",
+            ).length;
+            notes.push(
+              `Not sent to any inbox relay of ${personCount(delivery.noInboxSelected.length)}` +
+                (stillLooking > 0
+                  ? ` (${stillLooking} still being looked up).`
+                  : "."),
+            );
+          }
+          const description = notes.length > 0 ? notes.join(" ") : undefined;
+
           if (successCount === selected.length) {
             toast.success(
               `Published to all ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
+              { description },
             );
           } else {
             toast.warning(
               `Published to ${successCount} of ${selected.length} relays`,
+              { description },
             );
           }
         } else {
+          setFrozenRows(null);
           toast.error(
             "Failed to publish to any relay. Please check your relay connections and try again.",
           );
         }
       } catch (error) {
         subscription.unsubscribe();
+        setFrozenRows(null);
         console.error("Failed to publish:", error);
         const message =
           error instanceof Error ? error.message : "Failed to publish note";
@@ -405,16 +574,20 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         );
       } finally {
         setIsPublishing(false);
+        setPublishPhase("idle");
       }
     },
     [
       canSign,
       signer,
       pubkey,
-      selectedRelays,
       settings,
       windowId,
       excludedRecipients,
+      inboxes,
+      ownWriteRelays,
+      addedRelays,
+      overrides,
       setStatus,
     ],
   );
@@ -432,8 +605,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     setShowPublishedPreview(false);
     setLastPublishedEvent(null);
     setPublishStatus({});
+    setFrozenRows(null);
     setOverrides({});
     setExcludedRecipients([]);
+    setRecipients([]);
     editorRef.current?.clear();
     editorRef.current?.focus();
   }, []);
@@ -461,6 +636,21 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
   }
 
   const rowsLocked = isPublishing || showPublishedPreview;
+  const authorRows = displayRows.filter((r) => r.section === "author");
+  const inboxRows = displayRows.filter((r) => r.section === "recipients");
+  const hasInboxSection = inboxRows.length > 0;
+  const renderRow = (row: RelayRow) => (
+    <PostRelayRow
+      key={row.url}
+      row={row}
+      overrides={overrides}
+      publish={publishStatus[row.url]}
+      disabled={rowsLocked}
+      retryDisabled={isPublishing}
+      onToggle={setRelaySelected}
+      onRetry={retryRelay}
+    />
+  );
 
   return (
     <div className="h-full overflow-y-auto">
@@ -531,10 +721,19 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 disabled={
                   isPublishing || selectedRelays.length === 0 || isEditorEmpty
                 }
-                className="gap-2 w-32"
+                className="gap-2 min-w-32"
+                aria-live="polite"
               >
-                {isPublishing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {publishPhase === "resolving" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Finding inboxes…
+                  </>
+                ) : isPublishing ? (
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-label="Publishing"
+                  />
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
@@ -560,13 +759,23 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           </>
         )}
 
+        {!showPublishedPreview && (
+          <PostRecipients
+            recipients={shownRecipients}
+            getInbox={inboxes.get}
+            disabled={isPublishing}
+            onExclude={excludeRecipient}
+            onInclude={includeRecipient}
+          />
+        )}
+
         {/* Relay selection */}
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               Relays ({selectedRelays.length} selected)
             </span>
-            {!rowsLocked && hasActiveOverrides(rows, overrides) && (
+            {!rowsLocked && hasActiveOverrides(displayRows, overrides) && (
               <button
                 type="button"
                 onClick={resetRelaySelection}
@@ -577,19 +786,31 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             )}
           </div>
 
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {rows.map((row) => (
-              <PostRelayRow
-                key={row.url}
-                row={row}
-                overrides={overrides}
-                publish={publishStatus[row.url]}
-                disabled={rowsLocked}
-                retryDisabled={isPublishing}
-                onToggle={setRelaySelected}
-                onRetry={retryRelay}
-              />
-            ))}
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {hasInboxSection && (
+              <h3 className="text-xs text-muted-foreground font-normal pt-1">
+                Your relays
+              </h3>
+            )}
+            {authorRows.map(renderRow)}
+            {hasInboxSection && (
+              <section
+                aria-labelledby="post-inbox-relays-heading"
+                className="pt-2 space-y-1"
+              >
+                <h3
+                  id="post-inbox-relays-heading"
+                  className="text-xs text-muted-foreground font-normal"
+                >
+                  Tagged people&apos;s inboxes
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  The relays these people list for reading mentions (NIP-65).
+                  Untick any you don&apos;t want to send to.
+                </p>
+                {inboxRows.map(renderRow)}
+              </section>
+            )}
           </div>
 
           {!showPublishedPreview && (
