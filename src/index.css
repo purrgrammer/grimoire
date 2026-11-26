@@ -648,3 +648,15 @@ body.animating-layout
 .rich-editor .ProseMirror::-webkit-scrollbar {
   display: none; /* Chrome/Safari/Opera */
 }
+
+/*
+ * Toast secondary text. sonner colours [data-description] from its own theme
+ * (#3f3f3f under its default "light" theme) while the toast background comes
+ * from the app theme, so on the dark theme a description measured 1.9:1.
+ * Follow the app's muted foreground instead. Unlayered and one class more
+ * specific than sonner's own rules, which are injected unlayered at runtime.
+ */
+[data-sonner-toast][data-styled="true"]
+  [data-description].grimoire-toast-description {
+  color: hsl(var(--muted-foreground));
+}
