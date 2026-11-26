@@ -3,18 +3,13 @@ import {
   Paperclip,
   Send,
   Loader2,
-  Check,
-  X,
   RotateCcw,
   Settings,
-  Server,
-  ServerOff,
   Plus,
-  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { NostrEvent } from "nostr-tools";
 import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import {
   DropdownMenu,
@@ -26,7 +21,6 @@ import { useAccount } from "@/hooks/useAccount";
 import { useProfileSearch } from "@/hooks/useProfileSearch";
 import { useEmojiSearch } from "@/hooks/useEmojiSearch";
 import { useBlossomUpload } from "@/hooks/useBlossomUpload";
-import { useRelayState } from "@/hooks/useRelayState";
 import { useSettings } from "@/hooks/useSettings";
 import {
   RichEditor,
@@ -34,205 +28,238 @@ import {
   type BlobAttachment,
   type EmojiTag,
 } from "./editor/RichEditor";
-import { RelayLink } from "./nostr/RelayLink";
 import { Kind1Renderer } from "./nostr/kinds";
-import pool from "@/services/relay-pool";
-import publishService, {
-  type RelayPublishStatus,
-} from "@/services/publish-service";
+import publishService from "@/services/publish-service";
 import { buildPostTemplate } from "@/lib/post-template";
+import {
+  deriveRelayRows,
+  effectiveSelection,
+  hasActiveOverrides,
+  tryNormalizeRelay,
+} from "@/lib/post-relays";
+import {
+  parsePostDraft,
+  postDraftKey,
+  serializePostDraft,
+} from "@/lib/post-draft";
 import { useGrimoire } from "@/core/state";
 import { FALLBACK_RELAYS } from "@/services/loaders";
-import { normalizeRelayURL } from "@/lib/relay-url";
-import { use$ } from "applesauce-react/hooks";
-import { getAuthIcon } from "@/lib/relay-status-utils";
-
-interface RelayPublishState {
-  url: string;
-  status: RelayPublishStatus;
-  error?: string;
-}
-
-// Storage keys
-const DRAFT_STORAGE_KEY = "grimoire-post-draft";
+import { PostRelayRow, type RelayPublishState } from "./post/PostRelayList";
 
 interface PostViewerProps {
   windowId?: string;
 }
+
+/** Matches "relay.com", "wss://relay.com", "relay.com:7777/path". */
+const RELAY_INPUT_PATTERN =
+  /^(wss?:\/\/)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}(:[0-9]{1,5})?(\/.*)?$/;
+
+function isValidRelayInput(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed !== "" && RELAY_INPUT_PATTERN.test(trimmed);
+}
+
+const DRAFT_SAVE_DEBOUNCE_MS = 500;
 
 export function PostViewer({ windowId }: PostViewerProps = {}) {
   const { pubkey, canSign, signer } = useAccount();
   const { searchProfiles } = useProfileSearch();
   const { searchEmojis } = useEmojiSearch();
   const { state } = useGrimoire();
-  const { getRelay } = useRelayState();
   const { settings, updateSetting } = useSettings();
 
-  // Editor ref for programmatic control
   const editorRef = useRef<RichEditorHandle>(null);
 
   // Publish state
   const [isPublishing, setIsPublishing] = useState(false);
-  const [relayStates, setRelayStates] = useState<RelayPublishState[]>([]);
-  const [selectedRelays, setSelectedRelays] = useState<Set<string>>(new Set());
+  const [publishStatus, setPublishStatus] = useState<
+    Record<string, RelayPublishState>
+  >({});
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
-  const [lastPublishedEvent, setLastPublishedEvent] = useState<any>(null);
+  const [lastPublishedEvent, setLastPublishedEvent] =
+    useState<NostrEvent | null>(null);
   const [showPublishedPreview, setShowPublishedPreview] = useState(false);
   const [newRelayInput, setNewRelayInput] = useState("");
 
-  // Get relay pool state for connection status
-  const relayPoolMap = use$(pool.relays$);
+  // What the user decided. Everything else is derived (src/lib/post-relays.ts).
+  const [addedRelays, setAddedRelays] = useState<string[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [excludedRecipients, setExcludedRecipients] = useState<string[]>([]);
 
-  // Get active account's write relays from Grimoire state, fallback to the shared fallback relays
-  const writeRelays = useMemo(() => {
-    if (!state.activeAccount?.relays) return FALLBACK_RELAYS;
-    const userWriteRelays = state.activeAccount.relays
-      .filter((r) => r.write)
-      .map((r) => r.url);
-    return userWriteRelays.length > 0 ? userWriteRelays : FALLBACK_RELAYS;
-  }, [state.activeAccount?.relays]);
+  // The account's NIP-65 write relays.
+  const ownWriteRelays = useMemo(
+    () =>
+      (state.activeAccount?.relays ?? [])
+        .filter((r) => r.write)
+        .map((r) => r.url),
+    [state.activeAccount?.relays],
+  );
 
-  // Update relay states when write relays change
-  const updateRelayStates = useCallback(() => {
-    setRelayStates(
-      writeRelays.map((url) => ({
-        url,
-        status: "pending" as RelayPublishStatus,
-      })),
-    );
-    setSelectedRelays(new Set(writeRelays));
-  }, [writeRelays]);
+  const rows = useMemo(
+    () =>
+      deriveRelayRows({
+        ownWrite: ownWriteRelays,
+        fallback: FALLBACK_RELAYS,
+        manual: addedRelays,
+      }),
+    [ownWriteRelays, addedRelays],
+  );
+  const selectedRelays = useMemo(
+    () => effectiveSelection(rows, overrides),
+    [rows, overrides],
+  );
 
-  // Initialize selected relays when write relays change
+  // ---------------------------------------------------------------------------
+  // Drafts
+  // ---------------------------------------------------------------------------
+
+  // The latest decisions, for a save that runs after a debounce.
+  const decisionsRef = useRef({ addedRelays, overrides, excludedRecipients });
   useEffect(() => {
-    if (writeRelays.length > 0) {
-      updateRelayStates();
-    }
-  }, [writeRelays, updateRelayStates]);
+    decisionsRef.current = { addedRelays, overrides, excludedRecipients };
+  }, [addedRelays, overrides, excludedRecipients]);
 
-  // Track if draft has been loaded to prevent re-runs
-  const draftLoadedRef = useRef(false);
-
-  // Load draft from localStorage on mount
-  useEffect(() => {
-    if (!pubkey || draftLoadedRef.current) return;
-
-    const draftKey = windowId
-      ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-      : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-    const savedDraft = localStorage.getItem(draftKey);
-
-    if (savedDraft) {
-      try {
-        const draft = JSON.parse(savedDraft);
-        draftLoadedRef.current = true;
-
-        // Restore editor content with retry logic for editor readiness
-        if (draft.editorState) {
-          const trySetContent = (attempts = 0) => {
-            if (editorRef.current) {
-              editorRef.current.setContent(draft.editorState);
-            } else if (attempts < 10) {
-              // Retry up to 10 times with 50ms intervals (500ms total)
-              setTimeout(() => trySetContent(attempts + 1), 50);
-            }
-          };
-          // Start trying after a short delay to let editor mount
-          setTimeout(() => trySetContent(), 50);
-        }
-
-        // Restore selected relays
-        if (draft.selectedRelays && Array.isArray(draft.selectedRelays)) {
-          setSelectedRelays(new Set(draft.selectedRelays));
-        }
-
-        // Restore added relays (relays not in writeRelays)
-        if (draft.addedRelays && Array.isArray(draft.addedRelays)) {
-          setRelayStates((prev) => {
-            const currentRelayUrls = new Set(prev.map((r) => r.url));
-            const newRelays = draft.addedRelays
-              .filter((url: string) => !currentRelayUrls.has(url))
-              .map((url: string) => ({
-                url,
-                status: "pending" as RelayPublishStatus,
-              }));
-            return newRelays.length > 0 ? [...prev, ...newRelays] : prev;
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load draft:", err);
-      }
-    } else {
-      draftLoadedRef.current = true;
-    }
-  }, [pubkey, windowId]);
-
-  // Save draft to localStorage on content change
-  const saveDraft = useCallback(() => {
-    if (!pubkey || !editorRef.current) return;
-
-    const content = editorRef.current.getContent();
-    const editorState = editorRef.current.getJSON();
-
-    const draftKey = windowId
-      ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-      : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-
-    if (!content.trim()) {
-      // Clear draft if empty
-      localStorage.removeItem(draftKey);
-      return;
-    }
-
-    // Identify added relays (those not in writeRelays)
-    const addedRelays = relayStates
-      .filter((r) => !writeRelays.includes(r.url))
-      .map((r) => r.url);
-
-    const draft = {
-      editorState, // Full editor JSON state (preserves blobs, emojis, formatting)
-      selectedRelays: Array.from(selectedRelays), // Selected relay URLs
-      addedRelays, // Custom relays added by user
-      timestamp: Date.now(),
-    };
-
-    try {
-      localStorage.setItem(draftKey, JSON.stringify(draft));
-    } catch (err) {
-      console.error("Failed to save draft:", err);
-    }
-  }, [pubkey, windowId, selectedRelays, relayStates, writeRelays]);
-
-  // Debounced draft save on editor changes
+  // Which account's draft is loaded, and whether its content is still being
+  // pushed into the editor. Saving while that is pending would read an empty
+  // editor and delete the very draft being restored.
+  const loadedForRef = useRef<string | null>(null);
+  const restoringRef = useRef(false);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
-  const handleEditorChange = useCallback(() => {
-    // Update empty state immediately
-    if (editorRef.current) {
-      setIsEditorEmpty(editorRef.current.isEmpty());
+  const saveDraft = useCallback(() => {
+    if (!pubkey || !editorRef.current || restoringRef.current) return;
+    if (loadedForRef.current !== pubkey) return;
+    const key = postDraftKey(pubkey, windowId);
+    const content = editorRef.current.getContent();
+    if (!content.trim()) {
+      localStorage.removeItem(key);
+      return;
     }
+    try {
+      localStorage.setItem(
+        key,
+        serializePostDraft({
+          editorState: editorRef.current.getJSON(),
+          ...decisionsRef.current,
+        }),
+      );
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+    }
+  }, [pubkey, windowId]);
 
-    // Debounce draft save (500ms)
-    if (draftSaveTimeoutRef.current) {
-      clearTimeout(draftSaveTimeoutRef.current);
-    }
-    draftSaveTimeoutRef.current = setTimeout(() => {
-      saveDraft();
-    }, 500);
+  const scheduleDraftSave = useCallback(() => {
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = setTimeout(saveDraft, DRAFT_SAVE_DEBOUNCE_MS);
   }, [saveDraft]);
 
-  // Cleanup timeout on unmount
+  // Load the account's draft — on mount, and again when the account changes,
+  // so one identity never sees (or saves over) another's draft.
+  useEffect(() => {
+    if (!pubkey || loadedForRef.current === pubkey) return;
+    const switching = loadedForRef.current !== null;
+    loadedForRef.current = pubkey;
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+
+    let draft = null;
+    try {
+      draft = parsePostDraft(
+        localStorage.getItem(postDraftKey(pubkey, windowId)),
+      );
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+    }
+
+    setAddedRelays(draft?.addedRelays ?? []);
+    setOverrides(draft?.overrides ?? {});
+    setExcludedRecipients(draft?.excludedRecipients ?? []);
+
+    if (draft?.editorState) {
+      restoringRef.current = true;
+      const editorState = draft.editorState;
+      // The editor mounts asynchronously; retry for up to 500ms.
+      const trySetContent = (attempts = 0) => {
+        if (loadedForRef.current !== pubkey) return;
+        if (editorRef.current) {
+          editorRef.current.setContent(editorState as never);
+          restoringRef.current = false;
+        } else if (attempts < 10) {
+          setTimeout(() => trySetContent(attempts + 1), 50);
+        } else {
+          restoringRef.current = false;
+        }
+      };
+      setTimeout(() => trySetContent(), 50);
+    } else if (switching) {
+      editorRef.current?.clear();
+    }
+  }, [pubkey, windowId]);
+
+  // A relay toggle, an added relay or a recipient choice is part of the draft
+  // too, not only keystrokes.
+  const decisionsKey = JSON.stringify([
+    addedRelays,
+    overrides,
+    excludedRecipients,
+  ]);
+  const lastDecisionsKeyRef = useRef(decisionsKey);
+  useEffect(() => {
+    if (lastDecisionsKeyRef.current === decisionsKey) return;
+    lastDecisionsKeyRef.current = decisionsKey;
+    scheduleDraftSave();
+  }, [decisionsKey, scheduleDraftSave]);
+
+  const handleEditorChange = useCallback(() => {
+    if (editorRef.current) setIsEditorEmpty(editorRef.current.isEmpty());
+    scheduleDraftSave();
+  }, [scheduleDraftSave]);
+
   useEffect(() => {
     return () => {
-      if (draftSaveTimeoutRef.current) {
+      if (draftSaveTimeoutRef.current)
         clearTimeout(draftSaveTimeoutRef.current);
-      }
     };
   }, []);
 
-  // Blossom upload for attachments
+  // ---------------------------------------------------------------------------
+  // Relays
+  // ---------------------------------------------------------------------------
+
+  const setRelaySelected = useCallback((url: string, selected: boolean) => {
+    setOverrides((prev) => ({ ...prev, [url]: selected }));
+  }, []);
+
+  const resetRelaySelection = useCallback(() => setOverrides({}), []);
+
+  const setStatus = useCallback(
+    (url: string, next: RelayPublishState) =>
+      setPublishStatus((prev) => ({ ...prev, [url]: next })),
+    [],
+  );
+
+  const handleAddRelay = useCallback(() => {
+    const trimmed = newRelayInput.trim();
+    if (!trimmed || !isValidRelayInput(trimmed)) return;
+    const normalizedUrl = tryNormalizeRelay(trimmed);
+    if (!normalizedUrl) {
+      toast.error("Invalid relay URL");
+      return;
+    }
+    if (rows.some((r) => r.url === normalizedUrl)) {
+      toast.error("Relay already in list");
+      return;
+    }
+    setAddedRelays((prev) => [...prev, normalizedUrl]);
+    setOverrides((prev) => ({ ...prev, [normalizedUrl]: true }));
+    setNewRelayInput("");
+  }, [newRelayInput, rows]);
+
+  // ---------------------------------------------------------------------------
+  // Publishing
+  // ---------------------------------------------------------------------------
+
   const { open: openUpload, dialog: uploadDialog } = useBlossomUpload({
     accept: "image/*,video/*,audio/*",
     onSuccess: (results) => {
@@ -250,77 +277,31 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     },
   });
 
-  // Toggle relay selection
-  const toggleRelay = useCallback((url: string) => {
-    setSelectedRelays((prev) => {
-      const next = new Set(prev);
-      if (next.has(url)) {
-        next.delete(url);
-      } else {
-        next.add(url);
-      }
-      return next;
-    });
-  }, []);
-
-  // Retry publishing to a specific relay
   const retryRelay = useCallback(
     async (relayUrl: string) => {
-      // Reuse the last published event instead of recreating it
       if (!lastPublishedEvent) {
         toast.error("No event to retry");
         return;
       }
-
-      // Update status to publishing
-      setRelayStates((prev) =>
-        prev.map((r) =>
-          r.url === relayUrl
-            ? { ...r, status: "publishing" as RelayPublishStatus }
-            : r,
-        ),
-      );
-
-      // Retry via PublishService (skipEventStore since it's already in store)
+      setStatus(relayUrl, { status: "publishing" });
       const result = await publishService.retryRelays(lastPublishedEvent, [
         relayUrl,
       ]);
-
+      const host = relayUrl.replace(/^wss?:\/\//, "");
       if (result.ok) {
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? {
-                  ...r,
-                  status: "success" as RelayPublishStatus,
-                  error: undefined,
-                }
-              : r,
-          ),
-        );
-        toast.success(`Published to ${relayUrl.replace(/^wss?:\/\//, "")}`);
+        setStatus(relayUrl, { status: "success" });
+        toast.success(`Published to ${host}`);
       } else {
-        const error = result.failed[0]?.error || "Unknown error";
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === relayUrl
-              ? {
-                  ...r,
-                  status: "error" as RelayPublishStatus,
-                  error,
-                }
-              : r,
-          ),
-        );
-        toast.error(
-          `Failed to publish to ${relayUrl.replace(/^wss?:\/\//, "")}`,
-        );
+        setStatus(relayUrl, {
+          status: "error",
+          error: result.failed[0]?.error || "Unknown error",
+        });
+        toast.error(`Failed to publish to ${host}`);
       }
     },
-    [lastPublishedEvent],
+    [lastPublishedEvent, setStatus],
   );
 
-  // Publish to selected relays with per-relay status tracking
   const handlePublish = useCallback(
     async (
       content: string,
@@ -332,13 +313,11 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         toast.error("Please log in to publish");
         return;
       }
-
       if (!content.trim()) {
         toast.error("Cannot publish empty note");
         return;
       }
-
-      const selected = Array.from(selectedRelays);
+      const selected = selectedRelays;
       if (selected.length === 0) {
         toast.error("Please select at least one relay");
         return;
@@ -346,8 +325,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
       setIsPublishing(true);
 
-      // Create and sign event first
-      let event;
+      let event: NostrEvent;
       try {
         // One builder for preview and publish (src/lib/post-template.ts).
         const built = await buildPostTemplate({
@@ -356,6 +334,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           blobAttachments,
           addressRefs,
           includeClientTag: !!settings?.post?.includeClientTag,
+          excludedRecipients: new Set(excludedRecipients),
           selfPubkey: pubkey,
         });
         event = await built.factory.sign(signer);
@@ -369,56 +348,30 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
         return; // Don't destroy the post, let user try again
       }
 
-      // Signing succeeded, now publish to relays
-      // Store the signed event for potential retries
       setLastPublishedEvent(event);
+      setPublishStatus(
+        Object.fromEntries(
+          selected.map((url) => [url, { status: "pending" as const }]),
+        ),
+      );
 
-      // Use PublishService with status updates
       const { updates$, result } = publishService.publishWithUpdates(
         event,
         selected,
       );
-
-      // Subscribe to per-relay status updates for UI
       const subscription = updates$.subscribe((update) => {
-        setRelayStates((prev) =>
-          prev.map((r) =>
-            r.url === update.relay
-              ? {
-                  ...r,
-                  status: update.status,
-                  error: update.error,
-                }
-              : r,
-          ),
-        );
+        setStatus(update.relay, { status: update.status, error: update.error });
       });
 
       try {
-        // Wait for publish to complete
         const publishResult = await result;
-
-        // Unsubscribe from updates
         subscription.unsubscribe();
-
         const successCount = publishResult.successful.length;
 
         if (publishResult.ok) {
-          // Clear draft from localStorage
-          if (pubkey) {
-            const draftKey = windowId
-              ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-              : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-            localStorage.removeItem(draftKey);
-          }
-
-          // Clear editor content
+          localStorage.removeItem(postDraftKey(pubkey, windowId));
           editorRef.current?.clear();
-
-          // Show published preview
           setShowPublishedPreview(true);
-
-          // Show success toast
           if (successCount === selected.length) {
             toast.success(
               `Published to all ${selected.length} relay${selected.length > 1 ? "s" : ""}`,
@@ -429,7 +382,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
             );
           }
         } else {
-          // All relays failed - keep the editor visible with content
           toast.error(
             "Failed to publish to any relay. Please check your relay connections and try again.",
           );
@@ -437,104 +389,62 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
       } catch (error) {
         subscription.unsubscribe();
         console.error("Failed to publish:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to publish note",
-        );
-
-        // Reset relay states to error on publishing error
-        setRelayStates((prev) =>
-          prev.map((r) => ({
-            ...r,
-            status: "error" as RelayPublishStatus,
-            error: error instanceof Error ? error.message : "Unknown error",
-          })),
+        const message =
+          error instanceof Error ? error.message : "Failed to publish note";
+        toast.error(message);
+        setPublishStatus(
+          Object.fromEntries(
+            selected.map((url) => [
+              url,
+              {
+                status: "error" as const,
+                error: error instanceof Error ? error.message : "Unknown error",
+              },
+            ]),
+          ),
         );
       } finally {
         setIsPublishing(false);
       }
     },
-    [canSign, signer, pubkey, selectedRelays, settings, windowId],
+    [
+      canSign,
+      signer,
+      pubkey,
+      selectedRelays,
+      settings,
+      windowId,
+      excludedRecipients,
+      setStatus,
+    ],
   );
 
-  // Handle file paste
   const handleFilePaste = useCallback(
     (files: File[]) => {
-      if (files.length > 0) {
-        // For pasted files, trigger upload dialog
-        openUpload();
-      }
+      if (files.length > 0) openUpload();
     },
     [openUpload],
   );
 
-  // Reset form to compose another post
+  // Compose another post: a fresh note, the same relays. Added relays stay —
+  // the user put them there — while per-note choices start over.
   const handleReset = useCallback(() => {
     setShowPublishedPreview(false);
     setLastPublishedEvent(null);
-    updateRelayStates();
+    setPublishStatus({});
+    setOverrides({});
+    setExcludedRecipients([]);
     editorRef.current?.clear();
     editorRef.current?.focus();
-  }, [updateRelayStates]);
+  }, []);
 
-  // Discard draft and clear editor
   const handleDiscard = useCallback(() => {
     editorRef.current?.clear();
-    if (pubkey) {
-      const draftKey = windowId
-        ? `${DRAFT_STORAGE_KEY}-${pubkey}-${windowId}`
-        : `${DRAFT_STORAGE_KEY}-${pubkey}`;
-      localStorage.removeItem(draftKey);
-    }
+    setExcludedRecipients([]);
+    if (pubkey) localStorage.removeItem(postDraftKey(pubkey, windowId));
     editorRef.current?.focus();
   }, [pubkey, windowId]);
 
-  // Check if input looks like a valid relay URL
-  const isValidRelayInput = useCallback((input: string): boolean => {
-    const trimmed = input.trim();
-    if (!trimmed) return false;
-
-    // Allow relay URLs with or without protocol
-    // Must have at least a domain part (e.g., "relay.com" or "wss://relay.com")
-    const urlPattern =
-      /^(wss?:\/\/)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}(:[0-9]{1,5})?(\/.*)?$/;
-
-    return urlPattern.test(trimmed);
-  }, []);
-
-  // Add new relay to the list
-  const handleAddRelay = useCallback(() => {
-    const trimmed = newRelayInput.trim();
-    if (!trimmed || !isValidRelayInput(trimmed)) return;
-
-    try {
-      // Normalize the URL (adds wss:// if needed)
-      const normalizedUrl = normalizeRelayURL(trimmed);
-
-      // Check if already in list
-      const alreadyExists = relayStates.some((r) => r.url === normalizedUrl);
-      if (alreadyExists) {
-        toast.error("Relay already in list");
-        return;
-      }
-
-      // Add to relay states
-      setRelayStates((prev) => [
-        ...prev,
-        { url: normalizedUrl, status: "pending" as RelayPublishStatus },
-      ]);
-
-      // Select the new relay
-      setSelectedRelays((prev) => new Set([...prev, normalizedUrl]));
-
-      // Clear input
-      setNewRelayInput("");
-    } catch (error) {
-      console.error("Failed to add relay:", error);
-      toast.error(error instanceof Error ? error.message : "Invalid relay URL");
-    }
-  }, [newRelayInput, isValidRelayInput, relayStates]);
-
-  // Show login prompt if not logged in
   if (!canSign) {
     return (
       <div className="h-full flex items-center justify-center p-8">
@@ -550,12 +460,13 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
     );
   }
 
+  const rowsLocked = isPublishing || showPublishedPreview;
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto space-y-4 p-4">
         {!showPublishedPreview ? (
           <>
-            {/* Editor */}
             <div>
               <RichEditor
                 ref={editorRef}
@@ -571,9 +482,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
               />
             </div>
 
-            {/* Action buttons */}
             <div className="flex items-center gap-2">
-              {/* Upload button */}
               <Button
                 variant="outline"
                 size="icon"
@@ -584,7 +493,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 <Paperclip className="h-4 w-4" />
               </Button>
 
-              {/* Settings dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -608,10 +516,8 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Discard button */}
               <Button
                 variant="outline"
                 onClick={handleDiscard}
@@ -620,11 +526,10 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 Discard
               </Button>
 
-              {/* Publish button */}
               <Button
                 onClick={() => editorRef.current?.submit()}
                 disabled={
-                  isPublishing || selectedRelays.size === 0 || isEditorEmpty
+                  isPublishing || selectedRelays.length === 0 || isEditorEmpty
                 }
                 className="gap-2 w-32"
               >
@@ -641,14 +546,11 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           </>
         ) : (
           <>
-            {/* Published event preview */}
             {lastPublishedEvent && (
               <div className="rounded-lg border border-border bg-muted/10 p-4">
                 <Kind1Renderer event={lastPublishedEvent} depth={0} />
               </div>
             )}
-
-            {/* Reset button */}
             <div className="flex justify-center">
               <Button variant="outline" onClick={handleReset} className="gap-2">
                 <RotateCcw className="h-4 w-4" />
@@ -660,86 +562,36 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
 
         {/* Relay selection */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
-              Relays ({selectedRelays.size} selected)
+              Relays ({selectedRelays.length} selected)
             </span>
+            {!rowsLocked && hasActiveOverrides(rows, overrides) && (
+              <button
+                type="button"
+                onClick={resetRelaySelection}
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+              >
+                Reset selection
+              </button>
+            )}
           </div>
 
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {relayStates.map((relay) => {
-              // Get relay connection state from pool
-              const poolRelay = relayPoolMap?.get(relay.url);
-              const isConnected = poolRelay?.connected ?? false;
-
-              // Get relay state for auth status
-              const relayState = getRelay(relay.url);
-              const authIcon = getAuthIcon(relayState);
-
-              return (
-                <div
-                  key={relay.url}
-                  className="flex items-center justify-between gap-3 py-1"
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Checkbox
-                      id={relay.url}
-                      checked={selectedRelays.has(relay.url)}
-                      onCheckedChange={() => toggleRelay(relay.url)}
-                      disabled={isPublishing || showPublishedPreview}
-                    />
-                    {/* Connectivity status icon */}
-                    {isConnected ? (
-                      <Server className="h-3 w-3 text-green-500 flex-shrink-0" />
-                    ) : (
-                      <ServerOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    )}
-                    {/* Auth status icon */}
-                    <div className="flex-shrink-0" title={authIcon.label}>
-                      {authIcon.icon}
-                    </div>
-                    <label
-                      htmlFor={relay.url}
-                      className="cursor-pointer truncate flex-1"
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      <RelayLink
-                        url={relay.url}
-                        write={true}
-                        showInboxOutbox={false}
-                        className="text-sm"
-                      />
-                    </label>
-                  </div>
-
-                  {/* Status indicator */}
-                  <div className="flex-shrink-0 w-6 flex items-center justify-center">
-                    {relay.status === "pending" && (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    {relay.status === "publishing" && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                    {relay.status === "success" && (
-                      <Check className="h-4 w-4 text-green-500" />
-                    )}
-                    {relay.status === "error" && (
-                      <button
-                        onClick={() => retryRelay(relay.url)}
-                        disabled={isPublishing}
-                        className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                        title={`${relay.error || "Failed to publish"}. Click to retry.`}
-                      >
-                        <X className="h-4 w-4 text-red-500" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {rows.map((row) => (
+              <PostRelayRow
+                key={row.url}
+                row={row}
+                overrides={overrides}
+                publish={publishStatus[row.url]}
+                disabled={rowsLocked}
+                retryDisabled={isPublishing}
+                onToggle={setRelaySelected}
+                onRetry={retryRelay}
+              />
+            ))}
           </div>
 
-          {/* Add relay input */}
           {!showPublishedPreview && (
             <div className="flex items-center gap-2 pt-2">
               <Input
@@ -754,6 +606,7 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
                 }}
                 disabled={isPublishing}
                 className="flex-1 text-sm"
+                aria-label="Add relay"
               />
               <Button
                 size="icon"
@@ -768,7 +621,6 @@ export function PostViewer({ windowId }: PostViewerProps = {}) {
           )}
         </div>
 
-        {/* Upload dialog */}
         {uploadDialog}
       </div>
     </div>
