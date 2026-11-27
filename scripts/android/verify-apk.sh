@@ -4,9 +4,10 @@
 #   scripts/android/verify-apk.sh <apk> [expected-cert-sha256]
 #
 # Fails when: the signature does not verify, the package is not
-# rocks.grimoire.app, the APK is signed with an Android debug certificate
+# rocks.grimoire.app, it asks for permissions beyond the expected four,
+# the APK is signed with an Android debug certificate
 # (unless ALLOW_DEBUG_CERT=1, for CI's debug build),
-# it asks for any permission beyond INTERNET, or (when given) the signing
+# or (when given) the signing
 # certificate is not the pinned one — shipping under another key would lose
 # the Zapstore listing for good.
 set -euo pipefail
@@ -23,7 +24,13 @@ version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$badging" | head
 perms="$(sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" <<<"$badging" | grep -v '\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$' || true)"
 
 [[ "$package" == "rocks.grimoire.app" ]] || { echo "FAIL package is '$package'"; exit 1; }
-[[ "$perms" == "android.permission.INTERNET" ]] || { echo "FAIL unexpected permissions:"; echo "$perms"; exit 1; }
+# Exactly these, nothing more: network, plus camera/microphone for calls
+# (runtime-prompted, app origin only — see AndroidManifest.xml).
+expected_perms="android.permission.CAMERA
+android.permission.INTERNET
+android.permission.MODIFY_AUDIO_SETTINGS
+android.permission.RECORD_AUDIO"
+[[ "$(sort <<<"$perms")" == "$expected_perms" ]] || { echo "FAIL unexpected permissions:"; echo "$perms"; exit 1; }
 
 certs="$("$bt/apksigner" verify --print-certs --verbose "$apk")"
 grep -q "^Verified using v2 scheme (APK Signature Scheme v2): true" <<<"$certs" || { echo "FAIL not v2-signed"; exit 1; }
@@ -39,6 +46,6 @@ if [[ -n "$expected" && "$(lower "$cert")" != "$(lower "$expected")" ]]; then
 fi
 
 echo "OK package=$package versionCode=$version_code versionName=$version_name"
-echo "OK permissions=$perms"
+echo "OK permissions=$(tr '\n' ' ' <<<"$perms")"
 echo "OK cert-sha256=$cert"
 echo "OK apk-sha256=$(shasum -a 256 "$apk" | cut -d' ' -f1)"

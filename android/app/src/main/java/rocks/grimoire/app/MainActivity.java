@@ -10,5 +10,7 @@ public class MainActivity extends BridgeActivity {
         // App-local plugins must be registered before the bridge starts.
         registerPlugin(GrimoireNativePlugin.class);
         super.onCreate(savedInstanceState);
+        // Camera/microphone only for the app's own origin (MediaPermissionPolicy).
+        getBridge().getWebView().setWebChromeClient(new GrimoireWebChromeClient(getBridge()));
     }
 }

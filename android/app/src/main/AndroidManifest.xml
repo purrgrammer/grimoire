@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The only permission. Files are picked and saved through the system
-         pickers, photos through the camera app, links through other apps:
-         none of those need one. -->
+    <!-- Files are picked and saved through the system pickers and links go
+         to other apps: none of that needs a permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Calls (call / NIP-29 spaces / Concord) publish a microphone and a
+         camera. Runtime permissions: Android asks only when the user turns
+         one on in a call, and GrimoireWebChromeClient forwards the request
+         only for the app's own origin, never for an embedded frame.
+         MODIFY_AUDIO_SETTINGS is a normal (install-time) permission WebView
+         needs for audio capture. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Package visibility (API 30+): see which apps can take these links. -->
     <queries>
