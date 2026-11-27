@@ -196,9 +196,11 @@ jobs:
 
       - name: Configuration for this release
         run: |
-          cp zapstore.yaml "$RUNNER_TEMP/zapstore.yaml"
-          echo "release_source: $APK" >> "$RUNNER_TEMP/zapstore.yaml"
-          sed -i "s#icon: ./#icon: $GITHUB_WORKSPACE/#" "$RUNNER_TEMP/zapstore.yaml"
+          # zsp refuses local paths outside the config file's directory, so
+          # the release config lives in the checkout and points at the APK
+          # and icon relative to it.
+          cp zapstore.yaml zapstore.release.yaml
+          echo "release_source: ./${APK#"$GITHUB_WORKSPACE"/}" >> zapstore.release.yaml
 
       - name: Signer setup (nsec, or NIP-46 bunker with a persistent client key)
         # zsp keeps a bunker's NIP-46 client key in
@@ -243,7 +245,7 @@ jobs:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           VERSION_CODE: ${{ needs.build-signed.outputs.version_code }}
         run: |
-          "$(go env GOPATH)/bin/zsp" check --json "$RUNNER_TEMP/zapstore.yaml" > check.json
+          "$(go env GOPATH)/bin/zsp" check --json zapstore.release.yaml > check.json
           jq '{apk, listed, proof, published_version_code, signer, authorized, next_step}' check.json
           published=$(jq -r '.published_version_code' check.json)
           if [ "$published" -ge "$VERSION_CODE" ]; then
@@ -264,7 +266,7 @@ jobs:
         run: |
           set +e
           "$(go env GOPATH)/bin/zsp" publish --json --quiet --skip-preview --skip-metadata \
-            "$RUNNER_TEMP/zapstore.yaml" > publish.json 2> publish.err
+            zapstore.release.yaml > publish.json 2> publish.err
           status=$?
           set -e
           cat publish.json publish.err
