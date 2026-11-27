@@ -5,6 +5,7 @@
  * Ensures data integrity across application updates
  */
 
+import { saveBlob } from "./native/files";
 import { GrimoireState } from "@/types/app";
 import { toast } from "sonner";
 
@@ -265,18 +266,23 @@ export function exportState(state: GrimoireState): void {
   try {
     const json = JSON.stringify(state, null, 2);
     const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `grimoire-state-v${state.__version}-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    toast.success("State Exported", {
-      description: "Your state has been downloaded as JSON",
-    });
+    void saveBlob(
+      blob,
+      `grimoire-state-v${state.__version}-${Date.now()}.json`,
+    ).then(
+      (result) => {
+        if (result === "cancelled") return;
+        toast.success("State Exported", {
+          description: "Your state has been downloaded as JSON",
+        });
+      },
+      (error: unknown) => {
+        console.error("[Migrations] Export failed:", error);
+        toast.error("Export Failed", {
+          description: "Could not export state",
+        });
+      },
+    );
   } catch (error) {
     console.error("[Migrations] Export failed:", error);
     toast.error("Export Failed", {

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "rocks.grimoire.app",
+      "sha256_cert_fingerprints": [
+        "AA:A1:B3:F6:2D:AD:60:0D:D3:E8:53:21:42:34:46:F5:49:F2:86:2A:EF:FD:91:76:DF:62:4E:86:0D:06:D1:51"
+      ]
+    }
+  }
+]

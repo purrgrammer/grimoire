@@ -29,3 +29,19 @@ dist-ssr
 .claude/plans/
 .claude/worktrees/
 .claude/settings.local.json
+
+# Android packaging (docs/android-zapstore.md). Build outputs and signing
+# material never belong in git: the release keystore is owner-held, and an
+# APK in history is a binary nobody can audit against source.
+*.apk
+*.aab
+*.idsig
+*.keystore
+*.jks
+key.properties
+android/**/build/
+android/.gradle/
+android/local.properties
+
+# Android build outputs (scripts/android/build.mjs)
+android-dist/

@@ -1,4 +1,5 @@
 import { useState, memo, useCallback, useMemo, useEffect } from "react";
+import { saveBlob } from "@/lib/native/files";
 import {
   ChevronDown,
   ChevronRight,
@@ -1166,16 +1167,14 @@ export default function ReqViewer({
         }
       }
 
-      // Fallback: Traditional blob download (desktop browsers)
+      // Fallback: save as a file (desktop browsers, and the Android app,
+      // whose WebView ignores blob downloads — saveBlob uses the system picker)
       const blob = new Blob([content], { type: "application/jsonl" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if ((await saveBlob(blob, filename)) === "cancelled") {
+        setIsExporting(false);
+        setExportProgress(0);
+        return;
+      }
 
       setExportProgress(100);
     } catch (error) {

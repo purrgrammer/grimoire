@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { publicUrl } from "@/lib/native/platform";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ export function ShareSpellbookDialog({
   const [naddr, setNaddr] = useState<string>("");
 
   const actor = nip19.npubEncode(event.pubkey);
-  const webLink = `${window.location.origin}/${actor}/${spellbook.slug}`;
+  const webLink = publicUrl(`/${actor}/${spellbook.slug}`);
 
   useEffect(() => {
     const generateNaddr = async () => {

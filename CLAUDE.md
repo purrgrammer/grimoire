@@ -23,6 +23,7 @@ deliberately omits:
 | Tailwind v4 conventions | `docs/tailwind-v4.md` |
 | WebMCP (tools for the browser's own agent) | `docs/webmcp.md` |
 | Napplets (NIP-5D, Kehto runtime, capability consent) | `docs/napplets.md` |
+| Android app (Capacitor), release contract, CI, Zapstore, owner gates | `docs/android-zapstore.md` |
 | POST composer: tagged people, inbox relays (NIP-65), drafts | `docs/post-composer.md` |
 
 The official **`applesauce` skill** (`.claude/skills/applesauce`) and the
@@ -410,6 +411,12 @@ merge blockers.
   `vite.config.ts`. After adding a dependency, check:
   `find node_modules -path "*/node_modules/react-dom/package.json"` — any hit is
   a bug.
+- **Android app** (`android/`, Capacitor 8, `rocks.grimoire.app`): the same
+  `dist/` bundled into an APK and served from `https://localhost`. Anything
+  that differs between web and app goes through `src/lib/native/` — use
+  `publicUrl()` for links people share (never `location.origin`),
+  `openExternal()` for links that leave the app, `saveBlob()` for downloads.
+  Build, release contract and owner gates: `docs/android-zapstore.md`.
 - **The service worker registers in production only** (`src/main.tsx`). In dev it
   caches Vite's hashed module URLs, which die on the next dependency change and
   break dynamic imports. Don't make registration unconditional.

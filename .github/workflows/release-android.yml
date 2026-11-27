@@ -1,0 +1,310 @@
+name: Release Android
+
+# Signed APK for Zapstore. OFF until the owner turns it on.
+#
+# Runs only on pushes to main and on manual dispatch — never for pull
+# requests, so a fork can never reach the signing key or the publisher key.
+# Every job is skipped unless the repository variable ANDROID_RELEASE_ENABLED
+# is "true", which the owner sets after creating the protected environment
+# `android-release` (docs/android-zapstore.md, "Owner setup"). Merging this
+# file publishes nothing.
+#
+#   build-signed   build, sign, verify against the pinned certificate, keep
+#                  the APK as a workflow artifact. Needs the signing secrets.
+#   zapstore       publish to Zapstore with zsp. Only when ZAPSTORE_SIGN_WITH
+#                  (nsec1… delegate, or bunker:// + ZAPSTORE_BUNKER_CLIENT_KEY)
+#                  is set AND (dispatch with publish=true, or a push with
+#                  ZAPSTORE_PUBLISH_ON_PUSH=true). Re-runs are idempotent:
+#                  an already-published versionCode is reported and skipped.
+#   github-release optional public GitHub Release with the APK, only when
+#                  ANDROID_GITHUB_RELEASE=true. Off by default.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this build to Zapstore (needs ZAPSTORE_SIGN_WITH)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # One release at a time, in order; never cancel one half-way through.
+  group: release-android
+  cancel-in-progress: false
+
+env:
+  ANDROID_BUILD_TOOLS: "36.0.0"
+  ZSP_VERSION: "v2.0.1"
+
+jobs:
+  build-signed:
+    name: Build and sign the release APK
+    if: >-
+      vars.ANDROID_RELEASE_ENABLED == 'true' &&
+      github.repository == 'purrgrammer/grimoire' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: android-release
+    outputs:
+      version_code: ${{ steps.version.outputs.code }}
+      version_name: ${{ steps.version.outputs.name }}
+      apk_sha256: ${{ steps.verify.outputs.apk_sha256 }}
+      artifact: ${{ steps.version.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse to sign anything but main
+        run: |
+          branch=$(git branch -r --contains "$GITHUB_SHA" | grep -c "origin/main$" || true)
+          if [ "$branch" -lt 1 ]; then
+            echo "::error::$GITHUB_SHA is not on origin/main"
+            exit 1
+          fi
+
+      - name: Required configuration
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KSP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KA: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          missing=()
+          [ -n "$KS" ] || missing+=(secret:ANDROID_KEYSTORE_BASE64)
+          [ -n "$KSP" ] || missing+=(secret:ANDROID_KEYSTORE_PASSWORD)
+          [ -n "$KA" ] || missing+=(secret:ANDROID_KEY_ALIAS)
+          [ -n "$KP" ] || missing+=(secret:ANDROID_KEY_PASSWORD)
+          [[ "$CERT" =~ ^[0-9a-fA-F]{64}$ ]] || missing+=(variable:ANDROID_CERT_SHA256)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Release is enabled but not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          # No dependency cache in the signing job: what is built is what
+          # package-lock.json says, fetched fresh.
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Android SDK packages
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-36" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Version
+        id: version
+        run: |
+          node scripts/android/version.mjs --json | tee version.json
+          code=$(jq -r .versionCode version.json)
+          {
+            echo "code=$code"
+            echo "name=$(jq -r .versionName version.json)"
+            echo "artifact=grimoire-android-$code"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Web build (production, no test seams)
+        run: |
+          if [ -n "${VITE_E2E_RELAY:-}" ]; then echo "::error::VITE_E2E_RELAY is set"; exit 1; fi
+          npm run build
+
+      - name: Build and sign
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          umask 077
+          printf '%s' "$KS" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          trap 'rm -f "$ANDROID_KEYSTORE_PATH"' EXIT
+          node scripts/android/build.mjs release --require-signing --skip-web
+
+      - name: Verify (package, permissions, v2/v3 signature, pinned cert)
+        id: verify
+        env:
+          CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          apk=$(ls android-dist/grimoire-*-release.apk)
+          scripts/android/verify-apk.sh "$apk" "$CERT" | tee verify.txt
+          echo "apk_sha256=$(sed -n 's/^OK apk-sha256=//p' verify.txt)" >> "$GITHUB_OUTPUT"
+          mkdir -p out && cp "$apk" "$apk.sha256" android-dist/build.json verify.txt out/
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: error
+
+  zapstore:
+    name: Publish to Zapstore
+    needs: build-signed
+    if: >-
+      vars.ANDROID_RELEASE_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish) ||
+       (github.event_name == 'push' && vars.ZAPSTORE_PUBLISH_ON_PUSH == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: android-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.build-signed.outputs.artifact }}
+          path: out
+
+      - name: The APK is the one that was verified
+        env:
+          EXPECTED: ${{ needs.build-signed.outputs.apk_sha256 }}
+        run: |
+          apk=$(ls out/grimoire-*-release.apk)
+          echo "$EXPECTED  $apk" | sha256sum -c -
+          echo "APK=$GITHUB_WORKSPACE/$apk" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          # zsp v2.0.1 go.mod: go 1.27.3. Exact pin; GOTOOLCHAIN stays local.
+          go-version: "1.27.4"
+          cache: false
+
+      - name: Install zsp ${{ env.ZSP_VERSION }}
+        run: go install "github.com/zapstore/zsp/v2/cmd/zsp@${ZSP_VERSION}"
+
+      - name: Configuration for this release
+        run: |
+          cp zapstore.yaml "$RUNNER_TEMP/zapstore.yaml"
+          echo "release_source: $APK" >> "$RUNNER_TEMP/zapstore.yaml"
+          sed -i "s#icon: ./#icon: $GITHUB_WORKSPACE/#" "$RUNNER_TEMP/zapstore.yaml"
+
+      - name: Signer setup (nsec, or NIP-46 bunker with a persistent client key)
+        # zsp keeps a bunker's NIP-46 client key in
+        # $XDG_CONFIG_HOME/zsp/bunker-keys/<remote-signer-pubkey>.key and
+        # creates one when missing. A runner starts empty, so without this
+        # every run would be a new client, and the bunker URL's secret is
+        # single-use: the second release would fail (zsp ErrBunkerSecretUsed).
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          CLIENT_KEY: ${{ secrets.ZAPSTORE_BUNKER_CLIENT_KEY }}
+        run: |
+          case "$SIGN_WITH" in
+            "")
+              echo "::error::ZAPSTORE_SIGN_WITH is not set; nothing can be published"
+              exit 1 ;;
+            nsec1*)
+              echo "Signer: nsec (prefer a NIP-C1 delegate key, never the owner's)" ;;
+            bunker://*)
+              remote=$(sed -E 's#^bunker://([0-9a-f]{64})\?.*#\1#' <<<"$SIGN_WITH")
+              if [[ ! "$remote" =~ ^[0-9a-f]{64}$ ]] || [[ "$SIGN_WITH" != *"relay="* ]]; then
+                echo "::error::ZAPSTORE_SIGN_WITH must be bunker://<64-hex remote-signer pubkey>?relay=wss://…[&secret=…]"
+                exit 1
+              fi
+              if [[ ! "$CLIENT_KEY" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "::error::A bunker signer needs ZAPSTORE_BUNKER_CLIENT_KEY (64-hex NIP-46 client key the bunker already approved)"
+                exit 1
+              fi
+              export XDG_CONFIG_HOME="$RUNNER_TEMP/xdg"
+              umask 077
+              mkdir -p "$XDG_CONFIG_HOME/zsp/bunker-keys"
+              printf '%s\n' "$CLIENT_KEY" > "$XDG_CONFIG_HOME/zsp/bunker-keys/$remote.key"
+              echo "XDG_CONFIG_HOME=$XDG_CONFIG_HOME" >> "$GITHUB_ENV"
+              echo "Signer: NIP-46 bunker $remote with the stored client key" ;;
+            *)
+              echo "::error::ZAPSTORE_SIGN_WITH must start with nsec1 or bunker:// (zsp refuses hex keys)"
+              exit 1 ;;
+          esac
+
+      - name: Check — listed, proof, published versionCode, signer authorized
+        id: check
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          VERSION_CODE: ${{ needs.build-signed.outputs.version_code }}
+        run: |
+          "$(go env GOPATH)/bin/zsp" check --json "$RUNNER_TEMP/zapstore.yaml" > check.json
+          jq '{apk, listed, proof, published_version_code, signer, authorized, next_step}' check.json
+          published=$(jq -r '.published_version_code' check.json)
+          if [ "$published" -ge "$VERSION_CODE" ]; then
+            echo "::notice::versionCode $VERSION_CODE is already published ($published); nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(jq -r '.authorized' check.json)" != "true" ]; then
+            echo "::error::The signer is not authorized for this certificate. The owner must run the zsp wizard once (NIP-C1 proof) and name this key as owner or delegate."
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: steps.check.outputs.skip != 'true'
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+        run: |
+          set +e
+          "$(go env GOPATH)/bin/zsp" publish --json --quiet --skip-preview --skip-metadata \
+            "$RUNNER_TEMP/zapstore.yaml" > publish.json 2> publish.err
+          status=$?
+          set -e
+          cat publish.json publish.err
+          if [ "$status" -ne 0 ]; then
+            code=$(jq -r '.error.code // ""' publish.err)
+            if [ "$code" = "release_already_published" ]; then
+              echo "::notice::Already published; nothing to do"
+              exit 0
+            fi
+            echo "::error::zsp publish failed: $code"
+            exit 1
+          fi
+          echo "::notice::Zapstore status: $(jq -r '.status // "unknown"' publish.json)"
+
+  github-release:
+    name: GitHub Release (optional)
+    needs: build-signed
+    if: vars.ANDROID_RELEASE_ENABLED == 'true' && vars.ANDROID_GITHUB_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.build-signed.outputs.artifact }}
+          path: out
+
+      - name: Create the release once per versionCode
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ needs.build-signed.outputs.version_code }}
+          NAME: ${{ needs.build-signed.outputs.version_name }}
+        run: |
+          tag="android-$CODE"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::notice::$tag already exists; not re-uploading"
+            exit 0
+          fi
+          gh release create "$tag" out/grimoire-*-release.apk out/*.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Grimoire for Android $NAME" \
+            --notes "Built by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} from ${GITHUB_SHA}."

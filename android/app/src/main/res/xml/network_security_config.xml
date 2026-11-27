@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext (http://, ws://) is refused everywhere except this device:
+     an on-device relay such as Citrine listens on ws://localhost, and the
+     local test fixtures (scripts/android-e2e) are reached through
+     adb reverse on localhost. Remote ws:// relays stay unreachable from the
+     app, which is stricter than the website. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
