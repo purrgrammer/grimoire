@@ -47,7 +47,8 @@ jobs:
 
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: "1.25.x"
+          # zsp v2.0.1 go.mod: go 1.27.3. Exact pin; GOTOOLCHAIN stays local.
+          go-version: "1.27.4"
           cache: false
 
       - name: Validate the Gradle wrapper
