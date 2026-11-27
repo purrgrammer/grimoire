@@ -230,7 +230,12 @@ export function Kind1111Renderer({ event, depth = 0 }: BaseEventProps) {
         </ScopeRow>
       )}
 
-      <RichText event={event} className="text-sm" depth={depth} />
+      <RichText
+        event={event}
+        className="text-sm"
+        depth={depth}
+        options={{ bigEmoji: true }}
+      />
     </BaseEventContainer>
   );
 }

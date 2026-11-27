@@ -145,6 +145,27 @@ export function SettingsViewer() {
                   }
                 />
               </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label
+                    htmlFor="big-emoji"
+                    className="text-base font-medium cursor-pointer"
+                  >
+                    Big emoji
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Show posts that contain only emoji at a larger size
+                  </p>
+                </div>
+                <Switch
+                  id="big-emoji"
+                  checked={settings?.appearance?.bigEmoji ?? true}
+                  onCheckedChange={(checked: boolean) =>
+                    updateSetting("appearance", "bigEmoji", checked)
+                  }
+                />
+              </div>
             </div>
           </TabsContent>
 
