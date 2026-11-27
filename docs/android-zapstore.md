@@ -175,7 +175,8 @@ In order:
       the delegate identity* and copy its `bunker://` URI.
    2. Locally, run `SIGN_WITH='bunker://…' zsp check app-release.apk` once.
       zsp connects (spending the URI's secret) and stores its client key in
-      `~/.config/zsp/bunker-keys/<remote-pubkey>.key`. Approve that
+      `~/.config/zsp/bunker-keys/<remote-pubkey>.key` (macOS:
+      `~/Library/Application Support/zsp/bunker-keys/`). Approve that
       connection in the signer.
    3. In the signer, set that client to sign **without prompting** kinds
       `32267` (app), `30063` (release), `3063` (asset) and `24242` (Blossom
@@ -196,7 +197,7 @@ In order:
    listing or a web-of-trust check (`relay/pkg/policy/gate.go`).
 
 6. **Optional:** deploy `/.well-known/assetlinks.json` on grimoire.rocks
-   (not in `public/` until the cert exists). It verifies
+   (now in `public/.well-known/assetlinks.json`, pinned to the release cert). It verifies
    `https://grimoire.rocks` links so they open in the app:
 
    ```json
