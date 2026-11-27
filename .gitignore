@@ -42,3 +42,6 @@ key.properties
 android/**/build/
 android/.gradle/
 android/local.properties
+
+# Android build outputs (scripts/android/build.mjs)
+android-dist/

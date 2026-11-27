@@ -1,0 +1,101 @@
+apply plugin: 'com.android.application'
+
+import groovy.json.JsonSlurper
+
+// ---------------------------------------------------------------------------
+// Version and signing contract (docs/android-zapstore.md, "Release contract").
+//
+// versionCode  must only ever increase: Zapstore refuses a lower one and
+//              Android refuses to update over it. scripts/android/version.mjs
+//              derives it from the commit count of HEAD (monotonic on main)
+//              and passes it as -PgrimoireVersionCode.
+// versionName  "<package.json version>+<versionCode>": unique per release,
+//              because Zapstore keys a release on it.
+// Signing      only from the environment, never from a file in the repo, and
+//              never the debug key. Without the four variables a release
+//              build is produced UNSIGNED; -PrequireReleaseSigning=true (the
+//              release workflow) turns that into a build failure.
+// ---------------------------------------------------------------------------
+def pkgVersion = new JsonSlurper().parse(rootProject.file('../package.json')).version
+def grimoireVersionCode = (project.findProperty('grimoireVersionCode') ?: '1') as Integer
+def grimoireVersionName = project.findProperty('grimoireVersionName') ?: "${pkgVersion}+dev"
+def signingEnv = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+def hasReleaseSigning = signingEnv.every { System.getenv(it) }
+if (project.findProperty('requireReleaseSigning') == 'true' && !hasReleaseSigning) {
+    throw new GradleException("Release signing required but missing: " + signingEnv.findAll { !System.getenv(it) }.join(', '))
+}
+
+android {
+    namespace = "rocks.grimoire.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "rocks.grimoire.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode grimoireVersionCode
+        versionName grimoireVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_PATH'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // R8 off: Capacitor and its plugins are reached by reflection from
+            // the bridge. Turning it on needs keep rules and a device run.
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig hasReleaseSigning ? signingConfigs.release : null
+        }
+    }
+    // One universal APK (no ABI splits): the bundle has no native code, and
+    // Zapstore wants one complete APK per release.
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

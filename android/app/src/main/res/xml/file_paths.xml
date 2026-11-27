@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only what the WebView file chooser needs: a photo taken through the camera
+     app lands in the app's own Pictures folder (BridgeWebChromeClient). Nothing
+     else on shared storage is reachable through this provider. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="captures" path="Pictures/" />
+    <cache-path name="cache" path="." />
+</paths>

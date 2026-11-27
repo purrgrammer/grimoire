@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Grimoire</string>
+    <string name="title_activity_main">Grimoire</string>
+    <string name="package_name">rocks.grimoire.app</string>
+    <string name="custom_url_scheme">rocks.grimoire.app</string>
+</resources>

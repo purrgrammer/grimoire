@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Grimoire dark theme background; generated art sits on it
+         (scripts/generate-android-icons.mjs). -->
+    <color name="ic_launcher_background">#020817</color>
+    <color name="grimoire_background">#020817</color>
+</resources>
