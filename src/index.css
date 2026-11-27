@@ -332,11 +332,20 @@
        bold read alike; grayscale keeps the weight scale legible. */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* iOS PWA safe area insets for notch support */
-    padding-top: env(safe-area-inset-top, 0);
-    padding-right: env(safe-area-inset-right, 0);
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    padding-left: env(safe-area-inset-left, 0);
+    /* Safe-area insets: iOS PWA notches, and the Android app, which draws
+       edge to edge. Android WebView before Chromium 140 reports env() as 0,
+       so Capacitor injects --safe-area-inset-* (SystemBars insetsHandling
+       "css"); the web never sets them and falls through to env(). */
+    padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    padding-right: var(
+      --safe-area-inset-right,
+      env(safe-area-inset-right, 0px)
+    );
+    padding-bottom: var(
+      --safe-area-inset-bottom,
+      env(safe-area-inset-bottom, 0px)
+    );
+    padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   }
 }
 

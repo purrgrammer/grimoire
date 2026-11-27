@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { EventStoreProvider } from "applesauce-react/providers";
-import Root from "./root";
+import Root, { router } from "./root";
 import eventStore from "./services/event-store";
 import "./index.css";
 import "react-mosaic-component/react-mosaic-component.css";
@@ -16,6 +16,8 @@ import { Analytics } from "@vercel/analytics/react";
 // goes unrecorded. The log is a fixed-size ring buffer, so this costs no memory
 // growth.
 import "./services/event-log";
+import { isNativeApp } from "./lib/native/platform";
+import { installNativeShell } from "./lib/native/shell";
 
 // Initialize global error handling
 initializeErrorHandling();
@@ -44,17 +46,25 @@ createRoot(document.getElementById("root")!).render(
             }}
           />
           <Root />
-          <Analytics />
+          {/* Vercel's beacon is served by the website; the app has none. */}
+          {!isNativeApp() && <Analytics />}
         </TooltipProvider>
       </EventStoreProvider>
     </ThemeProvider>
   </ErrorBoundary>,
 );
 
-// Register the service worker — production only. In dev it would cache Vite's
-// hashed module URLs, which go dead whenever dependencies change and break
-// dynamic imports.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+// Register the service worker — production web only. In dev it would cache
+// Vite's hashed module URLs, which go dead whenever dependencies change and
+// break dynamic imports. In the Android app the build is already on the
+// device: a worker would only pin an old shell across an APK update.
+if (isNativeApp()) {
+  void installNativeShell({
+    navigate: (to, opts) =>
+      typeof to === "number" ? router.navigate(to) : router.navigate(to, opts),
+    pathname: () => router.state.location.pathname,
+  });
+} else if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch((error) => {
       console.error("SW registration failed:", error);

@@ -12,7 +12,7 @@ const errorElement = (
   </AppShell>
 );
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   {
     path: "/",
     errorElement,

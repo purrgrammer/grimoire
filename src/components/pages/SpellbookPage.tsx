@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { publicUrl } from "@/lib/native/platform";
 import { useParams, useNavigate, useLocation } from "react-router";
 import { useGrimoire } from "@/core/state";
 import { useNostrEvent } from "@/hooks/useNostrEvent";
@@ -192,7 +193,7 @@ export default function SpellbookPage() {
 
   const handleCopyLink = () => {
     if (!actor || !identifier) return;
-    const link = `${window.location.origin}/preview/${actor}/${identifier}`;
+    const link = publicUrl(`/preview/${actor}/${identifier}`);
     navigator.clipboard.writeText(link);
     toast.success("Link copied to clipboard");
   };
