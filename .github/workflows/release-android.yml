@@ -12,6 +12,7 @@ name: Release Android
 #   build-signed   build, sign, verify against the pinned certificate, keep
 #                  the APK as a workflow artifact. Needs the signing secrets.
 #   zapstore       publish to Zapstore with zsp. Only when ZAPSTORE_SIGN_WITH
+#                  (nsec1… delegate, or bunker:// + ZAPSTORE_BUNKER_CLIENT_KEY)
 #                  is set AND (dispatch with publish=true, or a push with
 #                  ZAPSTORE_PUBLISH_ON_PUSH=true). Re-runs are idempotent:
 #                  an already-published versionCode is reported and skipped.
@@ -199,16 +200,49 @@ jobs:
           echo "release_source: $APK" >> "$RUNNER_TEMP/zapstore.yaml"
           sed -i "s#icon: ./#icon: $GITHUB_WORKSPACE/#" "$RUNNER_TEMP/zapstore.yaml"
 
+      - name: Signer setup (nsec, or NIP-46 bunker with a persistent client key)
+        # zsp keeps a bunker's NIP-46 client key in
+        # $XDG_CONFIG_HOME/zsp/bunker-keys/<remote-signer-pubkey>.key and
+        # creates one when missing. A runner starts empty, so without this
+        # every run would be a new client, and the bunker URL's secret is
+        # single-use: the second release would fail (zsp ErrBunkerSecretUsed).
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          CLIENT_KEY: ${{ secrets.ZAPSTORE_BUNKER_CLIENT_KEY }}
+        run: |
+          case "$SIGN_WITH" in
+            "")
+              echo "::error::ZAPSTORE_SIGN_WITH is not set; nothing can be published"
+              exit 1 ;;
+            nsec1*)
+              echo "Signer: nsec (prefer a NIP-C1 delegate key, never the owner's)" ;;
+            bunker://*)
+              remote=$(sed -E 's#^bunker://([0-9a-f]{64})\?.*#\1#' <<<"$SIGN_WITH")
+              if [[ ! "$remote" =~ ^[0-9a-f]{64}$ ]] || [[ "$SIGN_WITH" != *"relay="* ]]; then
+                echo "::error::ZAPSTORE_SIGN_WITH must be bunker://<64-hex remote-signer pubkey>?relay=wss://…[&secret=…]"
+                exit 1
+              fi
+              if [[ ! "$CLIENT_KEY" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "::error::A bunker signer needs ZAPSTORE_BUNKER_CLIENT_KEY (64-hex NIP-46 client key the bunker already approved)"
+                exit 1
+              fi
+              export XDG_CONFIG_HOME="$RUNNER_TEMP/xdg"
+              umask 077
+              mkdir -p "$XDG_CONFIG_HOME/zsp/bunker-keys"
+              printf '%s\n' "$CLIENT_KEY" > "$XDG_CONFIG_HOME/zsp/bunker-keys/$remote.key"
+              echo "XDG_CONFIG_HOME=$XDG_CONFIG_HOME" >> "$GITHUB_ENV"
+              echo "Signer: NIP-46 bunker $remote with the stored client key" ;;
+            *)
+              echo "::error::ZAPSTORE_SIGN_WITH must start with nsec1 or bunker:// (zsp refuses hex keys)"
+              exit 1 ;;
+          esac
+
       - name: Check — listed, proof, published versionCode, signer authorized
         id: check
         env:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           VERSION_CODE: ${{ needs.build-signed.outputs.version_code }}
         run: |
-          if [ -z "$SIGN_WITH" ]; then
-            echo "::error::ZAPSTORE_SIGN_WITH is not set; nothing can be published"
-            exit 1
-          fi
           "$(go env GOPATH)/bin/zsp" check --json "$RUNNER_TEMP/zapstore.yaml" > check.json
           jq '{apk, listed, proof, published_version_code, signer, authorized, next_step}' check.json
           published=$(jq -r '.published_version_code' check.json)
