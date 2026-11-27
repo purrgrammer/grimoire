@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { isNativeApp, publicOrigin } from "@/lib/native/platform";
+import { openExternal } from "@/lib/native/links";
+import type { Nip55Account } from "@/lib/native/nip55-signer";
+import { AndroidSignerLogin } from "./AndroidSignerLogin";
 import {
   ExtensionSigner,
   NostrConnectSigner,
@@ -33,6 +37,8 @@ import {
   Key,
   ShieldAlert,
   Wand2,
+  Smartphone,
+  ExternalLink,
 } from "lucide-react";
 import accounts from "@/services/accounts";
 import pool from "@/services/relay-pool";
@@ -46,7 +52,7 @@ const DEFAULT_NIP46_RELAYS = [
   "wss://nos.lol",
 ];
 
-type LoginTab = "extension" | "readonly" | "nsec" | "nostr-connect";
+type LoginTab = "extension" | "android" | "readonly" | "nsec" | "nostr-connect";
 
 interface LoginDialogProps {
   open: boolean;
@@ -54,7 +60,9 @@ interface LoginDialogProps {
 }
 
 export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
-  const [tab, setTab] = useState<LoginTab>("extension");
+  // The Android app has no NIP-07 extension; its first choice is a signer app.
+  const native = isNativeApp();
+  const [tab, setTab] = useState<LoginTab>(native ? "android" : "extension");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +113,8 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         | ExtensionAccount<unknown>
         | NostrConnectAccount<unknown>
         | ReadonlyAccount<unknown>
-        | PrivateKeyAccount<unknown>,
+        | PrivateKeyAccount<unknown>
+        | Nip55Account,
     ) => {
       accounts.addAccount(account);
       accounts.setActive(account);
@@ -325,7 +334,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       // Generate the nostrconnect:// URI
       const uri = signer.getNostrConnectURI({
         name: "Grimoire",
-        url: window.location.origin,
+        url: publicOrigin(),
       });
 
       setConnectUri(uri);
@@ -425,10 +434,17 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as LoginTab)}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="extension" className="gap-2">
-              <Puzzle className="size-4" />
-              <span className="hidden sm:inline">Extension</span>
-            </TabsTrigger>
+            {native ? (
+              <TabsTrigger value="android" className="gap-2">
+                <Smartphone className="size-4" />
+                <span className="hidden sm:inline">Signer app</span>
+              </TabsTrigger>
+            ) : (
+              <TabsTrigger value="extension" className="gap-2">
+                <Puzzle className="size-4" />
+                <span className="hidden sm:inline">Extension</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="readonly" className="gap-2">
               <Eye className="size-4" />
               <span className="hidden sm:inline">Read-Only</span>
@@ -442,6 +458,15 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               <span className="hidden sm:inline">Remote</span>
             </TabsTrigger>
           </TabsList>
+
+          {native && (
+            <TabsContent value="android">
+              <AndroidSignerLogin
+                onSuccess={handleSuccess}
+                onUseRemote={() => setTab("nostr-connect")}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="extension" className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -654,6 +679,18 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                         </>
                       )}
                     </Button>
+                    {native && connectUri && (
+                      // On the phone the QR is on the same screen as the
+                      // signer: hand the nostrconnect: URI to the signer app.
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void openExternal(connectUri)}
+                      >
+                        <ExternalLink className="mr-2 size-4" />
+                        Open signer app
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={cancelQrLogin}>
                       Cancel
                     </Button>

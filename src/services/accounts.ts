@@ -2,6 +2,7 @@ import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
 import { NostrConnectSigner } from "applesauce-signers";
 import pool from "./relay-pool";
+import { Nip55Account } from "@/lib/native/nip55-signer";
 
 const ACCOUNTS = "nostr-accounts";
 const ACTIVE_ACCOUNT = "active-account";
@@ -16,6 +17,9 @@ function safeParse(s: string) {
 
 const accountManager = new AccountManager();
 registerCommonAccountTypes(accountManager);
+// NIP-55 (Android signer app). Registered on the web too, so an account list
+// carried over from the app still loads; its signer only works in the app.
+accountManager.registerType(Nip55Account);
 
 // Set up NostrConnectSigner pool BEFORE loading accounts
 // This is required for NIP-46 accounts to restore properly
