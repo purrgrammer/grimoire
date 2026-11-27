@@ -94,10 +94,29 @@ describe("an emoji-only body that opted in", () => {
     }
   });
 
-  it("stays normal when the caller put its own content in the body", () => {
+  it("enlarges only the content after a caller's prefix", () => {
     const html = renderToStaticMarkup(
-      <RichText event={note("😀")} options={{ bigEmoji: true }}>
+      <RichText
+        event={note("😀")}
+        className="text-sm"
+        options={{ bigEmoji: true }}
+      >
         <span>reply to</span>
+      </RichText>,
+    );
+    // The outer body keeps the caller's size, so the prefix does too…
+    expect(html).toMatch(/^<div dir="auto" class="[^"]*text-sm[^"]*">/);
+    // …and exactly one inner wrapper, after the prefix, is enlarged.
+    expect(html).toMatch(
+      /<span>reply to<\/span><div class="text-5xl leading-tight" data-emoji-only="single">/,
+    );
+    expect(html.match(/data-emoji-only/g)).toHaveLength(1);
+  });
+
+  it("does not let a prefix make text emoji-only", () => {
+    const html = renderToStaticMarkup(
+      <RichText event={note("gm")} options={{ bigEmoji: true }}>
+        <span>😀</span>
       </RichText>,
     );
     expect(html).not.toContain("data-emoji-only");
@@ -154,6 +173,8 @@ describe("feed and detail", () => {
   it.each([
     ["a note", 1],
     ["a comment", 1111],
+    ["a group chat message", 9],
+    ["a live chat message", 1311],
   ])("enlarge %s the same way in both", (_name, kind) => {
     const event = { ...note("😀"), kind };
     const feed = inStore(<KindRenderer event={event} />);

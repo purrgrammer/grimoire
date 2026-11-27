@@ -78,7 +78,12 @@ export function LiveChatMessageRenderer({ event, depth = 0 }: BaseEventProps) {
       )}
 
       {/* Message content with rich text */}
-      <RichText event={event} className="text-sm" depth={depth} />
+      <RichText
+        event={event}
+        className="text-sm"
+        depth={depth}
+        options={{ bigEmoji: true }}
+      />
     </BaseEventContainer>
   );
 }

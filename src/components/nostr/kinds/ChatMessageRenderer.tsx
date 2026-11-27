@@ -68,7 +68,12 @@ export function Kind9Renderer({ event, depth = 0 }: BaseEventProps) {
       )}
 
       {/* Main message content */}
-      <RichText event={event} className="text-sm" depth={depth} />
+      <RichText
+        event={event}
+        className="text-sm"
+        depth={depth}
+        options={{ bigEmoji: true }}
+      />
     </BaseEventContainer>
   );
 }

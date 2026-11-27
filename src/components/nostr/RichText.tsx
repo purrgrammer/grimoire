@@ -97,9 +97,13 @@ export interface RichTextOptions {
    * Let an emoji-only body render larger (default: false).
    *
    * Opt-in per call site because most of them are one-line rows — compact
-   * previews, reply cards, chat — whose fixed height a 48px glyph would break.
-   * Only a post's own body should set it. The user's "Big emoji" appearance
-   * setting still has the last word.
+   * previews, reply cards, zap rows — whose fixed height a 48px glyph would
+   * break. Only a post's or chat message's own body should set it. The user's
+   * "Big emoji" appearance setting still has the last word.
+   *
+   * A caller's `children` (a chat message's reply quote) are a prefix, not
+   * body: they never make a body emoji-only or stop one being, and when the
+   * body is enlarged only the content after them grows.
    */
   bigEmoji?: boolean;
 }
@@ -223,13 +227,9 @@ export function RichText({
     hookOptions,
   );
 
-  // `children` is a caller's own prefix inside the body (a reply quote, a
-  // label), so a body that has one is not emoji-only whatever its content.
   const { settings } = useSettings();
   const bigEmoji =
-    mergedOptions.bigEmoji &&
-    !children &&
-    (settings?.appearance?.bigEmoji ?? true);
+    mergedOptions.bigEmoji && (settings?.appearance?.bigEmoji ?? true);
   // Same arguments as the hook above, so for a real event this reads the tree
   // it just cached instead of parsing the content a second time.
   const parsedTier =
@@ -254,6 +254,12 @@ export function RichText({
     [emojiOnlyTier, onImageError],
   );
 
+  const body = (
+    <EmojiOnlyContext.Provider value={emojiOnly}>
+      {renderedContent}
+    </EmojiOnlyContext.Provider>
+  );
+
   return (
     <DepthContext.Provider value={depth}>
       <OptionsContext.Provider value={mergedOptions}>
@@ -271,14 +277,23 @@ export function RichText({
               // `leading-*` still wins.
               !/\bleading-/.test(className ?? "") && "leading-relaxed",
               // Last, so it overrides the caller's font size and leading.
-              emojiOnlyTier && emojiOnlyClasses[emojiOnlyTier],
+              // With a prefix the inner wrapper below carries it instead, so
+              // the prefix keeps its own size.
+              !children && emojiOnlyTier && emojiOnlyClasses[emojiOnlyTier],
             )}
-            data-emoji-only={emojiOnlyTier ?? undefined}
+            data-emoji-only={(!children && emojiOnlyTier) || undefined}
           >
             {children}
-            <EmojiOnlyContext.Provider value={emojiOnly}>
-              {renderedContent}
-            </EmojiOnlyContext.Provider>
+            {children && emojiOnlyTier ? (
+              <div
+                className={emojiOnlyClasses[emojiOnlyTier]}
+                data-emoji-only={emojiOnlyTier}
+              >
+                {body}
+              </div>
+            ) : (
+              body
+            )}
           </div>
         </EventContext.Provider>
       </OptionsContext.Provider>
