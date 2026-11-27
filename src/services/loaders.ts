@@ -166,11 +166,19 @@ function extractRelayContext(event: NostrEvent): {
  *
  * IMPORTANT: URLs must be normalized (trailing slash, lowercase) to match RelayStateManager keys
  */
-export const FALLBACK_RELAYS = [
-  "wss://nos.lol/",
-  "wss://relay.snort.social/",
-  "wss://relay.damus.io/",
-];
+/**
+ * Set ONLY by end-to-end test builds (scripts/android-e2e/README.md): every
+ * discovery and fallback read goes to one local fixture relay, so a test run
+ * can resolve its throwaway account's relay and Blossom lists without asking,
+ * or publishing to, any public relay. Unset in every real build.
+ */
+const E2E_RELAY = (import.meta.env.VITE_E2E_RELAY as string | undefined)
+  ?.trim()
+  .replace(/\/?$/, "/");
+
+export const FALLBACK_RELAYS = E2E_RELAY
+  ? [E2E_RELAY]
+  : ["wss://nos.lol/", "wss://relay.snort.social/", "wss://relay.damus.io/"];
 
 /**
  * Relays used to DISCOVER where a pubkey publishes — kinds 0, 3, 10002 and the
@@ -196,12 +204,14 @@ export const FALLBACK_RELAYS = [
  * lists both concentrates a privacy leak and makes one operator a single point
  * of failure.
  */
-export const INDEXER_RELAYS = [
-  "wss://purplepag.es/",
-  "wss://user.kindpag.es/",
-  "wss://indexer.coracle.social/",
-  "wss://relay.vertexlab.io/",
-];
+export const INDEXER_RELAYS = E2E_RELAY
+  ? [E2E_RELAY]
+  : [
+      "wss://purplepag.es/",
+      "wss://user.kindpag.es/",
+      "wss://indexer.coracle.social/",
+      "wss://relay.vertexlab.io/",
+    ];
 
 // Base event loader (used internally)
 const baseEventLoader = createEventLoader(pool, {
