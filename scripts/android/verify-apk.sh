@@ -4,7 +4,8 @@
 #   scripts/android/verify-apk.sh <apk> [expected-cert-sha256]
 #
 # Fails when: the signature does not verify, the package is not
-# rocks.grimoire.app, the APK is signed with an Android debug certificate,
+# rocks.grimoire.app, the APK is signed with an Android debug certificate
+# (unless ALLOW_DEBUG_CERT=1, for CI's debug build),
 # it asks for any permission beyond INTERNET, or (when given) the signing
 # certificate is not the pinned one — shipping under another key would lose
 # the Zapstore listing for good.
@@ -26,7 +27,11 @@ perms="$(sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" <<<"$badging" | gr
 
 certs="$("$bt/apksigner" verify --print-certs --verbose "$apk")"
 grep -q "^Verified using v2 scheme (APK Signature Scheme v2): true" <<<"$certs" || { echo "FAIL not v2-signed"; exit 1; }
-if grep -q "CN=Android Debug" <<<"$certs"; then echo "FAIL signed with an Android debug certificate"; exit 1; fi
+if grep -q "CN=Android Debug" <<<"$certs"; then
+  # CI checks debug builds too; ALLOW_DEBUG_CERT=1 accepts that one thing.
+  if [[ "${ALLOW_DEBUG_CERT:-}" == "1" ]]; then echo "WARN debug certificate (allowed: ALLOW_DEBUG_CERT=1)"
+  else echo "FAIL signed with an Android debug certificate"; exit 1; fi
+fi
 cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$certs")"
 lower() { tr '[:upper:]' '[:lower:]' <<<"$1"; }
 if [[ -n "$expected" && "$(lower "$cert")" != "$(lower "$expected")" ]]; then

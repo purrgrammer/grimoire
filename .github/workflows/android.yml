@@ -1,0 +1,139 @@
+name: Android
+
+# Every PR and every push to main: build the Android app from a clean
+# install, run its native tests and lint, and check the APK and the Zapstore
+# metadata with Zapstore's own tool. No secrets, no signing key, nothing
+# published — safe for pull requests from forks.
+# The signed release lives in release-android.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_BUILD_TOOLS: "36.0.0"
+  ZSP_VERSION: "v2.0.1"
+
+jobs:
+  android:
+    name: Build, test and check APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # versionCode is the commit count; a shallow clone would get it wrong.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Android SDK packages
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-36" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Web build
+        run: npm run build
+
+      - name: Sync web assets into the Android project
+        run: npx cap sync android
+
+      - name: Version
+        id: version
+        run: |
+          node scripts/android/version.mjs --json | tee version.json
+          echo "code=$(jq -r .versionCode version.json)" >> "$GITHUB_OUTPUT"
+          echo "name=$(jq -r .versionName version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Native unit tests, lint, debug and unsigned release APKs
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease \
+            "-PgrimoireVersionCode=${VERSION_CODE}" "-PgrimoireVersionName=${VERSION_NAME}"
+
+      - name: Release build is unsigned without a key
+        run: |
+          test -f android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if "$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify \
+              android/app/build/outputs/apk/release/app-release-unsigned.apk 2>/dev/null; then
+            echo "::error::A release APK came out signed with no release key configured"
+            exit 1
+          fi
+
+      - name: Check the debug APK (package, permissions, signature)
+        env:
+          # A debug build is debug-signed on purpose; everything else is checked.
+          ALLOW_DEBUG_CERT: "1"
+        run: scripts/android/verify-apk.sh android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Install zsp ${{ env.ZSP_VERSION }}
+        run: go install "github.com/zapstore/zsp/v2/cmd/zsp@${ZSP_VERSION}"
+
+      - name: zsp check (zapstore.yaml + APK, read-only)
+        # Validates zapstore.yaml with zsp's strict parser and the APK as
+        # Zapstore would see it, then asks relay.zapstore.dev (read-only)
+        # whether the app is listed. Signs, uploads and publishes nothing.
+        run: |
+          cp zapstore.yaml "$RUNNER_TEMP/zapstore.yaml"
+          echo "release_source: $GITHUB_WORKSPACE/android/app/build/outputs/apk/debug/app-debug.apk" >> "$RUNNER_TEMP/zapstore.yaml"
+          sed -i "s#icon: ./#icon: $GITHUB_WORKSPACE/#" "$RUNNER_TEMP/zapstore.yaml"
+          set +e
+          "$(go env GOPATH)/bin/zsp" check --json "$RUNNER_TEMP/zapstore.yaml" > zsp.out 2> zsp.err
+          status=$?
+          set -e
+          cat zsp.out zsp.err
+          if [ "$status" -eq 0 ]; then
+            jq -e '.ok and .apk.app_id == "rocks.grimoire.app"' zsp.out > /dev/null
+            exit 0
+          fi
+          code=$(jq -r '.error.code // ""' zsp.err)
+          # Only zsp's own "try again later" codes are tolerated, loudly.
+          case "$code" in
+            temporary_failure|rate_limited)
+              echo "::warning::zsp check could not reach the relay ($code); config and APK were not confirmed against it"
+              ;;
+            *)
+              echo "::error::zsp check failed: $code"
+              exit 1
+              ;;
+          esac
+
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grimoire-${{ steps.version.outputs.code }}-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
