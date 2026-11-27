@@ -42,8 +42,15 @@ android/app/src/main/java/rocks/grimoire/app/
 | Relays | `ws://` allowed | cleartext only to `localhost`/`127.0.0.1`, e.g. an on-device relay like Citrine |
 | Backup | n/a | `allowBackup=false` plus data-extraction rules: WebView storage holds accounts and nsec keys |
 
-**Permissions:** `INTERNET` only. App info on the emulator reads "No
-permissions requested".
+**Permissions:** `INTERNET`, plus `CAMERA`, `RECORD_AUDIO` and
+`MODIFY_AUDIO_SETTINGS` for calls (`call`, NIP-29 spaces, Concord), which
+publish a microphone and a camera. The first two are runtime permissions:
+Android asks only when you turn the mic or camera on, and app info reads "No
+permissions granted" until then. `GrimoireWebChromeClient` /
+`MediaPermissionPolicy` forward a capture request to Android **only for the
+app's own origin**. Capacitor's default would hand the camera to any frame
+once granted (napplets, nsites, embeds), and silently grant every
+non-capture resource. `verify-apk.sh` enforces exactly these four.
 
 ## Release contract
 
@@ -144,7 +151,8 @@ In order:
    | `ANDROID_KEYSTORE_PASSWORD` | secret | store password |
    | `ANDROID_KEY_ALIAS` | secret | `grimoire` |
    | `ANDROID_KEY_PASSWORD` | secret | key password |
-   | `ZAPSTORE_SIGN_WITH` | secret | the **delegate** key (below), `nsec1…` or a `bunker://` URL |
+   | `ZAPSTORE_SIGN_WITH` | secret | the publishing signer for zsp: `nsec1…` (a NIP-C1 **delegate**, never your own key) **or** `bunker://<remote-signer-pubkey-hex>?relay=wss://…&secret=…`. A bunker URI, **not** a `nostrconnect://` URI: zsp is the NIP-46 *client* and connects to your bunker. zsp refuses hex keys |
+   | `ZAPSTORE_BUNKER_CLIENT_KEY` | secret | bunker only: the 64-hex NIP-46 **client** key zsp generated when you connected once locally (`~/.config/zsp/bunker-keys/<remote-pubkey>.key`). Not an identity key. Without it each runner is a new client, the URI's single-use secret is already spent, and the second release fails |
    | `ANDROID_CERT_SHA256` | variable | the certificate's SHA-256 from step 1 (public) |
 
 4. **Repository variables:**
@@ -162,9 +170,27 @@ In order:
    - Put that delegate in `ZAPSTORE_SIGN_WITH`. Your own key never goes
      into CI.
 
-   A `bunker://` signer that needs you to tap "approve" cannot publish
-   unattended; CI would wait and fail. For unattended publishing, use a
-   delegate `nsec` or a bunker set to auto-approve that client.
+   **If you use a NIP-46 bunker for CI:**
+   1. In your signer (Amber, nsec.app, …), create a bunker connection *for
+      the delegate identity* and copy its `bunker://` URI.
+   2. Locally, run `SIGN_WITH='bunker://…' zsp check app-release.apk` once.
+      zsp connects (spending the URI's secret) and stores its client key in
+      `~/.config/zsp/bunker-keys/<remote-pubkey>.key`. Approve that
+      connection in the signer.
+   3. In the signer, set that client to sign **without prompting** kinds
+      `32267` (app), `30063` (release), `3063` (asset) and `24242` (Blossom
+      upload of the APK and icon). zsp waits 30 s for the connect handshake;
+      CI cannot tap "approve", so a manual prompt times out and the job
+      fails, loudly. The signer must also stay reachable on its relay
+      (Amber keeps a foreground service while the bunker is on).
+   4. Put the URI in `ZAPSTORE_SIGN_WITH` and the client key file's contents
+      in `ZAPSTORE_BUNKER_CLIENT_KEY`. The workflow writes the key to a 0600
+      file under `$RUNNER_TEMP` before zsp runs and validates both formats.
+
+   The NIP-C1 proof (step 5, the `zsp` wizard) is a separate, one-time
+   act: it links the **APK certificate** to the **publisher npub** and
+   names the delegate that CI signs with. The APK keystore never touches
+   the Nostr signer, and the Nostr signer never touches the keystore.
 
    Zapstore admits a new publisher key through a whitelist, a previous
    listing or a web-of-trust check (`relay/pkg/policy/gate.go`).
@@ -214,7 +240,12 @@ there was no route.
 | NIP-07 | Not available in a WebView (`window.nostr` undefined); the UI says so and offers NIP-55 and NIP-46 |
 | Session persistence, logout | **Pass.** Account survives a cold restart; logout clears it and stays cleared after a restart |
 | Upload (file picker) | **Pass.** System picker opens with no permission; the `image/*,video/*,audio/*` filter hides a `.txt`; cancel → nothing selected, 0 requests; the PNG reads as 177 B `image/png`; BUD-06 preflight 401 → kind 24242 signed over NIP-46 → PUT of 177 B, sha256 `e4a9bf91…` identical to the original file; injected 500 shows "Failed (1) …"; retry succeeds; the published note carries `imeta` with `m`, `x` and `size` |
-| Media | **Pass** for images and video: the uploaded image renders in the composer and feed; a 14,693 B `video/mp4` (sha256 `894b6bf3…`) uploads and plays in the feed (`readyState` 4, 320×240, playhead advancing). Audio was not tested |
+| Media | **Pass** for images and video: the uploaded image renders in the composer and feed; a 14,693 B `video/mp4` (sha256 `894b6bf3…`) uploads and plays in the feed (`readyState` 4, 320×240, playhead advancing). Audio: a 17,584 B `audio/x-m4a` (sha256 `2bcb5212…`) is picked from Downloads, uploads with an identical hash, and plays in the media dialog (`readyState` 4, duration 2.02 s, playhead advancing) |
+| Launcher icon centring | **Fixed and verified.** The mark's alpha-weighted centroid sat 3.1% left and 1% low of centre, so the G read as off-centre inside the launcher's circle (the bounding box was centred). The generator now centres the logo by its visual mass and draws it at 52 dp (was 58) in the 108 dp adaptive canvas; centroid offset now +0.03% / −0.08%. Same rule for legacy, round, monochrome and splash. Regenerating twice gives identical files |
+| NIP-55 encryption roundtrip (Amber, online build v6.6.9) | **Pass.** Publishes 10002 and 10050 signed by Amber. The fixture sends a NIP-17 DM, which Amber decrypts in the background (`nip44_decrypt` pre-approved at login): text, emoji and author intact. The reply needs `nip44_encrypt` plus two seals signed in Amber, and the fixture unwraps it by hand: wrap valid, seal kind 13 signed by the Amber key, rumor kind 14 by the same author with a correct id, text intact. Rejecting a seal → "The signer declined the request" and no gift wrap published (see the follow-up about the local echo) |
+| NIP-46 with a **real** signer over `nostrconnect://` | **Pass.** "Open signer app" opens Amber, which shows Grimoire, `https://grimoire.rocks` and the local relay. On connect, Grimoire's `nostr-connect` account gets Amber's identity, and Android returns to Grimoire. `sign_event` arrives as an Amber notification and in its requests list; Approve + Confirm → signed kind 1 published by the Amber key. Denying the pending decrypt requests → "user rejected" goes back to Grimoire |
+| Hostile app squatting the signer's channels | **Pass, on device.** `scripts/android-e2e/hostile-signer`: an Intent-only signer plus a squatter app that claims its eight provider authorities and makes itself visible by posing as a `lightning:` wallet. Without the guard the raw plugin returns the **attacker's** pubkey labelled as the signer (reproduced). Through Grimoire: login refused with `PROVIDER_HIJACKED`, 0 queries reach the squatter, the signer never opens, no account saved. With Amber the guard passes |
+| Camera and microphone (calls) | **Pass, capture layer.** From the app origin: Android's camera and mic prompts appear; deny → `NotAllowedError` and `granted=false`; allow → live audio and video tracks, the camera delivers 480×640 frames with luma 2–255. A cross-origin iframe (`http://localhost:7778/__frame`, `allow="camera; microphone"`) with the permission already granted → `NotAllowedError`; logcat: `GrimoireMedia: Denied …VIDEO_CAPTURE,…AUDIO_CAPTURE to http://localhost:7778/` |
 | Download (export JSONL) | **Pass.** System save-as with the suggested name; cancel → no file, no error; save → `/sdcard/Download/nostr-events.jsonl`, 1167 B, 2 valid events |
 | External links | **Pass.** https → Chrome; `lightning:` with no wallet → toast; `javascript:` → refused; top-level `intent:` → blocked natively (logged); `file:` and `content:` → blocked by Chromium, page unchanged |
 | Deep links | **Pass.** Cold `nostr:npub…` → profile from the local relay; warm `https://grimoire.rocks/run?cmd=help` → `/run`; `nostr:nsec…` → refused. A duplicate history entry on cold start was found and fixed |
@@ -230,10 +261,10 @@ there was no route.
 | Item | Status |
 | --- | --- |
 | **Physical device** | Nothing was run on hardware. Emulator results don't guarantee OEM WebView or signer behaviour |
-| Camera capture | No `capture` input in the app; the camera-app path is configured (FileProvider) but unused |
-| Audio upload and playback | Not run |
-| Signer-authority hijack on device | Needs a hostile test APK; unit-tested only |
-| NIP-55 nip44/nip04 (DMs, NWC) | Covered by unit tests only |
+| A full LiveKit call | Needs a LiveKit SFU and a token endpoint, a service this run did not stand up. The capture and permission layer under it is verified |
+| Microphone **signal** | The emulator ran with `-no-audio`: the mic track is live but silent |
+| Camera through the file picker | Grimoire's file inputs have no `capture` attribute, so there's no camera option there by design; camera is reached only through calls |
+| NIP-04 via NIP-55, NWC | Not exercised; NIP-44 encrypt and decrypt were |
 | Release-signed install with the **real** key | A throwaway-key release build was installed and launched; the real key exists only after owner step 1 |
 | Real Zapstore publication | Out of scope until the owner gates above |
 | `https://grimoire.rocks` App Links verification | Needs `assetlinks.json` (owner step 6) |
@@ -262,6 +293,16 @@ tap; at most a link can make the app read from a relay it names, as on the
 web.
 
 ## Known follow-ups
+
+- **DM sent while the signer refuses** (shared with the web): the local echo
+  is written before signing (`src/lib/dm/send.ts:112`, on purpose), so a
+  message whose seal the user rejected stays in the thread, even after a
+  restart, with no "not sent" marker, although nothing was published.
+  Needs a delivery state in the chat UI.
+- **Media dialog ignores the declared MIME** (shared with the web): an audio
+  URL with no file extension shows "Unable to preview this media type" even
+  when its `imeta` says `audio/…`. Real Blossom servers return extensions
+  (BUD-02), so it shows up mainly with servers that don't.
 
 - Relay hints and NIP-05 lookups still reach public hosts in an E2E build;
   the `VITE_E2E_RELAY` seam covers discovery and fallback only.
