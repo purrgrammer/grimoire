@@ -131,8 +131,12 @@ async function guardSigner(packageName: string): Promise<void> {
     );
   }
   if (check.foreignProviders.length > 0) {
+    // Name the app(s) to uninstall, not all eight authorities.
+    const owners = [
+      ...new Set(check.foreignProviders.map((p) => p.split(" -> ").pop())),
+    ];
     throw new Nip55Error(
-      `Another app claims this signer's request channels (${check.foreignProviders.join(", ")}). Refusing to use it.`,
+      `Another app (${owners.join(", ")}) is set up to answer in place of this signer. Refusing to use it; uninstall that app or use a remote signer (NIP-46).`,
       "PROVIDER_HIJACKED",
     );
   }
