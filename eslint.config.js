@@ -11,6 +11,18 @@ import prettierConfig from "eslint-config-prettier";
  * corresponds to a bug that shipped green, so these apply everywhere —
  * application code AND tests.
  */
+// body pads itself by the safe-area insets (src/index.css), so a shell sized
+// to the whole viewport overflows by the system bars. On the Android app with
+// WebView >= 140 that pushed the tab bar under the navigation bar. h-app is
+// the viewport minus that padding.
+const viewportHeightSyntaxRules = [
+  {
+    selector: "Literal[value=/(^|\\s)h-(dvh|screen)(\\s|$)/]",
+    message:
+      "h-dvh/h-screen overflow by the body's safe-area padding and hide the tab bar on edge-to-edge Android. Use h-app (src/index.css).",
+  },
+];
+
 const relaySyntaxRules = [
   {
     selector:
@@ -267,6 +279,7 @@ export default tseslint.config(
         "error",
         ...relaySyntaxRules,
         ...blockedRelaySyntaxRules,
+        ...viewportHeightSyntaxRules,
       ],
     },
   },

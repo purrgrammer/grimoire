@@ -93,7 +93,7 @@ export function AppShell({ children, hideBottomBar = false }: AppShellProps) {
       <GlobalNappletConsent />
       <NappletLaunchConsent />
       <NappletIntentChooser />
-      <main className="h-dvh w-screen flex flex-col bg-background text-foreground">
+      <main className="h-app w-full flex flex-col bg-background text-foreground">
         <header className="flex flex-row items-center px-1 border-b border-border">
           <div className="flex-1 flex items-center">
             <button
