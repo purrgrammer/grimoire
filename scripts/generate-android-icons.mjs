@@ -35,12 +35,43 @@ function out(dir, name, buffer) {
 }
 
 /** The logo, `height` px tall, centred on a `w`x`h` canvas. */
+/**
+ * Where the logo's visual weight sits, relative to its own box.
+ *
+ * The mark is a heavy hexagonal G with a light star at its lower right, so
+ * its bounding box is centred while its mass is not: centring the box left
+ * the G visibly to the left inside the launcher's circle (measured: the
+ * alpha-weighted centroid sat 3.1% left and 1% low of the canvas centre).
+ * Placing the centroid on the centre is what reads as centred.
+ */
+async function massOffset(png, width, height) {
+  const { data } = await sharp(png)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let sx = 0;
+  let sy = 0;
+  let sw = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const a = data[(y * width + x) * 4 + 3];
+      sx += x * a;
+      sy += y * a;
+      sw += a;
+    }
+  }
+  // How far to move the logo so its centroid lands where its box centre was.
+  return { dx: width / 2 - sx / sw, dy: height / 2 - sy / sw };
+}
+
+/** The logo, `height` px tall, optically centred on a `w`x`h` canvas. */
 async function logoOn(w, h, height, background, { monochrome = false } = {}) {
   const width = Math.round(height * ASPECT);
   let logoPng = await sharp(LOGO)
     .resize(width, height, { fit: "contain", background: CLEAR })
     .png()
     .toBuffer();
+  const { dx, dy } = await massOffset(logoPng, width, height);
   if (monochrome) {
     // Themed icons (Android 13+): the launcher tints the alpha mask, so the
     // layer is the logo's silhouette in white.
@@ -63,8 +94,8 @@ async function logoOn(w, h, height, background, { monochrome = false } = {}) {
     .composite([
       {
         input: logoPng,
-        left: Math.round((w - width) / 2),
-        top: Math.round((h - height) / 2),
+        left: Math.round((w - width) / 2 + dx),
+        top: Math.round((h - height) / 2 + dy),
       },
     ])
     .png()
@@ -87,12 +118,12 @@ async function main() {
     out(
       dir,
       "ic_launcher.png",
-      await logoOn(legacy, legacy, Math.round(legacy * 0.7), BG),
+      await logoOn(legacy, legacy, Math.round(legacy * 0.64), BG),
     );
 
     // Legacy round icon: same art clipped to a circle.
     const round = await sharp(
-      await logoOn(legacy, legacy, Math.round(legacy * 0.62), BG),
+      await logoOn(legacy, legacy, Math.round(legacy * 0.58), BG),
     )
       .composite([{ input: await circleMask(legacy), blend: "dest-in" }])
       .png()
@@ -100,17 +131,17 @@ async function main() {
     out(dir, "ic_launcher_round.png", round);
 
     // Adaptive foreground: 108dp canvas; launchers mask to a 66dp safe
-    // zone, so the logo stays inside ~58dp.
+    // zone; the logo is 52dp tall, centred by its visual mass.
     const adaptive = Math.round(108 * scale);
     out(
       dir,
       "ic_launcher_foreground.png",
-      await logoOn(adaptive, adaptive, Math.round(58 * scale), CLEAR),
+      await logoOn(adaptive, adaptive, Math.round(52 * scale), CLEAR),
     );
     out(
       dir,
       "ic_launcher_monochrome.png",
-      await logoOn(adaptive, adaptive, Math.round(58 * scale), CLEAR, {
+      await logoOn(adaptive, adaptive, Math.round(52 * scale), CLEAR, {
         monochrome: true,
       }),
     );
