@@ -1,0 +1,33 @@
+# Zapstore listing metadata for Grimoire.
+#
+# Read by `zsp` (https://github.com/zapstore/zsp, v2.x) when publishing an
+# Android build. Schema: zsp/internal/config/config.go; how to publish and
+# what is still owner-only: docs/android-zapstore.md.
+#
+# Deliberately absent:
+#   release_source  — no Android build is released yet. The release job (or the
+#                     owner, locally) supplies the signed APK path at publish time.
+#   identifier      — zsp ignores it; the app id is read from the APK's package
+#                     name, which is not chosen yet (see the doc).
+#   images          — screenshots go here once there is a store-quality build.
+#   supported_nips  — fill in from a reviewed list, not a guess.
+#
+# Nothing here is a key. `zsp publish` signs with SIGN_WITH (bunker:// or nsec,
+# supplied by the owner at publish time) and never reads the APK keystore.
+
+repository: https://github.com/purrgrammer/grimoire
+
+name: Grimoire
+summary: A Nostr protocol explorer and developer tool
+description: |
+  Grimoire is a tiling window manager for exploring Nostr. Each window is a
+  Nostr app (profile viewer, event feed, relay inspector, NIP documentation,
+  chat, and more) and commands are launched Unix-style from a command palette.
+license: MIT
+website: https://grimoire.rocks
+tags: [nostr, developer-tools, social, relays]
+
+icon: ./public/favicon-512x512.png
+
+# Fetch nothing from forges: everything the listing needs is in this file.
+metadata_sources: []
