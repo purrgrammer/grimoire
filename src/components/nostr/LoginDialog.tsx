@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { isNativeApp, publicOrigin } from "@/lib/native/platform";
 import { openExternal } from "@/lib/native/links";
+import { E2E_RELAY } from "@/services/loaders";
 import type { Nip55Account } from "@/lib/native/nip55-signer";
 import { AndroidSignerLogin } from "./AndroidSignerLogin";
 import {
@@ -46,11 +47,10 @@ import { resolveNip05, isNip05 } from "@/lib/nip05";
 import { isValidHexPubkey, normalizeHex } from "@/lib/nostr-validation";
 
 // Default relays for NIP-46 communication
-const DEFAULT_NIP46_RELAYS = [
-  "wss://relay.nsec.app",
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-];
+// E2E builds (VITE_E2E_RELAY) use only the local fixture relay; see loaders.ts.
+const DEFAULT_NIP46_RELAYS = E2E_RELAY
+  ? [E2E_RELAY]
+  : ["wss://relay.nsec.app", "wss://relay.damus.io", "wss://nos.lol"];
 
 type LoginTab = "extension" | "android" | "readonly" | "nsec" | "nostr-connect";
 

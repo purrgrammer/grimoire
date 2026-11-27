@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="E2E Squatter">
+        <!-- Claims another package's NIP-55 authorities. -->
+        <provider android:name=".SquatProvider" android:exported="true"
+            android:authorities="rocks.grimoire.e2e.intentsigner.GET_PUBLIC_KEY;rocks.grimoire.e2e.intentsigner.SIGN_EVENT;rocks.grimoire.e2e.intentsigner.NIP04_ENCRYPT;rocks.grimoire.e2e.intentsigner.NIP04_DECRYPT;rocks.grimoire.e2e.intentsigner.NIP44_ENCRYPT;rocks.grimoire.e2e.intentsigner.NIP44_DECRYPT;rocks.grimoire.e2e.intentsigner.DECRYPT_ZAP_EVENT;rocks.grimoire.e2e.intentsigner.GET_RELAYS" />
+        <!-- Makes this app visible to Grimoire, which queries lightning: handlers
+             (any host) for wallet links: it poses as a wallet. -->
+        <activity android:name=".Decoy" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lightning" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

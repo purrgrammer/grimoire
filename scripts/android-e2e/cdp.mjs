@@ -28,6 +28,8 @@ ws.onmessage = (m) => {
 const [mode, a, b] = process.argv.slice(2);
 const out = a;
 if (mode === "eval") {
+  // A paused WebView (app in the background) never answers; do not hang.
+  setTimeout(() => { console.error("eval timed out (is the app in the foreground?)"); process.exit(2); }, 20000);
   const r = await send("Runtime.evaluate", { expression: a, awaitPromise: true, returnByValue: true });
   console.log(JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails ?? r.result, null, 1));
   process.exit(0);

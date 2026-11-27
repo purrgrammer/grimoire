@@ -172,7 +172,7 @@ function extractRelayContext(event: NostrEvent): {
  * can resolve its throwaway account's relay and Blossom lists without asking,
  * or publishing to, any public relay. Unset in every real build.
  */
-const E2E_RELAY = (import.meta.env.VITE_E2E_RELAY as string | undefined)
+export const E2E_RELAY = (import.meta.env.VITE_E2E_RELAY as string | undefined)
   ?.trim()
   .replace(/\/?$/, "/");
 

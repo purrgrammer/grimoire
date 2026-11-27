@@ -17,6 +17,8 @@
  * Control (curl):
  *   POST http://localhost:7778/__control  {"failNextUploads":1,"uploadDelayMs":0}
  *   GET  http://localhost:7778/__audit    audit entries so far
+ *   POST http://localhost:7778/__dm       {"to":"<hex>","text":"…"}  NIP-17 DM from the fixture key
+ *   GET  http://localhost:7778/__dm/inbox gift wraps addressed to the fixture key, unwrapped and checked
  */
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
@@ -31,6 +33,8 @@ import {
 import * as nip44 from "nostr-tools/nip44";
 import * as nip04 from "nostr-tools/nip04";
 import { npubEncode } from "nostr-tools/nip19";
+import { getEventHash } from "nostr-tools/pure";
+import * as nip17 from "nostr-tools/nip17";
 
 const RELAY_PORT = Number(process.env.E2E_RELAY_PORT ?? 7777);
 const BLOSSOM_PORT = Number(process.env.E2E_BLOSSOM_PORT ?? 7778);
@@ -228,6 +232,7 @@ for (const t of [
   { kind: 0, content: JSON.stringify({ name: "e2e-fixture", about: "Throwaway key for a local test run" }), tags: [] },
   { kind: 10002, content: "", tags: [["r", RELAY_URL]] },
   { kind: 10063, content: "", tags: [["server", BLOSSOM_URL]] },
+  { kind: 10050, content: "", tags: [["relay", RELAY_URL]] },
   { kind: 1, content: "Seeded note from the local fixture relay.", tags: [] },
 ]) {
   store(finalizeEvent({ ...t, created_at: now }, sk));
@@ -277,6 +282,57 @@ createServer(async (req, res) => {
     log({ src: "blossom", type: "CONTROL", control });
     return send(200, JSON.stringify(control), { "Content-Type": "application/json" });
   }
+  if (url.pathname === "/__dm" && req.method === "POST") {
+    let body = "";
+    for await (const c of req) body += c;
+    const { to, text } = JSON.parse(body || "{}");
+    const wrap = nip17.wrapEvent(sk, { publicKey: to }, text);
+    publishLocal(wrap);
+    log({ src: "dm", type: "SENT", to, wrapId: wrap.id, wrapAuthor: wrap.pubkey });
+    return send(200, JSON.stringify({ wrapId: wrap.id }), { "Content-Type": "application/json" });
+  }
+  if (url.pathname === "/__dm/inbox") {
+    // Unwrap by hand so every layer is checked, not just the final text:
+    // wrap -> seal (kind 13, signed by the real sender) -> rumor (unsigned,
+    // must be authored by the seal's signer, id recomputed).
+    const out = [];
+    for (const wrap of stored.values()) {
+      if (wrap.kind !== 1059 || !wrap.tags.some((t) => t[0] === "p" && t[1] === pk)) continue;
+      const entry = { wrapId: wrap.id, wrapValid: verifyEvent(wrap) };
+      try {
+        const seal = JSON.parse(nip44.decrypt(wrap.content, nip44.getConversationKey(sk, wrap.pubkey)));
+        entry.sealKind = seal.kind;
+        entry.sealValid = verifyEvent(seal);
+        entry.sealAuthor = seal.pubkey;
+        const rumor = JSON.parse(nip44.decrypt(seal.content, nip44.getConversationKey(sk, seal.pubkey)));
+        entry.rumorKind = rumor.kind;
+        entry.rumorAuthorMatchesSeal = rumor.pubkey === seal.pubkey;
+        entry.rumorIdValid = rumor.id === getEventHash(rumor);
+        entry.text = rumor.content;
+      } catch (error) {
+        entry.error = String(error);
+      }
+      out.push(entry);
+    }
+    log({ src: "dm", type: "INBOX_READ", count: out.length });
+    return send(200, JSON.stringify(out, null, 1), { "Content-Type": "application/json" });
+  }
+  if (url.pathname === "/__frame") {
+    // A page on ANOTHER origin that asks for the camera and microphone from
+    // inside an iframe — what a hostile embed would do. It reports the
+    // outcome to its parent and to the audit log.
+    log({ src: "frame", type: "SERVED" });
+    return send(200, `<!doctype html><script>
+      navigator.mediaDevices.getUserMedia({audio:true,video:true})
+        .then(s => { s.getTracks().forEach(t => t.stop()); return "GRANTED"; })
+        .catch(e => "DENIED " + e.name)
+        .then(r => { parent.postMessage({frame: r}, "*"); fetch("/__frame/result?r=" + encodeURIComponent(r)); });
+    </script>`, { "Content-Type": "text/html" });
+  }
+  if (url.pathname === "/__frame/result") {
+    log({ src: "frame", type: "RESULT", result: url.searchParams.get("r") });
+    return send(204);
+  }
   if (url.pathname === "/__audit") {
     return send(200, JSON.stringify(audit, null, 1), { "Content-Type": "application/json" });
   }
@@ -306,10 +362,13 @@ createServer(async (req, res) => {
       return send(500, "", { "X-Reason": "injected failure (fixture)" });
     }
     blobs.set(sha256, { bytes, type });
+    // BUD-02: the returned url SHOULD carry the file extension; real servers
+    // do, and clients pick a player from it.
+    const ext = { "image/png": ".png", "image/jpeg": ".jpg", "video/mp4": ".mp4", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a", "audio/mpeg": ".mp3" }[type] ?? "";
     log({ ...entry, status: 200 });
     return send(
       200,
-      JSON.stringify({ url: `${BLOSSOM_URL}${sha256}`, sha256, size: bytes.length, type, uploaded: Math.floor(Date.now() / 1000) }),
+      JSON.stringify({ url: `${BLOSSOM_URL}${sha256}${ext}`, sha256, size: bytes.length, type, uploaded: Math.floor(Date.now() / 1000) }),
       { "Content-Type": "application/json" },
     );
   }

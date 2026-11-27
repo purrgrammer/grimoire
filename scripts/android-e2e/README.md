@@ -17,7 +17,8 @@ identity:
 
 | File | What |
 | --- | --- |
-| `fixtures.mjs` | relay (`ws://localhost:7777`), NIP-46 bunker, Blossom (`http://localhost:7778`, BUD-01/02/06, verifies upload auth, injectable failures), audit log |
+| `fixtures.mjs` | relay (`ws://localhost:7777`), NIP-46 bunker, Blossom (`http://localhost:7778`, BUD-01/02/06, verifies upload auth, injectable failures), NIP-17 DM send/unwrap (`/__dm`, `/__dm/inbox`), a hostile cross-origin capture page (`/__frame`), audit log |
+| `hostile-signer/` | Intent-only signer plus an app squatting its NIP-55 provider authorities (see its README) |
 | `cdp.mjs` | `eval '<js>'` in the app's WebView; `netlog <file> <s>` records every request/WebSocket URL (debug builds only) |
 | `ui.sh` | `dump` / `tap "<text>"` on native screens (signer, system pickers) via uiautomator |
 | `tap-css.sh` | a real tap on a WebView element (file inputs need user activation) |
@@ -49,6 +50,8 @@ node scripts/android-e2e/cdp.mjs eval 'location.href'
 scripts/android-e2e/ui.sh dump
 curl -X POST localhost:7778/__control -d '{"failNextUploads":1}'   # next upload → 500
 curl localhost:7778/__audit                                         # what the app sent
+curl -X POST localhost:7778/__dm -d '{"to":"<hex>","text":"hi"}'   # NIP-17 DM from the fixture
+curl localhost:7778/__dm/inbox                                      # unwrap + verify what reached it
 ```
 
 Never use a debug build with a real identity: Capacitor logs plugin
