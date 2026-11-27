@@ -171,7 +171,9 @@ const noInlineDynamicImport = {
 export default tseslint.config(
   // .agents holds vendored agent skills (installed via `npx skills add`);
   // .claude holds agent config and git worktrees. Neither is our source.
-  { ignores: ["dist", "node_modules", ".claude", ".agents"] },
+  // android/ is the Capacitor project: Java, Gradle and, after a sync, a
+  // copy of dist/ plus Capacitor's generated bridge — none of it source here.
+  { ignores: ["dist", "node_modules", ".claude", ".agents", "android"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

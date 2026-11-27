@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { EventStoreProvider } from "applesauce-react/providers";
-import Root, { router } from "./root";
+import Root from "./root";
+import { router } from "./router";
 import eventStore from "./services/event-store";
 import "./index.css";
 import "react-mosaic-component/react-mosaic-component.css";

@@ -23,8 +23,6 @@ export interface GrimoireNativePlugin {
     mimeType: string;
     base64: string;
   }): Promise<{ uri: string }>;
-  /** Android share sheet for plain text. Resolves once the sheet is shown. */
-  shareText(options: { text: string; title?: string }): Promise<void>;
 }
 
 export const GrimoireNative =

@@ -128,24 +128,4 @@ public class GrimoireNativePlugin extends Plugin {
         ret.put("uri", target.toString());
         call.resolve(ret);
     }
-
-    @PluginMethod
-    public void shareText(PluginCall call) {
-        String text = call.getString("text");
-        if (text == null || text.isEmpty()) {
-            call.reject("Missing text", "INVALID");
-            return;
-        }
-        Intent send = new Intent(Intent.ACTION_SEND);
-        send.setType("text/plain");
-        send.putExtra(Intent.EXTRA_TEXT, text);
-        Intent chooser = Intent.createChooser(send, call.getString("title", "Share"));
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            getContext().startActivity(chooser);
-            call.resolve();
-        } catch (ActivityNotFoundException e) {
-            call.reject("No app can share", "NO_HANDLER");
-        }
-    }
 }

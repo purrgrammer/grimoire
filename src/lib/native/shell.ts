@@ -74,9 +74,21 @@ function historyIndex(): number {
   return typeof state?.idx === "number" ? state.idx : 0;
 }
 
+let lastLink: { href: string; at: number } | null = null;
+
 function routeTo(router: ShellRouter, href: string, source: string): boolean {
   const target = classifyNavigation(href, window.location.origin);
   if (target.kind === "internal") {
+    // A cold start delivers the launch link twice (getLaunchUrl and
+    // appUrlOpen), before either navigation has committed; navigating twice
+    // left a duplicate history entry and Back had to be pressed once more.
+    if (source !== "window.open") {
+      const now = Date.now();
+      if (lastLink && lastLink.href === href && now - lastLink.at < 3000) {
+        return true;
+      }
+      lastLink = { href, at: now };
+    }
     void router.navigate(target.path);
     return true;
   }

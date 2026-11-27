@@ -84,7 +84,7 @@ function requireResult(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) {
     // NIP-55: a rejection is RESULT_OK with `rejected` and no result; the
     // plugin surfaces that as an empty result.
-    throw new Nip55Error("The signer returned no result", "REJECTED");
+    throw new Nip55Error("The signer declined the request", "REJECTED");
   }
   return value;
 }
