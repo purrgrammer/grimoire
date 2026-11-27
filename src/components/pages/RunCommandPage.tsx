@@ -83,7 +83,7 @@ export default function RunCommandPage() {
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-background">
+      <div className="flex h-app items-center justify-center bg-background">
         <div className="text-muted-foreground">Loading command...</div>
       </div>
     );
@@ -91,7 +91,7 @@ export default function RunCommandPage() {
 
   if (!windowInstance) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-background">
+      <div className="flex h-app items-center justify-center bg-background">
         <div className="max-w-md rounded-lg border border-border bg-card p-6">
           <h2 className="mb-2 text-lg font-semibold text-destructive">
             Command Error

@@ -73,7 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
       // App-level error: full screen error
       if (level === "app") {
         return (
-          <div className="h-dvh w-screen flex items-center justify-center bg-background p-8">
+          <div className="h-app w-full flex items-center justify-center bg-background p-8">
             <div className="max-w-2xl w-full border border-destructive bg-card p-8 space-y-6">
               <div className="flex items-center gap-3 text-destructive">
                 <AlertTriangle className="h-8 w-8" />

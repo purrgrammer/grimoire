@@ -353,6 +353,16 @@
    Custom Utilities (v4 @utility syntax)
    ========================================================================== */
 
+/* Full height of the visible area: the viewport minus the body's safe-area
+   padding (see body above). h-dvh alone overflows by the system bars on the
+   Android app and iOS PWAs, which hides the tab bar behind the nav bar. */
+@utility h-app {
+  height: calc(
+    100dvh - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) -
+      var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
+  );
+}
+
 @utility no-scrollbar {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
