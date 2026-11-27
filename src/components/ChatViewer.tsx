@@ -68,6 +68,7 @@ import { UserName } from "./nostr/UserName";
 import { OnchainZapAmount } from "./nostr/kinds/OnchainZapRenderer";
 import { BotMarker } from "./nostr/BotMarker";
 import { RichText } from "./nostr/RichText";
+import { ChatMessageBody } from "./chat/ChatMessageBody";
 import Timestamp from "./Timestamp";
 import { ReplyPreview } from "./chat/ReplyPreview";
 import { MembersDropdown } from "./chat/MembersDropdown";
@@ -909,8 +910,10 @@ const MessageItem = memo(function MessageItem({
         </div>
         <div className="break-words overflow-hidden">
           {message.event ? (
-            <RichText className="text-sm leading-tight" event={message.event}>
-              {message.replyTo &&
+            <ChatMessageBody
+              event={message.event}
+              replyPreview={
+                message.replyTo &&
                 isChatKindReply &&
                 !quotesItsOwnThreadRoot && (
                   <ReplyPreview
@@ -919,8 +922,9 @@ const MessageItem = memo(function MessageItem({
                     conversation={conversation}
                     onScrollToMessage={onScrollToMessage}
                   />
-                )}
-            </RichText>
+                )
+              }
+            />
           ) : (
             <span className="whitespace-pre-wrap break-words">
               {message.content}
