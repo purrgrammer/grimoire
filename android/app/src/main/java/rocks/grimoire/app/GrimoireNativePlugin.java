@@ -3,6 +3,8 @@ package rocks.grimoire.app;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.net.Uri;
 import android.util.Base64;
 import androidx.activity.result.ActivityResult;
@@ -13,7 +15,12 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import androidx.webkit.WebViewFeature;
+import com.getcapacitor.JSArray;
 import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Native half of src/lib/native/grimoire-native.ts. Needs no permission:
@@ -126,6 +133,41 @@ public class GrimoireNativePlugin extends Plugin {
         }
         JSObject ret = new JSObject();
         ret.put("uri", target.toString());
+        call.resolve(ret);
+    }
+
+    /**
+     * Before any NIP-55 request: is the signer installed, does any other app
+     * own one of its provider authorities (SignerGuard), and is the JS bridge
+     * limited to the main frame? On a WebView without WEB_MESSAGE_LISTENER,
+     * Capacitor falls back to addJavascriptInterface, which every iframe can
+     * reach; signing must not be offered there.
+     */
+    @PluginMethod
+    public void checkSigner(PluginCall call) {
+        String pkg = call.getString("packageName");
+        if (pkg == null || !pkg.matches("^[a-zA-Z][\\w]*(\\.[a-zA-Z][\\w]*)+$")) {
+            call.reject("Invalid package name", "INVALID");
+            return;
+        }
+        PackageManager pm = getContext().getPackageManager();
+        boolean installed;
+        try {
+            pm.getPackageInfo(pkg, 0);
+            installed = true;
+        } catch (PackageManager.NameNotFoundException e) {
+            installed = false;
+        }
+        Map<String, String> owners = new HashMap<>();
+        for (String authority : SignerGuard.authorities(pkg)) {
+            ProviderInfo info = pm.resolveContentProvider(authority, 0);
+            if (info != null) owners.put(authority, info.packageName);
+        }
+        List<String> foreign = SignerGuard.foreignAuthorities(pkg, owners);
+        JSObject ret = new JSObject();
+        ret.put("installed", installed);
+        ret.put("foreignProviders", new JSArray(foreign));
+        ret.put("frameSafeBridge", WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER));
         call.resolve(ret);
     }
 }

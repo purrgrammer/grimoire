@@ -21,6 +21,10 @@ function describe(error: unknown, app: string): string {
         return `${app} closed without answering. Try again and approve the login.`;
       case "WRONG_PACKAGE":
         return `A different app answered instead of ${app}. Login refused.`;
+      case "PROVIDER_HIJACKED":
+      case "UNSAFE_WEBVIEW":
+      case "NOT_INSTALLED":
+        return error.message;
       default:
         return error.message;
     }

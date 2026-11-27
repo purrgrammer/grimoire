@@ -23,6 +23,19 @@ export interface GrimoireNativePlugin {
     mimeType: string;
     base64: string;
   }): Promise<{ uri: string }>;
+  /**
+   * Before a NIP-55 request: is the signer installed, does another app own
+   * one of its content-provider authorities, and is the JS bridge limited to
+   * the main frame (WebView WEB_MESSAGE_LISTENER)?
+   */
+  checkSigner(options: { packageName: string }): Promise<SignerCheck>;
+}
+
+export interface SignerCheck {
+  installed: boolean;
+  /** "<authority> -> <owning package>" for every authority not the signer's. */
+  foreignProviders: string[];
+  frameSafeBridge: boolean;
 }
 
 export const GrimoireNative =

@@ -20,7 +20,21 @@ vi.mock("capacitor-plugin-nostr-signer", () => ({
   NostrSignerPlugin: plugin,
 }));
 
-import { Nip55Account, Nip55Error, Nip55Signer } from "./nip55-signer";
+vi.mock("./grimoire-native", () => ({ GrimoireNative: {} }));
+
+import {
+  Nip55Account,
+  Nip55Error,
+  Nip55Signer,
+  setSignerCheck,
+} from "./nip55-signer";
+
+const safe = {
+  installed: true,
+  foreignProviders: [] as string[],
+  frameSafeBridge: true,
+};
+const signerCheck = vi.fn();
 
 // An ephemeral key standing in for the signer app's; never leaves the test.
 const sk = generateSecretKey();
@@ -57,6 +71,46 @@ function honestSign(_pkg: string, eventJson: string, id: string) {
 beforeEach(() => {
   for (const fn of Object.values(plugin)) fn.mockReset();
   plugin.setPackageName.mockResolvedValue(undefined);
+  signerCheck.mockReset();
+  signerCheck.mockResolvedValue(safe);
+  setSignerCheck(signerCheck);
+});
+
+describe("signer guard", () => {
+  it("refuses a signer whose request channels another app owns", async () => {
+    signerCheck.mockResolvedValue({
+      ...safe,
+      foreignProviders: [`${PKG}.SIGN_EVENT -> com.evil.app`],
+    });
+    await expect(Nip55Signer.connect(PKG)).rejects.toMatchObject({
+      code: "PROVIDER_HIJACKED",
+    });
+    expect(plugin.getPublicKey).not.toHaveBeenCalled();
+  });
+
+  it("refuses on a WebView whose bridge iframes can reach", async () => {
+    signerCheck.mockResolvedValue({ ...safe, frameSafeBridge: false });
+    await expect(Nip55Signer.connect(PKG)).rejects.toMatchObject({
+      code: "UNSAFE_WEBVIEW",
+    });
+  });
+
+  it("checks again before every request, not only at login", async () => {
+    const s = new Nip55Signer(PKG, PUBKEY);
+    signerCheck.mockResolvedValue({
+      ...safe,
+      foreignProviders: [`${PKG}.NIP44_ENCRYPT -> com.evil.app`],
+    });
+    await expect(
+      s.nip44.encrypt(getPublicKey(OTHER_SK), "secret"),
+    ).rejects.toMatchObject({ code: "PROVIDER_HIJACKED" });
+    expect(plugin.nip44Encrypt).not.toHaveBeenCalled();
+    signerCheck.mockResolvedValue({ ...safe, installed: false });
+    await expect(s.signEvent(template)).rejects.toMatchObject({
+      code: "NOT_INSTALLED",
+    });
+    expect(plugin.signEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe("Nip55Signer.connect", () => {
