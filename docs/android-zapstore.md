@@ -57,7 +57,8 @@ permissions requested".
 | Downgrade | refused by Android (`INSTALL_FAILED_VERSION_DOWNGRADE`, verified) and by Zapstore's relay |
 | Reproducible | two clean unsigned builds of the same commit produced the same SHA-256 (`425acfb1…`) on the build machine. Not yet compared across machines |
 
-Toolchain: Node from `.nvmrc`, JDK 21 (Temurin), Android SDK platform 36 and
+Toolchain: Node from `.nvmrc`, JDK 21 (Temurin), Go 1.27.4 for zsp v2.0.1
+(its go.mod requires ≥ 1.27.3; CI pins it with `GOTOOLCHAIN=local`), Android SDK platform 36 and
 build-tools 36.0.0, Gradle 8.14.3 (wrapper jar matches the published
 checksum; the distribution is pinned by SHA-256), AGP 8.13.0, Capacitor 8.6.3.
 
@@ -84,6 +85,11 @@ irreversible and identity-bearing.
   reach a secret.
 - Merging the workflow does nothing until the owner sets the variable.
 - Publishing on push is a separate switch (`ZAPSTORE_PUBLISH_ON_PUSH`).
+
+Inside the release job, the signing secrets are in the environment while
+`cap sync` and Gradle run, so a compromised build dependency could read them.
+That is the residual risk. It is bounded by the lockfile, `npm ci` with no
+cache, wrapper validation, the protected environment and the cert pin.
 
 Once all three are configured, every push to `main` can produce a signed,
 verified build and a Zapstore release.
@@ -208,13 +214,15 @@ there was no route.
 | NIP-07 | Not available in a WebView (`window.nostr` undefined); the UI says so and offers NIP-55 and NIP-46 |
 | Session persistence, logout | **Pass.** Account survives a cold restart; logout clears it and stays cleared after a restart |
 | Upload (file picker) | **Pass.** System picker opens with no permission; the `image/*,video/*,audio/*` filter hides a `.txt`; cancel → nothing selected, 0 requests; the PNG reads as 177 B `image/png`; BUD-06 preflight 401 → kind 24242 signed over NIP-46 → PUT of 177 B, sha256 `e4a9bf91…` identical to the original file; injected 500 shows "Failed (1) …"; retry succeeds; the published note carries `imeta` with `m`, `x` and `size` |
-| Media | **Pass** for images: the uploaded image renders in the composer and feed. Video and audio were not tested |
+| Media | **Pass** for images and video: the uploaded image renders in the composer and feed; a 14,693 B `video/mp4` (sha256 `894b6bf3…`) uploads and plays in the feed (`readyState` 4, 320×240, playhead advancing). Audio was not tested |
 | Download (export JSONL) | **Pass.** System save-as with the suggested name; cancel → no file, no error; save → `/sdcard/Download/nostr-events.jsonl`, 1167 B, 2 valid events |
 | External links | **Pass.** https → Chrome; `lightning:` with no wallet → toast; `javascript:` → refused; top-level `intent:` → blocked natively (logged); `file:` and `content:` → blocked by Chromium, page unchanged |
 | Deep links | **Pass.** Cold `nostr:npub…` → profile from the local relay; warm `https://grimoire.rocks/run?cmd=help` → `/run`; `nostr:nsec…` → refused. A duplicate history entry on cold start was found and fixed |
 | Back | **Pass.** Closes the menu first; `/run` → profile → `/` → minimize (same pid, state kept) |
 | Offline and reconnect | **Pass.** Offline cold start renders the bundled build and the cached session; after the relay restarted the app reconnected on its own within 20 s (`navigator.onLine` stays `true` without a network, a WebView quirk) |
 | Update and downgrade | **Pass.** `install -r` of a newer versionCode keeps the session; 969 over 970 → `INSTALL_FAILED_VERSION_DOWNGRADE`; another key → `INSTALL_FAILED_UPDATE_INCOMPATIBLE` |
+| NIP-55 signer guard | **Pass.** `checkSigner` on the emulator: Amber `installed`, no foreign providers, `frameSafeBridge: true`; an uninstalled package → `installed: false`; a bad name → `INVALID`. Login and signing go through the guard. A hostile app squatting the authorities was **not** reproduced on the device (that needs a malicious APK); the logic is covered by JUnit (`SignerGuardTest`) and Vitest |
+| Release build (throwaway key) | **Pass.** `--require-signing` build of `03f4620` plus the guard, signed with a throwaway key (deleted afterwards): installs, launches in 753 ms, `run-as` → "not debuggable", 0 Capacitor plugin-argument lines in logcat. The WebView DevTools socket stays open, but this emulator is `userdebug` (`ro.debuggable=1`), where WebView turns DevTools on for every app; Google Search had its socket too. Capacitor ties DevTools to `FLAG_DEBUGGABLE`, which is false here. **Not confirmed on a `user` build or a physical device** |
 | Web regression | **Pass.** Production build in headless Chrome 158 (fresh profile): `sw.js` registered, no `data-native`, login keeps the Extension tab as default |
 
 **Not tested, and why:**
@@ -223,12 +231,35 @@ there was no route.
 | --- | --- |
 | **Physical device** | Nothing was run on hardware. Emulator results don't guarantee OEM WebView or signer behaviour |
 | Camera capture | No `capture` input in the app; the camera-app path is configured (FileProvider) but unused |
-| Video/audio upload and playback | Not run |
+| Audio upload and playback | Not run |
+| Signer-authority hijack on device | Needs a hostile test APK; unit-tested only |
 | NIP-55 nip44/nip04 (DMs, NWC) | Covered by unit tests only |
-| Release-signed install | Signing and verification were dry-run with a throwaway key (deleted); no release-signed APK was installed |
+| Release-signed install with the **real** key | A throwaway-key release build was installed and launched; the real key exists only after owner step 1 |
 | Real Zapstore publication | Out of scope until the owner gates above |
 | `https://grimoire.rocks` App Links verification | Needs `assetlinks.json` (owner step 6) |
 | R8/minify | Off; enabling it needs keep rules and a device run |
+
+## Security review (adversarial pass, `03f4620`)
+
+No blockers. Two findings were fixed in this PR:
+
+1. **Medium, fixed.** capacitor-plugin-nostr-signer queries
+   `content://<signer>.<TYPE>` before the package-addressed Intent. An
+   authority belongs to whichever app declared it, so with a signer that
+   declares none, another app could answer as the signer: its own key, and
+   every plaintext.
+   - `GrimoireNative.checkSigner` (`SignerGuard.java`) resolves every NIP-55
+     authority and reports any that another package owns.
+   - `Nip55Signer` refuses (`PROVIDER_HIJACKED`) before **every** request,
+     not only at login.
+2. **Low, fixed.** On a WebView without `WEB_MESSAGE_LISTENER`, Capacitor
+   falls back to `addJavascriptInterface`, which iframes can reach. NIP-55
+   is refused there (`UNSAFE_WEBVIEW`), with NIP-46 offered instead.
+
+Accepted, documented: a deep link to `https://grimoire.rocks/run?cmd=…` opens
+the same window a web link would. No command signs or publishes without a
+tap; at most a link can make the app read from a relay it names, as on the
+web.
 
 ## Known follow-ups
 
