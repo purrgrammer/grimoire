@@ -1,7 +1,16 @@
 import { cn } from "@/lib/utils";
 import { Hooks } from "applesauce-react";
-import { textNoteTransformers } from "applesauce-content/text";
-import { createContext, useContext, useMemo } from "react";
+import {
+  getParsedContent,
+  textNoteTransformers,
+} from "applesauce-content/text";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { Text } from "./RichText/Text";
 import { Hashtag } from "./RichText/Hashtag";
 import { Mention } from "./RichText/Mention";
@@ -10,9 +19,12 @@ import { Emoji } from "./RichText/Emoji";
 import { Gallery } from "./RichText/Gallery";
 import { Nip } from "./RichText/Nip";
 import { Relay } from "./RichText/Relay";
+import { EmojiOnlyContext } from "./RichText/emoji-only-context";
 import { bareNostrMentions } from "@/lib/bare-mention-transformer";
 import { nipReferences } from "@/lib/nip-transformer";
 import { relayReferences } from "@/lib/relay-transformer";
+import { getEmojiOnlyTier, type EmojiOnlyTier } from "@/lib/emoji-only";
+import { useSettings } from "@/hooks/useSettings";
 import type { NostrEvent } from "@/types/nostr";
 import type { Root } from "applesauce-content/nast";
 import type { ImetaEntry } from "@/lib/imeta";
@@ -81,6 +93,19 @@ export interface RichTextOptions {
   showMedia?: boolean;
   /** Show event embeds for note/nevent/naddr mentions (default: true) */
   showEventEmbeds?: boolean;
+  /**
+   * Let an emoji-only body render larger (default: false).
+   *
+   * Opt-in per call site because most of them are one-line rows — compact
+   * previews, reply cards, zap rows — whose fixed height a 48px glyph would
+   * break. Only a post's or chat message's own body should set it. The user's
+   * "Big emoji" appearance setting still has the last word.
+   *
+   * A caller's `children` (a chat message's reply quote) are a prefix, not
+   * body: they never make a body emoji-only or stop one being, and when the
+   * body is enlarged only the content after them grows.
+   */
+  bigEmoji?: boolean;
 }
 
 // Default options
@@ -90,6 +115,7 @@ const defaultOptions: Required<RichTextOptions> = {
   showAudio: true,
   showMedia: true,
   showEventEmbeds: true,
+  bigEmoji: false,
 };
 
 // Context for passing options through RichText rendering
@@ -98,6 +124,16 @@ const OptionsContext = createContext<Required<RichTextOptions>>(defaultOptions);
 export function useRichTextOptions() {
   return useContext(OptionsContext);
 }
+
+/**
+ * Body type for each emoji-only tier, against the `text-sm` a post normally
+ * uses. Tight leading, since a line of 48px glyphs at `leading-relaxed` leaves
+ * a post that is mostly air.
+ */
+const emojiOnlyClasses: Record<EmojiOnlyTier, string> = {
+  single: "text-5xl leading-tight",
+  multi: "text-3xl leading-tight",
+};
 
 /**
  * Parser options for customizing content parsing
@@ -179,14 +215,49 @@ export function RichText({
       }
     : undefined;
 
+  const source = content
+    ? ({
+        content,
+      } as NostrEvent)
+    : trimmedEvent;
+
   const renderedContent = useRenderedContent(
-    content
-      ? ({
-          content,
-        } as NostrEvent)
-      : trimmedEvent,
+    source,
     contentComponents,
     hookOptions,
+  );
+
+  const { settings } = useSettings();
+  const bigEmoji =
+    mergedOptions.bigEmoji && (settings?.appearance?.bigEmoji ?? true);
+  // Same arguments as the hook above, so for a real event this reads the tree
+  // it just cached instead of parsing the content a second time.
+  const parsedTier =
+    bigEmoji && source
+      ? getEmojiOnlyTier(
+          getParsedContent(source, undefined, transformers, cacheKey),
+        )
+      : null;
+
+  // A custom emoji whose image failed renders as its shortcode, which is text:
+  // the body is no longer emoji-only. Keyed by content, so the next event
+  // rendered by this instance starts clean.
+  const [imageFailedFor, setImageFailedFor] = useState<string | null>(null);
+  const sourceContent = source?.content;
+  const emojiOnlyTier = imageFailedFor === sourceContent ? null : parsedTier;
+  const onImageError = useCallback(
+    () => setImageFailedFor(sourceContent ?? null),
+    [sourceContent],
+  );
+  const emojiOnly = useMemo(
+    () => ({ tier: emojiOnlyTier, onImageError }),
+    [emojiOnlyTier, onImageError],
+  );
+
+  const body = (
+    <EmojiOnlyContext.Provider value={emojiOnly}>
+      {renderedContent}
+    </EmojiOnlyContext.Provider>
   );
 
   return (
@@ -205,10 +276,24 @@ export function RichText({
               // reset this to the size's tight default. A caller's own
               // `leading-*` still wins.
               !/\bleading-/.test(className ?? "") && "leading-relaxed",
+              // Last, so it overrides the caller's font size and leading.
+              // With a prefix the inner wrapper below carries it instead, so
+              // the prefix keeps its own size.
+              !children && emojiOnlyTier && emojiOnlyClasses[emojiOnlyTier],
             )}
+            data-emoji-only={(!children && emojiOnlyTier) || undefined}
           >
             {children}
-            {renderedContent}
+            {children && emojiOnlyTier ? (
+              <div
+                className={emojiOnlyClasses[emojiOnlyTier]}
+                data-emoji-only={emojiOnlyTier}
+              >
+                {body}
+              </div>
+            ) : (
+              body
+            )}
           </div>
         </EventContext.Provider>
       </OptionsContext.Provider>

@@ -36,6 +36,15 @@ export interface AppearanceSettings {
    * `foldThreads` (`src/lib/chat/threads.ts`).
    */
   collapseThreads: boolean;
+  /**
+   * Render posts that contain only emoji at a larger size.
+   *
+   * On by default, including for a settings blob stored before this existed —
+   * `validateSettings` merges each section onto its defaults. What counts as
+   * emoji-only is `getEmojiOnlyTier` (`src/lib/emoji-only.ts`); which surfaces
+   * honour it is the `bigEmoji` option of `RichText`.
+   */
+  bigEmoji: boolean;
 }
 
 /**
@@ -75,6 +84,7 @@ const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   showClientTags: true,
   loadMedia: true,
   collapseThreads: true,
+  bigEmoji: true,
 };
 
 /**

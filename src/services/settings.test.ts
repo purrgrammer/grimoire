@@ -75,3 +75,43 @@ describe("a blob stored before notifications existed", () => {
     logged.mockRestore();
   });
 });
+
+describe("big emoji", () => {
+  it("is on with nothing stored", async () => {
+    const manager = await loadManager();
+    expect(manager.value.appearance.bigEmoji).toBe(true);
+  });
+
+  it("is on for a blob stored before the setting existed", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        __version: 1,
+        post: { includeClientTag: true },
+        appearance: {
+          showClientTags: false,
+          loadMedia: false,
+          collapseThreads: false,
+        },
+        notifications: { enabled: true, defaultLevel: "all" },
+      }),
+    );
+    const manager = await loadManager();
+    expect(manager.value.appearance.bigEmoji).toBe(true);
+    // Without disturbing what the user had already chosen.
+    expect(manager.value.appearance.loadMedia).toBe(false);
+    expect(manager.value.appearance.collapseThreads).toBe(false);
+  });
+
+  it("stays off across a reload once switched off, and comes back on", async () => {
+    const manager = await loadManager();
+    manager.updateSetting("appearance", "bigEmoji", false);
+    expect(manager.value.appearance.bigEmoji).toBe(false);
+
+    const reloaded = await loadManager();
+    expect(reloaded.value.appearance.bigEmoji).toBe(false);
+
+    reloaded.updateSetting("appearance", "bigEmoji", true);
+    expect((await loadManager()).value.appearance.bigEmoji).toBe(true);
+  });
+});

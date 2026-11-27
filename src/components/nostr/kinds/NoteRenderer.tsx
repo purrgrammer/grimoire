@@ -114,7 +114,12 @@ export function Kind1Renderer({ event, depth = 0 }: BaseEventProps) {
         )}
       </TooltipProvider>
 
-      <RichText event={event} className="text-sm" depth={depth} />
+      <RichText
+        event={event}
+        className="text-sm"
+        depth={depth}
+        options={{ bigEmoji: true }}
+      />
     </BaseEventContainer>
   );
 }
